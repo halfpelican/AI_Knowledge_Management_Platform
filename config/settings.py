@@ -69,6 +69,12 @@ TEMPLATES = [
 
 DATABASES = {"default": env.db("DATABASE_URL")}  # required, no default
 
+# --- Authentication -------------------------------------------------------------
+# Email is the login identifier (docs/decisions.md D-02); the model is a UUID-keyed
+# shell that the proposal's Users table definition extends in a later migration.
+
+AUTH_USER_MODEL = "accounts.User"
+
 # --- Internationalisation -------------------------------------------------------
 
 LANGUAGE_CODE = "en-au"

@@ -1,0 +1,23 @@
+# Local PostgreSQL 16 + pgvector so all three developers run the same database
+# (Stage 1 item 3). Development credentials only: they match DATABASE_URL in
+# .env.example and are never used anywhere else.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: kmp
+      POSTGRES_USER: kmp
+      POSTGRES_PASSWORD: kmp
+    ports:
+      - "5432:5432"
+    volumes:
+      - kmp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kmp -d kmp"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  kmp_pgdata:
