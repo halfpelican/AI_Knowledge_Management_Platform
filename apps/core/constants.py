@@ -85,6 +85,10 @@ DEFAULT_MEETING_STATUS = MEETING_STATUS_VALUES[0]
 ROLE_NAMES = ("Employee", "Administrator")
 EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME = ROLE_NAMES
 
+# Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
+# role_permissions, seeded by accounts migration 0003; a test asserts the two agree.
+MANAGE_ROLES_PERMISSION = "manage_roles"
+
 # Provenance of a ContentTags row (FR-10, FR-15).
 TAG_APPLIED_BY_VALUES = ("ai", "user")
 

@@ -166,6 +166,7 @@ SECTION_5_PLAN = [
     ("core", "0001_pgvector_extension"),
     ("accounts", "0001_initial"),
     ("accounts", "0002_seed_roles"),
+    ("accounts", "0003_seed_permissions"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     ("documents", "0002_content_chunks"),

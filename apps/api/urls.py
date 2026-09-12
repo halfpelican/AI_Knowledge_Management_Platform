@@ -18,4 +18,8 @@ urlpatterns = [
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),
+    # Stage 2: FR-05
+    path("roles", views.RoleListView.as_view(), name="role-list"),
+    path("users", views.UserListView.as_view(), name="user-list"),
+    path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
 ] + router.urls

@@ -14,6 +14,7 @@ from pathlib import Path
 import environ
 
 from apps.core.constants import SESSION_INACTIVITY_MINUTES
+from apps.core.logging_config import audit_logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -131,6 +132,16 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
 }
+
+# --- Audit log (FR-05) -------------------------------------------------------------
+# A role change is one JSON line written by the "audit" logger
+# (apps.accounts.audit). Schema v1 has no audit table, so the medium is a file
+# until docs/decisions.md records one; the path is read from the environment.
+
+AUDIT_LOG_PATH = Path(env.str("AUDIT_LOG_PATH", default=str(BASE_DIR / "logs" / "audit.log")))
+AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+LOGGING = audit_logging(AUDIT_LOG_PATH)
 
 # --- Internationalisation -------------------------------------------------------
 

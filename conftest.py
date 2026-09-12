@@ -25,9 +25,12 @@ import pytest
 from django.conf import settings
 from django.test import override_settings
 
+import logging.config
+
 import apps.ai
 from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
+from apps.core.logging_config import audit_logging
 
 PASSWORD = "correct horse battery staple"
 
@@ -51,6 +54,20 @@ def no_live_provider(monkeypatch):
         VOYAGE_API_KEY="",
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def audit_file(tmp_path, settings):
+    """The FR-05 audit file for this test: AUDIT_LOG_PATH and LOGGING are overridden
+    to a temporary path and logging is reconfigured from them exactly as
+    config/settings.py builds it, so no test ever appends to logs/audit.log."""
+    original = settings.LOGGING
+    path = tmp_path / "audit.log"
+    settings.AUDIT_LOG_PATH = path
+    settings.LOGGING = audit_logging(path)
+    logging.config.dictConfig(settings.LOGGING)
+    yield path
+    logging.config.dictConfig(original)
 
 
 @pytest.fixture

@@ -2,23 +2,41 @@
 
 Authentication is the session cookie (D-21); ``IsAuthenticated`` is the global
 default, so only the views that set ``AllowAny`` are reachable anonymously.
+Routes that need more than a session add ``HasRolePermission`` (FR-06).
 """
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.constants import LOCKOUT_DURATION, LOCKOUT_THRESHOLD
+from apps.accounts.audit import log_role_change
+from apps.accounts.models import Permission, Role
+from apps.core.constants import (
+    LOCKOUT_DURATION,
+    LOCKOUT_THRESHOLD,
+    MANAGE_ROLES_PERMISSION,
+    ROLE_NAMES,
+)
 
-from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
+from .permissions import HasRolePermission
+from .serializers import (
+    LoginSerializer,
+    RegisterSerializer,
+    RoleChangeSerializer,
+    RoleSerializer,
+    UserSerializer,
+)
 
 User = get_user_model()
 
@@ -27,6 +45,13 @@ User = get_user_model()
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 # FR-01 names the duplicate case explicitly, so this response may say so.
 EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
+
+CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
+
+
+def not_found(request, exception=None):
+    """handler404: JSON like every other error, never Django's HTML page."""
+    return JsonResponse({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
 
 # --- FR-01 registration --------------------------------------------------------------
@@ -124,3 +149,48 @@ class LogoutView(APIView):
 class MeView(APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
+
+
+# --- FR-05 role management ---------------------------------------------------------------
+
+
+class RoleListView(APIView):
+    """Any session may read the roles and the permission codes each holds."""
+
+    def get(self, request):
+        roles = Role.objects.prefetch_related(
+            Prefetch("permissions", queryset=Permission.objects.order_by("permission_name"))
+        )
+        # Listed in ROLE_NAMES order (Employee, then the role that generalises it).
+        ordered = sorted(roles, key=lambda role: ROLE_NAMES.index(role.role_name))
+        return Response(RoleSerializer(ordered, many=True).data)
+
+
+class UserListView(APIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def get(self, request):
+        users = User.objects.select_related("role").order_by("created_at", "pk")
+        return Response(UserSerializer(users, many=True).data)
+
+
+class UserRoleView(APIView):
+    permission_classes = [IsAuthenticated, CanManageRoles]
+
+    def patch(self, request, pk):
+        serializer = RoleChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 {"role": [...]}
+        new_role = Role.objects.get(role_name=serializer.validated_data["role"])
+        with transaction.atomic():
+            user = get_object_or_404(
+                User.objects.select_for_update(of=("self",)).select_related("role"), pk=pk
+            )
+            old_role_name = user.role.role_name
+            user.role = new_role
+            user.save(update_fields=["role"])
+            # FR-05: every role change writes an audit entry, including a no-op
+            # one, so the log shows what was asked for as well as what changed.
+            log_role_change(
+                actor=request.user, target=user, old_role=old_role_name, new_role=new_role.role_name
+            )
+        return Response(UserSerializer(user).data)

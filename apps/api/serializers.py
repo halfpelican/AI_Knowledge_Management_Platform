@@ -10,6 +10,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from apps.accounts.models import Role
+from apps.core.constants import ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
 
 User = get_user_model()
@@ -24,6 +26,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = USER_FIELDS
         read_only_fields = USER_FIELDS
+
+
+# --- FR-01, FR-02 -------------------------------------------------------------------
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -57,3 +62,26 @@ class LoginSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         return value.strip().lower()  # D-02
+
+
+# --- FR-05 ----------------------------------------------------------------------------
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    """``GET /api/roles`` item: the role and the permission codes it holds (D-14)."""
+
+    name = serializers.CharField(source="role_name", read_only=True)
+    permissions = serializers.SlugRelatedField(
+        many=True, read_only=True, slug_field="permission_name"
+    )
+
+    class Meta:
+        model = Role
+        fields = ("name", "description", "permissions")
+        read_only_fields = fields
+
+
+class RoleChangeSerializer(serializers.Serializer):
+    """``PATCH /api/users/{id}/role`` body. A name outside ROLE_NAMES is 400."""
+
+    role = serializers.ChoiceField(choices=ROLE_NAMES)

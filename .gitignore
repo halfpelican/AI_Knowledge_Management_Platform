@@ -20,6 +20,9 @@ venv/
 # Uploaded files
 media/
 
+# Audit log (FR-05), path from AUDIT_LOG_PATH
+logs/
+
 # Frontend
 node_modules/
 frontend/dist/
