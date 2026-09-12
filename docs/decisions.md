@@ -35,6 +35,8 @@ Rules for this file:
 | D-17 | visible_to_roles denormalised onto ContentChunks at ingestion (user label D-08) | Settled by the user | 2026-09-12 |
 | D-18 | G7: Documents storage path deferred to migration v2 in Stage 3 (user label D-09) | Settled by the user | 2026-09-12 |
 | D-19 | Retry semantics: 3 total attempts, 1 initial plus 2 retries (user label D-10) | Settled by the user | 2026-09-12 |
+| D-20 | Logged in-place dependency edit to meetings 0001 (CLAUDE.md §7 exception) | Recorded | 2026-09-12 |
+| D-21 | API authentication is the Django session cookie with CSRF; Vite dev proxy keeps it same-origin | Settled | 2026-09-12 |
 
 ---
 
@@ -417,3 +419,49 @@ presentation prep sheet, which supersedes the earlier one-retry statement.
 **Consequences.** NFR-19's test asserts exactly three provider calls before the 503.
 The SDK clients are constructed with `max_retries=0` so these constants are the only
 retry policy.
+
+## D-20 · In-place dependency edit to a pushed migration
+
+**Status:** Recorded under the `CLAUDE.md` §7 migrations exception · **Date:** 2026-09-12
+
+**What was edited.** Commit `e08da51` added `("documents", "0001_initial")` to the
+`dependencies` of `apps/meetings/migrations/0001_initial.py` after the branch had
+been pushed, so that `migrate` applies Documents before Meetings as
+`docs/schema-v1.md` §5 lists. No operation changed.
+
+**Evidence that no other environment had applied it.** The branch
+`chore/stage-1-environment-and-schema` was unmerged and had been pushed for under an
+hour; the only databases that had run the migration were the author's local
+docker-compose database, rebuilt from empty in the same session, and GitHub Actions
+service containers, which are discarded after each run. A missing dependency cannot
+be supplied by a later migration, which is why the exception exists.
+
+**Why it is here.** The build session first reported that no pushed migration had
+been edited; the auditor found the diff. This entry corrects the record.
+
+## D-21 · API authentication: session cookie with CSRF, same-origin in development
+
+**Status:** Settled · **Date:** 2026-09-12
+
+**Decision.** The API authenticates requests with Django's session cookie
+(`rest_framework.authentication.SessionAuthentication`), which is the session
+framework D-10 already chose. There are no bearer tokens. Unsafe requests carry the
+CSRF token in the `X-CSRFToken` header, read from the `csrftoken` cookie that the
+login and current-user responses set. `DEFAULT_PERMISSION_CLASSES` is
+`IsAuthenticated` (`CLAUDE.md` §6 invariant 4); the registration and login endpoints
+opt out explicitly. In development the Vite dev server proxies `/api` to Django so
+the browser sees one origin and no CORS configuration exists; in the alpha
+deployment the built front end is served from the same origin as the API.
+
+**Rationale.** FR-04 requires server-side session destruction on logout and a
+60-minute inactivity expiry, both of which the session framework provides and a
+bearer token would have to reimplement. One origin removes cross-site cookie and
+CORS configuration, the most common way a capstone login "works locally and fails
+deployed". The session cookie is `HttpOnly`, so the front end never handles a
+credential.
+
+**Consequences.** "A token must stop working after logout" (Stage 2 item 2) is
+tested by replaying the session cookie after logout and asserting 401. The
+`Authorization: Bearer` support in the front-end API client is removed. Role changes
+take effect on the next request because the role is read from the database per
+request, never cached in the session.
