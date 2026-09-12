@@ -25,12 +25,16 @@ RELEVANCE_THRESHOLD = 0.5
 # Stage 4 once the prompt and the model's context window are measured.
 MAXIMUM_CONTEXT_TOKENS = 4000
 
-# --- Resilience (NFR-19, NFR-20) ----------------------------------------------------
-# Total attempts, not retries: one attempt plus the two retries CLAUDE.md section 5
-# names, after which the view answers 503 with the NFR-19 notice.
+# --- Resilience (NFR-19, NFR-20; docs/decisions.md D-19) ----------------------------
+# Total attempts, not retries: one initial attempt plus two retries, confirmed as
+# the uniform policy in D-19. After the last attempt the view answers 503 with the
+# NFR-19 notice.
 MAXIMUM_GENERATION_ATTEMPTS = 3
-# Same reasoning: one attempt plus two retries, after which the item is flagged.
+# Same policy: one attempt plus two retries, after which the item is flagged.
 MAXIMUM_EMBED_ATTEMPTS = 3
+# Same policy for classification (FR-10, NIT3004). Named here now so the retry
+# policy is uniform across every AI call, not so anything uses it before Stage 6.
+MAXIMUM_CLASSIFY_ATTEMPTS = 3
 
 # --- Question bounds (FR-12, FR-13), in characters -----------------------------------
 MINIMUM_QUESTION_LENGTH = 10
@@ -44,10 +48,12 @@ MINIMUM_CONTENT_LENGTH = 200
 
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 
-# Lower-case file extensions accepted for upload (FR-08). Callers lower-case the
+# Lower-case file extensions accepted for upload (FR-08). Exactly four, per
+# docs/decisions.md D-15: legacy DOC and XLS need an external binary to extract and
+# would always be answered 415, so they are not accepted. Callers lower-case the
 # extension before testing membership. The content signature is checked separately;
 # the extension alone admits nothing.
-ACCEPTED_FORMATS = frozenset({"pdf", "docx", "doc", "xlsx", "xls", "txt"})
+ACCEPTED_FORMATS = frozenset({"pdf", "docx", "xlsx", "txt"})
 
 # --- Account lockout (FR-03, NIT3004) ------------------------------------------------
 LOCKOUT_THRESHOLD = 5

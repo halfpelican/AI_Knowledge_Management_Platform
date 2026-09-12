@@ -91,6 +91,20 @@ def test_content_chunk_rejects_a_vector_of_the_wrong_length(document):
         chunk.save()
 
 
+def test_content_chunk_visible_to_roles_mirrors_documents(content_chunk, document):
+    # D-17: same shape as Documents.visible_to_roles, empty until ingestion stamps it.
+    content_chunk.refresh_from_db()
+    assert content_chunk.visible_to_roles == []
+    chunk_field = ContentChunk._meta.get_field("visible_to_roles")
+    document_field = Document._meta.get_field("visible_to_roles")
+    assert chunk_field.base_field.max_length == document_field.base_field.max_length
+    assert chunk_field.default is list and document_field.default is list
+    content_chunk.visible_to_roles = [EMPLOYEE_ROLE_NAME]
+    content_chunk.save()
+    assert ContentChunk.objects.get(pk=content_chunk.pk).visible_to_roles == [EMPLOYEE_ROLE_NAME]
+    assert ContentChunk.objects.filter(visible_to_roles__contains=[EMPLOYEE_ROLE_NAME]).count() == 1
+
+
 def test_content_chunk_source_is_not_a_database_foreign_key(content_chunk, document):
     # D-07: the database accepts a dangling source_id and does not cascade; the
     # application deletes chunks with their source, in the same transaction.

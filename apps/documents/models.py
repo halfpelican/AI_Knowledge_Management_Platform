@@ -80,6 +80,14 @@ class ContentChunk(models.Model):
     embedding_model = models.CharField(max_length=NAME_MAX_LENGTH)
     embedding_dimension = models.PositiveIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
+    # Same shape as Documents.visible_to_roles (docs/decisions.md D-17). The FR-11
+    # permission predicate and the vector live on one table, so retrieval filters
+    # before ranking structurally, not by a join it could forget. Ingestion stamps
+    # it from the source, and any visibility change on a source re-stamps its chunks
+    # (Stage 3 and 4 logic). No index yet.
+    visible_to_roles = ArrayField(
+        models.CharField(max_length=VOCABULARY_MAX_LENGTH), default=list, blank=True
+    )
 
     class Meta:
         db_table = "content_chunks"

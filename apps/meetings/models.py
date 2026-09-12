@@ -1,10 +1,16 @@
 """Meetings: Meetings and MeetingAttendees (docs/schema-v1.md section 1)."""
 
 from django.conf import settings
+from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
 from apps.core.constants import DEFAULT_MEETING_STATUS, MEETING_STATUS_VALUES
-from apps.core.models import NAME_MAX_LENGTH, uuid_primary_key, vocabulary_field
+from apps.core.models import (
+    NAME_MAX_LENGTH,
+    VOCABULARY_MAX_LENGTH,
+    uuid_primary_key,
+    vocabulary_field,
+)
 
 
 class Meeting(models.Model):
@@ -16,6 +22,12 @@ class Meeting(models.Model):
     transcript_text = models.TextField()
     status = vocabulary_field(MEETING_STATUS_VALUES, default=DEFAULT_MEETING_STATUS)
     created_at = models.DateTimeField(auto_now_add=True)
+    # Role names, mirroring Documents.visible_to_roles exactly: the FR-11 permission
+    # filter for meeting content (docs/decisions.md D-16). Meetings are NOT scoped by
+    # attendance; MeetingAttendees is a participation record only.
+    visible_to_roles = ArrayField(
+        models.CharField(max_length=VOCABULARY_MAX_LENGTH), default=list, blank=True
+    )
 
     class Meta:
         db_table = "meetings"

@@ -34,11 +34,12 @@ SCHEMA_V1 = {
     "content_chunks": (
         ("chunk_id",),
         {"chunk_id", "source_type", "source_id", "chunk_index", "chunk_text", "embedding",
-         "embedding_model", "embedding_dimension", "created_at"},
+         "embedding_model", "embedding_dimension", "created_at", "visible_to_roles"},  # D-17
     ),
     "meetings": (
         ("meeting_id",),
-        {"meeting_id", "title", "meeting_date", "transcript_text", "status", "created_at"},
+        {"meeting_id", "title", "meeting_date", "transcript_text", "status", "created_at",
+         "visible_to_roles"},  # D-16
     ),
     "meeting_attendees": (("attendee_id",), {"attendee_id", "meeting_id", "user_id"}),
     "conversations": (
@@ -170,6 +171,10 @@ SECTION_5_PLAN = [
     ("documents", "0002_content_chunks"),
     ("retrieval", "0001_initial"),
     ("documents", "0003_tags"),
+    # Post-v1 additions, each after its app's existing migrations:
+    ("documents", "0004_file_type_four_formats"),  # D-15: four upload formats
+    ("documents", "0005_chunk_visible_to_roles"),  # D-17: visible_to_roles on ContentChunks
+    ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
 ]
 
 

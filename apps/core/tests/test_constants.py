@@ -15,6 +15,7 @@ SECTION_5_NAMES = [
     "MAXIMUM_CONTEXT_TOKENS",
     "MAXIMUM_GENERATION_ATTEMPTS",
     "MAXIMUM_EMBED_ATTEMPTS",
+    "MAXIMUM_CLASSIFY_ATTEMPTS",
     "MINIMUM_QUESTION_LENGTH",
     "MAXIMUM_QUESTION_LENGTH",
     "MINIMUM_CONTENT_LENGTH",
@@ -48,22 +49,24 @@ def test_chunk_overlap_is_smaller_than_chunk_size():
     assert constants.CHUNK_OVERLAP == 50
 
 
-def test_accepted_formats_is_a_frozenset_of_bare_lower_case_extensions():
+def test_accepted_formats_is_a_frozenset_of_exactly_four_bare_lower_case_extensions():
+    # docs/decisions.md D-15: four formats; legacy doc and xls are not accepted.
     assert isinstance(constants.ACCEPTED_FORMATS, frozenset)
-    assert constants.ACCEPTED_FORMATS == {"pdf", "docx", "doc", "xlsx", "xls", "txt"}
+    assert constants.ACCEPTED_FORMATS == {"pdf", "docx", "xlsx", "txt"}
     for extension in constants.ACCEPTED_FORMATS:
         assert extension == extension.lower()
         assert not extension.startswith(".")
 
 
-@pytest.mark.parametrize("extension", ["pdf", "docx", "doc", "xlsx", "xls", "txt"])
+@pytest.mark.parametrize("extension", ["pdf", "docx", "xlsx", "txt"])
 def test_accepted_format_membership(extension):
     assert extension in constants.ACCEPTED_FORMATS
 
 
-@pytest.mark.parametrize("extension", ["exe", "zip", "md", "html", ".pdf", "PDF", ""])
+@pytest.mark.parametrize("extension", ["doc", "xls", "exe", "zip", "md", "html", ".pdf", "PDF", ""])
 def test_unaccepted_format_membership(extension):
-    # Upper-case and dotted forms are deliberately absent: callers normalise first.
+    # doc and xls per D-15; upper-case and dotted forms are deliberately absent
+    # because callers normalise first.
     assert extension not in constants.ACCEPTED_FORMATS
 
 
@@ -83,8 +86,11 @@ def test_upload_limit_is_fifty_megabytes():
 
 
 def test_attempt_counts_are_one_attempt_plus_two_retries():
+    # docs/decisions.md D-19: three total attempts, uniform across every AI call,
+    # including classification (FR-10, NIT3004) which is named now but unused.
     assert constants.MAXIMUM_GENERATION_ATTEMPTS == 3
     assert constants.MAXIMUM_EMBED_ATTEMPTS == 3
+    assert constants.MAXIMUM_CLASSIFY_ATTEMPTS == 3
 
 
 def test_top_k_is_positive():
