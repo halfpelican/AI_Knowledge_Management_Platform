@@ -20,6 +20,8 @@ Rules for this file:
 | D-02 | Login field for FR-01 / FR-02: email address | Settled | 2026-09-12 |
 | D-03 | Embedding model and dimension: embed-gemma, 768 | Settled by the FLM decision | 2026-09-12 |
 | D-04 | API key ownership and spend caps: none needed for the build phase | Settled by the FLM decision | 2026-09-12 |
+| D-05 | Uploaded files live in a local media directory | Settled by the team plan of 1 Sep 2026 | 2026-09-12 |
+| D-06 | Front-end language: JavaScript with JSX, not TypeScript | Settled | 2026-09-12 |
 
 ---
 
@@ -138,3 +140,50 @@ machine; it returns only if the production path is switched on.
   never committed (`CLAUDE.md` §7). Switching provider also triggers D-03's re-index.
 - The test suite never needs a key: it injects a stub `AIService`
   (`docs/ai-provider.md` §6), so CI runs with no AI credentials at all.
+
+## D-05 · Uploaded file storage
+
+**Status:** Settled by the team plan of 1 September 2026, recorded here · **Date:** 2026-09-12
+
+**Decision.** Uploaded originals are stored on the local filesystem under a media
+directory configured from the environment (`MEDIA_ROOT`), not inside the database
+and not in cloud object storage. Cloud storage is a later change behind the same
+storage interface.
+
+**Rationale.** The team's 1 September work assignment lists "Where do uploaded
+files live?" among the five things that quietly cost a week if left open, and
+settles it as "local media directory for now, cloud storage later. Decide, write it
+down, don't drift." The alpha runs on one machine, a directory is the boring option,
+and Django's file storage abstraction means a later move to object storage does not
+touch application code.
+
+**Consequences.**
+
+- `MEDIA_ROOT` is read from the environment when FR-08 lands in Stage 3, defaulting
+  to `media/` under the repository root, which is gitignored.
+- The original file and the extracted plain text are stored separately
+  (`CLAUDE.md` §6 and the rag-pipeline rules), so the original is never re-parsed
+  for retrieval.
+- Stored filenames are sanitised. No upload may write outside the media directory.
+
+## D-06 · Front-end language
+
+**Status:** Settled · **Date:** 2026-09-12
+
+**Decision.** The React application is written in JavaScript with JSX, from Vite's
+`react` template. Not TypeScript.
+
+**Rationale.** The team's 1 September plan says of the front end: "React is our
+weakest skill and it will expand to fill whatever room it is given." TypeScript adds
+a type layer, a build-time failure class and configuration to learn, while the M6
+gate is scored on the breadth of working requirements. JavaScript is the boring
+choice (`CLAUDE.md` §9). The API contract is enforced by server-side validation and
+tests, not by front-end types.
+
+**Consequences.**
+
+- Files under `frontend/src/` are `.jsx` and `.js`. No `tsconfig`, no type
+  packages. ESLint from the Vite template is the only static check.
+- Decided by the build session on 2026-09-12 under the Stage 1 delegation because
+  the scaffold could not be created without choosing. Overturn it before the first
+  feature screen is written in Stage 2; after that a conversion costs days.
