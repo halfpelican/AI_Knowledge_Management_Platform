@@ -45,3 +45,12 @@ not too similar to the name or email).
 
 Session: 60-minute inactivity expiry (D-10). An expired or invalid session cookie is
 `401` on every route that needs one.
+
+Response bodies the front end relies on (Stage 2 implementation):
+
+- `409` on registration: `{"detail": "This email address is already registered."}`.
+- `403`: `{"detail": "Your role does not hold the 'manage_roles' permission."}`.
+- Unmatched path: JSON `404 {"detail": "Not found."}`.
+- CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
+  `POST /api/auth/login` when the browser already holds a session.
+- `POST /api/auth/register` starts no session (D-23).

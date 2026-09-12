@@ -37,6 +37,8 @@ Rules for this file:
 | D-19 | Retry semantics: 3 total attempts, 1 initial plus 2 retries (user label D-10) | Settled by the user | 2026-09-12 |
 | D-20 | Logged in-place dependency edit to meetings 0001 (CLAUDE.md §7 exception) | Recorded | 2026-09-12 |
 | D-21 | API authentication is the Django session cookie with CSRF; Vite dev proxy keeps it same-origin | Settled | 2026-09-12 |
+| D-22 | Audit-log entries are JSON lines in a file (AUDIT_LOG_PATH); schema v1 has no audit table | Settled provisionally, confirm | 2026-09-13 |
+| D-23 | Stage 2 conventions: registration starts no session, administrators may change their own role, Django password validators | Settled | 2026-09-13 |
 
 ---
 
@@ -465,3 +467,35 @@ tested by replaying the session cookie after logout and asserting 401. The
 `Authorization: Bearer` support in the front-end API client is removed. Role changes
 take effect on the next request because the role is read from the database per
 request, never cached in the session.
+
+## D-22 · Audit-log medium for role changes
+
+**Status:** Settled provisionally, to confirm against the proposal · **Date:** 2026-09-13
+
+**Decision.** FR-05's "role changes write an audit-log entry" is satisfied by one JSON
+line per change on a dedicated `audit` logger, written to the file named by
+`AUDIT_LOG_PATH` (default `logs/audit.log`, gitignored): timestamp, event, actor id
+and email, target id and email, old role, new role.
+
+**Rationale.** `docs/schema-v1.md` defines no audit table in §1 or §2, and inventing
+one would violate the schema rule. A structured log file satisfies the clause with no
+schema change and can be replayed into a table later if the proposal turns out to
+require one.
+
+**Consequences.** If the proposal's FR-05 section names a table, migration v2 adds it
+and the logger call becomes a row insert; the call site is one function in
+`apps/accounts/audit.py`.
+
+## D-23 · Stage 2 conventions the contract did not state
+
+**Status:** Settled · **Date:** 2026-09-13
+
+- Registration returns 201 and starts no session; the client signs in through login.
+- An Administrator may change any user's role, including their own, and a same-role
+  change still writes an audit entry. Nothing in the available text forbids
+  self-demotion; revisit if the proposal does.
+- Password rules are Django's four default validators, with similarity checked
+  against name and email.
+- `locked_until` is stamped on every failure at or beyond `LOCKOUT_THRESHOLD` and is
+  not cleared by a successful login; enforcing and clearing it is FR-03 (NIT3004).
+- Unmatched API paths return a JSON 404 body.
