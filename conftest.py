@@ -1,5 +1,19 @@
 """Shared pytest fixtures for the whole suite.
 
-The stub AI service that keeps every test away from a live FLM server arrives with
-apps/ai (Stage 1 item 6). Until then there is nothing to share.
+No test ever reaches a live AI provider (docs/ai-provider.md section 6). The
+autouse fixture below replaces apps.ai.get_ai_service with a StubAIService for
+every test. Code under test must obtain the service through that function, looked
+up on the apps.ai module at call time, for the stub to apply.
 """
+
+import pytest
+
+import apps.ai
+from apps.ai.testing import StubAIService
+
+
+@pytest.fixture(autouse=True)
+def stub_ai_service(monkeypatch):
+    stub = StubAIService()
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: stub)
+    return stub
