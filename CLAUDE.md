@@ -158,7 +158,7 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |
 | `MINIMUM_CONTENT_LENGTH` | below this, mark "insufficient content", do not embed |
 | `MAX_UPLOAD_BYTES` | 50 MB |
-| `ACCEPTED_FORMATS` | PDF, DOCX, DOC, XLSX, XLS, TXT |
+| `ACCEPTED_FORMATS` | PDF, DOCX, XLSX, TXT (four, per D-15; DOC and XLS dropped) |
 | `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION` | 5 attempts / 15 minutes (FR-03, NIT3004) |
 | `NO_ANSWER_MESSAGE` | fixed text, defined once |
 

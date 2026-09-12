@@ -93,6 +93,7 @@ Stored separately from the original file so text is reusable without re-parsing.
 | `embedding_model` | text | e.g. `embed-gemma` — see gap G2 |
 | `embedding_dimension` | integer | 768 for embed-gemma |
 | `created_at` | timestamp | |
+| `visible_to_roles` | text[] | stamped from the source at ingestion so the filter and the vector share a table — D-17 |
 
 Index on `(source_type, source_id)` and on `embedding_model` — retrieval filters by
 recorded model before ranking.
@@ -107,6 +108,7 @@ recorded model before ranking.
 | `transcript_text` | text (long) | must exceed minimum length |
 | `status` | text | fixed vocabulary — see §3 |
 | `created_at` | timestamp | |
+| `visible_to_roles` | text[] | the FR-11 permission filter, mirrors Documents — G6, D-16 |
 
 ### MeetingAttendees — FR-09
 
@@ -264,6 +266,14 @@ breaks if a role is renamed. Recommendation: keep the proposal's shape for v1 si
 FR-11 is written against it and two roles will never be renamed in this project, but
 note the limitation rather than presenting it as a design strength if asked at the
 demonstration.
+
+**G6 — Meetings has no permission filter** although FR-11 must scope meeting chunks.
+Resolved by D-16: `Meetings.visible_to_roles` mirrors Documents; attendance is not an
+access control. D-17 additionally stamps `visible_to_roles` onto every chunk.
+
+**G7 — Documents has no column for the stored original** although FR-08 stores it.
+Resolved by D-18: deferred to migration v2 at the start of Stage 3, because its shape
+depends on the storage implementation.
 
 ---
 

@@ -30,6 +30,11 @@ Rules for this file:
 | D-12 | Foreign-key deletion policy for migration v1 | Settled | 2026-09-12 |
 | D-13 | Query, search, citation and conversation models live in apps/retrieval | Settled | 2026-09-12 |
 | D-14 | RBAC uses the project's Roles/Permissions tables only, never Django's Group/Permission | Settled | 2026-09-12 |
+| D-15 | Accepted upload formats: four, PDF DOCX XLSX TXT (user label D-06) | Settled by the user | 2026-09-12 |
+| D-16 | G6: Meetings.visible_to_roles in schema v1, not scoped by attendance (user label D-07) | Settled by the user | 2026-09-12 |
+| D-17 | visible_to_roles denormalised onto ContentChunks at ingestion (user label D-08) | Settled by the user | 2026-09-12 |
+| D-18 | G7: Documents storage path deferred to migration v2 in Stage 3 (user label D-09) | Settled by the user | 2026-09-12 |
+| D-19 | Retry semantics: 3 total attempts, 1 initial plus 2 retries (user label D-10) | Settled by the user | 2026-09-12 |
 
 ---
 
@@ -337,3 +342,78 @@ the project's tables; Django's are incidental.
 
 **Consequences.** Stage 2's RBAC permission classes resolve the user's role and its
 `RolePermissions` rows, nothing else. The `User` model has no `PermissionsMixin`.
+
+## D-15 · Accepted upload formats: four (user label D-06)
+
+**Status:** Settled by the user · **Date:** 2026-09-12
+
+**Decision.** `ACCEPTED_FORMATS` is exactly PDF, DOCX, XLSX and TXT.
+
+**Rationale (as given).** The proposal is internally inconsistent: six formats in
+FR-08's upload area, four parsers in §9.2, three in FR-08's own example error
+message. DOC and XLS are legacy binary formats requiring an external binary
+(LibreOffice or antiword) that must work on three development machines and in CI.
+Accepting a format that always returns 415 is a demonstrable defect.
+
+**Consequences.** `ACCEPTED_FORMATS` and the client-side rejection message (Stage 3
+upload screen) both name the same four. `CLAUDE.md` §5 is amended to match.
+`Documents.file_type` choices are the same four; the change lands as migration
+`documents 0004` because the branch was already pushed.
+
+## D-16 · G6: Meetings.visible_to_roles in schema v1 (user label D-07)
+
+**Status:** Settled by the user · **Date:** 2026-09-12
+
+**Decision.** `Meetings.visible_to_roles` is added, mirroring `Documents` exactly.
+
+**Rationale (as given).** Meetings are not scoped by attendance: knowledge must
+outlive its participants, and a second scoping mechanism would mean two code paths
+through the FR-11 filter. `MeetingAttendees` remains a participation record for
+FR-20, not an access control.
+
+**Consequences.** Lands as migration `meetings 0002` (the branch was pushed).
+`docs/schema-v1.md` §1 gains the column and §4 gains G6.
+
+## D-17 · visible_to_roles denormalised onto ContentChunks (user label D-08)
+
+**Status:** Settled by the user · **Date:** 2026-09-12
+
+**Decision.** Every `ContentChunks` row carries `visible_to_roles`, stamped from its
+source at ingestion.
+
+**Rationale (as given).** This makes the FR-11 "filter before ranking" invariant
+structurally true: the permission predicate and the vector live on one table, so no
+query shape can rank first. Changing a source's visibility re-stamps its chunks.
+
+**Consequences.** Lands as migration `documents 0005`. Stage 3 ingestion stamps the
+column; Stage 4 retrieval filters on it before any similarity computation; a
+visibility change on a document or meeting re-stamps its chunks in the same
+transaction.
+
+## D-18 · G7: Documents storage path deferred to migration v2 (user label D-09)
+
+**Status:** Settled by the user · **Date:** 2026-09-12
+
+**Decision.** The column recording where a stored original lives is added in
+migration v2, at the start of Stage 3, not in schema v1.
+
+**Rationale (as given).** Its shape depends on the storage implementation: a Django
+`FileField` would be the column. Defining it before that decision would pre-empt it.
+
+**Consequences.** Stage 3 item 1 begins with that migration. D-05 still fixes the
+storage location as a local media directory.
+
+## D-19 · Retry semantics: three total attempts (user label D-10)
+
+**Status:** Settled by the user · **Date:** 2026-09-12
+
+**Decision.** Three total attempts, one initial plus two retries, uniformly for
+`MAXIMUM_GENERATION_ATTEMPTS`, `MAXIMUM_EMBED_ATTEMPTS` and
+`MAXIMUM_CLASSIFY_ATTEMPTS`.
+
+**Rationale (as given).** Matches the proposal's "2 retries" wording and the
+presentation prep sheet, which supersedes the earlier one-retry statement.
+
+**Consequences.** NFR-19's test asserts exactly three provider calls before the 503.
+The SDK clients are constructed with `max_retries=0` so these constants are the only
+retry policy.
