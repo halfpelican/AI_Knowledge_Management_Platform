@@ -4,6 +4,11 @@ The suite never reaches a live provider: the root conftest.py installs a
 StubAIService for every test through apps.ai.get_ai_service. A test that needs
 different behaviour (another dimension, an outage) builds its own instance and
 patches it in the same way; apps/ai/tests/test_checks.py shows how.
+
+As a second layer, conftest.py also points every provider endpoint at
+UNROUTABLE_PROVIDER_URL for every test: a closed port on loopback, so a call that
+bypasses the stub is refused at once instead of quietly answered by a developer's
+running FLM server. apps/ai/tests/test_no_live_provider.py asserts both layers.
 """
 
 import hashlib
@@ -14,6 +19,13 @@ from django.conf import settings
 from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, Statement, StatementList
 
 STUB_EMBEDDING_MODEL = "stub-embed"
+
+# Port 9 (discard) is closed on every development machine and CI runner, so a
+# connect is actively refused rather than left to time out: about 2 s per attempt
+# on Windows (measured, WinError 10061), less on Linux. Loopback, so nothing leaves
+# the machine even in error.
+UNROUTABLE_PROVIDER_HOST = "http://127.0.0.1:9"
+UNROUTABLE_PROVIDER_URL = f"{UNROUTABLE_PROVIDER_HOST}/v1"
 
 
 class StubAIService:

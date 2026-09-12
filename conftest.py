@@ -1,9 +1,14 @@
 """Shared pytest fixtures for the whole suite.
 
-No test ever reaches a live AI provider (docs/ai-provider.md section 6). The
-autouse fixture below replaces apps.ai.get_ai_service with a StubAIService for
-every test. Code under test must obtain the service through that function, looked
-up on the apps.ai module at call time, for the stub to apply.
+No test ever reaches a live AI provider (docs/ai-provider.md section 6). Two
+autouse fixtures below enforce that:
+
+- stub_ai_service replaces apps.ai.get_ai_service with a StubAIService for every
+  test. Code under test must obtain the service through that function, looked up
+  on the apps.ai module at call time, for the stub to apply.
+- no_live_provider points every provider endpoint at a closed loopback port and
+  blanks every key, so anything that bypasses the stub fails at once with a
+  connection error instead of quietly succeeding against a running FLM server.
 
 The model fixtures give every test the same small, realistic set of rows: one
 user per role and one document with one chunk, visible to Employees.
@@ -11,9 +16,10 @@ user per role and one document with one chunk, visible to Employees.
 
 import pytest
 from django.conf import settings
+from django.test import override_settings
 
 import apps.ai
-from apps.ai.testing import StubAIService
+from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
 
 PASSWORD = "correct horse battery staple"
@@ -24,6 +30,20 @@ def stub_ai_service(monkeypatch):
     stub = StubAIService()
     monkeypatch.setattr(apps.ai, "get_ai_service", lambda: stub)
     return stub
+
+
+@pytest.fixture(autouse=True)
+def no_live_provider(monkeypatch):
+    # config/settings.py has no ANTHROPIC_BASE_URL; the anthropic SDK reads this
+    # environment variable instead, so it gets the same closed port.
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", UNROUTABLE_PROVIDER_HOST)
+    with override_settings(
+        FLM_BASE_URL=UNROUTABLE_PROVIDER_URL,
+        VOYAGE_BASE_URL=UNROUTABLE_PROVIDER_URL,
+        ANTHROPIC_API_KEY="",  # nothing in a developer's .env can reach a metered API
+        VOYAGE_API_KEY="",
+    ):
+        yield
 
 
 @pytest.fixture
