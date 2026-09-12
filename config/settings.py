@@ -50,6 +50,9 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # Resolves the session cookie to request.user, which DRF's session
+    # authentication reads (D-21). Must follow SessionMiddleware.
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -80,12 +83,54 @@ DATABASES = {"default": env.db("DATABASE_URL")}  # required, no default
 
 AUTH_USER_MODEL = "accounts.User"
 
+# bcrypt is the hasher the proposal names for password_hash (FR-01). It is listed
+# first so every new hash is bcrypt; Django's defaults follow so any other format
+# can still be verified. A test asserts new hashes start with "bcrypt_sha256$".
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+]
+
+# Django's four default validators, as docs/api-contract.md records under FR-01
+# (marked convention there). The similarity validator is pointed at the two user
+# attributes this model has; Django's default list names columns it does not.
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ["name", "email"]},
+    },
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
+
 # --- Sessions (FR-04, docs/decisions.md D-10) --------------------------------------
 # Django's own session framework, database-backed: no Sessions table of our own.
 # Saving on every request makes SESSION_COOKIE_AGE an inactivity expiry.
 
 SESSION_COOKIE_AGE = SESSION_INACTIVITY_MINUTES * 60
 SESSION_SAVE_EVERY_REQUEST = True
+# The session cookie is the credential (D-21): never readable by scripts, and
+# not sent on cross-site requests. The CSRF cookie must stay readable because the
+# front end copies it into the X-CSRFToken header on every unsafe request.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
+# Every route is protected unless it opts out explicitly (registration and login).
+# apps.api.authentication.SessionAuthentication names its scheme so DRF answers an
+# unauthenticated request with 401 rather than its 403 fallback.
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.SessionAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+}
 
 # --- Internationalisation -------------------------------------------------------
 

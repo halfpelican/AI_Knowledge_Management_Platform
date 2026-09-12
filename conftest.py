@@ -12,7 +12,14 @@ autouse fixtures below enforce that:
 
 The model fixtures give every test the same small, realistic set of rows: one
 user per role and one document with one chunk, visible to Employees.
+
+The client fixtures cover the dual-role gate (CLAUDE.md section 8): api_client is
+anonymous, employee_client and administrator_client are logged in as one role, and
+session_client is parametrised over both roles so a test written once against it
+runs from an Employee session and from an Administrator session.
 """
+
+from dataclasses import dataclass
 
 import pytest
 from django.conf import settings
@@ -20,7 +27,7 @@ from django.test import override_settings
 
 import apps.ai
 from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
+from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
 
 PASSWORD = "correct horse battery staple"
 
@@ -103,3 +110,48 @@ def content_chunk(document):
         embedding_model="stub-embed",
         embedding_dimension=settings.EMBEDDING_DIMENSION,
     )
+
+
+# --- API clients (docs/decisions.md D-21: session cookie) ------------------------------
+
+
+@pytest.fixture
+def api_client():
+    """Anonymous client. CSRF is not enforced, as on Django's test client; the tests
+    that prove the cookie flow build their own client with enforce_csrf_checks."""
+    from rest_framework.test import APIClient
+
+    return APIClient()
+
+
+def _logged_in(user):
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_login(user)
+    return client
+
+
+@pytest.fixture
+def employee_client(employee):
+    return _logged_in(employee)
+
+
+@pytest.fixture
+def administrator_client(administrator):
+    return _logged_in(administrator)
+
+
+@dataclass
+class RoleSession:
+    role_name: str
+    user: object
+    client: object
+
+
+@pytest.fixture(params=ROLE_NAMES, ids=[name.lower() for name in ROLE_NAMES])
+def session_client(request):
+    """One logged-in client per role, so a test runs from both roles (CLAUDE.md
+    section 8 item 2). The fixture named after the role supplies the user."""
+    user = request.getfixturevalue(request.param.lower())
+    return RoleSession(request.param, user, _logged_in(user))
