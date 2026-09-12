@@ -9,6 +9,7 @@ an authenticated one whose role lacks the code is 403 (CLAUDE.md section 6
 invariant 4). Django's Group and Permission tables are never consulted.
 """
 
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework.permissions import BasePermission
 
 from apps.accounts.models import RolePermission
@@ -35,6 +36,9 @@ class HasRolePermission(BasePermission):
         )
 
     def has_permission(self, request, view) -> bool:
+        if self.permission_name is None:
+            # The bare class guards nothing; a route must name the code it needs.
+            raise ImproperlyConfigured("Use HasRolePermission.for_code(<permission_name>).")
         user = request.user
         if not (user and user.is_authenticated):
             return False
