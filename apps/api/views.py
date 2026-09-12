@@ -6,6 +6,7 @@ default, so only the views that set ``AllowAny`` are reachable anonymously.
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
+from django.contrib.auth import logout as django_logout
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -100,6 +101,20 @@ class LoginView(APIView):
             user.failed_attempts = 0
             user.save(update_fields=["failed_attempts"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+# --- FR-04 logout ----------------------------------------------------------------------
+
+
+class LogoutView(APIView):
+    def post(self, request):
+        # Server-side invalidation (D-10): the django_session row is deleted, so a
+        # client that keeps the cookie value holds nothing. flush() is what
+        # django_logout() does too; it is called first so the row is gone before
+        # the user_logged_out signal fires.
+        request.session.flush()
+        django_logout(request)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 # --- Current user ----------------------------------------------------------------------
