@@ -1,4 +1,4 @@
-"""Shared model helpers and abstract base models.
+"""Shared model helpers: the UUID primary key and fixed-vocabulary field builders.
 
 docs/schema-v1.md uses UUID primary keys throughout, named per table (``user_id``,
 ``doc_id``, ...). ``uuid_primary_key()`` is the single definition of that key: every
