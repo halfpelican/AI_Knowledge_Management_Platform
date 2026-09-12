@@ -1,0 +1,59 @@
+# Stage 1 item 7: install on Python 3.12, run migrations against a Postgres
+# service container, run pytest. The Python version comes from .python-version
+# (decision D-01) so there is one source of truth.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    name: Django on Python 3.12 + Postgres 16 (pgvector)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: kmp
+          POSTGRES_USER: kmp
+          POSTGRES_PASSWORD: kmp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kmp -d kmp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      SECRET_KEY: ci-only-value-not-a-secret
+      DEBUG: "False"
+      DATABASE_URL: postgres://kmp:kmp@localhost:5432/kmp
+      AI_PROVIDER: flm
+      # No FLM server exists in CI. The startup check reports a warning, never an
+      # error, when the provider is unreachable, and the test suite uses the stub
+      # AIService fixture, so nothing here reaches a live model.
+      FLM_BASE_URL: http://127.0.0.1:52625/v1
+      EMBEDDING_DIMENSION: "768"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+
+      - name: Install pinned dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Run migrations from empty
+        run: python manage.py migrate --noinput
+
+      - name: Fail on model changes without a migration
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run the test suite
+        run: pytest -q
