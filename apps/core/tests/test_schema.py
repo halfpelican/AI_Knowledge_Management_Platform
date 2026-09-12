@@ -159,3 +159,31 @@ def test_users_has_no_section_2_or_django_default_columns():
 def test_django_session_table_exists():
     # D-10: sessions are Django's own framework, not a table of ours.
     assert "django_session" in public_tables()
+
+
+SECTION_5_PLAN = [
+    ("core", "0001_pgvector_extension"),
+    ("accounts", "0001_initial"),
+    ("accounts", "0002_seed_roles"),
+    ("documents", "0001_initial"),
+    ("meetings", "0001_initial"),
+    ("documents", "0002_content_chunks"),
+    ("retrieval", "0001_initial"),
+    ("documents", "0003_tags"),
+]
+
+
+def test_migrations_apply_in_schema_v1_section_5_order():
+    """The vector extension first, then the tables in docs/schema-v1.md section 5 order."""
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    plan = executor.migration_plan(executor.loader.graph.leaf_nodes(), clean_start=True)
+    apps_in_scope = {app for app, _ in SECTION_5_PLAN}
+    ours = [
+        (migration.app_label, migration.name)
+        for migration, backwards in plan
+        if migration.app_label in apps_in_scope
+    ]
+    assert ours == SECTION_5_PLAN

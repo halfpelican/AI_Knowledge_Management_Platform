@@ -28,6 +28,8 @@ Rules for this file:
 | D-10 | Sessions use Django's session framework, no Sessions table of our own (G4) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
 | D-11 | Documents.visible_to_roles stays text[] of role names (G5) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
 | D-12 | Foreign-key deletion policy for migration v1 | Settled | 2026-09-12 |
+| D-13 | Query, search, citation and conversation models live in apps/retrieval | Settled | 2026-09-12 |
+| D-14 | RBAC uses the project's Roles/Permissions tables only, never Django's Group/Permission | Settled | 2026-09-12 |
 
 ---
 
@@ -302,3 +304,36 @@ accidental cascade from destroying audit history.
 and chunks (D-07) in one transaction; the database then cascades citations. Decided by
 the build session on 2026-09-12 because migration v1 cannot be written without it;
 overturn before FR-15 is built if the team disagrees.
+
+## D-13 · Placement of the query models
+
+**Status:** Settled · **Date:** 2026-09-12
+
+**Decision.** `Conversations`, `QueryLog`, `SearchLogs` and `AnswerCitations` are
+models in `apps/retrieval`. The app holds models and migrations only until Stage 4,
+when the rag-pipeline agent adds retrieval logic to it.
+
+**Rationale.** The Stage 1 layout describes `apps/retrieval` as "empty for now", but
+schema v1 has to put these four tables somewhere and they are retrieval's domain.
+Putting them in `apps/api` would place models in the API layer; putting them in
+`apps/core` would make core a dumping ground.
+
+**Consequences.** Stage 4 must not assume an empty app. Stage 2 (FR-13) reads and
+writes `Conversation` through these models.
+
+## D-14 · Django's auth tables are not the RBAC tables
+
+**Status:** Settled · **Date:** 2026-09-12
+
+**Decision.** FR-05 and FR-06 use only the project's `roles`, `permissions` and
+`role_permissions` tables. Django's `auth_permission`, `auth_group` and
+`auth_group_permissions` exist in the database because `django.contrib.auth` is
+required by Django REST Framework, but no code reads or writes them, and no
+authorisation decision ever consults `User.has_perm`, groups or Django permissions.
+
+**Rationale.** Two permission systems in one database is the "implemented twice
+under different names" hazard the set-level audit checks for. The proposal specifies
+the project's tables; Django's are incidental.
+
+**Consequences.** Stage 2's RBAC permission classes resolve the user's role and its
+`RolePermissions` rows, nothing else. The `User` model has no `PermissionsMixin`.

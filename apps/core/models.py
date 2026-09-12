@@ -35,17 +35,3 @@ def vocabulary_field(values, **kwargs) -> models.CharField:
         max_length=VOCABULARY_MAX_LENGTH, choices=vocabulary_choices(values), **kwargs
     )
 
-
-class UUIDPrimaryKeyMixin(models.Model):
-    id = uuid_primary_key()
-
-    class Meta:
-        abstract = True
-
-
-class TimeStampedModel(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
