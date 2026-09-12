@@ -22,6 +22,12 @@ Rules for this file:
 | D-04 | API key ownership and spend caps: none needed for the build phase | Settled by the FLM decision | 2026-09-12 |
 | D-05 | Uploaded files live in a local media directory | Settled by the team plan of 1 Sep 2026 | 2026-09-12 |
 | D-06 | Front-end language: JavaScript with JSX, not TypeScript | Settled | 2026-09-12 |
+| D-07 | ContentChunks source reference: source_type + source_id, no database FK (G1) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
+| D-08 | ContentChunks carries embedding, embedding_model, embedding_dimension (G2) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
+| D-09 | Documents column is `department`, not `department_tag` (G3) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
+| D-10 | Sessions use Django's session framework, no Sessions table of our own (G4) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
+| D-11 | Documents.visible_to_roles stays text[] of role names (G5) | Settled per docs/schema-v1.md §4 | 2026-09-12 |
+| D-12 | Foreign-key deletion policy for migration v1 | Settled | 2026-09-12 |
 
 ---
 
@@ -187,3 +193,112 @@ tests, not by front-end types.
 - Decided by the build session on 2026-09-12 under the Stage 1 delegation because
   the scaffold could not be created without choosing. Overturn it before the first
   feature screen is written in Stage 2; after that a conversion costs days.
+
+## D-07 · ContentChunks source reference is polymorphic (schema gap G1)
+
+**Status:** Settled, applying the recommendation in `docs/schema-v1.md` §4 · **Date:** 2026-09-12
+
+**Decision.** `ContentChunks` references its source with two columns,
+`source_type` (fixed vocabulary `document` | `meeting`) and `source_id` (UUID), with
+no database-level foreign key. Referential integrity is enforced in application code,
+and deleting a document or a meeting deletes its chunks explicitly, in the same
+transaction, in application code.
+
+**Rationale.** The proposal writes the column as `UUID (FK → Documents/Meetings)`,
+which cannot be a real foreign key to two tables. The chosen shape matches the pattern
+FR-10 already uses for `ContentTags` ("keyed on source type and identifier"), so both
+join paths look the same. The alternative, two nullable FK columns with a check
+constraint, keeps database enforcement but makes one join path differ from the other.
+
+**Consequences.** `SOURCE_TYPES` lives in `apps/core/constants.py`. An index on
+`(source_type, source_id)` supports the join. Stage 3 ingestion and Stage 4 retrieval
+must never assume the database will reject a dangling `source_id`.
+
+## D-08 · Embedding columns on ContentChunks (schema gap G2)
+
+**Status:** Settled, applying the recommendation in `docs/schema-v1.md` §4 · **Date:** 2026-09-12
+
+**Decision.** `ContentChunks` carries `embedding` (pgvector `vector`, dimension from
+`settings.EMBEDDING_DIMENSION`), `embedding_model` (text) and `embedding_dimension`
+(integer), indexed on `embedding_model`.
+
+**Rationale.** The proposal's table list omits any embedding column even though FR-08
+requires that "the embedding model and dimension are recorded against every stored
+vector". The three columns are the minimum that satisfies the clause. The omission is
+a documentation gap, not a design choice, and it is what makes D-03 and risk R10
+enforceable in code.
+
+**Consequences.** Retrieval filters on `embedding_model` before ranking. The column
+dimension is never a literal in code.
+
+## D-09 · Documents.department (schema gap G3)
+
+**Status:** Settled, applying the recommendation in `docs/schema-v1.md` §4 · **Date:** 2026-09-12
+
+**Decision.** The column is `department`. The name `department_tag` is not used
+anywhere: not in the schema, the API contract, the front end or the tests.
+
+**Rationale.** FR-11 says `department_tag`; FR-12 and FR-14 say `department`. One name
+must be used everywhere, and two of the three sections use `department`.
+
+## D-10 · Sessions (schema gap G4)
+
+**Status:** Settled, applying the recommendation in `docs/schema-v1.md` §4 · **Date:** 2026-09-12
+
+**Decision.** There is no hand-rolled `Sessions` table. FR-04 is satisfied by Django's
+own session framework: `django.contrib.sessions` with database-backed storage,
+`SESSION_COOKIE_AGE` of 60 minutes read from `apps/core/constants.py`, and
+`SESSION_SAVE_EVERY_REQUEST = True` so the 60 minutes is an inactivity expiry.
+Logout flushes the session on the server, which is the "Sessions (Delete)" operation
+FR-04 lists.
+
+**Rationale.** FR-04 lists `Sessions (Delete)` in its CRUD and requires server-side
+destruction on logout plus a 60-minute inactivity expiry, but gives no field list.
+Django's framework provides server-side storage, deletion on logout and the inactivity
+expiry without inventing a table the proposal never specified.
+
+**Consequences.** The `django_session` table is created by Django's migration, not by
+migration v1. Stage 2 (FR-02, FR-04) builds login and logout on this framework; a
+token a client keeps after logout must stop working, and there is a test for that.
+
+## D-11 · Documents.visible_to_roles stays text[] (schema gap G5)
+
+**Status:** Settled, applying the recommendation in `docs/schema-v1.md` §4 · **Date:** 2026-09-12
+
+**Decision.** `visible_to_roles` is a Postgres text array holding role names, exactly
+the proposal's shape. It is the FR-11 permission filter.
+
+**Rationale.** FR-11 is written against this shape, and the two roles in this project
+will never be renamed. Keeping the proposal's shape avoids rewriting FR-11's logic.
+
+**Consequences.** The role name is denormalised into every document row, and renaming
+a role would break the filter. That is a known limitation to state plainly if asked at
+the demonstration, not a strength.
+
+## D-12 · Foreign-key deletion policy for migration v1
+
+**Status:** Settled · **Date:** 2026-09-12
+
+**Decision.** The proposal specifies deletion behaviour only for `ExtractedContent`
+(cascade). Migration v1 applies one policy everywhere else:
+
+- References to `Users`, `Roles` and `Tags` are `PROTECT`. A user, role or tag that
+  something still references cannot be deleted; tags are deactivated instead
+  (`Tags.active`), as the schema already says.
+- Rows owned by a parent cascade with it: `ExtractedContent` and `MeetingAttendees`
+  with their parent, `RolePermissions` with its role or permission,
+  `AnswerCitations` with its query or its chunk, `ContentTags` with nothing (its
+  polymorphic source is handled in application code, see D-07).
+- `QueryLog.conversation_id` is `SET NULL`: a deleted conversation leaves its queries
+  behind as one-off records, so the query log is never silently thinned.
+
+**Rationale.** Query and search logs are the project's main quality signal (the two
+no-answer paths) and must survive deletions. FR-15 requires permissioned document
+deletion, so a citation row must not block deleting a document; with the chunk gone
+the citation has nothing to cite. Protecting user, role and tag rows prevents an
+accidental cascade from destroying audit history.
+
+**Consequences.** Deleting a document in Stage 5 (FR-15) deletes its extracted content
+and chunks (D-07) in one transaction; the database then cascades citations. Decided by
+the build session on 2026-09-12 because migration v1 cannot be written without it;
+overturn before FR-15 is built if the team disagrees.
