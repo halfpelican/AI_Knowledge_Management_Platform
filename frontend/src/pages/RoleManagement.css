@@ -1,0 +1,38 @@
+.roles-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.roles-table th,
+.roles-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.roles-table th {
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.roles-table__email {
+  word-break: break-word;
+}
+
+.roles-table__created {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.roles-table__role {
+  min-width: var(--layout-card-min-width);
+}
+
+.roles-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}

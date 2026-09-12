@@ -76,11 +76,6 @@
   background-color: var(--color-surface-alt);
 }
 
-/* At narrow widths the table scrolls sideways instead of breaking the page. */
-.table-scroll {
-  overflow-x: auto;
-}
-
 .contrast-table {
   width: 100%;
   border-collapse: collapse;

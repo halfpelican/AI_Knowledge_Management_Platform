@@ -75,6 +75,13 @@ textarea {
   outline-offset: var(--focus-ring-offset);
 }
 
+/* At narrow widths a data table scrolls sideways instead of breaking the page.
+   Give the wrapper role="region", an accessible name and tabIndex={0} so keyboard
+   users can scroll it. */
+.table-scroll {
+  overflow-x: auto;
+}
+
 /* Text for assistive technology that is not shown on screen. */
 .visually-hidden {
   position: absolute;

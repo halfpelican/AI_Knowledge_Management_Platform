@@ -3,7 +3,9 @@ import { messageForStatus } from '../api/client.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { contrastRatio } from '../utils/contrast.js'
 import Button from './Button.jsx'
+import NotPermitted from './NotPermitted.jsx'
 import Notice from './Notice.jsx'
+import SelectInput from './SelectInput.jsx'
 import TextInput from './TextInput.jsx'
 import './ComponentSheet.css'
 
@@ -55,9 +57,12 @@ const CONTRAST_PAIRS = [
 ]
 
 /* Components for the M6 screens, in build order. Named here so the sheet stays the index of the design system. */
+const BUILT = [
+  { name: 'Register, sign in, log out (FR-01, FR-02, FR-04)', paths: ['/register', '/login'] },
+  { name: 'Role management (FR-05, Administrator only)', paths: ['/admin/roles'] },
+]
+
 const UPCOMING = [
-  'Auth: register, login, logout (FR-01, FR-02, FR-04)',
-  'Role management (FR-05)',
   'Upload (FR-08)',
   'Meeting transcript ingestion (FR-09)',
   'Repository (FR-15)',
@@ -250,6 +255,32 @@ export default function ComponentSheet() {
         </div>
       </section>
 
+      <section aria-labelledby="sheet-select">
+        <h2 id="sheet-select">Select</h2>
+        <p>
+          A native select, so it is keyboard-operable everywhere. The role column on the role management screen
+          uses it with a visually hidden label because the column header already names it.
+        </p>
+        <div className="demo-stack">
+          <SelectInput
+            label="Role"
+            name="role-demo"
+            options={[
+              { value: 'Employee', label: 'Employee' },
+              { value: 'Administrator', label: 'Administrator' },
+            ]}
+            defaultValue="Employee"
+          />
+          <SelectInput
+            label="Role"
+            name="role-error-demo"
+            options={[{ value: 'Employee', label: 'Employee' }]}
+            defaultValue="Employee"
+            error="Choose a valid role."
+          />
+        </div>
+      </section>
+
       <section aria-labelledby="sheet-notice">
         <h2 id="sheet-notice">Notice</h2>
         <Notice variant="info" title="Nothing here yet">
@@ -259,6 +290,32 @@ export default function ComponentSheet() {
           Processing failed. Please try again.
         </Notice>
         <Notice variant="unavailable">{messageForStatus(503)}</Notice>
+      </section>
+
+      <section aria-labelledby="sheet-not-permitted">
+        <h2 id="sheet-not-permitted">Not permitted</h2>
+        <p>
+          Shown when a signed-in user&apos;s role does not allow a screen, or the server answers 403. It says
+          only that permission is lacking and never describes what the screen would have shown.
+        </p>
+        <NotPermitted />
+      </section>
+
+      <section aria-labelledby="sheet-built">
+        <h2 id="sheet-built">Screens</h2>
+        <ul>
+          {BUILT.map((screen) => (
+            <li key={screen.name}>
+              {screen.name}:{' '}
+              {screen.paths.map((path, index) => (
+                <span key={path}>
+                  {index > 0 ? ', ' : ''}
+                  <code>{path}</code>
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section aria-labelledby="sheet-upcoming">
