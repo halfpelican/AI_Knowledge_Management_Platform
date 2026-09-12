@@ -13,6 +13,8 @@ from pathlib import Path
 
 import environ
 
+from apps.core.constants import SESSION_INACTIVITY_MINUTES
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env()
@@ -30,6 +32,8 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
+    "django.contrib.sessions",
+    "django.contrib.postgres",
     "rest_framework",
     "apps.core",
     "apps.accounts",
@@ -43,6 +47,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -74,6 +79,13 @@ DATABASES = {"default": env.db("DATABASE_URL")}  # required, no default
 # shell that the proposal's Users table definition extends in a later migration.
 
 AUTH_USER_MODEL = "accounts.User"
+
+# --- Sessions (FR-04, docs/decisions.md D-10) --------------------------------------
+# Django's own session framework, database-backed: no Sessions table of our own.
+# Saving on every request makes SESSION_COOKIE_AGE an inactivity expiry.
+
+SESSION_COOKIE_AGE = SESSION_INACTIVITY_MINUTES * 60
+SESSION_SAVE_EVERY_REQUEST = True
 
 # --- Internationalisation -------------------------------------------------------
 

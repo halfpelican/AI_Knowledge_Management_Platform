@@ -1,8 +1,9 @@
-"""Tuned constants for the platform: CLAUDE.md section 5.
+"""Tuned constants and fixed vocabularies for the platform.
 
-Every value here lives here and nowhere else. Application code imports the name; it
-never restates the number. Values marked PROVISIONAL are placeholders that a named
-later step settles; change them in this one place when that step runs.
+CLAUDE.md section 5 constants and the docs/schema-v1.md section 3 vocabularies live
+here and nowhere else. Application code imports the name; it never restates the
+value. Values marked PROVISIONAL are placeholders that a named later step settles;
+change them in this one place when that step runs.
 """
 
 from datetime import timedelta
@@ -56,3 +57,31 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 # PROVISIONAL: the proposal's exact wording is not available on this machine;
 # replace it with the proposal's text when the coordinator has it. Defined once.
 NO_ANSWER_MESSAGE = "No answer could be found in the material you have access to."
+
+# --- Fixed vocabularies (docs/schema-v1.md section 3) --------------------------------
+# Status values are fixed rather than free text so a status can be filtered on and
+# its meaning does not drift. Every model ``choices=`` is derived from these tuples.
+
+DOCUMENT_STATUS_VALUES = ("Uploaded", "Extracting", "Indexed",
+                          "Insufficient content", "Processing failed")
+MEETING_STATUS_VALUES  = ("Received", "Indexed", "Processing failed")
+CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
+SOURCE_TYPES = ("document", "meeting")
+NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESHOLD
+                     "no_statement_verified")   # retrieved, but verification stripped all
+
+# A new record starts in the first value of its vocabulary.
+DEFAULT_DOCUMENT_STATUS = DOCUMENT_STATUS_VALUES[0]
+DEFAULT_MEETING_STATUS = MEETING_STATUS_VALUES[0]
+
+# The two roles (FR-05). Administrator generalises Employee; registration defaults
+# to Employee (docs/schema-v1.md, Users.role_id).
+ROLE_NAMES = ("Employee", "Administrator")
+EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME = ROLE_NAMES
+
+# Provenance of a ContentTags row (FR-10, FR-15).
+TAG_APPLIED_BY_VALUES = ("ai", "user")
+
+# --- Sessions (FR-04, docs/decisions.md D-10) -----------------------------------------
+# Inactivity expiry; config/settings.py derives SESSION_COOKIE_AGE from it.
+SESSION_INACTIVITY_MINUTES = 60

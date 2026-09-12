@@ -1,10 +1,11 @@
-"""CLAUDE.md section 5: every tuned constant is defined once, in apps.core.constants."""
+"""CLAUDE.md section 5 and docs/schema-v1.md section 3: every constant is defined once."""
 
 from datetime import timedelta
 
 import pytest
 
 from apps.core import constants
+from apps.core.models import VOCABULARY_MAX_LENGTH
 
 SECTION_5_NAMES = [
     "CHUNK_SIZE",
@@ -24,9 +25,19 @@ SECTION_5_NAMES = [
     "NO_ANSWER_MESSAGE",
 ]
 
+VOCABULARIES = [
+    "DOCUMENT_STATUS_VALUES",
+    "MEETING_STATUS_VALUES",
+    "CLASSIFICATION_DIMENSIONS",
+    "SOURCE_TYPES",
+    "NO_ANSWER_REASONS",
+    "ROLE_NAMES",
+    "TAG_APPLIED_BY_VALUES",
+]
 
-@pytest.mark.parametrize("name", SECTION_5_NAMES)
-def test_every_section_5_constant_is_defined(name):
+
+@pytest.mark.parametrize("name", SECTION_5_NAMES + VOCABULARIES + ["SESSION_INACTIVITY_MINUTES"])
+def test_every_constant_is_defined(name):
     assert hasattr(constants, name), f"{name} missing from apps.core.constants"
 
 
@@ -92,3 +103,37 @@ def test_context_and_content_limits_are_positive():
 def test_no_answer_message_is_fixed_non_empty_text():
     assert isinstance(constants.NO_ANSWER_MESSAGE, str)
     assert constants.NO_ANSWER_MESSAGE.strip()
+
+
+def test_schema_v1_vocabularies_match_the_document():
+    assert constants.DOCUMENT_STATUS_VALUES == (
+        "Uploaded", "Extracting", "Indexed", "Insufficient content", "Processing failed"
+    )
+    assert constants.MEETING_STATUS_VALUES == ("Received", "Indexed", "Processing failed")
+    assert constants.CLASSIFICATION_DIMENSIONS == ("Department", "Project", "Process", "Topic")
+    assert constants.SOURCE_TYPES == ("document", "meeting")
+    assert constants.NO_ANSWER_REASONS == ("no_relevant_passage", "no_statement_verified")
+    assert constants.ROLE_NAMES == ("Employee", "Administrator")
+    assert constants.TAG_APPLIED_BY_VALUES == ("ai", "user")
+
+
+def test_derived_names_point_into_their_vocabularies():
+    assert constants.DEFAULT_DOCUMENT_STATUS == "Uploaded"
+    assert constants.DEFAULT_MEETING_STATUS == "Received"
+    assert constants.EMPLOYEE_ROLE_NAME == "Employee"
+    assert constants.ADMINISTRATOR_ROLE_NAME == "Administrator"
+
+
+@pytest.mark.parametrize("name", VOCABULARIES)
+def test_vocabulary_values_are_distinct_strings_that_fit_the_column(name):
+    values = getattr(constants, name)
+    assert isinstance(values, tuple)
+    assert len(set(values)) == len(values)
+    for value in values:
+        assert isinstance(value, str) and value
+        assert len(value) <= VOCABULARY_MAX_LENGTH
+
+
+def test_session_inactivity_is_sixty_minutes():
+    # FR-04, docs/decisions.md D-10.
+    assert constants.SESSION_INACTIVITY_MINUTES == 60
