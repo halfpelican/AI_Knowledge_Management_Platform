@@ -223,6 +223,11 @@ vectors and fixed statement lists, so the suite passes in CI and on a machine wi
 NPU. Provider-specific behaviour — JSON repair, retry, the 503 path — is tested
 against recorded responses, including deliberately malformed ones.
 
+Enforced, not just stated: an autouse fixture in `conftest.py` points `FLM_BASE_URL`,
+`VOYAGE_BASE_URL` and the Anthropic SDK at a closed loopback port and blanks every API
+key for the whole suite, so an accidental live call fails with a connection error
+instead of quietly succeeding against a developer's running server.
+
 ---
 
 ## 7. What this buys the project

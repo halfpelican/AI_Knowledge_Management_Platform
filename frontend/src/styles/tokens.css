@@ -1,0 +1,95 @@
+/*
+ * Design tokens for the Organisational Knowledge Platform (NFR-14 style guide).
+ *
+ * Every colour, spacing, type, radius and focus value in the interface comes from
+ * here. Components reference tokens with var(--name); they never carry literals.
+ * The component sheet at /components renders these tokens and re-computes the
+ * contrast ratios from the live values.
+ *
+ * Contrast figures are WCAG 2.1 relative-luminance ratios for each text/background
+ * pair the interface uses. AA requires 4.5:1 for body text (SC 1.4.3) and 3:1 for
+ * non-text boundaries such as input borders and the focus ring (SC 1.4.11).
+ * All pairs below pass.
+ */
+:root {
+  /* ---- Colour ----------------------------------------------------------- */
+
+  /* Surfaces */
+  --color-surface: #ffffff;         /* page and card background */
+  --color-surface-alt: #f3f4f6;     /* subtle panels, info notices, swatch wells */
+
+  /* Text */
+  --color-text: #1f2933;            /* on surface 14.76:1 | on surface-alt 13.41:1 */
+  --color-text-muted: #4b5563;      /* on surface  7.56:1 | on surface-alt  6.87:1 */
+
+  /* Primary action */
+  --color-primary: #1d4ed8;         /* as link text: on surface 6.70:1 | on surface-alt 6.09:1 */
+  --color-primary-hover: #1e40af;
+  --color-primary-text: #ffffff;    /* on primary 6.70:1 | on primary-hover 8.72:1 */
+
+  /* Borders */
+  --color-border: #d0d5dd;          /* decorative separators only: 1.47:1 on surface,
+                                       never the sole boundary of a control */
+  --color-border-strong: #667085;   /* control boundaries (inputs, secondary buttons):
+                                       4.97:1 on surface | 4.52:1 on surface-alt */
+
+  /* Status */
+  --color-danger: #b42318;          /* on surface 6.57:1 | on danger-surface 6.05:1 */
+  --color-danger-surface: #fef3f2;  /* body text on it 13.57:1 */
+  --color-success: #067647;         /* on surface 5.69:1 | on success-surface 5.40:1 */
+  --color-success-surface: #ecfdf3; /* body text on it 13.99:1 */
+  --color-warning: #93370d;         /* on surface 7.52:1 | on warning-surface 7.21:1
+                                       (used by the "AI unavailable" notice, NFR-19) */
+  --color-warning-surface: #fffaeb; /* body text on it 14.14:1 */
+
+  /* Focus ring: drawn outside the element with an offset, so it always sits on
+     the page surface rather than on the control it surrounds.
+     On surface 6.70:1 | on surface-alt 6.09:1 */
+  --color-focus: #1d4ed8;
+
+  /* ---- Spacing (4px base) ----------------------------------------------- */
+  --space-1: 0.25rem; /*  4px */
+  --space-2: 0.5rem;  /*  8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem;    /* 16px */
+  --space-5: 1.5rem;  /* 24px */
+  --space-6: 2rem;    /* 32px */
+  --space-7: 3rem;    /* 48px */
+
+  /* ---- Type ------------------------------------------------------------- */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", Consolas, "Liberation Mono", monospace;
+
+  --text-sm: 0.875rem;  /* 14px  hints, metadata */
+  --text-base: 1rem;    /* 16px  body */
+  --text-lg: 1.125rem;  /* 18px  lead text, h3 */
+  --text-xl: 1.375rem;  /* 22px  h2 */
+  --text-2xl: 1.75rem;  /* 28px  h1 */
+
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* ---- Radii ------------------------------------------------------------ */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-full: 999px;
+
+  /* ---- Borders and layout ----------------------------------------------- */
+  --border-width: 1px;
+  --border-width-strong: 2px;   /* invalid input outline */
+  --border-width-emphasis: 4px; /* leading edge of a notice */
+  --control-min-height: 2.75rem; /* 44px: buttons and inputs meet the touch-target guideline */
+  --content-max-width: 72rem;
+  --layout-card-min-width: 12rem;
+  --layout-field-max-width: 28rem;
+  --opacity-disabled: 0.55;
+
+  /* ---- Focus ring ------------------------------------------------------- */
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+  --focus-ring: var(--focus-ring-width) solid var(--color-focus);
+}

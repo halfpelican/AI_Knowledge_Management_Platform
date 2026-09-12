@@ -1,0 +1,16 @@
+# Direct dependencies, pinned exactly. Do not install from this file.
+#
+# requirements.txt is the fully pinned lock compiled from it, and is what CI and
+# every developer install:
+#
+#   uv pip compile requirements.in -o requirements.txt --python-version 3.12
+#   uv pip sync --python .venv/Scripts/python.exe requirements.txt
+Django==5.2.17
+djangorestframework==3.18.1
+django-environ==0.14.0
+psycopg[binary]==3.3.5
+pgvector==0.5.0
+openai==3.13.0
+anthropic==1.5.0
+pytest==9.1.1
+pytest-django==4.14.0

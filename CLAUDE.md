@@ -24,6 +24,15 @@ front-end build) · Sagarika Dey (SD — REST API layer, meeting intelligence,
 assistant, documentation) · Haseeb Malik (HM — database, auth & RBAC, retrieval
 scoping, security, NFR verification).
 
+### Companion documents
+
+| File | What it settles |
+|---|---|
+| `M6-BUILD-PROMPT.md` | The staged build plan, Stage 0 to Stage 5 |
+| `docs/schema-v1.md` | Table definitions, deferred tables, fixed vocabularies, schema gaps |
+| `docs/ai-provider.md` | The `AIService` contract, FLM configuration, structured-output strategy |
+| `docs/decisions.md` | Every settled decision, numbered, with rationale and date |
+
 ---
 
 ## 2. The only deadline that matters right now
@@ -85,7 +94,7 @@ through `apps/ai/provider.py`, which exposes exactly three operations:
 
 ```python
 class AIService(Protocol):
-    def embed(self, texts: list[str]) -> list[list[float]]: ...
+    def embed(self, texts: list[str]) -> EmbeddingResult: ...
     def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
 ```
@@ -99,6 +108,8 @@ Two implementations, selected by the `AI_PROVIDER` environment variable:
 
 If you find yourself writing `import anthropic` or `from openai import OpenAI`
 anywhere outside `apps/ai/`, stop — that is the bug.
+
+Full contract in `docs/ai-provider.md`.
 
 ### FLM configuration
 
@@ -152,15 +163,31 @@ set during evaluation, not guessed in a code review.
 | `TOP_K` | 25 initially, *tune* |
 | `RELEVANCE_THRESHOLD` | *tune* — cosine similarity floor for admitting a passage |
 | `MAXIMUM_CONTEXT_TOKENS` | *tune* — ceiling on grounding context per call |
-| `MAXIMUM_GENERATION_ATTEMPTS` | 2 retries, then 503 (NFR-19) |
-| `MAXIMUM_EMBED_ATTEMPTS` | 2 retries, then flag the item |
+| `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
+| `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
+| `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004) |
 | `MINIMUM_QUESTION_LENGTH` | ~10 characters |
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |
 | `MINIMUM_CONTENT_LENGTH` | below this, mark "insufficient content", do not embed |
 | `MAX_UPLOAD_BYTES` | 50 MB |
-| `ACCEPTED_FORMATS` | PDF, DOCX, DOC, XLSX, XLS, TXT |
+| `ACCEPTED_FORMATS` | **PDF, DOCX, XLSX, TXT** — four, per D-15 |
 | `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION` | 5 attempts / 15 minutes (FR-03, NIT3004) |
 | `NO_ANSWER_MESSAGE` | fixed text, defined once |
+
+**The three attempt constants are totals, not retry counts.** The proposal words them
+as "2 retries", which is the same thing said differently. Comment each one
+`# 1 initial call + 2 retries` so nobody helpfully corrects them to 2. NFR-19's
+fault-injection test asserts the provider was called exactly three times before the
+503 — that test is what keeps this honest.
+
+`ACCEPTED_FORMATS` is four formats, not the six named in FR-08's upload area. DOC and
+XLS are legacy binary formats with no parser in the stack, and accepting a format
+that always returns 415 is a defect rather than a feature. The client-side rejection
+message names the same four. See D-15.
+
+Fixed vocabularies — document and meeting status values, classification dimensions,
+source types, no-answer reasons — are in `docs/schema-v1.md` §3 and live in the same
+constants module.
 
 ---
 
@@ -169,32 +196,48 @@ set during evaluation, not guessed in a code review.
 1. **Permission filtering happens before ranking, never after.** FR-11 restricts the
    candidate set at retrieval. Material outside the user's scope must never reach
    the AI service, must never contribute to an answer, and its existence must not be
-   disclosed. Filtering a ranked list afterwards is the wrong shape and will be
-   caught in the demo.
-2. **Authorisation is server-side, always.** Hiding a UI element is usability, not
+   disclosed — not by a result count, a total, or an error message that distinguishes
+   "not found" from "not permitted". Filtering a ranked list afterwards is the wrong
+   shape and will be caught in the demo.
+2. **`visible_to_roles` is denormalised onto `ContentChunks`**, stamped at ingestion
+   from the owning Document or Meeting, so invariant 1 is a predicate on the same
+   table as the vector rather than a discipline someone has to remember. No query
+   shape can rank first. Changing a source's visibility **re-stamps every one of its
+   chunks in the same transaction** — that cascade is a model-level guarantee, not a
+   convention, and it has its own test. See D-17.
+3. **Meetings are scoped by role, never by attendance.** `Meetings.visible_to_roles`
+   mirrors `Documents` exactly. Knowledge has to outlive the people who were in the
+   room, and a second scoping mechanism would mean two code paths through the single
+   filter that matters most. `MeetingAttendees` is a participation record for FR-20,
+   not an access control. See D-16.
+4. **Authorisation is server-side, always.** Hiding a UI element is usability, not
    security. Every protected route checks the role on the server. 401 for an invalid
-   or expired token, 403 for a role lacking the permission.
-3. **Citation verification is application code, not a model judgement.**
+   or expired token, 403 for a role lacking the permission. DRF defaults to
+   `AllowAny`, so `DEFAULT_PERMISSION_CLASSES` is set to `IsAuthenticated` before the
+   first protected route exists — until that line lands, FR-06 is not partly done, it
+   is inverted.
+5. **Citation verification is application code, not a model judgement.**
    `verifyCitations()` receives passage *identifiers* and checks set membership
    against the IDs supplied in the prompt. Any statement whose identifier is absent,
    unrecognised or fabricated is removed before the answer is returned. It cannot
    and does not assess whether a passage actually supports the statement — that
    limitation is known, conceded, and must not be papered over with a second model
    call.
-4. **There is no interface state that shows an uncited factual statement.** If
+6. **There is no interface state that shows an uncited factual statement.** If
    nothing survives verification, the no-answer response is returned — not a
-   fragment.
-5. **No-answer has two distinct paths, logged separately.** (a) No passage exceeded
+   fragment, not greyed-out text, not a "withheld" panel.
+7. **No-answer has two distinct paths, logged separately.** (a) No passage exceeded
    `RELEVANCE_THRESHOLD` — return without invoking generation at all. (b) Passages
    retrieved but no statement survived verification. A rising rate of (b) means
-   retrieval is admitting passages that do not answer the question.
-6. **A failed AI step never discards the source.** Transcript storage, document
+   retrieval is admitting passages that do not answer the question. The distinction
+   lives in `QueryLog.no_answer_reason`.
+8. **A failed AI step never discards the source.** Transcript storage, document
    storage and indexing status are independent of summarisation or classification
    success (NFR-20).
-7. **Ingestion is atomic.** A document record and its chunks and vectors commit
+9. **Ingestion is atomic.** A document record and its chunks and vectors commit
    together or not at all (NFR-21). No orphaned or half-indexed rows.
-8. **Structured output or nothing.** A generation response that does not conform to
-   `STATEMENT_LIST_SCHEMA` is treated as no response and retried, then 503.
+10. **Structured output or nothing.** A generation response that does not conform to
+    `STATEMENT_LIST_SCHEMA` is treated as no response and retried, then 503.
 
 ---
 
@@ -210,6 +253,23 @@ commit did not happen.
 - Never commit `.env`, an API key, or a database dump.
 - Tests for a requirement land in the same commit as the requirement.
 - `main` stays runnable. If `pytest` fails on `main`, that is the only priority.
+- Each stage merges to `main` by pull request before the next begins. A branch that
+  CI has only ever seen in isolation has not been integrated, and teammates need a
+  real base to branch from.
+
+### Migrations
+
+These rules apply to **every** agent that writes a migration, not only
+`django-backend`.
+
+- Migrations are additive and reversible.
+- Never edit a **pushed** migration's operations — add a new one.
+- The one exception is a missing `dependencies` entry, which no later migration can
+  supply, since dependencies are a property of the node rather than an operation.
+  Correct it in place, only while no other environment has applied it, and log the
+  edit in `docs/decisions.md` with that evidence.
+- `python manage.py makemigrations --check --dry-run` runs in CI. Models and
+  migrations agreeing is a permanent condition, not a one-off check.
 
 ---
 
@@ -231,10 +291,15 @@ A requirement is done when **all** of these hold — not four of five:
 ## 9. How to work here
 
 - Six subagents live in `.claude/agents/`. Use them — each is scoped to a slice of
-  the system and carries the invariants for that slice.
+  the system and carries the invariants for that slice. Rules that apply to more than
+  one agent live in this file, not in an agent file, so that every agent sees them.
 - Follow `M6-BUILD-PROMPT.md` stage by stage. Do not skip ahead; the ordering is the
   critical path, and authentication genuinely gates retrieval scoping.
-- When a decision is not settled, stop and ask rather than picking silently. Open
-  decisions are tracked in `docs/decisions.md`.
+- When a decision is not settled, stop and ask rather than picking silently. Settled
+  decisions are numbered in `docs/decisions.md`; cite the number in code comments and
+  commit messages rather than restating the rationale.
+- Report what is actually true. An overstated summary is worse than a blocker,
+  because the auditor reads the repository rather than the summary and the
+  discrepancy surfaces later and more expensively.
 - Prefer the boring implementation. This is a capstone with a fixed gate, not a
   product. Cleverness that costs a day is a bad trade.
