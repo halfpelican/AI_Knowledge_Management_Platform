@@ -628,6 +628,18 @@ lockout now has no evidence trail (a forgotten password and a distributed attemp
 look alike) and a locked user's only remedy is to wait out the window. Worth stating
 at the demonstration rather than being asked.
 
+**A departure from FR-02's wording, recorded because the auditor found it
+undocumented.** FR-02's Business Logic says "On success a session is established
+carrying the user's role identifier." The session carries no role; a test asserts it
+(`test_rbac.py`). The role is re-read from `role_permissions` on every request
+instead (D-21). The substitution is deliberate and stronger: a role stamped into the
+session at login would go stale the moment an administrator changed it, and FR-05's
+change would not take effect until the user logged out and back in. Re-reading per
+request is what makes "a role change takes effect on the next request without
+re-login" true, which Stage 2's own exit condition requires. The literal clause is
+not met; its purpose is exceeded. Stated here so an assessor reading FR-02 against
+the test sees a decision rather than a mismatch.
+
 **Conventions that remain, because the FR enumerates no code.**
 
 - Refusing a self-demotion answers `403`. FR-05 lists only 200, 403 and 404.
