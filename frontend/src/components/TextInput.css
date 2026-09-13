@@ -15,6 +15,19 @@
   font-size: var(--text-sm);
 }
 
+/* Holds the input and, when there is one, the control beside it (the
+   "Show password" toggle). One child or two, the row behaves the same. */
+.field__control {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.field__control .field__input {
+  flex: 1 1 auto;
+  min-width: 0; /* lets the input shrink instead of pushing the toggle off a narrow screen */
+}
+
 .field__input {
   width: 100%;
   min-height: var(--control-min-height);

@@ -38,3 +38,22 @@
   cursor: not-allowed;
   opacity: var(--opacity-disabled);
 }
+
+/* Loading indicator (FR-02: the submit button "shows a loading indicator").
+   Decorative and aria-hidden; the button's label changes at the same time and is
+   the text equivalent. The reduced-motion rule in base.css stops the spin. */
+.btn__spinner {
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  border: var(--border-width-strong) solid currentColor;
+  border-top-color: transparent;
+  border-radius: var(--radius-full);
+  animation: btn-spin var(--duration-spinner) linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -19,6 +19,8 @@
  * next to the fields (see src/utils/fieldErrors.js).
  */
 
+import { VALIDATION } from '../constants.js'
+
 /* Same-origin path: the Vite dev server proxies it to Django and the alpha
    deployment serves the built front end from the API's origin (D-21). */
 const DEFAULT_BASE_URL = '/api'
@@ -38,7 +40,9 @@ const MESSAGES = {
   401: 'Your session has expired. Please sign in again.',
   403: 'You do not have permission to do that.',
   404: 'The requested item could not be found.',
-  409: 'That email address is already registered.',
+  // The only 409 in the contract is FR-01's duplicate address, which the
+  // registration form places under the email field (src/utils/fieldErrors.js).
+  409: VALIDATION.emailTaken,
   503: 'The AI service is currently unavailable. Please try again shortly.',
   default: 'Something went wrong. Please try again.',
 }

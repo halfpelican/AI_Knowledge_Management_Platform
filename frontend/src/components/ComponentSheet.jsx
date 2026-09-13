@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { messageForStatus } from '../api/client.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { contrastRatio } from '../utils/contrast.js'
 import Button from './Button.jsx'
+import Dialog from './Dialog.jsx'
 import NotPermitted from './NotPermitted.jsx'
 import Notice from './Notice.jsx'
+import PasswordInput from './PasswordInput.jsx'
+import PasswordRequirements from './PasswordRequirements.jsx'
 import SelectInput from './SelectInput.jsx'
 import TextInput from './TextInput.jsx'
 import './ComponentSheet.css'
@@ -26,6 +29,7 @@ const COLOR_TOKENS = [
   '--color-warning',
   '--color-warning-surface',
   '--color-focus',
+  '--color-overlay',
 ]
 
 const SPACING_TOKENS = ['--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6', '--space-7']
@@ -37,6 +41,8 @@ const TYPE_TOKENS = ['--text-sm', '--text-base', '--text-lg', '--text-xl', '--te
 const RADIUS_TOKENS = ['--radius-sm', '--radius-md', '--radius-full']
 
 const FOCUS_TOKENS = ['--color-focus', '--focus-ring-width', '--focus-ring-offset']
+
+const LAYER_TOKENS = ['--z-skip-link', '--z-dialog', '--duration-spinner']
 
 /* Text/background pairs the interface uses. AA: 4.5:1 for text, 3:1 for non-text boundaries. */
 const CONTRAST_PAIRS = [
@@ -60,6 +66,7 @@ const CONTRAST_PAIRS = [
 const BUILT = [
   { name: 'Register, sign in, log out (FR-01, FR-02, FR-04)', paths: ['/register', '/login'] },
   { name: 'Role management (FR-05, Administrator only)', paths: ['/admin/roles'] },
+  { name: 'Access Denied (FR-06, where a guarded route redirects)', paths: ['/403'] },
 ]
 
 const UPCOMING = [
@@ -72,7 +79,15 @@ const UPCOMING = [
 ]
 
 const ALL_TOKENS = [
-  ...new Set([...COLOR_TOKENS, ...SPACING_TOKENS, ...FONT_TOKENS, ...TYPE_TOKENS, ...RADIUS_TOKENS, ...FOCUS_TOKENS]),
+  ...new Set([
+    ...COLOR_TOKENS,
+    ...SPACING_TOKENS,
+    ...FONT_TOKENS,
+    ...TYPE_TOKENS,
+    ...RADIUS_TOKENS,
+    ...FOCUS_TOKENS,
+    ...LAYER_TOKENS,
+  ]),
 ]
 
 /** Reads the live value of each custom property from the document, so the sheet never drifts from tokens.css. */
@@ -89,6 +104,10 @@ function formatRatio(ratio) {
 export default function ComponentSheet() {
   useDocumentTitle('Component sheet')
   const [values] = useState(() => readTokenValues(ALL_TOKENS))
+  // Live demonstrations, so the sheet shows behaviour and not only markup.
+  const [demoPassword, setDemoPassword] = useState('')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const demoRequirementsId = useId()
 
   return (
     <div className="sheet">
@@ -222,6 +241,23 @@ export default function ComponentSheet() {
         </ul>
       </section>
 
+      <section aria-labelledby="sheet-layers">
+        <h2 id="sheet-layers">Layers and motion</h2>
+        <p>
+          Stacking order and the one animation in the interface. The skip link sits above the page, the modal
+          scrim above both. <code>--duration-spinner</code> is a single turn of the button&apos;s loading
+          indicator; the reduced-motion rule in <code>base.css</code> stops it.
+        </p>
+        <ul className="token-list">
+          {LAYER_TOKENS.map((name) => (
+            <li key={name} className="token-row">
+              <code>{name}</code>
+              <span className="token-row__value">{values[name]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section aria-labelledby="sheet-button">
         <h2 id="sheet-button">Button</h2>
         <div className="demo-row">
@@ -231,7 +267,14 @@ export default function ComponentSheet() {
           <Button variant="secondary" disabled>
             Secondary disabled
           </Button>
+          <Button loading disabled>
+            Signing in…
+          </Button>
         </div>
+        <p>
+          The loading variant draws the spinner FR-02 asks for and sets <code>aria-busy</code>. The spinner is
+          decorative; the label changes with it and is the text equivalent.
+        </p>
       </section>
 
       <section aria-labelledby="sheet-text-input">
@@ -253,6 +296,72 @@ export default function ComponentSheet() {
             autoComplete="off"
           />
         </div>
+      </section>
+
+      <section aria-labelledby="sheet-password">
+        <h2 id="sheet-password">Password input and requirements</h2>
+        <p>
+          FR-02 asks for a &ldquo;Show password&rdquo; toggle and FR-01 for a strength meter shown as the user
+          types. The toggle is a real button with <code>aria-pressed</code>; its name stays
+          &ldquo;Show password&rdquo; in both states, because a name that flipped to &ldquo;Hide&rdquo; would
+          contradict the pressed state. Only the input&apos;s <code>type</code> changes, so focus and caret
+          position survive.
+        </p>
+        <p>
+          Each rule is listed with its own met state, carrying a visually hidden &ldquo;Met:&rdquo; or
+          &ldquo;Not met:&rdquo; prefix so nothing is conveyed by colour alone. The bar is decorative and
+          <code> aria-hidden</code>; the sentence above it is its text equivalent, and a hidden live region
+          announces that sentence as it changes. The rules themselves come from
+          <code> src/utils/password.js</code>, the one copy of the policy the server enforces.
+        </p>
+        <div className="demo-stack">
+          <PasswordInput
+            label="Password"
+            name="password-demo"
+            autoComplete="new-password"
+            value={demoPassword}
+            describedBy={demoRequirementsId}
+            onChange={(event) => setDemoPassword(event.target.value)}
+          />
+          <PasswordRequirements id={demoRequirementsId} password={demoPassword} />
+          <PasswordInput
+            label="Confirm password"
+            name="confirm-demo"
+            toggleLabel="Show confirmed password"
+            autoComplete="new-password"
+            defaultValue="different"
+            error="The two passwords do not match."
+          />
+        </div>
+      </section>
+
+      <section aria-labelledby="sheet-dialog">
+        <h2 id="sheet-dialog">Confirmation dialogue</h2>
+        <p>
+          FR-05 requires a confirmation before a role change is applied. <code>role=&quot;dialog&quot;</code>{' '}
+          with <code>aria-modal</code>, named by its heading and described by its body. Focus moves into it,
+          Tab and Shift+Tab cycle inside it, Escape cancels, and focus returns to the control that opened it.
+          Open it below and try the keyboard.
+        </p>
+        <div className="demo-row">
+          <Button variant="secondary" onClick={() => setDialogOpen(true)}>
+            Show the example dialogue
+          </Button>
+        </div>
+        {dialogOpen ? (
+          <Dialog
+            title={'Change Jane Doe’s role to Administrator?'}
+            confirmLabel="Change role"
+            busyLabel="Changing…"
+            onConfirm={() => setDialogOpen(false)}
+            onCancel={() => setDialogOpen(false)}
+          >
+            <p>
+              Jane Doe (jane@example.com) currently has the Employee role. The change takes effect on their
+              next request and is recorded in the audit log.
+            </p>
+          </Dialog>
+        ) : null}
       </section>
 
       <section aria-labelledby="sheet-select">
@@ -295,8 +404,10 @@ export default function ComponentSheet() {
       <section aria-labelledby="sheet-not-permitted">
         <h2 id="sheet-not-permitted">Not permitted</h2>
         <p>
-          Shown when a signed-in user&apos;s role does not allow a screen, or the server answers 403. It says
-          only that permission is lacking and never describes what the screen would have shown.
+          Shown where the API answers 403 for material already on screen. A refused navigation is the other
+          half of FR-06 and goes to the Access Denied page at <code>/403</code> instead, so an admin URL typed
+          by hand does not stay in the address bar. Neither says what the screen would have shown, or whether
+          there was anything to show.
         </p>
         <NotPermitted />
       </section>

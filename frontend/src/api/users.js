@@ -4,7 +4,7 @@
  */
 import { get, patch } from './client.js'
 
-/** Any signed-in user. 200 [{name, description, permissions}]. */
+/** Any signed-in user. 200 [{role_id, name, description, permissions}]. */
 export function listRoles(options = {}) {
   return get('/roles', options)
 }
@@ -14,7 +14,17 @@ export function listUsers(options = {}) {
   return get('/users', options)
 }
 
-/** Administrator only. 200 updated user object; 400 unknown role; 403; 404 unknown user. */
-export function updateUserRole(userId, role) {
-  return patch(`/users/${encodeURIComponent(userId)}/role`, { role })
+/**
+ * Administrator only. FR-05's Server-End clause receives `{ user_id, new_role_id }`:
+ * the user id travels in the path and the role id in the body (D-25).
+ *
+ * 200 updated user object; 400 a missing or malformed `role_id`; 401; 403 for an
+ * Employee, or for an Administrator demoting themselves; 404 the user or the role
+ * does not exist.
+ *
+ * @param {string} userId UUID of the user whose role is changing.
+ * @param {string} roleId UUID of the new role, from GET /api/roles.
+ */
+export function updateUserRole(userId, roleId) {
+  return patch(`/users/${encodeURIComponent(userId)}/role`, { role_id: roleId })
 }

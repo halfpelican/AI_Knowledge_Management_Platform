@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { listRoles, listUsers, updateUserRole } from '../api/users.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
+import Dialog from '../components/Dialog.jsx'
 import NotPermitted from '../components/NotPermitted.jsx'
 import Notice from '../components/Notice.jsx'
 import SelectInput from '../components/SelectInput.jsx'
@@ -20,12 +21,16 @@ function formatCreated(iso) {
 /**
  * The user table as a pure view.
  *
- * `selected` maps user id to the role currently chosen in that row; a row's
- * Save button is enabled only when the choice differs from the saved role.
- * `savingId` is the id of the row whose PATCH is in flight.
+ * The API returns a user's role as its name and takes a role change as a
+ * `role_id` (FR-05, D-25), so the select's values are role ids and the two maps
+ * below cross between the two. `selected` maps user id to the role id currently
+ * chosen in that row; a row's Save button is enabled only when the choice
+ * differs from the saved role. `savingId` is the id of the row whose PATCH is in
+ * flight.
  */
 export function RoleTable({ users, roles, selected, savingId, onSelect, onSave }) {
-  const options = roles.map((role) => ({ value: role.name, label: role.name }))
+  const options = roles.map((role) => ({ value: role.role_id, label: role.name }))
+  const roleIdByName = new Map(roles.map((role) => [role.name, role.role_id]))
 
   if (users.length === 0) {
     return <Notice variant="info">{TEXT.noUsers}</Notice>
@@ -48,8 +53,9 @@ export function RoleTable({ users, roles, selected, savingId, onSelect, onSave }
         </thead>
         <tbody>
           {users.map((user) => {
-            const choice = selected[user.id] ?? user.role
-            const changed = choice !== user.role
+            const savedRoleId = roleIdByName.get(user.role) ?? ''
+            const choice = selected[user.id] ?? savedRoleId
+            const changed = choice !== '' && choice !== savedRoleId
             const saving = savingId === user.id
             return (
               <tr key={user.id}>
@@ -92,10 +98,16 @@ export function RoleTable({ users, roles, selected, savingId, onSelect, onSave }
 /**
  * FR-05 role management (Administrator).
  *
- * Reads GET /api/users and GET /api/roles, and saves a row with
- * PATCH /api/users/{id}/role. The server is the authority: a 403 on any call
- * renders the not-permitted notice, and if the administrator changes their own
- * role the signed-in user is reloaded so the interface follows.
+ * Reads GET /api/users and GET /api/roles, confirms the change in a modal
+ * dialogue — "Confirmation dialogue is shown before the role change is applied"
+ * — and then saves the row with PATCH /api/users/{id}/role carrying `role_id`.
+ * The table updates from the response, so it reflects what the server actually
+ * stored rather than what was asked for.
+ *
+ * The screen is admin-only, and the route that reaches it is guarded by
+ * RequireRole, which sends everyone else to /403 (FR-06). That is usability. The
+ * server is the authority: a 403 on the list renders the not-permitted notice
+ * and nothing else (CLAUDE.md §6, invariant 4).
  */
 export default function RoleManagement() {
   useDocumentTitle('Role management')
@@ -107,8 +119,13 @@ export default function RoleManagement() {
   const [selected, setSelected] = useState({})
   const [savingId, setSavingId] = useState(null)
   const [notice, setNotice] = useState(null)
+  // The pending change, held while the confirmation dialogue is open.
+  const [pending, setPending] = useState(null)
   // Bumping this re-runs the load effect (retry, or a 404 that means the list is stale).
   const [reloadKey, setReloadKey] = useState(0)
+  // Where focus goes when the dialogue closes and the button that opened it has
+  // become disabled, which is what happens after a successful save.
+  const headingRef = useRef(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -147,17 +164,30 @@ export default function RoleManagement() {
     reload()
   }
 
-  function handleSelect(userId, role) {
-    setSelected((current) => ({ ...current, [userId]: role }))
+  function handleSelect(userId, roleId) {
+    setSelected((current) => ({ ...current, [userId]: roleId }))
   }
 
-  async function handleSave(target) {
-    const role = selected[target.id]
-    if (!role || role === target.role) return
-    setSavingId(target.id)
+  /** Opens the confirmation dialogue. Nothing is sent until it is confirmed. */
+  function handleSave(target) {
+    const roleId = selected[target.id]
+    const role = roles.find((candidate) => candidate.role_id === roleId)
+    if (!roleId || !role || role.name === target.role) return
     setNotice(null)
+    setPending({ user: target, roleId, roleName: role.name })
+  }
+
+  function handleCancel() {
+    if (savingId) return
+    setPending(null)
+  }
+
+  async function handleConfirm() {
+    if (!pending) return
+    const { user: target, roleId } = pending
+    setSavingId(target.id)
     try {
-      const updated = await updateUserRole(target.id, role)
+      const updated = await updateUserRole(target.id, roleId)
       setUsers((current) => current.map((u) => (u.id === updated.id ? updated : u)))
       setSelected((current) => {
         const next = { ...current }
@@ -169,22 +199,45 @@ export default function RoleManagement() {
       // administrator, reload so the navigation and guards reflect it at once.
       if (currentUser && updated.id === currentUser.id) await refresh()
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
-        setLoadError(error)
-        await refresh()
-      } else if (error instanceof ApiError && error.status === 404) {
-        setNotice({ variant: 'error', title: 'Could not save', text: error.message })
-        reload()
-      } else {
-        setNotice({
-          variant: 'error',
-          title: 'Could not save',
-          text: error instanceof ApiError ? error.message : messageForStatus(),
-        })
-      }
+      handleSaveError(error, target)
     } finally {
       setSavingId(null)
+      setPending(null)
     }
+  }
+
+  function handleSaveError(error, target) {
+    if (!(error instanceof ApiError)) {
+      setNotice({ variant: 'error', title: 'Could not save', text: messageForStatus() })
+      return
+    }
+    if (error.status === 403 && currentUser && target.id === currentUser.id) {
+      // FR-05: "a user cannot remove their own administrator role". The server
+      // refuses that with a 403, and the only 403 it can raise for a request
+      // whose target is the requester is this one — the requester's permission
+      // was checked on the same request.
+      setNotice({ variant: 'error', title: 'Change refused', text: TEXT.roleChangeSelfDemotion })
+      setSelected((current) => {
+        const next = { ...current }
+        delete next[target.id]
+        return next
+      })
+      return
+    }
+    if (error.status === 403) {
+      // The permission has gone since the list loaded. Fall back to the same
+      // notice an Employee would see, and re-read who we are.
+      setLoadError(error)
+      refresh()
+      return
+    }
+    if (error.status === 404) {
+      // FR-05: "404 Not Found if user/role doesn't exist" — the list is stale.
+      setNotice({ variant: 'error', title: 'Could not save', text: TEXT.roleChangeStale })
+      reload()
+      return
+    }
+    setNotice({ variant: 'error', title: 'Could not save', text: error.message })
   }
 
   return (
@@ -196,14 +249,22 @@ export default function RoleManagement() {
       roles={roles}
       selected={selected}
       savingId={savingId}
+      pending={pending}
+      headingRef={headingRef}
       onSelect={handleSelect}
       onSave={handleSave}
+      onConfirm={handleConfirm}
+      onCancel={handleCancel}
       onRetry={handleRetry}
     />
   )
 }
 
-/** Whole-screen view: loading, not-permitted (403), load error with retry, or the table. */
+/**
+ * Whole-screen view: loading, not-permitted (a 403 from the API), load error
+ * with retry, or the table — plus the confirmation dialogue when a change is
+ * pending.
+ */
 export function RoleManagementView({
   loading,
   loadError,
@@ -212,8 +273,12 @@ export function RoleManagementView({
   roles,
   selected,
   savingId,
+  pending,
+  headingRef,
   onSelect,
   onSave,
+  onConfirm,
+  onCancel,
   onRetry,
 }) {
   let body
@@ -256,12 +321,31 @@ export function RoleManagementView({
 
   return (
     <div className="roles-page">
-      <h1 id="roles-heading">Role management</h1>
+      <h1 id="roles-heading" ref={headingRef} tabIndex={-1}>
+        Role management
+      </h1>
       <p>
         Choose a role for a user and save the row. Changes take effect on that user&apos;s next request and are
         recorded in the audit log.
       </p>
       {body}
+      {pending ? (
+        <Dialog
+          title={TEXT.roleChangeConfirm(pending.user.name, pending.roleName)}
+          confirmLabel="Change role"
+          busyLabel="Changing…"
+          cancelLabel="Cancel"
+          busy={Boolean(savingId)}
+          returnFocusRef={headingRef}
+          onConfirm={onConfirm}
+          onCancel={onCancel}
+        >
+          <p>
+            {pending.user.name} ({pending.user.email}) currently has the {pending.user.role} role. The
+            change takes effect on their next request and is recorded in the audit log.
+          </p>
+        </Dialog>
+      ) : null}
     </div>
   )
 }

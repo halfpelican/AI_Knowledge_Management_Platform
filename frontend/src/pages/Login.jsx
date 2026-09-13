@@ -4,6 +4,7 @@ import { ApiError, LOGIN_FAILED_MESSAGE } from '../api/client.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
+import PasswordInput from '../components/PasswordInput.jsx'
 import TextInput from '../components/TextInput.jsx'
 import { TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
@@ -16,13 +17,16 @@ const FIELDS = ['email', 'password']
 /** Notices for how the user arrived here, keyed by `location.state.reason`. */
 const ARRIVAL_NOTICES = {
   expired: { variant: 'error', title: 'Session expired', text: TEXT.sessionExpired },
-  'signed-out': { variant: 'info', title: 'Signed out', text: TEXT.signedOut },
+  // FR-04 Front-End: "redirected to the Login page with a brief confirmation
+  // 'You've been logged out'".
+  'signed-out': { variant: 'info', title: 'Logged out', text: TEXT.loggedOut },
   registered: { variant: 'info', title: 'Account created', text: TEXT.registered },
 }
 
 /**
  * The login form as a pure view. `arrival` is one of the ARRIVAL_NOTICES keys
- * (or undefined); `formError` is the fixed failure text for the last attempt.
+ * (or undefined); `formError` is the fixed failure text for the last attempt,
+ * either the single 401 message or the distinct locked-account one.
  */
 export function LoginForm({ values, fieldErrors, formError, arrival, submitting, onChange, onSubmit }) {
   const arrivalNotice = arrival ? ARRIVAL_NOTICES[arrival] : null
@@ -48,10 +52,9 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
         error={fieldErrors.email}
         onChange={onChange}
       />
-      <TextInput
+      <PasswordInput
         label="Password"
         name="password"
-        type="password"
         autoComplete="current-password"
         required
         value={values.password}
@@ -59,7 +62,9 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
         onChange={onChange}
       />
       <div className="auth-form__actions">
-        <Button type="submit" disabled={submitting}>
+        {/* FR-02: "On submit, 'Login' button disables and shows a loading
+            indicator, preventing a second submission." */}
+        <Button type="submit" loading={submitting} disabled={submitting}>
           {submitting ? 'Signing in…' : 'Sign in'}
         </Button>
       </div>
@@ -68,9 +73,18 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
 }
 
 /**
- * FR-02 user login. A 401 shows the contract's single message for both an
- * unknown email and a wrong password, so the form never reveals which.
+ * FR-02 user login.
+ *
+ * A 401 shows the contract's single message for both an unknown email and a
+ * wrong password, so the form never reveals which. A 403 is the locked account
+ * and shows its own, distinct message.
+ *
  * On success the user goes to the page they were sent here from, else `/`.
+ * FR-02's own clause is "On success, user is redirected to a role-specific
+ * dashboard (e.g., Administrator → Admin Console; Employee → Knowledge
+ * Dashboard)". Those dashboards are FR-14, built in Stage 5, so the branch on
+ * role lands with them; the deferral is recorded in docs/decisions.md D-25 and
+ * in docs/api-contract.md, not overlooked here.
  */
 export default function Login() {
   useDocumentTitle('Sign in')
@@ -104,6 +118,13 @@ export default function Login() {
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setFormError(LOGIN_FAILED_MESSAGE)
+      } else if (error instanceof ApiError && error.status === 403) {
+        // FR-02: "Where the account is locked and the submitted password was
+        // correct, a distinct message is shown." Login is anonymous, so the lock
+        // is the only 403 it can return; the server also sends the machine
+        // readable code "account_locked" (apps/api/views.py ACCOUNT_LOCKED_CODE)
+        // if a second 403 case is ever added here.
+        setFormError(TEXT.accountLocked)
       } else {
         const extracted = extractFieldErrors(error, FIELDS)
         setFieldErrors(extracted.fieldErrors)

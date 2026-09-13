@@ -8,6 +8,7 @@ import Button from './components/Button.jsx'
 import ComponentSheet from './components/ComponentSheet.jsx'
 import Notice from './components/Notice.jsx'
 import { APP_TITLE, ROLES } from './constants.js'
+import AccessDenied from './pages/AccessDenied.jsx'
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
@@ -42,12 +43,24 @@ function PrimaryNav({ onLogoutError }) {
       <NavLink to="/" end>
         Home
       </NavLink>
+      {/* FR-05: the role management screen "is entirely hidden and inaccessible
+          to non-admin roles (button and route do not render)". This is the button
+          half; RequireRole is the route half. Both are usability — the server
+          refuses the call either way (CLAUDE.md §6, invariant 4). */}
       {user?.role === ROLES.administrator ? <NavLink to="/admin/roles">Role management</NavLink> : null}
       <NavLink to="/components">Component sheet</NavLink>
+      {/* FR-04: "A 'Logout' control visible in navigation for all authenticated
+          roles." One branch, no role test, so every signed-in user has it. */}
       {loading ? null : user ? (
         <>
           <span className="app-nav__user">{`Signed in as ${user.name}`}</span>
-          <Button variant="secondary" className="app-nav__logout" disabled={signingOut} onClick={handleLogout}>
+          <Button
+            variant="secondary"
+            className="app-nav__logout"
+            loading={signingOut}
+            disabled={signingOut}
+            onClick={handleLogout}
+          >
             {signingOut ? 'Signing out…' : 'Log out'}
           </Button>
         </>
@@ -98,6 +111,8 @@ export default function App() {
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="components" element={<ComponentSheet />} />
+          {/* FR-06: where a guarded route sends an unauthorised navigation attempt. */}
+          <Route path="403" element={<AccessDenied />} />
           <Route element={<RequireAuth />}>
             <Route element={<RequireRole role={ROLES.administrator} />}>
               <Route path="admin/roles" element={<RoleManagement />} />
