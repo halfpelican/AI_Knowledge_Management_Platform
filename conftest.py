@@ -16,12 +16,19 @@ user per role and one document with one chunk, visible to Employees.
 The client fixtures cover the dual-role gate (CLAUDE.md section 8): api_client is
 anonymous, employee_client and administrator_client are logged in as one role, and
 session_client is parametrised over both roles so a test written once against it
-runs from an Employee session and from an Administrator session.
+runs from an Employee session and from an Administrator session. Whether every
+protected endpoint was in fact reached from both roles is not taken from fixture
+names: apps/api/tests/dual_role_matrix.py records the role the server resolved on
+each request and fails a full run below 100%.
 """
 
 from dataclasses import dataclass
 
 import pytest
+
+# The dual-role coverage matrix (CLAUDE.md section 8 item 2). Registered here so it
+# observes every request the suite makes; see the module docstring.
+pytest_plugins = ["apps.api.tests.dual_role_matrix"]
 from django.conf import settings
 from django.test import override_settings
 

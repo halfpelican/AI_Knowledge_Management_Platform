@@ -2,10 +2,12 @@
 docs/decisions.md D-14 and D-21).
 
 401 for no, forged or expired session; 403 for a valid session whose role lacks the
-permission. The first test walks every URL pattern under /api/ so a route added
-later without a permission class fails here, not in the demonstration. The role
-is resolved from role_permissions on every request, so a change takes effect on
-the user's next request without re-login, in both directions.
+permission. The first tests walk every URL pattern under /api/ (enumerated by
+apps/api/tests/dual_role_matrix.py, which also reports whether each protected
+endpoint was reached from both roles) so a route added later without a permission
+class fails here, not in the demonstration. The role is resolved from
+role_permissions on every request, so a change takes effect on the user's next
+request without re-login, in both directions.
 """
 
 import datetime
@@ -17,15 +19,14 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import PermissionsMixin
 from django.contrib.sessions.models import Session
 from django.core.exceptions import ImproperlyConfigured
-from django.urls import URLPattern, reverse
-from django.urls.converters import UUIDConverter
-from django.urls.resolvers import RegexPattern, RoutePattern
+from django.urls import reverse
 from django.utils import timezone
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.accounts.models import Permission, Role, RolePermission
-from apps.api import urls as api_urls
 from apps.api.permissions import HasRolePermission
+from apps.api.tests.dual_role_matrix import enumerate_endpoints
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, MANAGE_ROLES_PERMISSION
 from conftest import PASSWORD
 
@@ -33,10 +34,11 @@ User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
-# The two routes D-21 lets an anonymous client reach. Everything else is 401.
+# What docs/api-contract.md says: the two routes D-21 lets an anonymous client reach,
+# and every protected URL name. The tests below check the URL conf's own permission
+# classes against these names; the dual-role matrix (dual_role_matrix.py) then
+# reports, per protected endpoint, whether a passing test reached it from each role.
 OPEN_ROUTES = {"auth-register", "auth-login"}
-# Every protected URL name under /api/. A new route must be added here, which is
-# the moment to write its Employee and Administrator tests.
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role"}
 # Routes that need more than a session, with the permission code they check.
 PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE_ROLES_PERMISSION}
@@ -48,53 +50,34 @@ ROLES = reverse("role-list")
 # --- Enumerating the URL conf ---------------------------------------------------------------
 
 
-def _sample_kwargs(pattern):
-    """Placeholder kwargs so a pattern with parameters can be reversed; None when
-    the pattern is a format-suffix variant the router adds, which is not a route."""
-    if isinstance(pattern, RoutePattern):
-        if "format" in pattern.converters:
-            return None
-        assert all(isinstance(c, UUIDConverter) for c in pattern.converters.values()), pattern
-        return {name: uuid.uuid4() for name in pattern.converters}
-    if isinstance(pattern, RegexPattern):
-        return None if "format" in pattern.regex.groupindex else {}
-    raise TypeError(pattern)  # pragma: no cover
-
-
-def api_routes():
-    """(url name, path, [methods]) for every URL pattern under /api/."""
-    routes = []
-    for entry in api_urls.urlpatterns:
-        assert isinstance(entry, URLPattern), entry  # no nested includes to miss
-        kwargs = _sample_kwargs(entry.pattern)
-        if kwargs is None:
-            continue
-        view_class = getattr(entry.callback, "view_class", None) or entry.callback.cls
-        methods = [
-            method
-            for method in view_class.http_method_names
-            if hasattr(view_class, method) and method not in ("options", "head", "trace")
-        ]
-        assert methods, entry.name
-        routes.append((entry.name, "/api/" + str(entry.pattern.describe()).strip("^$'"), methods, kwargs))
-    return routes
-
-
 def test_the_url_conf_is_exactly_the_contract():
-    names = {name for name, _, _, _ in api_routes()}
-    assert names == OPEN_ROUTES | PROTECTED_ROUTES
+    endpoints = enumerate_endpoints()
+    assert {e.name for e in endpoints} == OPEN_ROUTES | PROTECTED_ROUTES
     assert set(PERMISSIONED_ROUTES) <= PROTECTED_ROUTES
+    # Open and protected are read from each view's permission classes, so a route
+    # that opts out of IsAuthenticated cannot pass as protected by being listed.
+    assert {e.name for e in endpoints if not e.protected} == OPEN_ROUTES
+    assert {e.name for e in endpoints if e.protected} == PROTECTED_ROUTES
+    for endpoint in endpoints:
+        if endpoint.name in OPEN_ROUTES:
+            assert endpoint.permission_classes == (AllowAny,), endpoint
+        else:
+            assert endpoint.permission_classes[0] is IsAuthenticated, endpoint
+
+
+def test_every_endpoint_has_a_method_and_a_drf_view():
+    for endpoint in enumerate_endpoints():
+        assert endpoint.method != "?", f"{endpoint.path} is not a DRF view"
 
 
 def _walk(client, expected_for):
     failures = []
-    for name, _, methods, kwargs in api_routes():
-        url = reverse(name, kwargs=kwargs)
-        for method in methods:
-            response = client.generic(method.upper(), url, data="{}", content_type="application/json")
-            expected = expected_for(name)
-            if response.status_code != expected:
-                failures.append((method.upper(), url, response.status_code, expected))
+    for endpoint in enumerate_endpoints():
+        url = reverse(endpoint.name, kwargs=endpoint.reverse_kwargs)
+        response = client.generic(endpoint.method, url, data="{}", content_type="application/json")
+        expected = expected_for(endpoint.name)
+        if response.status_code != expected:
+            failures.append((endpoint.method, url, response.status_code, expected))
     assert not failures, failures
 
 
@@ -112,11 +95,11 @@ def test_every_route_but_the_two_opt_outs_is_401_with_a_forged_session(api_clien
 
 
 def test_every_protected_route_names_401_as_the_scheme(api_client):
-    for name, _, methods, kwargs in api_routes():
-        if name in OPEN_ROUTES:
+    for endpoint in enumerate_endpoints():
+        if not endpoint.protected:
             continue
-        response = api_client.generic(methods[0].upper(), reverse(name, kwargs=kwargs))
-        assert response["WWW-Authenticate"] == "Session", name
+        response = api_client.generic(endpoint.method, reverse(endpoint.name, kwargs=endpoint.reverse_kwargs))
+        assert response["WWW-Authenticate"] == "Session", endpoint
 
 
 # --- 401 versus 403 from both roles -----------------------------------------------------------
