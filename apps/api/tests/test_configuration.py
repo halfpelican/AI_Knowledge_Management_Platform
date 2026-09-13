@@ -9,6 +9,9 @@ from django.conf import settings
 from django.contrib.auth.hashers import get_hasher, make_password
 from django.urls import reverse
 
+from apps.core.constants import PASSWORD_MINIMUM_LENGTH
+from conftest import PASSWORD
+
 pytestmark = pytest.mark.django_db
 
 
@@ -60,18 +63,32 @@ def test_api_root_is_reachable_from_a_session(session_client):
 def test_bcrypt_is_the_hasher_for_new_passwords():
     assert settings.PASSWORD_HASHERS[0] == "django.contrib.auth.hashers.BCryptSHA256PasswordHasher"
     assert get_hasher().algorithm == "bcrypt_sha256"
-    assert make_password("correct horse battery staple").startswith("bcrypt_sha256$")
+    assert make_password(PASSWORD).startswith("bcrypt_sha256$")
 
 
-def test_the_four_default_password_validators_are_configured():
+def test_the_password_validators_are_djangos_four_plus_fr_01_complexity():
+    # D-25: FR-01 states "min 8 chars, 1 uppercase, 1 number, 1 special character",
+    # and none of Django's defaults check a character class.
     names = [validator["NAME"].rsplit(".", 1)[1] for validator in settings.AUTH_PASSWORD_VALIDATORS]
     assert names == [
         "UserAttributeSimilarityValidator",
         "MinimumLengthValidator",
         "CommonPasswordValidator",
         "NumericPasswordValidator",
+        "ComplexityValidator",
     ]
     assert settings.AUTH_PASSWORD_VALIDATORS[0]["OPTIONS"] == {"user_attributes": ["name", "email"]}
+
+
+def test_the_minimum_length_is_stated_once():
+    """MinimumLengthValidator and ComplexityValidator both check the length, so they
+    read the same constant; a literal in either would let them disagree."""
+    minimum_length = settings.AUTH_PASSWORD_VALIDATORS[1]["OPTIONS"]["min_length"]
+    assert minimum_length == PASSWORD_MINIMUM_LENGTH == 8
+
+    from apps.accounts.validators import ComplexityValidator
+
+    assert ComplexityValidator().minimum_length == PASSWORD_MINIMUM_LENGTH
 
 
 # --- Cookie flags (D-21) ---------------------------------------------------------------------

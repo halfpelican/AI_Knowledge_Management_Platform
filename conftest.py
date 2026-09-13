@@ -39,7 +39,11 @@ from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, S
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
 from apps.core.logging_config import audit_logging
 
-PASSWORD = "correct horse battery staple"
+# The suite's one password. It satisfies FR-01's complexity rules (min 8 characters,
+# an uppercase letter, a number and a special character) so that a test may register
+# it through the API; apps/api/tests/test_register.py is where non-complying
+# passwords are asserted to be refused.
+PASSWORD = "Correct-Horse-9-Battery"
 
 
 @pytest.fixture(autouse=True)

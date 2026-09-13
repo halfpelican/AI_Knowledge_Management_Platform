@@ -45,6 +45,15 @@ User = get_user_model()
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 # FR-01 names the duplicate case explicitly, so this response may say so.
 EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
+# FR-02 Responses: "403 forbidden if account is locked" (D-25). The wording is the
+# proposal's own, from its handleLoginAttempt pseudocode. ACCOUNT_LOCKED_CODE is the
+# machine-readable flag for FR-02's front-end clause, "where the account is locked
+# and the submitted password was correct, a distinct message is shown": the client
+# branches on the code and never has to match on prose.
+ACCOUNT_LOCKED_MESSAGE = "Account is locked. An Administrator can release it."
+ACCOUNT_LOCKED_CODE = "account_locked"
+# FR-04 Front-End: "a brief confirmation 'You've been logged out'".
+LOGGED_OUT_MESSAGE = "You have been logged out."
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 
@@ -85,21 +94,32 @@ class RegisterView(APIView):
 # --- FR-02 login ---------------------------------------------------------------------
 
 
+def _is_locked(user) -> bool:
+    """FR-02: the lock is evaluated before the password result is used, so that no
+    session is issued for a locked account whatever credential was submitted."""
+    return user is not None and user.locked_until is not None and user.locked_until > timezone.now()
+
+
 def _record_failed_attempt(email: str) -> None:
-    """FR-02 side effect (docs/api-contract.md): count the failure against the account
-    and, at the LOCKOUT_THRESHOLDth consecutive one, stamp locked_until. The lock is
-    only recorded here; enforcing it is FR-03 (NIT3004) and is not part of Stage 2."""
+    """FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
+    failures lock the account for 15 minutes." Reached only for an account that is
+    not currently locked, so an attempt made during a lockout window neither extends
+    the window nor moves the counter. An expired window resets the counter first: it
+    counts *consecutive* failures, and without the reset the single next failure
+    after a lock expired would re-lock the account on one attempt rather than five."""
     with transaction.atomic():
         try:
             user = User.objects.select_for_update().get(email=email)
         except User.DoesNotExist:
             return
+        if user.locked_until is not None:
+            # A live lock never reaches here, so this window has expired.
+            user.failed_attempts = 0
+            user.locked_until = None
         user.failed_attempts += 1
-        fields = ["failed_attempts"]
         if user.failed_attempts >= LOCKOUT_THRESHOLD:
             user.locked_until = timezone.now() + LOCKOUT_DURATION
-            fields.append("locked_until")
-        user.save(update_fields=fields)
+        user.save(update_fields=["failed_attempts", "locked_until"])
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -108,12 +128,30 @@ class LoginView(APIView):
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  # 400 malformed body
+        # 400: a missing field, or an address that is not an address. FR-02
+        # Validation rules put the format check "before database lookup", and the
+        # login pseudocode returns 400 for it explicitly (D-25).
+        serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
-        # Django's ModelBackend runs the password hasher even when the address is
-        # unknown, so the two 401 cases take the same time as far as practical.
+        account = User.objects.filter(email=email).first()
+        # The password is verified even for a locked account, because its result
+        # selects the response and can never grant access. Django's ModelBackend runs
+        # the hasher even when the address is unknown, so the failing cases take the
+        # same time as far as practical.
         user = authenticate(request, username=email, password=password)
+        if _is_locked(account):
+            # FR-02 Responses: "403 forbidden if account is locked", whatever the
+            # password (D-25). Only the message varies: the lock is named where the
+            # password matched, which is FR-02's "distinct message" clause, and the
+            # generic message is kept where it did not, because confirming a lock to
+            # anyone who submits an address would confirm the address is registered.
+            body = (
+                {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE}
+                if user is not None
+                else {"detail": INVALID_CREDENTIALS_MESSAGE}
+            )
+            return Response(body, status=status.HTTP_403_FORBIDDEN)
         if user is None:
             _record_failed_attempt(email)
             return Response(
@@ -122,9 +160,13 @@ class LoginView(APIView):
         # Cycles the session key and, through the user_logged_in signal, sets
         # last_login (stored as last_login_at). The CSRF token is rotated too.
         django_login(request, user)
-        if user.failed_attempts:
+        if user.failed_attempts or user.locked_until:
+            # Both, not just the counter. A success that left locked_until standing
+            # would refuse the user's next login for the rest of the window, which is
+            # the trap D-24 recorded and D-25 closes.
             user.failed_attempts = 0
-            user.save(update_fields=["failed_attempts"])
+            user.locked_until = None
+            user.save(update_fields=["failed_attempts", "locked_until"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
 
@@ -139,7 +181,9 @@ class LogoutView(APIView):
         # the user_logged_out signal fires.
         request.session.flush()
         django_logout(request)
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        # FR-04 Responses: "200 OK on success" (D-25), with a JSON body like every
+        # other response the contract defines.
+        return Response({"detail": LOGGED_OUT_MESSAGE}, status=status.HTTP_200_OK)
 
 
 # --- Current user ----------------------------------------------------------------------

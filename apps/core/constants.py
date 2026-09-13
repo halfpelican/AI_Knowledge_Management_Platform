@@ -6,6 +6,7 @@ value. Values marked PROVISIONAL are placeholders that a named later step settle
 change them in this one place when that step runs.
 """
 
+import string
 from datetime import timedelta
 
 # --- Chunking (FR-08), in tokens ---------------------------------------------------
@@ -55,7 +56,27 @@ MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
 # the extension alone admits nothing.
 ACCEPTED_FORMATS = frozenset({"pdf", "docx", "xlsx", "txt"})
 
-# --- Account lockout (FR-03, NIT3004) ------------------------------------------------
+# --- Password complexity (FR-01) -----------------------------------------------------
+# FR-01 Server-End, Validation rules: "Password must meet complexity rules (min 8
+# chars, 1 uppercase, 1 number, 1 special character)." The four conditions are
+# enforced by apps.accounts.validators.ComplexityValidator; Django's
+# MinimumLengthValidator is configured from PASSWORD_MINIMUM_LENGTH in
+# config/settings.py so the two statements of the length cannot drift.
+PASSWORD_MINIMUM_LENGTH = 8
+PASSWORD_MINIMUM_UPPERCASE = 1
+PASSWORD_MINIMUM_DIGITS = 1
+PASSWORD_MINIMUM_SPECIAL = 1
+# What counts as a "special character": ASCII punctuation, which is the set the
+# registration form's strength meter shows. Whitespace is not special; a space in
+# a passphrase must not stand in for punctuation.
+PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
+
+# --- Account lockout (FR-02 Server-End; FR-03, NIT3004) -------------------------------
+# FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
+# failures lock the account for 15 minutes", and FR-02 Responses: "403 forbidden if
+# account is locked". Enforcement is therefore FR-02's, not FR-03's; FR-03 adds the
+# interface (remaining-attempt warning, countdown) and the administrator release.
+# Configuration values rather than literals, as FR-03 Business logic requires.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
 

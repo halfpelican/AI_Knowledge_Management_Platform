@@ -59,10 +59,17 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    """FR-02 request body. The address is a plain string on purpose: a malformed
-    address is simply an unknown one and is answered 401 like any other."""
+    """FR-02 request body. FR-02 Server-End, Validation rules: "required field check
+    on both inputs. Email format checked before database lookup" — and the UC-02
+    pseudocode is explicit that a malformed address is 400 ("IF NOT
+    isValidEmailFormat(submittedEmail) THEN RETURN response(400, ...)"), before the
+    account is read. A 400 on malformed syntax discloses nothing, because it is
+    returned whether or not the address is registered; the generic 401 is kept for a
+    well-formed address that is unknown and for a wrong password, which is where the
+    enumeration protection actually lives (D-02). Bounded by the column length, as
+    the registration serializer is, so the two agree."""
 
-    email = serializers.CharField()
+    email = serializers.EmailField(max_length=User._meta.get_field("email").max_length)
     password = serializers.CharField(trim_whitespace=False)
 
     def validate_email(self, value):

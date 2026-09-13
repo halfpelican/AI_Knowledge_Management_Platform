@@ -13,6 +13,7 @@ from django.db import connection
 from django.urls import reverse
 
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME
+from conftest import PASSWORD
 
 User = get_user_model()
 
@@ -22,7 +23,7 @@ URL = reverse("auth-register")
 USER_OBJECT_KEYS = {"id", "name", "email", "role", "created_at"}
 SECRET_COLUMNS = {"password", "password_hash", "failed_attempts", "locked_until", "last_login"}
 
-VALID = {"name": "Ada Lovelace", "email": "Ada@Example.com", "password": "correct horse battery staple"}
+VALID = {"name": "Ada Lovelace", "email": "Ada@Example.com", "password": PASSWORD}
 
 
 def register(client, **overrides):
@@ -120,6 +121,52 @@ def test_registration_enforces_the_password_validators(api_client, password):
     assert response.status_code == 400
     assert list(response.json()) == ["password"]
     assert not User.objects.filter(email="ada@example.com").exists()
+
+
+# --- FR-01 complexity: "min 8 chars, 1 uppercase, 1 number, 1 special character" ----
+
+
+@pytest.mark.parametrize(
+    ("password", "unmet"),
+    [
+        ("Ab1!efg", "at least 8 characters"),  # 7 characters
+        ("abcdefg1!", "uppercase letter"),
+        ("Abcdefgh!", "number"),
+        ("Abcdefg1", "special character"),
+    ],
+)
+def test_registration_refuses_a_password_missing_one_complexity_rule(api_client, password, unmet):
+    """D-25: each of FR-01's four rules refuses on its own, and the 400 names the
+    rule that was not met so the form can mark it."""
+    response = register(api_client, password=password)
+    assert response.status_code == 400
+    assert list(response.json()) == ["password"]
+    assert any(unmet in message for message in response.json()["password"]), response.json()
+    assert not User.objects.filter(email="ada@example.com").exists()
+
+
+def test_registration_names_every_unmet_complexity_rule_at_once(api_client):
+    # FR-01's strength meter shows all four rules, so one 400 reports all four.
+    response = register(api_client, password="abc")
+    assert response.status_code == 400
+    messages = " ".join(response.json()["password"])
+    for rule in ("at least 8 characters", "uppercase letter", "number", "special character"):
+        assert rule in messages, messages
+
+
+def test_a_space_is_not_a_special_character(api_client):
+    """The server's definition of "special character" is ASCII punctuation. A
+    passphrase must not satisfy the rule with a space; the front end's strength
+    meter narrows to the same set."""
+    response = register(api_client, password="Abcdefg1 ")
+    assert response.status_code == 400
+    assert any("special character" in message for message in response.json()["password"])
+
+
+@pytest.mark.parametrize("special", ["!", "@", "#", "-", "_", "?", "~", "|"])
+def test_any_ascii_punctuation_satisfies_the_special_rule(api_client, special):
+    response = register(api_client, email=f"ada{ord(special)}@example.com", password=f"Abcdefg1{special}")
+    assert response.status_code == 201
 
 
 # --- 409 duplicate address (FR-01) ------------------------------------------------------------------

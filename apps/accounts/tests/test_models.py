@@ -18,7 +18,7 @@ User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
-PASSWORD = "correct horse battery staple"
+PASSWORD = "Correct-Horse-9-Battery"  # FR-01 complexity, as conftest.PASSWORD
 
 
 # --- Roles -------------------------------------------------------------------------

@@ -4,6 +4,8 @@
 The proof the FR asks for: a session cookie replayed after logout gets 401 and
 its django_session row is gone. These tests use real login and logout requests
 with CSRF enforced, exactly as the browser does it.
+
+FR-04 Responses: "200 OK on success" (D-25). It was 204 before.
 """
 
 import datetime
@@ -54,8 +56,8 @@ def test_logout_invalidates_the_session_server_side(employee):
 
     response = client.post(LOGOUT, **csrf_header(client))
 
-    assert response.status_code == 204
-    assert not response.content
+    assert response.status_code == 200
+    assert response.json() == {"detail": "You have been logged out."}
     # The cookie value the client kept no longer names anything on the server.
     assert replay(session_key).get(ME).status_code == 401
     assert not Session.objects.filter(session_key=session_key).exists()
@@ -69,8 +71,18 @@ def test_logout_tells_the_browser_to_drop_the_cookie(employee):
 
 def test_logout_from_either_role(session_client):
     response = session_client.client.post(LOGOUT)
-    assert response.status_code == 204
+    assert response.status_code == 200
+    assert response.json() == {"detail": "You have been logged out."}
     assert session_client.client.get(ME).status_code == 401
+
+
+def test_logout_answers_json_not_an_empty_body(session_client):
+    """FR-04 says 200, not 204, so there is a body; the front end shows the
+    confirmation the FR names rather than inventing one for an empty response."""
+    response = session_client.client.post(LOGOUT)
+    assert response.status_code == 200
+    assert response["Content-Type"].startswith("application/json")
+    assert response.content
 
 
 def test_logout_is_401_anonymously(api_client):

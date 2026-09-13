@@ -1,8 +1,10 @@
 """FR-02 login: POST /api/auth/login, and GET /api/auth/me (docs/api-contract.md).
 
 200 with the user object, the session cookie and the csrftoken cookie; 400 for a
-malformed body; 401 with one generic message for an unknown address and a wrong
-password alike (D-02). Side effects: failed_attempts, locked_until, last_login.
+missing field or an address that is not an address, checked before the database
+lookup; 401 with one generic message for an unknown address and a wrong password
+alike (D-02); 403 while the account is locked, whatever the password (D-25). Side
+effects: failed_attempts, locked_until, last_login.
 """
 
 import datetime
@@ -117,6 +119,50 @@ def test_malformed_login_body_is_400(api_client, employee, payload):
     assert set(response.json()) <= {"email", "password"}
 
 
+@pytest.mark.parametrize(
+    "address", ["not-an-address", "missing-at-sign.example.com", "two@@example.com", "@example.com"]
+)
+def test_an_address_that_is_not_an_address_is_400(api_client, employee, address):
+    """FR-02 Validation rules: "Email format checked before database lookup", and the
+    login pseudocode returns 400 for it explicitly (D-25). This was 401 before, on
+    the argument that a malformed address is just an unknown one."""
+    response = api_client.post(LOGIN, {"email": address, "password": PASSWORD}, format="json")
+    assert response.status_code == 400
+    assert list(response.json()) == ["email"]
+    assert settings.SESSION_COOKIE_NAME not in response.cookies
+
+
+def test_a_malformed_address_discloses_nothing(api_client, employee):
+    """The 400 is safe precisely because it does not depend on the account: a
+    registered address and an unregistered one in the same broken shape answer
+    identically, so the check is not an enumeration oracle."""
+    registered = api_client.post(
+        LOGIN, {"email": f"{employee.email}@", "password": PASSWORD}, format="json"
+    )
+    unknown = api_client.post(
+        LOGIN, {"email": "nobody@example.com@", "password": PASSWORD}, format="json"
+    )
+    assert registered.status_code == unknown.status_code == 400
+    assert registered.json() == unknown.json()
+
+
+def test_a_well_formed_unknown_address_is_still_401(api_client, employee):
+    # The enumeration protection is here, and it stays: format is syntax, existence
+    # is not disclosed.
+    response = login(api_client, "nobody@example.com")
+    assert response.status_code == 401
+    assert response.json() == INVALID
+
+
+def test_an_over_long_address_is_400(api_client, employee):
+    # Bounded by the same column length as the registration serializer.
+    length = User._meta.get_field("email").max_length
+    local = "a" * (length - len("@example.com") + 1)
+    response = login(api_client, f"{local}@example.com")
+    assert response.status_code == 400
+    assert "email" in response.json()
+
+
 # --- Side effects (docs/api-contract.md "Login side effects") --------------------------------------------
 
 
@@ -162,16 +208,129 @@ def test_an_unknown_email_records_nothing(api_client, employee):
     assert User.objects.count() == before
 
 
-def test_a_locked_account_can_still_log_in_with_the_right_password(api_client, employee):
-    # docs/api-contract.md: "Enforcing the lock is FR-03 (NIT3004) and is not part of
-    # Stage 2." FR-02 records locked_until; nothing in Stage 2 reads it.
-    employee.failed_attempts = LOCKOUT_THRESHOLD
-    employee.locked_until = timezone.now() + LOCKOUT_DURATION
-    employee.save(update_fields=["failed_attempts", "locked_until"])
+# --- FR-02 lockout enforcement (D-25) ----------------------------------------------
+# "Failed attempts increment a counter; five consecutive failures lock the account
+# for 15 minutes" and "403 forbidden if account is locked". The lock is enforced
+# here, in FR-02; FR-03 adds only the warning interface.
+
+
+def lock(user, remaining=LOCKOUT_DURATION):
+    user.failed_attempts = LOCKOUT_THRESHOLD
+    user.locked_until = timezone.now() + remaining
+    user.save(update_fields=["failed_attempts", "locked_until"])
+    return user
+
+
+def test_a_locked_account_is_403_even_with_the_right_password(api_client, employee):
+    lock(employee)
+
+    response = login(api_client, employee.email)
+
+    assert response.status_code == 403
+    assert settings.SESSION_COOKIE_NAME not in response.cookies
+    # FR-02 Front-End: "where the account is locked and the submitted password was
+    # correct, a distinct message is shown", so the body identifies the lockout.
+    assert response.json() == {
+        "detail": "Account is locked. An Administrator can release it.",
+        "code": "account_locked",
+    }
+
+
+def test_a_locked_account_is_403_with_the_wrong_password_too(api_client, employee):
+    lock(employee)
+
+    response = login(api_client, employee.email, "wrong password")
+
+    assert response.status_code == 403
+    # The lock is not announced where the password was also wrong: confirming it to
+    # anyone who submits an address would confirm the address is registered.
+    assert response.json() == INVALID
+    assert "code" not in response.json()
+
+
+def test_a_locked_account_issues_no_session(api_client, employee):
+    lock(employee)
+    login(api_client, employee.email)
+    assert api_client.get(ME).status_code == 401
+
+
+def test_an_attempt_during_the_lock_neither_extends_it_nor_moves_the_counter(api_client, employee):
+    lock(employee)
+    locked_until = employee.locked_until
+
+    login(api_client, employee.email)  # correct password
+    login(api_client, employee.email, "wrong password")
+
+    employee.refresh_from_db()
+    assert employee.failed_attempts == LOCKOUT_THRESHOLD
+    assert employee.locked_until == locked_until
+
+
+def test_login_succeeds_once_the_lock_has_expired(api_client, employee):
+    lock(employee, remaining=-datetime.timedelta(seconds=1))
 
     assert login(api_client, employee.email).status_code == 200
+
+
+def test_a_success_clears_locked_until_as_well_as_the_counter(api_client, employee):
+    """D-24 recorded the trap: a success that reset failed_attempts but left
+    locked_until standing would refuse the user's next login for the rest of the
+    window. D-25 closes it."""
+    lock(employee, remaining=-datetime.timedelta(seconds=1))
+
+    assert login(api_client, employee.email).status_code == 200
+
     employee.refresh_from_db()
     assert employee.failed_attempts == 0
+    assert employee.locked_until is None
+    # The proof the trap is gone: the next login is not refused.
+    assert login(APIClient(), employee.email).status_code == 200
+
+
+def test_an_expired_lock_does_not_re_lock_on_the_next_single_failure(api_client, employee):
+    """The counter counts *consecutive* failures. Without resetting it when the
+    window expires, one wrong password after a lock expired would re-lock the
+    account, and "five consecutive failures" would not be true of it."""
+    lock(employee, remaining=-datetime.timedelta(seconds=1))
+
+    response = login(api_client, employee.email, "wrong password")
+
+    assert response.status_code == 401
+    employee.refresh_from_db()
+    assert employee.failed_attempts == 1
+    assert employee.locked_until is None
+
+
+def test_five_consecutive_failures_then_403(api_client, employee):
+    for attempt in range(LOCKOUT_THRESHOLD):
+        response = login(api_client, employee.email, "wrong password")
+        assert response.status_code == 401, attempt
+
+    # The sixth attempt, with the right password, is refused: the account is locked.
+    assert login(api_client, employee.email).status_code == 403
+
+
+def test_an_administrator_account_locks_on_the_same_terms(api_client, administrator):
+    # Nothing about the lock depends on the role (CLAUDE.md section 8 item 2).
+    for _ in range(LOCKOUT_THRESHOLD):
+        login(api_client, administrator.email, "wrong password")
+
+    assert login(api_client, administrator.email).status_code == 403
+    administrator.refresh_from_db()
+    assert administrator.locked_until is not None
+
+
+def test_a_lock_on_one_account_does_not_lock_another(api_client, employee, administrator):
+    lock(employee)
+    assert login(api_client, administrator.email).status_code == 200
+
+
+def test_an_unknown_address_is_never_403(api_client, employee):
+    # The 403 must not become a way to ask whether an address is registered by
+    # locking it: an address with no account answers 401 whatever is submitted.
+    for _ in range(LOCKOUT_THRESHOLD + 1):
+        response = login(api_client, "nobody@example.com", "wrong password")
+        assert response.status_code == 401
 
 
 # --- GET /api/auth/me ------------------------------------------------------------------------------------

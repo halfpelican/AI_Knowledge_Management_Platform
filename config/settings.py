@@ -13,7 +13,7 @@ from pathlib import Path
 
 import environ
 
-from apps.core.constants import SESSION_INACTIVITY_MINUTES
+from apps.core.constants import PASSWORD_MINIMUM_LENGTH, SESSION_INACTIVITY_MINUTES
 from apps.core.logging_config import audit_logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -95,17 +95,25 @@ PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.ScryptPasswordHasher",
 ]
 
-# Django's four default validators, as docs/api-contract.md records under FR-01
-# (marked convention there). The similarity validator is pointed at the two user
-# attributes this model has; Django's default list names columns it does not.
+# Django's four default validators, plus FR-01's own complexity rule. FR-01 states
+# it as "min 8 chars, 1 uppercase, 1 number, 1 special character"; none of Django's
+# defaults check a character class, so ComplexityValidator is what makes the clause
+# true. MinimumLengthValidator reads the same constant as ComplexityValidator, so
+# the two statements of the minimum cannot drift. The similarity validator is
+# pointed at the two user attributes this model has; Django's default list names
+# columns it does not.
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
         "OPTIONS": {"user_attributes": ["name", "email"]},
     },
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": PASSWORD_MINIMUM_LENGTH},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "apps.accounts.validators.ComplexityValidator"},
 ]
 
 # --- Sessions (FR-04, docs/decisions.md D-10) --------------------------------------
