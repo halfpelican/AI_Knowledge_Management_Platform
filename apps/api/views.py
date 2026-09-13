@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
 from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
     LOCKOUT_DURATION,
     LOCKOUT_THRESHOLD,
     MANAGE_ROLES_PERMISSION,
@@ -54,6 +55,12 @@ ACCOUNT_LOCKED_MESSAGE = "Account is locked. An Administrator can release it."
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
 LOGGED_OUT_MESSAGE = "You have been logged out."
+# FR-05 Validation: "a user cannot remove their own administrator role, preventing
+# accidental lockout of the last administrator."
+SELF_DEMOTION_MESSAGE = "You cannot remove your own Administrator role."
+# FR-05 Responses: "404 Not Found if user/role doesn't exist". The user half is
+# get_object_or_404's own body; this is the role half.
+UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 
@@ -223,13 +230,30 @@ class UserRoleView(APIView):
 
     def patch(self, request, pk):
         serializer = RoleChangeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  # 400 {"role": [...]}
-        new_role = Role.objects.get(role_name=serializer.validated_data["role"])
+        serializer.is_valid(raise_exception=True)  # 400 {"role_id": [...]}
+        try:
+            # FR-05 Validation: "new_role_id must exist in Roles table"; FR-05
+            # Responses: "404 Not Found if user/role doesn't exist" (D-25).
+            new_role = Role.objects.get(pk=serializer.validated_data["role_id"])
+        except Role.DoesNotExist:
+            return Response({"detail": UNKNOWN_ROLE_MESSAGE}, status=status.HTTP_404_NOT_FOUND)
         with transaction.atomic():
             user = get_object_or_404(
                 User.objects.select_for_update(of=("self",)).select_related("role"), pk=pk
             )
             old_role_name = user.role.role_name
+            if (
+                user.pk == request.user.pk
+                and old_role_name == ADMINISTRATOR_ROLE_NAME
+                and new_role.role_name != ADMINISTRATOR_ROLE_NAME
+            ):
+                # FR-05 Validation: "a user cannot remove their own administrator
+                # role, preventing accidental lockout of the last administrator."
+                # 403 is a convention: FR-05 enumerates only 200, 403 and 404, and
+                # this is a refusal to act on an authorised request (D-25).
+                return Response(
+                    {"detail": SELF_DEMOTION_MESSAGE}, status=status.HTTP_403_FORBIDDEN
+                )
             user.role = new_role
             user.save(update_fields=["role"])
             # FR-05: every role change writes an audit entry, including a no-op

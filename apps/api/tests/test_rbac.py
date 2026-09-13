@@ -47,6 +47,11 @@ USERS = reverse("user-list")
 ROLES = reverse("role-list")
 
 
+def role_id_for(role_name):
+    """FR-05's body carries the role's id, not its name (D-25)."""
+    return str(Role.objects.get(role_name=role_name).pk)
+
+
 # --- Enumerating the URL conf ---------------------------------------------------------------
 
 
@@ -124,7 +129,9 @@ def test_permissioned_routes_are_403_for_an_employee_and_200_for_an_administrato
     expected = 200 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403
     assert session_client.client.get(USERS).status_code == expected
     response = session_client.client.patch(
-        reverse("user-role", kwargs={"pk": employee.pk}), {"role": EMPLOYEE_ROLE_NAME}, format="json"
+        reverse("user-role", kwargs={"pk": employee.pk}),
+        {"role_id": role_id_for(EMPLOYEE_ROLE_NAME)},
+        format="json",
     )
     assert response.status_code == expected
 
@@ -140,7 +147,9 @@ def test_403_names_the_missing_permission(employee_client):
 
 def test_403_comes_before_404_so_nothing_is_disclosed(employee_client):
     response = employee_client.patch(
-        reverse("user-role", kwargs={"pk": uuid.uuid4()}), {"role": EMPLOYEE_ROLE_NAME}, format="json"
+        reverse("user-role", kwargs={"pk": uuid.uuid4()}),
+        {"role_id": role_id_for(EMPLOYEE_ROLE_NAME)},
+        format="json",
     )
     assert response.status_code == 403
 
@@ -159,7 +168,9 @@ def test_promotion_takes_effect_on_the_next_request(employee, administrator_clie
     assert employee_session.get(USERS).status_code == 403
 
     response = administrator_client.patch(
-        reverse("user-role", kwargs={"pk": employee.pk}), {"role": ADMINISTRATOR_ROLE_NAME}, format="json"
+        reverse("user-role", kwargs={"pk": employee.pk}),
+        {"role_id": role_id_for(ADMINISTRATOR_ROLE_NAME)},
+        format="json",
     )
     assert response.status_code == 200
 
@@ -174,7 +185,9 @@ def test_demotion_takes_effect_on_the_next_request(administrator, administrator_
     assert other_session.get(USERS).status_code == 200
 
     response = administrator_client.patch(
-        reverse("user-role", kwargs={"pk": other.pk}), {"role": EMPLOYEE_ROLE_NAME}, format="json"
+        reverse("user-role", kwargs={"pk": other.pk}),
+        {"role_id": role_id_for(EMPLOYEE_ROLE_NAME)},
+        format="json",
     )
     assert response.status_code == 200
 
@@ -182,12 +195,19 @@ def test_demotion_takes_effect_on_the_next_request(administrator, administrator_
     assert other_session.get(reverse("auth-me")).json()["role"] == EMPLOYEE_ROLE_NAME
 
 
-def test_self_demotion_locks_the_administrator_out_on_the_next_request(administrator, administrator_client):
+def test_self_demotion_is_refused_so_the_administrator_keeps_their_access(administrator, administrator_client):
+    """FR-05 forbids removing your own administrator role (D-25). This test used to
+    pin the opposite: that the demotion succeeded and the administrator lost role
+    management on the very next request, with no in-product way back, because
+    permissions are held only against roles (D-14), there is no Django admin and
+    manage_roles is the only permission."""
     response = administrator_client.patch(
-        reverse("user-role", kwargs={"pk": administrator.pk}), {"role": EMPLOYEE_ROLE_NAME}, format="json"
+        reverse("user-role", kwargs={"pk": administrator.pk}),
+        {"role_id": role_id_for(EMPLOYEE_ROLE_NAME)},
+        format="json",
     )
-    assert response.status_code == 200
-    assert administrator_client.get(USERS).status_code == 403
+    assert response.status_code == 403
+    assert administrator_client.get(USERS).status_code == 200
 
 
 def test_the_session_stores_no_role_or_permission(session_client):

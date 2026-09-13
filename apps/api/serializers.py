@@ -11,7 +11,6 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.accounts.models import Role
-from apps.core.constants import ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
 
 User = get_user_model()
@@ -80,8 +79,10 @@ class LoginSerializer(serializers.Serializer):
 
 
 class RoleSerializer(serializers.ModelSerializer):
-    """``GET /api/roles`` item: the role and the permission codes it holds (D-14)."""
+    """``GET /api/roles`` item: the role, its permission codes (D-14) and the
+    ``role_id`` FR-05's request body carries, which the client reads from here."""
 
+    role_id = serializers.UUIDField(source="id", read_only=True)
     name = serializers.CharField(source="role_name", read_only=True)
     permissions = serializers.SlugRelatedField(
         many=True, read_only=True, slug_field="permission_name"
@@ -89,11 +90,16 @@ class RoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Role
-        fields = ("name", "description", "permissions")
+        fields = ("role_id", "name", "description", "permissions")
         read_only_fields = fields
 
 
 class RoleChangeSerializer(serializers.Serializer):
-    """``PATCH /api/users/{id}/role`` body. A name outside ROLE_NAMES is 400."""
+    """``PATCH /api/users/{id}/role`` body. FR-05 Server-End: "Receives { user_id,
+    new_role_id } from an authenticated Admin session only", and "new_role_id must
+    exist in Roles table". The user id is the one in the path, which carries the same
+    information. A missing or non-UUID ``role_id`` is a malformed body and is 400
+    here; a well-formed id that names no row is 404, which the view decides, because
+    "404 Not Found if user/role doesn't exist" is FR-05's own response for it."""
 
-    role = serializers.ChoiceField(choices=ROLE_NAMES)
+    role_id = serializers.UUIDField()
