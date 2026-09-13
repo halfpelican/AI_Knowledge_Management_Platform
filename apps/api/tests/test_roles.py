@@ -20,7 +20,8 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.accounts.models import Role
+from apps.api.views import LAST_ADMINISTRATOR_MESSAGE, SELF_DEMOTION_MESSAGE
+from apps.accounts.models import Permission, Role, RolePermission
 from apps.accounts.audit import AUDIT_LOGGER_NAME, ROLE_CHANGED
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
@@ -385,6 +386,9 @@ def test_the_last_administrator_cannot_be_demoted_by_anyone(administrator_client
     assert second.role == employee_role
     refused = change_role(administrator_client, administrator, EMPLOYEE_ROLE_NAME)
     assert refused.status_code == 403
+    # The self-demotion guard is checked first, so this is the branch that answers.
+    # The set-level branch is reached by the test below, where requester != target.
+    assert refused.json() == {"detail": SELF_DEMOTION_MESSAGE}
     administrator.refresh_from_db()
     assert administrator.role.role_name == ADMINISTRATOR_ROLE_NAME
 
@@ -395,8 +399,11 @@ def test_two_administrators_cannot_race_each_other_to_zero(administrator):
     so a self-only guard let both commit and left no administrator at all, with
     manage_roles held by that role alone and no way back through the product.
 
-    Serialised here rather than threaded: the guard takes a row lock over the whole
-    administrator set, so the second transaction re-reads after the first commits.
+    Serialised rather than threaded, so what this asserts is the outcome, not the
+    locking: once A has demoted B, B can no longer act at all. Under true concurrency
+    both requests pass the permission check while both are still administrators and
+    the second blocks on the row lock over the administrator set, then re-reads and
+    is refused by the set-level branch — which the test below reaches directly.
     """
     administrator_role = Role.objects.get(role_name=ADMINISTRATOR_ROLE_NAME)
     other = User.objects.create_user(
@@ -411,4 +418,30 @@ def test_two_administrators_cannot_race_each_other_to_zero(administrator):
 
     assert first.status_code == 200
     assert second.status_code == 403  # would have been 200, leaving zero administrators
+    assert User.objects.filter(role__role_name=ADMINISTRATOR_ROLE_NAME).count() == 1
+
+
+def test_a_permitted_non_administrator_cannot_empty_the_administrator_set(
+    administrator, employee, employee_client
+):
+    """The branch the self-demotion guard cannot reach.
+
+    Its condition is requester != target, so the requester must hold manage_roles
+    without being an Administrator. Permissions are held against roles (D-14), which
+    makes that reachable by granting the permission to Employee. Without the
+    set-level check this request would leave the organisation with no administrator
+    and no way to appoint one, because manage_roles is normally held by that role
+    alone.
+    """
+    RolePermission.objects.create(
+        role=Role.objects.get(role_name=EMPLOYEE_ROLE_NAME),
+        permission=Permission.objects.get(permission_name=MANAGE_ROLES_PERMISSION),
+    )
+
+    response = change_role(employee_client, administrator, EMPLOYEE_ROLE_NAME)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": LAST_ADMINISTRATOR_MESSAGE}
+    administrator.refresh_from_db()
+    assert administrator.role.role_name == ADMINISTRATOR_ROLE_NAME
     assert User.objects.filter(role__role_name=ADMINISTRATOR_ROLE_NAME).count() == 1
