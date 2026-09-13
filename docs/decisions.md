@@ -490,7 +490,13 @@ and the logger call becomes a row insert; the call site is one function in
 
 ## D-23 · Stage 2 conventions the contract did not state
 
-**Status:** Settled · **Date:** 2026-09-13
+**Status:** Partly superseded by D-25 on 2026-09-13 · **Date:** 2026-09-13
+
+> Read D-25 before relying on anything here. The proposal's FR text overturned two
+> of the conventions below: an Administrator may **not** change their own role, and
+> the password rules are FR-01's complexity clause rather than Django's defaults.
+> The entry is left standing, as this file's rules require, so the superseded
+> reasoning stays legible.
 
 - Registration returns 201 and starts no session; the client signs in through login.
 - An Administrator may change any user's role, including their own, and a same-role
@@ -504,7 +510,11 @@ and the logger call becomes a row insert; the call site is one function in
 
 ## D-24 · Stage 2 security review: fixes and accepted residues
 
-**Status:** Settled · **Date:** 2026-09-13
+**Status:** Partly superseded by D-25 on 2026-09-13 · **Date:** 2026-09-13
+
+> The second accepted residue below — that lockout enforcement is FR-03's and
+> `locked_until` is never cleared — is overturned by D-25. The lock is FR-02's own
+> clause and is now enforced. The rest of this entry stands.
 
 The adversarial review of FR-01, FR-02, FR-04, FR-05 and FR-06 confirmed two defects.
 Both are fixed, with a regression test each.
@@ -576,7 +586,7 @@ been built from it and every further hour of work compounded the error.
 | Clause | Was | Now | FR wording |
 |---|---|---|---|
 | FR-01 password rules | Django's four default validators (D-23) | min 8 characters, 1 uppercase, 1 number, 1 special character, enforced server-side | "Password must meet complexity rules (min 8 chars, 1 uppercase, 1 number, 1 special character)" |
-| FR-02 locked account | recorded only, never enforced (D-24) | `403` while the lock holds, whatever the password; a success clears `locked_until` | "403 forbidden if account is locked"; "five consecutive failures lock the account for 15 minutes" |
+| FR-02 locked account | recorded only, never enforced (D-24) | `403` when the lock holds **and** the password matched, the ordinary `401` when it did not; a success clears `locked_until` | "403 forbidden if account is locked"; "five consecutive failures lock the account for 15 minutes" |
 | FR-02 malformed address | `401`, treated as an unknown address | `400`, checked before the database lookup | "Email format checked before database lookup"; the login pseudocode returns 400 explicitly |
 | FR-04 logout | `204` | `200` | "200 OK on success" |
 | FR-05 unknown role | `400` | `404` | "404 Not Found if user/role doesn't exist" |
@@ -587,6 +597,36 @@ The self-demotion clause was the highest risk of the seven. Permissions are held
 against roles (D-14), there is no Django admin, and `manage_roles` is the only
 permission, so a demonstrator who demoted themselves removed role management from the
 running system with no in-product way back.
+
+**Correction, 2026-09-13, after the first implementation.** This entry first read
+FR-02's "403 forbidden if account is locked" as unqualified and specified a 403
+whatever the password. That was wrong, and the build agent caught it: the proposal's
+`handleLoginAttempt()` pseudocode branches on the password result inside the locked
+case and returns 401 where the password was wrong, giving the reason in the document
+itself — "Confirming a lock to anyone who merely knows the email address would
+convert a protective measure into an account-enumeration tool." FR-03's messaging
+clause says the same. A uniform 403 would have meant five wrong passwords return 401
+for an unregistered address and 403 for a registered one, which is precisely the
+oracle the proposal set out to avoid. The Responses line is the summary; the
+pseudocode is the detail, and the detail wins. The code, the contract and the row
+above now say: 403 only where the password matched, otherwise the ordinary 401,
+byte-identical to an unknown address, with a test asserting that equality.
+
+**Two further conventions inside the lockout, neither settled by the proposal.**
+
+- A failed attempt made *during* an active lock neither moves the counter nor
+  extends the window, so "locks the account for 15 minutes" stays literally true
+  rather than becoming indefinite under a sustained attack.
+- `failed_attempts` resets once the lock window expires, taken from FR-03's "the
+  counter also resets automatically once the lockout window expires". Without it a
+  single wrong password after the window would re-lock the account at once, and
+  FR-02's "five consecutive failures" would be false of it.
+
+**A gap that arrived with enforcement.** FR-03 also defines a `LoginAttempts` table
+and an administrator release route, both out of the M6 gate and both unbuilt. So a
+lockout now has no evidence trail (a forgotten password and a distributed attempt
+look alike) and a locked user's only remedy is to wait out the window. Worth stating
+at the demonstration rather than being asked.
 
 **Conventions that remain, because the FR enumerates no code.**
 

@@ -35,7 +35,7 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
 | POST | `/api/auth/register` | none | `201` user object; role is Employee | `400` a field is missing, the address is not a valid format, or the password fails the complexity rules; `409` the address is already registered |
-| POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie | `400` a field is missing, or the address is not a valid format (checked before the database lookup); `401 {"detail": "Invalid email or password."}` for an unknown address or a wrong password, the same message for both; `403` the account is locked |
+| POST | `/api/auth/login` | none | `200` user object; sets the session cookie and the `csrftoken` cookie | `400` a field is missing, or the address is not a valid format (checked before the database lookup); `401 {"detail": "Invalid email or password."}` for an unknown address, a wrong password, or a locked account whose password was also wrong, byte-identical in every case; `403 {"detail": "...", "code": "account_locked"}` only when the account is locked **and** the password matched |
 | POST | `/api/auth/logout` | session | `200`; the session record is destroyed server-side | `401` no valid session |
 | GET | `/api/auth/me` | session | `200` user object; refreshes the `csrftoken` cookie | `401` |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
@@ -48,8 +48,12 @@ and keeps submit disabled until they all pass. Both derive from one policy so th
 cannot drift.
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
-consecutive failures lock the account for `LOCKOUT_DURATION`; while the lock holds,
-login is `403` whatever the password. A success resets `failed_attempts` to 0, clears
+consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
+login is `403` **only when the password also matched**; a wrong password against a
+locked account is the ordinary `401`, indistinguishable from an unregistered address.
+Announcing the lock to anyone who merely knows an address would make it an
+account-enumeration oracle, which is why the proposal's own login pseudocode branches
+there. A success resets `failed_attempts` to 0, clears
 `locked_until`, and sets `last_login_at`. The lock is FR-02's own clause and is
 enforced here; FR-03 adds only the warning interface and stays out of the gate
 (D-25).
