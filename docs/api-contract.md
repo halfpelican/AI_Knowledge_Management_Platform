@@ -68,8 +68,10 @@ enforced here; FR-03 adds only the warning interface and stays out of the gate
 their own administrator role, and no change may empty the administrator set, so the
 last administrator cannot be locked out by either route. Both refusals are `403`.
 
-**FR-02 role-specific dashboard.** The FR redirects to a dashboard chosen by role.
-The dashboards are FR-14, so this is deferred to Stage 5 and recorded in D-25.
+**FR-02 role-specific dashboard.** Login sends an Administrator to `/admin` and an
+Employee to `/dashboard`, unless the user was bounced off a guarded route, in which
+case they return there. Both routes exist; FR-14 replaces what they render in Stage 5,
+so today the destination differs by role and the content does not.
 
 Session: 60-minute inactivity expiry (D-10). An expired or invalid session cookie is
 `401` on every route that needs one.

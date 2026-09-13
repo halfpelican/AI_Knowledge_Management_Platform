@@ -570,7 +570,13 @@ authorisation decided only in React; no secret committed.
 
 ## D-25 · Stage 2 corrected against the proposal's FR text
 
-**Status:** Settled · **Date:** 2026-09-13 · **Supersedes:** parts of D-23 and D-24
+**Status:** Settled, one bullet amended by D-26 · **Date:** 2026-09-13 · **Supersedes:** parts of D-23 and D-24
+
+> One rule below is out of date: this entry says a failed attempt during an
+> active lock neither moves the counter nor extends the window. D-26 changes the
+> first half. The counter does move, so that a locked account can stop announcing
+> whether a guess was right once guessing passes a ceiling; the window is still
+> never extended. Everything else here stands.
 
 `Project_8-proposal_complete_V4.5.docx` reached this machine on 2026-09-13, after
 Stage 2 was built. Until then the endpoints were built from
@@ -704,7 +710,10 @@ every fifteen minutes holds it locked. Administrators lock on the same terms, th
 is no release route, no password reset and no Django admin, so the only remedy was a
 shell on the host. Both anonymous endpoints now carry a scoped rate limit
 (`AUTHENTICATION_THROTTLE_RATE`, 20 requests per minute per client address), which
-is generous for a person typing a password and useless for this attack. D-24 noted
+is generous for a person typing a password and useless for this attack. The counters
+live in Django's default per-process cache, so under several worker processes the
+effective rate is that many times higher and a restart clears it. Adequate for the
+alpha; a shared cache is the fix if the limit ever has to be exact. D-24 noted
 the absence of throttling while the lockout was inert; enforcement turned that
 residue into a live denial-of-service primitive, which is a change in what can be
 demonstrated rather than production hardening.
@@ -734,8 +743,9 @@ changes take effect on the next request, but a session can only be ended by its
 owner. That is a fair question against FR-04 "session management" and the honest
 answer is that ending sessions is not in the M6 scope.
 
-**Also confirmed clean by the same review:** the 401 and 403 responses for a locked
-account are byte-identical to those for an unregistered address, headers included;
+**Also confirmed clean by the same review:** a locked account's 401 is byte-identical
+to the response for an unregistered address, headers included, which is the case that
+matters because the 403 is by design the one distinguishable outcome;
 the counter and window cannot be set by a caller; no path authenticates except the
 login view; no mass assignment through the role change; and the two 403 bodies,
 though different, are only ever visible to someone who already holds the permission.

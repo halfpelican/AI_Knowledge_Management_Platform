@@ -43,6 +43,9 @@ const MESSAGES = {
   // The only 409 in the contract is FR-01's duplicate address, which the
   // registration form places under the email field (src/utils/fieldErrors.js).
   409: VALIDATION.emailTaken,
+  // Registration and login are rate limited per client address (D-26); reachable
+  // in a demonstration, since the lockout scenario alone needs several attempts.
+  429: 'Too many attempts. Please wait a minute and try again.',
   503: 'The AI service is currently unavailable. Please try again shortly.',
   default: 'Something went wrong. Please try again.',
 }

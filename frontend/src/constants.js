@@ -50,7 +50,8 @@ export const TEXT = {
   // a distinct message is shown." Distinct from the 401 text, and it names no
   // account detail, so it discloses nothing a 401 does not.
   accountLocked:
-    'This account is temporarily locked after too many failed sign-in attempts. Please try again later, or ask an Administrator for help.',
+    'This account is temporarily locked after too many failed sign-in attempts. ' +
+    'Please try again later.',
   // FR-06: the "403 - Access Denied" page a guarded route redirects to. It never
   // describes what the requested screen would have contained.
   accessDeniedTitle: '403 – Access Denied',
