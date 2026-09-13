@@ -30,6 +30,7 @@ import pytest
 # observes every request the suite makes; see the module docstring.
 pytest_plugins = ["apps.api.tests.dual_role_matrix"]
 from django.conf import settings
+from django.core.cache import cache
 from django.test import override_settings
 
 import logging.config
@@ -44,6 +45,20 @@ from apps.core.logging_config import audit_logging
 # it through the API; apps/api/tests/test_register.py is where non-complying
 # passwords are asserted to be refused.
 PASSWORD = "Correct-Horse-9-Battery"
+
+
+@pytest.fixture(autouse=True)
+def reset_request_throttles():
+    """Clear the throttle counters between tests.
+
+    Registration and login are rate limited per client address (D-26), and DRF keeps
+    those counts in the cache, which outlives a test. Without this, a test that
+    signs in a few times would 429 the next test rather than failing on its own
+    merits, and the lockout tests deliberately make dozens of attempts.
+    """
+    cache.clear()
+    yield
+    cache.clear()
 
 
 @pytest.fixture(autouse=True)

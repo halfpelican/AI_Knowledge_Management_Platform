@@ -52,7 +52,11 @@ export const PASSWORD_RULES = [
   {
     id: 'length',
     label: `At least ${PASSWORD_MIN_LENGTH} characters`,
-    test: (password) => password.length >= PASSWORD_MIN_LENGTH,
+    // Code points, not UTF-16 code units. An astral character such as an emoji is
+    // two units to JavaScript and one character to Python's len(), so counting
+    // units let a short emoji password enable submit and then fail server-side.
+    // Every other rule in this module already iterates with Array.from.
+    test: (password) => Array.from(password).length >= PASSWORD_MIN_LENGTH,
   },
   {
     id: 'uppercase',

@@ -13,7 +13,11 @@ from pathlib import Path
 
 import environ
 
-from apps.core.constants import PASSWORD_MINIMUM_LENGTH, SESSION_INACTIVITY_MINUTES
+from apps.core.constants import (
+    AUTHENTICATION_THROTTLE_RATE,
+    PASSWORD_MINIMUM_LENGTH,
+    SESSION_INACTIVITY_MINUTES,
+)
 from apps.core.logging_config import audit_logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -146,6 +150,11 @@ REST_FRAMEWORK = {
     # reach the API at all, and a cross-site fetch sending application/json is
     # held by the preflight that this same-origin deployment never answers.
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    # Registration and login are anonymous and, with FR-02's lockout enforced,
+    # unthrottled they are a denial-of-service primitive: the mandatory 409 on a
+    # duplicate address identifies a registered one and five requests then lock
+    # it. Scoped so only those two views are limited (D-26).
+    "DEFAULT_THROTTLE_RATES": {"auth": AUTHENTICATION_THROTTLE_RATE},
 }
 
 # --- Audit log (FR-05) -------------------------------------------------------------

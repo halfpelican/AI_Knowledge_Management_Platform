@@ -6,7 +6,7 @@ import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import PasswordInput from '../components/PasswordInput.jsx'
 import TextInput from '../components/TextInput.jsx'
-import { TEXT } from '../constants.js'
+import { dashboardPathForRole, TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { validateLogin } from '../utils/validation.js'
@@ -113,8 +113,10 @@ export default function Login() {
 
     setSubmitting(true)
     try {
-      await login({ email: values.email.trim(), password: values.password })
-      navigate(location.state?.from ?? '/', { replace: true })
+      const me = await login({ email: values.email.trim(), password: values.password })
+      // FR-02: a role-specific dashboard. A guarded route the user was sent away
+      // from still wins, so they land where they were going.
+      navigate(location.state?.from ?? dashboardPathForRole(me?.role), { replace: true })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setFormError(LOGIN_FAILED_MESSAGE)
