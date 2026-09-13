@@ -39,6 +39,7 @@ Rules for this file:
 | D-21 | API authentication is the Django session cookie with CSRF; Vite dev proxy keeps it same-origin | Settled | 2026-09-12 |
 | D-22 | Audit-log entries are JSON lines in a file (AUDIT_LOG_PATH); schema v1 has no audit table | Settled provisionally, confirm | 2026-09-13 |
 | D-23 | Stage 2 conventions: registration starts no session, administrators may change their own role, Django password validators | Settled | 2026-09-13 |
+| D-24 | Security review findings and accepted residues for Stage 2 | Settled | 2026-09-13 |
 
 ---
 
@@ -499,3 +500,58 @@ and the logger call becomes a row insert; the call site is one function in
 - `locked_until` is stamped on every failure at or beyond `LOCKOUT_THRESHOLD` and is
   not cleared by a successful login; enforcing and clearing it is FR-03 (NIT3004).
 - Unmatched API paths return a JSON 404 body.
+
+## D-24 · Stage 2 security review: fixes and accepted residues
+
+**Status:** Settled · **Date:** 2026-09-13
+
+The adversarial review of FR-01, FR-02, FR-04, FR-05 and FR-06 confirmed two defects.
+Both are fixed, with a regression test each.
+
+**Fixed: login accepted a cross-site form POST.** DRF applies `csrf_exempt` to every
+view and enforces CSRF only after it has found a session user, so an anonymous POST
+was never checked. A hidden cross-site form could therefore sign a victim's browser
+into the attacker's account; `SESSION_COOKIE_SAMESITE` does not help, because it
+governs when a cookie is sent and not when one is set. The fix is
+`DEFAULT_PARSER_CLASSES` of `JSONParser` alone, which is what
+`docs/api-contract.md` always said: a cross-site HTML form can send only form or
+multipart bodies, and a cross-site `fetch` sending JSON is held by a preflight that
+this same-origin deployment (D-21) never answers. Not taken: also enforcing CSRF on
+login unconditionally. It would cost the client nothing, because the current-user
+call already sets the cookie before the form is submitted, and it remains available
+if the deployment ever stops being same-origin.
+
+**Fixed: registration returned 500 for an address longer than the column.** The
+serializer's email field was unbounded, so an over-long address passed validation and
+the insert raised `DataError`, a sibling of `IntegrityError` rather than a subclass,
+which the 409 handler did not catch. The field is now bounded by the column's own
+length, so the two cannot drift, and the contract's 400 is returned.
+
+**Accepted, not fixed.**
+
+- *Login timing distinguishes a registered address from an unknown one by roughly one
+  to two percent.* The failed-attempt update runs only when the address exists;
+  bcrypt runs either way, which equalises the expensive half. FR-01 mandates a 409 on
+  duplicate registration, which is an exact, unthrottled enumeration oracle for every
+  address in the organisation, so closing a one percent timing channel would change
+  nothing. Say that plainly rather than claiming login is non-enumerable.
+- *Nothing rate-limits login or registration, and `locked_until` is written but never
+  read.* Enforcement is FR-03 (SHOULD, NIT3004) and out of the M6 gate. The columns
+  are populated now so FR-03 has the history it needs.
+- *`locked_until` is not cleared by a successful login* (D-23). Whoever builds FR-03
+  must clear it explicitly, or a user who succeeds after five failures stays locked
+  for the rest of the window. Recorded here because the trap is invisible until the
+  field is first read.
+- *The JSON 404 for an unmatched path is only returned when `DEBUG` is false.* Django
+  bypasses `handler404` under `DEBUG`, so the development default shows the technical
+  404 page instead. The contract line holds for the alpha deployment, not for a
+  developer's machine.
+- *The audit log covers role changes only* (D-22), which is FR-05's clause. It is not
+  a general audit trail: there is no entry for login, logout, a failed login or a
+  refused privilege escalation.
+
+**Clean.** No route lacks a server-side check; no privilege escalation through a
+request body, including a role supplied at registration; 401 and 403 do not leak
+account existence; no password or hash in any response or log; logout destroys the
+session server-side so a captured cookie stops working; no session fixation; no
+authorisation decided only in React; no secret committed.

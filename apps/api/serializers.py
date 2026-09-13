@@ -36,7 +36,12 @@ class RegisterSerializer(serializers.Serializer):
     always creates an Employee (docs/schema-v1.md Users.role_id)."""
 
     name = serializers.CharField(max_length=NAME_MAX_LENGTH)
-    email = serializers.EmailField()
+    # Bounded by the column itself, so the two cannot drift. Without the bound an
+    # over-long address passes validation and the INSERT raises DataError, which is
+    # a sibling of IntegrityError rather than a subclass, so the 409 handler below
+    # does not catch it and an anonymous caller gets a 500 instead of the 400 the
+    # contract names.
+    email = serializers.EmailField(max_length=User._meta.get_field("email").max_length)
     password = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate_email(self, value):

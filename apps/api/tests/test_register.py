@@ -136,3 +136,37 @@ def test_duplicate_email_is_409(api_client, employee):
 def test_duplicate_email_is_detected_case_insensitively(api_client, employee):
     response = register(api_client, email=employee.email.upper())
     assert response.status_code == 409
+
+
+# --- Security review findings (Stage 2 item 7) ------------------------------------------------
+
+
+def test_an_over_long_address_is_400_not_500(api_client):
+    """The column is varchar(254). Unbounded, the serializer admitted a longer
+    address and the INSERT raised DataError, which is a sibling of IntegrityError
+    rather than a subclass, so the 409 handler missed it and an anonymous caller
+    got a 500 with a traceback under the development DEBUG setting."""
+    length = User._meta.get_field("email").max_length
+    local = "a" * (length - len("@example.com") + 1)
+    response = register(api_client, email=f"{local}@example.com")
+    assert response.status_code == 400
+    assert "email" in response.json()
+    assert not User.objects.filter(name=VALID["name"]).exists()
+
+
+def test_an_address_of_exactly_the_column_length_is_accepted(api_client):
+    length = User._meta.get_field("email").max_length
+    local = "a" * (length - len("@example.com"))
+    address = f"{local}@example.com"
+    assert len(address) == length
+    assert register(api_client, email=address).status_code == 201
+
+
+def test_a_cross_site_form_post_cannot_register(api_client):
+    """DRF exempts its views from CsrfViewMiddleware and only enforces CSRF once a
+    session user exists, so an anonymous POST is never checked. JSON-only parsing
+    is what closes it: a cross-site HTML form can only send form or multipart
+    bodies, and a cross-site fetch sending JSON is held by the preflight."""
+    response = api_client.post(URL, data=VALID)  # urlencoded, as an HTML form sends
+    assert response.status_code == 415
+    assert not User.objects.filter(email=VALID["email"].lower()).exists()

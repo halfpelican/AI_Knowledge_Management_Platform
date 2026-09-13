@@ -208,3 +208,16 @@ def test_me_reads_the_role_from_the_database_on_every_request(employee_client, e
     employee.role = administrator_role
     employee.save(update_fields=["role"])
     assert employee_client.get(ME).json()["role"] == ADMINISTRATOR_ROLE_NAME
+
+
+def test_a_cross_site_form_post_cannot_sign_a_browser_in(api_client, employee):
+    """Login CSRF (security review, Stage 2 item 7). A hidden cross-site form
+    posting valid credentials would have signed the victim's browser into the
+    attacker's account, and SameSite=Lax does not help because it governs when a
+    cookie is sent, not when one is set. JSON-only parsing refuses the form body
+    before any credential is read."""
+    response = api_client.post(
+        LOGIN, data={"email": employee.email, "password": PASSWORD}
+    )  # urlencoded, as an HTML form sends
+    assert response.status_code == 415
+    assert "sessionid" not in response.cookies

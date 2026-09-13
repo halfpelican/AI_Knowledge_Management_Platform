@@ -131,6 +131,13 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.SessionAuthentication"],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # JSON only, as docs/api-contract.md states. This is also what stops a
+    # cross-site login: DRF applies csrf_exempt to every view and only enforces
+    # CSRF once a session user has been found, so an anonymous POST is never
+    # checked. Dropping the form parsers means a cross-site HTML form cannot
+    # reach the API at all, and a cross-site fetch sending application/json is
+    # held by the preflight that this same-origin deployment never answers.
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
 }
 
 # --- Audit log (FR-05) -------------------------------------------------------------

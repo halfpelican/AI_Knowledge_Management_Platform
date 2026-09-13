@@ -85,3 +85,12 @@ def test_session_cookie_is_http_only_and_same_site():
 def test_csrf_cookie_is_readable_by_the_front_end():
     assert settings.CSRF_COOKIE_HTTPONLY is False
     assert settings.CSRF_COOKIE_SAMESITE == "Lax"
+
+
+def test_the_api_parses_json_only():
+    """docs/api-contract.md says JSON bodies. The form parsers are also the login
+    CSRF vector (security review, Stage 2 item 7): DRF never checks CSRF on an
+    anonymous request, so an HTML form from another origin could post credentials."""
+    from rest_framework.settings import api_settings
+
+    assert [cls.__name__ for cls in api_settings.DEFAULT_PARSER_CLASSES] == ["JSONParser"]
