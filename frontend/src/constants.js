@@ -7,6 +7,24 @@ export const ROLES = {
 }
 
 /**
+ * FR-02: "On success, user is redirected to a role-specific dashboard (e.g.,
+ * Administrator -> Admin Console; Employee -> Knowledge Dashboard)."
+ *
+ * The dashboards themselves are FR-14 and arrive in Stage 5. These routes exist
+ * now so the redirect is genuinely role-specific today; Stage 5 replaces what they
+ * render, not where they live. See docs/decisions.md D-25.
+ */
+export const DASHBOARD_PATHS = {
+  [ROLES.administrator]: '/admin',
+  [ROLES.employee]: '/dashboard',
+}
+
+/** Where a signed-in user belongs. Falls back to the shared placeholder. */
+export function dashboardPathForRole(role) {
+  return DASHBOARD_PATHS[role] ?? '/'
+}
+
+/**
  * Client-side validation text. Fixed here so every form says the same thing.
  * The password rules themselves live in src/utils/password.js, which is the
  * single copy of the policy the server also enforces (FR-01).

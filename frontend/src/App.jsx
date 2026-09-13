@@ -111,6 +111,12 @@ export default function App() {
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="components" element={<ComponentSheet />} />
+          {/* FR-02 redirects to a role-specific dashboard. FR-14 replaces what
+              these render in Stage 5; they exist now so the redirect is real. */}
+          <Route element={<RequireAuth />}>
+            <Route path="dashboard" element={<Home />} />
+            <Route path="admin" element={<Home />} />
+          </Route>
           {/* FR-06: where a guarded route sends an unauthorised navigation attempt. */}
           <Route path="403" element={<AccessDenied />} />
           <Route element={<RequireAuth />}>

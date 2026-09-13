@@ -111,3 +111,69 @@ def test_the_api_parses_json_only():
     from rest_framework.settings import api_settings
 
     assert [cls.__name__ for cls in api_settings.DEFAULT_PARSER_CLASSES] == ["JSONParser"]
+
+
+# --- The anonymous endpoints are rate limited (D-26) -------------------------------------------
+
+
+def _set_auth_rate(monkeypatch, rate):
+    """DRF binds THROTTLE_RATES to a class attribute at import, so overriding the
+    setting has no effect on an already-imported throttle. Patch the attribute."""
+    from rest_framework.throttling import ScopedRateThrottle
+
+    monkeypatch.setattr(
+        ScopedRateThrottle, "THROTTLE_RATES", {**ScopedRateThrottle.THROTTLE_RATES, "auth": rate}
+    )
+
+
+@pytest.mark.django_db
+def test_login_is_rate_limited_per_client(api_client, monkeypatch):
+    """With FR-02's lockout enforced, an unthrottled login is a denial-of-service
+    primitive: five requests lock any account, and registration's mandatory 409
+    identifies which addresses exist. Nothing in the product releases a lock, so
+    every account could be held locked indefinitely by anyone."""
+    from django.core.cache import cache
+    from django.urls import reverse
+
+    _set_auth_rate(monkeypatch, "3/min")
+    cache.clear()
+    url = reverse("auth-login")
+    body = {"email": "nobody@example.com", "password": "Wrong-Password-1!"}
+
+    statuses = [api_client.post(url, body, format="json").status_code for _ in range(4)]
+
+    assert statuses[:3] == [401, 401, 401]
+    assert statuses[3] == 429
+
+
+@pytest.mark.django_db
+def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
+    """The same throttle scope covers the address oracle that feeds the attack."""
+    from django.core.cache import cache
+    from django.urls import reverse
+
+    _set_auth_rate(monkeypatch, "2/min")
+    cache.clear()
+    url = reverse("auth-register")
+
+    statuses = [
+        api_client.post(
+            url,
+            {"name": "A Person", "email": f"person{index}@example.com", "password": "Str0ng-Pass!"},
+            format="json",
+        ).status_code
+        for index in range(3)
+    ]
+
+    assert statuses[:2] == [201, 201]
+    assert statuses[2] == 429
+
+
+def test_the_authenticated_routes_are_not_throttled():
+    """Only the two anonymous endpoints carry the scope; a signed-in user browsing
+    the repository must not be rate limited by an auth throttle."""
+    from apps.api import views
+
+    assert views.LoginView.throttle_scope == views.RegisterView.throttle_scope == "auth"
+    for view in (views.LogoutView, views.MeView, views.RoleListView, views.UserListView):
+        assert not getattr(view, "throttle_classes", [])

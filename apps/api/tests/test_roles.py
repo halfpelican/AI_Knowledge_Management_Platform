@@ -20,6 +20,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from apps.accounts.models import Role
 from apps.accounts.audit import AUDIT_LOGGER_NAME, ROLE_CHANGED
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
@@ -360,3 +361,54 @@ def test_a_role_change_without_the_csrf_header_is_refused(employee, administrato
     header = {"HTTP_X_CSRFTOKEN": client.cookies[django_settings.CSRF_COOKIE_NAME].value}
     accepted = client.patch(url, body, format="json", **header)
     assert accepted.status_code == 200
+
+
+# --- The administrator set can never be emptied (FR-05, D-26) ---------------------------------
+
+
+def test_the_last_administrator_cannot_be_demoted_by_anyone(administrator_client, administrator):
+    """FR-05's clause is worded as a self-demotion rule, but its stated purpose is
+    "preventing accidental lockout of the last administrator". A sole administrator
+    is the last one whoever asks, so the refusal is about the set, not the requester."""
+    second = User.objects.create_user(
+        "second-admin@example.com", PASSWORD, name="Second Admin", role=Role.objects.get(
+            role_name=ADMINISTRATOR_ROLE_NAME
+        )
+    )
+    employee_role = Role.objects.get(role_name=EMPLOYEE_ROLE_NAME)
+
+    # Two administrators exist, so demoting one is allowed.
+    assert change_role(administrator_client, second, EMPLOYEE_ROLE_NAME).status_code == 200
+
+    # The requester is now the only administrator left; it may not be emptied.
+    second.refresh_from_db()
+    assert second.role == employee_role
+    refused = change_role(administrator_client, administrator, EMPLOYEE_ROLE_NAME)
+    assert refused.status_code == 403
+    administrator.refresh_from_db()
+    assert administrator.role.role_name == ADMINISTRATOR_ROLE_NAME
+
+
+def test_two_administrators_cannot_race_each_other_to_zero(administrator):
+    """Reproduces the concurrency hole the security review found: A demotes B while
+    B demotes A. Neither is a self-demotion and the two lock different target rows,
+    so a self-only guard let both commit and left no administrator at all, with
+    manage_roles held by that role alone and no way back through the product.
+
+    Serialised here rather than threaded: the guard takes a row lock over the whole
+    administrator set, so the second transaction re-reads after the first commits.
+    """
+    administrator_role = Role.objects.get(role_name=ADMINISTRATOR_ROLE_NAME)
+    other = User.objects.create_user(
+        "other-admin@example.com", PASSWORD, name="Other Admin", role=administrator_role
+    )
+    a_client, b_client = APIClient(), APIClient()
+    a_client.force_login(administrator)
+    b_client.force_login(other)
+
+    first = change_role(a_client, other, EMPLOYEE_ROLE_NAME)
+    second = change_role(b_client, administrator, EMPLOYEE_ROLE_NAME)
+
+    assert first.status_code == 200
+    assert second.status_code == 403  # would have been 200, leaving zero administrators
+    assert User.objects.filter(role__role_name=ADMINISTRATOR_ROLE_NAME).count() == 1

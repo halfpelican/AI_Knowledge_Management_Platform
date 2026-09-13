@@ -18,6 +18,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.accounts.audit import log_role_change
@@ -25,6 +26,7 @@ from apps.accounts.models import Permission, Role
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     LOCKOUT_DURATION,
+    LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
     MANAGE_ROLES_PERMISSION,
     ROLE_NAMES,
@@ -51,13 +53,23 @@ EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
 # machine-readable flag for FR-02's front-end clause, "where the account is locked
 # and the submitted password was correct, a distinct message is shown": the client
 # branches on the code and never has to match on prose.
-ACCOUNT_LOCKED_MESSAGE = "Account is locked. An Administrator can release it."
+# FR-03 defines an administrator release route; it is out of the M6 gate and
+# unbuilt, so the notice must not promise one (D-26). Waiting is the only remedy.
+ACCOUNT_LOCKED_MESSAGE = (
+    "This account is temporarily locked after repeated failed sign-ins. "
+    "Please try again later."
+)
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
 LOGGED_OUT_MESSAGE = "You have been logged out."
 # FR-05 Validation: "a user cannot remove their own administrator role, preventing
 # accidental lockout of the last administrator."
 SELF_DEMOTION_MESSAGE = "You cannot remove your own Administrator role."
+# The same clause's purpose, "preventing accidental lockout of the last
+# administrator", when the last one is somebody else (D-26).
+LAST_ADMINISTRATOR_MESSAGE = (
+    "This is the last Administrator. Promote another user before changing this role."
+)
 # FR-05 Responses: "404 Not Found if user/role doesn't exist". The user half is
 # get_object_or_404's own body; this is the role half.
 UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
@@ -75,6 +87,10 @@ def not_found(request, exception=None):
 
 class RegisterView(APIView):
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
+    # Anonymous and unthrottled, this endpoint is an unlimited "is this address
+    # registered?" oracle, and the answer feeds the lockout below (D-26).
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -107,6 +123,27 @@ def _is_locked(user) -> bool:
     return user is not None and user.locked_until is not None and user.locked_until > timezone.now()
 
 
+def _record_locked_attempt(email: str) -> int:
+    """Count a failed attempt made *during* an active lock, and return the new total.
+
+    The window is deliberately not extended: "locks the account for 15 minutes" stays
+    literally true rather than becoming indefinite under a sustained attack (D-25).
+    But the counter does move, which D-25 originally said it would not. Leaving it
+    still meant the lock withheld only the session cookie and not the *verification
+    oracle*: an attacker could guess without limit for the life of the window, each
+    guess answered 403 or 401 according to whether it was right. Counting is what
+    lets the caller stop announcing the answer (D-26).
+    """
+    with transaction.atomic():
+        try:
+            user = User.objects.select_for_update().get(email=email)
+        except User.DoesNotExist:  # pragma: no cover - the caller found a locked account
+            return 0
+        user.failed_attempts += 1
+        user.save(update_fields=["failed_attempts"])
+        return user.failed_attempts
+
+
 def _record_failed_attempt(email: str) -> None:
     """FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
     failures lock the account for 15 minutes." Reached only for an account that is
@@ -132,6 +169,10 @@ def _record_failed_attempt(email: str) -> None:
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class LoginView(APIView):
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
+    # Five requests lock any account, so without this anyone could hold every
+    # account in the organisation locked indefinitely (D-26).
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -156,7 +197,15 @@ class LoginView(APIView):
             # 401, indistinguishable from a wrong password against any other
             # address. FR-02's unqualified "403 if account is locked" is the summary;
             # the pseudocode and FR-03's messaging clause are the detail (D-25).
-            if user is None:
+            #
+            # Announcing it for the whole window, however, leaves the lock withholding
+            # only the session and not the answer: guesses are unlimited during a
+            # lock, and each 403 or 401 says whether that guess was right. So the
+            # attempt is counted, and past LOCKOUT_NOTICE_CEILING the answer stops
+            # being given at all (D-26). The password is still verified on every path
+            # so the timing does not separate these cases from an unknown address.
+            attempts = _record_locked_attempt(email)
+            if user is None or attempts > LOCKOUT_NOTICE_CEILING:
                 return Response(
                     {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
                 )
@@ -243,21 +292,38 @@ class UserRoleView(APIView):
         except Role.DoesNotExist:
             return Response({"detail": UNKNOWN_ROLE_MESSAGE}, status=status.HTTP_404_NOT_FOUND)
         with transaction.atomic():
+            # Lock the whole administrator set before reading it, not just the target
+            # row. Two administrators demoting each other at the same time touch
+            # different rows, so a self-only guard lets both commit and leaves zero
+            # administrators; manage_roles is held only by that role (D-14), so there
+            # is then no way back through the product. Ordered by primary key so
+            # concurrent requests take the locks in the same order (D-26).
+            administrator_ids = set(
+                User.objects.select_for_update()
+                .filter(role__role_name=ADMINISTRATOR_ROLE_NAME)
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
             user = get_object_or_404(
                 User.objects.select_for_update(of=("self",)).select_related("role"), pk=pk
             )
             old_role_name = user.role.role_name
-            if (
-                user.pk == request.user.pk
-                and old_role_name == ADMINISTRATOR_ROLE_NAME
+            removes_administrator = (
+                old_role_name == ADMINISTRATOR_ROLE_NAME
                 and new_role.role_name != ADMINISTRATOR_ROLE_NAME
-            ):
+            )
+            if removes_administrator and user.pk == request.user.pk:
                 # FR-05 Validation: "a user cannot remove their own administrator
                 # role, preventing accidental lockout of the last administrator."
                 # 403 is a convention: FR-05 enumerates only 200, 403 and 404, and
                 # this is a refusal to act on an authorised request (D-25).
                 return Response(
                     {"detail": SELF_DEMOTION_MESSAGE}, status=status.HTTP_403_FORBIDDEN
+                )
+            if removes_administrator and administrator_ids <= {user.pk}:
+                # The same clause's stated purpose, reached by another route.
+                return Response(
+                    {"detail": LAST_ADMINISTRATOR_MESSAGE}, status=status.HTTP_403_FORBIDDEN
                 )
             user.role = new_role
             user.save(update_fields=["role"])

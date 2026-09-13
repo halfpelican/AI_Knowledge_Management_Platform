@@ -79,6 +79,20 @@ PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
 # Configuration values rather than literals, as FR-03 Business logic requires.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
+# How many failed attempts in total may still be answered with the distinct
+# "account is locked" notice. Past this, a locked account answers every attempt with
+# the generic message, right password or wrong. Without a ceiling the lock withheld
+# the session but not the answer: guessing during the window was unlimited and each
+# response said whether that guess was correct (D-26). Twice the threshold leaves a
+# user who mistypes once after locking themselves out with the useful message.
+LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
+
+# Requests per minute allowed to the two anonymous authentication endpoints, per
+# client address. Lockout without a throttle is a denial-of-service primitive:
+# registration's mandatory 409 identifies a registered address and five requests
+# then lock it, so every account in the organisation can be held locked by anyone
+# (D-26). Generous enough that a person typing a password never meets it.
+AUTHENTICATION_THROTTLE_RATE = "20/min"
 
 # --- No-answer response (FR-12; CLAUDE.md invariants 6 and 7) ------------------------
 # PROVISIONAL: the proposal's exact wording is not available on this machine;

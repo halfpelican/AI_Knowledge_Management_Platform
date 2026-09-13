@@ -47,10 +47,15 @@ character", enforced server-side. The client shows the same rules as the user ty
 and keeps submit disabled until they all pass. Both derive from one policy so they
 cannot drift.
 
+**Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
+per client address and answer `429` past the rate. No other route is throttled (D-26).
+
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
 login is `403` **only when the password also matched**; a wrong password against a
 locked account is the ordinary `401`, indistinguishable from an unregistered address.
+Past twice the threshold the lock stops being announced at all and every attempt gets
+the `401`, so the lock bounds guessing and not merely the session (D-26).
 Announcing the lock to anyone who merely knows an address would make it an
 account-enumeration oracle, which is why the proposal's own login pseudocode branches
 there. A success resets `failed_attempts` to 0, clears
@@ -60,7 +65,8 @@ enforced here; FR-03 adds only the warning interface and stays out of the gate
 
 **FR-05 role change.** The body is `{"role_id": "<uuid>"}`, matching the FR's
 `{ user_id, new_role_id }`; the user id travels in the path. A user cannot remove
-their own administrator role, so the last administrator cannot be locked out.
+their own administrator role, and no change may empty the administrator set, so the
+last administrator cannot be locked out by either route. Both refusals are `403`.
 
 **FR-02 role-specific dashboard.** The FR redirects to a dashboard chosen by role.
 The dashboards are FR-14, so this is deferred to Stage 5 and recorded in D-25.

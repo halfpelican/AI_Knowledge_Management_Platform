@@ -17,7 +17,12 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, LOCKOUT_DURATION, LOCKOUT_THRESHOLD
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    LOCKOUT_DURATION,
+    LOCKOUT_NOTICE_CEILING,
+    LOCKOUT_THRESHOLD,
+)
 from conftest import PASSWORD
 
 User = get_user_model()
@@ -232,7 +237,10 @@ def test_a_locked_account_is_403_even_with_the_right_password(api_client, employ
     # FR-02 Front-End: "where the account is locked and the submitted password was
     # correct, a distinct message is shown", so the body identifies the lockout.
     assert response.json() == {
-        "detail": "Account is locked. An Administrator can release it.",
+        "detail": (
+            "This account is temporarily locked after repeated failed sign-ins. "
+            "Please try again later."
+        ),
         "code": "account_locked",
     }
 
@@ -269,7 +277,10 @@ def test_a_locked_account_issues_no_session(api_client, employee):
     assert api_client.get(ME).status_code == 401
 
 
-def test_an_attempt_during_the_lock_neither_extends_it_nor_moves_the_counter(api_client, employee):
+def test_an_attempt_during_the_lock_does_not_extend_it(api_client, employee):
+    """"Locks the account for 15 minutes" stays literally true: a sustained attack
+    cannot push the window out indefinitely. The counter does move, so that the
+    notice can be withdrawn once guessing passes the ceiling (D-26)."""
     lock(employee)
     locked_until = employee.locked_until
 
@@ -277,8 +288,37 @@ def test_an_attempt_during_the_lock_neither_extends_it_nor_moves_the_counter(api
     login(api_client, employee.email, "wrong password")
 
     employee.refresh_from_db()
-    assert employee.failed_attempts == LOCKOUT_THRESHOLD
     assert employee.locked_until == locked_until
+    assert employee.failed_attempts == LOCKOUT_THRESHOLD + 2
+
+
+def test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right(api_client, employee):
+    """The lock must withhold the answer, not only the session. Before this, guesses
+    during a lock were unlimited and each response said whether that guess was
+    correct, so the lock bounded nothing (D-26)."""
+    lock(employee)
+
+    # Exhaust the attempts that still earn the distinct notice.
+    for _ in range(LOCKOUT_NOTICE_CEILING - LOCKOUT_THRESHOLD):
+        assert login(api_client, employee.email, "wrong password").status_code == 401
+
+    right = login(api_client, employee.email)
+    wrong = login(api_client, employee.email, "wrong password")
+
+    assert right.status_code == 401
+    assert right.json() == INVALID
+    assert (right.status_code, right.json()) == (wrong.status_code, wrong.json())
+
+
+def test_the_notice_survives_a_mistype_by_the_locked_out_user(api_client, employee):
+    """The ceiling is generous enough that a person who locks themselves out and
+    then types their password correctly still learns why they cannot get in."""
+    lock(employee)
+
+    response = login(api_client, employee.email)
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "account_locked"
 
 
 def test_login_succeeds_once_the_lock_has_expired(api_client, employee):

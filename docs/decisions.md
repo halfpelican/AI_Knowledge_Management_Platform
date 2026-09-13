@@ -41,6 +41,7 @@ Rules for this file:
 | D-23 | Stage 2 conventions: registration starts no session, administrators may change their own role, Django password validators | Settled | 2026-09-13 |
 | D-24 | Security review findings and accepted residues for Stage 2 | Settled | 2026-09-13 |
 | D-25 | Stage 2 corrected against the proposal FR text; supersedes parts of D-23 and D-24 | Settled | 2026-09-13 |
+| D-26 | Stage 2 security review round two: throttling, a bounded lockout oracle, the last-administrator guard | Settled | 2026-09-13 |
 
 ---
 
@@ -628,6 +629,18 @@ lockout now has no evidence trail (a forgotten password and a distributed attemp
 look alike) and a locked user's only remedy is to wait out the window. Worth stating
 at the demonstration rather than being asked.
 
+**A departure from FR-02's wording, recorded because the auditor found it
+undocumented.** FR-02's Business Logic says "On success a session is established
+carrying the user's role identifier." The session carries no role; a test asserts it
+(`test_rbac.py`). The role is re-read from `role_permissions` on every request
+instead (D-21). The substitution is deliberate and stronger: a role stamped into the
+session at login would go stale the moment an administrator changed it, and FR-05's
+change would not take effect until the user logged out and back in. Re-reading per
+request is what makes "a role change takes effect on the next request without
+re-login" true, which Stage 2's own exit condition requires. The literal clause is
+not met; its purpose is exceeded. Stated here so an assessor reading FR-02 against
+the test sees a decision rather than a mismatch.
+
 **Conventions that remain, because the FR enumerates no code.**
 
 - Refusing a self-demotion answers `403`. FR-05 lists only 200, 403 and 404.
@@ -655,3 +668,74 @@ this entry raises the conflict rather than editing it.
 eight of the thirteen gaps the auditor found were in the untested layer. Whether
 front-end testing is in scope for M6 is not settled anywhere and needs a decision
 before Stage 3, which ships more screens.
+
+## D-26 · Stage 2 security review, round two
+
+**Status:** Settled · **Date:** 2026-09-13 · **Amends:** one bullet of D-25
+
+The adversarial review of the code that landed for D-25 confirmed five defects, each
+reproduced with a live probe. All five are fixed, with tests.
+
+**1. The lock withheld the session but not the answer.** While an account was locked
+the password was still verified and the response said which guess was right, and the
+attempt was not counted, so guessing during the window was unlimited. The lock
+bounded nothing. Now a failed attempt during a lock is counted, and past
+`LOCKOUT_NOTICE_CEILING` (twice the threshold) every attempt gets the generic
+message whatever the password. The window is still never extended, so "locks the
+account for 15 minutes" stays literally true, and the ceiling is high enough that a
+user who locks themselves out and then types the right password still learns why
+they cannot get in.
+
+This **amends D-25**, which said a failed attempt during a lock "neither moves the
+counter nor extends the window". The counter now moves; only the window is fixed.
+It also departs from the proposal's own `handleLoginAttempt()` pseudocode, which
+verifies the password inside the locked branch and counts nothing. The pseudocode's
+hole is real, and the question "what stops me guessing ten thousand passwords?" has
+to have an answer at the demonstration.
+
+The password is still verified on every path, including the ones that no longer
+report the result. Skipping the hash once the ceiling is passed would have made
+those responses measurably faster than the response for an unknown address, which
+would have rebuilt the enumeration oracle that D-25 removed.
+
+**2. Anyone could lock every account in the organisation.** Registration's mandatory
+409 identifies a registered address, five login requests then lock it, and repeating
+every fifteen minutes holds it locked. Administrators lock on the same terms, there
+is no release route, no password reset and no Django admin, so the only remedy was a
+shell on the host. Both anonymous endpoints now carry a scoped rate limit
+(`AUTHENTICATION_THROTTLE_RATE`, 20 requests per minute per client address), which
+is generous for a person typing a password and useless for this attack. D-24 noted
+the absence of throttling while the lockout was inert; enforcement turned that
+residue into a live denial-of-service primitive, which is a change in what can be
+demonstrated rather than production hardening.
+
+**3. Two administrators could race each other to zero.** The guard checked only
+self-demotion, so A demoting B while B demoted A touched different rows, both
+committed, and no administrator remained, with `manage_roles` held by that role
+alone (D-14) and no way back through the product. The transaction now takes a row
+lock over the whole administrator set before reading it and refuses any change that
+would empty it. That is FR-05's stated purpose, "preventing accidental lockout of
+the last administrator", rather than only its letter.
+
+**4. The locked-account notice promised a release that does not exist.** It read "An
+Administrator can release it." FR-03 defines that route and FR-03 is out of the M6
+gate, so the text was false in this build. It now says the account is temporarily
+locked and to try again later, which is true and discloses no more.
+
+**5. The client enabled submit for a password the server refuses.** The length rule
+counted UTF-16 code units while the server counts code points, so an emoji password
+passed the form and was rejected server-side. It now counts code points, and the
+module's claim that it only ever errs the safe way is corrected.
+
+**Recorded, not fixed: a lock does not end an existing session.** Nothing on the
+session path reads `locked_until`, and the model has no `is_active` flag, so an
+administrator cannot revoke anyone's access by any route the product exposes. Role
+changes take effect on the next request, but a session can only be ended by its
+owner. That is a fair question against FR-04 "session management" and the honest
+answer is that ending sessions is not in the M6 scope.
+
+**Also confirmed clean by the same review:** the 401 and 403 responses for a locked
+account are byte-identical to those for an unregistered address, headers included;
+the counter and window cannot be set by a caller; no path authenticates except the
+login view; no mass assignment through the role change; and the two 403 bodies,
+though different, are only ever visible to someone who already holds the permission.
