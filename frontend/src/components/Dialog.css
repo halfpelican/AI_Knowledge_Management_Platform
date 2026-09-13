@@ -1,0 +1,45 @@
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background-color: var(--color-overlay);
+  /* A dialogue taller than a short viewport scrolls rather than overflowing it. */
+  overflow-y: auto;
+}
+
+.dialog {
+  width: 100%;
+  max-width: var(--layout-field-max-width);
+  padding: var(--space-5);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+}
+
+.dialog__title {
+  margin-bottom: var(--space-3);
+  font-size: var(--text-xl);
+}
+
+.dialog__body > :last-child {
+  margin-bottom: 0;
+}
+
+.dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+/* At 400px the two buttons stack to full width rather than being squeezed. */
+@media (max-width: 30rem) {
+  .dialog__actions > .btn {
+    flex: 1 1 100%;
+  }
+}

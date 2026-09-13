@@ -13,7 +13,8 @@ from pathlib import Path
 
 import environ
 
-from apps.core.constants import SESSION_INACTIVITY_MINUTES
+from apps.core.constants import PASSWORD_MINIMUM_LENGTH, SESSION_INACTIVITY_MINUTES
+from apps.core.logging_config import audit_logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -50,6 +51,9 @@ MIDDLEWARE = [
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    # Resolves the session cookie to request.user, which DRF's session
+    # authentication reads (D-21). Must follow SessionMiddleware.
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -80,12 +84,79 @@ DATABASES = {"default": env.db("DATABASE_URL")}  # required, no default
 
 AUTH_USER_MODEL = "accounts.User"
 
+# bcrypt is the hasher the proposal names for password_hash (FR-01). It is listed
+# first so every new hash is bcrypt; Django's defaults follow so any other format
+# can still be verified. A test asserts new hashes start with "bcrypt_sha256$".
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.BCryptSHA256PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.ScryptPasswordHasher",
+]
+
+# Django's four default validators, plus FR-01's own complexity rule. FR-01 states
+# it as "min 8 chars, 1 uppercase, 1 number, 1 special character"; none of Django's
+# defaults check a character class, so ComplexityValidator is what makes the clause
+# true. MinimumLengthValidator reads the same constant as ComplexityValidator, so
+# the two statements of the minimum cannot drift. The similarity validator is
+# pointed at the two user attributes this model has; Django's default list names
+# columns it does not.
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "OPTIONS": {"user_attributes": ["name", "email"]},
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        "OPTIONS": {"min_length": PASSWORD_MINIMUM_LENGTH},
+    },
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {"NAME": "apps.accounts.validators.ComplexityValidator"},
+]
+
 # --- Sessions (FR-04, docs/decisions.md D-10) --------------------------------------
 # Django's own session framework, database-backed: no Sessions table of our own.
 # Saving on every request makes SESSION_COOKIE_AGE an inactivity expiry.
 
 SESSION_COOKIE_AGE = SESSION_INACTIVITY_MINUTES * 60
 SESSION_SAVE_EVERY_REQUEST = True
+# The session cookie is the credential (D-21): never readable by scripts, and
+# not sent on cross-site requests. The CSRF cookie must stay readable because the
+# front end copies it into the X-CSRFToken header on every unsafe request.
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
+
+# --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
+# Every route is protected unless it opts out explicitly (registration and login).
+# apps.api.authentication.SessionAuthentication names its scheme so DRF answers an
+# unauthenticated request with 401 rather than its 403 fallback.
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": ["apps.api.authentication.SessionAuthentication"],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # JSON only, as docs/api-contract.md states. This is also what stops a
+    # cross-site login: DRF applies csrf_exempt to every view and only enforces
+    # CSRF once a session user has been found, so an anonymous POST is never
+    # checked. Dropping the form parsers means a cross-site HTML form cannot
+    # reach the API at all, and a cross-site fetch sending application/json is
+    # held by the preflight that this same-origin deployment never answers.
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+}
+
+# --- Audit log (FR-05) -------------------------------------------------------------
+# A role change is one JSON line written by the "audit" logger
+# (apps.accounts.audit). Schema v1 has no audit table, so the medium is a file
+# until docs/decisions.md records one; the path is read from the environment.
+
+AUDIT_LOG_PATH = Path(env.str("AUDIT_LOG_PATH", default=str(BASE_DIR / "logs" / "audit.log")))
+AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+LOGGING = audit_logging(AUDIT_LOG_PATH)
 
 # --- Internationalisation -------------------------------------------------------
 

@@ -11,6 +11,8 @@ anyio==4.15.1
     #   openai
 asgiref==3.12.1
     # via django
+bcrypt==5.0.0
+    # via -r requirements.in
 colorama==0.4.6
     # via pytest
 django==5.2.17

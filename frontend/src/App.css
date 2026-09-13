@@ -4,7 +4,7 @@
   position: absolute;
   top: var(--space-2);
   left: var(--space-2);
-  z-index: 1;
+  z-index: var(--z-skip-link);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   background-color: var(--color-primary);
@@ -62,4 +62,20 @@
   max-width: var(--content-max-width);
   margin: 0 auto;
   padding: var(--space-5) var(--space-4) var(--space-7);
+}
+
+.app-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.app-nav__user {
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.app-nav__logout {
+  margin-left: var(--space-2);
 }

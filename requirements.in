@@ -7,6 +7,7 @@
 #   uv pip sync --python .venv/Scripts/python.exe requirements.txt
 Django==5.2.17
 djangorestframework==3.18.1
+bcrypt==5.0.0
 django-environ==0.14.0
 psycopg[binary]==3.3.5
 pgvector==0.5.0

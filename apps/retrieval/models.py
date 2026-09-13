@@ -40,7 +40,7 @@ class QueryLog(models.Model):
     answer_text = models.TextField(null=True, blank=True)  # null where no answer was returned
     retrieved_chunk_ids = ArrayField(models.UUIDField(), default=list, blank=True)  # FR-12 traceability
     answered = models.BooleanField()
-    # The two no-answer paths are recorded distinctly (CLAUDE.md invariant 5).
+    # The two no-answer paths are recorded distinctly (CLAUDE.md invariant 7).
     no_answer_reason = vocabulary_field(NO_ANSWER_REASONS, null=True, blank=True)
     answered_at = models.DateTimeField(auto_now_add=True)
 
@@ -60,7 +60,7 @@ class SearchLog(models.Model):
 
 
 class AnswerCitation(models.Model):
-    # Rows exist only for statements that survived verification (CLAUDE.md invariant 4).
+    # Rows exist only for statements that survived verification (CLAUDE.md invariant 6).
     id = uuid_primary_key("citation_id")
     query = models.ForeignKey(QueryLog, on_delete=models.CASCADE, related_name="citations")
     chunk = models.ForeignKey(

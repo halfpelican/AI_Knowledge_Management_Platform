@@ -12,17 +12,38 @@ autouse fixtures below enforce that:
 
 The model fixtures give every test the same small, realistic set of rows: one
 user per role and one document with one chunk, visible to Employees.
+
+The client fixtures cover the dual-role gate (CLAUDE.md section 8): api_client is
+anonymous, employee_client and administrator_client are logged in as one role, and
+session_client is parametrised over both roles so a test written once against it
+runs from an Employee session and from an Administrator session. Whether every
+protected endpoint was in fact reached from both roles is not taken from fixture
+names: apps/api/tests/dual_role_matrix.py records the role the server resolved on
+each request and fails a full run below 100%.
 """
 
+from dataclasses import dataclass
+
 import pytest
+
+# The dual-role coverage matrix (CLAUDE.md section 8 item 2). Registered here so it
+# observes every request the suite makes; see the module docstring.
+pytest_plugins = ["apps.api.tests.dual_role_matrix"]
 from django.conf import settings
 from django.test import override_settings
 
+import logging.config
+
 import apps.ai
 from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
+from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
+from apps.core.logging_config import audit_logging
 
-PASSWORD = "correct horse battery staple"
+# The suite's one password. It satisfies FR-01's complexity rules (min 8 characters,
+# an uppercase letter, a number and a special character) so that a test may register
+# it through the API; apps/api/tests/test_register.py is where non-complying
+# passwords are asserted to be refused.
+PASSWORD = "Correct-Horse-9-Battery"
 
 
 @pytest.fixture(autouse=True)
@@ -44,6 +65,20 @@ def no_live_provider(monkeypatch):
         VOYAGE_API_KEY="",
     ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def audit_file(tmp_path, settings):
+    """The FR-05 audit file for this test: AUDIT_LOG_PATH and LOGGING are overridden
+    to a temporary path and logging is reconfigured from them exactly as
+    config/settings.py builds it, so no test ever appends to logs/audit.log."""
+    original = settings.LOGGING
+    path = tmp_path / "audit.log"
+    settings.AUDIT_LOG_PATH = path
+    settings.LOGGING = audit_logging(path)
+    logging.config.dictConfig(settings.LOGGING)
+    yield path
+    logging.config.dictConfig(original)
 
 
 @pytest.fixture
@@ -103,3 +138,48 @@ def content_chunk(document):
         embedding_model="stub-embed",
         embedding_dimension=settings.EMBEDDING_DIMENSION,
     )
+
+
+# --- API clients (docs/decisions.md D-21: session cookie) ------------------------------
+
+
+@pytest.fixture
+def api_client():
+    """Anonymous client. CSRF is not enforced, as on Django's test client; the tests
+    that prove the cookie flow build their own client with enforce_csrf_checks."""
+    from rest_framework.test import APIClient
+
+    return APIClient()
+
+
+def _logged_in(user):
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_login(user)
+    return client
+
+
+@pytest.fixture
+def employee_client(employee):
+    return _logged_in(employee)
+
+
+@pytest.fixture
+def administrator_client(administrator):
+    return _logged_in(administrator)
+
+
+@dataclass
+class RoleSession:
+    role_name: str
+    user: object
+    client: object
+
+
+@pytest.fixture(params=ROLE_NAMES, ids=[name.lower() for name in ROLE_NAMES])
+def session_client(request):
+    """One logged-in client per role, so a test runs from both roles (CLAUDE.md
+    section 8 item 2). The fixture named after the role supplies the user."""
+    user = request.getfixturevalue(request.param.lower())
+    return RoleSession(request.param, user, _logged_in(user))

@@ -47,6 +47,10 @@
      On surface 6.70:1 | on surface-alt 6.09:1 */
   --color-focus: #1d4ed8;
 
+  /* Modal scrim: --color-text at 60%, so the dialogue's own surface keeps every
+     ratio above. Nothing is read through it; it is decorative and aria-hidden. */
+  --color-overlay: rgb(31 41 51 / 60%);
+
   /* ---- Spacing (4px base) ----------------------------------------------- */
   --space-1: 0.25rem; /*  4px */
   --space-2: 0.5rem;  /*  8px */
@@ -87,6 +91,15 @@
   --layout-card-min-width: 12rem;
   --layout-field-max-width: 28rem;
   --opacity-disabled: 0.55;
+
+  /* Stacking: the skip link sits above the page, the modal scrim above both. */
+  --z-skip-link: 10;
+  --z-dialog: 20;
+
+  /* ---- Motion ----------------------------------------------------------- */
+  /* One spin of the button's loading indicator. The reduced-motion rule in
+     base.css collapses it to a still frame. */
+  --duration-spinner: 0.7s;
 
   /* ---- Focus ring ------------------------------------------------------- */
   --focus-ring-width: 3px;

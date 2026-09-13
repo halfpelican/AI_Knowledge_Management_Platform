@@ -1,0 +1,26 @@
+/* Shared layout for the register and login screens. */
+
+.auth-page {
+  max-width: var(--layout-field-max-width);
+}
+
+.auth-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.auth-page__alt {
+  margin-top: var(--space-5);
+  color: var(--color-text-muted);
+}
+
+/* Why the submit button is disabled (FR-01). Beside the button, in ordinary
+   text, because a disabled button takes neither focus nor a description. */
+.auth-form__gate {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

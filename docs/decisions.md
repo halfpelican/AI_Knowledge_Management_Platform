@@ -35,6 +35,12 @@ Rules for this file:
 | D-17 | visible_to_roles denormalised onto ContentChunks at ingestion (user label D-08) | Settled by the user | 2026-09-12 |
 | D-18 | G7: Documents storage path deferred to migration v2 in Stage 3 (user label D-09) | Settled by the user | 2026-09-12 |
 | D-19 | Retry semantics: 3 total attempts, 1 initial plus 2 retries (user label D-10) | Settled by the user | 2026-09-12 |
+| D-20 | Logged in-place dependency edit to meetings 0001 (CLAUDE.md §7 exception) | Recorded | 2026-09-12 |
+| D-21 | API authentication is the Django session cookie with CSRF; Vite dev proxy keeps it same-origin | Settled | 2026-09-12 |
+| D-22 | Audit-log entries are JSON lines in a file (AUDIT_LOG_PATH); schema v1 has no audit table | Settled provisionally, confirm | 2026-09-13 |
+| D-23 | Stage 2 conventions: registration starts no session, administrators may change their own role, Django password validators | Settled | 2026-09-13 |
+| D-24 | Security review findings and accepted residues for Stage 2 | Settled | 2026-09-13 |
+| D-25 | Stage 2 corrected against the proposal FR text; supersedes parts of D-23 and D-24 | Settled | 2026-09-13 |
 
 ---
 
@@ -417,3 +423,235 @@ presentation prep sheet, which supersedes the earlier one-retry statement.
 **Consequences.** NFR-19's test asserts exactly three provider calls before the 503.
 The SDK clients are constructed with `max_retries=0` so these constants are the only
 retry policy.
+
+## D-20 · In-place dependency edit to a pushed migration
+
+**Status:** Recorded under the `CLAUDE.md` §7 migrations exception · **Date:** 2026-09-12
+
+**What was edited.** Commit `e08da51` added `("documents", "0001_initial")` to the
+`dependencies` of `apps/meetings/migrations/0001_initial.py` after the branch had
+been pushed, so that `migrate` applies Documents before Meetings as
+`docs/schema-v1.md` §5 lists. No operation changed.
+
+**Evidence that no other environment had applied it.** The branch
+`chore/stage-1-environment-and-schema` was unmerged and had been pushed for under an
+hour; the only databases that had run the migration were the author's local
+docker-compose database, rebuilt from empty in the same session, and GitHub Actions
+service containers, which are discarded after each run. A missing dependency cannot
+be supplied by a later migration, which is why the exception exists.
+
+**Why it is here.** The build session first reported that no pushed migration had
+been edited; the auditor found the diff. This entry corrects the record.
+
+## D-21 · API authentication: session cookie with CSRF, same-origin in development
+
+**Status:** Settled · **Date:** 2026-09-12
+
+**Decision.** The API authenticates requests with Django's session cookie
+(`rest_framework.authentication.SessionAuthentication`), which is the session
+framework D-10 already chose. There are no bearer tokens. Unsafe requests carry the
+CSRF token in the `X-CSRFToken` header, read from the `csrftoken` cookie that the
+login and current-user responses set. `DEFAULT_PERMISSION_CLASSES` is
+`IsAuthenticated` (`CLAUDE.md` §6 invariant 4); the registration and login endpoints
+opt out explicitly. In development the Vite dev server proxies `/api` to Django so
+the browser sees one origin and no CORS configuration exists; in the alpha
+deployment the built front end is served from the same origin as the API.
+
+**Rationale.** FR-04 requires server-side session destruction on logout and a
+60-minute inactivity expiry, both of which the session framework provides and a
+bearer token would have to reimplement. One origin removes cross-site cookie and
+CORS configuration, the most common way a capstone login "works locally and fails
+deployed". The session cookie is `HttpOnly`, so the front end never handles a
+credential.
+
+**Consequences.** "A token must stop working after logout" (Stage 2 item 2) is
+tested by replaying the session cookie after logout and asserting 401. The
+`Authorization: Bearer` support in the front-end API client is removed. Role changes
+take effect on the next request because the role is read from the database per
+request, never cached in the session.
+
+## D-22 · Audit-log medium for role changes
+
+**Status:** Settled provisionally, to confirm against the proposal · **Date:** 2026-09-13
+
+**Decision.** FR-05's "role changes write an audit-log entry" is satisfied by one JSON
+line per change on a dedicated `audit` logger, written to the file named by
+`AUDIT_LOG_PATH` (default `logs/audit.log`, gitignored): timestamp, event, actor id
+and email, target id and email, old role, new role.
+
+**Rationale.** `docs/schema-v1.md` defines no audit table in §1 or §2, and inventing
+one would violate the schema rule. A structured log file satisfies the clause with no
+schema change and can be replayed into a table later if the proposal turns out to
+require one.
+
+**Consequences.** If the proposal's FR-05 section names a table, migration v2 adds it
+and the logger call becomes a row insert; the call site is one function in
+`apps/accounts/audit.py`.
+
+## D-23 · Stage 2 conventions the contract did not state
+
+**Status:** Partly superseded by D-25 on 2026-09-13 · **Date:** 2026-09-13
+
+> Read D-25 before relying on anything here. The proposal's FR text overturned two
+> of the conventions below: an Administrator may **not** change their own role, and
+> the password rules are FR-01's complexity clause rather than Django's defaults.
+> The entry is left standing, as this file's rules require, so the superseded
+> reasoning stays legible.
+
+- Registration returns 201 and starts no session; the client signs in through login.
+- An Administrator may change any user's role, including their own, and a same-role
+  change still writes an audit entry. Nothing in the available text forbids
+  self-demotion; revisit if the proposal does.
+- Password rules are Django's four default validators, with similarity checked
+  against name and email.
+- `locked_until` is stamped on every failure at or beyond `LOCKOUT_THRESHOLD` and is
+  not cleared by a successful login; enforcing and clearing it is FR-03 (NIT3004).
+- Unmatched API paths return a JSON 404 body.
+
+## D-24 · Stage 2 security review: fixes and accepted residues
+
+**Status:** Partly superseded by D-25 on 2026-09-13 · **Date:** 2026-09-13
+
+> The second accepted residue below — that lockout enforcement is FR-03's and
+> `locked_until` is never cleared — is overturned by D-25. The lock is FR-02's own
+> clause and is now enforced. The rest of this entry stands.
+
+The adversarial review of FR-01, FR-02, FR-04, FR-05 and FR-06 confirmed two defects.
+Both are fixed, with a regression test each.
+
+**Fixed: login accepted a cross-site form POST.** DRF applies `csrf_exempt` to every
+view and enforces CSRF only after it has found a session user, so an anonymous POST
+was never checked. A hidden cross-site form could therefore sign a victim's browser
+into the attacker's account; `SESSION_COOKIE_SAMESITE` does not help, because it
+governs when a cookie is sent and not when one is set. The fix is
+`DEFAULT_PARSER_CLASSES` of `JSONParser` alone, which is what
+`docs/api-contract.md` always said: a cross-site HTML form can send only form or
+multipart bodies, and a cross-site `fetch` sending JSON is held by a preflight that
+this same-origin deployment (D-21) never answers. Not taken: also enforcing CSRF on
+login unconditionally. It would cost the client nothing, because the current-user
+call already sets the cookie before the form is submitted, and it remains available
+if the deployment ever stops being same-origin.
+
+**Fixed: registration returned 500 for an address longer than the column.** The
+serializer's email field was unbounded, so an over-long address passed validation and
+the insert raised `DataError`, a sibling of `IntegrityError` rather than a subclass,
+which the 409 handler did not catch. The field is now bounded by the column's own
+length, so the two cannot drift, and the contract's 400 is returned.
+
+**Accepted, not fixed.**
+
+- *Login timing distinguishes a registered address from an unknown one by roughly one
+  to two percent.* The failed-attempt update runs only when the address exists;
+  bcrypt runs either way, which equalises the expensive half. FR-01 mandates a 409 on
+  duplicate registration, which is an exact, unthrottled enumeration oracle for every
+  address in the organisation, so closing a one percent timing channel would change
+  nothing. Say that plainly rather than claiming login is non-enumerable.
+- *Nothing rate-limits login or registration, and `locked_until` is written but never
+  read.* Enforcement is FR-03 (SHOULD, NIT3004) and out of the M6 gate. The columns
+  are populated now so FR-03 has the history it needs.
+- *`locked_until` is not cleared by a successful login* (D-23). Whoever builds FR-03
+  must clear it explicitly, or a user who succeeds after five failures stays locked
+  for the rest of the window. Recorded here because the trap is invisible until the
+  field is first read.
+- *The JSON 404 for an unmatched path is only returned when `DEBUG` is false.* Django
+  bypasses `handler404` under `DEBUG`, so the development default shows the technical
+  404 page instead. The contract line holds for the alpha deployment, not for a
+  developer's machine.
+- *The audit log covers role changes only* (D-22), which is FR-05's clause. It is not
+  a general audit trail: there is no entry for login, logout, a failed login or a
+  refused privilege escalation.
+
+**Clean.** No route lacks a server-side check; no privilege escalation through a
+request body, including a role supplied at registration; 401 and 403 do not leak
+account existence; no password or hash in any response or log; logout destroys the
+session server-side so a captured cookie stops working; no session fixation; no
+authorisation decided only in React; no secret committed.
+
+## D-25 · Stage 2 corrected against the proposal's FR text
+
+**Status:** Settled · **Date:** 2026-09-13 · **Supersedes:** parts of D-23 and D-24
+
+`Project_8-proposal_complete_V4.5.docx` reached this machine on 2026-09-13, after
+Stage 2 was built. Until then the endpoints were built from
+`docs/api-contract.md`, which the build session had compiled from the requirement
+summaries available to it. The requirements auditor then checked all five
+requirements clause by clause against the FR text and returned CONTRADICTS SPEC:
+five clauses were implemented as the opposite of what the FR states and eight more
+were absent. This entry records the corrections. The contract's Stage 2 section was
+rewritten against the FR text first, because the tests and the front end had both
+been built from it and every further hour of work compounded the error.
+
+**Overturned by the FR text.**
+
+| Clause | Was | Now | FR wording |
+|---|---|---|---|
+| FR-01 password rules | Django's four default validators (D-23) | min 8 characters, 1 uppercase, 1 number, 1 special character, enforced server-side | "Password must meet complexity rules (min 8 chars, 1 uppercase, 1 number, 1 special character)" |
+| FR-02 locked account | recorded only, never enforced (D-24) | `403` when the lock holds **and** the password matched, the ordinary `401` when it did not; a success clears `locked_until` | "403 forbidden if account is locked"; "five consecutive failures lock the account for 15 minutes" |
+| FR-02 malformed address | `401`, treated as an unknown address | `400`, checked before the database lookup | "Email format checked before database lookup"; the login pseudocode returns 400 explicitly |
+| FR-04 logout | `204` | `200` | "200 OK on success" |
+| FR-05 unknown role | `400` | `404` | "404 Not Found if user/role doesn't exist" |
+| FR-05 request body | the role's name | `{"role_id": "<uuid>"}` | "Receives { user_id, new_role_id }" |
+| FR-05 self-demotion | permitted (D-23) | refused | "a user cannot remove their own administrator role, preventing accidental lockout of the last administrator" |
+
+The self-demotion clause was the highest risk of the seven. Permissions are held only
+against roles (D-14), there is no Django admin, and `manage_roles` is the only
+permission, so a demonstrator who demoted themselves removed role management from the
+running system with no in-product way back.
+
+**Correction, 2026-09-13, after the first implementation.** This entry first read
+FR-02's "403 forbidden if account is locked" as unqualified and specified a 403
+whatever the password. That was wrong, and the build agent caught it: the proposal's
+`handleLoginAttempt()` pseudocode branches on the password result inside the locked
+case and returns 401 where the password was wrong, giving the reason in the document
+itself — "Confirming a lock to anyone who merely knows the email address would
+convert a protective measure into an account-enumeration tool." FR-03's messaging
+clause says the same. A uniform 403 would have meant five wrong passwords return 401
+for an unregistered address and 403 for a registered one, which is precisely the
+oracle the proposal set out to avoid. The Responses line is the summary; the
+pseudocode is the detail, and the detail wins. The code, the contract and the row
+above now say: 403 only where the password matched, otherwise the ordinary 401,
+byte-identical to an unknown address, with a test asserting that equality.
+
+**Two further conventions inside the lockout, neither settled by the proposal.**
+
+- A failed attempt made *during* an active lock neither moves the counter nor
+  extends the window, so "locks the account for 15 minutes" stays literally true
+  rather than becoming indefinite under a sustained attack.
+- `failed_attempts` resets once the lock window expires, taken from FR-03's "the
+  counter also resets automatically once the lockout window expires". Without it a
+  single wrong password after the window would re-lock the account at once, and
+  FR-02's "five consecutive failures" would be false of it.
+
+**A gap that arrived with enforcement.** FR-03 also defines a `LoginAttempts` table
+and an administrator release route, both out of the M6 gate and both unbuilt. So a
+lockout now has no evidence trail (a forgotten password and a distributed attempt
+look alike) and a locked user's only remedy is to wait out the window. Worth stating
+at the demonstration rather than being asked.
+
+**Conventions that remain, because the FR enumerates no code.**
+
+- Refusing a self-demotion answers `403`. FR-05 lists only 200, 403 and 404.
+- Registration answers `201`. The FR states it, so this is no longer a convention;
+  it is recorded here only because D-23 previously listed it as one.
+
+**Deferred, with the reason on record.**
+
+- FR-02 redirects to a role-specific dashboard on success. The dashboards are FR-14,
+  built in Stage 5, so the branch on role lands with them. Recorded rather than
+  overlooked.
+- FR-03's lockout interface (the "2 attempts remaining" warning and the countdown)
+  stays out of the M6 gate. Only the enforcement moved, because the 403 sits in
+  FR-02's own Responses list.
+
+**Conflict to resolve in `CLAUDE.md`.** §5 annotates `LOCKOUT_THRESHOLD` and
+`LOCKOUT_DURATION` as "(FR-03, NIT3004)". The proposal puts the lock in FR-02's
+Business Logic and the 403 in FR-02's Responses, and FR-02 is a MUST-HAVE in the M6
+gate. The code now follows the proposal, per `CLAUDE.md` §1 ("The full specification
+is `Project_8-proposal_complete_V4.5.docx`... Never invent a requirement"). The
+annotation in §5 should be corrected to FR-02, but `CLAUDE.md` is the team's file and
+this entry raises the conflict rather than editing it.
+
+**Still open, for the team.** The front end has no test runner and no CI step, so
+eight of the thirteen gaps the auditor found were in the untested layer. Whether
+front-end testing is in scope for M6 is not settled anywhere and needs a decision
+before Stage 3, which ships more screens.

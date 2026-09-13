@@ -1,0 +1,11 @@
+/* Shares .field, .field__label, .field__hint, .field__input and .field__error with
+   TextInput.css, which SelectInput.jsx imports alongside this file. */
+
+.select-field__control {
+  cursor: pointer;
+}
+
+/* Inside a table row the field has no bottom margin, so rows stay compact. */
+.select-field--inline {
+  margin-bottom: 0;
+}

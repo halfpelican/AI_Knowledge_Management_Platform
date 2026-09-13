@@ -26,6 +26,15 @@ SECTION_5_NAMES = [
     "NO_ANSWER_MESSAGE",
 ]
 
+# FR-01's complexity rules, stated once here and nowhere else (D-25).
+PASSWORD_NAMES = [
+    "PASSWORD_MINIMUM_LENGTH",
+    "PASSWORD_MINIMUM_UPPERCASE",
+    "PASSWORD_MINIMUM_DIGITS",
+    "PASSWORD_MINIMUM_SPECIAL",
+    "PASSWORD_SPECIAL_CHARACTERS",
+]
+
 VOCABULARIES = [
     "DOCUMENT_STATUS_VALUES",
     "MEETING_STATUS_VALUES",
@@ -37,7 +46,9 @@ VOCABULARIES = [
 ]
 
 
-@pytest.mark.parametrize("name", SECTION_5_NAMES + VOCABULARIES + ["SESSION_INACTIVITY_MINUTES"])
+@pytest.mark.parametrize(
+    "name", SECTION_5_NAMES + PASSWORD_NAMES + VOCABULARIES + ["SESSION_INACTIVITY_MINUTES"]
+)
 def test_every_constant_is_defined(name):
     assert hasattr(constants, name), f"{name} missing from apps.core.constants"
 
@@ -71,8 +82,32 @@ def test_unaccepted_format_membership(extension):
 
 
 def test_lockout_values():
+    # FR-02 Business Logic: "five consecutive failures lock the account for 15
+    # minutes". Enforcement is FR-02's, not FR-03's (D-25).
     assert constants.LOCKOUT_THRESHOLD == 5
     assert constants.LOCKOUT_DURATION == timedelta(minutes=15)
+
+
+def test_password_complexity_constants_are_fr_01s_four_rules():
+    # FR-01: "min 8 chars, 1 uppercase, 1 number, 1 special character" (D-25).
+    assert constants.PASSWORD_MINIMUM_LENGTH == 8
+    assert constants.PASSWORD_MINIMUM_UPPERCASE == 1
+    assert constants.PASSWORD_MINIMUM_DIGITS == 1
+    assert constants.PASSWORD_MINIMUM_SPECIAL == 1
+
+
+def test_special_characters_are_ascii_punctuation_and_exclude_whitespace():
+    """The server's definition of "special character" is the authoritative one, and
+    the front end's strength meter narrows to it: ASCII punctuation, 32 characters.
+    A space is not special, or a passphrase would satisfy the rule by accident."""
+    import string
+
+    assert constants.PASSWORD_SPECIAL_CHARACTERS == frozenset(string.punctuation)
+    assert len(constants.PASSWORD_SPECIAL_CHARACTERS) == 32
+    for character in " \t\n":
+        assert character not in constants.PASSWORD_SPECIAL_CHARACTERS
+    for character in string.ascii_letters + string.digits:
+        assert character not in constants.PASSWORD_SPECIAL_CHARACTERS
 
 
 def test_question_length_bounds_are_ordered():

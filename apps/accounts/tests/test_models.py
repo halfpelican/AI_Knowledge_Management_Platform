@@ -18,7 +18,7 @@ User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
-PASSWORD = "correct horse battery staple"
+PASSWORD = "Correct-Horse-9-Battery"  # FR-01 complexity, as conftest.PASSWORD
 
 
 # --- Roles -------------------------------------------------------------------------
@@ -74,8 +74,9 @@ def test_permissions_are_held_against_roles_through_role_permissions(employee_ro
     permission = Permission.objects.create(permission_name="manage_documents")
     administrator_role.permissions.add(permission)
 
-    assert list(administrator_role.permissions.all()) == [permission]
-    assert list(employee_role.permissions.all()) == []
+    # Alongside whatever migration 0003 seeded (tested in test_permissions_seed).
+    assert permission in administrator_role.permissions.all()
+    assert permission not in employee_role.permissions.all()
     assert RolePermission.objects.filter(role=administrator_role, permission=permission).exists()
     assert list(permission.roles.all()) == [administrator_role]
 
