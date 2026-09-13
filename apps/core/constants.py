@@ -59,7 +59,7 @@ ACCEPTED_FORMATS = frozenset({"pdf", "docx", "xlsx", "txt"})
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
 
-# --- No-answer response (FR-12; CLAUDE.md invariants 4 and 5) ------------------------
+# --- No-answer response (FR-12; CLAUDE.md invariants 6 and 7) ------------------------
 # PROVISIONAL: the proposal's exact wording is not available on this machine;
 # replace it with the proposal's text when the coordinator has it. Defined once.
 NO_ANSWER_MESSAGE = "No answer could be found in the material you have access to."

@@ -7,7 +7,7 @@ import useAuth from './useAuth.js'
  *
  * Usability only. Every protected route is authorised on the server, which
  * answers 401 without a valid session regardless of what the interface shows
- * (CLAUDE.md §6, invariant 2).
+ * (CLAUDE.md §6, invariant 4).
  */
 export default function RequireAuth({ children }) {
   const { user, loading } = useAuth()

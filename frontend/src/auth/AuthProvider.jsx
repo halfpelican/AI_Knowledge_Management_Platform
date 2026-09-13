@@ -10,7 +10,7 @@ import { AuthContext } from './context.js'
  * On load it asks GET /api/auth/me whether the session cookie is still valid.
  * Nothing is stored on the client: the cookie is HttpOnly and the server is the
  * only source of truth for who is signed in (D-21). Whether a user *may* do
- * something is decided server-side on every route (CLAUDE.md §6, invariant 2);
+ * something is decided server-side on every route (CLAUDE.md §6, invariant 4);
  * the `user.role` held here only shapes what the interface offers.
  *
  * Session expiry (FR-04): if any request answers 401 while the app believes a

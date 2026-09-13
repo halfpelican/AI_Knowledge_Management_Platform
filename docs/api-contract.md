@@ -54,3 +54,5 @@ Response bodies the front end relies on (Stage 2 implementation):
 - CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
   `POST /api/auth/login` when the browser already holds a session.
 - `POST /api/auth/register` starts no session (D-23).
+- Any endpoint, a request body that is not `application/json`: `415`. The API parses
+  JSON only, which is what stops a cross-site form from posting credentials (D-24).

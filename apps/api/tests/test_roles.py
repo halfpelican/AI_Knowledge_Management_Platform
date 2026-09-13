@@ -13,6 +13,7 @@ import pytest
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from rest_framework.test import APIClient
 
 from apps.accounts.audit import AUDIT_LOGGER_NAME, ROLE_CHANGED
 from apps.core.constants import (
@@ -216,3 +217,24 @@ def test_audit_log_path_is_configured_from_settings():
     handler = django_settings.LOGGING["handlers"]["audit_file"]
     assert handler["filename"] == str(django_settings.AUDIT_LOG_PATH)
     assert django_settings.LOGGING["loggers"][AUDIT_LOGGER_NAME]["handlers"] == ["audit_file"]
+
+
+def test_a_role_change_without_the_csrf_header_is_refused(employee, administrator):
+    """The contract requires X-CSRFToken on every unsafe method. Logout has covered
+    this since FR-04; the role change is the other unsafe route and carries the
+    privilege, so it is worth its own test rather than an argument from symmetry."""
+    client = APIClient(enforce_csrf_checks=True)
+    assert client.post(
+        reverse("auth-login"), {"email": administrator.email, "password": PASSWORD}, format="json"
+    ).status_code == 200
+    url = role_url(employee)
+
+    refused = client.patch(url, {"role": ADMINISTRATOR_ROLE_NAME}, format="json")
+
+    assert refused.status_code == 403
+    employee.refresh_from_db()
+    assert employee.role.role_name == EMPLOYEE_ROLE_NAME
+
+    header = {"HTTP_X_CSRFTOKEN": client.cookies[django_settings.CSRF_COOKIE_NAME].value}
+    accepted = client.patch(url, {"role": ADMINISTRATOR_ROLE_NAME}, format="json", **header)
+    assert accepted.status_code == 200

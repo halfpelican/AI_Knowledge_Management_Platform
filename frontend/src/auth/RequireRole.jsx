@@ -8,7 +8,7 @@ import useAuth from './useAuth.js'
  *
  * Usability only. The server checks the role on every protected route and
  * answers 403 for a session whose role lacks the permission (CLAUDE.md §6,
- * invariant 2); hiding the screen here just saves the user a dead end.
+ * invariant 4); hiding the screen here just saves the user a dead end.
  */
 export default function RequireRole({ role, children }) {
   const { user } = useAuth()

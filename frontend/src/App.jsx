@@ -17,7 +17,7 @@ import './App.css'
 /**
  * Primary navigation. What it shows depends on who is signed in, but that is
  * usability only: every protected route is authorised on the server
- * (CLAUDE.md §6, invariant 2).
+ * (CLAUDE.md §6, invariant 4).
  */
 function PrimaryNav({ onLogoutError }) {
   const { user, loading, logout } = useAuth()
