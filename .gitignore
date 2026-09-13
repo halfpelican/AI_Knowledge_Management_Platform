@@ -32,3 +32,8 @@ frontend/dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# The proposal and the plain-text extraction of it. The .docx is the spec, not
+# source; commit it deliberately if the team wants it in the repository.
+Project_8-proposal_complete_V4.5.docx
+proposal.txt

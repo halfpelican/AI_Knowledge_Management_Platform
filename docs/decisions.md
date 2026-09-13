@@ -40,6 +40,7 @@ Rules for this file:
 | D-22 | Audit-log entries are JSON lines in a file (AUDIT_LOG_PATH); schema v1 has no audit table | Settled provisionally, confirm | 2026-09-13 |
 | D-23 | Stage 2 conventions: registration starts no session, administrators may change their own role, Django password validators | Settled | 2026-09-13 |
 | D-24 | Security review findings and accepted residues for Stage 2 | Settled | 2026-09-13 |
+| D-25 | Stage 2 corrected against the proposal FR text; supersedes parts of D-23 and D-24 | Settled | 2026-09-13 |
 
 ---
 
@@ -555,3 +556,62 @@ request body, including a role supplied at registration; 401 and 403 do not leak
 account existence; no password or hash in any response or log; logout destroys the
 session server-side so a captured cookie stops working; no session fixation; no
 authorisation decided only in React; no secret committed.
+
+## D-25 · Stage 2 corrected against the proposal's FR text
+
+**Status:** Settled · **Date:** 2026-09-13 · **Supersedes:** parts of D-23 and D-24
+
+`Project_8-proposal_complete_V4.5.docx` reached this machine on 2026-09-13, after
+Stage 2 was built. Until then the endpoints were built from
+`docs/api-contract.md`, which the build session had compiled from the requirement
+summaries available to it. The requirements auditor then checked all five
+requirements clause by clause against the FR text and returned CONTRADICTS SPEC:
+five clauses were implemented as the opposite of what the FR states and eight more
+were absent. This entry records the corrections. The contract's Stage 2 section was
+rewritten against the FR text first, because the tests and the front end had both
+been built from it and every further hour of work compounded the error.
+
+**Overturned by the FR text.**
+
+| Clause | Was | Now | FR wording |
+|---|---|---|---|
+| FR-01 password rules | Django's four default validators (D-23) | min 8 characters, 1 uppercase, 1 number, 1 special character, enforced server-side | "Password must meet complexity rules (min 8 chars, 1 uppercase, 1 number, 1 special character)" |
+| FR-02 locked account | recorded only, never enforced (D-24) | `403` while the lock holds, whatever the password; a success clears `locked_until` | "403 forbidden if account is locked"; "five consecutive failures lock the account for 15 minutes" |
+| FR-02 malformed address | `401`, treated as an unknown address | `400`, checked before the database lookup | "Email format checked before database lookup"; the login pseudocode returns 400 explicitly |
+| FR-04 logout | `204` | `200` | "200 OK on success" |
+| FR-05 unknown role | `400` | `404` | "404 Not Found if user/role doesn't exist" |
+| FR-05 request body | the role's name | `{"role_id": "<uuid>"}` | "Receives { user_id, new_role_id }" |
+| FR-05 self-demotion | permitted (D-23) | refused | "a user cannot remove their own administrator role, preventing accidental lockout of the last administrator" |
+
+The self-demotion clause was the highest risk of the seven. Permissions are held only
+against roles (D-14), there is no Django admin, and `manage_roles` is the only
+permission, so a demonstrator who demoted themselves removed role management from the
+running system with no in-product way back.
+
+**Conventions that remain, because the FR enumerates no code.**
+
+- Refusing a self-demotion answers `403`. FR-05 lists only 200, 403 and 404.
+- Registration answers `201`. The FR states it, so this is no longer a convention;
+  it is recorded here only because D-23 previously listed it as one.
+
+**Deferred, with the reason on record.**
+
+- FR-02 redirects to a role-specific dashboard on success. The dashboards are FR-14,
+  built in Stage 5, so the branch on role lands with them. Recorded rather than
+  overlooked.
+- FR-03's lockout interface (the "2 attempts remaining" warning and the countdown)
+  stays out of the M6 gate. Only the enforcement moved, because the 403 sits in
+  FR-02's own Responses list.
+
+**Conflict to resolve in `CLAUDE.md`.** §5 annotates `LOCKOUT_THRESHOLD` and
+`LOCKOUT_DURATION` as "(FR-03, NIT3004)". The proposal puts the lock in FR-02's
+Business Logic and the 403 in FR-02's Responses, and FR-02 is a MUST-HAVE in the M6
+gate. The code now follows the proposal, per `CLAUDE.md` §1 ("The full specification
+is `Project_8-proposal_complete_V4.5.docx`... Never invent a requirement"). The
+annotation in §5 should be corrected to FR-02, but `CLAUDE.md` is the team's file and
+this entry raises the conflict rather than editing it.
+
+**Still open, for the team.** The front end has no test runner and no CI step, so
+eight of the thirteen gaps the auditor found were in the untested layer. Whether
+front-end testing is in scope for M6 is not settled anywhere and needs a decision
+before Stage 3, which ships more screens.
