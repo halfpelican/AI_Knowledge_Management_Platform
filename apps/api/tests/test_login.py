@@ -3,7 +3,8 @@
 200 with the user object, the session cookie and the csrftoken cookie; 400 for a
 missing field or an address that is not an address, checked before the database
 lookup; 401 with one generic message for an unknown address and a wrong password
-alike (D-02); 403 while the account is locked, whatever the password (D-25). Side
+alike (D-02); 403 while the account is locked and the password matched, and the
+ordinary 401 when it did not, so the lock is not an enumeration oracle (D-25). Side
 effects: failed_attempts, locked_until, last_login.
 """
 
@@ -236,16 +237,30 @@ def test_a_locked_account_is_403_even_with_the_right_password(api_client, employ
     }
 
 
-def test_a_locked_account_is_403_with_the_wrong_password_too(api_client, employee):
+def test_a_locked_account_with_the_wrong_password_is_the_ordinary_401(api_client, employee):
+    """The lock is announced only where the password also matched. The proposal's
+    handleLoginAttempt() pseudocode branches here deliberately: "Confirming a lock to
+    anyone who merely knows the email address would convert a protective measure into
+    an account-enumeration tool." So this response must be byte-identical to the one
+    an unregistered address gets, or the 403 becomes the oracle."""
     lock(employee)
 
     response = login(api_client, employee.email, "wrong password")
 
-    assert response.status_code == 403
-    # The lock is not announced where the password was also wrong: confirming it to
-    # anyone who submits an address would confirm the address is registered.
+    assert response.status_code == 401
     assert response.json() == INVALID
     assert "code" not in response.json()
+
+
+def test_a_locked_account_is_indistinguishable_from_an_unknown_address(api_client, employee):
+    """The enumeration property itself, asserted rather than argued: same status and
+    same body for a locked account and for an address that was never registered."""
+    lock(employee)
+
+    locked = login(api_client, employee.email, "wrong password")
+    unknown = login(api_client, "no-such-person@example.com", "wrong password")
+
+    assert (locked.status_code, locked.json()) == (unknown.status_code, unknown.json())
 
 
 def test_a_locked_account_issues_no_session(api_client, employee):

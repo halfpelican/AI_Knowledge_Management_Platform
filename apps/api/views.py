@@ -148,17 +148,22 @@ class LoginView(APIView):
         # same time as far as practical.
         user = authenticate(request, username=email, password=password)
         if _is_locked(account):
-            # FR-02 Responses: "403 forbidden if account is locked", whatever the
-            # password (D-25). Only the message varies: the lock is named where the
-            # password matched, which is FR-02's "distinct message" clause, and the
-            # generic message is kept where it did not, because confirming a lock to
-            # anyone who submits an address would confirm the address is registered.
-            body = (
-                {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE}
-                if user is not None
-                else {"detail": INVALID_CREDENTIALS_MESSAGE}
+            # The lock is announced ONLY where the password also matched. The
+            # proposal's handleLoginAttempt() pseudocode branches exactly here and
+            # says why: "Confirming a lock to anyone who merely knows the email
+            # address would convert a protective measure into an account-enumeration
+            # tool." So a wrong password against a locked account is the ordinary
+            # 401, indistinguishable from a wrong password against any other
+            # address. FR-02's unqualified "403 if account is locked" is the summary;
+            # the pseudocode and FR-03's messaging clause are the detail (D-25).
+            if user is None:
+                return Response(
+                    {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
+                )
+            return Response(
+                {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE},
+                status=status.HTTP_403_FORBIDDEN,
             )
-            return Response(body, status=status.HTTP_403_FORBIDDEN)
         if user is None:
             _record_failed_attempt(email)
             return Response(
