@@ -1,0 +1,38 @@
+/* Shares .field, .field__label, .field__hint and .field__error with TextInput.css,
+   which FileDropZone.jsx imports alongside this file. */
+
+.dropzone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--border-width-strong) dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* While a file is over the area. A colour change alone would be the only signal,
+   so the border thickens as well. */
+.dropzone--active {
+  border-style: solid;
+  border-color: var(--color-primary);
+  background-color: var(--color-surface-alt);
+}
+
+.dropzone .field {
+  flex: 1 1 var(--layout-card-min-width);
+  margin-bottom: 0;
+}
+
+.dropzone__input {
+  min-height: var(--control-min-height);
+  padding: var(--space-2) 0;
+}
+
+.dropzone__target {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

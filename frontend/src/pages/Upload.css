@@ -1,0 +1,97 @@
+.upload-page {
+  max-width: var(--content-max-width);
+}
+
+/* Settings that apply to the whole queue, grouped so the legend says so. */
+.upload-options {
+  max-width: var(--layout-field-max-width);
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.upload-options legend {
+  padding: 0 var(--space-2);
+  font-weight: var(--weight-medium);
+}
+
+.upload-options__note {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.upload-queue {
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  list-style: none;
+}
+
+.upload-row {
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.upload-row + .upload-row {
+  margin-top: var(--space-3);
+}
+
+.upload-row__file {
+  margin: 0 0 var(--space-3);
+}
+
+.upload-row__name {
+  font-weight: var(--weight-semibold);
+  word-break: break-word;
+}
+
+.upload-row__size {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.upload-row__status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+}
+
+/* The status word carries a border as well as a colour, so it is not
+   distinguished by colour alone (WCAG 2.1 SC 1.4.1). */
+.upload-status {
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.upload-status--done {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.upload-status--failed,
+.upload-status--rejected {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.upload-row__message {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.upload-row__actions,
+.upload-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}

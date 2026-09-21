@@ -1,0 +1,45 @@
+/* FR-09 ingestion form. The list and the transcript block are in Repository.css,
+   shared with the document repository. */
+
+.meeting-form {
+  max-width: var(--layout-field-max-width);
+  margin-bottom: var(--space-7);
+}
+
+/* Focus lands here when a submission is refused, so it carries the ring. */
+.meeting-form__summary:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.meeting-form__source {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.meeting-form__source legend {
+  padding: 0 var(--space-2);
+  font-weight: var(--weight-medium);
+}
+
+.meeting-form__choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-min-height);
+}
+
+.meeting-form__file,
+.meeting-form__note {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Reserves no space when empty, so the layout does not jump as it fills. */
+.meeting-form__progress {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+}

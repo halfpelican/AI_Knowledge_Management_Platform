@@ -1,14 +1,19 @@
 import { useId, useState } from 'react'
 import { messageForStatus } from '../api/client.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
+import { TEXT } from '../constants.js'
 import { contrastRatio } from '../utils/contrast.js'
+import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
 import Button from './Button.jsx'
 import Dialog from './Dialog.jsx'
+import FileDropZone from './FileDropZone.jsx'
 import NotPermitted from './NotPermitted.jsx'
 import Notice from './Notice.jsx'
 import PasswordInput from './PasswordInput.jsx'
 import PasswordRequirements from './PasswordRequirements.jsx'
+import ProgressBar from './ProgressBar.jsx'
 import SelectInput from './SelectInput.jsx'
+import TextAreaInput from './TextAreaInput.jsx'
 import TextInput from './TextInput.jsx'
 import './ComponentSheet.css'
 
@@ -67,12 +72,13 @@ const BUILT = [
   { name: 'Register, sign in, log out (FR-01, FR-02, FR-04)', paths: ['/register', '/login'] },
   { name: 'Role management (FR-05, Administrator only)', paths: ['/admin/roles'] },
   { name: 'Access Denied (FR-06, where a guarded route redirects)', paths: ['/403'] },
+  { name: 'Document upload (FR-08)', paths: ['/upload'] },
+  { name: 'Document repository (FR-08; FR-15 adds filtered browsing in Stage 5)', paths: ['/documents'] },
+  { name: 'Meeting transcripts (FR-09)', paths: ['/meetings'] },
 ]
 
 const UPCOMING = [
-  'Upload (FR-08)',
-  'Meeting transcript ingestion (FR-09)',
-  'Repository (FR-15)',
+  'Filtered browsing (FR-15)',
   'Search / Ask / Sources (FR-12)',
   'Assistant (FR-13)',
   'Dashboard (FR-14)',
@@ -388,6 +394,53 @@ export default function ComponentSheet() {
             error="Choose a valid role."
           />
         </div>
+      </section>
+
+      <section aria-labelledby="sheet-textarea">
+        <h2 id="sheet-textarea">Text area</h2>
+        <div className="demo-stack">
+          <TextAreaInput
+            label="Transcript"
+            name="transcript-demo"
+            rows={4}
+            hint={TEXT.transcriptVerbatim}
+            defaultValue={'[00:03:12] Sagarika: the dates hold.\n[00:03:20] Haseeb: agreed.'}
+          />
+        </div>
+        <p>
+          FR-09&apos;s pasted transcript. Speaker labels and timestamps are stored exactly as supplied and are
+          not parsed, so nothing here treats them as structure.
+        </p>
+      </section>
+
+      <section aria-labelledby="sheet-dropzone">
+        <h2 id="sheet-dropzone">File drop zone</h2>
+        <FileDropZone
+          label="Choose files"
+          hint={TEXT.uploadDropHint}
+          accept={FILE_INPUT_ACCEPT}
+          multiple
+          onFiles={() => {}}
+        />
+        <p>
+          FR-08&apos;s &quot;drag-and-drop or file-picker upload area&quot;, which is both: dragging is a
+          pointer gesture, so the picker beside it is the keyboard equivalent. The <code>accept</code>{' '}
+          attribute and the format check that follows are conveniences — the server identifies the format from
+          the file signature and refuses anything else with a 415.
+        </p>
+      </section>
+
+      <section aria-labelledby="sheet-progress">
+        <h2 id="sheet-progress">Progress bar</h2>
+        <div className="demo-stack">
+          <ProgressBar label="Upload progress for leave-policy.pdf" value={42} />
+          <ProgressBar label="Processing leave-policy.pdf" valueText={TEXT.uploadProcessing} />
+        </div>
+        <p>
+          One per file, as FR-08 requires. The determinate bar carries{' '}
+          <code>aria-valuenow</code>; the indeterminate one carries none, because a zero would read as &quot;no
+          progress&quot; rather than &quot;unknown&quot;. Both carry the same information as text.
+        </p>
       </section>
 
       <section aria-labelledby="sheet-notice">
