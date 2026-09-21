@@ -10,10 +10,13 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
+from django.utils import timezone
+
 from apps.accounts.models import Role
 from apps.core.constants import ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
+from apps.meetings.models import Meeting
 
 User = get_user_model()
 
@@ -161,3 +164,98 @@ class DocumentUploadSerializer(serializers.Serializer):
         # same roles differently produce the same row and the FR-11 predicate has
         # one shape to match.
         return [name for name in ROLE_NAMES if name in set(value)]
+
+
+# --- FR-09 meeting transcript ingestion ------------------------------------------------
+
+
+class MeetingSerializer(serializers.ModelSerializer):
+    """The meeting object FR-09's endpoints return.
+
+    ``transcript_text`` is included: FR-09's front end requires that "once processed,
+    the stored transcript is then viewable in full", and it is the caller's own
+    permitted content. The list view trims it (see ``MeetingListSerializer``) so a
+    listing does not carry every transcript in the organisation.
+    """
+
+    meeting_id = serializers.UUIDField(source="id", read_only=True)
+    attendees = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Meeting
+        fields = ("meeting_id", "title", "meeting_date", "status", "created_at",
+                  "visible_to_roles", "attendees", "transcript_text")
+        read_only_fields = fields
+
+    def get_attendees(self, meeting):
+        return [attendee.user.email for attendee in meeting.attendees.all()]
+
+
+class MeetingListSerializer(MeetingSerializer):
+    """The same object without the transcript body.
+
+    A list of fifty meetings should not ship fifty full transcripts to render a table
+    of titles and dates; the detail route serves the full text.
+    """
+
+    class Meta(MeetingSerializer.Meta):
+        fields = tuple(f for f in MeetingSerializer.Meta.fields if f != "transcript_text")
+        read_only_fields = fields
+
+
+class MeetingIngestSerializer(serializers.Serializer):
+    """FR-09 request body, as JSON with pasted text or multipart with a file.
+
+    FR-09 Validation: "title and date are required; the date may not be in the
+    future; transcript content must exceed a minimum length, since a near-empty
+    transcript produces unusable AI output." All three are 400 here, which is FR-09's
+    own "400 Bad Request for missing fields or insufficient content" — note that this
+    differs from FR-08, which answers 422 for too little content. Each requirement
+    gets the code its own Responses clause names.
+
+    The minimum-length check is NOT here: it applies to the transcript's final text,
+    which for an uploaded file exists only after extraction. The view runs it.
+    """
+
+    title = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False,
+                                  trim_whitespace=True)
+    meeting_date = serializers.DateField()
+    # Exactly one of the two carries the transcript. Both optional at the field
+    # level so that "neither was given" is one clear error rather than two.
+    transcript_text = serializers.CharField(required=False, allow_blank=True,
+                                            trim_whitespace=False)
+    file = serializers.FileField(required=False)
+    attendees = serializers.ListField(
+        child=serializers.UUIDField(), required=False, allow_empty=True
+    )
+    visible_to_roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=ROLE_NAMES),
+        required=False,
+        allow_empty=False,
+    )
+
+    def validate_meeting_date(self, value):
+        # FR-09: "the date may not be in the future". Compared in the project's own
+        # timezone (TIME_ZONE, Australia/Melbourne) rather than UTC, or a meeting
+        # minuted this morning in Melbourne is "tomorrow" for part of the day.
+        if value > timezone.localdate():
+            raise serializers.ValidationError("A meeting date may not be in the future.")
+        return value
+
+    def validate_visible_to_roles(self, value):
+        return [name for name in ROLE_NAMES if name in set(value)]
+
+    def validate(self, attrs):
+        has_text = bool((attrs.get("transcript_text") or "").strip())
+        has_file = attrs.get("file") is not None
+        if not has_text and not has_file:
+            raise serializers.ValidationError(
+                {"transcript_text": ["Provide the transcript as text or upload a file."]}
+            )
+        if has_text and has_file:
+            # Ambiguous rather than harmless: whichever the server picked, the other
+            # would be discarded in silence and the user would not know which.
+            raise serializers.ValidationError(
+                {"transcript_text": ["Provide either transcript text or a file, not both."]}
+            )
+        return attrs

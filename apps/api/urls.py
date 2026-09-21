@@ -24,4 +24,7 @@ urlpatterns = [
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
+    # Stage 3: FR-09
+    path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
+    path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
 ] + router.urls

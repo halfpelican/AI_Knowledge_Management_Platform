@@ -154,3 +154,53 @@ FR-11 is Stage 4 work and this is not that filter, but a list disclosing documen
 outside the caller's scope would be a leak to remove later rather than a feature
 (`CLAUDE.md` §6 invariant 1: not by a result count, a total, or an error message).
 FR-15's filtered browsing builds on this in Stage 5.
+
+### FR-09 — meeting transcripts
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role |
+| GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
+| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text` | `401`; `404` no such meeting, or one outside the caller's scope |
+
+The meeting object:
+
+```json
+{"meeting_id": "uuid", "title": "Q3 Planning Sync", "meeting_date": "2026-07-28",
+ "status": "Indexed", "created_at": "2026-09-21T10:00:00+10:00",
+ "visible_to_roles": ["Employee", "Administrator"],
+ "attendees": ["erin@example.com"], "transcript_text": "..."}
+```
+
+**The transcript arrives as pasted text or as a file**, which is FR-09's "upload a
+transcript file or paste transcript text directly into a form". JSON carries
+`transcript_text`; multipart carries `file`. Supplying both is `400` rather than a
+silent preference, because whichever the server picked the other would be discarded
+without the user knowing which. An uploaded file goes through the same signature
+check and the same parsers as FR-08 — FR-09 says the transcript is "passed to the
+chunking and embedding process in FR-08", and a second extraction path would be a
+second thing to keep correct.
+
+**Too little content is `400` here and `422` on a document.** FR-09's Responses
+clause names "400 Bad Request for missing fields or insufficient content"; FR-08's
+names 422. Each requirement gets the code its own clause names rather than one being
+made to match the other. The threshold itself is the same `MINIMUM_CONTENT_LENGTH`,
+counted by the same token definition the chunker uses (D-31).
+
+**The date may not be in the future**, compared in the project's own timezone
+(`TIME_ZONE`) rather than UTC — a meeting minuted this morning in Melbourne is
+otherwise "tomorrow" for part of the day. Today is accepted; the boundary has a test.
+
+**Speaker and timestamp parsing is out of scope for this version**, which FR-09
+states explicitly. The transcript is stored verbatim — out of scope means untouched,
+not quietly stripped, and a test asserts the labels survive into the stored chunks.
+
+**Attendees are a participation record, never an access control (D-16).** Meetings
+are scoped by `visible_to_roles`, mirroring documents exactly, and the scoping code
+does not consult `MeetingAttendees` at all. An Employee who attended a meeting
+visible only to Administrators still cannot read it; there is a test that says so by
+name. Knowledge has to outlive the people who were in the room, and a second scoping
+mechanism would mean two code paths through the one filter that matters most.
+
+**A meeting outside the caller's scope is `404`, not `403`.** A 403 would confirm
+that the id names something real (`CLAUDE.md` §6 invariant 1).

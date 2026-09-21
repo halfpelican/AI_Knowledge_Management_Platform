@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -32,17 +32,26 @@ from apps.core.constants import (
     LOCKOUT_THRESHOLD,
     MANAGE_ROLES_PERMISSION,
     MAX_UPLOAD_BYTES,
+    MINIMUM_CONTENT_LENGTH,
     ROLE_NAMES,
 )
 from apps.documents.models import Document
+from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document
+from apps.ingestion.errors import ExtractionError
+from apps.ingestion.extraction import extract_plain_text
+from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
+from apps.meetings.models import Meeting
 
 from .permissions import HasRolePermission
 from .serializers import (
     DocumentSerializer,
     DocumentUploadSerializer,
     LoginSerializer,
+    MeetingIngestSerializer,
+    MeetingListSerializer,
+    MeetingSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
@@ -97,6 +106,16 @@ DUPLICATE_DOCUMENT_MESSAGE = "A duplicate document already exists."
 SELF_EXCLUDING_VISIBILITY_MESSAGE = (
     "You cannot upload content into a scope your own role cannot read."
 )
+# FR-09 Validation: "transcript content must exceed a minimum length, since a
+# near-empty transcript produces unusable AI output."
+INSUFFICIENT_TRANSCRIPT_MESSAGE = (
+    "The transcript is too short to index. Paste the full transcript and try again."
+)
+# An uploaded transcript file of an accepted format that yields no readable text.
+NO_TEXT_IN_TRANSCRIPT_MESSAGE = "No readable text could be extracted from that file."
+# FR-09 associates a transcript with its attendees; MeetingAttendees is a
+# participation record for FR-20 and never an access control (D-16).
+UNKNOWN_ATTENDEE_MESSAGE = "One or more of those attendees is not a registered user."
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -494,3 +513,121 @@ class DocumentsView(APIView):
         if outcome.detail:
             body["detail"] = outcome.detail
         return Response(body, status=outcome.http_status)
+
+
+# --- FR-09 meeting transcript ingestion -------------------------------------------------
+
+
+class MeetingsView(APIView):
+    """``/api/meetings`` — FR-09 transcript ingestion (POST) and the listing (GET).
+
+    A transcript arrives either as pasted text, as JSON, or as an uploaded file, as
+    multipart. FR-09 offers both: "Users can upload a transcript file or paste
+    transcript text directly into a form". An uploaded file goes through the same
+    signature check and the same parsers as FR-08, because FR-09 says the transcript
+    is "passed to the chunking and embedding process in FR-08" and a second
+    extraction path would be a second thing to keep correct.
+
+    Gated on the same contribute permission as the document upload (D-30).
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser]
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [IsAuthenticated(), CanContributeContent()]
+        return [IsAuthenticated()]
+
+    def get(self, request):
+        meetings = (
+            Meeting.objects.prefetch_related("attendees__user")
+            .filter(visible_to_roles__contains=[request.user.role.role_name])
+            .order_by("-meeting_date", "-created_at", "pk")
+        )
+        return Response(MeetingListSerializer(meetings, many=True).data)
+
+    def post(self, request):
+        serializer = MeetingIngestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400: FR-09's own code
+        data = serializer.validated_data
+
+        transcript_text, error = self._transcript_from(data)
+        if error is not None:
+            return Response(error, status=status.HTTP_400_BAD_REQUEST)
+
+        # FR-09 Validation: "transcript content must exceed a minimum length, since a
+        # near-empty transcript produces unusable AI output." Counted in tokens by
+        # the one definition the chunker also uses (D-31), so a transcript judged
+        # long enough can never then produce no chunks.
+        if length_in_tokens(transcript_text) < MINIMUM_CONTENT_LENGTH:
+            return Response(
+                {"transcript_text": [INSUFFICIENT_TRANSCRIPT_MESSAGE]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        visible_to_roles = data.get("visible_to_roles") or list(ROLE_NAMES)
+        if request.user.role.role_name not in visible_to_roles:
+            return Response(
+                {"detail": SELF_EXCLUDING_VISIBILITY_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        attendee_ids = data.get("attendees") or []
+        attendees = list(User.objects.filter(pk__in=attendee_ids))
+        if len(attendees) != len(set(attendee_ids)):
+            # A silently dropped attendee is a participation record that quietly
+            # disagrees with what was submitted (FR-20 reads these rows).
+            return Response(
+                {"attendees": [UNKNOWN_ATTENDEE_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        outcome = ingest_meeting_transcript(
+            title=data["title"],
+            meeting_date=data["meeting_date"],
+            transcript_text=transcript_text,
+            visible_to_roles=visible_to_roles,
+            attendees=attendees,
+        )
+        body = MeetingSerializer(outcome.meeting).data
+        if outcome.detail:
+            body["detail"] = outcome.detail
+        return Response(body, status=outcome.http_status)
+
+    @staticmethod
+    def _transcript_from(data):
+        """The transcript's text, or a 400 body. The serializer has already ensured
+        exactly one of the two was supplied."""
+        uploaded_file = data.get("file")
+        if uploaded_file is None:
+            return data["transcript_text"], None
+
+        file_format = read_file_signature(uploaded_file)
+        if file_format is None:
+            # The same four formats as FR-08, decided the same way: by content. A
+            # 400 rather than FR-08's 415, because FR-09 enumerates only 201 and 400
+            # and this is one field of a form being wrong.
+            return None, {"file": [UNSUPPORTED_FORMAT_MESSAGE]}
+        try:
+            return extract_plain_text(uploaded_file, file_format), None
+        except ExtractionError:
+            return None, {"file": [NO_TEXT_IN_TRANSCRIPT_MESSAGE]}
+
+
+class MeetingDetailView(APIView):
+    """``GET /api/meetings/{id}`` — FR-09: "once processed, the stored transcript is
+    then viewable in full".
+
+    Scoped by ``visible_to_roles``, and a meeting outside the caller's scope is 404,
+    not 403: CLAUDE.md invariant 1 requires that its existence not be disclosed, and
+    a 403 would confirm the id names something real.
+    """
+
+    def get(self, request, pk):
+        meeting = get_object_or_404(
+            Meeting.objects.prefetch_related("attendees__user").filter(
+                visible_to_roles__contains=[request.user.role.role_name]
+            ),
+            pk=pk,
+        )
+        return Response(MeetingSerializer(meeting).data)
