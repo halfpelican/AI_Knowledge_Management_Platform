@@ -11,7 +11,9 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.accounts.models import Role
+from apps.core.constants import ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.models import Document
 
 User = get_user_model()
 
@@ -103,3 +105,59 @@ class RoleChangeSerializer(serializers.Serializer):
     "404 Not Found if user/role doesn't exist" is FR-05's own response for it."""
 
     role_id = serializers.UUIDField()
+
+
+# --- FR-08 document upload ------------------------------------------------------------
+
+
+class DocumentSerializer(serializers.ModelSerializer):
+    """The document object every FR-08 and FR-15 endpoint returns.
+
+    ``doc_id`` rather than ``id``, matching the proposal's Documents table and the
+    ``201 Created with the document ID`` FR-08 promises. ``file_path`` is never
+    exposed: it is a path inside MEDIA_ROOT and the client has no use for it, while
+    publishing it invites a caller to construct one. ``content_hash`` is likewise
+    internal — it exists to answer 409, and echoing it would let a caller probe
+    whether a document they cannot see has already been uploaded.
+    """
+
+    doc_id = serializers.UUIDField(source="id", read_only=True)
+    uploaded_by = serializers.CharField(source="uploaded_by.email", read_only=True)
+
+    class Meta:
+        model = Document
+        fields = ("doc_id", "title", "file_type", "status", "uploaded_at", "department",
+                  "visible_to_roles", "file_size_bytes", "uploaded_by")
+        read_only_fields = fields
+
+
+class DocumentUploadSerializer(serializers.Serializer):
+    """FR-08 request body, sent as ``multipart/form-data``.
+
+    Field shapes only. The *order* of the rejections is the view's, because the
+    proposal's section 7.2 ``validateUpload()`` fixes it — contribute permission,
+    then signature, then size, then title, then duplicate — and a serializer would
+    report them all at once in whichever order its fields happen to sit.
+    """
+
+    file = serializers.FileField()
+    title = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False,
+                                  trim_whitespace=True)
+    department = serializers.CharField(max_length=NAME_MAX_LENGTH, required=False,
+                                       allow_blank=True, default="")
+    # docs/decisions.md D-29. Omitted means both roles: a document nobody thought
+    # about is visible to everybody, so an omitted field can never accidentally hide
+    # content. Present but empty is 400 (``allow_empty=False``) — "visible to
+    # nobody" is not something anyone means to ask for, and FR-11 would filter such a
+    # document out of every search in silence. A name outside ROLE_NAMES is 400.
+    visible_to_roles = serializers.ListField(
+        child=serializers.ChoiceField(choices=ROLE_NAMES),
+        required=False,
+        allow_empty=False,
+    )
+
+    def validate_visible_to_roles(self, value):
+        # Stored in ROLE_NAMES order and deduplicated, so two requests naming the
+        # same roles differently produce the same row and the FR-11 predicate has
+        # one shape to match.
+        return [name for name in ROLE_NAMES if name in set(value)]

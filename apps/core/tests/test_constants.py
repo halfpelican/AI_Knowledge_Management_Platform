@@ -147,8 +147,11 @@ def test_no_answer_message_is_fixed_non_empty_text():
 
 
 def test_schema_v1_vocabularies_match_the_document():
+    # DOCUMENT_STATUS_VALUES is the proposal's section 7.0 set, which supersedes the
+    # five values schema v1 wrote before the proposal reached this machine (D-28).
     assert constants.DOCUMENT_STATUS_VALUES == (
-        "Uploaded", "Extracting", "Indexed", "Insufficient content", "Processing failed"
+        "Processing", "Extraction failed", "Insufficient content",
+        "Indexing failed", "Partially indexed", "Indexed",
     )
     assert constants.MEETING_STATUS_VALUES == ("Received", "Indexed", "Processing failed")
     assert constants.CLASSIFICATION_DIMENSIONS == ("Department", "Project", "Process", "Topic")
@@ -159,7 +162,9 @@ def test_schema_v1_vocabularies_match_the_document():
 
 
 def test_derived_names_point_into_their_vocabularies():
-    assert constants.DEFAULT_DOCUMENT_STATUS == "Uploaded"
+    # Section 7.8 creates the record with status "Processing", before extraction
+    # begins, so the vocabulary's first value is what a new row holds (D-28).
+    assert constants.DEFAULT_DOCUMENT_STATUS == "Processing"
     assert constants.DEFAULT_MEETING_STATUS == "Received"
     assert constants.EMPLOYEE_ROLE_NAME == "Employee"
     assert constants.ADMINISTRATOR_ROLE_NAME == "Administrator"

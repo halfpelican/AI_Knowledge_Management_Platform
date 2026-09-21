@@ -26,6 +26,7 @@ from apps.accounts.audit import AUDIT_LOGGER_NAME, ROLE_CHANGED
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     ROLE_NAMES,
 )
@@ -72,8 +73,12 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
     assert all(set(role) == {"role_id", "name", "description", "permissions"} for role in body)
     assert all(role["description"] for role in body)
     by_name = {role["name"]: role for role in body}
-    assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == []
-    assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [MANAGE_ROLES_PERMISSION]
+    # Both roles contribute content (D-30); manage_roles is Administrator's alone.
+    assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == [CONTRIBUTE_CONTENT_PERMISSION]
+    assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [
+        CONTRIBUTE_CONTENT_PERMISSION,
+        MANAGE_ROLES_PERMISSION,
+    ]
 
 
 def test_roles_carries_the_role_id_the_role_change_needs(session_client):

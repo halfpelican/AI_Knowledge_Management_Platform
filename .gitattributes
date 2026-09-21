@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# The ingestion fixture corpus is byte-sensitive (FR-08, Stage 3). Its files are
+# parsed by signature and hashed by content, so line-ending normalisation would
+# change what the tests are testing: a CRLF rewrite alters every content hash, and
+# rewriting bytes inside a PDF, DOCX or XLSX corrupts the container outright.
+# -text disables normalisation in both directions.
+apps/ingestion/tests/fixtures/** -text

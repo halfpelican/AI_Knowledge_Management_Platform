@@ -39,8 +39,13 @@ pytestmark = pytest.mark.django_db
 # classes against these names; the dual-role matrix (dual_role_matrix.py) then
 # reports, per protected endpoint, whether a passing test reached it from each role.
 OPEN_ROUTES = {"auth-register", "auth-login"}
-PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role"}
+PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
+                    "document-list"}  # Stage 3: FR-08
 # Routes that need more than a session, with the permission code they check.
+# document-list is absent on purpose: its GET needs only a session, and the
+# contribute permission its POST needs is returned by get_permissions() per method
+# rather than declared on the class, so reading permission_classes cannot see it.
+# apps/api/tests/test_document_upload.py proves that 403 directly.
 PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE_ROLES_PERMISSION}
 
 USERS = reverse("user-list")

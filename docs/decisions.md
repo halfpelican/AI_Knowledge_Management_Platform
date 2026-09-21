@@ -42,6 +42,11 @@ Rules for this file:
 | D-24 | Security review findings and accepted residues for Stage 2 | Settled | 2026-09-13 |
 | D-25 | Stage 2 corrected against the proposal FR text; supersedes parts of D-23 and D-24 | Settled | 2026-09-13 |
 | D-26 | Stage 2 security review round two: throttling, a bounded lockout oracle, the last-administrator guard | Settled | 2026-09-13 |
+| D-27 | NO_ANSWER_MESSAGE wording, the PROVISIONAL marker removed | Settled | 2026-09-14 |
+| D-28 | Document status vocabulary: the proposal's six values, superseding schema v1's five | Settled by the user | 2026-09-21 |
+| D-29 | visible_to_roles at ingestion: optional on upload, both roles when omitted | Settled by the user | 2026-09-21 |
+| D-30 | FR-08's contribute permission: role-level `contribute_content`, no knowledge areas | Settled by the user | 2026-09-21 |
+| D-31 | A token is a whitespace-delimited word; MINIMUM_CONTENT_LENGTH is 50 tokens | Settled by the user | 2026-09-21 |
 
 ---
 
@@ -762,3 +767,144 @@ same message where the scope resolves to no accessible content "rather than an
 error disclosing that restricted material exists". The wording now follows
 FR-12's own clause — states plainly it cannot answer from the available
 knowledge base, no speculation, no hint that scoping exists.
+
+## D-28 · Document status vocabulary: the proposal's six values
+
+**Status:** Settled by the user · **Date:** 2026-09-21 · **Supersedes:** `docs/schema-v1.md` §3's `DOCUMENT_STATUS_VALUES`
+
+**Decision.** `DOCUMENT_STATUS_VALUES` is the proposal's own set, from its §7.0
+configuration table:
+
+```python
+DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient content",
+                          "Indexing failed", "Partially indexed", "Indexed")
+```
+
+**Rationale (as given).** The same principle as D-25: the FR text wins over the
+contract compiled before the proposal arrived. Schema v1 named five values —
+`Uploaded`, `Extracting`, `Indexed`, `Insufficient content`, `Processing failed` —
+written from the requirement summaries, before
+`Project_8-proposal_complete_V4.5.docx` reached this machine on 2026-09-13. The
+proposal's §7.7 `embedAndStoreChunks()` and §7.8 `ingestAndIndexDocument()` set
+`Indexing failed` and `Partially indexed` directly, and schema v1's set cannot
+express a document whose chunks partly embedded: it would have to call that document
+`Indexed` and lose the fact, or `Processing failed` and lose the chunks that worked.
+
+**Mapping from the superseded set.**
+
+| Schema v1 | Proposal §7.0 |
+|---|---|
+| `Uploaded`, `Extracting` | `Processing` (one in-flight state, since ingestion is synchronous) |
+| `Processing failed` | `Extraction failed` or `Indexing failed`, according to which step failed |
+| `Insufficient content`, `Indexed` | unchanged |
+| — | `Partially indexed` (new) |
+
+**Consequences.**
+
+- `apps/core/constants.py` and `docs/schema-v1.md` §3 are corrected together.
+- Lands as migration `documents 0006`, the schema v2 migration D-18 places at the
+  start of Stage 3. There are no rows to migrate: no document has been ingested.
+- `DEFAULT_DOCUMENT_STATUS` becomes `Processing`, which is what §7.8 message 13
+  writes when the record is created, before extraction begins.
+- **`Partially indexed` is a terminal status, not a half-written record.** It is
+  committed inside the one NFR-21 transaction, and only where a chunk was abandoned
+  after `MAXIMUM_EMBED_ATTEMPTS` attempts (D-19). It does not weaken CLAUDE.md
+  invariant 9: an *unexpected* failure part-way through ingestion still rolls the
+  whole transaction back and leaves nothing. The distinction is between an outcome
+  the pipeline decided and recorded, and a crash.
+- `MEETING_STATUS_VALUES` is untouched. The proposal's Meetings table defines no
+  status column at all, only FR-09's CRUD line "Meetings (Create, Read, Update
+  status)", so schema v1's three values are an invention with nothing to contradict.
+
+## D-29 · visible_to_roles at ingestion
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**Decision.** The FR-08 upload request and the FR-09 transcript request each accept
+an optional `visible_to_roles` list, validated against `ROLE_NAMES`.
+
+- Omitted: both roles. A document nobody thought about is visible to everybody.
+- Present but empty: `400`. An empty list means "visible to nobody", which is not a
+  thing anyone means to ask for, and FR-11 would filter it out of every search
+  silently.
+- A list excluding the uploader's own role: `403`. Uploading into a scope you cannot
+  read is how content is lost.
+
+Chunks are stamped from the source row inside the item-4 transaction (D-17).
+
+**Rationale (as given).** Neither FR-08 nor FR-09 mentions the column; FR-11 filters
+on it. Whatever Stage 3 writes at ingestion is what Stage 4 retrieval filters against
+and what the M6 demonstration shows, so it cannot stay open past the upload endpoint.
+Defaulting to both roles means an omitted field never accidentally hides content,
+while an uploader who does set the field gives FR-11 something real to scope against
+in Stage 4 without a separate administration screen.
+
+**Consequences.**
+
+- **The chunk row is what FR-11 filters on**, so FR-15's visibility edit in Stage 5
+  MUST re-stamp every chunk of that source in the same transaction, or retrieval
+  keeps enforcing the stale scope. That cascade is D-17's model-level guarantee and
+  has its own test; this entry is the reminder that Stage 5 is where it is first
+  exercised for real.
+- Role names are denormalised into document, meeting and chunk rows, so renaming a
+  role breaks the filter (D-11's known limitation, now reaching three tables).
+
+## D-30 · FR-08's contribute permission is role-level
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**Decision.** A `contribute_content` permission is seeded in an accounts migration
+and held by **both** Employee and Administrator. The FR-08 upload endpoint and the
+FR-09 transcript endpoint carry it in their `permission_classes`, so the `403`
+precedes the signature, size and title checks exactly as §7.2 `validateUpload()`
+orders them. The permission name lives in `apps/core/constants.py`.
+
+`knowledgeArea` is dropped from the check. Schema v1 models no knowledge area, so
+the check is role-level rather than per-area.
+
+**Rationale (as given).** §7.2's first line is
+`hasContributePermission(user.userId, file.knowledgeArea)` returning `403`, and its
+comment says why it is first: "it is the cheapest rejection, and the user's role may
+have changed during a transfer of up to 50 MB". The repository seeds one permission,
+`manage_roles` (D-14), so without this the requirement's first server-side check
+would simply be absent. Per-area scoping would need a new table, seeding and an
+administration surface, and is out of the M6 gate.
+
+**Consequences.**
+
+- A test constructs a role **without** the permission and asserts `403` on both
+  endpoints, so the gate is proven rather than assumed.
+- Both new endpoints need an Employee test and an Administrator test for the
+  dual-role matrix (`CLAUDE.md` §8 item 2).
+- Because both roles hold it, the permission refuses nobody in the shipped seed. It
+  is enforcement machinery with its own test, not a demonstrable restriction; say
+  that plainly rather than presenting it as access control that does something.
+
+## D-31 · A token is a whitespace-delimited word
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**Decision.** `length_in_tokens()` splits on whitespace. It is one function, used by
+both `split_into_overlapping_chunks()` and the insufficient-content check, so the two
+definitions cannot drift. `CHUNK_SIZE` (500) and `CHUNK_OVERLAP` (50) are unchanged.
+
+`MINIMUM_CONTENT_LENGTH` becomes **50 tokens**. This is a unit change: the constant
+previously read 200 *characters*.
+
+**Rationale (as given).** §7.5 and §7.8 both count in tokens (`lengthInTokens`), and
+no tokeniser is in the stack. The proposal says "approximately 500 tokens"
+throughout, and embed-gemma's 2048-token ceiling leaves ample headroom for
+whitespace words undercounting real subword tokens by the usual factor of about 1.3.
+`tiktoken` was rejected: it is OpenAI's BPE, not gemma's SentencePiece, so a new
+pinned dependency would buy precision against the wrong tokeniser. The floor is set
+permissively because FR-09 transcripts and short memos are legitimate content; §7.0
+marks the value "To be tuned", so there was never a number to wait for.
+
+**Consequences.**
+
+- `apps/core/constants.py` and `docs/schema-v1.md` are updated together, and the
+  constant's PROVISIONAL marker is removed — like D-27, there is nothing pending.
+- Chunk text is cut on the original string's own whitespace spans, so a stored chunk
+  is a verbatim substring of the extracted text, newlines and all, rather than a
+  space-joined reconstruction. FR-12 shows the passage to a reader, so it must be
+  the passage.

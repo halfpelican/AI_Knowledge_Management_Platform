@@ -21,9 +21,13 @@ def permission_names(role):
 
 
 def test_manage_roles_is_seeded_and_held_by_administrator_only(employee_role, administrator_role):
+    # Asserted as membership, not as the whole set: later migrations seed further
+    # codes (0004 adds contribute_content, D-30), and the claim this test makes is
+    # that manage_roles is Administrator's alone, not that it is the only permission
+    # in the system.
     assert Permission.objects.filter(permission_name=MANAGE_ROLES_PERMISSION).exists()
-    assert permission_names(administrator_role) == {MANAGE_ROLES_PERMISSION}
-    assert permission_names(employee_role) == set()
+    assert MANAGE_ROLES_PERMISSION in permission_names(administrator_role)
+    assert MANAGE_ROLES_PERMISSION not in permission_names(employee_role)
 
 
 def test_administrator_generalises_employee(employee_role, administrator_role):
@@ -46,11 +50,16 @@ def test_seed_is_idempotent():
 def test_seed_is_reversible(administrator_role):
     seed.unseed_permissions(registry, None)
     assert not Permission.objects.filter(permission_name=MANAGE_ROLES_PERMISSION).exists()
-    assert not RolePermission.objects.filter(role=administrator_role).exists()
+    # Scoped to the rows this migration owns: unseeding 0003 must not disturb what
+    # 0004 seeded, and asserting the role holds nothing at all would be asserting
+    # that 0003 is the only seed there will ever be.
+    assert not RolePermission.objects.filter(
+        role=administrator_role, permission__permission_name=MANAGE_ROLES_PERMISSION
+    ).exists()
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 
     seed.seed_permissions(registry, None)
-    assert permission_names(administrator_role) == {MANAGE_ROLES_PERMISSION}
+    assert MANAGE_ROLES_PERMISSION in permission_names(administrator_role)
 
 
 def test_permissions_are_never_held_by_a_user():

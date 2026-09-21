@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
+from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
@@ -25,15 +26,22 @@ from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
     MANAGE_ROLES_PERMISSION,
+    MAX_UPLOAD_BYTES,
     ROLE_NAMES,
 )
+from apps.documents.models import Document
+from apps.ingestion.documents import store_document
+from apps.ingestion.signatures import compute_content_hash, read_file_signature
 
 from .permissions import HasRolePermission
 from .serializers import (
+    DocumentSerializer,
+    DocumentUploadSerializer,
     LoginSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
@@ -74,7 +82,24 @@ LAST_ADMINISTRATOR_MESSAGE = (
 # get_object_or_404's own body; this is the role half.
 UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
 
+# FR-08 Responses: "415 Unsupported Media Type for a disallowed format". The four
+# accepted formats are named so the message is actionable, and they are the same four
+# the client-side rejection names (D-15).
+UNSUPPORTED_FORMAT_MESSAGE = (
+    "File type not supported. Accepted formats: PDF, DOCX, XLSX, TXT."
+)
+# FR-08 Responses: "413 Payload Too Large beyond the size limit".
+FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
+# FR-08 Responses: "409 Duplicate document exists for duplicate documents in the
+# database". Compared by content, not by filename (section 7.2).
+DUPLICATE_DOCUMENT_MESSAGE = "A duplicate document already exists."
+# docs/decisions.md D-29.
+SELF_EXCLUDING_VISIBILITY_MESSAGE = (
+    "You cannot upload content into a scope your own role cannot read."
+)
+
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
+CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
 
 
 def not_found(request, exception=None):
@@ -333,3 +358,133 @@ class UserRoleView(APIView):
                 actor=request.user, target=user, old_role=old_role_name, new_role=new_role.role_name
             )
         return Response(UserSerializer(user).data)
+
+
+# --- FR-08 document upload -----------------------------------------------------------
+
+
+class DocumentsView(APIView):
+    """``/api/documents`` — FR-08 upload (POST) and the repository list (GET).
+
+    **POST.** The rejection order is the proposal's section 7.2 ``validateUpload()``,
+    not a serializer's field order, because 7.2 fixes it and says why the permission
+    check comes first: "it is the cheapest rejection, and the user's role may have
+    changed during a transfer of up to 50 MB". ``CanContributeContent`` is returned
+    by ``get_permissions()`` for POST, so DRF runs it in ``initial()`` before this
+    method is entered and before the body is parsed at all (D-30). Processing is
+    synchronous, as FR-08 states, with the interface displaying progress.
+
+    **GET.** The list FR-08's front end reads the "Indexed" status from, scoped by
+    ``visible_to_roles`` from the first day it exists. FR-11 is Stage 4 work and this
+    is not that filter, but a list disclosing documents outside the caller's scope
+    would be a leak to remove later rather than a feature, and CLAUDE.md invariant 1
+    is explicit that the existence of out-of-scope material must not be disclosed
+    "by a result count, a total, or an error message". FR-15's filtered browsing
+    builds on this in Stage 5.
+    """
+
+    permission_classes = [IsAuthenticated]
+    # The one endpoint that accepts something other than JSON. The global JSON-only
+    # default (D-24) exists to stop a cross-site HTML form reaching an *anonymous*
+    # endpoint; it is not what protects this one. This route requires a session, and
+    # DRF enforces CSRF as soon as its session authenticator resolves a user, so a
+    # cross-site multipart POST here is rejected for want of the token.
+    parser_classes = [MultiPartParser]
+
+    def get_permissions(self):
+        # Contributing is not reading: FR-08's 403 guards the upload, and a session
+        # that may read the repository is not thereby entitled to add to it.
+        if self.request.method == "POST":
+            return [IsAuthenticated(), CanContributeContent()]
+        return [IsAuthenticated()]
+
+    def get(self, request):
+        documents = (
+            Document.objects.select_related("uploaded_by")
+            .filter(visible_to_roles__contains=[request.user.role.role_name])
+            .order_by("-uploaded_at", "pk")
+        )
+        return Response(DocumentSerializer(documents, many=True).data)
+
+    def post(self, request):
+        # Enforced against the declared length BEFORE request.data is touched, so
+        # an oversized body is refused without being parsed or buffered: FR-08 wants
+        # the ceiling applied "before the file is written to storage", and reading
+        # 50 MB into memory to discover it is 50 MB is the thing to avoid. A client
+        # that lies about or omits Content-Length is caught by the second check
+        # below, against the size Django actually received.
+        declared_length = request.META.get("CONTENT_LENGTH") or 0
+        try:
+            declared_length = int(declared_length)
+        except (TypeError, ValueError):
+            declared_length = 0
+        if declared_length > MAX_UPLOAD_BYTES:
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        serializer = DocumentUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        data = serializer.validated_data
+        uploaded_file = data["file"]
+
+        # 415: the format is established from the file's CONTENT (FR-08 Validation:
+        # "confirmed by inspecting the file signature rather than the extension
+        # alone, preventing a disguised file from being accepted"). The extension is
+        # never consulted here; it gates only the upload control's own convenience
+        # check, client-side.
+        file_format = read_file_signature(uploaded_file)
+        if file_format is None:
+            return Response(
+                {"detail": UNSUPPORTED_FORMAT_MESSAGE},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+
+        # 413 again, now against the bytes actually received.
+        if uploaded_file.size > MAX_UPLOAD_BYTES:
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
+        # The title was required by the serializer above, which is FR-08's "400 A
+        # Document title is required for empty titles".
+
+        visible_to_roles = data.get("visible_to_roles") or list(ROLE_NAMES)
+        if request.user.role.role_name not in visible_to_roles:
+            # D-29. Uploading into a scope you cannot read is how content is lost:
+            # the uploader could not find their own document again, and no error
+            # would ever say so. A refusal to act on an otherwise authorised
+            # request, so 403, as the two FR-05 refusals are.
+            return Response(
+                {"detail": SELF_EXCLUDING_VISIBILITY_MESSAGE},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # 409: "Compared by content hash rather than by filename, so that the same
+        # document uploaded under two different names is still caught" (section
+        # 7.2). The hash is retained on the record so later uploads compare to it.
+        content_hash = compute_content_hash(uploaded_file)
+        if Document.objects.filter(content_hash=content_hash).exists():
+            return Response(
+                {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
+            )
+
+        try:
+            document = store_document(
+                uploaded_file=uploaded_file,
+                file_format=file_format,
+                content_hash=content_hash,
+                title=data["title"],
+                department=data.get("department", ""),
+                visible_to_roles=visible_to_roles,
+                uploaded_by=request.user,
+            )
+        except IntegrityError:
+            # Two uploads of the same bytes raced past the check above; the unique
+            # index on content_hash is what actually decides it.
+            return Response(
+                {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
+            )
+        return Response(DocumentSerializer(document).data, status=status.HTTP_201_CREATED)

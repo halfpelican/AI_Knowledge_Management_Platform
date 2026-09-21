@@ -85,7 +85,9 @@ def test_role_permissions_cascade_with_their_permission(employee_role):
     permission = Permission.objects.create(permission_name="temporary")
     RolePermission.objects.create(role=employee_role, permission=permission)
     permission.delete()
-    assert not RolePermission.objects.filter(role=employee_role).exists()
+    # Only this permission's row goes; the seeded ones are untouched.
+    assert not RolePermission.objects.filter(permission=permission.pk).exists()
+    assert employee_role.permissions.exists()
 
 
 # --- Users -------------------------------------------------------------------------
