@@ -95,9 +95,8 @@ LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
 AUTHENTICATION_THROTTLE_RATE = "20/min"
 
 # --- No-answer response (FR-12; CLAUDE.md invariants 6 and 7) ------------------------
-# PROVISIONAL: the proposal's exact wording is not available on this machine;
 # replace it with the proposal's text when the coordinator has it. Defined once.
-NO_ANSWER_MESSAGE = "No answer could be found in the material you have access to."
+NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowledge base."
 
 # --- Fixed vocabularies (docs/schema-v1.md section 3) --------------------------------
 # Status values are fixed rather than free text so a status can be filtered on and
