@@ -14,10 +14,13 @@ import json
 import logging
 import uuid
 
+from datetime import timedelta
+
 import pytest
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.api.views import LAST_ADMINISTRATOR_MESSAGE, SELF_DEMOTION_MESSAGE
@@ -131,7 +134,15 @@ def test_users_lists_every_user_for_an_administrator(administrator_client, emplo
 
 def test_users_are_ordered_by_created_at(administrator_client, employee):
     later = User.objects.create_user("zed@example.com", PASSWORD, name="Zed")
+    # The view orders by (created_at, pk), and the pk is a random UUID, so two users
+    # sharing a created_at come back in an arbitrary order. Three users registered
+    # inside one test can share one: the ordering this test is about is the
+    # timestamp, not the resolution of the system clock or the tiebreak behind it.
+    # Backdating the others makes `later` unambiguously last.
+    User.objects.exclude(pk=later.pk).update(created_at=timezone.now() - timedelta(minutes=1))
+
     body = administrator_client.get(USERS).json()
+
     created = [user["created_at"] for user in body]
     assert created == sorted(created)
     assert body[-1]["id"] == str(later.id)
