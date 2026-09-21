@@ -248,7 +248,14 @@ export const TEXT = {
   // (D-16, CLAUDE.md §6, invariant 3).
   attendeesHint:
     'A record of who took part. Attendees do not control who can read the transcript; visibility does.',
-  attendeesUnavailable: 'Attendees can only be recorded by an Administrator.',
+  loadingAttendees: 'Loading the list of people…',
+  // No longer "only an Administrator can do this": FR-09's association is open to
+  // every role, and the picker reads the directory any session may read (D-34).
+  // This is the note for having nobody to choose from — a failed read, or a
+  // directory that came back empty — and it says what is still possible.
+  attendeesUnavailable:
+    'There is nobody to choose from at the moment, so attendees cannot be recorded with this transcript. ' +
+    'The transcript itself can still be added.',
   transcriptHeading: 'Transcript',
   // FR-09 states that speaker and timestamp parsing is out of scope for this
   // version, so the stored text is shown exactly as it was supplied.

@@ -40,6 +40,7 @@ pytestmark = pytest.mark.django_db
 # reports, per protected endpoint, whether a passing test reached it from each role.
 OPEN_ROUTES = {"auth-register", "auth-login"}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
+                    "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
                     "meeting-list", "meeting-detail"}  # Stage 3: FR-09
 # Routes that need more than a session, with the permission code they check.

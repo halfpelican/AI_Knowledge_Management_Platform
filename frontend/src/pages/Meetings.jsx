@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client.js'
 import { ingestMeeting, listMeetings } from '../api/meetings.js'
-import { listUsers } from '../api/users.js'
+import { listUserDirectory } from '../api/users.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
 import FileDropZone from '../components/FileDropZone.jsx'
@@ -11,7 +11,7 @@ import NotPermitted from '../components/NotPermitted.jsx'
 import SelectInput from '../components/SelectInput.jsx'
 import TextAreaInput from '../components/TextAreaInput.jsx'
 import TextInput from '../components/TextInput.jsx'
-import { ROLES, TEXT, TRANSCRIPT_SOURCE } from '../constants.js'
+import { TEXT, TRANSCRIPT_SOURCE } from '../constants.js'
 import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate, todayIsoDate } from '../utils/dates.js'
@@ -80,10 +80,15 @@ export function MeetingTable({ meetings }) {
  *
  * Attendees are a participation record and never an access control (D-16,
  * CLAUDE.md §6, invariant 3): what decides who can read a transcript is the
- * visibility scope, exactly as for a document. The picker is populated from
- * GET /api/users, which is Administrator-only (FR-05), so an Employee gets a
- * note in its place rather than an empty control that cannot be filled. That is
- * usability; the server decides what any of it may do (invariant 4).
+ * visibility scope, exactly as for a document. That is why every signed-in user
+ * gets a real attendee control — FR-09's Front-End clause gives the association
+ * to any user, and an Employee naming an Administrator as an attendee grants
+ * that Administrator nothing they did not already have.
+ *
+ * The picker reads GET /api/users/directory: name and address, no role (D-34).
+ * FR-05's GET /api/users stays Administrator-only, because it carries the role
+ * each person holds and this form has no use for one. The server decides what
+ * any of this may do (invariant 4).
  */
 export default function Meetings() {
   useDocumentTitle('Meeting transcripts')
@@ -91,16 +96,14 @@ export default function Meetings() {
   const meetingsResource = useApiResource(listMeetings)
   const meetings = meetingsResource.data ?? []
 
-  // Only an Administrator may read the user list, so only an Administrator asks
-  // for it: an Employee requesting it would collect a 403 on every page load.
-  const isAdministrator = user?.role === ROLES.administrator
-  const loadAttendeeCandidates = useCallback(
-    ({ signal }) => (isAdministrator ? listUsers({ signal }) : Promise.resolve([])),
-    [isAdministrator],
-  )
+  // Everyone who could be named as having taken part, which is every signed-in
+  // user and is read the same way whatever role is asking.
+  //
   // A failure here is not this screen's failure: the transcript can still be
-  // ingested without attendees, so the list simply stays empty.
-  const candidates = useApiResource(loadAttendeeCandidates).data ?? []
+  // ingested without attendees, so the list simply stays empty and the form says
+  // so rather than showing a control that cannot be filled.
+  const directory = useApiResource(listUserDirectory)
+  const candidates = directory.data ?? []
 
   const [values, setValues] = useState(EMPTY_FORM)
   const [source, setSource] = useState(TRANSCRIPT_SOURCE.text)
@@ -231,6 +234,53 @@ export default function Meetings() {
     list = <MeetingTable meetings={meetings} />
   }
 
+  /**
+   * FR-09's attendee association, offered to every role.
+   *
+   * The directory returns a name and an address and no role (D-34), so that is
+   * what an option shows: nothing here sorts, groups or labels by standing in
+   * the organisation, and there is no field to do it with. The hint says what
+   * naming someone does and does not do, because an Employee can now name an
+   * Administrator and it has to be plain that this grants nothing (D-16,
+   * CLAUDE.md §6, invariant 3).
+   */
+  let attendeeControl
+  if (directory.loading) {
+    attendeeControl = (
+      <p className="meeting-form__note" role="status">
+        {TEXT.loadingAttendees}
+      </p>
+    )
+  } else if (candidates.length > 0) {
+    attendeeControl = (
+      <SelectInput
+        label="Attendees (optional)"
+        hint={TEXT.attendeesHint}
+        multiple
+        size={Math.min(6, candidates.length)}
+        options={candidates.map((candidate) => ({
+          value: candidate.id,
+          label: `${candidate.name} (${candidate.email})`,
+        }))}
+        value={attendees}
+        error={fieldErrors.attendees}
+        disabled={submitting}
+        onChange={(event) =>
+          setAttendees(Array.from(event.target.selectedOptions, (option) => option.value))
+        }
+      />
+    )
+  } else {
+    // Nobody to choose from — the read failed, or it came back empty. Either way
+    // the transcript is still the point and can still be added, which is what
+    // the note says instead of leaving an empty control on the form.
+    attendeeControl = (
+      <p className="meeting-form__note">
+        {TEXT.attendeesUnavailable} {TEXT.attendeesHint}
+      </p>
+    )
+  }
+
   return (
     <div className="repository-page">
       <h1>Meeting transcripts</h1>
@@ -326,28 +376,7 @@ export default function Meetings() {
             </>
           )}
 
-          {candidates.length > 0 ? (
-            <SelectInput
-              label="Attendees (optional)"
-              hint={TEXT.attendeesHint}
-              multiple
-              size={Math.min(6, candidates.length)}
-              options={candidates.map((candidate) => ({
-                value: candidate.id,
-                label: `${candidate.name} (${candidate.email})`,
-              }))}
-              value={attendees}
-              error={fieldErrors.attendees}
-              disabled={submitting}
-              onChange={(event) =>
-                setAttendees(Array.from(event.target.selectedOptions, (option) => option.value))
-              }
-            />
-          ) : (
-            <p className="meeting-form__note">
-              {TEXT.attendeesUnavailable} {TEXT.attendeesHint}
-            </p>
-          )}
+          {attendeeControl}
 
           {visibilityOptions.length > 1 ? (
             <SelectInput

@@ -49,6 +49,7 @@ Rules for this file:
 | D-31 | A token is a whitespace-delimited word; MINIMUM_CONTENT_LENGTH is 50 tokens | Settled by the user | 2026-09-21 |
 | D-32 | FR-08's retry re-runs ingestion on the stored original; a failed ingestion reserves no duplicate slot | Settled by the user | 2026-09-21 |
 | D-33 | Stage 3 audit: FR-08 classification deferred with FR-10; FR-09's 422; the 409 existence oracle | Recorded | 2026-09-21 |
+| D-34 | A staff directory endpoint, separate from FR-05's user list, so any role may name attendees | Settled | 2026-09-21 |
 
 ---
 
@@ -1061,15 +1062,81 @@ Note what this does *not* undo: `DocumentSerializer` still withholds `content_ha
 from every response, so a caller cannot probe for a document by asking about a hash —
 only by possessing the file itself.
 
-**Also recorded, as statements to make rather than work to do:**
+**Also recorded. Two of these three were statements to make when this entry was
+written on 2026-09-21; both were built the same day and are struck through here
+rather than deleted, so the record of what was found still reads straight.**
 
-- An Employee cannot record meeting attendees through the interface, because the
+- ~~An Employee cannot record meeting attendees through the interface, because the
   attendee picker reads `GET /api/users`, which is Administrator-only (FR-05). The
   API accepts attendees from either role; only the control is missing. FR-09's
-  Front-End clause is therefore partial for an Employee.
-- FR-08's retry action exists only in the upload screen's in-session queue. A
+  Front-End clause is therefore partial for an Employee.~~
+  **Closed.** The gap was server-side and it was an absence, not a wrong rule: the
+  API never restricted attendee *association*, only the user *listing* the picker
+  needed. `GET /api/users/directory` supplies it and FR-05's list is untouched. See
+  **D-34**, which also states what the directory discloses.
+- ~~FR-08's retry action exists only in the upload screen's in-session queue. A
   document left at `Indexing failed` and revisited after a page reload has no route
   back to `POST /api/documents/{id}/reprocess`, although the endpoint works and is
-  tested. One button in the repository row closes it.
-- There is still no front-end test runner, so every Front-End clause above is graded
-  by reading code. Stage 3 shipped four more screens against that gap.
+  tested. One button in the repository row closes it.~~
+  **Closed.** The repository row carries the action for any status that is not
+  `Indexed`, refreshed from the response rather than assumed, and D-32's
+  status-specific wording moved to `src/utils/documentStatus.js` so both screens
+  read one copy of it.
+- **Still open.** There is still no front-end test runner, so every Front-End clause
+  above is graded by reading code. Stage 3 shipped five screens against that gap, and
+  the two fixes above added an untested retry control and an untested attendee
+  picker to it. This is the one of the three that did not get smaller.
+
+
+## D-34 · A staff directory, separate from FR-05's user list
+
+**Status:** Settled · **Date:** 2026-09-21 · **Closes:** Stage 3 audit finding 4
+
+**The finding.** FR-09's Front-End clause has any user associate a transcript "with a
+meeting title, date, and attendees". In practice only an Administrator could: the
+interface populated its attendee picker from `GET /api/users`, which is
+Administrator-only, so an Employee was shown a note instead of a control. The M6 gate
+is demonstrated from both roles, and an Employee demonstrating FR-09 could not show
+the clause at all.
+
+**Which side was wrong.** The server never restricted the *association*.
+`POST /api/meetings` accepts attendees from any holder of `contribute_content`, which
+is both roles (D-30), and a test now proves an Employee can name attendees
+end-to-end. What it restricted was the only user *listing*. Removing the interface
+gate alone would therefore not have produced a 403 on the transcript — it would have
+produced one on the directory read that fills the picker, on every page load.
+
+So the gap was server-side, and it was an absence rather than a wrong rule.
+
+**Decision.** `GET /api/users/directory`, readable by any signed-in session, returning
+`id`, `name` and `email` and nothing else. FR-05's `GET /api/users` is untouched and
+stays Administrator-only.
+
+**Rationale.** The obvious shortcut — relax `GET /api/users` to `IsAuthenticated` —
+would have handed every Employee the role every colleague holds, plus their account
+timestamps, in order to satisfy a requirement that needs only a name. That is a fix
+worse than the finding it closes. `GET /api/users` also *is* FR-05's list: it drives
+role management, the contract marks it Administrator-only, and
+`test_users_is_403_for_an_employee` pins that. Two endpoints with two audiences is
+the boring shape.
+
+Three fields were chosen, not four. `role` is deliberately absent: naming an attendee
+needs a person, not their standing in the organisation, and who holds which role
+stays FR-05's business.
+
+**What this discloses, stated rather than glossed.** Every signed-in user can now read
+the name and address of every registered user. That is what a staff directory is, and
+naming a colleague as an attendee is not possible without one. It is worth saying out
+loud at the demonstration rather than leaving for someone to notice: the platform
+assumes an organisation whose staff list is not itself confidential. Nothing about
+roles, account state or history goes with it, and a test asserts the response carries
+exactly the three keys.
+
+**Consequences.**
+
+- One more protected endpoint in the dual-role matrix: 13, still 100%.
+- `MeetingAttendees` remains a participation record and never an access control
+  (D-16, `CLAUDE.md` invariant 3). The end-to-end test has an Employee name an
+  Administrator as an attendee and asserts nobody's access changed.
+- If the organisation ever needs a confidential staff list, this endpoint is the one
+  place to scope, and FR-09's picker is its only consumer.
