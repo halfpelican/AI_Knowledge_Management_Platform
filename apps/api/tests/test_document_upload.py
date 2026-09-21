@@ -24,7 +24,7 @@ from django.urls import reverse
 
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
-    DOCUMENT_PROCESSING,
+    DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
     MAX_UPLOAD_BYTES,
     ROLE_NAMES,
@@ -52,7 +52,10 @@ def test_each_accepted_format_uploads(session_client, upload, fixture_name):
     # "201 Created with the document ID" — the client needs the id to poll status.
     assert uuid.UUID(str(response.data["doc_id"]))
     assert response.data["file_type"] == fixture_name.removeprefix("sample.")
-    assert response.data["status"] == DOCUMENT_PROCESSING
+    # Processing is synchronous (FR-08), so the request does not return until the
+    # document is indexed. "Processing" is the status the row holds inside the
+    # transaction and never one a caller can observe.
+    assert response.data["status"] == DOCUMENT_INDEXED
     document = Document.objects.get(pk=response.data["doc_id"])
     assert document.uploaded_by == session_client.user
     # The original is stored, separately from any extracted text (FR-08, D-05).
