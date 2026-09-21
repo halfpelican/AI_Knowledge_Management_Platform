@@ -35,6 +35,25 @@
   text-transform: uppercase;
 }
 
+/* Status, and under it the sentence that says whether trying again can change
+   the outcome (FR-08, D-32). Status is words, never colour alone. */
+.data-table__status {
+  min-width: var(--layout-card-min-width);
+}
+
+.data-table__message {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+/* The retry action. Kept on one line so the button does not wrap mid-label. */
+.data-table__action {
+  white-space: nowrap;
+}
+
 .data-table__meta {
   color: var(--color-text-muted);
   font-size: var(--text-sm);

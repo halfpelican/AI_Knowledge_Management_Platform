@@ -68,6 +68,13 @@ export const MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 export const MAX_UPLOAD_LABEL = '50 MB'
 
 /**
+ * Said by the upload queue against a finished file and by the repository against
+ * a "Partially indexed" row, so the one sentence has one copy.
+ */
+const PARTIALLY_INDEXED_DETAIL =
+  'Some passages could not be indexed, so parts of this document will not appear in search results.'
+
+/**
  * Client-side validation text. Fixed here so every form says the same thing.
  * The password rules themselves live in src/utils/password.js, which is the
  * single copy of the policy the server also enforces (FR-01).
@@ -154,8 +161,7 @@ export const TEXT = {
   uploadProcessing: 'Processing…',
   uploadIndexed: 'Indexed. This document can now be found in search.',
   // The 201 whose status is "Partially indexed": some chunks failed to embed.
-  uploadPartiallyIndexed:
-    'Partially indexed. Some passages could not be indexed, so parts of this document will not appear in search results.',
+  uploadPartiallyIndexed: `Partially indexed. ${PARTIALLY_INDEXED_DETAIL}`,
   // FR-08 Front-End, verbatim: "if extraction fails, a 'Processing failed.
   // Please try again' action is shown." The action calls the reprocess endpoint,
   // which re-runs ingestion against the original already stored on the server
@@ -176,6 +182,11 @@ export const TEXT = {
   processingFailedInsufficient:
     'Processing failed. This file holds too little text to index, so trying again ' +
     'will not change the result.',
+  // Not a failure, so it does not claim to be one: the document is searchable and
+  // some of its passages are not. Running ingestion again over the stored file is
+  // worth offering, because a provider outage is the usual reason a chunk did not
+  // embed.
+  reprocessPartiallyIndexed: `${PARTIALLY_INDEXED_DETAIL} Trying again re-runs indexing on the stored file.`,
   uploadRetry: 'Try again',
   uploadRemove: 'Remove',
   // FR-08's 409 is a duplicate document, compared by content and not by
@@ -184,12 +195,28 @@ export const TEXT = {
   uploadDuplicate: 'A document with these contents has already been uploaded.',
   uploadNotPermitted: 'You do not have permission to add documents.',
   uploadRejected: 'That file was rejected. Check the title and try again.',
-  uploadQueueStatus: (name, message) => `${name}: ${message}`,
+  // What the live region announces when one record's status changes: the record
+  // named, then the same words that are on screen against it. Used by the upload
+  // queue and by the repository list, which is why it names neither.
+  statusAnnouncement: (name, message) => `${name}: ${message}`,
 
   /* ---- FR-08 / FR-15 document repository -------------------------------- */
   loadingDocuments: 'Loading documents…',
   noDocuments: 'No documents have been uploaded yet.',
   documentsLoadFailed: 'Could not load documents',
+  // FR-08's retry, reachable from the list rather than only from the queue that
+  // uploaded the file: a document left at a failed status has a route back after
+  // the tab is closed. A column of buttons all named "Try again" names nothing to
+  // anyone moving between controls, so each one names its own document.
+  documentRetryLabel: (title) => `Try again for ${title}`,
+  documentReprocessFailed: 'Could not process this document',
+  // The 409: it is indexed already, or a copy was indexed while this list sat
+  // open. Either way the list is out of date, so it is re-read.
+  documentAlreadyIndexed: 'This document has already been indexed. The list has been reloaded.',
+  // The 404, which is also the answer for a document outside the caller's scope.
+  // One message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
+  documentNotFound: 'That document could not be found. The list has been reloaded.',
+  documentReprocessNotPermitted: 'You do not have permission to process documents.',
 
   /* ---- FR-09 meeting transcripts ---------------------------------------- */
   loadingMeetings: 'Loading meetings…',
