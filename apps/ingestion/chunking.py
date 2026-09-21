@@ -68,11 +68,31 @@ def split_into_overlapping_chunks(source_text: str) -> list[Chunk]:
     if total_tokens == 0:
         return []
 
+    # The most chunks this text can legitimately produce: the first chunk, plus one
+    # per advance of (CHUNK_SIZE - CHUNK_OVERLAP) tokens over what remains. Exceeding
+    # it means the loop is not advancing, which has exactly one cause — see the
+    # termination comment below.
+    #
+    # This guard exists because the failure it catches is an INFINITE LOOP, and an
+    # infinite loop is the one bug a test suite cannot report: the run hangs instead
+    # of going red, and in CI that is a job that burns its timeout with no failure to
+    # read. Section 7.5 singles this out as the mistake to avoid, so it is worth one
+    # comparison per chunk to make it impossible rather than merely warned against.
+    step = CHUNK_SIZE - CHUNK_OVERLAP
+    maximum_chunks = 1 + -(-max(total_tokens - CHUNK_SIZE, 0) // step)
+
     chunks: list[Chunk] = []
     start = 0
     index = 0
     final_taken = False
     while not final_taken:
+        if index >= maximum_chunks:
+            raise RuntimeError(
+                f"Chunking did not terminate: {index} chunks for {total_tokens} tokens, "
+                f"at most {maximum_chunks} expected. The loop is not advancing, which "
+                f"means termination is being decided on the start position rather than "
+                f"on end >= total_tokens (proposal section 7.5)."
+            )
         end = min(start + CHUNK_SIZE, total_tokens)
         chunks.append(Chunk(index=index, text=source_text[spans[start][0] : spans[end - 1][1]]))
         index += 1

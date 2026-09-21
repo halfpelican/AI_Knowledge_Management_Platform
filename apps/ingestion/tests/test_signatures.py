@@ -13,7 +13,12 @@ import hashlib
 import pytest
 
 from apps.core.constants import ACCEPTED_FORMATS
-from apps.ingestion.signatures import TEXT_SAMPLE_BYTES, compute_content_hash, read_file_signature
+from apps.ingestion.signatures import (
+    MAXIMUM_CONTROL_CHARACTER_SHARE,
+    TEXT_SAMPLE_BYTES,
+    compute_content_hash,
+    read_file_signature,
+)
 from apps.ingestion.tests.builders import docx_bytes, pdf_bytes, upload, xlsx_bytes, zip_bytes
 
 # The first bytes of a real Windows PE executable: the MZ magic, then the DOS
@@ -198,3 +203,33 @@ def test_content_hash_leaves_the_position_at_zero():
     compute_content_hash(file)
     assert file.tell() == 0
     assert file.read() == b"Leave requests need a manager's approval."
+
+
+def test_text_with_an_embedded_nul_is_not_accepted_as_txt():
+    """The case that isolates the NUL-byte rule, and the only one that does.
+
+    Found by mutation on 2026-09-21: removing the NUL rule from
+    read_file_signature() left the whole suite green, because the disguised_utf8.pdf
+    fixture is 80% NUL and the control-character-share rule rejects it long before
+    the NUL rule is reached. The rule was load-bearing in intent and dead in test
+    terms.
+
+    This payload is what the share rule cannot catch: ordinary prose with two NUL
+    bytes buried in it, a share of well under a tenth of a percent. It decodes
+    cleanly as UTF-8, so section 7.3's literal last rule would return TXT for it and
+    hand a corrupt file to the pipeline to be chunked, embedded and indexed. No
+    plain-text document contains a NUL; a file that does is not one, whatever share
+    of it is readable.
+    """
+    import io
+
+    body = ("Annual leave is accrued at one and two-thirds days per month. " * 48).encode("utf-8")
+    with_nuls = body[:900] + bytes(2) + body[900:]
+    decoded = with_nuls.decode("utf-8")  # section 7.3's literal rule would admit it
+
+    # And the share rule does not reach it: the assertion is here so the test cannot
+    # quietly stop isolating the NUL rule if the threshold is ever retuned.
+    share = decoded.count(chr(0)) / len(decoded)
+    assert share < MAXIMUM_CONTROL_CHARACTER_SHARE
+
+    assert read_file_signature(io.BytesIO(with_nuls)) is None

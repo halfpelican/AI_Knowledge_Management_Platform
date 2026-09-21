@@ -161,3 +161,25 @@ def test_chunks_are_frozen():
     assert isinstance(chunk, Chunk)
     with pytest.raises(FrozenInstanceError):
         chunk.text = "something else"
+
+
+def test_the_non_termination_guard_never_fires_on_valid_input():
+    """The guard's bound must be exact, not merely generous.
+
+    split_into_overlapping_chunks() raises if it produces more chunks than the text
+    can legitimately yield, because the regression section 7.5 warns about is an
+    INFINITE LOOP: deciding termination on the start position leaves start stuck at
+    a negative value for any text shorter than one chunk, and the run hangs instead
+    of going red. Verified by mutation on 2026-09-21 — the buggy version never
+    returns for a 499-token text, and with the guard it raises at once.
+
+    A bound set too high would let a shorter runaway through; one set too low would
+    reject a legitimate text. This walks the sizes where the arithmetic is tightest
+    and asserts the bound equals what the loop actually produces.
+    """
+    step = CHUNK_SIZE - CHUNK_OVERLAP
+    for total in [1, CHUNK_SIZE - 1, CHUNK_SIZE, CHUNK_SIZE + 1, CHUNK_SIZE + step,
+                  CHUNK_SIZE + step + 1, 5000]:
+        chunks = split_into_overlapping_chunks(" ".join(f"w{n}" for n in range(total)))
+        expected = 1 + -(-max(total - CHUNK_SIZE, 0) // step)
+        assert len(chunks) == expected, total
