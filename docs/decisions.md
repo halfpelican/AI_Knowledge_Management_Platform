@@ -749,3 +749,16 @@ matters because the 403 is by design the one distinguishable outcome;
 the counter and window cannot be set by a caller; no path authenticates except the
 login view; no mass assignment through the role change; and the two 403 bodies,
 though different, are only ever visible to someone who already holds the permission.
+
+## D-27  NO_ANSWER_MESSAGE wording — "This question cannot be answered from the available knowledge base."  2026-09-14
+**The PROVISIONAL marker is removed: the proposal never specifies this string.**
+The constants table defines it only as "Fixed text"; the pseudocode references
+the name; UC-06's "No relevant information could be found" is prefaced with
+"something like". There was nothing to wait for.
+The previous wording, "No answer could be found in the material you have access
+to", disclosed the permission boundary. FR-11 Front-End: "the interface gives
+no indication that withheld content exists", and FR-11 Validation returns this
+same message where the scope resolves to no accessible content "rather than an
+error disclosing that restricted material exists". The wording now follows
+FR-12's own clause — states plainly it cannot answer from the available
+knowledge base, no speculation, no hint that scoping exists.
