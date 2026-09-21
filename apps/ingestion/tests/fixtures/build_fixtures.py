@@ -135,6 +135,59 @@ def build_xlsx() -> None:
     workbook.save(HERE / "sample.xlsx")
 
 
+def build_no_text_pdf() -> None:
+    """A valid PDF with a blank page and no text layer.
+
+    The scanned-document case: the file is a perfectly good PDF, the parser reads it
+    without error, and there is simply no text in it. Section 7.8 lines 41-44 answer
+    422 and mark the record "Extraction failed" while keeping the original, which is
+    a different outcome from a corrupt file even though FR-08 gives them one code.
+    """
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << >> >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (number, body)
+    xref_at = len(out)
+    out += b"xref\n0 %d\n" % (len(objects) + 1)
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += b"%010d 00000 n \n" % offset
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
+        len(objects) + 1,
+        xref_at,
+    )
+    (HERE / "no_text.pdf").write_bytes(bytes(out))
+
+
+def build_corrupt_docx() -> None:
+    """A ZIP that declares itself a DOCX and then is not one.
+
+    ``[Content_Types].xml`` names the Word content type, so ``read_file_signature``
+    correctly identifies it as DOCX and the upload is accepted; ``word/document.xml``
+    is then not valid document XML, so python-docx raises and the extractor turns
+    that into ExtractionError. This is the path that proves a vendor exception is
+    caught rather than escaping as a 500.
+    """
+    import zipfile
+
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Override PartName="/word/document.xml" ContentType="'
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        '.main+xml"/></Types>'
+    )
+    with zipfile.ZipFile(HERE / "corrupt.docx", "w") as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("word/document.xml", "this is not document xml at all")
+
+
 def build_disguised_pdf() -> None:
     """A minimal, realistic PE executable named .pdf — see the module docstring."""
     dos_header = bytearray(b"MZ")
@@ -183,6 +236,8 @@ if __name__ == "__main__":
     build_pdf()
     build_docx()
     build_xlsx()
+    build_no_text_pdf()
+    build_corrupt_docx()
     build_disguised_pdf()
     build_disguised_utf8_pdf()
     for path in sorted(HERE.glob("*")):

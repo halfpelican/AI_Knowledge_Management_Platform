@@ -35,7 +35,7 @@ from apps.core.constants import (
     ROLE_NAMES,
 )
 from apps.documents.models import Document
-from apps.ingestion.documents import store_document
+from apps.ingestion.documents import ingest_and_index_document
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 
 from .permissions import HasRolePermission
@@ -472,7 +472,7 @@ class DocumentsView(APIView):
             )
 
         try:
-            document = store_document(
+            outcome = ingest_and_index_document(
                 uploaded_file=uploaded_file,
                 file_format=file_format,
                 content_hash=content_hash,
@@ -487,4 +487,10 @@ class DocumentsView(APIView):
             return Response(
                 {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
             )
-        return Response(DocumentSerializer(document).data, status=status.HTTP_201_CREATED)
+        # The document object is returned whatever the code: on a 422 the file is
+        # kept and the record carries the status saying why it is not indexed, which
+        # is what FR-08's "Processing failed. Please try again" action reads.
+        body = DocumentSerializer(outcome.document).data
+        if outcome.detail:
+            body["detail"] = outcome.detail
+        return Response(body, status=outcome.http_status)
