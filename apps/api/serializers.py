@@ -137,10 +137,12 @@ class DocumentSerializer(serializers.ModelSerializer):
 class DocumentUploadSerializer(serializers.Serializer):
     """FR-08 request body, sent as ``multipart/form-data``.
 
-    Field shapes only. The *order* of the rejections is the view's, because the
-    proposal's section 7.2 ``validateUpload()`` fixes it — contribute permission,
-    then signature, then size, then title, then duplicate — and a serializer would
-    report them all at once in whichever order its fields happen to sit.
+    Field shapes only, and deliberately not the whole request. The *order* of the
+    rejections is the view's, because section 7.2 ``validateUpload()`` fixes it —
+    contribute permission, then signature, then size, then title, then duplicate —
+    and a serializer reports every field at once. So the view reads the file part
+    and checks its signature and size BEFORE running this serializer, and this
+    serializer never sees a request that should have been 415 or 413.
     """
 
     file = serializers.FileField()

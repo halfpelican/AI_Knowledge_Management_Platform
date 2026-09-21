@@ -98,6 +98,7 @@ UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
 UNSUPPORTED_FORMAT_MESSAGE = (
     "File type not supported. Accepted formats: PDF, DOCX, XLSX, TXT."
 )
+NO_FILE_SUBMITTED_MESSAGE = "No file was submitted."
 # FR-08 Responses: "413 Payload Too Large beyond the size limit".
 FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
 # FR-08 Responses: "409 Duplicate document exists for duplicate documents in the
@@ -448,10 +449,21 @@ class DocumentsView(APIView):
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
 
-        serializer = DocumentUploadSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
-        data = serializer.validated_data
-        uploaded_file = data["file"]
+        # The file is taken from the parsed body BEFORE the serializer runs, because
+        # section 7.2 fixes the order of the rejections and a serializer reports
+        # every field at once. Validating the whole body first would answer 400 for
+        # a blank title on a request whose file is a disguised binary, where 7.2
+        # lines 10-22 fix 415 first, then 413, then 400. The auditor found exactly
+        # that inversion on 2026-09-21: the order was claimed in a comment and not
+        # implemented, and no test pinned it because each test varied one condition
+        # at a time. There are now tests for the combinations.
+        uploaded_file = request.data.get("file")
+        if not hasattr(uploaded_file, "read"):
+            # Not a file part at all. The serializer would say this too, but it has
+            # not run yet, so the message is given in its shape.
+            return Response(
+                {"file": [NO_FILE_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         # 415: the format is established from the file's CONTENT (FR-08 Validation:
         # "confirmed by inspecting the file signature rather than the extension
@@ -472,8 +484,11 @@ class DocumentsView(APIView):
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             )
 
-        # The title was required by the serializer above, which is FR-08's "400 A
+        # 400: the title, and the shape of the remaining fields. FR-08: "400 A
         # Document title is required for empty titles".
+        serializer = DocumentUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape
+        data = serializer.validated_data
 
         visible_to_roles = data.get("visible_to_roles") or list(ROLE_NAMES)
         if request.user.role.role_name not in visible_to_roles:

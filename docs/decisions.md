@@ -48,6 +48,7 @@ Rules for this file:
 | D-30 | FR-08's contribute permission: role-level `contribute_content`, no knowledge areas | Settled by the user | 2026-09-21 |
 | D-31 | A token is a whitespace-delimited word; MINIMUM_CONTENT_LENGTH is 50 tokens | Settled by the user | 2026-09-21 |
 | D-32 | FR-08's retry re-runs ingestion on the stored original; a failed ingestion reserves no duplicate slot | Settled by the user | 2026-09-21 |
+| D-33 | Stage 3 audit: FR-08 classification deferred with FR-10; FR-09's 422; the 409 existence oracle | Recorded | 2026-09-21 |
 
 ---
 
@@ -974,3 +975,101 @@ both are addressed:
   which is the truthful answer: an indexed copy now exists.
 - `docs/api-contract.md` gains the route, and the `422` that was missing from the
   `POST /api/documents` row although the implementation and the prose both had it.
+
+
+## D-33 · Stage 3 requirements audit: what is deferred, and what is conceded
+
+**Status:** Recorded · **Date:** 2026-09-21
+
+The requirements audit of FR-08 and FR-09 returned **INCOMPLETE** on 2026-09-21. Two
+findings were defects and are fixed in the same commit as this entry. The rest are
+recorded here, because the auditor's point about the first of them applies to all
+three: *nothing in the repository recorded that these clauses had been considered and
+set aside, which is how they turn into a surprise at the gate.*
+
+**Fixed, not recorded.** The §7.2 rejection order was claimed in a comment and not
+implemented — the serializer validated the whole body before the signature and size
+checks, so a blank title on a disguised binary was answered 400 where §7.2 fixes 415.
+No test pinned it because every test varied one condition at a time. The view now
+reads the file part and checks signature and size before the serializer runs, and
+four tests combine conditions to pin the order. The `disguised_utf8.pdf` NUL-rule gap
+was the same shape and is fixed in `0951ea1`.
+
+### 1. FR-08's classification hand-off is deferred with FR-10
+
+**The clause.** FR-08 Business logic (classification): "on successful extraction the
+document is passed to FR-10 for classification. A failure of classification marks the
+document unclassified but never prevents it reaching indexed status". §7.8 step 4
+calls `classifyAndTagDocument()` and §7.8 line 100 returns `classification` in the
+201 payload.
+
+**Status: unmet, and it stays unmet.** There is no classification call in
+`apps/ingestion/`, the 201 body carries no `classification` key, and no
+`Unclassified` state exists.
+
+**Why.** FR-10 is SHOULD and sits in NIT3004, outside the twelve MUST-HAVEs of the M6
+gate (`CLAUDE.md` §2). `MAXIMUM_CLASSIFY_ATTEMPTS` is already named in
+`apps/core/constants.py` so the retry policy is uniform when FR-10 is built, but
+nothing uses it and nothing should before then. Building it now is the exact trade
+`CLAUDE.md` §2 warns against: depth inside a requirement bought at the cost of
+breadth across the twelve.
+
+**What is owed.** Not code. A sentence in the demonstration script: FR-08's
+classification hand-off is deferred with FR-10, which is NIT3004 work. When FR-10 is
+built, §7.8 step 4 goes between `ExtractedContent` and chunking in
+`ingest_and_index_document()`, and it must be unable to fail the document — a
+classification failure marks it unclassified and never revokes indexed status
+(`CLAUDE.md` invariant 8).
+
+### 2. FR-09 returns a 422 its Responses clause does not enumerate
+
+**The clause.** FR-09 Responses: "201 Created with the meeting ID; 400 Bad Request
+for missing fields or insufficient content." Two codes, and no more.
+
+**What is built.** `apps/ingestion/meetings.py` answers **422** when every chunk fails
+to embed: the transcript is stored, the record carries `Processing failed`, and the
+caller is told it is not searchable.
+
+**Why the departure.** The alternative is to answer 201 for a transcript that is not
+searchable, which is the one thing a caller must not be told. `CLAUDE.md` invariant 8
+requires the transcript survive the failed AI step, so the record must exist; FR-09
+simply has no code for "stored but not indexable" because its Responses clause does
+not contemplate an embedding provider being down. FR-08's 422 covers the identical
+condition, so the same code is used rather than a new convention.
+
+**Conceded:** this is a code FR-09 does not name. It is in `docs/api-contract.md`
+marked *convention*, and the front end handles it. Say so plainly if asked rather
+than presenting FR-09's Responses clause as fully met.
+
+### 3. The 409 duplicate check is a cross-scope existence oracle
+
+**The conflict.** §7.2 specifies an unqualified duplicate check: "IF
+findByContentHash(contentHash) EXISTS THEN RETURN FAILURE WITH response(409)". The
+check in `apps/api/views.py` is global, as written. But `CLAUDE.md` §6 invariant 1
+forbids disclosing the existence of out-of-scope material "not by a result count, a
+total, or an error message". An Employee who happens to hold the same bytes as an
+Administrator-only document learns that document exists.
+
+**Decision: leave the behaviour, record the conflict.** Scoping the duplicate check
+to the caller's `visible_to_roles` would let two copies of one file exist in the
+knowledge base, which is the thing §7.2 exists to prevent, and duplicate passages in
+retrieval are a worse outcome at the gate than a narrow oracle. The oracle also
+requires the attacker to already hold the exact bytes, which is a much weaker
+disclosure than a search result or a count.
+
+Note what this does *not* undo: `DocumentSerializer` still withholds `content_hash`
+from every response, so a caller cannot probe for a document by asking about a hash —
+only by possessing the file itself.
+
+**Also recorded, as statements to make rather than work to do:**
+
+- An Employee cannot record meeting attendees through the interface, because the
+  attendee picker reads `GET /api/users`, which is Administrator-only (FR-05). The
+  API accepts attendees from either role; only the control is missing. FR-09's
+  Front-End clause is therefore partial for an Employee.
+- FR-08's retry action exists only in the upload screen's in-session queue. A
+  document left at `Indexing failed` and revisited after a page reload has no route
+  back to `POST /api/documents/{id}/reprocess`, although the endpoint works and is
+  tested. One button in the repository row closes it.
+- There is still no front-end test runner, so every Front-End clause above is graded
+  by reading code. Stage 3 shipped four more screens against that gap.

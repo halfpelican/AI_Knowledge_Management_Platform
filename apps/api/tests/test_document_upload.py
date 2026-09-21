@@ -337,3 +337,63 @@ def test_an_uploaded_document_appears_in_the_list(employee_client, upload):
     # they cannot see has already been uploaded.
     assert "file_path" not in response.data[0]
     assert "content_hash" not in response.data[0]
+
+
+# --- The order of the rejections is itself the contract (section 7.2) -----------------
+#
+# Every test above varies one condition at a time, which is how the view came to
+# report 400 for a blank title on a request whose file was a disguised binary while
+# a comment claimed section 7.2's order. The order was asserted in prose and not in
+# code, and nothing caught it until the requirements audit of 2026-09-21. These
+# combine conditions, so the order is pinned by a test and not by a docstring.
+#
+# Section 7.2 lines 6-32, in its own sequence: contribute permission (403), then
+# signature (415), then size (413), then title (400), then duplicate (409).
+
+
+@pytest.mark.django_db
+def test_a_disguised_file_is_415_even_with_a_blank_title(employee_client, upload):
+    """415 before 400: the file is refused on its content before the form is read."""
+    response = post_upload(employee_client, upload("disguised.pdf"), title="")
+
+    assert response.status_code == 415
+
+
+@pytest.mark.django_db
+def test_an_oversized_file_is_413_even_with_a_blank_title(employee_client):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    oversize = SimpleUploadedFile(
+        "big.txt", b"a " * (MAX_UPLOAD_BYTES // 2 + 1), content_type="text/plain"
+    )
+
+    response = post_upload(employee_client, oversize, title="")
+
+    assert response.status_code == 413
+
+
+@pytest.mark.django_db
+def test_a_disguised_file_is_415_even_with_an_unknown_role(employee_client, upload):
+    response = post_upload(
+        employee_client, upload("disguised.pdf"), visible_to_roles=["Auditor"]
+    )
+
+    assert response.status_code == 415
+
+
+@pytest.mark.django_db
+def test_the_permission_is_refused_before_the_file_is_even_looked_at(
+    employee, employee_client, upload
+):
+    """403 before everything. Section 7.2 puts it first and says why: "it is the
+    cheapest rejection, and the user's role may have changed during a transfer of up
+    to 50 MB". A disguised binary with a blank title still gets the 403."""
+    from apps.accounts.models import RolePermission
+
+    RolePermission.objects.filter(
+        role=employee.role, permission__permission_name="contribute_content"
+    ).delete()
+
+    response = post_upload(employee_client, upload("disguised.pdf"), title="")
+
+    assert response.status_code == 403
