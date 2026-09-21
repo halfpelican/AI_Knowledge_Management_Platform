@@ -14,10 +14,13 @@ import json
 import logging
 import uuid
 
+from datetime import timedelta
+
 import pytest
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.api.views import LAST_ADMINISTRATOR_MESSAGE, SELF_DEMOTION_MESSAGE
@@ -26,6 +29,7 @@ from apps.accounts.audit import AUDIT_LOGGER_NAME, ROLE_CHANGED
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     ROLE_NAMES,
 )
@@ -72,8 +76,12 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
     assert all(set(role) == {"role_id", "name", "description", "permissions"} for role in body)
     assert all(role["description"] for role in body)
     by_name = {role["name"]: role for role in body}
-    assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == []
-    assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [MANAGE_ROLES_PERMISSION]
+    # Both roles contribute content (D-30); manage_roles is Administrator's alone.
+    assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == [CONTRIBUTE_CONTENT_PERMISSION]
+    assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [
+        CONTRIBUTE_CONTENT_PERMISSION,
+        MANAGE_ROLES_PERMISSION,
+    ]
 
 
 def test_roles_carries_the_role_id_the_role_change_needs(session_client):
@@ -126,7 +134,15 @@ def test_users_lists_every_user_for_an_administrator(administrator_client, emplo
 
 def test_users_are_ordered_by_created_at(administrator_client, employee):
     later = User.objects.create_user("zed@example.com", PASSWORD, name="Zed")
+    # The view orders by (created_at, pk), and the pk is a random UUID, so two users
+    # sharing a created_at come back in an arbitrary order. Three users registered
+    # inside one test can share one: the ordering this test is about is the
+    # timestamp, not the resolution of the system clock or the tiebreak behind it.
+    # Backdating the others makes `later` unambiguously last.
+    User.objects.exclude(pk=later.pk).update(created_at=timezone.now() - timedelta(minutes=1))
+
     body = administrator_client.get(USERS).json()
+
     created = [user["created_at"] for user in body]
     assert created == sorted(created)
     assert body[-1]["id"] == str(later.id)

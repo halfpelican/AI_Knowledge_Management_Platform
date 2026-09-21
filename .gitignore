@@ -17,7 +17,9 @@ venv/
 .env.*
 !.env.example
 
-# Uploaded files
+# Uploaded originals (FR-08), path from MEDIA_ROOT (docs/decisions.md D-05).
+# The default is media/ under the repository root; a MEDIA_ROOT pointed
+# elsewhere must be ignored there too.
 media/
 
 # Audit log (FR-05), path from AUDIT_LOG_PATH

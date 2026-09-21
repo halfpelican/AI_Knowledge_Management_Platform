@@ -29,11 +29,34 @@ from apps.core.models import (
 )
 
 
+def document_upload_path(instance, filename):
+    """Where an uploaded original is stored beneath MEDIA_ROOT (D-05, D-18).
+
+    Keyed by the document's own UUID, which exists before the row is saved, so two
+    uploads of ``report.docx`` never collide and the stored name stays recognisable
+    for download. Django's storage sanitises ``filename`` (directory separators are
+    stripped), so no upload can write outside MEDIA_ROOT.
+    """
+    return f"documents/{instance.id}/{filename}"
+
+
 class Document(models.Model):
     id = uuid_primary_key("doc_id")
     title = models.CharField(max_length=NAME_MAX_LENGTH)
     # ACCEPTED_FORMATS is a set; sorted so the migration state is stable between runs.
     file_type = vocabulary_field(sorted(ACCEPTED_FORMATS))
+    # The stored original. Schema v2, deferred here from v1 because its shape
+    # depended on the storage decision (D-18); D-05 settles that as a local media
+    # directory, so the column is a FileField. Blank only for a record that never
+    # had an original retained; every FR-08 upload sets it.
+    file_path = models.FileField(upload_to=document_upload_path, max_length=512, blank=True)
+    # SHA-256 of the uploaded bytes. FR-08 answers 409 for a duplicate, and section
+    # 7.2 compares "by content hash rather than by filename, so that the same
+    # document uploaded under two different names is still caught". Unique and
+    # nullable: Postgres permits many NULLs under a unique constraint, so records
+    # with no stored original do not collide with each other.
+    content_hash = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    file_size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

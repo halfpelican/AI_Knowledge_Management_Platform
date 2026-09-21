@@ -38,9 +38,9 @@ def test_document_vocabularies_come_from_the_constants():
     assert Document._meta.get_field("status").default == DEFAULT_DOCUMENT_STATUS
 
 
-def test_new_document_starts_uploaded_and_visible_to_the_named_roles(document):
+def test_new_document_starts_processing_and_visible_to_the_named_roles(document):
     document.refresh_from_db()
-    assert document.status == DEFAULT_DOCUMENT_STATUS == "Uploaded"
+    assert document.status == DEFAULT_DOCUMENT_STATUS == "Processing"
     assert document.visible_to_roles == [EMPLOYEE_ROLE_NAME]
     assert document.department == ""
     assert document.uploaded_at is not None

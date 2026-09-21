@@ -25,7 +25,9 @@ SCHEMA_V1 = {
     "documents": (
         ("doc_id",),
         {"doc_id", "title", "file_type", "uploaded_by", "status", "uploaded_at",
-         "department", "visible_to_roles"},
+         "department", "visible_to_roles",
+         # Schema v2, added at the start of Stage 3 by documents 0006 (G7, D-18).
+         "file_path", "content_hash", "file_size_bytes"},
     ),
     "extracted_content": (
         ("content_id",),
@@ -167,6 +169,7 @@ SECTION_5_PLAN = [
     ("accounts", "0001_initial"),
     ("accounts", "0002_seed_roles"),
     ("accounts", "0003_seed_permissions"),
+    ("accounts", "0004_seed_contribute_content"),  # D-30: FR-08's contribute permission
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     ("documents", "0002_content_chunks"),
@@ -175,6 +178,9 @@ SECTION_5_PLAN = [
     # Post-v1 additions, each after its app's existing migrations:
     ("documents", "0004_file_type_four_formats"),  # D-15: four upload formats
     ("documents", "0005_chunk_visible_to_roles"),  # D-17: visible_to_roles on ContentChunks
+    # Schema v2, at the start of Stage 3: the storage columns G7/D-18 deferred, and
+    # the corrected status vocabulary (D-28).
+    ("documents", "0006_schema_v2_storage_and_status"),
     ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
 ]
 

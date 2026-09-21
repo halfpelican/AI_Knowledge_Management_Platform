@@ -9,10 +9,14 @@ import ComponentSheet from './components/ComponentSheet.jsx'
 import Notice from './components/Notice.jsx'
 import { APP_TITLE, ROLES } from './constants.js'
 import AccessDenied from './pages/AccessDenied.jsx'
+import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
+import MeetingDetail from './pages/MeetingDetail.jsx'
+import Meetings from './pages/Meetings.jsx'
 import Register from './pages/Register.jsx'
 import RoleManagement from './pages/RoleManagement.jsx'
+import Upload from './pages/Upload.jsx'
 import './App.css'
 
 /**
@@ -43,6 +47,18 @@ function PrimaryNav({ onLogoutError }) {
       <NavLink to="/" end>
         Home
       </NavLink>
+      {/* FR-08, FR-09 and FR-15: every signed-in user may reach all three, so
+          there is no role test here. They are shown only while signed in
+          because an anonymous visitor would be sent straight to /login by
+          RequireAuth; that is usability, and the server authorises each request
+          regardless (CLAUDE.md §6, invariant 4). */}
+      {user ? (
+        <>
+          <NavLink to="/documents">Documents</NavLink>
+          <NavLink to="/upload">Upload</NavLink>
+          <NavLink to="/meetings">Meetings</NavLink>
+        </>
+      ) : null}
       {/* FR-05: the role management screen "is entirely hidden and inaccessible
           to non-admin roles (button and route do not render)". This is the button
           half; RequireRole is the route half. Both are usability — the server
@@ -116,6 +132,12 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route path="dashboard" element={<Home />} />
             <Route path="admin" element={<Home />} />
+            {/* Stage 3: FR-08 upload and the repository list, FR-09 transcript
+                ingestion and the full stored transcript. */}
+            <Route path="upload" element={<Upload />} />
+            <Route path="documents" element={<DocumentRepository />} />
+            <Route path="meetings" element={<Meetings />} />
+            <Route path="meetings/:meetingId" element={<MeetingDetail />} />
           </Route>
           {/* FR-06: where a guarded route sends an unauthorised navigation attempt. */}
           <Route path="403" element={<AccessDenied />} />

@@ -1,0 +1,69 @@
+/**
+ * Meeting transcript endpoints (FR-09), per docs/api-contract.md. Thin wrappers
+ * over the one API client; no fetch and no XMLHttpRequest here.
+ */
+import { get, post, upload } from './client.js'
+
+/**
+ * Any signed-in user. 200 [meeting object without `transcript_text`], newest
+ * first, scoped by `visible_to_roles`. The list carries no transcript bodies;
+ * the detail route below serves the full text.
+ */
+export function listMeetings(options = {}) {
+  return get('/meetings', options)
+}
+
+/**
+ * One meeting **with** `transcript_text` — FR-09: "once processed, the stored
+ * transcript is then viewable in full".
+ *
+ * 404 both for an id that names nothing and for a meeting outside the caller's
+ * scope, so a refusal does not confirm that the id names something real
+ * (CLAUDE.md §6, invariant 1).
+ */
+export function fetchMeeting(meetingId, options = {}) {
+  return get(`/meetings/${encodeURIComponent(meetingId)}`, options)
+}
+
+/**
+ * FR-09 ingestion: "users can upload a transcript file or paste transcript text
+ * directly into a form, associating it with a meeting title, date, and
+ * attendees".
+ *
+ * Exactly one of `transcriptText` and `file` carries the transcript. Supplying
+ * both is 400 rather than a silent preference — whichever the server picked, the
+ * other would be discarded without the user knowing which — so the form offers
+ * one or the other and this function sends whichever it was given. Pasted text
+ * goes as JSON; a file goes as multipart, through the same `upload()` helper the
+ * document screen uses.
+ *
+ * 201 with the meeting object; 400 a missing title or date, a future date, a
+ * transcript below the minimum length, neither text nor file, both, an
+ * unreadable file, or an attendee who is not a registered user; 403 the role
+ * lacks `contribute_content`; 422 the transcript was stored but could not be
+ * indexed (NFR-20: a failed AI step never discards the source).
+ *
+ * `attendees` is a list of user ids. They are a participation record and never
+ * an access control (D-16, CLAUDE.md §6, invariant 3): scoping is
+ * `visibleToRoles`, exactly as for a document.
+ */
+export function ingestMeeting(
+  { title, meetingDate, transcriptText, file, attendees = [], visibleToRoles },
+  options = {},
+) {
+  if (file) {
+    const body = new FormData()
+    body.append('title', title)
+    body.append('meeting_date', meetingDate)
+    body.append('file', file)
+    for (const attendee of attendees) body.append('attendees', attendee)
+    if (visibleToRoles) for (const role of visibleToRoles) body.append('visible_to_roles', role)
+    return upload('/meetings', body, options)
+  }
+
+  const body = { title, meeting_date: meetingDate, transcript_text: transcriptText }
+  if (attendees.length > 0) body.attendees = attendees
+  // Omitted means both roles (D-29), so the key is absent rather than null.
+  if (visibleToRoles) body.visible_to_roles = visibleToRoles
+  return post('/meetings', body, options)
+}

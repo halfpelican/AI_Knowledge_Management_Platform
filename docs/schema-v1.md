@@ -67,7 +67,10 @@ Permissions are held against roles, never against individual users.
 | `status` | text | fixed vocabulary — see §3 |
 | `uploaded_at` | timestamp | |
 | `department` | text | see gap G3 |
-| `visible_to_roles` | text[] | the FR-11 permission filter |
+| `visible_to_roles` | text[] | the FR-11 permission filter; set at upload, both roles when omitted — D-29 |
+| `file_path` | text (FileField) | **v2** — where the stored original lives under `MEDIA_ROOT`; G7, D-18, D-05 |
+| `content_hash` | text, unique, nullable | **v2** — SHA-256 of the uploaded bytes; FR-08's 409 compares content, not filename (§7.2) |
+| `file_size_bytes` | bigint, nullable | **v2** — recorded on the document by §7.8 |
 
 ### ExtractedContent — FR-08, FR-15
 
@@ -215,8 +218,8 @@ now for work that may be descoped.
 ## 3. Fixed vocabularies
 
 ```python
-DOCUMENT_STATUS_VALUES = ("Uploaded", "Extracting", "Indexed",
-                          "Insufficient content", "Processing failed")
+DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient content",
+                          "Indexing failed", "Partially indexed", "Indexed")
 MEETING_STATUS_VALUES  = ("Received", "Indexed", "Processing failed")
 CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
 SOURCE_TYPES = ("document", "meeting")
@@ -226,6 +229,23 @@ NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESH
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
 so a status can be filtered on and its meaning does not drift.
+
+`DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
+values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
+`Insufficient content`, `Processing failed` — which were written from the requirement
+summaries, before `Project_8-proposal_complete_V4.5.docx` reached the team. See
+**D-28** for the mapping and for why `Partially indexed` had to exist: §7.7 abandons a
+chunk after `MAXIMUM_EMBED_ATTEMPTS`, and the superseded set had no status for a
+document whose chunks partly embedded.
+
+`MEETING_STATUS_VALUES` is untouched. The proposal defines no status column on
+`Meetings` at all, only FR-09's CRUD line "Meetings (Create, Read, Update status)", so
+these three values have nothing to contradict.
+
+`MINIMUM_CONTENT_LENGTH` is counted in **tokens**, not characters, and a token is a
+whitespace-delimited word (**D-31**). §7.5 and §7.8 both call `lengthInTokens()`, and
+one function serves both the chunker and the insufficient-content check so the two
+cannot drift.
 
 ---
 
@@ -273,7 +293,12 @@ access control. D-17 additionally stamps `visible_to_roles` onto every chunk.
 
 **G7 — Documents has no column for the stored original** although FR-08 stores it.
 Resolved by D-18: deferred to migration v2 at the start of Stage 3, because its shape
-depends on the storage implementation.
+depends on the storage implementation. **Closed on 2026-09-21** by
+`documents 0006_schema_v2_storage_and_status`: D-05 fixes storage as a local media
+directory, so the column is a Django `FileField` reading `MEDIA_ROOT` from the
+environment. `content_hash` and `file_size_bytes` land in the same migration, because
+§7.2 and §7.8 record both on the document and FR-08's 409 is a comparison of content
+rather than of filenames.
 
 ---
 

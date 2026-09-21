@@ -1,0 +1,85 @@
+/* Shared by the document repository (FR-08/FR-15) and the meetings list and
+   detail screens (FR-09): one table style, one page frame. */
+
+.repository-page {
+  max-width: var(--content-max-width);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  font-weight: var(--weight-semibold);
+}
+
+.data-table thead th {
+  white-space: nowrap;
+}
+
+.data-table__title {
+  min-width: var(--layout-card-min-width);
+  word-break: break-word;
+}
+
+.data-table__type {
+  text-transform: uppercase;
+}
+
+.data-table__meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.repository-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* FR-09: the stored transcript, viewable in full. Speaker labels and timestamps
+   are stored verbatim and are not parsed (out of scope for this version), so the
+   block preserves the line breaks it was given and imposes no structure of its
+   own. It scrolls rather than stretching the page. */
+.transcript {
+  max-height: 60vh;
+  margin: 0;
+  padding: var(--space-4);
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+  /* Keeps the line breaks, wraps the long lines. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Key/value list for a record's metadata. */
+.record-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-5);
+}
+
+.record-meta dt {
+  font-weight: var(--weight-medium);
+}
+
+.record-meta dd {
+  margin: 0;
+}

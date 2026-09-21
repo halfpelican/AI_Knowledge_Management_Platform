@@ -1,0 +1,11 @@
+/* Shares .field, .field__label, .field__hint, .field__input and .field__error with
+   TextInput.css, which TextAreaInput.jsx imports alongside this file. */
+
+.textarea-field__control {
+  min-height: calc(var(--control-min-height) * 4);
+  /* Vertical only: a textarea widened past its column would break the layout,
+     and the transcript is read as lines. */
+  resize: vertical;
+  font-family: inherit;
+  line-height: var(--leading-normal);
+}

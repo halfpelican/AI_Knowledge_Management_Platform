@@ -37,6 +37,9 @@ jobs:
       # AIService fixture, so nothing here reaches a live model.
       FLM_BASE_URL: http://127.0.0.1:52625/v1
       EMBEDDING_DIMENSION: "768"
+      # Uploaded originals (FR-08, D-05). The runner's workspace is discarded
+      # after the job, so this only has to be writable, not durable.
+      MEDIA_ROOT: ${{ runner.temp }}/media
 
     steps:
       - uses: actions/checkout@v5

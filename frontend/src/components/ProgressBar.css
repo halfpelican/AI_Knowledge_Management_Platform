@@ -1,0 +1,50 @@
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A solid boundary rather than a tint, so the bar is visible in forced-colours
+   mode and its extent does not depend on colour alone. */
+.progress__track {
+  position: relative;
+  flex: 1 1 auto;
+  height: var(--space-3);
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface-alt);
+}
+
+.progress__fill {
+  display: block;
+  height: 100%;
+  background-color: var(--color-primary);
+  transition: width var(--duration-spinner) linear;
+}
+
+/* Unknown duration: a band that travels the track. The reduced-motion rule in
+   base.css collapses the animation, leaving a still bar that still reads as
+   "in progress" through its text equivalent. */
+.progress--indeterminate .progress__fill {
+  width: 40%;
+  animation: progress-slide calc(var(--duration-spinner) * 2) linear infinite;
+}
+
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.progress__value {
+  min-width: 4ch;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

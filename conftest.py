@@ -23,6 +23,7 @@ each request and fails a full run below 100%.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import pytest
 
@@ -198,3 +199,53 @@ def session_client(request):
     section 8 item 2). The fixture named after the role supplies the user."""
     user = request.getfixturevalue(request.param.lower())
     return RoleSession(request.param, user, _logged_in(user))
+
+
+# --- Ingestion (FR-08, FR-09) ---------------------------------------------------------
+
+# The committed fixture corpus: a real PDF, DOCX, XLSX and TXT, plus two executables
+# renamed .pdf. Built by apps/ingestion/tests/fixtures/build_fixtures.py, which
+# documents what each one is for.
+FIXTURE_CORPUS = Path(__file__).resolve().parent / "apps" / "ingestion" / "tests" / "fixtures"
+
+
+@pytest.fixture(autouse=True)
+def media_root(tmp_path, settings):
+    """Every test writes uploads into its own temporary directory.
+
+    Without this the suite would write real files into the repository's own media/
+    and leave them there: MEDIA_ROOT defaults to media/ under the repository root
+    (D-05), gitignored but not self-cleaning, and a test asserting "the stored file
+    was removed" would be reading a directory every other test had also written to.
+    """
+    root = tmp_path / "media"
+    root.mkdir()
+    settings.MEDIA_ROOT = root
+    return root
+
+
+@pytest.fixture
+def corpus():
+    """The directory holding the committed sample files."""
+    return FIXTURE_CORPUS
+
+
+@pytest.fixture
+def upload():
+    """Build an in-memory upload from a file in the corpus.
+
+    ``upload("sample.pdf")`` sends it under its own name; ``upload("disguised.pdf")``
+    is the renamed executable. ``name=`` overrides the filename the client claims,
+    which is how a test disguises one format as another: the server reads the
+    signature and never the extension (FR-08).
+    """
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    def build(fixture_name, name=None, content_type="application/octet-stream"):
+        return SimpleUploadedFile(
+            name or fixture_name,
+            (FIXTURE_CORPUS / fixture_name).read_bytes(),
+            content_type=content_type,
+        )
+
+    return build

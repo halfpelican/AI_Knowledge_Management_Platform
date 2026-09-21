@@ -167,6 +167,25 @@ AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 LOGGING = audit_logging(AUDIT_LOG_PATH)
 
+# --- Uploaded files (FR-08, docs/decisions.md D-05) ------------------------------
+# Originals are stored on the local filesystem, not in the database and not in cloud
+# object storage; cloud storage is a later change behind Django's own storage
+# interface. The path is read from the environment and defaults to media/ under the
+# repository root, which is gitignored. The extracted plain text is stored
+# separately, in extracted_content, so retrieval never re-parses the original.
+#
+# Stored names are sanitised by Django's storage (get_valid_name strips directory
+# separators) and every write goes through a FileField, so no upload can name a path
+# outside MEDIA_ROOT.
+
+MEDIA_ROOT = Path(env.str("MEDIA_ROOT", default=str(BASE_DIR / "media")))
+MEDIA_URL = "/media/"
+# Django buffers an upload in memory below this and spools it to a temporary file
+# above it. Held well under MAX_UPLOAD_BYTES so a 50 MB upload is never held in
+# memory: the size ceiling is checked against the declared length before the body is
+# parsed at all (FR-08: "enforced before the file is written to storage").
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2 MB
+
 # --- Internationalisation -------------------------------------------------------
 
 LANGUAGE_CODE = "en-au"

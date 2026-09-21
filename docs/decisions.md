@@ -42,6 +42,13 @@ Rules for this file:
 | D-24 | Security review findings and accepted residues for Stage 2 | Settled | 2026-09-13 |
 | D-25 | Stage 2 corrected against the proposal FR text; supersedes parts of D-23 and D-24 | Settled | 2026-09-13 |
 | D-26 | Stage 2 security review round two: throttling, a bounded lockout oracle, the last-administrator guard | Settled | 2026-09-13 |
+| D-27 | NO_ANSWER_MESSAGE wording, the PROVISIONAL marker removed | Settled | 2026-09-14 |
+| D-28 | Document status vocabulary: the proposal's six values, superseding schema v1's five | Settled by the user | 2026-09-21 |
+| D-29 | visible_to_roles at ingestion: optional on upload, both roles when omitted | Settled by the user | 2026-09-21 |
+| D-30 | FR-08's contribute permission: role-level `contribute_content`, no knowledge areas | Settled by the user | 2026-09-21 |
+| D-31 | A token is a whitespace-delimited word; MINIMUM_CONTENT_LENGTH is 50 tokens | Settled by the user | 2026-09-21 |
+| D-32 | FR-08's retry re-runs ingestion on the stored original; a failed ingestion reserves no duplicate slot | Settled by the user | 2026-09-21 |
+| D-33 | Stage 3 audit: FR-08 classification deferred with FR-10; FR-09's 422; the 409 existence oracle | Recorded | 2026-09-21 |
 
 ---
 
@@ -762,3 +769,307 @@ same message where the scope resolves to no accessible content "rather than an
 error disclosing that restricted material exists". The wording now follows
 FR-12's own clause — states plainly it cannot answer from the available
 knowledge base, no speculation, no hint that scoping exists.
+
+## D-28 · Document status vocabulary: the proposal's six values
+
+**Status:** Settled by the user · **Date:** 2026-09-21 · **Supersedes:** `docs/schema-v1.md` §3's `DOCUMENT_STATUS_VALUES`
+
+**Decision.** `DOCUMENT_STATUS_VALUES` is the proposal's own set, from its §7.0
+configuration table:
+
+```python
+DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient content",
+                          "Indexing failed", "Partially indexed", "Indexed")
+```
+
+**Rationale (as given).** The same principle as D-25: the FR text wins over the
+contract compiled before the proposal arrived. Schema v1 named five values —
+`Uploaded`, `Extracting`, `Indexed`, `Insufficient content`, `Processing failed` —
+written from the requirement summaries, before
+`Project_8-proposal_complete_V4.5.docx` reached this machine on 2026-09-13. The
+proposal's §7.7 `embedAndStoreChunks()` and §7.8 `ingestAndIndexDocument()` set
+`Indexing failed` and `Partially indexed` directly, and schema v1's set cannot
+express a document whose chunks partly embedded: it would have to call that document
+`Indexed` and lose the fact, or `Processing failed` and lose the chunks that worked.
+
+**Mapping from the superseded set.**
+
+| Schema v1 | Proposal §7.0 |
+|---|---|
+| `Uploaded`, `Extracting` | `Processing` (one in-flight state, since ingestion is synchronous) |
+| `Processing failed` | `Extraction failed` or `Indexing failed`, according to which step failed |
+| `Insufficient content`, `Indexed` | unchanged |
+| — | `Partially indexed` (new) |
+
+**Consequences.**
+
+- `apps/core/constants.py` and `docs/schema-v1.md` §3 are corrected together.
+- Lands as migration `documents 0006`, the schema v2 migration D-18 places at the
+  start of Stage 3. There are no rows to migrate: no document has been ingested.
+- `DEFAULT_DOCUMENT_STATUS` becomes `Processing`, which is what §7.8 message 13
+  writes when the record is created, before extraction begins.
+- **`Partially indexed` is a terminal status, not a half-written record.** It is
+  committed inside the one NFR-21 transaction, and only where a chunk was abandoned
+  after `MAXIMUM_EMBED_ATTEMPTS` attempts (D-19). It does not weaken CLAUDE.md
+  invariant 9: an *unexpected* failure part-way through ingestion still rolls the
+  whole transaction back and leaves nothing. The distinction is between an outcome
+  the pipeline decided and recorded, and a crash.
+- `MEETING_STATUS_VALUES` is untouched. The proposal's Meetings table defines no
+  status column at all, only FR-09's CRUD line "Meetings (Create, Read, Update
+  status)", so schema v1's three values are an invention with nothing to contradict.
+
+## D-29 · visible_to_roles at ingestion
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**Decision.** The FR-08 upload request and the FR-09 transcript request each accept
+an optional `visible_to_roles` list, validated against `ROLE_NAMES`.
+
+- Omitted: both roles. A document nobody thought about is visible to everybody.
+- Present but empty: `400`. An empty list means "visible to nobody", which is not a
+  thing anyone means to ask for, and FR-11 would filter it out of every search
+  silently.
+- A list excluding the uploader's own role: `403`. Uploading into a scope you cannot
+  read is how content is lost.
+
+Chunks are stamped from the source row inside the item-4 transaction (D-17).
+
+**Rationale (as given).** Neither FR-08 nor FR-09 mentions the column; FR-11 filters
+on it. Whatever Stage 3 writes at ingestion is what Stage 4 retrieval filters against
+and what the M6 demonstration shows, so it cannot stay open past the upload endpoint.
+Defaulting to both roles means an omitted field never accidentally hides content,
+while an uploader who does set the field gives FR-11 something real to scope against
+in Stage 4 without a separate administration screen.
+
+**Consequences.**
+
+- **The chunk row is what FR-11 filters on**, so FR-15's visibility edit in Stage 5
+  MUST re-stamp every chunk of that source in the same transaction, or retrieval
+  keeps enforcing the stale scope. That cascade is D-17's model-level guarantee and
+  has its own test; this entry is the reminder that Stage 5 is where it is first
+  exercised for real.
+- Role names are denormalised into document, meeting and chunk rows, so renaming a
+  role breaks the filter (D-11's known limitation, now reaching three tables).
+
+## D-30 · FR-08's contribute permission is role-level
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**Decision.** A `contribute_content` permission is seeded in an accounts migration
+and held by **both** Employee and Administrator. The FR-08 upload endpoint and the
+FR-09 transcript endpoint carry it in their `permission_classes`, so the `403`
+precedes the signature, size and title checks exactly as §7.2 `validateUpload()`
+orders them. The permission name lives in `apps/core/constants.py`.
+
+`knowledgeArea` is dropped from the check. Schema v1 models no knowledge area, so
+the check is role-level rather than per-area.
+
+**Rationale (as given).** §7.2's first line is
+`hasContributePermission(user.userId, file.knowledgeArea)` returning `403`, and its
+comment says why it is first: "it is the cheapest rejection, and the user's role may
+have changed during a transfer of up to 50 MB". The repository seeds one permission,
+`manage_roles` (D-14), so without this the requirement's first server-side check
+would simply be absent. Per-area scoping would need a new table, seeding and an
+administration surface, and is out of the M6 gate.
+
+**Consequences.**
+
+- A test constructs a role **without** the permission and asserts `403` on both
+  endpoints, so the gate is proven rather than assumed.
+- Both new endpoints need an Employee test and an Administrator test for the
+  dual-role matrix (`CLAUDE.md` §8 item 2).
+- Because both roles hold it, the permission refuses nobody in the shipped seed. It
+  is enforcement machinery with its own test, not a demonstrable restriction; say
+  that plainly rather than presenting it as access control that does something.
+
+## D-31 · A token is a whitespace-delimited word
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**Decision.** `length_in_tokens()` splits on whitespace. It is one function, used by
+both `split_into_overlapping_chunks()` and the insufficient-content check, so the two
+definitions cannot drift. `CHUNK_SIZE` (500) and `CHUNK_OVERLAP` (50) are unchanged.
+
+`MINIMUM_CONTENT_LENGTH` becomes **50 tokens**. This is a unit change: the constant
+previously read 200 *characters*.
+
+**Rationale (as given).** §7.5 and §7.8 both count in tokens (`lengthInTokens`), and
+no tokeniser is in the stack. The proposal says "approximately 500 tokens"
+throughout, and embed-gemma's 2048-token ceiling leaves ample headroom for
+whitespace words undercounting real subword tokens by the usual factor of about 1.3.
+`tiktoken` was rejected: it is OpenAI's BPE, not gemma's SentencePiece, so a new
+pinned dependency would buy precision against the wrong tokeniser. The floor is set
+permissively because FR-09 transcripts and short memos are legitimate content; §7.0
+marks the value "To be tuned", so there was never a number to wait for.
+
+**Consequences.**
+
+- `apps/core/constants.py` and `docs/schema-v1.md` are updated together, and the
+  constant's PROVISIONAL marker is removed — like D-27, there is nothing pending.
+- Chunk text is cut on the original string's own whitespace spans, so a stored chunk
+  is a verbatim substring of the extracted text, newlines and all, rather than a
+  space-joined reconstruction. FR-12 shows the passage to a reader, so it must be
+  the passage.
+
+
+## D-32 · FR-08's retry re-runs ingestion on the stored original
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**The problem.** FR-08's Front-End clause requires that "if extraction fails, a
+'Processing failed. Please try again' action is shown". The action was built in Stage
+3 item 7 and could not succeed. Ingestion commits the document row on every 422 path,
+so that the source survives a failed step (`CLAUDE.md` invariant 8, NFR-20), and that
+row carries the `content_hash`. Re-sending the same bytes therefore met §7.2's
+duplicate check and was answered `409`.
+
+**The proposal's own flaw, recorded as the reason for the departure below.** FR-08
+ties the retry to extraction failing. But a scanned, image-only PDF has no text
+layer, and re-submitting identical bytes to the same parser fails identically, every
+time, forever. "Please try again" can only ever help where the failure was
+*transient* — an embedding provider that was down, which is `Indexing failed`. The
+requirement asks for a control whose label is wrong for the case it names. Rather
+than implement a button that cannot work, or drop a clause the gate is scored on,
+both are addressed:
+
+**Decision, three parts.**
+
+1. **A failed ingestion reserves no duplicate slot.** On every 422 outcome —
+   `Extraction failed`, `Insufficient content`, `Indexing failed` — the row is
+   committed with `content_hash` set to NULL. The column is nullable and Postgres
+   permits many NULLs under a unique constraint (schema v2, `documents 0006`), so
+   re-sending the same bytes is an ordinary fresh upload rather than a `409`. A
+   successful reprocess restores the hash, so a document that reaches `Indexed` is
+   protected by the duplicate check exactly as one indexed on the first attempt is.
+
+2. **The retry re-runs ingestion against the stored original, and does not re-POST
+   the file.** `POST /api/documents/{doc_id}/reprocess` re-opens the file already
+   under `MEDIA_ROOT` — invariant 8 has kept it — and runs extraction, chunking and
+   embedding again, replacing any `ExtractedContent` and `ContentChunks` for that
+   document in one transaction. Chosen over a re-upload because a re-upload creates a
+   second row per attempt: three retries would leave three near-identical entries in
+   FR-15's repository list, and the user would have to find the file on disk again to
+   retry at all. One document, one row, however many attempts it took.
+
+3. **The retry's wording differs by status**, because the honest message differs:
+
+   | Status | Action shown | Text |
+   |---|---|---|
+   | `Indexing failed` | Retry | "Processing failed. Please try again." — the failure was transient and a retry may well work |
+   | `Extraction failed` | Retry, as FR-08 requires | names what would actually change the outcome: a text-based or OCR'd copy of the file |
+   | `Insufficient content` | Retry | says the file holds too little text to index, so a retry of the same file will not change it |
+
+   FR-08's action is present in every case the clause names. Only its text stops
+   promising something the same bytes cannot deliver.
+
+**Consequences.**
+
+- The reprocess route is protected by `contribute_content` (D-30) and scoped by
+  `visible_to_roles`; a document outside the caller's scope is `404`, not `403`
+  (`CLAUDE.md` invariant 1). It needs an Employee test and an Administrator test like
+  every other protected endpoint.
+- Reprocessing a document that is already `Indexed` is `409`. Re-indexing healthy
+  content is FR-15's business, not a retry's.
+- Restoring the hash on success can collide, if the same file was uploaded and
+  indexed successfully while this one sat failed. That is a `409` on the reprocess,
+  which is the truthful answer: an indexed copy now exists.
+- `docs/api-contract.md` gains the route, and the `422` that was missing from the
+  `POST /api/documents` row although the implementation and the prose both had it.
+
+
+## D-33 · Stage 3 requirements audit: what is deferred, and what is conceded
+
+**Status:** Recorded · **Date:** 2026-09-21
+
+The requirements audit of FR-08 and FR-09 returned **INCOMPLETE** on 2026-09-21. Two
+findings were defects and are fixed in the same commit as this entry. The rest are
+recorded here, because the auditor's point about the first of them applies to all
+three: *nothing in the repository recorded that these clauses had been considered and
+set aside, which is how they turn into a surprise at the gate.*
+
+**Fixed, not recorded.** The §7.2 rejection order was claimed in a comment and not
+implemented — the serializer validated the whole body before the signature and size
+checks, so a blank title on a disguised binary was answered 400 where §7.2 fixes 415.
+No test pinned it because every test varied one condition at a time. The view now
+reads the file part and checks signature and size before the serializer runs, and
+four tests combine conditions to pin the order. The `disguised_utf8.pdf` NUL-rule gap
+was the same shape and is fixed in `0951ea1`.
+
+### 1. FR-08's classification hand-off is deferred with FR-10
+
+**The clause.** FR-08 Business logic (classification): "on successful extraction the
+document is passed to FR-10 for classification. A failure of classification marks the
+document unclassified but never prevents it reaching indexed status". §7.8 step 4
+calls `classifyAndTagDocument()` and §7.8 line 100 returns `classification` in the
+201 payload.
+
+**Status: unmet, and it stays unmet.** There is no classification call in
+`apps/ingestion/`, the 201 body carries no `classification` key, and no
+`Unclassified` state exists.
+
+**Why.** FR-10 is SHOULD and sits in NIT3004, outside the twelve MUST-HAVEs of the M6
+gate (`CLAUDE.md` §2). `MAXIMUM_CLASSIFY_ATTEMPTS` is already named in
+`apps/core/constants.py` so the retry policy is uniform when FR-10 is built, but
+nothing uses it and nothing should before then. Building it now is the exact trade
+`CLAUDE.md` §2 warns against: depth inside a requirement bought at the cost of
+breadth across the twelve.
+
+**What is owed.** Not code. A sentence in the demonstration script: FR-08's
+classification hand-off is deferred with FR-10, which is NIT3004 work. When FR-10 is
+built, §7.8 step 4 goes between `ExtractedContent` and chunking in
+`ingest_and_index_document()`, and it must be unable to fail the document — a
+classification failure marks it unclassified and never revokes indexed status
+(`CLAUDE.md` invariant 8).
+
+### 2. FR-09 returns a 422 its Responses clause does not enumerate
+
+**The clause.** FR-09 Responses: "201 Created with the meeting ID; 400 Bad Request
+for missing fields or insufficient content." Two codes, and no more.
+
+**What is built.** `apps/ingestion/meetings.py` answers **422** when every chunk fails
+to embed: the transcript is stored, the record carries `Processing failed`, and the
+caller is told it is not searchable.
+
+**Why the departure.** The alternative is to answer 201 for a transcript that is not
+searchable, which is the one thing a caller must not be told. `CLAUDE.md` invariant 8
+requires the transcript survive the failed AI step, so the record must exist; FR-09
+simply has no code for "stored but not indexable" because its Responses clause does
+not contemplate an embedding provider being down. FR-08's 422 covers the identical
+condition, so the same code is used rather than a new convention.
+
+**Conceded:** this is a code FR-09 does not name. It is in `docs/api-contract.md`
+marked *convention*, and the front end handles it. Say so plainly if asked rather
+than presenting FR-09's Responses clause as fully met.
+
+### 3. The 409 duplicate check is a cross-scope existence oracle
+
+**The conflict.** §7.2 specifies an unqualified duplicate check: "IF
+findByContentHash(contentHash) EXISTS THEN RETURN FAILURE WITH response(409)". The
+check in `apps/api/views.py` is global, as written. But `CLAUDE.md` §6 invariant 1
+forbids disclosing the existence of out-of-scope material "not by a result count, a
+total, or an error message". An Employee who happens to hold the same bytes as an
+Administrator-only document learns that document exists.
+
+**Decision: leave the behaviour, record the conflict.** Scoping the duplicate check
+to the caller's `visible_to_roles` would let two copies of one file exist in the
+knowledge base, which is the thing §7.2 exists to prevent, and duplicate passages in
+retrieval are a worse outcome at the gate than a narrow oracle. The oracle also
+requires the attacker to already hold the exact bytes, which is a much weaker
+disclosure than a search result or a count.
+
+Note what this does *not* undo: `DocumentSerializer` still withholds `content_hash`
+from every response, so a caller cannot probe for a document by asking about a hash —
+only by possessing the file itself.
+
+**Also recorded, as statements to make rather than work to do:**
+
+- An Employee cannot record meeting attendees through the interface, because the
+  attendee picker reads `GET /api/users`, which is Administrator-only (FR-05). The
+  API accepts attendees from either role; only the control is missing. FR-09's
+  Front-End clause is therefore partial for an Employee.
+- FR-08's retry action exists only in the upload screen's in-session queue. A
+  document left at `Indexing failed` and revisited after a page reload has no route
+  back to `POST /api/documents/{id}/reprocess`, although the endpoint works and is
+  tested. One button in the repository row closes it.
+- There is still no front-end test runner, so every Front-End clause above is graded
+  by reading code. Stage 3 shipped four more screens against that gap.
