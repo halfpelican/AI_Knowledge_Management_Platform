@@ -24,6 +24,8 @@ urlpatterns = [
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
+    path("documents/<uuid:pk>/reprocess", views.DocumentReprocessView.as_view(),
+         name="document-reprocess"),  # FR-08 "Please try again" (D-32)
     # Stage 3: FR-09
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),

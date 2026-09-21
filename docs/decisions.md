@@ -47,6 +47,7 @@ Rules for this file:
 | D-29 | visible_to_roles at ingestion: optional on upload, both roles when omitted | Settled by the user | 2026-09-21 |
 | D-30 | FR-08's contribute permission: role-level `contribute_content`, no knowledge areas | Settled by the user | 2026-09-21 |
 | D-31 | A token is a whitespace-delimited word; MINIMUM_CONTENT_LENGTH is 50 tokens | Settled by the user | 2026-09-21 |
+| D-32 | FR-08's retry re-runs ingestion on the stored original; a failed ingestion reserves no duplicate slot | Settled by the user | 2026-09-21 |
 
 ---
 
@@ -908,3 +909,68 @@ marks the value "To be tuned", so there was never a number to wait for.
   is a verbatim substring of the extracted text, newlines and all, rather than a
   space-joined reconstruction. FR-12 shows the passage to a reader, so it must be
   the passage.
+
+
+## D-32 · FR-08's retry re-runs ingestion on the stored original
+
+**Status:** Settled by the user · **Date:** 2026-09-21
+
+**The problem.** FR-08's Front-End clause requires that "if extraction fails, a
+'Processing failed. Please try again' action is shown". The action was built in Stage
+3 item 7 and could not succeed. Ingestion commits the document row on every 422 path,
+so that the source survives a failed step (`CLAUDE.md` invariant 8, NFR-20), and that
+row carries the `content_hash`. Re-sending the same bytes therefore met §7.2's
+duplicate check and was answered `409`.
+
+**The proposal's own flaw, recorded as the reason for the departure below.** FR-08
+ties the retry to extraction failing. But a scanned, image-only PDF has no text
+layer, and re-submitting identical bytes to the same parser fails identically, every
+time, forever. "Please try again" can only ever help where the failure was
+*transient* — an embedding provider that was down, which is `Indexing failed`. The
+requirement asks for a control whose label is wrong for the case it names. Rather
+than implement a button that cannot work, or drop a clause the gate is scored on,
+both are addressed:
+
+**Decision, three parts.**
+
+1. **A failed ingestion reserves no duplicate slot.** On every 422 outcome —
+   `Extraction failed`, `Insufficient content`, `Indexing failed` — the row is
+   committed with `content_hash` set to NULL. The column is nullable and Postgres
+   permits many NULLs under a unique constraint (schema v2, `documents 0006`), so
+   re-sending the same bytes is an ordinary fresh upload rather than a `409`. A
+   successful reprocess restores the hash, so a document that reaches `Indexed` is
+   protected by the duplicate check exactly as one indexed on the first attempt is.
+
+2. **The retry re-runs ingestion against the stored original, and does not re-POST
+   the file.** `POST /api/documents/{doc_id}/reprocess` re-opens the file already
+   under `MEDIA_ROOT` — invariant 8 has kept it — and runs extraction, chunking and
+   embedding again, replacing any `ExtractedContent` and `ContentChunks` for that
+   document in one transaction. Chosen over a re-upload because a re-upload creates a
+   second row per attempt: three retries would leave three near-identical entries in
+   FR-15's repository list, and the user would have to find the file on disk again to
+   retry at all. One document, one row, however many attempts it took.
+
+3. **The retry's wording differs by status**, because the honest message differs:
+
+   | Status | Action shown | Text |
+   |---|---|---|
+   | `Indexing failed` | Retry | "Processing failed. Please try again." — the failure was transient and a retry may well work |
+   | `Extraction failed` | Retry, as FR-08 requires | names what would actually change the outcome: a text-based or OCR'd copy of the file |
+   | `Insufficient content` | Retry | says the file holds too little text to index, so a retry of the same file will not change it |
+
+   FR-08's action is present in every case the clause names. Only its text stops
+   promising something the same bytes cannot deliver.
+
+**Consequences.**
+
+- The reprocess route is protected by `contribute_content` (D-30) and scoped by
+  `visible_to_roles`; a document outside the caller's scope is `404`, not `403`
+  (`CLAUDE.md` invariant 1). It needs an Employee test and an Administrator test like
+  every other protected endpoint.
+- Reprocessing a document that is already `Indexed` is `409`. Re-indexing healthy
+  content is FR-15's business, not a retry's.
+- Restoring the hash on success can collide, if the same file was uploaded and
+  indexed successfully while this one sat failed. That is a `409` on the reprocess,
+  which is the truthful answer: an indexed copy now exists.
+- `docs/api-contract.md` gains the route, and the `422` that was missing from the
+  `POST /api/documents` row although the implementation and the prose both had it.

@@ -30,6 +30,7 @@ from apps.core.constants import (
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
+    DOCUMENT_INDEXED,
     MANAGE_ROLES_PERMISSION,
     MAX_UPLOAD_BYTES,
     MINIMUM_CONTENT_LENGTH,
@@ -37,7 +38,7 @@ from apps.core.constants import (
 )
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
-from apps.ingestion.documents import ingest_and_index_document
+from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.errors import ExtractionError
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
@@ -116,6 +117,10 @@ NO_TEXT_IN_TRANSCRIPT_MESSAGE = "No readable text could be extracted from that f
 # FR-09 associates a transcript with its attendees; MeetingAttendees is a
 # participation record for FR-20 and never an access control (D-16).
 UNKNOWN_ATTENDEE_MESSAGE = "One or more of those attendees is not a registered user."
+# D-32: FR-08's retry re-runs ingestion on the stored original. Re-indexing a
+# document that is already indexed is FR-15's business, not a retry's.
+ALREADY_INDEXED_MESSAGE = "This document is already indexed."
+NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -631,3 +636,49 @@ class MeetingDetailView(APIView):
             pk=pk,
         )
         return Response(MeetingSerializer(meeting).data)
+
+
+class DocumentReprocessView(APIView):
+    """``POST /api/documents/{doc_id}/reprocess`` — FR-08's "Please try again".
+
+    Re-runs ingestion against the original already stored under MEDIA_ROOT, rather
+    than asking for the file again (D-32). Invariant 8 kept those bytes when the
+    first attempt failed, so a re-upload would only create a second row per attempt
+    and leave FR-15's repository list full of near-identical entries.
+
+    Scoped and permissioned exactly as the upload is: ``contribute_content``, and a
+    document outside the caller's scope is 404 rather than 403, because a 403 would
+    confirm the id names something real (CLAUDE.md invariant 1).
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+
+    def post(self, request, pk):
+        document = get_object_or_404(
+            Document.objects.filter(visible_to_roles__contains=[request.user.role.role_name]),
+            pk=pk,
+        )
+        if document.status == DOCUMENT_INDEXED:
+            # Re-indexing healthy content is FR-15's business, not a retry's.
+            return Response(
+                {"detail": ALREADY_INDEXED_MESSAGE}, status=status.HTTP_409_CONFLICT
+            )
+        if not document.file_path:
+            # No original to re-read. Unreachable through the API, which always
+            # stores one, but a row can be made without a file.
+            return Response(
+                {"detail": NO_STORED_ORIGINAL_MESSAGE},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        try:
+            outcome = reprocess_document(document)
+        except IntegrityError:
+            # Restoring the content hash collided: the same file was uploaded and
+            # indexed successfully while this one sat failed.
+            return Response(
+                {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
+            )
+        body = DocumentSerializer(outcome.document).data
+        if outcome.detail:
+            body["detail"] = outcome.detail
+        return Response(body, status=outcome.http_status)

@@ -96,7 +96,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB; `415` the file signature is not one of the four accepted formats |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB; `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or every chunk failed to embed |
+| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 
 The document object:
@@ -148,6 +149,27 @@ content. An empty list is `400` — "visible to nobody" is not something anyone 
 to ask for, and FR-11 would filter such a document out of every search in silence. A
 list excluding the uploader's own role is `403`, because uploading into a scope you
 cannot read is how content is lost.
+
+**The retry re-runs ingestion on the stored original (D-32).** FR-08's interface
+shows a "Processing failed. Please try again" action against a document that did not
+index. That action calls `POST /api/documents/{id}/reprocess`, which re-reads the
+file already under `MEDIA_ROOT` — invariant 8 kept it — rather than asking for the
+upload again: a re-upload would create a second row per attempt and leave FR-15's
+list full of near-identical entries.
+
+**A failed ingestion reserves no duplicate slot.** On every `422` the row is
+committed with `content_hash` NULL, so re-sending the same bytes is an ordinary
+fresh upload rather than a `409`. A successful reprocess restores the hash, so an
+indexed document is protected by the duplicate check exactly as one indexed on the
+first attempt is. Several failed attempts at one file coexist, because Postgres
+permits many NULLs under a unique constraint.
+
+**What the retry can and cannot do.** FR-08 ties the action to extraction failing,
+but a scanned PDF with no text layer parses identically however many times the same
+bytes are submitted. The retry genuinely recovers only an `Indexing failed` — a
+provider outage. The action is shown in every case the clause names; its wording
+differs by status so it stops promising what identical bytes cannot deliver. D-32
+records this as a flaw in the requirement rather than in the build.
 
 **`GET /api/documents` is scoped by `visible_to_roles` from the first day it exists.**
 FR-11 is Stage 4 work and this is not that filter, but a list disclosing documents

@@ -31,7 +31,8 @@ from apps.core.constants import (
     DOCUMENT_PARTIALLY_INDEXED,
     MINIMUM_CONTENT_LENGTH,
 )
-from apps.documents.models import Document, ExtractedContent
+from apps.documents.models import ContentChunk, Document, ExtractedContent
+from apps.ingestion.signatures import compute_content_hash
 from apps.ingestion.chunking import length_in_tokens, split_into_overlapping_chunks
 from apps.ingestion.embedding import DOCUMENT_SOURCE_TYPE, embed_and_store_chunks
 from apps.ingestion.extraction import extract_plain_text
@@ -106,60 +107,7 @@ def ingest_and_index_document(
             stored_name = document.file_path.name
             document.save()
 
-            text = _extract(uploaded_file, file_format)
-            if not text:
-                # Section 7.8 lines 41-44. The original is kept and remains
-                # downloadable; only its text is missing. A scanned image-only PDF
-                # reaches here, and so does a file whose parser failed.
-                document.status = DOCUMENT_EXTRACTION_FAILED
-                document.save(update_fields=["status"])
-                return IngestionOutcome(document, 422, NO_TEXT_EXTRACTED_MESSAGE)
-
-            if length_in_tokens(text) < MINIMUM_CONTENT_LENGTH:
-                # Section 7.8 lines 46-53. A fragment embeds into an unreliable
-                # vector that matches unpredictably and pollutes every later search,
-                # so it is marked and never submitted for embedding.
-                #
-                # The return is BEFORE line 58's CREATE ExtractedContent, so an
-                # insufficient-content document gets no extracted_content row at
-                # all. That is the pseudocode's own order and it is deliberate, not
-                # an oversight: the text is below the threshold at which it is
-                # useful to search or to ground an answer, and the file itself is
-                # kept and stays downloadable, so nothing is lost that re-parsing
-                # could not produce again.
-                document.status = DOCUMENT_INSUFFICIENT_CONTENT
-                document.save(update_fields=["status"])
-                return IngestionOutcome(document, 422, INSUFFICIENT_CONTENT_MESSAGE)
-
-            # Stored separately from the original so that search and AI processing
-            # never require the document to be parsed a second time (FR-08, D-05).
-            ExtractedContent.objects.create(document=document, extracted_text=text)
-
-            # Chunks, vectors, the document row and its text all commit together or
-            # not at all (NFR-21) — this is still the one atomic block.
-            chunks = split_into_overlapping_chunks(text)
-            failed_chunk_count = embed_and_store_chunks(
-                chunks=chunks,
-                source_type=DOCUMENT_SOURCE_TYPE,
-                source_id=document.id,
-                # Stamped from the document itself, not from the argument, so the
-                # chunks carry what the stored row says (D-17).
-                visible_to_roles=document.visible_to_roles,
-            )
-
-            # Section 7.8 lines 89-96. All three are decided outcomes, committed
-            # with the status that names them; none is a half-written record (D-28).
-            if failed_chunk_count and failed_chunk_count == len(chunks):
-                document.status = DOCUMENT_INDEXING_FAILED
-                document.save(update_fields=["status"])
-                return IngestionOutcome(document, 422, INDEXING_FAILED_MESSAGE)
-            if failed_chunk_count:
-                document.status = DOCUMENT_PARTIALLY_INDEXED
-                document.save(update_fields=["status"])
-                return IngestionOutcome(document, 201)
-            document.status = DOCUMENT_INDEXED
-            document.save(update_fields=["status"])
-            return IngestionOutcome(document, 201)
+            return _run_pipeline(document, uploaded_file)
     except Exception:
         # The database has rolled back; the file has not, because a filesystem is
         # not transactional. Remove it, or an abandoned ingestion leaves bytes under
@@ -167,6 +115,115 @@ def ingest_and_index_document(
         if stored_name:
             document.file_path.storage.delete(stored_name)
         raise
+
+
+def reprocess_document(document: Document) -> IngestionOutcome:
+    """Re-run ingestion against the original already stored under MEDIA_ROOT (D-32).
+
+    This is what FR-08's "Processing failed. Please try again" action calls. It does
+    NOT re-upload: invariant 8 kept the original when the first attempt failed, so
+    the bytes are already here, and a re-upload would create a second row per
+    attempt — three retries would leave three near-identical entries in FR-15's
+    repository list, and the user would have to find the file on disk again to retry
+    at all. One document, one row, however many attempts it took.
+
+    Any extracted text and chunks from the previous attempt are removed first, so a
+    reprocess replaces its predecessor rather than adding to it. ContentChunks has
+    no database foreign key (D-07), so its rows are deleted explicitly here rather
+    than by a cascade.
+
+    A successful reprocess restores the content hash the failed attempt released, so
+    a document that reaches Indexed is protected by the duplicate check exactly as
+    one indexed on the first attempt is. If the same file was uploaded and indexed
+    successfully in the meantime, that restore collides and raises IntegrityError,
+    which the view answers 409 — the truthful answer, since an indexed copy now
+    exists.
+    """
+    with transaction.atomic():
+        # Locked for the duration: two retries of the same document would otherwise
+        # both delete the other's chunks and both write their own.
+        document = Document.objects.select_for_update().get(pk=document.pk)
+        ExtractedContent.objects.filter(document=document).delete()
+        ContentChunk.objects.filter(
+            source_type=DOCUMENT_SOURCE_TYPE, source_id=document.id
+        ).delete()
+
+        with document.file_path.open("rb") as stored:
+            outcome = _run_pipeline(document, stored)
+            if outcome.http_status == 201:
+                document.content_hash = compute_content_hash(stored)
+                document.save(update_fields=["content_hash"])
+    return outcome
+
+
+def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
+    """Extract, guard, chunk, embed, and set the status. Section 7.8, lines 37-100.
+
+    Shared by a first ingestion and by a reprocess, so the two cannot diverge: a
+    retry that indexed by a different route from the original upload would be a
+    second pipeline to keep correct. The caller owns the transaction; everything
+    written here commits with the document row or not at all (NFR-21).
+    """
+    text = _extract(source_file, document.file_type)
+    if not text:
+        # Section 7.8 lines 41-44. The original is kept and remains downloadable;
+        # only its text is missing. A scanned image-only PDF reaches here, and so
+        # does a file whose parser failed.
+        return _decided_failure(document, DOCUMENT_EXTRACTION_FAILED, NO_TEXT_EXTRACTED_MESSAGE)
+
+    if length_in_tokens(text) < MINIMUM_CONTENT_LENGTH:
+        # Section 7.8 lines 46-53. A fragment embeds into an unreliable vector that
+        # matches unpredictably and pollutes every later search, so it is marked and
+        # never submitted for embedding.
+        #
+        # The return is BEFORE line 58's CREATE ExtractedContent, so an
+        # insufficient-content document gets no extracted_content row at all. That is
+        # the pseudocode's own order and it is deliberate: the text is below the
+        # threshold at which it is useful to search or to ground an answer, and the
+        # file itself is kept and stays downloadable, so nothing is lost that
+        # re-parsing could not produce again.
+        return _decided_failure(
+            document, DOCUMENT_INSUFFICIENT_CONTENT, INSUFFICIENT_CONTENT_MESSAGE
+        )
+
+    # Stored separately from the original so that search and AI processing never
+    # require the document to be parsed a second time (FR-08, D-05).
+    ExtractedContent.objects.create(document=document, extracted_text=text)
+
+    chunks = split_into_overlapping_chunks(text)
+    failed_chunk_count = embed_and_store_chunks(
+        chunks=chunks,
+        source_type=DOCUMENT_SOURCE_TYPE,
+        source_id=document.id,
+        # Stamped from the document itself, not from an argument, so the chunks
+        # carry what the stored row says (D-17).
+        visible_to_roles=document.visible_to_roles,
+    )
+
+    # Section 7.8 lines 89-96. All three are decided outcomes, committed with the
+    # status that names them; none is a half-written record (D-28).
+    if failed_chunk_count and failed_chunk_count == len(chunks):
+        return _decided_failure(document, DOCUMENT_INDEXING_FAILED, INDEXING_FAILED_MESSAGE)
+    document.status = DOCUMENT_PARTIALLY_INDEXED if failed_chunk_count else DOCUMENT_INDEXED
+    document.save(update_fields=["status"])
+    return IngestionOutcome(document, 201)
+
+
+def _decided_failure(document: Document, status: str, detail: str) -> IngestionOutcome:
+    """Commit a failure the pipeline decided, and release the duplicate slot.
+
+    The row is kept, carrying the status that says why it is not indexed (CLAUDE.md
+    invariant 8, NFR-20). The content hash is cleared, because a failed ingestion
+    must not reserve the duplicate check against a document that never indexed:
+    while it did, FR-08's "Please try again" action was answered 409 by section
+    7.2's duplicate rule and could never succeed (D-32). The column is nullable and
+    Postgres permits many NULLs under a unique constraint, so several failed
+    attempts at the same file coexist. A successful reprocess restores the hash.
+    """
+    document.status = status
+    document.content_hash = None
+    document.save(update_fields=["status", "content_hash"])
+    return IngestionOutcome(document, 422, detail)
 
 
 def _extract(uploaded_file, file_format: str) -> str:

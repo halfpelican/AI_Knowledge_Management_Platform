@@ -121,11 +121,22 @@ def test_the_unprocessable_response_still_carries_the_document(employee_client, 
     assert response.data["detail"]
 
 
-def test_a_failed_extraction_still_occupies_its_content_hash(employee_client, upload):
-    """The record is committed, so a second upload of the same bytes is the ordinary
-    409 rather than a second attempt. Re-processing an existing document is FR-15's
-    business, not a repeat upload's."""
-    assert post_upload(employee_client, upload("no_text.pdf")).status_code == 422
+def test_a_failed_extraction_releases_its_content_hash(employee_client, upload):
+    """A failed ingestion reserves no duplicate slot (D-32).
 
-    assert post_upload(employee_client, upload("no_text.pdf")).status_code == 409
-    assert Document.objects.count() == 1
+    This test asserted the opposite when it was written, and the opposite was
+    wrong: while a 422 kept its content hash, FR-08's own "Processing failed.
+    Please try again" action met section 7.2's duplicate check and was answered
+    409, so the clause the M6 gate is scored on could never succeed. The record is
+    still committed, carrying the status that says why it is not indexed
+    (CLAUDE.md invariant 8) — only the hash is released.
+
+    The retry proper re-runs ingestion on the stored original rather than
+    re-uploading; that path is tested in ``test_document_reprocess.py``.
+    """
+    response = post_upload(employee_client, upload("no_text.pdf"))
+    assert response.status_code == 422
+
+    assert Document.objects.get(pk=response.data["doc_id"]).content_hash is None
+    # So the same bytes may be sent again, as an ordinary fresh attempt.
+    assert post_upload(employee_client, upload("no_text.pdf")).status_code == 422
