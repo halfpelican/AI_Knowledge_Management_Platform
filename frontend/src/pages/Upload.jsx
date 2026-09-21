@@ -11,6 +11,7 @@ import SelectInput from '../components/SelectInput.jsx'
 import TextInput from '../components/TextInput.jsx'
 import { DOCUMENT_STATUS, TEXT, VALIDATION } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
+import { retryMessageFor } from '../utils/documentStatus.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { FILE_INPUT_ACCEPT, screenFile, titleFromFilename } from '../utils/uploads.js'
 import { rolesForVisibility, VISIBILITY_EVERYONE, visibilityOptionsFor } from '../utils/visibility.js'
@@ -48,14 +49,6 @@ function formatSize(bytes) {
  * duplicate email address, while FR-08's 409 is a document whose *content* has
  * been uploaded before, compared by hash and not by filename.
  */
-function retryMessageFor(status) {
-  if (status === DOCUMENT_STATUS.extractionFailed) return TEXT.processingFailedExtraction
-  if (status === DOCUMENT_STATUS.insufficientContent) return TEXT.processingFailedInsufficient
-  // "Indexing failed", and anything a later status vocabulary adds: FR-08's own
-  // wording, which is true for a transient failure.
-  return TEXT.processingFailed
-}
-
 function failureFor(error) {
   if (!(error instanceof ApiError)) {
     return { message: messageForStatus(NETWORK_ERROR_STATUS), retryable: true }
@@ -222,7 +215,7 @@ export default function Upload() {
   }
 
   function announce(name, message) {
-    setAnnouncement(TEXT.uploadQueueStatus(name, message))
+    setAnnouncement(TEXT.statusAnnouncement(name, message))
   }
 
   /** Files from the picker or from a drop. Screened before anything is sent. */

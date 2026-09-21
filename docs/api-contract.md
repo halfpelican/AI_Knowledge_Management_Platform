@@ -40,7 +40,20 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | GET | `/api/auth/me` | session | `200` user object; refreshes the `csrftoken` cookie | `401` |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
 | GET | `/api/users` | Administrator | `200 [user object, ...]` ordered by `created_at` | `401`; `403` Employee |
+| GET | `/api/users/directory` | session | `200 [{"id", "name", "email"}, ...]` ordered by name | `401` |
 | PATCH | `/api/users/{id}/role` | Administrator | `200` updated user object; writes an audit entry | `400` the body is missing `role_id` or it is not a UUID; `401`; `403` Employee, or an administrator demoting themselves (*convention*: FR-05 enumerates only 200, 403 and 404); `404` the user or the role does not exist |
+
+**The directory is not the user list (D-34).** `GET /api/users/directory` carries a
+name and an address and nothing else — no role, no timestamps, no account state. It
+exists because FR-09 gives attendee association to *any* user, while `GET /api/users`
+is Administrator-only: it carries the role each person holds and drives role
+management, so an Employee had no way to populate an attendee picker and FR-09's
+clause was unreachable for them. Relaxing `GET /api/users` would have handed every
+Employee the role of every colleague to satisfy a requirement that needs only their
+name, so the two stay separate and a test asserts `GET /api/users` is still `403`
+for an Employee. What the directory does disclose, stated rather than glossed: every
+signed-in user can read every registered user's name and address. That is what a
+staff directory is.
 
 **FR-01 password complexity.** "min 8 chars, 1 uppercase, 1 number, 1 special
 character", enforced server-side. The client shows the same rules as the user types

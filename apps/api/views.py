@@ -47,6 +47,7 @@ from apps.meetings.models import Meeting
 
 from .permissions import HasRolePermission
 from .serializers import (
+    DirectoryEntrySerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
     LoginSerializer,
@@ -327,6 +328,28 @@ class UserListView(APIView):
     def get(self, request):
         users = User.objects.select_related("role").order_by("created_at", "pk")
         return Response(UserSerializer(users, many=True).data)
+
+
+class UserDirectoryView(APIView):
+    """``GET /api/users/directory`` — the people an FR-09 transcript can name.
+
+    Any signed-in session. FR-09 gives attendee association to any user, and the
+    gate is demonstrated from both roles, but the only user listing was FR-05's
+    ``GET /api/users``, which is Administrator-only: an Employee could not populate
+    an attendee picker, so the clause was unreachable for them (Stage 3 audit,
+    finding 4). FR-05's list is untouched — it carries roles and drives role
+    management, and relaxing it would have handed every Employee the role of every
+    colleague to satisfy a requirement that only needs their name.
+
+    What this does disclose, stated rather than glossed: every signed-in user can
+    read the name and address of every other registered user. That is what a staff
+    directory is, and naming an attendee is not possible without it. No role, no
+    timestamps, no account state (D-34).
+    """
+
+    def get(self, request):
+        people = User.objects.order_by("name", "pk")
+        return Response(DirectoryEntrySerializer(people, many=True).data)
 
 
 class UserRoleView(APIView):

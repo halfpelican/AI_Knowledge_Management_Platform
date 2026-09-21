@@ -32,6 +32,27 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = USER_FIELDS
 
 
+class DirectoryEntrySerializer(serializers.ModelSerializer):
+    """A person, for choosing FR-09 meeting attendees. Deliberately not UserSerializer.
+
+    FR-09's Front-End clause has any user associate a transcript "with a meeting
+    title, date, and attendees", so any session must be able to name a colleague.
+    The only list that existed was FR-05's ``GET /api/users``, which is
+    Administrator-only because it carries the role each person holds and drives role
+    management — so an Employee had no way to populate an attendee picker and the
+    clause was unreachable for them (Stage 3 audit, finding 4).
+
+    Three fields, and none of them is ``role``: who may change roles, and who holds
+    which, stays FR-05's business. This is a staff directory, which is what naming
+    an attendee needs and no more.
+    """
+
+    class Meta:
+        model = User
+        fields = ("id", "name", "email")
+        read_only_fields = fields
+
+
 # --- FR-01, FR-02 -------------------------------------------------------------------
 
 

@@ -21,6 +21,9 @@ urlpatterns = [
     # Stage 2: FR-05
     path("roles", views.RoleListView.as_view(), name="role-list"),
     path("users", views.UserListView.as_view(), name="user-list"),
+    # Before the <uuid:pk> route below; "directory" is not a UUID so the two
+    # cannot collide, but reading first is the habit that keeps it true.
+    path("users/directory", views.UserDirectoryView.as_view(), name="user-directory"),
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
