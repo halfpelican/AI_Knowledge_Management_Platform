@@ -1183,7 +1183,7 @@ Mitigations, all of which cost nothing:
 - The AMD driver version the NPU depends on is recorded, after a
   `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
 
-  ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
+## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the implicit assumption that
 the current FastFlowLM release is the right one to run
@@ -1250,7 +1250,7 @@ system. The subsequent pass on v0.9.39 means something because the failure came 
 - `docs/flm-baseline.md` records the three rates that this pin makes meaningful. Every
   number in it is invalid on any other FLM version.
 
-  ## D-37 · RELEVANCE_THRESHOLD is 0.30, and why no value would be the right one
+## D-37 · RELEVANCE_THRESHOLD is 0.30, and why no value would be the right one
 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the placeholder value carried
 since Stage 1 · **Provisional:** re-measured against a real corpus

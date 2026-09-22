@@ -124,7 +124,7 @@ flm serve gemma3:4b --embed 1
 
 ```
 AI_PROVIDER=flm
-FLM_BASE_URL=http://127.0.0.1:52625/v1
+FLM_BASE_URL=http://127.0.0.1:8625/v1
 FLM_API_KEY=flm                          # placeholder, no real credential
 FLM_CHAT_MODEL=gemma3:4b
 FLM_EMBED_MODEL=embed-gemma

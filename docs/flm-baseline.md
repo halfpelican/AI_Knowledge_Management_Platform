@@ -13,10 +13,10 @@ FR-12 on. Produced by `scripts/citation_harness.py`.
 | Chat model | `gemma3:4b` |
 | Embedding model | `embed-gemma` (embeddinggemma-300m) |
 | Embedding dimension | 768 |
-| Corpus | the placeholder Meridian fixture set, 6 chunks, all recorded against `embed-gemma` |
+| Corpus | the placeholder Meridian fixture set, 9 chunks, all recorded against `embed-gemma` |
 | Question set | `scripts/citation_questions.json`, 64 questions |
 | Constants | `TOP_K=25`, `MAXIMUM_CONTEXT_TOKENS=4000`, `MAXIMUM_GENERATION_ATTEMPTS=3` |
-| Threshold used | **0.30**, not the constant's provisional 0.5 — see "Tuning RELEVANCE_THRESHOLD" |
+| Threshold used | **0.30** — see "Tuning RELEVANCE_THRESHOLD" |
 
 ## The three rates
 
@@ -70,8 +70,7 @@ model judgement (invariant 5).
 
 ## Tuning RELEVANCE_THRESHOLD
 
-`apps/core/constants.py` marks `RELEVANCE_THRESHOLD = 0.5` PROVISIONAL and names
-this step as the one that settles it: "0.5 is a placeholder, not a measured value."
+`apps/core/constants.py` marks `RELEVANCE_THRESHOLD = 0.3`
 Reproduce the evidence with `python scripts/citation_harness.py --scores-only`.
 
 Top-score distribution over the rebuilt corpus:
@@ -94,9 +93,9 @@ Two conclusions:
    that is the *role filter* doing the work before ranking, not the threshold.
 
 0.30 was used for this run: it admits 41/48 answerable and 5/16 unanswerable, and
-sits clear of the scoped maximum. **The constant has not been changed.** Writing a
-value into `apps/core/constants.py` is a decision for the coordinator, and this
-document is the evidence for making it.
+sits clear of the scoped maximum. The constant is now 0.30 (D-37); this section
+is the evidence for that decision, and both are void if the corpus, the embedding
+prefixes or the FLM build change.
 
 ## The worked example was fabricating identifiers
 
@@ -172,7 +171,7 @@ corpus after a version or provider change.
 - **These are local-model baselines, not the platform's capability.** The
   proposal's production path is Claude plus Voyage. Do not present these numbers as
   what the system can do (`docs/ai-provider.md` section 7).
-- **The corpus is a placeholder.** Six chunks over five sources is small enough
+- **The corpus is a placeholder.** Nine chunks over five sources is small enough
   that a single chunk's wording moves a rate by two percentage points. The rates
   are a go/no-go signal for building FR-12, not a quality measurement. Re-run
   against the real corpus when there is one; the question-set path is a CLI
