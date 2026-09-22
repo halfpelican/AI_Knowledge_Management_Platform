@@ -123,7 +123,7 @@ def check_models(base_url: str, api_key: str, chat_model: str) -> str:
     for model_id in model_ids:
         print(f"    - {model_id}")
     print(
-        "  note: on FLM 1.0.2 this list is the model catalogue rather than the resident set,\n"
+        "  note: this list is the model catalogue rather than the resident set,\n"
         "        and it does not include the embedding model. The two calls below are the proof."
     )
     if chat_model not in model_ids:
