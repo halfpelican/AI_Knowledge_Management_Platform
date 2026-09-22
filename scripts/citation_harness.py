@@ -402,7 +402,14 @@ def build_candidate_set(chunks: list[ContentChunk], role: str, query_model: str)
 
 
 def rank(candidates: list[ContentChunk], query_vector: list[float]) -> list[Candidate]:
-    """Cosine similarity over the candidate set, best first, TOP_K then the threshold."""
+    """Cosine similarity over the candidate set, best first, capped at TOP_K.
+
+    The threshold is NOT applied here. run_question applies it to this list, and
+    reads top_score off it beforehand — that pre-threshold top score is what the
+    D-37 sweep and --scores-only measure. Stage 4 item 3 applies TOP_K and the
+    threshold together in apps/retrieval/; this stays as it is so the harness keeps
+    measuring what the baseline measured.
+    """
     scored = [
         Candidate(
             chunk_id=str(chunk.id),
@@ -668,8 +675,8 @@ def report(results: list[QuestionResult]) -> dict:
 def score_distribution(questions: list[dict], chunks: list[ContentChunk], service) -> int:
     """Embed and rank every question, print top scores by kind, call no generation.
 
-    This is how RELEVANCE_THRESHOLD is tuned (apps/core/constants.py marks it
-    PROVISIONAL and names Stage 4 step 0 as the step that settles it). The value
+    This is how RELEVANCE_THRESHOLD was tuned: the sweep it prints is the evidence
+    recorded in docs/flm-baseline.md and settled as D-37. The value
     wanted is one that separates questions the corpus CAN answer from the scoped
     and no-answer questions it cannot: admitting a passage that does not answer the
     question is what drives no-answer path B, the project's main quality signal.
@@ -725,11 +732,10 @@ def main() -> int:
         help=f"question set JSON (default: {DEFAULT_QUESTION_SET.name}, a placeholder set)",
     )
     parser.add_argument("--limit", type=int, default=0, help="run only the first N questions")
-    # RELEVANCE_THRESHOLD is marked PROVISIONAL in apps/core/constants.py and is
-    # tuned HERE, in Stage 4 step 0, against the fixture corpus. This override is a
-    # measuring instrument: it lets the score distribution be observed at several
-    # thresholds before one value is written into the constants module. It defaults
-    # to the constant, so an ordinary run measures what retrieval will really do.
+    # This override is a measuring instrument: it lets the score distribution be
+    # observed at several thresholds without disturbing the settled value (D-37).
+    # It defaults to the constant, so an ordinary run measures what retrieval will
+    # really do.
     parser.add_argument(
         "--threshold",
         type=float,

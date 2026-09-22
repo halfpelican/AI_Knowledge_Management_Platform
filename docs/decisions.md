@@ -52,6 +52,7 @@ Rules for this file:
 | D-34 | A staff directory endpoint, separate from FR-05's user list, so any role may name attendees | Settled | 2026-09-21 |
 | D-35 | No external AI spend; demonstration runs on one machine | Settled | 2026-09-22 |
 | D-36 | FastFlowLM pinned to v0.9.39; `check_flm.py` asserts embedding determinism | Settled | 2026-09-22 |
+| D-37 | RELEVANCE_THRESHOLD lowered to 0.30; no threshold separates answerable from unanswerable | Settled | 2026-09-22 |
 
 ---
 
@@ -1182,7 +1183,7 @@ Mitigations, all of which cost nothing:
 - The AMD driver version the NPU depends on is recorded, after a
   `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
 
-  ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
+## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the implicit assumption that
 the current FastFlowLM release is the right one to run
@@ -1248,3 +1249,75 @@ system. The subsequent pass on v0.9.39 means something because the failure came 
   against a failing case before it is trusted.
 - `docs/flm-baseline.md` records the three rates that this pin makes meaningful. Every
   number in it is invalid on any other FLM version.
+
+## D-37 · RELEVANCE_THRESHOLD is 0.30, and why no value would be the right one
+
+**Status:** Settled · **Date:** 2026-09-22 · **Closes:** the placeholder value carried
+since Stage 1 · **Provisional:** re-measured against a real corpus
+
+**Decision.** `RELEVANCE_THRESHOLD` in `apps/core/constants.py` moves from 0.5 to
+**0.30**.
+
+**The measurement.** Top-score distribution over the placeholder corpus, all 64
+questions in `scripts/citation_questions.json`, after the reindex on the pinned FLM
+build (D-36):
+
+| Kind | n | min | median | max |
+|---|---|---|---|---|
+| Ordinary (answerable) | 48 | 0.219 | 0.390 | 0.661 |
+| Scoped (Employee asking an Administrator-only question) | 8 | 0.179 | 0.252 | 0.286 |
+| No-answer | 8 | 0.180 | 0.474 | 0.535 |
+
+0.5 admits 10 of the 48 answerable questions. It was never measured; it was a round
+number chosen before any retrieval existed, and it discards most of the corpus by
+construction. At 0.5 the empty-answer-where-available rate was 81.2%. At 0.30 it is
+14.6%.
+
+**The finding that matters more than the number.** No threshold separates answerable
+from unanswerable on this corpus. The no-answer questions reach 0.535, overlapping
+the top third of the genuinely answerable ones. Admitting 41 of 48 answerable
+questions costs 5 of 16 unanswerable ones reaching generation; excluding every
+unanswerable question requires a floor of 0.54, which keeps 7 of the 48 real answers.
+There is no setting that buys both.
+
+This is not a tuning failure. It is what cosine similarity over an embedding model
+measures — topical relatedness, not whether a passage contains the answer. Q15 in the
+question set was written to make exactly that point: it shares vocabulary with the
+Administrator-only postmortem without being answerable from anything in the corpus.
+
+**Rationale.** If the threshold cannot decide answerable from unanswerable, then
+invariant 7(b) must, and the baseline run shows it does. Four no-answer questions
+cleared 0.30, reached generation, and came back with an empty statement list. Path B
+is therefore load-bearing rather than a leftover branch, and the threshold's remaining
+job shrinks to cutting obvious noise cheaply — one candidate filter before an NPU
+call, not an accuracy mechanism.
+
+A threshold with that job should sit low enough not to throw away real answers, since
+generation catches what gets through. 0.30 sits below the answerable median by a clear
+margin and above the floor of the distribution, and the cost of the questions it
+wrongly admits is a generation call, not a wrong answer.
+
+**Consequences.**
+
+- **Invariant 7(b) is now demonstrated, not assumed.** The Stage 4 test suite tests it
+  directly rather than treating it as the branch that happens to be left over, and the
+  two no-answer reason codes must stay distinguishable in the query log — a rising
+  rate of (b) is the only signal that generation is degrading.
+- **The value is provisional and the comment in `constants.py` says so.** It is
+  measured against 9 chunks. At that size `TOP_K = 25` never binds, so the threshold
+  is currently performing all the selection in the pipeline. It is re-measured when a
+  real corpus arrives.
+- **It is re-measured again if the EmbeddingGemma task prefixes are adopted.** The
+  model expects `task: search result | query: …` for queries and `title: … | text: …`
+  for documents; the project sends raw text. Query-to-chunk scores (0.18–0.66) sitting
+  below chunk-to-chunk scores (mean 0.488) is the signature of that omission, and
+  correcting it moves the whole distribution.
+- **Every rate in `docs/flm-baseline.md` is specific to this threshold and this FLM
+  build.** Changing either invalidates the document, which is why both are recorded
+  decisions rather than configuration someone adjusts in passing.
+
+**What this decision does not establish.** The scoped questions top out at 0.286
+because the role filter removed the Administrator-only content from the candidate set
+before ranking. That is correct behaviour and it is invariant 1 working, but it means
+the scoped result measures the filter's output, not the filter under test. FR-11 is
+evidenced at Stage 4 item 11, not here.
