@@ -140,10 +140,29 @@ the vectors are real this time:
   same pair scored 0.099, *below* the 0.640 maximum between unrelated documents.
 
 **Before trusting any embedding work, assert determinism** — embed one string
-twice and require a cosine near 1.0. `scripts/check_flm.py` passes on a broken
-version, because its sanity check is "vectors are non-zero and differ between the
-two inputs", which noise satisfies trivially. That single missing assertion is why
-this went undetected from Stage 0 until the harness ran.
+twice and require a cosine near 1.0. `scripts/check_flm.py` originally passed on a
+broken version, because its sanity check was "vectors are non-zero and differ
+between the two inputs", which noise satisfies trivially. That single missing
+assertion is why this went undetected from Stage 0 until the harness ran.
+
+It is no longer missing. `check_flm.py` now asserts determinism at
+`DETERMINISM_TOLERANCE = 0.999`, both for the same input twice within one request
+and for the same input across two separate requests — the second catching a server
+that is deterministic within a batch but not between calls — and then checks that
+two unrelated inputs still discriminate.
+
+The assertion was added and exercised **before** the downgrade, which is what makes
+it worth anything:
+
+| | v1.0.6 (broken) | v0.9.39 (good) |
+|---|---|---|
+| same input, one batch | — | 1.0000 |
+| same input, two calls | 0.0939 — **failed** | 1.0000 |
+| two unrelated inputs | — | 0.1299 |
+
+A check that has only ever passed does not evidence that it can fail. This one has
+a demonstrated failure mode on a version known to be broken, so the pass on v0.9.39
+means something.
 
 `python manage.py reindex --provider <name>` now exists and is what rebuilds the
 corpus after a version or provider change.
