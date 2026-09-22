@@ -9,8 +9,10 @@ asserted about.
 
 import pytest
 from django.conf import settings
+from django.test import override_settings
 
 from apps.ai.base import ProviderUnavailable
+from apps.ai.prefixes import document_text
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
@@ -30,9 +32,27 @@ from apps.ingestion.tests.ai_doubles import MisreportingEmbedService, ScriptedEm
 pytestmark = pytest.mark.django_db
 
 CHUNKS = [Chunk(index=0, text="Leave accrues monthly."), Chunk(index=1, text="Approvals are two.")]
+# The title store() passes, so a test can say what the provider was sent: the
+# document task prefix wraps the chunk text with it (apps/ai/prefixes.py).
+TITLE = "Leave policy"
 
 
-def store(chunks=CHUNKS, source_type=DOCUMENT_SOURCE_TYPE, source_id=None, roles=None):
+def sent(chunk):
+    """The string the provider receives for ``chunk`` — prefixed if the configured
+    embedding model takes prefixes, bare if it does not. Read through the same
+    function the pipeline uses, so these tests keep measuring retries and counts
+    rather than becoming assertions about the prefix; the literal documented forms
+    are asserted at the bottom of this file."""
+    return document_text(TITLE, chunk.text)
+
+
+def store(
+    chunks=CHUNKS,
+    source_type=DOCUMENT_SOURCE_TYPE,
+    source_id=None,
+    roles=None,
+    title=TITLE,
+):
     """embed_and_store_chunks() with the arguments a document would supply."""
     import uuid
 
@@ -41,6 +61,7 @@ def store(chunks=CHUNKS, source_type=DOCUMENT_SOURCE_TYPE, source_id=None, roles
         source_type=source_type,
         source_id=source_id or uuid.uuid4(),
         visible_to_roles=roles if roles is not None else [EMPLOYEE_ROLE_NAME],
+        title=title,
     )
 
 
@@ -92,7 +113,7 @@ def test_one_embed_call_per_chunk_not_one_per_document(stub_ai_service):
     the whole document and leave "Partially indexed" unreachable."""
     store()
 
-    assert stub_ai_service.embed_calls == [[CHUNKS[0].text], [CHUNKS[1].text]]
+    assert stub_ai_service.embed_calls == [[sent(CHUNKS[0])], [sent(CHUNKS[1])]]
 
 
 def test_no_chunks_is_no_calls_and_no_failures(stub_ai_service):
@@ -113,7 +134,7 @@ def test_two_failures_then_success_stores_the_chunk_on_the_third_attempt(monkeyp
     # Exactly three: one initial call plus two retries (D-19). Asserted as an
     # equality, not a floor, because that is what stops MAXIMUM_EMBED_ATTEMPTS being
     # quietly read as a retry count and reduced to 2.
-    assert service.attempts_for(CHUNKS[0].text) == MAXIMUM_EMBED_ATTEMPTS == 3
+    assert service.attempts_for(sent(CHUNKS[0])) == MAXIMUM_EMBED_ATTEMPTS == 3
 
 
 def test_a_chunk_that_exhausts_its_attempts_is_flagged_and_written_no_row(monkeypatch):
@@ -122,7 +143,7 @@ def test_a_chunk_that_exhausts_its_attempts_is_flagged_and_written_no_row(monkey
     assert store(chunks=CHUNKS[:1]) == 1
 
     assert ContentChunk.objects.count() == 0
-    assert service.attempts_for(CHUNKS[0].text) == MAXIMUM_EMBED_ATTEMPTS
+    assert service.attempts_for(sent(CHUNKS[0])) == MAXIMUM_EMBED_ATTEMPTS
     # The policy stops at the ceiling; it does not keep trying.
     assert len(service.embed_calls) == MAXIMUM_EMBED_ATTEMPTS
 
@@ -133,7 +154,7 @@ def test_one_failing_chunk_costs_only_that_chunk(monkeypatch):
     install(
         monkeypatch,
         ScriptedEmbedService(
-            failures=MAXIMUM_EMBED_ATTEMPTS, should_fail=lambda text: text == CHUNKS[1].text
+            failures=MAXIMUM_EMBED_ATTEMPTS, should_fail=lambda text: text == sent(CHUNKS[1])
         ),
     )
 
@@ -184,7 +205,7 @@ def test_a_wrong_dimension_is_not_retried(monkeypatch):
     service = install(monkeypatch, MisreportingEmbedService())
 
     assert store(chunks=CHUNKS[:1]) == 1
-    assert service.attempts_for(CHUNKS[0].text) == 1
+    assert service.attempts_for(sent(CHUNKS[0])) == 1
 
 
 def test_a_vector_narrower_than_the_declared_dimension_fails_the_chunk(monkeypatch):
@@ -200,3 +221,48 @@ def test_provider_unavailable_is_the_class_the_contract_names():
     # Guards the import path the retry policy catches on: a provider raising some
     # other class would not be retried at all.
     assert issubclass(ProviderUnavailable, Exception)
+
+
+# --- The task prefix goes to the provider and never into the column --------------------
+
+
+@override_settings(AI_PROVIDER="flm", FLM_EMBED_MODEL="embed-gemma")
+def test_the_prefix_is_embedded_and_the_verbatim_text_is_stored(stub_ai_service):
+    """The one that matters: chunk_text is what a human reads, so it stays verbatim.
+
+    A document task prefix in the column would be read straight back out into FR-12's
+    answers, its citations and every snippet in the Sources panel, and
+    apps/ingestion/chunking.py keeps each chunk a verbatim substring of its source
+    precisely so that cannot happen. The two strings are asserted separately: what was
+    sent carries the prefix, what was stored does not.
+    """
+    assert store(title=TITLE) == 0
+
+    embedded = [call[0] for call in stub_ai_service.embed_calls]
+    assert embedded == [f"title: {TITLE} | text: {chunk.text}" for chunk in CHUNKS]
+
+    stored = list(ContentChunk.objects.order_by("chunk_index").values_list("chunk_text", flat=True))
+    assert stored == [chunk.text for chunk in CHUNKS]
+    for text in stored:
+        assert "title:" not in text
+        assert "text:" not in text
+
+
+@override_settings(AI_PROVIDER="flm", FLM_EMBED_MODEL="embed-gemma")
+def test_a_source_without_a_title_still_embeds_a_title_field(stub_ai_service):
+    """``title: none``, because the model was trained with the token present."""
+    assert store(title=None) == 0
+
+    embedded = [call[0] for call in stub_ai_service.embed_calls]
+    assert embedded == [f"title: none | text: {chunk.text}" for chunk in CHUNKS]
+    assert list(
+        ContentChunk.objects.order_by("chunk_index").values_list("chunk_text", flat=True)
+    ) == [chunk.text for chunk in CHUNKS]
+
+
+@override_settings(AI_PROVIDER="flm", FLM_EMBED_MODEL="some-other-embedding-model")
+def test_a_model_without_task_prefixes_is_sent_the_bare_chunk(stub_ai_service):
+    """The prefix is EmbeddingGemma's convention, not the pipeline's."""
+    assert store(title=TITLE) == 0
+
+    assert [call[0] for call in stub_ai_service.embed_calls] == [chunk.text for chunk in CHUNKS]

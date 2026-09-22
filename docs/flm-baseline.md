@@ -4,6 +4,15 @@ Stage 4 item 0 of `M6-BUILD-PROMPT.md`, run before any retrieval code exists, to
 establish whether the provider's structured output is reliable enough to build
 FR-12 on. Produced by `scripts/citation_harness.py`.
 
+> **The three rates below were measured against an index that no longer exists.**
+> Stage 4 item 2a adopted EmbeddingGemma's task prefixes on 23 September 2026 and
+> re-indexed the corpus (D-38), so every vector behind the numbers in "The three
+> rates" and in "Tuning RELEVANCE_THRESHOLD" was rebuilt. The score distributions are
+> re-measured in "23 September 2026 — adopting the task prefixes" below. The three
+> rates themselves are re-measured against the real pipeline at Stage 4 item 6, not
+> here; treat the figures in the next two sections as the go/no-go evidence they were
+> taken for and not as a description of the shipped system.
+
 | | |
 |---|---|
 | Date | 22 September 2026 |
@@ -13,7 +22,7 @@ FR-12 on. Produced by `scripts/citation_harness.py`.
 | Chat model | `gemma3:4b` |
 | Embedding model | `embed-gemma` (embeddinggemma-300m) |
 | Embedding dimension | 768 |
-| Corpus | the placeholder Meridian fixture set, 9 chunks, all recorded against `embed-gemma` |
+| Corpus | the placeholder Meridian fixture set, 6 chunks, all recorded against `embed-gemma` |
 | Question set | `scripts/citation_questions.json`, 64 questions |
 | Constants | `TOP_K=25`, `MAXIMUM_CONTEXT_TOKENS=4000`, `MAXIMUM_GENERATION_ATTEMPTS=3` |
 | Threshold used | **0.30** — see "Tuning RELEVANCE_THRESHOLD" |
@@ -97,6 +106,15 @@ sits clear of the scoped maximum. The constant is now 0.30 (D-37); this section
 is the evidence for that decision, and both are void if the corpus, the embedding
 prefixes or the FLM build change.
 
+**The embedding prefixes changed on 23 September 2026, so this section is void by its
+own last sentence.** The distribution above is superseded by the one in "23 September
+2026 — adopting the task prefixes" below, which is the re-measurement D-37 required on
+exactly this trigger. The value itself does not move: 0.30 admits 44/48 answerable
+and 6/16 unanswerable on the rebuilt index, and still sits clear of the scoped
+maximum. The table is left here as written rather than edited in place, because it is
+the evidence D-37 was decided on and rewriting it would leave that decision citing
+numbers nobody ever measured.
+
 ## The worked example was fabricating identifiers
 
 First run of this harness measured a **23.8%** fabricated-identifier rate. The
@@ -171,19 +189,125 @@ corpus after a version or provider change.
 - **These are local-model baselines, not the platform's capability.** The
   proposal's production path is Claude plus Voyage. Do not present these numbers as
   what the system can do (`docs/ai-provider.md` section 7).
-- **The corpus is a placeholder.** Nine chunks over five sources is small enough
-  that a single chunk's wording moves a rate by two percentage points. The rates
+- **The corpus is a placeholder.** Six chunks over five sources is small enough
+  that a single chunk's wording moves a rate by two percentage points. (The count
+  read 9 between 22 and 23 September; it was corrected against `ContentChunk` and
+  the rates above were measured on these 6 chunks — see D-37's erratum.) The rates
   are a go/no-go signal for building FR-12, not a quality measurement. Re-run
   against the real corpus when there is one; the question-set path is a CLI
   argument precisely so that replacement is a flag, not an edit.
-- **We do not send EmbeddingGemma's task prefixes.** The model is documented to
-  expect `task: search result | query: …` for queries and `title: … | text: …` for
-  documents. We embed raw text through one code path for both. This likely explains
-  why query-to-chunk scores (0.18–0.66) sit below chunk-to-chunk scores (mean
-  0.488). Adopting the prefixes would shift every score in this document and is a
-  full re-index event; it has not been done and is not scheduled.
+- ~~**We do not send EmbeddingGemma's task prefixes.**~~ **Adopted on 23 September
+  2026, and the explanation offered here was wrong.** This caveat used to read that
+  the missing prefixes "likely explain why query-to-chunk scores (0.18–0.66) sit
+  below chunk-to-chunk scores (mean 0.488)". They do not. The prefixes were adopted
+  and the corpus re-indexed (D-38), and the answerable median moved from 0.3892 to
+  0.3937 — **+0.0045**, which on this corpus is nothing. The query band is now
+  0.22–0.69 rather than 0.18–0.66. Had the two-spaces hypothesis been the main cause,
+  the query band would have moved substantially toward the chunk-to-chunk range; it
+  did not, so whatever holds query-to-chunk scores below chunk-to-chunk scores is
+  still unidentified. The prefixes are kept because the model is documented to expect
+  them, not because they were measured to help. See the dated section below.
 - **Conformance was measured on the happy path.** No malformed response occurred,
   so nothing here evidences the retry-then-503 behaviour NFR-19 requires.
+
+## 23 September 2026 — adopting the task prefixes
+
+Stage 4 item 2a. EmbeddingGemma is documented to expect a task prefix on each side of
+a search — `task: search result | query: {content}` for a query and
+`title: {title} | text: {content}` for a document. The project sent raw text in both
+directions. `apps/ai/prefixes.py` now applies both, the corpus was re-indexed with
+`manage.py reindex --provider flm`, and the harness was re-run over the same 64
+questions, the same 6 chunks and the same 0.30 threshold. Settled as D-38.
+
+**The hypothesis this change was built on is disproved.** The caveat above reasoned
+that the missing prefixes likely explained why query-to-chunk scores sat below the
+chunk-to-chunk mean. The answerable median moved **from 0.3892 to 0.3937: +0.0045.**
+On a corpus where a single chunk's wording moves a rate by two percentage points that
+is not a result at all. The gap between query-to-chunk and chunk-to-chunk scores has
+some other cause, and this document no longer offers a candidate for it.
+
+**The prefixes were kept anyway, and the reason is correctness of use rather than
+measurement.** On 6 chunks and 64 questions every delta below is inside noise, so the
+measurement cannot adjudicate the change in either direction. What is not inside
+noise is that the model is documented to expect these prefixes and was previously not
+being given them. "We use the model as documented" answers a question at the
+demonstration; "we measured no difference on six chunks, so we kept the undocumented
+usage" does not.
+
+### The distributions, before and after
+
+| | before | after | delta |
+|---|---|---|---|
+| ordinary (answerable), n=48 — min / median / max | 0.2192 / 0.3892 / 0.6607 | 0.2179 / 0.3937 / 0.6856 | −0.0013 / **+0.0045** / +0.0249 |
+| scoped, n=8 — min / median / max | 0.1786 / 0.2522 / 0.2856 | 0.1982 / 0.2761 / 0.2947 | +0.0196 / +0.0239 / +0.0091 |
+| no-answer, n=8 — min / median / max | 0.1795 / 0.4745 / 0.5348 | 0.2063 / 0.4452 / 0.5067 | +0.0268 / −0.0293 / −0.0281 |
+
+At the settled 0.30 threshold:
+
+| | before | after |
+|---|---|---|
+| answerable admitted | 41/48 (85.4%) | **44/48 (91.7%)** |
+| unanswerable admitted | 5/16 (31.3%) | 6/16 (37.5%) |
+
+**Three more answerable questions admitted for one more unanswerable one: a 3:1
+recall-to-wasted-call trade.** An unanswerable question clearing the threshold is a
+wasted NPU call that no-answer path B then catches; it is not a leak. A leak is
+out-of-scope content reaching the prompt, which the role filter prevents before
+ranking and which the harness asserts at zero on every question (invariant 1). The
+two are worth keeping apart in the vocabulary, because one is a cost and the other
+would be a failure.
+
+That trade should improve the worst of the three baseline rates.
+Empty-answer-where-available was 14.6% (7 of 48), and all seven were questions the
+threshold excluded rather than questions generation declined. Four are now excluded,
+which projects **14.6% → about 8.3% (4/48), down by a third.** It is a projection, not
+a measurement: generation's behaviour on the three newly admitted questions is
+unmeasured, and item 6 re-runs the full harness against the real pipeline to settle
+it.
+
+### Separation widened, and D-37's central finding still stands
+
+The answerable maximum rose to 0.6856 while the unanswerable ceiling fell to 0.5067,
+so the gap between them widened **from 0.126 to 0.179**. The most damaging kind of
+overlap — an irrelevant passage outscoring the genuinely answerable range — got less
+severe.
+
+**It did not get less real.** 0.5067 still sits well above the answerable median of
+0.3937, so a threshold high enough to exclude every unanswerable question still
+discards most of the answerable ones: the first zero-admission row in the after sweep
+is 0.52, which keeps 10 of 48. D-37's central finding is unchanged by this work — no
+threshold separates answerable from unanswerable on this corpus — and invariant 7(b)
+is still what does the work the threshold cannot.
+
+### The scoped questions, and a margin worth watching
+
+The scoped band rose: ceiling 0.2856 → 0.2947, median 0.2522 → 0.2761. This is not a
+regression, and reading it as one would repeat the error D-37 already corrected: a
+scoped question's top score measures the best of what the role filter *left*, not the
+filter itself. The filter removed the Administrator-only content before ranking, so
+the number describes the permitted remainder.
+
+What it does affect is a margin. **The headroom between the scoped ceiling and the
+0.30 threshold has fallen from 0.0144 to 0.0053.** Nothing depends on that headroom —
+the role filter, not the threshold, is what keeps scoped content out, and a scoped
+question crossing 0.30 would reach generation over permitted passages and return an
+honest answer or an honest no-answer. But it is thin enough to be worth watching if
+the corpus grows, because a scoped question scoring above the threshold is a question
+whose permitted remainder looks relevant, and that is a retrieval-quality signal
+rather than a security one.
+
+### RELEVANCE_THRESHOLD is not re-tuned here
+
+D-37 recorded that the value "is re-measured again if the EmbeddingGemma task
+prefixes are adopted". **That trigger has now fired, and the sweep above is the
+re-measurement.** It does not move the value: 0.30 still admits 91.7% of answerable
+questions and still sits clear of the scoped ceiling at 0.2947. Re-tuning is
+explicitly out of scope for Stage 4, and re-tuning against 6 chunks would in any case
+be fitting a constant to a corpus nobody intends to ship.
+
+The re-measure that matters is deferred to **Stage 5 item 3**, the end-to-end
+integration pass over a real corpus, which is the first point at which the question
+can be answered with evidence rather than with six chunks.
 
 ## Temporary duplication — deliberate, and with an expiry
 

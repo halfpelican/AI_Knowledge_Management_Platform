@@ -198,6 +198,8 @@ def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
         # Stamped from the document itself, not from an argument, so the chunks
         # carry what the stored row says (D-17).
         visible_to_roles=document.visible_to_roles,
+        # Goes into the embedding model's document task prefix, not into any column.
+        title=document.title,
     )
 
     # Section 7.8 lines 89-96. All three are decided outcomes, committed with the

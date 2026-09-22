@@ -20,7 +20,7 @@ TOP_K = 25
 
 # Cosine-similarity floor for admitting a passage. Measured in Stage 4 step 0
 # against the placeholder corpus; see docs/flm-baseline.md. Provisional — the
-# corpus is 9 chunks and the value moves with the corpus and the embedding model.
+# corpus is 6 chunks and the value moves with the corpus and the embedding model.
 RELEVANCE_THRESHOLD = 0.3
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in

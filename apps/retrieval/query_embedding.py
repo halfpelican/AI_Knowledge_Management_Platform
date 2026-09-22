@@ -18,6 +18,12 @@ it is not caught and converted into a no-answer, because a provider outage is no
 the same event as "nothing in the corpus answers this" and the two must not share a
 code path (CLAUDE.md invariant 7).
 
+What is sent is the question wrapped in the embedding model's query task prefix
+(apps/ai/prefixes.py), which is how EmbeddingGemma is told it is embedding a question
+rather than a passage. The prefix exists only on the wire: the caller's question is
+what is logged, shown and stored, and a model that does not take prefixes receives
+the question unchanged.
+
 Two failures, one exception, and deliberately different attempt counts. A transient
 outage is retried to MAXIMUM_EMBED_ATTEMPTS, because the next call may well succeed.
 A response that arrives looking fine and is not usable — the wrong number of vectors,
@@ -47,6 +53,7 @@ from django.conf import settings
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.prefixes import query_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS
 
 
@@ -60,10 +67,14 @@ def embed_question(question: str) -> EmbeddingResult:
     # fixture replaces this attribute with a stub, and a name bound at import time
     # would quietly reach a real provider instead (docs/ai-provider.md section 6).
     service = apps.ai.get_ai_service()
+    # The query side of the model's task prefixes (apps/ai/prefixes.py). The prefixed
+    # string is what the provider sees; nothing else is affected, and the question the
+    # caller passed in is what gets logged and shown.
+    prefixed = query_text(question)
 
     for attempt in range(1, MAXIMUM_EMBED_ATTEMPTS + 1):  # 1 initial call + 2 retries
         try:
-            result = service.embed([question])
+            result = service.embed([prefixed])
         except ProviderUnavailable:
             # A transient outage. Retry; the loop bound is the whole policy, and the
             # last failure is re-raised with its own message rather than replaced.

@@ -108,6 +108,7 @@ def ingest_meeting_transcript(
             source_type=MEETING_SOURCE_TYPE,
             source_id=meeting.id,
             visible_to_roles=meeting.visible_to_roles,
+            title=meeting.title,
         )
 
         # MEETING_STATUS_VALUES has no "Partially indexed" counterpart, because the

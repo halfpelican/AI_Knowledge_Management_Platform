@@ -13,9 +13,11 @@ the fakes are plain classes with a call counter.
 
 import pytest
 from django.conf import settings
+from django.test import override_settings
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.prefixes import query_text
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import EMPLOYEE_ROLE_NAME, MAXIMUM_EMBED_ATTEMPTS, SOURCE_TYPES
 from apps.documents.models import ContentChunk
@@ -112,8 +114,9 @@ def test_the_question_is_embedded_by_the_suites_stub(stub_ai_service):
     assert len(result.vectors) == 1
     assert len(result.vectors[0]) == settings.EMBEDDING_DIMENSION
     assert all(isinstance(value, float) for value in result.vectors[0])
-    # The question itself, unaltered, as a one-item batch.
-    assert stub_ai_service.embed_calls == [[QUESTION]]
+    # One batch of one, carrying the model's query task prefix; the tests below
+    # assert the prefixed form itself.
+    assert stub_ai_service.embed_calls == [[query_text(QUESTION)]]
 
 
 def test_the_model_name_comes_from_the_response_not_from_settings(monkeypatch):
@@ -148,7 +151,7 @@ def test_the_service_is_obtained_at_call_time(monkeypatch, stub_ai_service):
     result = embed_question(QUESTION)
 
     assert service.calls == 1
-    assert service.texts == [[QUESTION]]
+    assert service.texts == [[query_text(QUESTION)]]
     assert result.model == FAKE_EMBEDDING_MODEL
     assert stub_ai_service.embed_calls == []  # the stub installed at setup was not used
 
@@ -294,7 +297,7 @@ def test_the_question_is_embedded_without_being_length_checked(stub_ai_service):
     result = embed_question("hi")
 
     assert result.model == STUB_EMBEDDING_MODEL
-    assert stub_ai_service.embed_calls == [["hi"]]
+    assert stub_ai_service.embed_calls == [[query_text("hi")]]
 
 
 @pytest.mark.django_db
@@ -316,3 +319,33 @@ def test_the_query_model_and_the_chunk_model_are_the_same_name(document, stub_ai
     assert candidates == [comparable]
     assert stale not in candidates
     assert ContentChunk.objects.count() == 2  # the stale row exists and is simply not a candidate
+
+
+# --- The query task prefix (apps/ai/prefixes.py) ----------------------------------------
+
+
+@override_settings(AI_PROVIDER="flm", FLM_EMBED_MODEL="embed-gemma")
+def test_the_prefixed_question_is_what_the_provider_is_handed(monkeypatch):
+    """EmbeddingGemma is told it is embedding a query, in the form it documents.
+
+    The prefix exists on the wire and nowhere else: the EmbeddingResult is unchanged,
+    and the caller's own question is what gets logged, shown and stored.
+    """
+    service = install(monkeypatch, FakeEmbeddingService())
+
+    result = embed_question(QUESTION)
+
+    assert service.texts == [[f"task: search result | query: {QUESTION}"]]
+    assert QUESTION in service.texts[0][0]  # verbatim inside it, not rewritten
+    assert result.model == FAKE_EMBEDDING_MODEL
+    assert len(result.vectors[0]) == settings.EMBEDDING_DIMENSION
+
+
+@override_settings(AI_PROVIDER="flm", FLM_EMBED_MODEL="some-other-embedding-model")
+def test_a_model_without_task_prefixes_is_handed_the_bare_question(monkeypatch):
+    """The prefix belongs to the model, not to the pipeline."""
+    service = install(monkeypatch, FakeEmbeddingService())
+
+    embed_question(QUESTION)
+
+    assert service.texts == [[QUESTION]]

@@ -1255,6 +1255,16 @@ system. The subsequent pass on v0.9.39 means something because the failure came 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the placeholder value carried
 since Stage 1 · **Provisional:** re-measured against a real corpus
 
+**Erratum, 23 September 2026.** This record first gave the corpus as 9 chunks. It is
+**6** — four documents and one meeting, of which only the Employee Handbook splits,
+into two. The count was read back from `ContentChunk`, and `--scores-only` was re-run
+against those rows: it reproduced the distribution below to the three decimal places
+the table prints, so the numbers were measured on these 6 chunks and only the count
+was wrong. The chunk rows were all written at 11:22 on 22 September and nothing wrote
+a chunk between then and this decision, which is the evidence that no other corpus
+was ever involved. The 0.30 value and every argument here stand, and `TOP_K = 25`
+binds even less at 6 than at 9.
+
 **Decision.** `RELEVANCE_THRESHOLD` in `apps/core/constants.py` moves from 0.5 to
 **0.30**.
 
@@ -1304,7 +1314,7 @@ wrongly admits is a generation call, not a wrong answer.
   two no-answer reason codes must stay distinguishable in the query log — a rising
   rate of (b) is the only signal that generation is degrading.
 - **The value is provisional and the comment in `constants.py` says so.** It is
-  measured against 9 chunks. At that size `TOP_K = 25` never binds, so the threshold
+  measured against 6 chunks. At that size `TOP_K = 25` never binds, so the threshold
   is currently performing all the selection in the pipeline. It is re-measured when a
   real corpus arrives.
 - **It is re-measured again if the EmbeddingGemma task prefixes are adopted.** The
@@ -1321,3 +1331,111 @@ because the role filter removed the Administrator-only content from the candidat
 before ranking. That is correct behaviour and it is invariant 1 working, but it means
 the scoped result measures the filter's output, not the filter under test. FR-11 is
 evidenced at Stage 4 item 11, not here.
+## D-38 · EmbeddingGemma's task prefixes are adopted, and the reason is not the measurement
+
+**Status:** Settled by the user · **Date:** 2026-09-23 · **Stage:** 4 item 2a ·
+**Re-index event:** yes · **Supersedes:** the "we do not send the task prefixes"
+caveat in `docs/flm-baseline.md`
+
+**Decision.** `apps/ai/prefixes.py` applies EmbeddingGemma's two documented task
+prefixes — `task: search result | query: {content}` for a query and
+`title: {title} | text: {content}` for a document, with `title: none` where a source
+has none. The corpus was re-indexed on the pinned FLM build (D-36). The prefixes are
+kept **because the model is documented to expect them**, not because adopting them
+was measured to improve anything.
+
+**The hypothesis that motivated the change is disproved.** `docs/flm-baseline.md`
+reasoned that the absent prefixes likely explained why query-to-chunk scores
+(0.18–0.66) sat below the chunk-to-chunk mean of 0.488 — query and document being
+embedded into one space rather than the two the model relates. After adopting both
+prefixes and rebuilding every vector, the answerable median moved from 0.3892 to
+**0.3937: +0.0045**, and the query band moved from 0.18–0.66 to 0.22–0.69. Had the
+two-spaces account been the main cause, the query band would have moved substantially
+toward the chunk-to-chunk range. It did not. Whatever depresses query-to-chunk scores
+relative to chunk-to-chunk scores is still unidentified, and the baseline no longer
+offers a candidate for it. This is the finding of item 2a, not a footnote to it.
+
+**Rationale (as given).** On 6 chunks and 64 questions every delta is inside noise, so
+the measurement cannot adjudicate the change in either direction — and a measurement
+that cannot adjudicate is not a reason to keep the code or to remove it. What settles
+it is that the model is documented to expect these prefixes and was previously not
+being given them. *"We use the model as documented"* survives a question at the
+demonstration; *"we measured no difference on six chunks, so we kept the undocumented
+usage"* does not.
+
+**What the numbers did show.**
+
+| | before | after |
+|---|---|---|
+| answerable admitted at 0.30 | 41/48 (85.4%) | **44/48 (91.7%)** |
+| unanswerable admitted at 0.30 | 5/16 (31.3%) | 6/16 (37.5%) |
+| answerable median / max | 0.3892 / 0.6607 | 0.3937 / 0.6856 |
+| unanswerable ceiling | 0.5348 | 0.5067 |
+| answerable max − unanswerable ceiling | 0.126 | **0.179** |
+
+Three more answerable questions admitted for one more unanswerable one: a **3:1
+recall-to-wasted-call trade**. An unanswerable question clearing the threshold is a
+wasted NPU call that no-answer path B catches. It is deliberately not called a leak
+anywhere in this record: a leak is out-of-scope content reaching the prompt, which the
+role filter prevents before ranking and which the harness asserts at zero on every
+question (invariant 1). One is a cost; the other would be a failure of the thing this
+project is most often asked about, and the vocabulary should not blur them.
+
+That trade should improve the worst of the three baseline rates.
+Empty-answer-where-available was 14.6% (7 of 48), and all seven were questions the
+threshold excluded rather than ones generation declined; four are now excluded, which
+projects **14.6% → about 8.3% (4/48), down by a third.** A projection, not a
+measurement: generation's behaviour on the three newly admitted questions is untested,
+and Stage 4 item 6 re-runs the full harness against the real pipeline to settle it.
+
+**Consequences.**
+
+- **`docs/flm-baseline.md`'s three rates now describe a superseded index**, and the
+  document says so at the top rather than only in the new dated section. Its
+  "Tuning RELEVANCE_THRESHOLD" table is void by its own closing sentence, which named
+  a change of embedding prefixes as one of the three things that would void it. The
+  table is left as written rather than edited in place, because it is the evidence
+  D-37 was decided on and rewriting it would leave that decision citing numbers nobody
+  measured.
+- **D-37's re-measurement trigger has fired and is discharged, not deferred.** D-37
+  recorded that the threshold "is re-measured again if the EmbeddingGemma task
+  prefixes are adopted". The `--scores-only` sweep in the new dated section is that
+  re-measurement, and it does not move the value: 0.30 still admits 91.7% of
+  answerable questions and still clears the scoped ceiling. `RELEVANCE_THRESHOLD` is
+  **not** re-tuned in Stage 4, and would not be worth re-tuning against 6 chunks in
+  any case. The re-measure that matters is **Stage 5 item 3**, the end-to-end
+  integration pass over a real corpus.
+- **D-37's central finding stands.** 0.5067 still sits well above the answerable
+  median of 0.3937; the first threshold admitting no unanswerable question is 0.52,
+  which keeps 10 of 48 real answers. No threshold separates answerable from
+  unanswerable on this corpus, so invariant 7(b) is still doing the work the threshold
+  cannot.
+- **A thin margin worth watching, and not a regression.** The scoped ceiling rose
+  0.2856 → 0.2947, so headroom under the 0.30 threshold fell from 0.0144 to 0.0053.
+  Reading that as a regression would repeat the error D-37 corrected: a scoped
+  question's top score measures the best of what the role filter *left*, not the
+  filter. Nothing depends on the headroom — the role filter, never the threshold, is
+  what keeps scoped content out, and a scoped question crossing 0.30 reaches
+  generation over permitted passages only. It is a retrieval-quality signal to watch
+  as the corpus grows, not a security one.
+- **The prefix never enters `chunk_text`.** The prefixed string goes to the provider;
+  the stored chunk stays the verbatim substring `apps/ingestion/chunking.py` produced,
+  because a prefix in that column would be read back out into answers, citations and
+  snippets (FR-12). Asserted as two separate assertions — what was sent, and what was
+  stored — in `apps/ingestion/tests/test_embedding.py`.
+- **Dispatch is on the embedding model's name, not on `AI_PROVIDER`**, so a future FLM
+  build serving some other embedding model inherits nothing. The provider is consulted
+  only to learn which model name is in play: reading `FLM_EMBED_MODEL` unconditionally
+  would have applied an EmbeddingGemma convention to Voyage in every environment that
+  left the FLM default in place, which is every environment. A test covers Voyage with
+  the FLM default present.
+- **`scripts/citation_harness.py` now embeds its questions through
+  `apps.retrieval.query_embedding.embed_question()`** rather than a raw
+  `service.embed()` of its own. Without that the harness would have measured raw
+  queries against a prefixed index — the worst of both configurations, and a
+  measurement of something the shipped system will never do. It is the same reason
+  item 5 makes the harness import the prompt and the schema instead of defining them:
+  a second copy of a code path stops describing the first one the day they diverge.
+- Switching the provider remains a full re-index event, and adopting or dropping a
+  prefix now is too.
+

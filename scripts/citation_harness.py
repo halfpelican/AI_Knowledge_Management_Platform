@@ -16,6 +16,14 @@ Usage, in PowerShell, with FLM running in another window
 
 This script READS the database and never writes to it. It ingests nothing.
 
+Questions are embedded through ``apps.retrieval.query_embedding.embed_question()``
+rather than by calling ``service.embed()`` here, so the harness exercises the
+pipeline's own query path: the embedding model's query task prefix
+(``apps/ai/prefixes.py``) and the response check are applied exactly as FR-12 applies
+them. Measuring a parallel copy of that path would measure something the shipped
+system does not do. The ranking, the threshold, the scoring and the reporting below
+are unchanged.
+
 --------------------------------------------------------------------------------
 TEMPORARY DUPLICATION — READ BEFORE EDITING
 --------------------------------------------------------------------------------
@@ -77,6 +85,7 @@ from apps.core.constants import (  # noqa: E402
     TOP_K,
 )
 from apps.documents.models import ContentChunk  # noqa: E402
+from apps.retrieval.query_embedding import embed_question  # noqa: E402
 
 DEFAULT_QUESTION_SET = Path(__file__).resolve().parent / "citation_questions.json"
 QUESTION_KINDS = ("ordinary", "scoped", "no-answer")
@@ -485,7 +494,10 @@ def run_question(
         expected_answer=question.get("expected_answer"),
     )
 
-    embedding = service.embed([result.question])
+    # The pipeline's own query path, not a copy of it: embed_question() applies the
+    # embedding model's query task prefix and validates the response, so the harness
+    # measures what the shipped system sends rather than something adjacent to it.
+    embedding = embed_question(result.question)
     query_vector = embedding.vectors[0]
 
     candidates = build_candidate_set(chunks, result.role, embedding.model)
@@ -685,7 +697,8 @@ def score_distribution(questions: list[dict], chunks: list[ContentChunk], servic
     for position, question in enumerate(questions, start=1):
         label = question.get("id", f"#{position}")
         print(f"[{position}/{len(questions)}] {label} ...", flush=True)
-        embedding = service.embed([question["question"]])
+        # Same query path as run_question() uses, for the same reason.
+        embedding = embed_question(question["question"])
         candidates = build_candidate_set(chunks, question["role"], embedding.model)
         ranked = rank(candidates, embedding.vectors[0])
         by_kind[question["kind"]].append((label, ranked[0].score if ranked else 0.0))

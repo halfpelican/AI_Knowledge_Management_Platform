@@ -10,6 +10,7 @@ temporary directory and "the stored file was removed" means something.
 
 import pytest
 
+from apps.ai.prefixes import document_text
 from apps.core.constants import (
     DOCUMENT_INDEXED,
     DOCUMENT_INDEXING_FAILED,
@@ -35,6 +36,15 @@ ONE_CHUNK_TEXT = words(120)
 # fails exactly one chunk of a document (the "Partially indexed" case).
 TWO_CHUNK_TEXT = words(501)
 SECOND_CHUNK_MARKER = "w500"
+DOCUMENT_TITLE = "Leave Policy 2026"
+
+
+def sent(text):
+    """What the provider receives for a chunk of this document: the document task
+    prefix wraps it when the configured embedding model takes prefixes
+    (apps/ai/prefixes.py). The stored chunk_text is asserted separately, and
+    verbatim, in apps/ingestion/tests/test_embedding.py."""
+    return document_text(DOCUMENT_TITLE, text)
 
 
 def ingest(text=ONE_CHUNK_TEXT, *, user, roles=None, name="policy.txt"):
@@ -44,7 +54,7 @@ def ingest(text=ONE_CHUNK_TEXT, *, user, roles=None, name="policy.txt"):
         uploaded_file=file,
         file_format="txt",
         content_hash=compute_content_hash(file),
-        title="Leave Policy 2026",
+        title=DOCUMENT_TITLE,
         department="People",
         visible_to_roles=roles if roles is not None else [EMPLOYEE_ROLE_NAME],
         uploaded_by=user,
@@ -66,7 +76,7 @@ def test_a_document_is_extracted_chunked_embedded_and_indexed(employee, stub_ai_
     assert ExtractedContent.objects.get(document=outcome.document).extracted_text == ONE_CHUNK_TEXT
     chunks = ContentChunk.objects.filter(source_id=outcome.document.id)
     assert chunks.count() == 1
-    assert stub_ai_service.embed_calls == [[ONE_CHUNK_TEXT]]
+    assert stub_ai_service.embed_calls == [[sent(ONE_CHUNK_TEXT)]]
 
 
 def test_chunks_are_keyed_to_the_document_and_carry_its_visibility(employee):
@@ -125,7 +135,7 @@ def test_a_transient_failure_costs_nothing_when_a_retry_succeeds(employee, monke
     outcome = ingest(user=employee)
 
     assert outcome.document.status == DOCUMENT_INDEXED
-    assert service.attempts_for(ONE_CHUNK_TEXT) == MAXIMUM_EMBED_ATTEMPTS == 3
+    assert service.attempts_for(sent(ONE_CHUNK_TEXT)) == MAXIMUM_EMBED_ATTEMPTS == 3
 
 
 # --- Insufficient content (section 7.8 lines 46-53, D-31) ---------------------------------

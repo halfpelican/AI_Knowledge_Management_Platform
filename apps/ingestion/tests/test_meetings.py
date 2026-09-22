@@ -16,6 +16,7 @@ import datetime
 
 import pytest
 
+from apps.ai.prefixes import document_text
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
@@ -36,6 +37,7 @@ from apps.meetings.models import Meeting, MeetingAttendee
 pytestmark = pytest.mark.django_db
 
 MEETING_DATE = datetime.date(2026, 9, 14)
+MEETING_TITLE = "Records management working group"
 
 # A transcript in the shape FR-09 receives one: speaker labels, timestamps, and a
 # blank line between turns. Long enough to clear MINIMUM_CONTENT_LENGTH.
@@ -54,7 +56,7 @@ SPEAKER_LABEL = "[00:01:37] Sagarika Dey:"
 
 def ingest(transcript=TRANSCRIPT, *, roles=None, attendees=()):
     return ingest_meeting_transcript(
-        title="Records management working group",
+        title=MEETING_TITLE,
         meeting_date=MEETING_DATE,
         transcript_text=transcript,
         visible_to_roles=roles if roles is not None else list(ROLE_NAMES),
@@ -74,8 +76,11 @@ def test_a_transcript_is_stored_chunked_and_embedded(stub_ai_service):
     assert chunks.count() == 1
     assert {chunk.source_type for chunk in chunks} == {MEETING_SOURCE_TYPE}
     # The same AIService, called the same way: one embed call per chunk (section 7.7).
+    # A meeting takes the document path unchanged, prefix included: the title is the
+    # meeting's own (apps/ai/prefixes.py).
     assert stub_ai_service.embed_calls == [
-        [chunk.text] for chunk in split_into_overlapping_chunks(TRANSCRIPT)
+        [document_text(MEETING_TITLE, chunk.text)]
+        for chunk in split_into_overlapping_chunks(TRANSCRIPT)
     ]
 
 
