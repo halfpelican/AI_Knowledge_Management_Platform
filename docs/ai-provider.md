@@ -94,7 +94,7 @@ from openai import OpenAI
 class FLMService:
     def __init__(self):
         self._client = OpenAI(
-            base_url=settings.FLM_BASE_URL,   # http://127.0.0.1:52625/v1
+            base_url=settings.FLM_BASE_URL,   # http://127.0.0.1:8625/v1
             api_key=settings.FLM_API_KEY,     # "flm" — a placeholder, not a credential
         )
 ```
@@ -109,7 +109,7 @@ flm serve gemma3:4b --embed 1
 
 `--embed 1` loads EmbeddingGemma alongside the chat model; the embedding model must
 be co-resident with an LLM in server mode. Endpoints then available at
-`http://127.0.0.1:52625/v1`: `/models`, `/chat/completions`, `/embeddings`,
+`http://127.0.0.1:8625/v1`: `/models`, `/chat/completions`, `/embeddings`,
 `/audio/transcriptions`.
 
 | Setting | Value |
@@ -123,13 +123,13 @@ be co-resident with an LLM in server mode. Endpoints then available at
 ### Why native Windows, not WSL
 
 The NPU is not visible from inside WSL2. Django, the tests and the FLM server all run
-on the Windows side, so `127.0.0.1:52625` is the same machine for all of them and
+on the Windows side, so `127.0.0.1:8625` is the same machine for all of them and
 there is no host-IP indirection to get wrong.
 
 Confirm the server is up before debugging anything else:
 
 ```powershell
-curl.exe http://127.0.0.1:52625/v1/models
+curl.exe http://127.0.0.1:8625/v1/models
 ```
 
 If someone on the team later wants to develop in WSL, they must run `flm serve` on

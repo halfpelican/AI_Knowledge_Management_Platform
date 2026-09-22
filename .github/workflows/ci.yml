@@ -35,7 +35,7 @@ jobs:
       # No FLM server exists in CI. The startup check reports a warning, never an
       # error, when the provider is unreachable, and the test suite uses the stub
       # AIService fixture, so nothing here reaches a live model.
-      FLM_BASE_URL: http://127.0.0.1:52625/v1
+      FLM_BASE_URL: http://127.0.0.1:8625/v1
       EMBEDDING_DIMENSION: "768"
       # The workspace is discarded after the job, so this only has to be writable, not durable
       MEDIA_ROOT: ${{ github.workspace }}/media

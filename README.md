@@ -43,7 +43,7 @@ flm serve gemma3:4b --embed 1
 ```
 
 That serves `gemma3:4b` for generation and `embed-gemma` (768 dimensions) for
-embeddings at `http://127.0.0.1:52625/v1`. Confirm it with
+embeddings at `http://127.0.0.1:8625/v1`. Confirm it with
 `python scripts/check_flm.py`. `manage.py check`, `migrate` and `runserver` probe
 the provider on start: a warning if it is unreachable, a hard stop if the
 embedding dimension does not match `EMBEDDING_DIMENSION` (`docs/ai-provider.md`
