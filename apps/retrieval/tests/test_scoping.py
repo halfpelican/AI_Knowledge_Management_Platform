@@ -7,24 +7,45 @@ up here as a failure rather than as a test that quietly agrees with itself.
 import pytest
 from django.conf import settings
 
+from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
 from apps.documents.models import ContentChunk
-from apps.retrieval.scoping import UnscopedRequestError, permission_scope, scoped_chunks
+from apps.retrieval.scoping import (
+    UnscopedRequestError,
+    candidate_chunks,
+    permission_scope,
+    scoped_chunks,
+)
 
 pytestmark = pytest.mark.django_db
 
 ROLE_PAIR = (EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME)
 
+# A corpus indexed by some other model: the risk R10 case, spelled once.
+OTHER_EMBEDDING_MODEL = "some-other-model"
 
-def make_chunk(document, visible_to_roles, *, index, text="Leave is approved by a manager."):
-    """A chunk stamped with a visibility scope, as ingestion stamps it (D-17)."""
+
+def make_chunk(
+    document,
+    visible_to_roles,
+    *,
+    index,
+    text="Leave is approved by a manager.",
+    embedding_model=STUB_EMBEDDING_MODEL,
+):
+    """A chunk stamped with a visibility scope, as ingestion stamps it (D-17).
+
+    ``embedding_model`` is the name ingestion took from the provider's response, not
+    a setting; the default is the stub's, since the stub is what the suite embeds
+    with.
+    """
     return ContentChunk.objects.create(
         source_type=SOURCE_TYPES[0],
         source_id=document.id,
         chunk_index=index,
         chunk_text=text,
         embedding=[0.0] * settings.EMBEDDING_DIMENSION,
-        embedding_model="stub-embed",
+        embedding_model=embedding_model,
         embedding_dimension=settings.EMBEDDING_DIMENSION,
         visible_to_roles=visible_to_roles,
     )
@@ -184,3 +205,116 @@ def test_scoping_from_both_role_sessions(session_client, one_chunk_per_scope):
     assert one_chunk_per_scope["both"] in visible
     assert one_chunk_per_scope[mine[other_role]] not in visible
     assert len(visible) == scoped_chunks(role_name=role_name).count() == 2
+
+
+# --- The second predicate: the embedding-model match (risk R10) ------------------------
+
+
+@pytest.fixture
+def one_chunk_per_combination(document):
+    """Four chunks over both predicates, so exactly one is a candidate for an Employee.
+
+    In scope or not, embedded by the query's model or not. The FR-11 role filter and
+    the risk R10 model filter are independent, and a chunk has to pass both.
+    """
+    return {
+        "in_scope_same_model": make_chunk(
+            document, [EMPLOYEE_ROLE_NAME], index=1, text="In scope, comparable."
+        ),
+        "in_scope_other_model": make_chunk(
+            document,
+            [EMPLOYEE_ROLE_NAME],
+            index=2,
+            text="In scope, not comparable.",
+            embedding_model=OTHER_EMBEDDING_MODEL,
+        ),
+        "out_of_scope_same_model": make_chunk(
+            document, [ADMINISTRATOR_ROLE_NAME], index=3, text="Out of scope, comparable."
+        ),
+        "out_of_scope_other_model": make_chunk(
+            document,
+            [ADMINISTRATOR_ROLE_NAME],
+            index=4,
+            text="Out of scope, not comparable.",
+            embedding_model=OTHER_EMBEDDING_MODEL,
+        ),
+    }
+
+
+def test_a_chunk_recorded_against_another_model_is_excluded_not_demoted(one_chunk_per_combination):
+    """Risk R10: exclusion, not a lower rank.
+
+    The distinction is the whole rule. A mismatched vector still yields a
+    plausible-looking cosine score, so demoting it leaves it eligible to be the best
+    thing available on a thin query and to be cited in an answer. Asserting absence
+    from the candidate set — rather than a position within it — is what says the
+    chunk was never a candidate at all.
+    """
+    candidates = list(candidate_chunks(role_name=EMPLOYEE_ROLE_NAME, embedding_model=STUB_EMBEDDING_MODEL))
+    mismatched = one_chunk_per_combination["in_scope_other_model"]
+
+    assert mismatched not in candidates
+    # Not merely last: it is not in the list in any position, and its text is not
+    # reachable through it either.
+    assert mismatched.chunk_text not in [chunk.chunk_text for chunk in candidates]
+    assert candidates == [one_chunk_per_combination["in_scope_same_model"]]
+
+
+def test_both_predicates_must_pass(one_chunk_per_combination):
+    """Four chunks, one candidate. Failing either predicate is enough to be excluded."""
+    candidates = list(candidate_chunks(role_name=EMPLOYEE_ROLE_NAME, embedding_model=STUB_EMBEDDING_MODEL))
+    assert candidates == [one_chunk_per_combination["in_scope_same_model"]]
+    for key in ("in_scope_other_model", "out_of_scope_same_model", "out_of_scope_other_model"):
+        assert one_chunk_per_combination[key] not in candidates
+
+
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_the_candidate_count_excludes_both_kinds_of_exclusion(one_chunk_per_combination, role_name):
+    """A count is computed after both filters, so it discloses neither kind of row."""
+    assert ContentChunk.objects.count() == 4  # what the store holds
+    assert candidate_chunks(role_name=role_name, embedding_model=STUB_EMBEDDING_MODEL).count() == 1
+
+
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_the_model_predicate_is_in_the_sql_not_applied_afterwards(role_name):
+    """Same reasoning as the visible_to_roles SQL test above.
+
+    A mismatched chunk read out of the store and dropped in Python would satisfy
+    every other assertion in this file. What it could not do is keep the row out of
+    the query, and only the compiled SQL can tell the two apart.
+    """
+    sql = str(candidate_chunks(role_name=role_name, embedding_model=STUB_EMBEDDING_MODEL).query)
+    assert "embedding_model" in sql
+    assert STUB_EMBEDDING_MODEL in sql
+    # Both predicates in the one WHERE clause, not one of them somewhere else.
+    assert "visible_to_roles" in sql
+
+
+def test_a_corpus_indexed_by_a_model_the_provider_no_longer_serves_yields_nothing(
+    one_chunk_per_scope,
+):
+    """The recoverable failure: an empty candidate set, not an answer from noise.
+
+    Every chunk in ``one_chunk_per_scope`` is recorded against the stub's model, so
+    asking with a different model must return nothing at all. manage.py reindex is
+    the remedy; until it has run, the honest no-answer is the correct outcome.
+    """
+    assert candidate_chunks(
+        role_name=EMPLOYEE_ROLE_NAME, embedding_model=OTHER_EMBEDDING_MODEL
+    ).count() == 0
+
+
+def test_candidates_from_both_role_sessions(session_client, one_chunk_per_combination):
+    """Both predicates, from an Employee session and an Administrator session."""
+    role_name = session_client.role_name
+    mine = {
+        EMPLOYEE_ROLE_NAME: "in_scope_same_model",
+        ADMINISTRATOR_ROLE_NAME: "out_of_scope_same_model",
+    }
+    candidates = list(
+        candidate_chunks(
+            role_name=permission_scope(session_client.user),
+            embedding_model=STUB_EMBEDDING_MODEL,
+        )
+    )
+    assert candidates == [one_chunk_per_combination[mine[role_name]]]

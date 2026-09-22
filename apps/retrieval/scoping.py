@@ -36,9 +36,20 @@ Employee Administrator-scoped content. Role generalisation is a question about
 permissions (FR-05), not about ``visible_to_roles``, where the default at ingestion
 is both roles (D-29).
 
-The two predicates that build the candidate set are the role scope here and the
-embedding-model match (risk R10); the latter is item 2 and is applied on top of this
-queryset, not inside it.
+The candidate set is built from two predicates, both of them here and both of them
+conditions on the query: the role scope above, and the embedding-model match in
+``candidate_chunks`` below. The second is the risk R10 rule from
+docs/ai-provider.md section 4: a chunk whose recorded ``embedding_model`` differs
+from the model that embedded the question is excluded from the candidate set
+entirely — not ranked lower, not down-weighted, not admitted with a caveat. Vectors
+produced by two different models are not comparable, but cosine similarity over them
+still returns a plausible-looking number, so a mismatch surfaces as a confidently
+wrong answer rather than as an error. Nothing further down the pipeline can detect
+it. Exclusion at the candidate set is what makes the corruption visible: a re-index
+that has not run yet shows up as an empty result and an honest no-answer, which is
+recoverable, instead of as an answer drawn from vectors that mean nothing
+(``manage.py reindex`` is the intended remedy, and switching providers is a full
+re-index event).
 """
 
 from django.contrib.auth import get_user_model
@@ -99,3 +110,24 @@ def scoped_chunks(*, role_name: str) -> QuerySet[ContentChunk]:
     everything.
     """
     return ContentChunk.objects.filter(visible_to_roles__contains=[role_name])
+
+
+def candidate_chunks(*, role_name: str, embedding_model: str) -> QuerySet[ContentChunk]:
+    """The candidate set proper: in scope for this role and comparable to this query.
+
+    Both predicates are conditions on one query, so a row failing either is never
+    fetched. ``embedding_model`` is the name the provider recorded on the query's
+    own EmbeddingResult, matched against the name ingestion recorded on each chunk
+    from its response (apps/ingestion/embedding.py) — one value read from one place
+    on both sides, never a literal and never settings.
+
+    A mismatched chunk is excluded, not demoted: see the module docstring for why a
+    number that looks like a similarity is worse here than no number at all. If the
+    corpus was indexed by a model the current provider no longer serves, this
+    returns nothing, and the pipeline's no-answer path is the correct and visible
+    outcome until ``manage.py reindex`` has run.
+
+    This is the whole of what ranking may see. Item 3 orders it and applies TOP_K and
+    RELEVANCE_THRESHOLD; nothing downstream widens it.
+    """
+    return scoped_chunks(role_name=role_name).filter(embedding_model=embedding_model)
