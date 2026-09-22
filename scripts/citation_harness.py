@@ -143,20 +143,21 @@ Rules, all of them mandatory:
 7. If the passages do not answer the question, reply with exactly
    {"statements": []}. An empty array is a correct and expected answer.
 
-Worked example.
+Worked example. The identifiers below are EXAMPLE values and appear nowhere in the
+real passages: never reuse them, and never copy their shape onto a real identifier.
 
 Passages:
-[chunk_id: c_4471]
+[chunk_id: 3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03]
 Purchase orders above $10,000 require two approvals. Orders below that amount
 require one approval from the team lead.
 
-[chunk_id: c_8802]
+[chunk_id: 8b5d04e2-1a7f-4c93-b620-de91f3805c47]
 The office is closed on public holidays and reopens the following working day.
 
 Question: How many approvals does a $25,000 purchase order need?
 
 Your reply:
-{"statements": [{"text": "Purchase orders above $10,000 require two approvals.", "chunk_id": "c_4471"}]}\
+{"statements": [{"text": "Purchase orders above $10,000 require two approvals.", "chunk_id": "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"}]}\
 """
 
 
