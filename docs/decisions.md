@@ -50,6 +50,8 @@ Rules for this file:
 | D-32 | FR-08's retry re-runs ingestion on the stored original; a failed ingestion reserves no duplicate slot | Settled by the user | 2026-09-21 |
 | D-33 | Stage 3 audit: FR-08 classification deferred with FR-10; FR-09's 422; the 409 existence oracle | Recorded | 2026-09-21 |
 | D-34 | A staff directory endpoint, separate from FR-05's user list, so any role may name attendees | Settled | 2026-09-21 |
+| D-35 | No external AI spend; demonstration runs on one machine | Settled | 2026-09-22 |
+| D-36 | FastFlowLM pinned to v0.9.39; `check_flm.py` asserts embedding determinism | Settled | 2026-09-22 |
 
 ---
 
@@ -1140,3 +1142,109 @@ exactly the three keys.
   Administrator as an attendee and asserts nobody's access changed.
 - If the organisation ever needs a confidential staff list, this endpoint is the one
   place to scope, and FR-09's picker is its only consumer.
+
+## D-35 · No external AI spend; the demonstration runs on one machine
+
+**Status:** Settled · **Date:** 2026-09-22 · **Closes:** the API key and spend cap
+question left open by the team plan of 1 September 2026
+
+**Decision.** The platform runs on FastFlowLM only. No Anthropic or Voyage keys are
+purchased and no API spend is incurred. The team has no budget, and no member funds
+it personally.
+
+**Rationale.** The question of whose API keys and who pays has been open since
+1 September. Leaving it open is itself a risk: Stage 4 cannot be built without an
+embedding and generation provider, and the decision would otherwise be made by
+default at the worst moment. FLM on the NPU is free, local, and already the
+documented default for development, testing and demonstration
+(`docs/ai-provider.md`). An unfunded student project should not be financed out of a
+student's own pocket, and the constraint is defensible when it is chosen and
+recorded rather than discovered.
+
+**Consequences.** FLM requires an XDNA2 NPU, which one machine in the team has.
+All end-to-end development, the Stage 4 baseline, and the November demonstration
+therefore run on that machine. This is a single point of failure and is accepted
+knowingly.
+
+The `anthropic` provider path stays implemented and stub-tested, so that switching
+providers is a configuration change rather than a rewrite should funding ever
+exist. Note that the two produce different vectors — 768-dimension `embed-gemma`
+against Voyage's own — so a switch is a full re-index event, not a toggle
+(`docs/ai-provider.md` section 4).
+
+Mitigations, all of which cost nothing:
+
+- The Stage 4 corpus is ingested by script, so the index can be rebuilt on any
+  machine in one command rather than by hand.
+- A screen recording of the complete flow is made once Stage 4 works, as
+  demonstration-day insurance. Assessors generally accept a recording where the
+  live system is unavailable; they do not accept a description.
+- The AMD driver version the NPU depends on is recorded, after a
+  `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
+
+  ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
+
+**Status:** Settled · **Date:** 2026-09-22 · **Closes:** the implicit assumption that
+the current FastFlowLM release is the right one to run
+
+**Decision.** FastFlowLM is pinned to **v0.9.39**. Upgrading is a deliberate act that
+requires `scripts/check_flm.py` to pass on the new version first, and a re-index if
+any embedding changes. The version is recorded in `README.md` and
+`docs/ai-provider.md` alongside the AMD driver version (D-35).
+
+**Why.** FastFlowLM's `/v1/embeddings` endpoint has been broken since v1.0.4
+(ROCm/FastFlowLM issue #732, open at the time of writing). It returns vectors of the
+correct shape and magnitude that are statistically uncorrelated with their input. The
+weights on disk are identical across the affected versions; only the serving path is
+wrong. The project had been running v1.0.6.
+
+This was not caught by inspection. It was caught on 22 September when
+`scripts/citation_harness.py` ran for the first time and every retrieval result was
+incoherent. The measurements that identified the cause:
+
+| Measured on v1.0.6 | Cosine |
+|---|---|
+| The same string embedded twice in one batch | 0.4833 |
+| Two consecutive chunks of one document, sharing 50 tokens of literal text | 0.0992 |
+| Two unrelated documents | 0.6398 |
+
+Three identical `curl` calls returned three different vectors. An embedding function
+that does not return the same vector for the same input is not an embedding function.
+
+After downgrading to v0.9.39, the same checks return cosine **1.0000** for a repeated
+input within a batch, **1.0000** across separate calls, and **0.1299** between two
+unrelated sentences. Three embeddings take **1.0 second** against **95.6 seconds** on
+the broken build — the latency was itself a symptom nobody read as one.
+
+**The real finding is about the check, not the version.** `check_flm.py` had passed
+every day for two weeks. Its embeddings check asserted that the vectors were non-zero
+and that two different inputs produced different vectors. Random noise satisfies both.
+The check was written to confirm the endpoint responds, and it was read as confirming
+the endpoint works.
+
+It now asserts the properties that actually define an embedding, at
+`DETERMINISM_TOLERANCE = 0.999`:
+
+1. The same input embedded twice **in one batch** returns the same vector.
+2. The same input embedded again in a **separate call** returns the same vector.
+3. Two unrelated inputs score **lower** than a repeated one.
+
+The order of work was deliberate and is worth stating: the strengthened check was
+written and run against the known-broken v1.0.6 **before** the downgrade, where it
+failed at cosine 0.0939. Only then was the version changed. A check that has never
+been observed to fail is not evidence; it is a check that passed once on an unknown
+system. The subsequent pass on v0.9.39 means something because the failure came first.
+
+**Consequences.**
+
+- The stored index built before 22 September was noise. `manage.py reindex` rebuilt
+  it against the working provider and is the supported way to do so again.
+- FLM upgrades are blocked pending issue #732. When it closes, the upgrade path is:
+  run `check_flm.py` on the new version, and if it passes, re-index — the vectors are
+  not guaranteed comparable across versions even when both are correct.
+- The generalised lesson applies beyond FLM: an invariant test that asserts a value is
+  *present and non-identical* asserts almost nothing. Where the project tests an
+  external provider, the test asserts a property the provider could fail, and is run
+  against a failing case before it is trusted.
+- `docs/flm-baseline.md` records the three rates that this pin makes meaningful. Every
+  number in it is invalid on any other FLM version.

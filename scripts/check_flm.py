@@ -31,8 +31,9 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import math
 
-DEFAULT_BASE_URL = "http://127.0.0.1:52625/v1"
+DEFAULT_BASE_URL = "http://127.0.0.1:8625/v1"
 DEFAULT_API_KEY = "flm"
 DEFAULT_CHAT_MODEL = "gemma3:4b"
 DEFAULT_EMBED_MODEL = "embed-gemma"
@@ -40,10 +41,13 @@ DEFAULT_EMBED_MODEL = "embed-gemma"
 # embed-gemma (embeddinggemma-300m) returns 768-dimensional vectors: docs/decisions.md D-03.
 EXPECTED_DIMENSION = 768
 
+DETERMINISM_TOLERANCE = 0.999
+
 CHAT_PROMPT = "Reply with the single word: pong"
 EMBED_INPUTS = [
     "Purchase orders above $10,000 require two approvals.",
     "The quarterly planning meeting moved to Thursday.",
+    "Purchase orders above $10,000 require two approvals.",
 ]
 
 MODELS_TIMEOUT_SECONDS = 15
@@ -119,7 +123,7 @@ def check_models(base_url: str, api_key: str, chat_model: str) -> str:
     for model_id in model_ids:
         print(f"    - {model_id}")
     print(
-        "  note: on FLM 1.0.2 this list is the model catalogue rather than the resident set,\n"
+        "  note: this list is the model catalogue rather than the resident set,\n"
         "        and it does not include the embedding model. The two calls below are the proof."
     )
     if chat_model not in model_ids:
@@ -150,6 +154,14 @@ def check_chat(base_url: str, api_key: str, chat_model: str) -> str:
     print(f"  reply  : {reply!r}  ({elapsed:.1f}s)")
     return f"replied {reply!r} in {elapsed:.1f}s"
 
+def cosine(a: list[float], b: list[float]) -> float:
+    """Cosine similarity. The vectors are not assumed to be normalised."""
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(x * x for x in b))
+    if norm_a == 0.0 or norm_b == 0.0:
+        raise CheckFailed("an embedding has zero magnitude, so similarity is undefined")
+    return dot / (norm_a * norm_b)
 
 def check_embeddings(base_url: str, api_key: str, embed_model: str) -> str:
     payload = {"model": embed_model, "input": EMBED_INPUTS}
@@ -186,7 +198,43 @@ def check_embeddings(base_url: str, api_key: str, embed_model: str) -> str:
         raise CheckFailed(
             "embeddings are degenerate: a zero vector or identical vectors for different inputs"
         )
-    print("  sanity     : vectors are non-zero and differ between the two inputs")
+        # EMBED_INPUTS[0] and [2] are the same string. An embedding is a pure function
+    # of its input: identical text must give an identical vector. FLM 1.0.4 to 1.0.6
+    # returned uncorrelated noise here and this script passed anyway, because
+    # "non-zero, and the two inputs differ" is something noise satisfies
+    # (ROCm/FastFlowLM issue 732).
+    repeat_in_batch = cosine(vectors[0], vectors[2])
+    print(f"  determinism : same input twice in one batch -> cosine {repeat_in_batch:.4f}")
+    if repeat_in_batch < DETERMINISM_TOLERANCE:
+        raise CheckFailed(
+            f"the same input embedded twice in one request gave cosine {repeat_in_batch:.4f}, "
+            f"below {DETERMINISM_TOLERANCE}. The vectors are not a function of the input, so "
+            "every stored chunk would be noise and retrieval cannot work."
+        )
+
+    # A separate request, to catch a server deterministic within a batch but not
+    # across calls.
+    again = call(base_url, api_key, "/embeddings", {"model": embed_model, "input": [EMBED_INPUTS[0]]})
+    repeat_items = again.get("data")
+    if not isinstance(repeat_items, list) or not repeat_items:
+        raise CheckFailed("the determinism re-check returned no embedding")
+    across_calls = cosine(vectors[0], repeat_items[0].get("embedding") or [])
+    print(f"  determinism : same input in a second call  -> cosine {across_calls:.4f}")
+    if across_calls < DETERMINISM_TOLERANCE:
+        raise CheckFailed(
+            f"the same input embedded in two separate requests gave cosine {across_calls:.4f}, "
+            f"below {DETERMINISM_TOLERANCE}."
+        )
+
+    # Two unrelated sentences must be further apart than two identical ones.
+    unrelated = cosine(vectors[0], vectors[1])
+    print(f"  discrimination: two unrelated inputs      -> cosine {unrelated:.4f}")
+    if unrelated >= repeat_in_batch:
+        raise CheckFailed(
+            f"two unrelated inputs scored {unrelated:.4f} against {repeat_in_batch:.4f} for two "
+            "identical ones. The vectors carry no information about their input."
+        )
+    print("  sanity      : vectors are deterministic and discriminate between inputs")    
     return f"{len(vectors)} vectors of {EXPECTED_DIMENSION} dimensions"
 
 

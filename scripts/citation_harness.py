@@ -143,20 +143,21 @@ Rules, all of them mandatory:
 7. If the passages do not answer the question, reply with exactly
    {"statements": []}. An empty array is a correct and expected answer.
 
-Worked example.
+Worked example. The identifiers below are EXAMPLE values and appear nowhere in the
+real passages: never reuse them, and never copy their shape onto a real identifier.
 
 Passages:
-[chunk_id: c_4471]
+[chunk_id: 3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03]
 Purchase orders above $10,000 require two approvals. Orders below that amount
 require one approval from the team lead.
 
-[chunk_id: c_8802]
+[chunk_id: 8b5d04e2-1a7f-4c93-b620-de91f3805c47]
 The office is closed on public holidays and reopens the following working day.
 
 Question: How many approvals does a $25,000 purchase order need?
 
 Your reply:
-{"statements": [{"text": "Purchase orders above $10,000 require two approvals.", "chunk_id": "c_4471"}]}\
+{"statements": [{"text": "Purchase orders above $10,000 require two approvals.", "chunk_id": "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"}]}\
 """
 
 
@@ -462,7 +463,13 @@ def generate_once(client, messages: list[dict]) -> str:
     return choices[0].message.content or ""
 
 
-def run_question(question: dict, chunks: list[ContentChunk], service, client) -> QuestionResult:
+def run_question(
+    question: dict,
+    chunks: list[ContentChunk],
+    service,
+    client,
+    threshold: float = RELEVANCE_THRESHOLD,
+) -> QuestionResult:
     result = QuestionResult(
         question_id=question.get("id", "?"),
         kind=question["kind"],
@@ -477,7 +484,7 @@ def run_question(question: dict, chunks: list[ContentChunk], service, client) ->
     candidates = build_candidate_set(chunks, result.role, embedding.model)
     ranked = rank(candidates, query_vector)
     result.top_score = ranked[0].score if ranked else None
-    admitted = [candidate for candidate in ranked if candidate.score >= RELEVANCE_THRESHOLD]
+    admitted = [candidate for candidate in ranked if candidate.score >= threshold]
 
     # The chunks this role may NOT see. Computed only so the harness can assert
     # that none of them reached the prompt or the answer; never printed, never
@@ -658,6 +665,57 @@ def report(results: list[QuestionResult]) -> dict:
     }
 
 
+def score_distribution(questions: list[dict], chunks: list[ContentChunk], service) -> int:
+    """Embed and rank every question, print top scores by kind, call no generation.
+
+    This is how RELEVANCE_THRESHOLD is tuned (apps/core/constants.py marks it
+    PROVISIONAL and names Stage 4 step 0 as the step that settles it). The value
+    wanted is one that separates questions the corpus CAN answer from the scoped
+    and no-answer questions it cannot: admitting a passage that does not answer the
+    question is what drives no-answer path B, the project's main quality signal.
+    """
+    by_kind: dict[str, list[tuple[str, float]]] = {kind: [] for kind in QUESTION_KINDS}
+    for position, question in enumerate(questions, start=1):
+        label = question.get("id", f"#{position}")
+        print(f"[{position}/{len(questions)}] {label} ...", flush=True)
+        embedding = service.embed([question["question"]])
+        candidates = build_candidate_set(chunks, question["role"], embedding.model)
+        ranked = rank(candidates, embedding.vectors[0])
+        by_kind[question["kind"]].append((label, ranked[0].score if ranked else 0.0))
+
+    print("\n" + "=" * 100)
+    print("TOP-SCORE DISTRIBUTION BY QUESTION KIND")
+    print("=" * 100)
+    for kind in QUESTION_KINDS:
+        scores = sorted(score for _, score in by_kind[kind])
+        if not scores:
+            continue
+        middle = scores[len(scores) // 2]
+        print(f"\n{kind}  (n={len(scores)})")
+        print(f"  min {scores[0]:.4f}   median {middle:.4f}   max {scores[-1]:.4f}")
+        print("  all: " + " ".join(f"{s:.3f}" for s in scores))
+
+    answerable = sorted(score for _, score in by_kind["ordinary"])
+    unanswerable = sorted(
+        score for kind in ("scoped", "no-answer") for _, score in by_kind[kind]
+    )
+    print("\n" + "-" * 100)
+    print("SEPARATION — a threshold should admit the answerable and reject the rest")
+    print("-" * 100)
+    if answerable and unanswerable:
+        print(f"  answerable (ordinary)      : min {answerable[0]:.4f}, median "
+              f"{answerable[len(answerable) // 2]:.4f}")
+        print(f"  unanswerable (scoped+none) : max {unanswerable[-1]:.4f}, median "
+              f"{unanswerable[len(unanswerable) // 2]:.4f}")
+        print("\n  candidate thresholds:")
+        for candidate in [round(x * 0.01, 2) for x in range(20, 61, 2)]:
+            kept = sum(1 for s in answerable if s >= candidate)
+            leaked = sum(1 for s in unanswerable if s >= candidate)
+            print(f"    {candidate:.2f}  admits {kept:>2}/{len(answerable)} answerable, "
+                  f"{leaked:>2}/{len(unanswerable)} unanswerable")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument(
@@ -667,6 +725,22 @@ def main() -> int:
         help=f"question set JSON (default: {DEFAULT_QUESTION_SET.name}, a placeholder set)",
     )
     parser.add_argument("--limit", type=int, default=0, help="run only the first N questions")
+    # RELEVANCE_THRESHOLD is marked PROVISIONAL in apps/core/constants.py and is
+    # tuned HERE, in Stage 4 step 0, against the fixture corpus. This override is a
+    # measuring instrument: it lets the score distribution be observed at several
+    # thresholds before one value is written into the constants module. It defaults
+    # to the constant, so an ordinary run measures what retrieval will really do.
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=RELEVANCE_THRESHOLD,
+        help=f"cosine floor for admitting a passage (default: RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD})",
+    )
+    parser.add_argument(
+        "--scores-only",
+        action="store_true",
+        help="embed and rank only, print the top-score distribution by kind, call no generation",
+    )
     parser.add_argument("--kind", choices=QUESTION_KINDS, help="run only one kind of question")
     parser.add_argument("--out", type=Path, help="write the full per-question record as JSON")
     arguments = parser.parse_args()
@@ -693,12 +767,17 @@ def main() -> int:
     print(f"  constants       : TOP_K={TOP_K}, RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD}, "
           f"MAXIMUM_CONTEXT_TOKENS={MAXIMUM_CONTEXT_TOKENS}, "
           f"MAXIMUM_GENERATION_ATTEMPTS={MAXIMUM_GENERATION_ATTEMPTS}")
+    if arguments.threshold != RELEVANCE_THRESHOLD:
+        print(f"  THRESHOLD       : {arguments.threshold} (overriding the constant, for tuning)")
     if not health.available:
         print("\nFLM is not reachable. Start it with:  flm serve gemma3:4b --embed 1")
         return 1
     if not chunks:
         print("\nNo indexed chunks in the database. Ingest the fixture corpus first.")
         return 1
+
+    if arguments.scores_only:
+        return score_distribution(questions, chunks, service)
 
     client = chat_client(service)
     results: list[QuestionResult] = []
@@ -707,7 +786,7 @@ def main() -> int:
         label = question.get("id", f"#{position}")
         print(f"[{position}/{len(questions)}] {label} ({question['kind']}, {question['role']}) ...",
               flush=True)
-        results.append(run_question(question, chunks, service, client))
+        results.append(run_question(question, chunks, service, client, arguments.threshold))
     elapsed = time.perf_counter() - started
 
     summary = report(results)
