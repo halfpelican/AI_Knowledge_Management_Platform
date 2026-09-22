@@ -1,7 +1,7 @@
 # Organisational Knowledge Platform — frontend
 
 - Install: `npm install` (Node 24; versions are pinned exactly, `.npmrc` keeps new additions pinned).
-- Dev server: `npm run dev`, then open http://127.0.0.1:5173/ (the component sheet is at `/components`).
+- Dev server: `npm run dev`, then open http://localhost:5173/ (the component sheet is at `/components`).
 - Build: `npm run build` writes `dist/`; `npm run lint` runs the template's Oxlint rules.
 - API: requests go to `/api` on the same origin (D-21). In development `vite.config.js` proxies `/api` to the Django server at http://127.0.0.1:8000, so run `python manage.py runserver` alongside `npm run dev`. `VITE_API_BASE_URL` in `.env` (see `.env.example`) overrides the path only if the API is served elsewhere.
 - Auth: the session cookie is HttpOnly and never handled by the front end; unsafe requests send `X-CSRFToken` from the `csrftoken` cookie. Screens: `/register`, `/login`, `/admin/roles` (Administrator only), `/403` (Access Denied, where a guarded route sends an unauthorised navigation attempt, FR-06).
