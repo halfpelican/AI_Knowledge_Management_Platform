@@ -51,6 +51,7 @@ Rules for this file:
 | D-33 | Stage 3 audit: FR-08 classification deferred with FR-10; FR-09's 422; the 409 existence oracle | Recorded | 2026-09-21 |
 | D-34 | A staff directory endpoint, separate from FR-05's user list, so any role may name attendees | Settled | 2026-09-21 |
 | D-35 | No external AI spend; demonstration runs on one machine | Settled | 2026-09-22 |
+| D-36 | FastFlowLM pinned to v0.9.39; `check_flm.py` asserts embedding determinism | Settled | 2026-09-22 |
 
 ---
 
@@ -1180,3 +1181,70 @@ Mitigations, all of which cost nothing:
   live system is unavailable; they do not accept a description.
 - The AMD driver version the NPU depends on is recorded, after a
   `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
+
+  ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
+
+**Status:** Settled · **Date:** 2026-09-22 · **Closes:** the implicit assumption that
+the current FastFlowLM release is the right one to run
+
+**Decision.** FastFlowLM is pinned to **v0.9.39**. Upgrading is a deliberate act that
+requires `scripts/check_flm.py` to pass on the new version first, and a re-index if
+any embedding changes. The version is recorded in `README.md` and
+`docs/ai-provider.md` alongside the AMD driver version (D-35).
+
+**Why.** FastFlowLM's `/v1/embeddings` endpoint has been broken since v1.0.4
+(ROCm/FastFlowLM issue #732, open at the time of writing). It returns vectors of the
+correct shape and magnitude that are statistically uncorrelated with their input. The
+weights on disk are identical across the affected versions; only the serving path is
+wrong. The project had been running v1.0.6.
+
+This was not caught by inspection. It was caught on 22 September when
+`scripts/citation_harness.py` ran for the first time and every retrieval result was
+incoherent. The measurements that identified the cause:
+
+| Measured on v1.0.6 | Cosine |
+|---|---|
+| The same string embedded twice in one batch | 0.4833 |
+| Two consecutive chunks of one document, sharing 50 tokens of literal text | 0.0992 |
+| Two unrelated documents | 0.6398 |
+
+Three identical `curl` calls returned three different vectors. An embedding function
+that does not return the same vector for the same input is not an embedding function.
+
+After downgrading to v0.9.39, the same checks return cosine **1.0000** for a repeated
+input within a batch, **1.0000** across separate calls, and **0.1299** between two
+unrelated sentences. Three embeddings take **1.0 second** against **95.6 seconds** on
+the broken build — the latency was itself a symptom nobody read as one.
+
+**The real finding is about the check, not the version.** `check_flm.py` had passed
+every day for two weeks. Its embeddings check asserted that the vectors were non-zero
+and that two different inputs produced different vectors. Random noise satisfies both.
+The check was written to confirm the endpoint responds, and it was read as confirming
+the endpoint works.
+
+It now asserts the properties that actually define an embedding, at
+`DETERMINISM_TOLERANCE = 0.999`:
+
+1. The same input embedded twice **in one batch** returns the same vector.
+2. The same input embedded again in a **separate call** returns the same vector.
+3. Two unrelated inputs score **lower** than a repeated one.
+
+The order of work was deliberate and is worth stating: the strengthened check was
+written and run against the known-broken v1.0.6 **before** the downgrade, where it
+failed at cosine 0.0939. Only then was the version changed. A check that has never
+been observed to fail is not evidence; it is a check that passed once on an unknown
+system. The subsequent pass on v0.9.39 means something because the failure came first.
+
+**Consequences.**
+
+- The stored index built before 22 September was noise. `manage.py reindex` rebuilt
+  it against the working provider and is the supported way to do so again.
+- FLM upgrades are blocked pending issue #732. When it closes, the upgrade path is:
+  run `check_flm.py` on the new version, and if it passes, re-index — the vectors are
+  not guaranteed comparable across versions even when both are correct.
+- The generalised lesson applies beyond FLM: an invariant test that asserts a value is
+  *present and non-identical* asserts almost nothing. Where the project tests an
+  external provider, the test asserts a property the provider could fail, and is run
+  against a failing case before it is trusted.
+- `docs/flm-baseline.md` records the three rates that this pin makes meaningful. Every
+  number in it is invalid on any other FLM version.
