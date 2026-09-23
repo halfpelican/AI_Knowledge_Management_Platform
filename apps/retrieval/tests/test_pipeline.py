@@ -1,5 +1,5 @@
-"""FR-12 steps 1 to 9: retrieval, no-answer path A, grounded generation and verification
-(apps/retrieval/pipeline.py).
+"""FR-12 steps 1 to 10: retrieval, both no-answer paths, grounded generation and
+verification (apps/retrieval/pipeline.py).
 
 The autouse ``stub_ai_service`` is replaced here by a local double whose query vector
 is fixed, because the stub's vectors are seeded random and no score could be predicted
@@ -38,6 +38,7 @@ from apps.core.constants import (
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
     NO_ANSWER_MESSAGE,
+    NO_ANSWER_REASONS,
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
     RELEVANCE_THRESHOLD,
@@ -295,8 +296,8 @@ def test_a_passage_above_the_threshold_comes_back_as_a_passage_and_not_as_an_ans
     assert outcome.answered is True
     assert outcome.no_answer_reason is None
     assert outcome.message is None
-    # Item 7 owns the no-answer response; item 8 the QueryLog row. The presentation
-    # layer composes the answer string and resolves sources from `passages`.
+    # Item 8 owns the QueryLog row. The presentation layer composes the answer string and
+    # resolves sources from `passages`.
     assert not hasattr(outcome, "proposed_statements")
     assert not hasattr(outcome, "answer_text")
     assert not hasattr(outcome, "sources")
@@ -725,46 +726,70 @@ def test_the_outcome_has_no_field_carrying_rejected_statement_text(document, ser
     assert outcome.rejected_count == 1  # a number crosses the boundary; the text does not
 
 
+# --- No-answer path B (item 7): retrieved, generated, and nothing survived -------------
+#
+# Every test in this section is constructed to reach path B on purpose. None of them gets
+# there incidentally, because the path is not incidental: D-37 found that no threshold on
+# this corpus separates answerable from unanswerable (no-answer questions reach 0.535 where
+# the answerable median is 0.390), so the floor cannot decide answerability and path B is
+# what catches the rest. The item-0 baseline found four no-answer questions that cleared
+# the threshold, reached generation and came back empty; the item-6 live runs found more.
+# A rising rate of this path is the project's main quality signal (invariant 7): it means
+# retrieval is admitting passages that score above the floor but do not answer the
+# question, which is a tuning problem rather than a missing-content one.
+
+
 @pytest.mark.django_db
-def test_an_empty_statement_list_is_not_an_error_and_not_path_a(document, service_with):
+def test_path_b_where_the_model_declines_with_an_empty_statement_list(document, service_with):
     """``{"statements": []}`` is the model reporting that the passages do not answer.
 
-    The pipeline returns it as an ordinary outcome: passages were retrieved, so this is not
-    no-answer path A. Nothing was rejected either — an empty list has nothing to reject —
-    so ``rejected_count`` is 0 and only ``verified_statements`` being empty distinguishes
-    this from an answer. **The reason code stays None at this item**: item 7 sets
-    NO_STATEMENT_VERIFIED and the message, and keeps it distinct from path A's reason,
-    which is the distinction invariant 7 rests on.
+    One of the two ways to reach no-answer path B, and the one that is not a failure of the
+    model: it read the passages and correctly declined rather than inventing. Nothing was
+    rejected — an empty list has nothing to reject — so ``rejected_count`` is 0, which is
+    the only thing separating this from the all-rejected case below. Both record
+    NO_STATEMENT_VERIFIED, because 7.10 step 10 folds them into one reason and
+    NO_ANSWER_REASONS holds exactly two values; a third code would be a vocabulary change,
+    a migration and a requirement nobody wrote.
+
+    A rising rate here is the project's main quality signal (invariant 7): the passages
+    scored above RELEVANCE_THRESHOLD and still did not answer the question.
     """
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
-    service_with(statements=[])
+    double = service_with(statements=[])
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
 
-    assert outcome.verified_statements == ()
-    assert outcome.rejected_count == 0
-    assert outcome.no_answer_reason is None  # NOT no_relevant_passage: passages were found
-    assert outcome.no_answer_reason != NO_STATEMENT_VERIFIED  # nor path B, which is item 7's
-    assert outcome.message is None
-    assert outcome.result_count == 1
     assert outcome.answered is False
+    assert outcome.verified_statements == ()
+    assert outcome.rejected_count == 0  # the model proposed nothing to reject
+    assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert outcome.no_answer_reason != NO_RELEVANT_PASSAGE  # emphatically not path A
+    assert outcome.message == NO_ANSWER_MESSAGE
+    # The reply carries nothing about the passages that were retrieved: see the
+    # indistinguishability test below for why the count is 0 where one passage was sent.
+    assert outcome.result_count == 0
+    assert outcome.passages == ()
+    # Generation WAS called, which is what makes this path B rather than path A.
+    assert len(double.generate_calls) == 1
 
 
 @pytest.mark.django_db
-def test_every_statement_fabricated_leaves_an_unanswered_outcome_with_no_reason_yet(
-    document, service_with
-):
-    """No-answer path B's input, as far as item 6 builds it.
+def test_path_b_where_verification_rejects_every_statement(document, service_with):
+    """The other way in: the model answered, and every citation it gave was invented.
 
-    Passages were retrieved and generation returned, but nothing survived verification.
-    ``answered`` is False, ``verified_statements`` is empty, ``rejected_count`` says how
-    many were thrown away, and ``no_answer_reason`` is still None — item 7 fills that in
-    with NO_STATEMENT_VERIFIED, and a rising rate of it is the project's main quality
-    signal (invariant 7). It must never be confused with path A's
-    NO_RELEVANT_PASSAGE, which is why neither is set here by guesswork.
+    Passages were retrieved and generation returned statements, but not one identifier was
+    in the supplied set, so verification removed them all (invariant 5) and there is
+    nothing citable left to show. Invariant 6 forbids any interface state showing an
+    uncited factual statement, so the answer is not shown in part — the no-answer response
+    is returned whole.
+
+    ``rejected_count`` is 2 where the declining case above is 0. That is the field that
+    tells the two ways of reaching this path apart, the item-6 live runs showed them moving
+    independently, and item 8 is where it reaches the log. The reason code is the same for
+    both, deliberately.
     """
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
-    service_with(
+    double = service_with(
         statements=[
             Statement(text="Invented.", chunk_id="00000000-0000-4000-8000-000000000000"),
             Statement(text="Also invented.", chunk_id="c_4471"),
@@ -776,13 +801,185 @@ def test_every_statement_fabricated_leaves_an_unanswered_outcome_with_no_reason_
     assert outcome.answered is False
     assert outcome.verified_statements == ()
     assert outcome.rejected_count == 2
-    assert outcome.no_answer_reason is None
-    assert outcome.no_answer_reason != NO_RELEVANT_PASSAGE  # emphatically not path A
-    assert outcome.message is None
-    # The passages are still carried: they were retrieved and are in scope, and item 7 may
-    # want them. What is gone is what the model said about them.
-    assert outcome.result_count == 1
+    assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert outcome.no_answer_reason != NO_RELEVANT_PASSAGE
+    assert outcome.message == NO_ANSWER_MESSAGE
+    assert outcome.result_count == 0
+    assert outcome.passages == ()
+    assert len(double.generate_calls) == 1
+    # And the unverified text is gone, as on every other branch: a count crosses the
+    # boundary, sentences do not.
     assert "Invented." not in repr(outcome)
+
+
+@pytest.mark.django_db
+def test_the_two_no_answer_paths_are_one_reply_and_two_reasons(document, monkeypatch):
+    """**The test that pins invariant 7.** Same response, different record.
+
+    Two runs against the same store. In the first, the one permitted chunk scores below
+    RELEVANCE_THRESHOLD, so nothing is admitted and generation is never called: path A. In
+    the second, a chunk scoring above the floor is added and the model is scripted to cite
+    an identifier that was never supplied, so everything is rejected: path B.
+
+    Everything a caller can see is asserted equal, field by field. A user must not be able
+    to tell from the reply whether the organisation holds nothing on the subject or whether
+    it holds something that could not be cited — the second is a disclosure that material
+    exists (invariant 1) and it is one a person would act on by asking again. That is why
+    ``result_count`` is 0 on path B even though passages really were supplied to
+    generation: a count is part of the reply, and a count that differed between the paths
+    would be the field that gave the game away.
+
+    What differs is ``no_answer_reason``, which no caller sees and item 8 records. A rising
+    rate of the path-B reason is the project's main quality signal; merging the two codes
+    would delete that signal, and returning two different replies would leak it to the
+    wrong audience.
+    """
+    from dataclasses import asdict, fields
+
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW, text="Too far.")
+    path_a_double = install(monkeypatch, ControlledService())
+
+    path_a = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    # Path A's premise: nothing was admitted, so the model was never asked.
+    assert path_a.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert path_a_double.generate_calls == []
+
+    admitted = make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=2, cosine=ABOVE, text="Close enough."
+    )
+    path_b_double = install(
+        monkeypatch,
+        ControlledService(
+            statements=[Statement(text="Ungrounded.", chunk_id="00000000-0000-4000-8000-0000000")]
+        ),
+    )
+
+    path_b = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    # Path B's premise: the model WAS asked, over a real passage, and everything it said
+    # was rejected. The two paths differ in what happened, which is the whole point.
+    assert path_b.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert len(path_b_double.generate_calls) == 1
+    (_, passages_sent) = path_b_double.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(admitted.id)]
+
+    # Field by field, everything the caller is handed:
+    assert path_a.answered == path_b.answered is False
+    assert path_a.message == path_b.message == NO_ANSWER_MESSAGE
+    assert path_a.result_count == path_b.result_count == 0
+    assert path_a.passages == path_b.passages == ()
+    assert path_a.verified_statements == path_b.verified_statements == ()
+
+    # And exhaustively, so a field added later is not silently allowed to differ. Only the
+    # reason and the rejected count — the two fields item 8 records and no caller reads —
+    # may vary between the paths.
+    caller_visible = {
+        field.name for field in fields(path_a)
+    } - {"no_answer_reason", "rejected_count"}
+    assert asdict(path_a).keys() == asdict(path_b).keys()
+    for name in caller_visible:
+        assert getattr(path_a, name) == getattr(path_b, name), name
+
+    # The one difference, and it is in the record rather than the reply.
+    assert path_a.no_answer_reason != path_b.no_answer_reason
+    assert {path_a.no_answer_reason, path_b.no_answer_reason} == set(NO_ANSWER_REASONS)
+
+
+@pytest.mark.django_db
+def test_one_surviving_statement_is_an_answer_and_not_path_b(document, service_with):
+    """The boundary: some survived, so this is not the no-answer path.
+
+    Two statements, one citing a supplied identifier and one fabricated. Path B is "NOTHING
+    survived", not "something was rejected" — an answer that lost a statement is still an
+    answer, and the surviving one carries a verified citation. This is where an off-by-one
+    would live, and it would be a bad one in either direction: returning the no-answer
+    response here would throw away a properly cited answer, and the reverse would show an
+    answer with nothing behind it.
+    """
+    chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
+    service_with(
+        statements=[
+            Statement(text="Grounded.", chunk_id=str(chunk.id)),
+            Statement(text="Invented.", chunk_id="00000000-0000-4000-8000-000000000000"),
+        ]
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.answered is True
+    assert [statement.text for statement in outcome.verified_statements] == ["Grounded."]
+    assert outcome.rejected_count == 1
+    assert outcome.no_answer_reason is None
+    assert outcome.no_answer_reason != NO_STATEMENT_VERIFIED
+    assert outcome.message is None
+    # The passages and the count come back on an answered outcome, unlike on path B: this
+    # is what the Sources panel is built from.
+    assert outcome.result_count == 1
+    assert [passage.chunk_id for passage in outcome.passages] == [str(chunk.id)]
+
+
+@pytest.mark.django_db
+def test_path_b_from_both_role_sessions(session_client, document, service_with):
+    """Path B from an Employee session and an Administrator session (section 8 item 2).
+
+    The passage the model was given is the one this role may read; the statement it
+    returned cites the other role's chunk, which was never in the prompt and is therefore
+    rejected exactly as an invented identifier would be. The no-answer response is what
+    comes back, and it says nothing about the restricted chunk — not its identifier, not
+    its text, not a count that would imply it.
+    """
+    role_name = session_client.role_name
+    other_role = next(name for name in ROLE_PAIR if name != role_name)
+    restricted = make_chunk(
+        document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest."
+    )
+    permitted = make_chunk(document, [role_name], index=2, cosine=ABOVE, text="Permitted.")
+    double = service_with(
+        statements=[Statement(text="Claimed of another role's chunk.", chunk_id=str(restricted.id))]
+    )
+
+    outcome = answer_question(question=QUESTION, user=session_client.user)
+
+    assert outcome.answered is False
+    assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert outcome.message == NO_ANSWER_MESSAGE
+    assert outcome.result_count == 0
+    assert outcome.passages == ()
+    assert outcome.rejected_count == 1
+    # Only the permitted passage ever reached the provider, and nothing of the restricted
+    # chunk reaches the outcome by any route.
+    (_, passages_sent) = double.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(permitted.id)]
+    assert str(restricted.id) not in repr(outcome)
+    assert restricted.chunk_text not in repr(outcome)
+
+
+def test_an_unanswered_outcome_with_no_reason_cannot_be_built():
+    """There is no fourth shape, and the type refuses to make one.
+
+    Item 6 returned an outcome with ``answered=False`` and ``no_answer_reason`` None,
+    stated in its docstrings as the absence item 7 would fill. It is filled, and
+    ``verified`` now raises rather than rebuilding it, so the hole cannot come back through
+    a caller that forgets the branch. Without this, the failure mode is silent: a no-answer
+    that never reaches the log is a no-answer the team cannot count, and the rate is the
+    signal.
+    """
+    from apps.retrieval.pipeline import RetrievalOutcome
+    from apps.retrieval.verification import VerificationResult
+
+    nothing_survived = VerificationResult(
+        verified_statements=(), rejected_statements=(), rejected_count=0
+    )
+
+    with pytest.raises(ValueError):
+        RetrievalOutcome.verified([], nothing_survived)
+
+    # The same input through the path-B constructor is the outcome that was wanted.
+    outcome = RetrievalOutcome.no_statement_verified(nothing_survived)
+    assert outcome.answered is False
+    assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert outcome.message == NO_ANSWER_MESSAGE
 
 
 @pytest.mark.django_db

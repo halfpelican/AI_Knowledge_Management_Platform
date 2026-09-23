@@ -43,10 +43,13 @@ the question, the supplied identifiers and the outcome together. ``rejected_coun
 carried to it for that purpose, which is why this function computes it rather than leaving
 the caller to count.
 
-Not here: no-answer path B. When nothing survives, this returns an empty verified list and
-the pipeline returns an outcome with ``answered=False`` and no reason code. Item 7 fills in
-NO_STATEMENT_VERIFIED and the no-answer response, and it is item 7 that must keep that
-reason distinct from path A's (invariant 7).
+Not here, and deliberately: no-answer path B. When nothing survives, this returns an empty
+verified list and says nothing about what that means. The pipeline reads the empty list as
+7.10 step 10's second no-answer and returns NO_STATEMENT_VERIFIED with the no-answer
+message (``apps/retrieval/pipeline.py``, ``RetrievalOutcome.no_statement_verified``). The
+reason code lives there because the decision is about the response, not about the
+identifiers: this function's only job is set membership, and it has no business knowing
+that its caller is a question-answering path at all — the harness calls it too.
 """
 
 from dataclasses import dataclass
