@@ -34,6 +34,11 @@ once defined for itself now live in the code under test and are imported below:
     SYSTEM_PROMPT, build_generation_messages                      apps/ai/prompting.py
     the attempt loop and the 503 after three tries                apps/ai/generation.py
     rank, truncate_to_context, cosine_similarity                  apps/retrieval/ranking.py
+    verify_citations                                              apps/retrieval/verification.py
+
+Item 6 added the last of those. The fabricated-identifier rate is now computed from
+the statements verification REJECTED, rather than from a copy of its membership rule
+written here — so the rate measures the function that decides what a user is shown.
 
 The harness no longer makes a raw chat call: it calls
 ``service.generate_statements(question, passages, on_attempt=...)`` and measures the
@@ -100,6 +105,11 @@ from apps.retrieval.query_embedding import embed_question  # noqa: E402
 # and admit() correctly reads the settled constant.
 from apps.retrieval.ranking import RankedPassage, rank, truncate_to_context  # noqa: E402
 
+# Citation verification, as the pipeline performs it: set membership against the
+# identifiers actually supplied to the prompt (apps/retrieval/verification.py, FR-12 step
+# 9). The harness used to inline this rule; it does not any more.
+from apps.retrieval.verification import verify_citations  # noqa: E402
+
 DEFAULT_QUESTION_SET = Path(__file__).resolve().parent / "citation_questions.json"
 QUESTION_KINDS = ("ordinary", "scoped", "no-answer")
 
@@ -131,7 +141,12 @@ class QuestionResult:
     generation_called: bool = False
     attempts: list[dict] = field(default_factory=list)
     parsed: bool = False
+    # What the model PROPOSED: the denominator of the fabricated-identifier rate, and the
+    # set the out-of-scope check is run over, because a leak must be caught even in a
+    # statement verification threw away.
     statements: list[Statement] = field(default_factory=list)
+    # What survived apps/retrieval/verification.py. This is what a user would be shown.
+    verified_statements: list[Statement] = field(default_factory=list)
     fabricated_ids: list[str] = field(default_factory=list)
     out_of_scope_ids: list[str] = field(default_factory=list)
     expected_answer: str | None = None
@@ -140,8 +155,16 @@ class QuestionResult:
 
     @property
     def answered(self) -> bool:
-        """A non-empty statement list survived parsing."""
-        return bool(self.statements)
+        """A statement survived VERIFICATION, which is what the pipeline means by answered.
+
+        Changed at Stage 4 item 6, and worth knowing when comparing with the baseline: it
+        used to mean "the model returned at least one statement". It now means what
+        ``RetrievalOutcome.answered`` means — ``bool(verified_statements)`` — so the
+        empty-answer rates below measure what a user would actually have been shown. A
+        question whose only statement cited a fabricated identifier counted as answered at
+        the baseline and counts as empty now.
+        """
+        return bool(self.verified_statements)
 
 
 def load_question_set(path: Path) -> list[dict]:
@@ -271,9 +294,14 @@ def run_question(
         return finish(result, forbidden)
     result.parsed = True
     result.statements = parsed.statements
-    result.fabricated_ids = sorted(
-        {s.chunk_id for s in parsed.statements if s.chunk_id not in supplied_ids}
-    )
+
+    # Verification is the shipped function, not a local copy of its rule. The harness used
+    # to compute `s.chunk_id not in supplied_ids` itself, which was the same rule written
+    # twice — the defect Stage 4 item 5 spent its whole diff removing everywhere else. The
+    # fabricated identifiers are now, by definition, the ones verification rejected.
+    verification = verify_citations(parsed.statements, supplied_ids)
+    result.verified_statements = list(verification.verified_statements)
+    result.fabricated_ids = sorted({s.chunk_id for s in verification.rejected_statements})
 
     return finish(result, forbidden)
 
@@ -281,11 +309,15 @@ def run_question(
 def finish(result: QuestionResult, forbidden: set[str]) -> QuestionResult:
     """Score the expected answer and check that nothing out of scope got through."""
     seen = {candidate.chunk_id for candidate in result.retrieved}
+    # Every PROPOSED statement, not only the verified ones: a model naming a restricted
+    # chunk is a finding even when verification then threw the statement away.
     seen |= {statement.chunk_id for statement in result.statements}
     result.out_of_scope_ids = sorted(seen & forbidden)
     if result.expected_answer:
         wanted = normalise(result.expected_answer)
-        answer = normalise(" ".join(statement.text for statement in result.statements))
+        # Scored over the VERIFIED statements: the expected answer is what a user would
+        # have been shown, and a rejected statement is shown to nobody.
+        answer = normalise(" ".join(statement.text for statement in result.verified_statements))
         result.expected_answer_found = wanted in answer
     return result
 
@@ -320,8 +352,13 @@ def report(results: list[QuestionResult]) -> dict:
             print(f"  FABRICATED  : {result.fabricated_ids}")
         if result.out_of_scope_ids:
             print(f"  OUT OF SCOPE LEAK: {result.out_of_scope_ids}")
+        verified_texts = {id(statement) for statement in result.verified_statements}
         for statement in result.statements:
-            print(f"    - [{statement.chunk_id[:8]}] {statement.text}")
+            # A rejected statement is marked here and nowhere else. The harness is a
+            # measuring instrument run by hand, not a view: the pipeline drops this text
+            # at the verification boundary and no interface can reach it (invariant 6).
+            mark = "-" if id(statement) in verified_texts else "x REJECTED"
+            print(f"    {mark} [{statement.chunk_id[:8]}] {statement.text}")
         if not result.statements and result.generation_called and result.parsed:
             print("    (empty statement list)")
         if result.expected_answer:
@@ -343,13 +380,9 @@ def report(results: list[QuestionResult]) -> dict:
     eventually_parsed = [r for r in generated if r.parsed]
 
     with_fabrication = [r for r in results if r.fabricated_ids]
-    identifiers_returned = sum(len(r.statements) for r in results)
-    identifiers_fabricated = sum(
-        1
-        for r in results
-        for s in r.statements
-        if s.chunk_id in set(r.fabricated_ids)
-    )
+    identifiers_returned = sum(len(r.statements) for r in results)  # proposed, as before
+    identifiers_fabricated = sum(len(r.statements) - len(r.verified_statements) for r in results)
+    statements_verified = sum(len(r.verified_statements) for r in results)
 
     ordinary_empty = [r for r in ordinary if not r.answered]
     scoped_empty = [r for r in scoped if not r.answered]
@@ -379,6 +412,8 @@ def report(results: list[QuestionResult]) -> dict:
           f"{percentage(identifiers_fabricated, identifiers_returned)}"
           "   [identifiers not supplied in that prompt, per statement]")
     print(f"  questions with any fabrication   : {percentage(len(with_fabrication), len(results))}")
+    print(f"  statements proposed / verified   : {identifiers_returned} / {statements_verified}"
+          "   [verify_citations() removed the difference]")
     print()
     print("empty-answer rate where an answer was available "
           f"(ordinary only) : {percentage(len(ordinary_empty), len(ordinary))}")
@@ -397,6 +432,7 @@ def report(results: list[QuestionResult]) -> dict:
         "schema_conformance": (len(conforming), len(responses)),
         "first_attempt_conformance": (len(first_conforming), len(first_attempts)),
         "fabricated_identifiers": (identifiers_fabricated, identifiers_returned),
+        "statements_verified": statements_verified,
         "empty_answer_ordinary": (len(ordinary_empty), len(ordinary)),
         "scoped_empty": (len(scoped_empty), len(scoped)),
         "no_answer_empty": (len(no_answer_empty), len(no_answer)),
@@ -561,6 +597,9 @@ def main() -> int:
                     "attempts": r.attempts,
                     "parsed": r.parsed,
                     "statements": [{"text": s.text, "chunk_id": s.chunk_id} for s in r.statements],
+                    "verified_statements": [
+                        {"text": s.text, "chunk_id": s.chunk_id} for s in r.verified_statements
+                    ],
                     "fabricated_ids": r.fabricated_ids,
                     "out_of_scope_ids": r.out_of_scope_ids,
                     "expected_answer": r.expected_answer,

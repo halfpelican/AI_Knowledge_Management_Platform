@@ -1,4 +1,4 @@
-"""FR-12 steps 1 to 8: retrieval, no-answer path A, and grounded generation
+"""FR-12 steps 1 to 9: retrieval, no-answer path A, grounded generation and verification
 (apps/retrieval/pipeline.py).
 
 The autouse ``stub_ai_service`` is replaced here by a local double whose query vector
@@ -254,16 +254,16 @@ def test_a_chunk_from_another_embedding_model_leaves_nothing_to_answer_from(docu
 def test_a_passage_above_the_threshold_comes_back_as_a_passage_and_not_as_an_answer(
     document, service
 ):
-    """The admitted branch: passages, a count, proposed statements, and no answer.
+    """The answered branch: passages, a count, verified statements, and answered=True.
 
-    ``answered`` is False here as well as on path A, and deliberately: generation has run,
-    but nothing has verified that the identifiers it returned were ever in the prompt, and
-    an unverified statement is not an answer (invariants 5 and 6). A True here would put a
-    not-yet-verified question into the answered rate. The branches are told apart by
-    ``no_answer_reason`` being None and ``passages`` being non-empty. **Item 6 is where
-    ``answered=True`` first becomes reachable** — verifyCitations() is what makes a
-    statement citable — and this assertion is expected to change in that diff rather than
-    to be assumed away.
+    **This is the test items 4 and 5 both pointed at.** At item 4 it asserted
+    ``answered is False`` because nothing had been generated; at item 5 it still did,
+    because nothing had been verified; both said in this docstring that item 6 was where
+    the flip belonged, so that it would appear in this diff rather than be assumed. It has
+    flipped here, and only because step 9 now runs: ``answered`` is
+    ``bool(verified_statements)``, nothing else sets it, and a statement is citable exactly
+    when its identifier has been checked for set membership against the identifiers the
+    prompt supplied (invariant 5).
     """
     chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
     below = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=BELOW, text="Unrelated.")
@@ -278,23 +278,27 @@ def test_a_passage_above_the_threshold_comes_back_as_a_passage_and_not_as_an_ans
     # The threshold still applied: the low-scoring chunk is not in the passages or the
     # count, so the count is of admitted passages and not of candidates.
     assert str(below.id) not in [passage.chunk_id for passage in outcome.passages]
-    # Generation ran over exactly the admitted passage, and what came back is carried as
-    # PROPOSED statements: what the model said, not what has been verified.
+    # Generation ran over exactly the admitted passage, and the statement it returned
+    # cited a supplied identifier, so verification admitted it.
     assert len(service.generate_calls) == 1
     question_sent, passages_sent = service.generate_calls[0]
     assert question_sent == QUESTION
     assert [passage.chunk_id for passage in passages_sent] == [str(chunk.id)]
     assert [passage.text for passage in passages_sent] == ["Twenty days."]
-    assert [statement.chunk_id for statement in outcome.proposed_statements] == [str(chunk.id)]
+    assert [statement.chunk_id for statement in outcome.verified_statements] == [str(chunk.id)]
+    assert outcome.rejected_count == 0
 
-    # No answer is claimed, and no no-answer response is returned either.
-    assert outcome.answered is False
+    # ANSWERED IS TRUE HERE, for the first time in this stage. Items 4 and 5 both pinned
+    # it False and both named item 6 as where it would flip; this is that flip, and it is
+    # exactly bool(verified_statements) — a statement is citable once its identifier has
+    # been checked for set membership, and not before.
+    assert outcome.answered is True
     assert outcome.no_answer_reason is None
     assert outcome.message is None
-    # Item 6 owns verification and its results; nothing is stubbed for it here.
-    assert not hasattr(outcome, "statements")
-    assert not hasattr(outcome, "citations")
-    assert not hasattr(outcome, "verified_statements")
+    # Item 7 owns the no-answer response; item 8 the QueryLog row. The presentation
+    # layer composes the answer string and resolves sources from `passages`.
+    assert not hasattr(outcome, "proposed_statements")
+    assert not hasattr(outcome, "answer_text")
     assert not hasattr(outcome, "sources")
 
 
@@ -647,14 +651,15 @@ def test_the_context_budget_is_applied_before_generation(document, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_the_proposed_statements_are_carried_verbatim_and_not_judged(document, service_with):
-    """Whatever the model said comes back as proposed_statements, unfiltered.
+def test_a_fabricated_citation_is_stripped_and_its_text_does_not_reach_the_outcome(
+    document, service_with
+):
+    """The 2.4% case through the whole pipeline (item 5 carried it; item 6 removes it).
 
-    Including a statement citing an identifier that was never in the prompt. This module
-    must NOT quietly drop it: verification is item 6's, it is application code over set
-    membership (invariant 5), and a pipeline that filtered here would leave item 6 testing
-    a case it could never see. The baseline measured fabrication at 2.4%, so this is a real
-    input rather than a hypothetical one.
+    The model returns one real citation and one invented one. The real statement is the
+    answer, the invented one is gone — and gone means GONE: its text exists nowhere on the
+    outcome, only a count. Invariant 6 says no interface state shows an uncited factual
+    statement, and a view cannot render what it was never handed.
     """
     chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
     fabricated = "00000000-0000-4000-8000-000000000000"
@@ -667,12 +672,57 @@ def test_the_proposed_statements_are_carried_verbatim_and_not_judged(document, s
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
 
-    assert [statement.chunk_id for statement in outcome.proposed_statements] == [
-        str(chunk.id),
-        fabricated,
-    ]
-    assert outcome.answered is False  # and it stays False until item 6 has checked them
+    assert [statement.text for statement in outcome.verified_statements] == ["A real one."]
+    assert [statement.chunk_id for statement in outcome.verified_statements] == [str(chunk.id)]
+    assert outcome.rejected_count == 1
+    assert outcome.answered is True  # one good citation is still an answer
     assert len(double.generate_calls) == 1
+
+    # The rejected text is not reachable from the outcome by any route: not in a field, not
+    # in a repr that a log line or a debug view might render.
+    assert "An invented one." not in repr(outcome)
+    assert fabricated not in repr(outcome)
+    assert not any(
+        "invented" in str(value).lower()
+        for value in vars(outcome).values()
+    )
+
+
+@pytest.mark.django_db
+def test_the_outcome_has_no_field_carrying_rejected_statement_text(document, service_with):
+    """The invariant stated as a property of the object, not of one code path.
+
+    ``proposed_statements`` existed at item 5 and is deliberately gone. A future field
+    holding what the model said before verification would be a field a view could reach,
+    and the "withheld panel" this project has ruled out is exactly what someone builds
+    when the text is right there.
+    """
+    from dataclasses import fields
+
+    chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    service_with(
+        statements=[
+            Statement(text="Rejected text that must not survive.", chunk_id="fabricated-id")
+        ]
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    names = {field.name for field in fields(outcome)}
+    assert names == {
+        "answered",
+        "result_count",
+        "passages",
+        "verified_statements",
+        "rejected_count",
+        "no_answer_reason",
+        "message",
+    }
+    for banned in ("proposed_statements", "rejected_statements", "unverified_statements"):
+        assert banned not in names
+        assert not hasattr(outcome, banned)
+    assert "Rejected text that must not survive." not in repr(outcome)
+    assert outcome.rejected_count == 1  # a number crosses the boundary; the text does not
 
 
 @pytest.mark.django_db
@@ -680,21 +730,59 @@ def test_an_empty_statement_list_is_not_an_error_and_not_path_a(document, servic
     """``{"statements": []}`` is the model reporting that the passages do not answer.
 
     The pipeline returns it as an ordinary outcome: passages were retrieved, so this is not
-    no-answer path A, and the reason code stays None. Item 6 turns an empty set of VERIFIED
-    statements into path B with reason no_statement_verified — a different reason from path
-    A's, which is the distinction invariant 7 rests on.
+    no-answer path A. Nothing was rejected either — an empty list has nothing to reject —
+    so ``rejected_count`` is 0 and only ``verified_statements`` being empty distinguishes
+    this from an answer. **The reason code stays None at this item**: item 7 sets
+    NO_STATEMENT_VERIFIED and the message, and keeps it distinct from path A's reason,
+    which is the distinction invariant 7 rests on.
     """
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
     service_with(statements=[])
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
 
-    assert outcome.proposed_statements == ()
+    assert outcome.verified_statements == ()
+    assert outcome.rejected_count == 0
     assert outcome.no_answer_reason is None  # NOT no_relevant_passage: passages were found
-    assert outcome.no_answer_reason != NO_STATEMENT_VERIFIED  # nor path B, which is item 6's
+    assert outcome.no_answer_reason != NO_STATEMENT_VERIFIED  # nor path B, which is item 7's
     assert outcome.message is None
     assert outcome.result_count == 1
     assert outcome.answered is False
+
+
+@pytest.mark.django_db
+def test_every_statement_fabricated_leaves_an_unanswered_outcome_with_no_reason_yet(
+    document, service_with
+):
+    """No-answer path B's input, as far as item 6 builds it.
+
+    Passages were retrieved and generation returned, but nothing survived verification.
+    ``answered`` is False, ``verified_statements`` is empty, ``rejected_count`` says how
+    many were thrown away, and ``no_answer_reason`` is still None — item 7 fills that in
+    with NO_STATEMENT_VERIFIED, and a rising rate of it is the project's main quality
+    signal (invariant 7). It must never be confused with path A's
+    NO_RELEVANT_PASSAGE, which is why neither is set here by guesswork.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    service_with(
+        statements=[
+            Statement(text="Invented.", chunk_id="00000000-0000-4000-8000-000000000000"),
+            Statement(text="Also invented.", chunk_id="c_4471"),
+        ]
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.answered is False
+    assert outcome.verified_statements == ()
+    assert outcome.rejected_count == 2
+    assert outcome.no_answer_reason is None
+    assert outcome.no_answer_reason != NO_RELEVANT_PASSAGE  # emphatically not path A
+    assert outcome.message is None
+    # The passages are still carried: they were retrieved and are in scope, and item 7 may
+    # want them. What is gone is what the model said about them.
+    assert outcome.result_count == 1
+    assert "Invented." not in repr(outcome)
 
 
 @pytest.mark.django_db
@@ -734,16 +822,127 @@ def test_generation_is_reached_through_the_module_lookup_not_a_bound_import(docu
 
 
 @pytest.mark.django_db
-def test_generation_from_both_role_sessions(session_client, document, service):
-    """Generation over each role's own passages (CLAUDE.md section 8 item 2)."""
+def test_generation_and_verification_from_both_role_sessions(session_client, document, service):
+    """Generation and verification over each role's own passages (section 8 item 2)."""
     role_name = session_client.role_name
     other_role = next(name for name in ROLE_PAIR if name != role_name)
-    make_chunk(document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest.")
+    restricted = make_chunk(
+        document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest."
+    )
     permitted = make_chunk(document, [role_name], index=2, cosine=ABOVE, text="Permitted.")
 
     outcome = answer_question(question=QUESTION, user=session_client.user)
 
     (_, passages_sent) = service.generate_calls[0]
     assert [passage.chunk_id for passage in passages_sent] == [str(permitted.id)]
-    assert [statement.chunk_id for statement in outcome.proposed_statements] == [str(permitted.id)]
-    assert outcome.answered is False
+    assert [statement.chunk_id for statement in outcome.verified_statements] == [str(permitted.id)]
+    assert outcome.answered is True
+    assert outcome.rejected_count == 0
+    # A verified citation can only ever name a passage this role may read, because the
+    # supplied set it was checked against is the scoped, ranked, admitted, truncated one.
+    assert str(restricted.id) not in [s.chunk_id for s in outcome.verified_statements]
+
+
+# --- Step 9: verification against the SUPPLIED set, not the admitted one ----------------
+
+
+@pytest.mark.django_db
+def test_a_citation_of_a_passage_truncated_out_of_the_prompt_is_rejected(document, monkeypatch):
+    """The subtle one, and the reason verification takes the truncated set.
+
+    A passage can clear RELEVANCE_THRESHOLD and then be discarded by the context budget.
+    It was admitted, but it was never put in front of the model — so a statement citing it
+    is a statement about text the model never read, which is exactly as unsupported as an
+    invented identifier and is rejected on the same rule. Checking against the admitted set
+    instead would quietly admit it, and the answer would carry a citation to a passage that
+    was not in the prompt.
+
+    Arranged by shrinking MAXIMUM_CONTEXT_TOKENS for this test only: the constant is
+    PROVISIONAL and item 5 did not tune it, so a test that needs the budget to bite says so
+    locally rather than moving the value everyone else reads.
+    """
+    from apps.retrieval import ranking
+
+    monkeypatch.setattr(ranking, "MAXIMUM_CONTEXT_TOKENS", 10)
+    kept = make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.90, text=" ".join(["word"] * 8)
+    )
+    dropped = make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.60, text=" ".join(["other"] * 8)
+    )
+    double = install(
+        monkeypatch,
+        ControlledService(
+            statements=[
+                Statement(text="From the passage it was shown.", chunk_id=str(kept.id)),
+                Statement(text="From a passage it never saw.", chunk_id=str(dropped.id)),
+            ]
+        ),
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    # The premise: the dropped chunk cleared the threshold but was not supplied.
+    (_, passages_sent) = double.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(kept.id)]
+
+    assert [statement.chunk_id for statement in outcome.verified_statements] == [str(kept.id)]
+    assert str(dropped.id) not in [s.chunk_id for s in outcome.verified_statements]
+    assert outcome.rejected_count == 1
+    assert "From a passage it never saw." not in repr(outcome)
+    assert outcome.answered is True
+
+
+@pytest.mark.django_db
+def test_verification_checks_against_exactly_what_was_supplied(document, service_with):
+    """Every supplied identifier is a valid citation, and only those.
+
+    Two passages go into the prompt; the model cites both plus one invention. Both real
+    citations survive and the invention does not — the supplied set is the whole rule, and
+    nothing about rank, score or position affects it.
+    """
+    first = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.90, text="First.")
+    second = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.60, text="Second.")
+    service_with(
+        statements=[
+            Statement(text="From the best.", chunk_id=str(first.id)),
+            Statement(text="Invented.", chunk_id="00000000-0000-4000-8000-000000000000"),
+            Statement(text="From the second.", chunk_id=str(second.id)),
+        ]
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert [s.chunk_id for s in outcome.verified_statements] == [str(first.id), str(second.id)]
+    assert [s.text for s in outcome.verified_statements] == ["From the best.", "From the second."]
+    assert outcome.rejected_count == 1
+    assert outcome.answered is True
+
+
+@pytest.mark.django_db
+def test_a_statement_citing_an_out_of_scope_chunk_cannot_be_verified(document, service_with):
+    """FR-11 and invariant 5 meeting: an out-of-scope identifier is not in the supplied set.
+
+    The identifier here is a REAL chunk in the store, just not one this role may read, so it
+    is the strongest form of the case: the model could only have produced it by inventing
+    it, and verification rejects it for the same reason it rejects nonsense. No answer can
+    cite a passage the asking role may not see, even if something upstream leaked the
+    identifier.
+    """
+    permitted = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Mine.")
+    restricted = make_chunk(
+        document, [ADMINISTRATOR_ROLE_NAME], index=2, cosine=NEAREST, text="Not mine."
+    )
+    service_with(
+        statements=[
+            Statement(text="Permitted fact.", chunk_id=str(permitted.id)),
+            Statement(text="Restricted fact.", chunk_id=str(restricted.id)),
+        ]
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert [s.chunk_id for s in outcome.verified_statements] == [str(permitted.id)]
+    assert str(restricted.id) not in repr(outcome)
+    assert "Restricted fact." not in repr(outcome)
+    assert outcome.rejected_count == 1

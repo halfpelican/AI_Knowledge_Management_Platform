@@ -1439,3 +1439,135 @@ and Stage 4 item 6 re-runs the full harness against the real pipeline to settle 
 - Switching the provider remains a full re-index event, and adopting or dropping a
   prefix now is too.
 
+## D-39 · The worked example is training data for the response, in its content as well as its identifiers
+
+**Status:** Settled by the user · **Date:** 2026-09-24 · **Stage:** 4 item 6 ·
+**Supersedes:** the item-0 conclusion that UUID-shaping the example identifiers was the
+whole fix
+
+**Decision.** `SYSTEM_PROMPT` in `apps/ai/prompting.py` gets a new worked example, and
+both halves of the cause are removed: the example moves to an **alien domain**
+(houseplant care — no policy, procedure, approval, money, staff, meeting or IT content),
+and it carries **one identifier, which its own reply cites**. A second example
+demonstrating the empty-array reply reuses the same passage rather than introducing a
+second identifier, so the prompt contains nothing uncited to borrow.
+
+**The finding.** The first live run of the shipped pipeline measured a fabricated-
+identifier rate of **6.8% (3 of 44)**, up from the prototype's 2.4% (1 of 42). All three
+had one cause and it was ours:
+
+- **q30** and **q31**, both purchase-approval questions, cited
+  `8b5d04e2-1a7f-4c93-b620-de91f3805c47`. That is the worked example's **second**
+  identifier — the one the example's own reply does *not* cite. Both statements were
+  factually correct, drawn from the corpus's real AUD approval-threshold table, and
+  both were discarded by `verifyCitations()` because the citation was invented.
+- **q21** cited `5. Offboarding`, a section heading lifted from a passage body.
+
+The example's subject matter — "Purchase orders above $10,000 require two approvals" —
+collided directly with the corpus's real approval-threshold table. The model was asked a
+purchase-approval question, answered it correctly from the corpus, and reached into the
+example for the citation.
+
+**Rationale (as given).** Item 0 found that 9 of 10 fabrications were the example's own
+short identifiers, gave the examples UUID shapes, and the rate fell from 23.8% to 2.4%.
+That fix was right but the conclusion drawn from it was too narrow: it treated identifier
+*shape* as the mechanism. The mechanism is that **a worked example is training data for
+the response, in its identifiers and in its content**, and the second recurrence is what
+shows the first conclusion was incomplete. Deferring the fix to Stage 5 was rejected:
+the cause was identified and specific, Stage 5 has seven items including the integration
+pass, the accessibility pass, deployment and two audits by 31 October, and shipping a
+documented rate that describes a system we already intend to change is not a saving.
+
+**The re-measurement, bounded to one run.** Fabricated identifiers went **3 of 44 to 0
+of 38**, and no identifier was invented in the 36 further question-runs of the stability
+measurement. The three statements verification had been correctly discarding are now
+correctly cited. **This does not establish that fabrication is solved** — it is 0 of 38
+on one run of a 6-chunk corpus, at an n D-37 already says cannot adjudicate small
+differences. One fix, one re-measure, deliberately: iterating the prompt against this
+question set at n=3 would be tuning noise.
+
+**Consequences.**
+
+- **The lesson is now an assertion, not a comment.**
+  `test_no_identifier_appears_in_the_prompt_without_its_example_reply_citing_it` checks
+  `shown == cited` over whatever identifiers the prompt contains, so a future
+  three-passage example fails in under a second instead of in a six-minute live run. A
+  subject-matter guard asserts the example text contains none of the corpus's own
+  vocabulary (purchase, approval, invoice, procurement, policy, leave, onboarding,
+  offboarding, employee, staff, manager, meeting, incident, account, password, AUD, `$`).
+- **The block comment above `SYSTEM_PROMPT` records both recurrences**, not just the
+  first. Recording only the first would again suggest UUID-shaping was the whole fix,
+  which is the conclusion that permitted the second.
+- **Verification did its job in the before-run and that is the point worth keeping.**
+  Three fabricated citations reached verification and none reached an answer. The
+  measurable cost was two correct answers withheld — which is the trade invariant 5
+  exists to make, made in the right direction.
+- **Every rate in `docs/flm-baseline.md` before 23 September describes the old prompt.**
+  The before and after runs are both recorded there, because the before-run is the only
+  evidence for the mechanism.
+
+## D-40 · Retrieval is unstable at the threshold, and FLM's stability is not established
+
+**Status:** Open — recorded, not resolved · **Date:** 2026-09-24 · **Stage:** 4 item 6 ·
+**Owner:** unassigned · **Re-measure at:** Stage 5 item 3, over a real corpus
+
+**The observation.** Running the shipped prompt three times, unchanged, over the same 12
+questions in three separate processes, two questions changed answer between runs — q04
+answered in 1 run of 3, q06 in 2 of 3, swapping with each other. The other ten were
+stable in count *and* in character-identical statement text.
+
+**The mechanism, as far as it is established.** Both flips were retrieval, not
+generation. A chunk sitting **0.0003 to 0.0014 above `RELEVANCE_THRESHOLD`** crossed the
+floor in opposite directions on the two questions, changing how many passages reached the
+prompt. Across 14 distinct (question, supplied-passage-set) groups, identical input gave
+identical output every time, so **the generator is not implicated on this evidence.**
+
+Two facts make it matter:
+
+1. **About 6% of admitted passages sit on the floor.** 5 of 86 admitted passages are
+   within 0.005 of 0.30, three within 0.0017. q04 and q06 are two of those five.
+2. **Query embeddings vary by roughly 1e-4 on some questions and not others**, which is
+   what moves a passage across the floor. Reproduced independently: q04's top score was
+   0.358032 on one invocation and 0.358459 on two others.
+
+**What is NOT established, and is deliberately left open rather than guessed.** The
+trigger for the embedding variation is unknown. Two plausible candidates were tested and
+ruled out: embedding the same questions in three separate processes gave bit-identical
+vectors (elementwise difference 0.000e+00), and interleaving a chat completion between
+two embeddings inside one process also gave bit-identical vectors. Every observation so
+far shows the first run of a sequence differing and later runs agreeing, but what
+distinguishes that first run is not known.
+
+**`scripts/check_flm.py` does not catch this, and that is a gap rather than a fault.** It
+requires cosine ≥ 0.999 between repeated embeddings; the variation here is around 1e-4,
+four orders of magnitude inside that tolerance. The check was built for the v1.0.4 bug
+where a string scored 0.09 against itself (D-36) and it still does that job. It simply
+does not measure at the resolution retrieval turns out to need at a threshold boundary.
+
+**Why this is recorded before it causes a visible failure.** Generation determinism on
+the NPU was assumed and never measured until 24 September, exactly as embedding
+determinism was assumed until D-36 — where the assumption turned out to be load-bearing
+and wrong, and an index of pure noise looked entirely plausible for four days. If FLM
+output is not stable run to run, **every rate in `docs/flm-baseline.md` is one draw from
+a distribution rather than a measurement, including the first-attempt conformance of 100%
+from which NFR-19's retry policy is reasoned.** Nothing observed so far says that is the
+case for generation. The point is that it has not been shown either way, and the wording
+in the baseline says "no variance observed across 3 runs on 12 questions" rather than
+anything stronger.
+
+**Consequences.**
+
+- **`RELEVANCE_THRESHOLD` is NOT re-tuned on this.** D-37 and D-38 both say the value is
+  not tuned against a 6-chunk corpus, and moving a floor to dodge two questions that sit
+  on it would be fitting a constant to noise. The instability is a property of where the
+  corpus happens to land, not evidence about where the floor belongs.
+- **A demonstration can show the same question answering differently on two runs.** That
+  is worth knowing before 1 November rather than discovering it live. It is not a
+  correctness failure — both outcomes are honest, and the no-answer response is a
+  legitimate reply — but it will be asked about.
+- **It changes nothing about the permission boundary.** Out-of-scope chunks were 0 in
+  every run, before the fix, after it, and in all three stability runs. Instability at
+  the floor moves passages the asking role may already read.
+- **Any future claim of determinism needs a measurement, not an absence of failures.**
+  That is the D-36 lesson restated, and it is why this entry stays open rather than
+  closing with "appears stable".

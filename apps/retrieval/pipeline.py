@@ -1,20 +1,25 @@
-"""FR-12 steps 1 to 8 (proposal section 7.10 ``generateGroundedAnswer``): retrieval, the
-first no-answer path, and grounded generation.
+"""FR-12 steps 1 to 9 (proposal section 7.10 ``generateGroundedAnswer``): retrieval, the
+first no-answer path, grounded generation, and citation verification.
 
 One function, ``answer_question``, composing the pieces items 1 to 3 built: validate,
 resolve the scope, embed, restrict the candidate set, rank, admit, fit the context
-budget, generate. It stops before verification. No-answer path A returns at step 6;
-path B is item 6's.
+budget, generate, verify. No-answer path A returns at step 6.
 
-**This module still cannot answer anything, and that is deliberate.** 7.10's name for the
-function is ``generateGroundedAnswer``; this one is called ``answer_question`` because a
-name promising an answer on a function that returns unverified statements is the kind of
-overstatement CLAUDE.md section 9 asks not to be committed. What generation returns are
-statements the model PROPOSED, each carrying an identifier this module has not checked.
-Item 6 adds ``verifyCitations()`` and is where a statement first becomes citable and
-``answered`` first becomes True; item 8 adds the QueryLog row. Nothing here is shown to a
-user: an uncited factual statement has no lawful interface state (invariant 6), so the
-proposed statements exist to be verified and for no other purpose.
+**This module can now answer, and ``answered`` can now be True** — for the first time in
+this stage, and only because step 9 exists. A statement becomes citable when its
+identifier has been checked for set membership against the identifiers the prompt
+supplied (``apps/retrieval/verification.py``, invariant 5), so ``answered`` is exactly
+``bool(verified_statements)``. What generation returns is what the model PROPOSED; what
+leaves this module is what survived. The proposed list does not outlive the function that
+verified it, and ``RetrievalOutcome`` has no field for it: see the class docstring for why
+that is an invariant rather than tidiness.
+
+Still not here: no-answer path B's reason code and message (item 7 — when nothing survives
+verification this returns ``answered=False`` with **no** reason set, and item 7 fills in
+NO_STATEMENT_VERIFIED, keeping it distinct from path A's NO_RELEVANT_PASSAGE), the
+QueryLog row (item 8), 7.10's ``composeAnswerWithInlineCitations`` and
+``resolveSourceDetails`` (the presentation layer), the view (item 11) and conversations
+(FR-13).
 
 **7.10 step 1, and what is NOT built for it.**
 
@@ -79,7 +84,7 @@ because the wider number does not exist here to be taken.
 
 **Not built here:** the QueryLog row (item 8 — this function writes nothing to the
 database, and the no-answer *reason* it returns is not yet the no-answer *record*),
-citation verification and no-answer path B (item 6), the view and its status codes
+no-answer path B's reason code and message (item 7), the view and its status codes
 (item 11), and conversations (FR-13). ``conversation_id``, which 7.10 takes only to pass
 to ``recordQuery``, is therefore not a parameter yet.
 """
@@ -97,6 +102,7 @@ from apps.core.constants import (
 from apps.retrieval.query_embedding import embed_question
 from apps.retrieval.ranking import RankedPassage, admit, rank, truncate_to_context
 from apps.retrieval.scoping import candidate_chunks, permission_scope
+from apps.retrieval.verification import VerificationResult, verify_citations
 
 
 class QuestionLengthOutOfRange(ValueError):
@@ -114,43 +120,55 @@ class QuestionLengthOutOfRange(ValueError):
 class RetrievalOutcome:
     """What retrieval decided, which at this item is never yet an answer.
 
-    ``answered`` means "an answer was returned to the user", and it is False on BOTH
-    branches of ``answer_question``: path A returns a no-answer response, and the other
-    branch returns statements the model proposed that no verification step has yet
-    checked. Setting it True for generated-but-unverified would make the field read as an
-    answer having been given, and the one number FR-12 asks to be tracked over time would
-    start its life overcounting. Item 6 is where a statement first becomes citable and so
-    the only place ``answered=True`` may come from; the name of this class says the same
-    thing — it is retrieval's outcome, not an answer.
+    ``answered`` means "an answer was returned to the user". Items 4 and 5 both left it
+    False on every branch, because nothing citable existed yet; **item 6 is where it first
+    becomes True, and it is exactly ``bool(verified_statements)``**. A statement is citable
+    once its identifier has been checked for set membership against the identifiers the
+    prompt supplied, and not one moment earlier — so generated-but-unverified was False,
+    and verified-and-non-empty is True. Nothing else may set this field: it is derived,
+    not decided.
 
-    ``proposed_statements`` is 7.9's own vocabulary (``proposedStatements``) and is chosen
-    to be unusable by accident: these are what the model said, each tagged with an
-    identifier nothing has yet checked for set membership against the identifiers the
-    prompt supplied. A statement in here may cite a fabricated identifier — the baseline
-    measured that at 2.4% — so nothing may render, log or count one as an answer until
-    ``verifyCitations()`` has run (invariants 5 and 6).
+    **There is no field carrying unverified statements, and that is an invariant rather
+    than a preference.** Item 5 carried ``proposed_statements``; item 6 removed it. What
+    the model said is now checked by ``verify_citations`` inside ``answer_question``, and
+    only ``verified_statements`` and ``rejected_count`` come out. The rejected text is
+    unverified model output tagged with an identifier that may be invented — the baseline
+    measured 1 in 42 — and invariant 6 says no interface state shows an uncited factual
+    statement. The most reliable way to guarantee that is for the text to be unreachable
+    from the object a view is handed: a count discloses nothing, a list of sentences is one
+    refactor away from a "withheld" panel. ``verify_citations`` does return the rejected
+    statements, because the harness measures the fabrication rate from them; the pipeline
+    drops them at the boundary.
 
     The branches are told apart by the fields that are actually populated, not by
-    ``answered``:
+    ``answered`` alone:
 
     - path A — ``no_answer_reason`` is NO_RELEVANT_PASSAGE, ``message`` is
-      NO_ANSWER_MESSAGE, ``passages`` and ``proposed_statements`` are empty and
+      NO_ANSWER_MESSAGE, ``passages`` and ``verified_statements`` are empty and
       ``result_count`` is 0;
-    - passages retrieved — ``no_answer_reason`` and ``message`` are both None and
-      ``passages`` is non-empty. ``proposed_statements`` may legitimately be empty here:
-      ``{"statements": []}`` is the model correctly reporting that the passages do not
-      answer the question, and item 6 turns that into no-answer path B.
+    - answered — ``verified_statements`` is non-empty, ``answered`` is True, and
+      ``no_answer_reason`` and ``message`` are both None;
+    - retrieved but nothing survived — ``passages`` is non-empty, ``verified_statements``
+      is empty, ``answered`` is False, and ``no_answer_reason`` is **still None**. That is
+      no-answer path B, and item 7 owns it: it sets NO_STATEMENT_VERIFIED and the
+      NO_ANSWER_MESSAGE, and keeps that reason distinct from path A's, which is the
+      distinction invariant 7 rests on. This item deliberately leaves the reason unset
+      rather than guessing at it.
 
     Frozen, for the reason ``RankedPassage`` is: a score or an identifier edited after
     the fact is a citation checked against something other than what was retrieved. No
-    fields for verified citations or sources — item 6 owns those, and a stub of one here
+    fields for resolved sources (7.10's ``sourceList``) or for a composed answer string —
+    ``passages`` already carries what those are built from, and a stub of either here
     would be a field nothing sets and something eventually trusts.
     """
 
     answered: bool
     result_count: int
     passages: tuple[RankedPassage, ...] = ()
-    proposed_statements: tuple[Statement, ...] = ()
+    verified_statements: tuple[Statement, ...] = ()
+    # How many statements cited an identifier that was not supplied. A number, not text:
+    # see the class docstring. Item 8 records it against the query.
+    rejected_count: int = 0
     no_answer_reason: str | None = None
     message: str | None = None
 
@@ -166,26 +184,34 @@ class RetrievalOutcome:
         )
 
     @classmethod
-    def passages_retrieved(
-        cls, passages: list[RankedPassage], proposed_statements: list[Statement]
+    def verified(
+        cls,
+        passages: list[RankedPassage],
+        verification: "VerificationResult",
     ) -> "RetrievalOutcome":
-        """Passages were supplied to generation and it returned. Item 6 takes it from here.
+        """Generation ran and its citations were checked. The only True ``answered``.
 
-        ``answered`` is False because nothing has been verified yet, and
-        ``no_answer_reason`` is None because this is not a no-answer outcome either.
+        Takes the VerificationResult rather than a statement list, so the rejected
+        statements are dropped HERE, at one boundary that can be pointed at, instead of by
+        a caller who has to remember to. Only the count crosses.
+
+        ``no_answer_reason`` stays None even when nothing survived: that outcome is
+        no-answer path B and item 7 sets its reason. Leaving it None is not an oversight,
+        it is the absence item 7 fills.
         """
         return cls(
-            answered=False,
+            answered=bool(verification.verified_statements),
             result_count=len(passages),
             passages=tuple(passages),
-            proposed_statements=tuple(proposed_statements),
+            verified_statements=verification.verified_statements,
+            rejected_count=verification.rejected_count,
             no_answer_reason=None,
             message=None,
         )
 
 
 def answer_question(*, question: str, user) -> RetrievalOutcome:
-    """7.10 steps 1 to 8: validate, scope, embed, retrieve, rank, admit, fit, generate.
+    """7.10 steps 1 to 9: validate, scope, embed, rank, admit, fit, generate, verify.
 
     Raises QuestionLengthOutOfRange before any provider call, and lets
     ``UnscopedRequestError`` and ``ProviderUnavailable`` out unchanged — the view turns
@@ -231,11 +257,21 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
 
     # Step 8. Generation, over these passages and nothing else. The service is looked up
     # on the module at call time so the suite's stub applies (docs/ai-provider.md
-    # section 6), and the identifiers going in are the ones item 6 will check the
-    # returned ones against. ProviderUnavailable after MAXIMUM_GENERATION_ATTEMPTS is
-    # allowed out: the view answers 503.
+    # section 6), and the identifiers going in are the ones step 9 checks the returned
+    # ones against. ProviderUnavailable after MAXIMUM_GENERATION_ATTEMPTS is allowed out:
+    # the view answers 503.
     service = apps.ai.get_ai_service()
     proposed = service.generate_statements(
         question, [Passage(chunk_id=passage.chunk_id, text=passage.chunk_text) for passage in supplied]
     )
-    return RetrievalOutcome.passages_retrieved(supplied, proposed.statements)
+
+    # Step 9. Verification, over the identifiers that were ACTUALLY supplied — the
+    # truncated set, not the admitted one. A passage discarded by the context budget was
+    # never in front of the model, so a statement citing it is as unsupported as one
+    # citing an invented identifier. Set membership in application code, no second model
+    # call (invariant 5). The proposed statements are not stored, logged or returned:
+    # ``RetrievalOutcome.verified`` takes the result and keeps only the count.
+    verification = verify_citations(
+        proposed.statements, [passage.chunk_id for passage in supplied]
+    )
+    return RetrievalOutcome.verified(supplied, verification)

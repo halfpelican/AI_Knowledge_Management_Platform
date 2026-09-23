@@ -21,11 +21,32 @@ which also keeps ``django.setup()`` out of the test.
 """
 
 import ast
+import io
+import tokenize
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 HARNESS_PATH = REPOSITORY_ROOT / "scripts" / "citation_harness.py"
 HARNESS_SOURCE = HARNESS_PATH.read_text(encoding="utf-8")
+
+
+def code_only(source: str) -> str:
+    """``source`` with comments and string literals removed.
+
+    Needed because this file's own subject matter keeps appearing in the harness's
+    explanatory prose: a comment saying "we no longer write `x not in supplied_ids` here"
+    would fail a naive substring check for exactly the thing it says was removed. Tests
+    about what the code DOES must read the code, and a comment is not code.
+    """
+    kept = []
+    for token in tokenize.generate_tokens(io.StringIO(source).readline):
+        if token.type in (tokenize.COMMENT, tokenize.STRING):
+            continue
+        kept.append(token.string)
+    return " ".join(kept)
+
+
+HARNESS_CODE = code_only(HARNESS_SOURCE)
 
 # A prompt is a long string. 200 characters is well above every legitimate string
 # literal in the harness — the longest are report() format fragments and argparse help
@@ -111,6 +132,30 @@ def test_the_harness_no_longer_makes_its_own_chat_call():
     assert "def generate_once" not in HARNESS_SOURCE
     assert "chat.completions.create" not in HARNESS_SOURCE
     assert "generate_statements(" in HARNESS_SOURCE
+
+
+def test_the_harness_verifies_citations_with_the_shipped_function():
+    """Stage 4 item 6: the membership rule is not written here a second time.
+
+    The harness used to compute its fabricated-identifier rate with
+    ``s.chunk_id not in supplied_ids`` — the same rule as apps/retrieval/verification.py,
+    written twice. That is the defect this file exists to prevent, and it is worse here
+    than for the prompt: a local copy that drifted would report a healthy fabrication rate
+    for a rule the pipeline no longer applies, and citation verification is the one
+    mechanism standing between a fabricated identifier and an answer (invariant 5).
+
+    Lives in this file rather than the observer one because it is the same question the
+    rest of this module asks — is there a second definition of something that decides what
+    a user is shown — and the answer should be findable in one place.
+    """
+    assert "from apps.retrieval.verification import verify_citations" in HARNESS_SOURCE
+    assert "verify_citations (" in HARNESS_CODE  # a call, in the code rather than prose
+    # No local membership test against the supplied identifiers, and no second definition
+    # of the function. Checked against the CODE: the harness explains in a comment what it
+    # used to do, and that comment necessarily contains the rule it no longer applies.
+    assert "not in supplied_ids" not in HARNESS_CODE
+    assert "in supplied_ids" not in HARNESS_CODE
+    assert "def verify_citations" not in HARNESS_CODE
 
 
 def test_the_harness_counts_tokens_with_the_projects_one_definition():

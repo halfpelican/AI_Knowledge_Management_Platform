@@ -309,6 +309,171 @@ The re-measure that matters is deferred to **Stage 5 item 3**, the end-to-end
 integration pass over a real corpus, which is the first point at which the question
 can be answered with evidence rather than with six chunks.
 
+## 23 September 2026 — item 6, the first measurement of the shipped pipeline
+
+Stage 4 item 6. Everything before this was measured with the harness's own prompt,
+schema and parser; item 5 moved those into `apps/ai/`, so these runs measure the code
+the application actually runs. Two runs, because the first found a defect in our own
+prompt, which was fixed and re-measured once (D-39).
+
+**Counts are given beside every rate.** At 38–44 statements a single event moves the
+fabrication rate by more than two points, so a percentage alone overstates how much is
+known — the same caution the 6-chunk corpus already earns.
+
+| | baseline (prototype, pre-prefix) | item 6 before fix | item 6 after fix |
+|---|---|---|---|
+| Schema conformance | 100.0% (46/46) | **100.0% (50/50)** | **100.0% (50/50)** |
+| First-attempt conformance | 100.0% | **100.0% (50/50)** | **100.0% (50/50)** |
+| Fabricated identifiers | 2.4% (1 of 42) | **6.8% (3 of 44)** | **0.0% (0 of 38)** |
+| Statements proposed / verified | — | 44 / 41 | 38 / 38 |
+| Empty where an answer existed | 14.6% (7 of 48) | 18.8% (9 of 48) | **20.8% (10 of 48)** |
+| Expected-answer match (diagnostic) | 72.9% (35/48) | 66.7% (32/48) | 70.8% (34/48) |
+| Scoped correctly empty | 8/8 | **8/8** | **8/8** |
+| No-answer correctly empty | 8/8 | **8/8** | **8/8** |
+| **Out-of-scope in any prompt or answer** | 0 | **0** | **0** |
+
+**Invariant 1 holds against the real retrieval path.** The baseline's zero was measured
+over a candidate set the harness assembled itself; this one is measured through
+`scoping.candidate_chunks`, over 64 questions in each run and 36 more in the stability
+runs below. No out-of-scope identifier reached any prompt, statement or count in any of
+them. The harness checks the *proposed* statements, not only the verified ones, so a
+model naming a restricted chunk would be a finding even where verification then
+discarded it.
+
+### Two definitions of "answered", and which number compares with which
+
+The harness's `answered` now means `bool(verified_statements)` — what
+`RetrievalOutcome.answered` means, now that the harness runs the shipped pipeline. The
+baseline meant "the model returned at least one statement", which counts an answer whose
+every citation was fabricated as answered.
+
+The new definition is the correct one and it stays. It also moves the number, so both
+are recorded:
+
+| | before fix | after fix |
+|---|---|---|
+| empty-answer, `bool(verified_statements)` (current) | 18.8% (9/48) | 20.8% (10/48) |
+| empty-answer, baseline's "model returned at least one statement" | **12.5% (6/48)** | 20.8% (10/48) |
+
+**12.5% is the figure comparable with the baseline's 14.6%, and it is lower.** 18.8%
+against 14.6% is not like-for-like and must not be quoted as though it were. After the
+fix the two definitions coincide, because nothing was fabricated for verification to
+strip.
+
+### What the D-38 projection got right, and what it got wrong
+
+D-38 projected that empty-answer-where-available would fall to about 8.3% (4/48),
+because the prefix change admitted 44 of 48 answerable questions instead of 41.
+
+**The retrieval half was exactly right.** In both runs precisely 4 ordinary questions
+took no-answer path A — q23, q25, q45, q47 — with top scores of 0.218 to 0.298 against
+the 0.30 floor. That is 8.3%, question for question, in both runs.
+
+**The generation half was wrong.** Every remaining empty answer is generation or
+verification, not the threshold. Before the fix: 4 path A, 2 the model declined with
+passages in front of it, 3 that lost every statement to verification. After: 4 path A,
+6 declined, 0 lost to verification. The projection assumed generation would answer what
+retrieval admitted; it does not always.
+
+### The fabrication rose because of our own prompt, and the fix removed the mechanism
+
+D-39 records the three fabrications. Two cited `8b5d04e2-…`, the *uncited* second
+identifier from the worked example, while answering purchase-approval questions
+correctly out of the real AUD threshold table: the example's subject matter collided
+with the corpus. The third was a section heading lifted from a passage body.
+
+After removing both halves of the cause — an alien example domain, and no uncited
+identifier left to borrow — no identifier was invented across 64 questions, nor across
+the 36 question-runs of the stability measurement. The three statements verification had
+been correctly discarding are now correctly cited.
+
+**This is not "fabrication is solved."** It is 0 of 38 on one run of a 6-chunk corpus,
+the same n that D-37 says cannot adjudicate small differences.
+
+## 24 September 2026 — measurement stability, and a threshold exposed
+
+The fix appeared to cost four answers: q04, q06, q07 and q46 answered before it and
+returned `{"statements": []}` after. Before attributing that to the prompt, the shipped
+prompt was run again unchanged — 12 questions, the 4 that flipped plus 8 that did not,
+chosen to span and interleave the same score band, three times, in three separate
+processes, with nothing else altered.
+
+**Different questions came back empty in different runs.** The empty sets were
+{q06, q12, q14, q46}, then {q04, q12, q14, q46}, then {q04, q12, q14, q46} — q04 and q06
+swap. The four-question regression is therefore largely a draw rather than a result:
+
+| | across 3 runs | reading |
+|---|---|---|
+| q07 | answered 3 of 3 | its "loss" in the after-run was an unlucky draw |
+| q04 | answered 1 of 3 | unstable |
+| q06 | answered 2 of 3 | unstable |
+| q46 | empty 3 of 3 | the only one with a claim to being a real change, and one question is not a finding |
+
+For the other ten questions there was **no variance observed across 3 runs on 12
+questions**, in statement count or in statement text — the verified statements are
+character-identical, `chunk_id` included. That is an absence of observed variance on a
+small sample. It is **not** evidence that generation is deterministic at temperature 0.
+A check that has never failed cannot support that claim, which is the lesson this
+repository paid the most for (D-36, and `check_flm.py` passing on a broken build).
+
+### The cause is a threshold crossing, and the generator is not implicated
+
+Both flips changed how many passages the question was given:
+
+```
+q04  run 1:    supplied 2  ->  answered     chunk fe61bb55 BELOW the floor
+     runs 2,3: supplied 3  ->  empty        chunk fe61bb55 at 0.301412  (+0.0014)
+
+q06  run 1:    supplied 3  ->  empty        chunk 39d5c220 at 0.300344  (+0.0003)
+     runs 2,3: supplied 2  ->  answered     chunk 39d5c220 BELOW the floor
+```
+
+A passage sitting 0.0003 to 0.0014 above `RELEVANCE_THRESHOLD` crossed it, in opposite
+directions on two questions. In both cases 2 supplied passages produced an answer and 3
+produced an empty list — the same relationship both ways.
+
+**Across 14 distinct (question, supplied-passage-set) groups, identical input produced
+identical output every time.** Every difference observed traces to the input set
+changing, not to the model's reply to a fixed input.
+
+**About 6% of admitted passages are effectively coin flips.** In the item-6 run, 5 of 86
+admitted passages sit within 0.005 of the 0.30 floor and three within 0.0017: q06
++0.00056, q12 +0.00070, q04 +0.00111, q08 +0.00157, q13 +0.00165. q04 and q06 are two of
+those five, which is why they are the two that moved.
+
+### An unexplained source of variation in query embeddings, which check_flm.py misses
+
+Those scores move because the query vector moves, by roughly 1e-4 to 1e-3, on some
+questions and not others. Reproduced independently while checking this write-up: q04's
+top score was 0.358032 on one invocation of the real pipeline and 0.358459 on two
+others.
+
+**The trigger is not established, and two plausible ones were ruled out.** Embedding the
+same four questions in three separate processes gave **bit-identical** vectors (maximum
+elementwise difference 0.000e+00, cosine 1.000000000), so a process boundary alone does
+not cause it. Interleaving a chat completion between two embeddings of the same question
+inside one process also gave bit-identical vectors, so chat/embed alternation on the NPU
+is not obviously the cause either. The pattern in every observation so far is that the
+first run of a sequence differs and later runs agree, but what distinguishes that first
+run is not known. It is recorded as unidentified rather than guessed at.
+
+**`scripts/check_flm.py` asserts embedding determinism, passes, and does not catch
+this.** It embeds one string twice within a request and once in a second request, and
+requires cosine ≥ 0.999. The variation here is around 1e-4 — four orders of magnitude
+inside that tolerance and invisible to it. That is not a fault in the check, which was
+built to catch the v1.0.4 noise bug where a string scored 0.09 against itself; it is a
+gap between what it proves and what retrieval needs at a threshold boundary.
+
+**Why this is recorded now rather than when it bites.** Generation determinism on the
+NPU was assumed and never measured until today, exactly as embedding determinism was
+before D-36. If FLM output is not stable run to run, every rate in this document is one
+draw from a distribution rather than a measurement — **including the first-attempt
+conformance of 100%, which is what NFR-19's retry policy is reasoned from.** On the
+evidence here the generator itself is not implicated: identical inputs gave identical
+outputs in all 14 groups tested. The instability that was found lives in the query
+embedding, and a threshold that a handful of real passages sit on is what turns it into
+visible behaviour. Both remain open, and D-40 records them.
+
 ## The duplication is over — item 5 landed on 23 September 2026
 
 This section used to record a deliberate, temporary copy: `scripts/citation_harness.py`

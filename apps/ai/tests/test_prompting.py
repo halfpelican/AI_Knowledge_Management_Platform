@@ -120,20 +120,51 @@ def test_no_passages_produces_no_passage_block():
     assert "[chunk_id:" not in user
 
 
-# --- The worked example: the 23.8% -> 2.4% lesson ---------------------------------------
+# --- The worked examples: 23.8% -> 2.4% -> 6.8%, and what the second recurrence taught --
 
 
-def test_the_worked_examples_identifiers_are_uuid_shaped():
+def test_the_prompt_contains_exactly_one_example_identifier():
+    """One passage, one identifier, nothing spare to borrow.
+
+    The old example showed two passages and cited one. On the first run of the shipped
+    pipeline, 2 of 3 fabrications were the identifier it did NOT cite — a UUID sitting in
+    the prompt with no demonstrated purpose, which the model took as available. Example 2
+    now reuses example 1's passage instead of introducing a second one, so there is exactly
+    one identifier in the whole prompt.
+    """
+    assert len(set(UUID_SHAPE.findall(SYSTEM_PROMPT))) == 1
+
+
+def test_no_identifier_appears_in_the_prompt_without_its_example_reply_citing_it():
+    """THE property that failed at item 6, asserted so it cannot fail silently again.
+
+    Every identifier in the prompt must be cited by one of the example replies. An
+    identifier shown but never cited is an identifier whose only demonstrated use is to be
+    available, and a small model treats availability as permission. Written as a property
+    over whatever identifiers the prompt happens to contain, not as a check of the two that
+    were fabricated, so a future example with three passages fails here rather than in a
+    six-minute live run.
+    """
+    shown = set(UUID_SHAPE.findall(SYSTEM_PROMPT))
+    # The identifiers that appear inside a `"chunk_id": "..."` in an example reply.
+    cited = set(re.findall(r'"chunk_id":\s*"([^"]+)"', SYSTEM_PROMPT))
+
+    assert shown, "the prompt should still demonstrate at least one passage"
+    assert shown == cited, f"shown but never cited: {sorted(shown - cited)}"
+
+
+def test_the_example_identifier_is_uuid_shaped():
     """Real chunk identifiers are UUIDs, so the example's must be too.
 
     The point is not that UUIDs are better prompt decoration. It is that an example
     identifier WILL be cited by a small model, and a UUID-shaped one is then caught by
     verification as a fabrication instead of colliding with a real identifier or teaching
-    the model a shape to invent in. Measured: 23.8% fabricated identifiers before, 2.4%
-    after, with no other change.
+    the model a shape to invent in. This half of the item-0 fix worked and is not in
+    question: 23.8% (10 of 42) before, 2.4% (1 of 42) after.
     """
-    example_ids = UUID_SHAPE.findall(SYSTEM_PROMPT)
-    assert len(example_ids) >= 2, "the worked example should show more than one passage"
+    identifiers = UUID_SHAPE.findall(SYSTEM_PROMPT)
+    assert identifiers, "the example must show a UUID-shaped identifier"
+    assert all(identifier == identifiers[0] for identifier in identifiers)
 
 
 def test_the_worked_example_holds_no_short_synthetic_identifier():
@@ -143,26 +174,89 @@ def test_the_worked_example_holds_no_short_synthetic_identifier():
     is absent rather than asserting those two strings are, so a new `c_1234` or `chunk-7`
     fails here too.
     """
-    assert not re.search(r"\b(c|chunk|id)[_-]?\d{1,6}\b", SYSTEM_PROMPT, re.IGNORECASE)
+    assert not re.search(r"(c|chunk|id)[_-]?\d{1,6}", SYSTEM_PROMPT, re.IGNORECASE)
 
 
-def test_the_example_identifiers_are_declared_to_be_examples():
-    """The declaration is half the fix: the model is told they appear nowhere real."""
-    assert "EXAMPLE values and appear nowhere in the" in SYSTEM_PROMPT
-    assert "never reuse them" in SYSTEM_PROMPT
+def test_the_example_subject_matter_cannot_collide_with_an_organisational_corpus():
+    """The second half of the item-6 fix, and the half that is easy to undo by accident.
 
+    The old example was about purchase-order approval thresholds; the corpus holds a real
+    AUD approval table; the two purchase-approval questions in the question set were
+    answered correctly FROM THE CORPUS while citing the EXAMPLE. An example whose subject
+    resembles the corpus invites the model to reach into the example, so the subject is now
+    houseplants — concrete, mundane, and not something any organisation would index.
 
-def test_the_lesson_is_recorded_next_to_the_example_it_applies_to():
-    """The measured reason lives in the source, not only in docs/flm-baseline.md.
-
-    A future editor shortening the worked example will read apps/ai/prompting.py and not
-    the baseline document. Asserted because a comment is the only place this can live —
-    inside the string it would be prompt text the model reads.
+    The vocabulary below is what an organisational knowledge base is made of. None of it
+    may appear in the example. The rules above are allowed to say "passage" and "question";
+    what is banned is example CONTENT that reads like a policy, a procedure or a meeting.
     """
-    assert "23.8%" in PROMPTING_SOURCE and "2.4%" in PROMPTING_SOURCE
-    assert "Do not put a plausible chunk ID in a prompt" in PROMPTING_SOURCE
-    # And it is a comment, so it is not sent to the model.
-    assert "23.8%" not in SYSTEM_PROMPT
+    example_text = SYSTEM_PROMPT[SYSTEM_PROMPT.index("Two worked examples") :]
+    for banned in (
+        "purchase",
+        "approval",
+        "approve",
+        "invoice",
+        "procurement",
+        "policy",
+        "leave",
+        "onboarding",
+        "offboarding",
+        "employee",
+        "staff",
+        "manager",
+        "team lead",
+        "meeting",
+        "incident",
+        "account",
+        "password",
+        "office",
+        "$",
+        "AUD",
+    ):
+        assert banned.lower() not in example_text.lower(), f"{banned!r} is corpus-shaped"
+
+
+def test_the_second_example_demonstrates_the_empty_array():
+    """Rule 7 is now shown as well as stated, and it is what replaced the spare passage.
+
+    The old second passage taught "ignore what is irrelevant" by being irrelevant. An
+    example reply of `{"statements": []}` teaches the same thing, cites nothing, and leaves
+    no identifier to borrow.
+    """
+    assert SYSTEM_PROMPT.count("Your reply:") == 2
+    assert '{"statements": []}' in SYSTEM_PROMPT
+    assert SYSTEM_PROMPT.rstrip().endswith('{"statements": []}')
+
+
+def test_the_example_identifier_is_declared_to_be_an_example():
+    """The declaration is part of the fix: the model is told it appears nowhere real.
+
+    Extended at item 6 to cover the subject as well as the identifier, because the subject
+    is what the second recurrence was actually about.
+    """
+    assert "EXAMPLE value and appears nowhere in the" in FLAT_PROMPT
+    assert "neither does its subject" in FLAT_PROMPT
+    assert "never reuse it" in FLAT_PROMPT
+    assert "never answer a real question from the example's content" in FLAT_PROMPT
+
+
+def test_both_recurrences_are_recorded_next_to_the_example_they_apply_to():
+    """The measured reasons live in the source, not only in docs/flm-baseline.md.
+
+    A future editor shortening the examples will read apps/ai/prompting.py and not the
+    baseline document. Asserted because a comment is the only place this can live — inside
+    the string it would be prompt text the model reads. Both recurrences must be there: the
+    first alone would suggest UUID-shaping was the whole fix, which is exactly the
+    conclusion that let the second one happen.
+    """
+    assert "23.8%" in PROMPTING_SOURCE and "2.4%" in PROMPTING_SOURCE  # first recurrence
+    assert "6.8%" in PROMPTING_SOURCE  # second
+    assert "8b5d04e2" in PROMPTING_SOURCE  # the identifier that was stolen
+    assert "A WORKED EXAMPLE IS TRAINING DATA FOR THE RESPONSE" in PROMPTING_SOURCE
+    assert "IN ITS IDENTIFIERS AND IN ITS CONTENT" in PROMPTING_SOURCE
+    # And it is a comment, so none of it is sent to the model.
+    for leaked in ("23.8%", "6.8%", "8b5d04e2", "TRAINING DATA"):
+        assert leaked not in SYSTEM_PROMPT
 
 
 @pytest.mark.parametrize("rule", ["1.", "2.", "3.", "4.", "5.", "6.", "7."])
