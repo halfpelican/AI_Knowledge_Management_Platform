@@ -153,6 +153,10 @@ CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
 SOURCE_TYPES = ("document", "meeting")
 NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESHOLD
                      "no_statement_verified")   # retrieved, but verification stripped all
+# Named for the same reason as the status values above, and it matters more here:
+# CLAUDE.md invariant 7 turns on these two staying distinguishable, and a reason
+# misspelt as a literal would collapse the two paths into one unreadable signal.
+(NO_RELEVANT_PASSAGE, NO_STATEMENT_VERIFIED) = NO_ANSWER_REASONS
 
 # A new record starts in the first value of its vocabulary.
 DEFAULT_DOCUMENT_STATUS = DOCUMENT_STATUS_VALUES[0]
