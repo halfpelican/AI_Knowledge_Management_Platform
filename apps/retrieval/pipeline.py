@@ -119,12 +119,15 @@ by that, because ``record_query`` is called from inside this function where the 
 identifiers are still the local ``supplied_chunk_ids``, which is also the exact list
 verification checked against.
 
-**One thing item 8 could NOT do, stated rather than quietly dropped.** The item-6 and
-item-7 docstrings below said ``rejected_count`` would be recorded against the query. It is
-not, because ``QueryLog`` has no column for it (docs/schema-v1.md section 1) and item 8
-adds no migration; the claim was wrong when it was written and is corrected in place here
-rather than left standing. The count still tells the two ways of reaching path B apart on
-the outcome, and giving it a column is a schema question for the team.
+**``rejected_count`` IS recorded, on a column added for it.** Item 8 first shipped without
+one — ``QueryLog`` had no such field — and said so rather than inventing a migration; the
+column was then asked for and added (``0002_querylog_rejected_count``). It is written on
+every call that reached generation, path B and answered alike, and is NULL where
+generation was not called. That is what makes the two ways of reaching path B separable,
+which invariant 7 requires: item 6's live runs moved 2 declines / 3 all-rejected to 6 / 0
+across the prompt fix, an aggregate of 5 to 6 that would have read as "no effect". It is
+record-only, like ``no_answer_reason``: no serializer exposes either, or the identical
+no-answer reply stops being identical.
 """
 
 from dataclasses import dataclass
@@ -210,8 +213,10 @@ class RetrievalOutcome:
     verified_statements: tuple[Statement, ...] = ()
     # How many statements cited an identifier that was not supplied. A number, not text:
     # see the class docstring. On a path-B outcome it is the only thing that tells the two
-    # ways of reaching that path apart. It is NOT recorded: QueryLog has no column for it
-    # (see the module docstring), so it lives and dies on this object.
+    # ways of reaching that path apart, and on an answered outcome a non-zero value is
+    # fabrication caught before it cost an answer. Both are recorded in
+    # QueryLog.rejected_count, which is NULL only where generation was not called — so 0
+    # on this object where path A leaves it is "not applicable" and is never written.
     rejected_count: int = 0
     no_answer_reason: str | None = None
     message: str | None = None
@@ -261,11 +266,9 @@ class RetrievalOutcome:
         folds both into one reason and NO_ANSWER_REASONS holds exactly two values, so both
         map to NO_STATEMENT_VERIFIED. Inventing a third code would be a vocabulary change,
         a migration and a requirement nobody wrote. ``rejected_count`` is what tells them
-        apart, and it tells them apart HERE only: item 8 found that QueryLog has no column
-        for it, added none, and said so in this module's docstring rather than inventing
-        one. The supplied identifiers, which the log does hold, separate this path from
-        path A in the record; the two ways of reaching this path are separated on this
-        object alone.
+        apart, on this object and in ``QueryLog.rejected_count``, which exists for exactly
+        this distinction: same reason code, different count, and item 6's runs showed the
+        two moving independently under a change that left their total almost unmoved.
         """
         return cls(
             answered=False,
@@ -364,7 +367,15 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
         # 7.10 line 76: recorded with an EMPTY identifier list, because nothing was
         # supplied to generation. That empty array beside answered=False is what
         # distinguishes this row from a path-B row for FR-19, on top of the reason code.
-        record_query(user=user, question=question, outcome=outcome, supplied_chunk_ids=())
+        # ``rejected_count`` is None, not 0: the model was not asked, so there was nothing
+        # to reject, and a 0 here would read as a clean generation that never happened.
+        record_query(
+            user=user,
+            question=question,
+            outcome=outcome,
+            supplied_chunk_ids=(),
+            rejected_count=None,
+        )
         return outcome
 
     # Step 7. Fit the grounding context, discarding the lowest-ranked passages first.
@@ -397,17 +408,21 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
     # Step 10. No-answer path B: passages cleared the floor and generation ran, but nothing
     # survived. The reply is path A's, exactly; the reason is not. Both ways of arriving —
     # every statement rejected, or the model declining with an empty list — record
-    # NO_STATEMENT_VERIFIED, and ``rejected_count`` is what tells them apart on the outcome.
+    # NO_STATEMENT_VERIFIED, and ``rejected_count`` is what tells them apart, on the outcome
+    # and in the row.
     if not verification.verified_statements:
         outcome = RetrievalOutcome.no_statement_verified(verification)
         # 7.10 line 165: the row carries ``suppliedPassageIds`` where the reply carries
         # none. The record is not the reply — that is the whole of invariant 7, and the
-        # traceability clause is why the identifiers are written down at all.
+        # traceability clause is why the identifiers are written down at all. The rejected
+        # count goes with them, and on this path it is the ONLY thing separating the model
+        # declining (0) from verification rejecting everything it proposed (> 0).
         record_query(
             user=user,
             question=question,
             outcome=outcome,
             supplied_chunk_ids=supplied_chunk_ids,
+            rejected_count=verification.rejected_count,
         )
         return outcome
 
@@ -415,11 +430,16 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
     # recording; both are presentation (item 10), and the record does not wait for them —
     # ``answer_text`` holds the verified statements themselves, and the citation rows carry
     # the numbering a composed answer would show (apps/retrieval/query_log.py).
+    # ``rejected_count`` is recorded HERE too, and not only on path B: an answered row with
+    # a non-zero count is the early warning, the response where the model fabricated an
+    # identifier and verification stripped that statement while the answer survived. Item 6
+    # saw that shape. Recording it only where it cost an answer would hide it until it did.
     outcome = RetrievalOutcome.verified(supplied, verification)
     record_query(
         user=user,
         question=question,
         outcome=outcome,
         supplied_chunk_ids=supplied_chunk_ids,
+        rejected_count=verification.rejected_count,
     )
     return outcome

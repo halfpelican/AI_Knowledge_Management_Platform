@@ -143,11 +143,36 @@ recorded model before ranking.
 | `answered` | boolean | |
 | `no_answer_reason` | text, nullable | see §3 — the two paths are recorded distinctly |
 | `answered_at` | timestamp | |
+| `rejected_count` | integer, nullable | statements verification removed; null where generation was not called |
 
 `no_answer_reason` is the one field in this table the proposal does not name
 explicitly, but FR-12 requires the two no-answer cases be "recorded separately", and
 this is how. Without it the platform cannot tell a threshold that is too high from
 retrieval that is returning irrelevant passages.
+
+`rejected_count` is the second such field, added on 24 September 2026 and justified
+the same way. Invariant 7 requires that no-answer path B's two kinds stay separable,
+and `no_answer_reason` alone cannot do it: a model that proposes nothing and a model
+whose every citation is rejected both arrive as `no_statement_verified`. The evidence
+is the Stage 4 item 6 live runs — before the prompt fix, 2 questions where the model
+declined and 3 where verification rejected everything; after it, 6 and 0. **The
+aggregate moved 5 to 6, which on its own reads as "no effect"**, while what actually
+happened was one failure mode removed and the other grown. Only the split shows it.
+
+It is populated on **every call that reached generation**, answered rows included: an
+answered row with `rejected_count` above zero is fabrication that has not yet cost
+anyone an answer, which is the earliest warning the system produces. **Null means
+generation was not called** — no-answer path A, and the keyword search path. It never
+means "path B did not occur" and it never means zero.
+
+It stores a count and never the claimed identifier, which section 7.9's rejection log
+would also record. A fabricated identifier has no referent, so storing one invites a
+later reader to resolve it against `ContentChunks` and read a hit or a miss as
+provenance. A database column is a surface, and invariant 6 applies to it.
+
+`rejected_count` and `no_answer_reason` are **record-only**. No serializer may expose
+either: both would hand a caller the path-A/path-B distinction that the two paths'
+identical reply exists to hide.
 
 ### SearchLogs — FR-12
 

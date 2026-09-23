@@ -182,6 +182,7 @@ def test_an_answered_query_writes_one_row_carrying_the_whole_traceability_clause
     assert row.answer_text == "A grounded statement."
     assert row.user == document.uploaded_by
     assert row.conversation is None  # FR-13 (item 9) wires conversations; not this item
+    assert row.rejected_count == 0  # generation ran and invented nothing; not NULL
     assert row.answered_at is not None
     # The reply and the record agree on this branch, and the count is derived from the
     # array rather than stored beside it (see the module docstring on result_count).
@@ -211,6 +212,7 @@ def test_path_a_writes_a_row_with_no_identifiers_and_the_first_reason(document, 
     assert row.answered is False
     assert row.no_answer_reason == NO_RELEVANT_PASSAGE
     assert row.answer_text is None  # nullable for exactly this case
+    assert row.rejected_count is None  # NULL means the model was not asked
     assert row.question == QUESTION
     assert row.user == document.uploaded_by
     assert row.citations.count() == 0
@@ -242,6 +244,7 @@ def test_path_b_logs_the_supplied_identifiers_the_reply_no_longer_carries(
     assert row.answered is False
     assert row.no_answer_reason == NO_STATEMENT_VERIFIED
     assert row.answer_text is None
+    assert row.rejected_count == 1  # generation ran; one statement, one invented citation
     assert row.citations.count() == 0
     assert len(double.generate_calls) == 1
     # Which is exactly the FR-19 signal: unanswered WITH identifiers means retrieval
@@ -301,6 +304,9 @@ def test_the_two_no_answer_paths_are_one_reply_and_two_rows(document, monkeypatc
     # lets FR-19 count them without reading the vocabulary at all.
     assert row_a.retrieved_chunk_ids == []
     assert row_b.retrieved_chunk_ids == [admitted.id]
+    # And in the third: NULL where the model was not asked, an integer where it was.
+    assert row_a.rejected_count is None
+    assert row_b.rejected_count == 1
     # Everything else about them is the same event: same question, same user, unanswered.
     assert row_a.question == row_b.question == QUESTION
     assert row_a.user == row_b.user == document.uploaded_by
@@ -598,6 +604,145 @@ def test_no_search_log_row_is_written(document, service):
 
     assert QueryLog.objects.count() == 1
     assert SearchLog.objects.count() == 0
+
+
+# --- rejected_count, and what its NULL means -------------------------------------------
+#
+# The column exists because invariant 7 needs the two kinds of no-answer path B separable:
+# both carry NO_STATEMENT_VERIFIED, and only the count says whether the model declined or
+# whether verification stripped everything it proposed. Item 6's live runs are the evidence
+# — 2 declines and 3 all-rejected before the prompt fix, 6 and 0 after — an aggregate of 5
+# to 6 that would have read as "no effect" without the split.
+
+
+@pytest.mark.django_db
+def test_a_clean_answered_response_records_zero_and_not_null(document, service):
+    """Generation ran and every citation checked out: 0, which is not the same as NULL.
+
+    The distinction is the whole point of the column. 0 says "the model was asked and
+    invented nothing"; NULL says "the model was not asked". A row that conflated them
+    would put path A's silence into the same bucket as a clean generation.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+
+    answer_question(question=QUESTION, user=document.uploaded_by)
+
+    row = only_row()
+    assert row.answered is True
+    assert row.rejected_count == 0
+    assert row.rejected_count is not None
+    assert QueryLog.objects.filter(rejected_count__isnull=True).count() == 0
+
+
+@pytest.mark.django_db
+def test_an_answered_row_records_the_rejection_that_did_not_cost_the_answer(
+    document, service_with
+):
+    """**The early warning**, and the reason this column is not written on path B alone.
+
+    One statement survived beside one whose identifier was invented, so the answer was
+    given — ``answered`` is True — and a fabrication happened anyway. This is the shape item
+    6 observed, it is fabrication before it has cost anything, and a column written only
+    where nothing survived would not see it until it was too late to be a warning.
+    """
+    chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    service_with(
+        statements=[
+            Statement(text="Grounded.", chunk_id=str(chunk.id)),
+            Statement(text="Invented alongside it.", chunk_id=FABRICATED),
+        ]
+    )
+
+    answer_question(question=QUESTION, user=document.uploaded_by)
+
+    row = only_row()
+    assert row.answered is True
+    assert row.no_answer_reason is None
+    assert row.rejected_count == 1
+    assert row.answer_text == "Grounded."  # and the rejected statement is still nowhere
+    assert row.citations.count() == 1
+
+
+@pytest.mark.django_db
+def test_the_two_ways_of_reaching_path_b_are_one_reason_and_two_counts(document, monkeypatch):
+    """**The pair this column was added for.** Same ``no_answer_reason``, different count.
+
+    First run: the model declines with an empty statement list — it read the passages and
+    correctly said nothing, so there was nothing to reject and the count is 0. Second run:
+    it proposed two statements and every identifier was invented, so the count is 2. Both
+    are NO_STATEMENT_VERIFIED, because 7.10 step 10 folds them into one reason and
+    NO_ANSWER_REASONS holds exactly two values. Without the count they are the same row,
+    and the item-6 finding — one failure mode removed while the other grew — would have
+    been invisible behind an unmoved total.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Close enough.")
+
+    install(monkeypatch, ControlledService(statements=[]))
+    declined = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    install(
+        monkeypatch,
+        ControlledService(
+            statements=[
+                Statement(text="Invented.", chunk_id=FABRICATED),
+                Statement(text="Also invented.", chunk_id="c_4471"),
+            ]
+        ),
+    )
+    all_rejected = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert declined.no_answer_reason == all_rejected.no_answer_reason == NO_STATEMENT_VERIFIED
+    row_declined, row_all_rejected = QueryLog.objects.order_by("answered_at")
+    assert row_declined.rejected_count == 0
+    assert row_all_rejected.rejected_count == 2
+    assert row_declined.no_answer_reason == row_all_rejected.no_answer_reason
+    # Both reached generation, so neither is NULL: the count is a real 0, not an absence.
+    assert row_declined.rejected_count is not None
+    assert QueryLog.objects.filter(rejected_count__isnull=True).count() == 0
+
+
+@pytest.mark.django_db
+def test_path_a_records_null_and_null_is_not_zero(document, service):
+    """NULL means generation was NOT CALLED. It never means "path B did not occur".
+
+    Asserted as NULL specifically rather than as falsy, because ``not 0`` and ``not None``
+    are both true and a reader who tested for falsiness would have merged the one
+    distinction this column carries. The database is asked as well as the attribute, so a
+    0 written and read back as 0 could not pass.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW)
+
+    answer_question(question=QUESTION, user=document.uploaded_by)
+
+    row = only_row()
+    assert row.rejected_count is None
+    assert row.rejected_count != 0
+    assert QueryLog.objects.filter(rejected_count__isnull=True).count() == 1
+    assert QueryLog.objects.filter(rejected_count=0).count() == 0
+    assert service.generate_calls == []  # the premise: the model was never asked
+    # And the reason it is NULL is not "this was a no-answer": path B rows are no-answers
+    # too and carry an integer. It is NULL because generation did not run.
+    assert row.no_answer_reason == NO_RELEVANT_PASSAGE
+
+
+@pytest.mark.django_db
+def test_rejected_count_from_both_role_sessions(session_client, document, service_with):
+    """The early-warning shape from an Employee session and an Administrator session."""
+    role_name = session_client.role_name
+    chunk = make_chunk(document, [role_name], index=1, cosine=ABOVE)
+    service_with(
+        statements=[
+            Statement(text="Grounded.", chunk_id=str(chunk.id)),
+            Statement(text="Invented.", chunk_id=FABRICATED),
+        ]
+    )
+
+    answer_question(question=QUESTION, user=session_client.user)
+
+    row = only_row()
+    assert row.user == session_client.user
+    assert row.answered is True
+    assert row.rejected_count == 1
 
 
 # --- What is not a query outcome, and so is not recorded -------------------------------

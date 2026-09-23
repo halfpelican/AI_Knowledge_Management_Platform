@@ -38,15 +38,18 @@ panel, which is exactly what invariant 6 forbids. The harness is a measuring ins
 by hand, is not a view, and never renders an answer.
 
 7.9 also logs each rejected citation (its line 12, with the question and the claimed
-identifier). That log is not written here, and — item 8 having been built — it is not
-written anywhere. ``apps/retrieval/query_log.py`` records the question, the supplied
-identifiers and the outcome together, but ``QueryLog`` has no column for a rejection: not
-for the count, and emphatically not for the claimed identifier or the text beside it,
-which is unverified model output that invariant 6 keeps out of every reachable surface.
-``rejected_count`` is therefore computed for the OUTCOME rather than for the row — it is
-what separates "the model declined" from "everything it said was rejected" on no-answer
-path B — and for the harness, which measures the fabrication rate from the statements
-themselves. Giving 7.9's rejection log a home would be a schema question for the team.
+identifier). Half of it is written, and the half that is not was left out on purpose.
+``apps/retrieval/query_log.py`` records the question, the supplied identifiers, the outcome
+and ``rejected_count`` — the COUNT of rejections, on every call that reached generation.
+The claimed identifier is not recorded and must not be: a fabricated identifier has no
+referent, so storing one invites a later reader to resolve it against ContentChunks and
+treat a hit or a miss as provenance, and the text beside it is unverified model output that
+invariant 6 keeps off every reachable surface, a database column included. The count
+carries the whole diagnostic — it is what separates "the model declined" from "everything
+it said was rejected" on no-answer path B, and what makes fabrication visible on an
+answered row before it has cost an answer — and carries nothing that could be mistaken for
+a source. This function still returns the statements themselves for the harness, which
+measures the fabrication rate from them and is not a view.
 
 Not here, and deliberately: no-answer path B. When nothing survives, this returns an empty
 verified list and says nothing about what that means. The pipeline reads the empty list as
@@ -69,8 +72,10 @@ class VerificationResult:
 
     ``rejected_count`` is not merely ``len(rejected_statements)`` for the caller's
     convenience: it is the number the pipeline keeps after dropping the statements
-    themselves, and the only thing that tells the two ways of reaching no-answer path B
-    apart. It is not recorded — there is no column for it (see the module docstring).
+    themselves, the only thing that tells the two ways of reaching no-answer path B apart,
+    and the value written to ``QueryLog.rejected_count`` on every call that reached
+    generation. The statements it counts are not recorded anywhere (see the module
+    docstring).
 
     Frozen, like everything else on this path: a verified statement whose identifier could
     be edited afterwards is a statement verified against something other than what was

@@ -68,6 +68,23 @@ no-answer paths — no answer was returned, and the column is nullable for preci
 case rather than holding NO_ANSWER_MESSAGE, which is a fixed string that says nothing
 about this query and would make "an answer was given" untestable in SQL.
 
+**``rejected_count`` is a parameter, not read off the outcome, and that is the whole of
+its null semantics.** ``RetrievalOutcome.rejected_count`` is 0 on no-answer path A, where
+it means "not applicable" — generation was never called, so nothing could be rejected —
+and writing that 0 into the column would make a path-A row indistinguishable from a clean
+generation. The caller therefore states it: an integer where generation ran, ``None``
+where it did not, with no default, so a future call site has to decide rather than fall
+into a silent NULL. **NULL means "the model was not asked". It never means "path B did not
+occur", and it never means zero.**
+
+It is recorded on EVERY call that reached generation, not only on path B. An answered row
+with ``rejected_count`` 1 is the early warning — ``verify_citations`` strips individual
+statements, so fabrication shows up in a mixed response long before it costs an answer,
+and item 6 observed exactly that shape. Writing the column on the no-answer path alone
+would hide the case worth catching first. The rest of the argument for the column, and
+the item-6 numbers behind it, are on ``QueryLog`` itself; it is record-only, and item 11's
+serializer must not expose it.
+
 **Atomicity.** The ``QueryLog`` row and its ``AnswerCitation`` rows are written in one
 ``transaction.atomic`` block. A row recorded as answered with no citation rows beneath it
 would be a traceability record that traces to nothing — worse than no record, because it
@@ -98,13 +115,6 @@ at line 189 — and it is the boring choice as well as the honest one.
   FR-13 is Stage 4 item 9 and there is nothing yet that could supply one; the column is
   nullable for the one-off question, which is every question today. Item 9 adds the
   parameter and passes it through from the pipeline.
-- ``rejected_count`` is NOT recorded, and the pipeline's item-6 and item-7 docstrings
-  said it would be. **There is no column for it** — schema v1 does not have one and this
-  item adds no migration — so the claim was wrong and those docstrings are corrected in
-  this diff rather than left to be believed. It remains on the outcome, where it is what
-  tells the two ways of reaching path B apart (every statement rejected, versus the model
-  declining with an empty list). Storing it would be a schema change, and a schema change
-  needs asking for.
 - No ``SearchLog`` row. That table records FR-12's *keyword search* — the "200 OK with
   grouped results" half of FR-12's Responses, as against the "answer and citations" half
   this pipeline serves — and that path is not built. It is a deliberate absence, not an
@@ -166,6 +176,7 @@ def record_query(
     question: str,
     outcome: "RetrievalOutcome",
     supplied_chunk_ids: Sequence[str],
+    rejected_count: int | None,
 ) -> QueryLog:
     """Write the QueryLog row for this question, and one AnswerCitation per verified
     statement, in one transaction.
@@ -182,6 +193,12 @@ def record_query(
     identifiers that were ACTUALLY put in the prompt — the same list verification checked
     against — so that every identifier in the row is one the model saw, and an empty list
     on path A because nothing was supplied.
+
+    ``rejected_count`` has no default and is not read off the outcome: it is
+    ``verification.rejected_count`` where generation ran, on the answered path as well as
+    on path B, and ``None`` where it did not. The outcome's own value is 0 on path A and
+    means "not applicable" there; see the module docstring, and the model docstring for
+    why the distinction is worth a column.
 
     ``no_answer_reason`` is None on an answered row. 7.10 line 186 passes
     ``reason = "ANSWERED"``; NO_ANSWER_REASONS holds exactly the two no-answer values
@@ -210,6 +227,8 @@ def record_query(
             retrieved_chunk_ids=[UUID(chunk_id) for chunk_id in supplied_chunk_ids],
             answered=outcome.answered,
             no_answer_reason=outcome.no_answer_reason,
+            # None only where the model was never asked. Never a stand-in for 0.
+            rejected_count=rejected_count,
         )
         # Only what survived verification (invariant 6), in the order it survived in.
         # ``chunk_id`` is set to the UUID directly rather than fetching the ContentChunk:
