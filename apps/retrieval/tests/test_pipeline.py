@@ -296,8 +296,9 @@ def test_a_passage_above_the_threshold_comes_back_as_a_passage_and_not_as_an_ans
     assert outcome.answered is True
     assert outcome.no_answer_reason is None
     assert outcome.message is None
-    # Item 8 owns the QueryLog row. The presentation layer composes the answer string and
-    # resolves sources from `passages`.
+    # The QueryLog row is item 8's and is asserted in test_query_log.py; the outcome itself
+    # carries no composed answer and no resolved sources, which the presentation layer
+    # (item 10) builds from `passages`.
     assert not hasattr(outcome, "proposed_statements")
     assert not hasattr(outcome, "answer_text")
     assert not hasattr(outcome, "sources")
@@ -564,23 +565,34 @@ def test_path_a_from_both_role_sessions(session_client, document, service):
     assert service.generate_calls == []
 
 
-# --- Item 8's concern, asserted as absent here ----------------------------------------
+# --- The query record, which item 8 added ---------------------------------------------
 
 
 @pytest.mark.django_db
-def test_no_query_log_row_is_written_yet(document, service):
-    """Item 4 writes nothing to the database; item 8 adds the QueryLog row.
+def test_every_call_that_reaches_retrieval_writes_one_query_log_row(document, service):
+    """Item 4 wrote nothing to the database; item 8 writes the row, and here it is.
 
-    Asserted rather than left unsaid, so that item 8's diff shows the row appearing
-    and this test being replaced, instead of nobody noticing which commit was supposed
-    to add it. 7.10 calls recordQuery at line 76, inside this branch.
+    This test used to assert ``count() == 0`` and named item 8 as the commit that would
+    replace it, so that the row appearing would show up in a diff rather than in nobody's
+    memory. It is that commit. 7.10 calls recordQuery at line 76 inside path A, at 165
+    inside path B and at 185 on the answered path, and all three are covered here — one
+    row each, nothing else changed about the reply.
+
+    What the row CONTAINS is apps/retrieval/tests/test_query_log.py's subject, including
+    the pair of this file's two-no-answer-paths test: same reply, two rows, two reasons.
     """
     from apps.retrieval.models import QueryLog
 
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW)
-    answer_question(question=QUESTION, user=document.uploaded_by)
 
-    assert QueryLog.objects.count() == 0
+    path_a = answer_question(question=QUESTION, user=document.uploaded_by)
+    assert path_a.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert QueryLog.objects.count() == 1
+
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=ABOVE)
+    answered = answer_question(question=QUESTION, user=document.uploaded_by)
+    assert answered.answered is True
+    assert QueryLog.objects.count() == 2
 
 
 # --- Step 7 and step 8: what is sent, and what comes back ------------------------------

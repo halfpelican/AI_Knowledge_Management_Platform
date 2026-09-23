@@ -1,5 +1,5 @@
-"""FR-12 steps 1 to 10 (proposal section 7.10 ``generateGroundedAnswer``): retrieval, both
-no-answer paths, grounded generation, and citation verification.
+"""FR-12 steps 1 to 11 (proposal section 7.10 ``generateGroundedAnswer``): retrieval, both
+no-answer paths, grounded generation, citation verification, and the query record.
 
 One function, ``answer_question``, composing the pieces items 1 to 3 built: validate,
 resolve the scope, embed, restrict the candidate set, rank, admit, fit the context
@@ -32,9 +32,18 @@ passages in front of it and 3 where verification rejected every statement; after
 6 declined). A rising rate of this path is the project's main quality signal: it means
 retrieval is admitting passages that score above the floor but do not answer the question.
 
-Still not here: the QueryLog row (item 8), 7.10's ``composeAnswerWithInlineCitations`` and
-``resolveSourceDetails`` (the presentation layer), the view (item 11) and conversations
-(FR-13).
+**The query record (7.10 step 11) is item 8's, and it is here.** Every one of the three
+exits calls ``record_query`` (``apps/retrieval/query_log.py``) before returning, as 7.10
+calls ``recordQuery`` at its lines 76, 165 and 185. The reply is unchanged by it: the row
+is a different document from the response, and on path B it holds the supplied identifiers
+the reply deliberately does not carry. Read that module's docstring for the four decisions
+it settles — why ``result_count`` needs no column, what ``answer_text`` holds before the
+presentation layer exists, why the row and its citations share a transaction, and why a
+failed write loses the answer rather than being swallowed.
+
+Still not here: 7.10's ``composeAnswerWithInlineCitations`` and ``resolveSourceDetails``
+(the presentation layer, item 10), the view (item 11) and conversations (FR-13, item 9 —
+``QueryLog.conversation`` is NULL on every row this writes).
 
 **7.10 step 1, and what is NOT built for it.**
 
@@ -100,14 +109,22 @@ because the wider number does not exist here to be taken. On EITHER no-answer pa
 ``RetrievalOutcome.no_statement_verified``: a count is part of the reply, and a reply that
 counts differently on the two paths tells the caller which path was taken.
 
-**Not built here:** the QueryLog row (item 8 — this function writes nothing to the
-database, and the no-answer *reason* it returns is not yet the no-answer *record*), the
-view and its status codes (item 11), and conversations (FR-13). ``conversation_id``, which
-7.10 takes only to pass to ``recordQuery``, is therefore not a parameter yet. Note for
-item 8: 7.10 step 10 records ``suppliedPassageIds`` against a path-B row, and the outcome
-this function returns does not carry them — deliberately, because they are caller-visible
-material. Nothing is lost by it, because ``recordQuery`` is called from inside this
-function in 7.10, where the supplied passages are still a local variable.
+**Not built here:** the view and its status codes (item 11), and conversations (FR-13,
+item 9). ``conversation_id``, which 7.10 takes only to pass to ``recordQuery``, is
+therefore not a parameter yet, and ``record_query`` does not take one either. Item 7 left
+a note here for item 8, and item 8 acted on it: 7.10 step 10 records
+``suppliedPassageIds`` against a path-B row, the outcome this function returns does not
+carry them — deliberately, because they are caller-visible material — and nothing was lost
+by that, because ``record_query`` is called from inside this function where the supplied
+identifiers are still the local ``supplied_chunk_ids``, which is also the exact list
+verification checked against.
+
+**One thing item 8 could NOT do, stated rather than quietly dropped.** The item-6 and
+item-7 docstrings below said ``rejected_count`` would be recorded against the query. It is
+not, because ``QueryLog`` has no column for it (docs/schema-v1.md section 1) and item 8
+adds no migration; the claim was wrong when it was written and is corrected in place here
+rather than left standing. The count still tells the two ways of reaching path B apart on
+the outcome, and giving it a column is a schema question for the team.
 """
 
 from dataclasses import dataclass
@@ -122,6 +139,7 @@ from apps.core.constants import (
     NO_STATEMENT_VERIFIED,
 )
 from apps.retrieval.query_embedding import embed_question
+from apps.retrieval.query_log import record_query
 from apps.retrieval.ranking import RankedPassage, admit, rank, truncate_to_context
 from apps.retrieval.scoping import candidate_chunks, permission_scope
 from apps.retrieval.verification import VerificationResult, verify_citations
@@ -191,8 +209,9 @@ class RetrievalOutcome:
     passages: tuple[RankedPassage, ...] = ()
     verified_statements: tuple[Statement, ...] = ()
     # How many statements cited an identifier that was not supplied. A number, not text:
-    # see the class docstring. Item 8 records it against the query, and on a path-B row it
-    # is the only thing that tells the two ways of reaching that path apart.
+    # see the class docstring. On a path-B outcome it is the only thing that tells the two
+    # ways of reaching that path apart. It is NOT recorded: QueryLog has no column for it
+    # (see the module docstring), so it lives and dies on this object.
     rejected_count: int = 0
     no_answer_reason: str | None = None
     message: str | None = None
@@ -219,7 +238,7 @@ class RetrievalOutcome:
         ground an answer — the second discloses that material exists which could not be
         cited, which is the disclosure invariant 1 forbids and which a user could act on
         ("there IS something, keep asking"). The two are told apart in
-        ``no_answer_reason``, which item 8 records and no caller sees.
+        ``no_answer_reason``, which the QueryLog row records and no caller sees.
 
         **``result_count`` is 0, and ``passages`` is empty.** Passages genuinely were
         supplied to generation, so a non-zero count would be the more literal report of
@@ -242,7 +261,11 @@ class RetrievalOutcome:
         folds both into one reason and NO_ANSWER_REASONS holds exactly two values, so both
         map to NO_STATEMENT_VERIFIED. Inventing a third code would be a vocabulary change,
         a migration and a requirement nobody wrote. ``rejected_count`` is what tells them
-        apart, it is already carried, and item 8 is where it reaches the log.
+        apart, and it tells them apart HERE only: item 8 found that QueryLog has no column
+        for it, added none, and said so in this module's docstring rather than inventing
+        one. The supplied identifiers, which the log does hold, separate this path from
+        path A in the record; the two ways of reaching this path are separated on this
+        object alone.
         """
         return cls(
             answered=False,
@@ -290,7 +313,13 @@ class RetrievalOutcome:
 
 
 def answer_question(*, question: str, user) -> RetrievalOutcome:
-    """7.10 steps 1 to 10: validate, scope, embed, rank, admit, fit, generate, verify.
+    """7.10 steps 1 to 11: validate, scope, embed, rank, admit, fit, generate, verify, record.
+
+    Every exit writes its QueryLog row before returning — answered, path A and path B —
+    because 7.10 records at all three and because an answer that was not recorded is an
+    answer that cannot be traced. A failure of that write is not caught here: the caller
+    loses the answer rather than receiving one the system has no record of, and the FR-19
+    evidence is not silently dropped (apps/retrieval/query_log.py argues it).
 
     Raises QuestionLengthOutOfRange before any provider call, and lets
     ``UnscopedRequestError`` and ``ProviderUnavailable`` out unchanged — the view turns
@@ -299,7 +328,9 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
     a no-answer: "the system could not ask" and "the corpus has no answer" are
     different events and invariant 7's signal depends on them staying apart. That now
     covers generation as well as embedding: three non-conforming replies are a 503, never
-    a quiet no-answer (invariant 10).
+    a quiet no-answer (invariant 10). Neither an outage nor a rejected question writes a
+    row, for the same reason: 7.10 returns its 503 at line 146 without calling
+    ``recordQuery``, and a query that never ran is not a query outcome.
     """
     # Step 1. First, so that a question outside the bounds costs nothing.
     if not MINIMUM_QUESTION_LENGTH <= len(question) <= MAXIMUM_QUESTION_LENGTH:
@@ -329,7 +360,12 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
     # Answerability is settled on the scores, so with no grounding material the model is
     # not asked at all — there is nothing it could do with the question but invent.
     if not admitted:
-        return RetrievalOutcome.no_relevant_passage()
+        outcome = RetrievalOutcome.no_relevant_passage()
+        # 7.10 line 76: recorded with an EMPTY identifier list, because nothing was
+        # supplied to generation. That empty array beside answered=False is what
+        # distinguishes this row from a path-B row for FR-19, on top of the reason code.
+        record_query(user=user, question=question, outcome=outcome, supplied_chunk_ids=())
+        return outcome
 
     # Step 7. Fit the grounding context, discarding the lowest-ranked passages first.
     supplied = truncate_to_context(admitted)
@@ -344,21 +380,46 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
         question, [Passage(chunk_id=passage.chunk_id, text=passage.chunk_text) for passage in supplied]
     )
 
+    # Named once and used twice, by step 9 and by the record: 7.10's ``suppliedPassageIds``.
+    # One list, so what a statement was verified against and what the row says was in front
+    # of the model cannot diverge — and every identifier in it came off a chunk this role
+    # may read, because the candidate set was restricted in the query (invariant 1).
+    supplied_chunk_ids = [passage.chunk_id for passage in supplied]
+
     # Step 9. Verification, over the identifiers that were ACTUALLY supplied — the
     # truncated set, not the admitted one. A passage discarded by the context budget was
     # never in front of the model, so a statement citing it is as unsupported as one
     # citing an invented identifier. Set membership in application code, no second model
     # call (invariant 5). The proposed statements are not stored, logged or returned:
     # ``RetrievalOutcome.verified`` takes the result and keeps only the count.
-    verification = verify_citations(
-        proposed.statements, [passage.chunk_id for passage in supplied]
-    )
+    verification = verify_citations(proposed.statements, supplied_chunk_ids)
 
     # Step 10. No-answer path B: passages cleared the floor and generation ran, but nothing
     # survived. The reply is path A's, exactly; the reason is not. Both ways of arriving —
     # every statement rejected, or the model declining with an empty list — record
-    # NO_STATEMENT_VERIFIED, and ``rejected_count`` is what tells them apart for item 8.
+    # NO_STATEMENT_VERIFIED, and ``rejected_count`` is what tells them apart on the outcome.
     if not verification.verified_statements:
-        return RetrievalOutcome.no_statement_verified(verification)
+        outcome = RetrievalOutcome.no_statement_verified(verification)
+        # 7.10 line 165: the row carries ``suppliedPassageIds`` where the reply carries
+        # none. The record is not the reply — that is the whole of invariant 7, and the
+        # traceability clause is why the identifiers are written down at all.
+        record_query(
+            user=user,
+            question=question,
+            outcome=outcome,
+            supplied_chunk_ids=supplied_chunk_ids,
+        )
+        return outcome
 
-    return RetrievalOutcome.verified(supplied, verification)
+    # Step 11, in part. 7.10 composes the answer and resolves the sources here before
+    # recording; both are presentation (item 10), and the record does not wait for them —
+    # ``answer_text`` holds the verified statements themselves, and the citation rows carry
+    # the numbering a composed answer would show (apps/retrieval/query_log.py).
+    outcome = RetrievalOutcome.verified(supplied, verification)
+    record_query(
+        user=user,
+        question=question,
+        outcome=outcome,
+        supplied_chunk_ids=supplied_chunk_ids,
+    )
+    return outcome
