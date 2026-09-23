@@ -309,28 +309,43 @@ The re-measure that matters is deferred to **Stage 5 item 3**, the end-to-end
 integration pass over a real corpus, which is the first point at which the question
 can be answered with evidence rather than with six chunks.
 
-## Temporary duplication — deliberate, and with an expiry
+## The duplication is over — item 5 landed on 23 September 2026
 
-`scripts/citation_harness.py` currently defines three things that Stage 4 item 5
-(FR-12 grounded generation) will own inside `apps/ai/`:
+This section used to record a deliberate, temporary copy: `scripts/citation_harness.py`
+defined `STATEMENT_LIST_SCHEMA`, `SYSTEM_PROMPT` and `parse_statement_list()` itself,
+because item 0 ran before item 5 existed and the three had to be iterated against a
+live model without touching production code or its tests. The 23.8% → 2.4%
+fabrication fix above is exactly that iteration, and it happened without a single
+change under `apps/`.
 
-- `STATEMENT_LIST_SCHEMA` — the required response shape
-- `SYSTEM_PROMPT` — strict instructions plus the worked example
-- `parse_statement_list()` — the tolerant parser
+**Its termination condition has been met.** Stage 4 item 5 moved all three, and the
+harness now imports them and calls `FLMService.generate_statements()` rather than
+building messages and making a raw chat call of its own.
 
-They live in `scripts/` because item 0 runs **before** item 5 exists, which is the
-whole point of the ordering: the schema, the prompt and the parser can be iterated
-against a live model without touching production code or its tests. The 23.8% → 2.4%
-fix above is exactly that iteration, and it happened without a single change under
-`apps/`.
+| What | Where it lives now |
+|---|---|
+| `STATEMENT_LIST_SCHEMA`, `SchemaViolation`, `parse_statement_list()` | `apps/ai/schema.py` |
+| `SYSTEM_PROMPT`, `build_user_prompt()`, `build_generation_messages()` | `apps/ai/prompting.py` |
+| the attempt loop, `GENERATION_MAX_TOKENS`, `GENERATION_TIMEOUT_SECONDS` | `apps/ai/generation.py` |
 
-They are written as clean, liftable units with no harness-specific coupling, so item
-5 can move them into `apps/ai/` verbatim.
+The harness also gave up its own `cosine_similarity`, `rank`, `truncate_to_context`
+and `count_tokens`, which now come from `apps/retrieval/ranking.py` and
+`apps/ingestion/chunking.py`. It defines none of them.
 
-**When item 5 lands, the harness must delete its copies and import from `apps/ai/`,
-and call `FLMService.generate_statements()` instead of `build_generation_messages()`
-plus a raw chat call.** Two definitions of the schema that drift apart would be
-invisible until a citation silently stopped being verified — the same failure mode
-as a front-end password rule drifting from `ComplexityValidator`, and harder to
-notice. This note exists so that the duplication reads as a decision with a
-termination condition rather than as a stray second implementation.
+**The note that used to live here is now an assertion.**
+`apps/ai/tests/test_prompt_is_not_duplicated.py` reads the harness's *source text* —
+not its imported namespace, since an imported name would satisfy a namespace check
+while a copied literal sat beside it — and fails if any of the three is redefined
+there. A second test asserts that nothing under `apps/` passes the `on_attempt`
+observer, so the harness stays its only caller. An assertion in the suite outlives an
+instruction in a document, which is the whole reason this section could be retired
+rather than merely updated.
+
+**What this buys the numbers above.** The prompt, the schema and the parser that
+produced the three rates are now the ones the application runs, so the rates describe
+the shipped system rather than a copy of it. The three units moved with only imports
+and docstrings changed — no wording, no rule, no parser branch altered — so the
+measurements above carry over by construction. Item 6 re-runs the harness against the
+real pipeline and reports them again; until that run, the figures in "The three rates"
+remain the last measurement, taken on the pre-prefix index (see the notice at the top
+of this document).

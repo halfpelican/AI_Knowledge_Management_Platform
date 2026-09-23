@@ -45,8 +45,14 @@ D-38 were decided on. Folding the floor into the ranking step would delete the o
 number that says whether the threshold is set anywhere near the right place.
 
 Not here, deliberately: the two no-answer paths and their reason codes (item 4 — this
-module returns an empty list and draws no conclusion from it), truncation to
-MAXIMUM_CONTEXT_TOKENS (item 5), generation, citation verification and query logging.
+module returns an empty list and draws no conclusion from it), generation, citation
+verification and query logging.
+
+``truncate_to_context`` joined ``rank`` and ``admit`` here at item 5 rather than taking a
+module of its own: the three are one sequence of operations over one list — order it,
+apply the floor, fit the budget — they share ``RankedPassage``, and each of their
+docstrings refers to the other two. A module holding the third alone would have to
+restate that context to be readable.
 """
 
 from dataclasses import dataclass
@@ -54,8 +60,9 @@ from math import sqrt
 from typing import Iterable
 from uuid import UUID
 
-from apps.core.constants import RELEVANCE_THRESHOLD, TOP_K
+from apps.core.constants import MAXIMUM_CONTEXT_TOKENS, RELEVANCE_THRESHOLD, TOP_K
 from apps.documents.models import ContentChunk
+from apps.ingestion.chunking import length_in_tokens
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -166,3 +173,50 @@ def admit(ranked: list[RankedPassage]) -> list[RankedPassage]:
     against a real corpus.
     """
     return [passage for passage in ranked if passage.score >= RELEVANCE_THRESHOLD]
+
+
+def truncate_to_context(passages: list[RankedPassage]) -> list[RankedPassage]:
+    """Fit the grounding context into MAXIMUM_CONTEXT_TOKENS, dropping the worst first.
+
+    Proposal 7.10 lines 92-111 (FR-12 step 7). Passages are consumed in rank order, and
+    when the next one will not fit the remaining budget the loop STOPS rather than
+    skipping it to try the one after. The pseudocode gives the reason and it is worth
+    restating: continuing would admit a weaker passage while excluding a stronger one
+    purely on length. A ranking that can be re-ordered by passage size is not a ranking.
+
+    TOP_K bounds how many passages are retrieved and this bounds how many fit in one
+    generation call. They are not the same limit and the smaller of them governs.
+
+    **The single best passage is always sent, even when it alone exceeds the budget.**
+    The ``if kept and ...`` guard is what does it, and it is deliberate: dropping it
+    would return the no-answer response while holding the most relevant material the
+    corpus has, which reads to the user as "we know nothing about this" when the truth is
+    "we found it and would not show you". An over-length prompt is the provider's to
+    refuse — and a refusal is a failed attempt, retried, then an honest 503 — whereas a
+    silent no-answer is not visible to anyone. This matches what the harness did when
+    docs/flm-baseline.md was measured.
+
+    Tokens are counted with ``length_in_tokens``, the project's single definition of a
+    token: a whitespace-delimited word (D-31). Not a model tokeniser, so this is an
+    approximation that undercounts real subword tokens by roughly 1.3x; the budget is set
+    with that headroom in mind.
+
+    MAXIMUM_CONTEXT_TOKENS is marked PROVISIONAL in apps/core/constants.py and item 5
+    does NOT tune it. 4000 is the value docs/flm-baseline.md was measured at, and the
+    corpus is 6 chunks of roughly 400 tokens, so the budget never binds: fitting a
+    constant to a corpus that cannot exercise it would be fitting it to nothing. Same
+    reasoning as TOP_K in item 3, and the same consequence — the code is written and
+    tested for the case that does not yet occur.
+    """
+    kept: list[RankedPassage] = []
+    used = 0
+    for passage in passages:  # already ordered best first
+        cost = length_in_tokens(passage.chunk_text)
+        if kept and used + cost > MAXIMUM_CONTEXT_TOKENS:
+            # The window is full. Everything remaining scores lower than everything
+            # already kept, so the list is abandoned here rather than searched for a
+            # shorter passage that would fit.
+            break
+        kept.append(passage)
+        used += cost
+    return kept

@@ -1,13 +1,19 @@
-"""FR-12 steps 1 to 6 and no-answer path A (apps/retrieval/pipeline.py).
+"""FR-12 steps 1 to 8: retrieval, no-answer path A, and grounded generation
+(apps/retrieval/pipeline.py).
 
 The autouse ``stub_ai_service`` is replaced here by a local double whose query vector
 is fixed, because the stub's vectors are seeded random and no score could be predicted
-from them. ``ControlledEmbeddingService`` answers with ``QUERY`` — the unit vector on
-the first axis — so a chunk built by ``at_cosine(v)`` scores exactly ``v``, the same
-arrangement apps/retrieval/tests/test_ranking.py uses. Its ``embed_calls`` and
-``generate_calls`` lists are named as the stub's are, so a call-count assertion reads
-the same either way, and its ``generate_statements`` raises: nothing in this module may
-reach generation at all.
+from them. ``ControlledService`` answers with ``QUERY`` — the unit vector on the first
+axis — so a chunk built by ``at_cosine(v)`` scores exactly ``v``, the same arrangement
+apps/retrieval/tests/test_ranking.py uses. Its ``embed_calls`` and ``generate_calls``
+lists are named as the stub's are, so a call-count assertion reads the same either way,
+and ``generate_calls`` records the question and the passages each generation call
+received — which is how the tests below assert what reached the prompt.
+
+The provider's own behaviour — the retry loop, the schema check, the 503 after three
+attempts — is tested in apps/ai/tests/test_generation.py against the openai SDK's mock
+transport. What is tested here is the pipeline: what it sends, when it does not send at
+all, and what it does with what comes back.
 
 The helpers are restated here rather than imported from test_ranking.py, following
 this suite's habit of a test stating its own premise instead of inheriting it from
@@ -23,7 +29,7 @@ import pytest
 from django.conf import settings
 
 import apps.ai
-from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.base import EmbeddingResult, ProviderUnavailable, Statement, StatementList
 from apps.ai.prefixes import query_text
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import (
@@ -89,17 +95,32 @@ def make_chunk(document, visible_to_roles, *, index, cosine, text="A passage."):
 # --- The double ------------------------------------------------------------------------
 
 
-class ControlledEmbeddingService:
-    """An AIService whose query vector is known and whose generation call explodes.
+class ControlledService:
+    """An AIService whose query vector is known and whose generation reply is scripted.
 
     ``model`` defaults to the stub's name because that is what make_chunk stamps, so
     the embedding-model predicate passes and the candidate set is decided by the role
     scope alone. A test that wants the mismatch case passes another name.
+
+    ``generate_calls`` holds ``(question, passages)`` per call, so a test can assert
+    exactly what reached the prompt — which is the only way to check the invariant that
+    out-of-scope material never reaches the AI service. ``statements`` scripts the reply;
+    the default cites the first passage it was given, as a grounded reply would.
+    ``generation_failure`` scripts an outage instead.
     """
 
-    def __init__(self, *, vector=None, model=STUB_EMBEDDING_MODEL):
+    def __init__(
+        self,
+        *,
+        vector=None,
+        model=STUB_EMBEDDING_MODEL,
+        statements=None,
+        generation_failure=None,
+    ):
         self.vector = QUERY if vector is None else vector
         self.model = model
+        self.statements = statements
+        self.generation_failure = generation_failure
         self.embed_calls: list[list[str]] = []
         self.generate_calls: list[tuple] = []
 
@@ -112,13 +133,15 @@ class ControlledEmbeddingService:
         )
 
     def generate_statements(self, question, passages):
-        # Recorded first so an assertion on generate_calls can still see it, then
-        # raised: at item 4 nothing may call generation, and a double that merely
-        # counted the call would let a wrong implementation get as far as a diff.
+        # Recorded before anything else, so a test asserting zero calls sees a call that
+        # should not have happened even if the scripted reply would have hidden it.
         self.generate_calls.append((question, list(passages)))
-        raise AssertionError(
-            "generation was called from the retrieval pipeline; no-answer path A "
-            "returns without invoking it (FR-12, CLAUDE.md invariant 7)"
+        if self.generation_failure is not None:
+            raise self.generation_failure
+        if self.statements is not None:
+            return StatementList(statements=list(self.statements))
+        return StatementList(
+            statements=[Statement(text="A grounded statement.", chunk_id=passages[0].chunk_id)]
         )
 
     def health(self):
@@ -128,9 +151,24 @@ class ControlledEmbeddingService:
 @pytest.fixture
 def service(monkeypatch):
     """Install the double where apps.ai.get_ai_service is looked up at call time."""
-    double = ControlledEmbeddingService()
+    double = ControlledService()
     monkeypatch.setattr(apps.ai, "get_ai_service", lambda: double)
     return double
+
+
+def install(monkeypatch, double):
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: double)
+    return double
+
+
+@pytest.fixture
+def service_with(monkeypatch):
+    """Install a ControlledService with a scripted generation reply or failure."""
+
+    def build(**kwargs):
+        return install(monkeypatch, ControlledService(**kwargs))
+
+    return build
 
 
 # --- No-answer path A ------------------------------------------------------------------
@@ -140,17 +178,18 @@ def service(monkeypatch):
 def test_path_a_returns_the_no_answer_response_without_calling_generation(document, service):
     """Nothing cleared the threshold: the no-answer outcome, and no generation call.
 
-    **On the strength of the generate_calls assertion at this item.** There is no
-    generation call site anywhere in apps/retrieval yet, so this assertion currently
-    proves something the code is not able to do wrong. It is written now because it
-    becomes load-bearing at item 5, when the call site appears immediately after this
-    branch: KEEP IT AND RE-ASSERT IT THEN — at that point it is the test standing
-    between path A and an ungrounded answer, and it is the test FR-12 and the M6 build
-    plan actually ask for. Read today it is a placeholder with the right shape.
+    **The generation call site exists as of item 5, so this assertion is now
+    load-bearing.** It was written at item 4 when there was nothing it could catch;
+    ``answer_question`` now calls ``generate_statements`` two lines below the branch under
+    test, and this is the test standing between no-answer path A and an ungrounded answer.
+    If the early return were ever removed, or moved below the call, or turned into a
+    conditional around it, the model would be handed a question with no grounding material
+    and could answer it only by inventing — and nothing downstream could tell. That is the
+    failure FR-12 asks for this test by name to prevent.
 
-    ``embed_calls`` is the assertion that does carry weight here: retrieval genuinely
-    ran — the question was embedded and a candidate set was ranked — so the empty
-    result is a decision taken on the scores, not a short circuit that never looked.
+    ``embed_calls`` carries its own weight: retrieval genuinely ran — the question was
+    embedded and a candidate set was ranked — so the empty result is a decision taken on
+    the scores, not a short circuit that never looked.
     """
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW, text="Barely related.")
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=ALSO_BELOW, text="Less related.")
@@ -197,7 +236,7 @@ def test_a_chunk_from_another_embedding_model_leaves_nothing_to_answer_from(docu
     honest no-answer is the outcome until ``manage.py reindex`` has run.
     """
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=NEAREST, text="Indexed earlier.")
-    double = ControlledEmbeddingService(model="some-other-model")
+    double = ControlledService(model="some-other-model")
     monkeypatch.setattr(apps.ai, "get_ai_service", lambda: double)
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
@@ -215,15 +254,16 @@ def test_a_chunk_from_another_embedding_model_leaves_nothing_to_answer_from(docu
 def test_a_passage_above_the_threshold_comes_back_as_a_passage_and_not_as_an_answer(
     document, service
 ):
-    """The admitted branch at item 4: passages, a count, and no answer of any kind.
+    """The admitted branch: passages, a count, proposed statements, and no answer.
 
-    ``answered`` is False here as well as on path A, and deliberately: no generation
-    has run, so no answer has been returned, and a True here would put a
-    not-yet-answered question into the answered rate. The branches are told apart by
-    ``no_answer_reason`` being None and ``passages`` being non-empty. Item 5 is where
-    ``answered=True`` first becomes reachable, and this assertion is expected to change
-    there — it is pinned now so that the change is visible in that diff rather than
-    assumed.
+    ``answered`` is False here as well as on path A, and deliberately: generation has run,
+    but nothing has verified that the identifiers it returned were ever in the prompt, and
+    an unverified statement is not an answer (invariants 5 and 6). A True here would put a
+    not-yet-verified question into the answered rate. The branches are told apart by
+    ``no_answer_reason`` being None and ``passages`` being non-empty. **Item 6 is where
+    ``answered=True`` first becomes reachable** — verifyCitations() is what makes a
+    statement citable — and this assertion is expected to change in that diff rather than
+    to be assumed away.
     """
     chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Twenty days.")
     below = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=BELOW, text="Unrelated.")
@@ -238,13 +278,24 @@ def test_a_passage_above_the_threshold_comes_back_as_a_passage_and_not_as_an_ans
     # The threshold still applied: the low-scoring chunk is not in the passages or the
     # count, so the count is of admitted passages and not of candidates.
     assert str(below.id) not in [passage.chunk_id for passage in outcome.passages]
+    # Generation ran over exactly the admitted passage, and what came back is carried as
+    # PROPOSED statements: what the model said, not what has been verified.
+    assert len(service.generate_calls) == 1
+    question_sent, passages_sent = service.generate_calls[0]
+    assert question_sent == QUESTION
+    assert [passage.chunk_id for passage in passages_sent] == [str(chunk.id)]
+    assert [passage.text for passage in passages_sent] == ["Twenty days."]
+    assert [statement.chunk_id for statement in outcome.proposed_statements] == [str(chunk.id)]
+
     # No answer is claimed, and no no-answer response is returned either.
     assert outcome.answered is False
     assert outcome.no_answer_reason is None
     assert outcome.message is None
+    # Item 6 owns verification and its results; nothing is stubbed for it here.
     assert not hasattr(outcome, "statements")
     assert not hasattr(outcome, "citations")
-    assert service.generate_calls == []
+    assert not hasattr(outcome, "verified_statements")
+    assert not hasattr(outcome, "sources")
 
 
 @pytest.mark.django_db
@@ -383,7 +434,7 @@ def test_a_provider_outage_is_not_converted_into_a_no_answer(employee, monkeypat
     number the team reads as a retrieval-quality signal.
     """
 
-    class DownService(ControlledEmbeddingService):
+    class DownService(ControlledService):
         def embed(self, texts):
             self.embed_calls.append(list(texts))
             raise ProviderUnavailable("the provider is down")
@@ -455,6 +506,16 @@ def test_an_out_of_scope_chunk_is_absent_where_a_permitted_passage_is_admitted(d
     assert outcome.result_count == 1  # after both filters and the threshold
     assert ContentChunk.objects.count() == 2
 
+    # The part that could not be asserted before item 5: what the AI service was SENT.
+    # The restricted passage outscored the permitted one, so a post-filter would have put
+    # it first in this prompt. It is not in the prompt at all — not its text, not its
+    # identifier — and no statement could therefore cite it (invariant 1).
+    (question_sent, passages_sent) = service.generate_calls[0]
+    assert question_sent == QUESTION
+    assert [passage.chunk_id for passage in passages_sent] == [str(permitted.id)]
+    assert str(restricted.id) not in [passage.chunk_id for passage in passages_sent]
+    assert restricted.chunk_text not in [passage.text for passage in passages_sent]
+
 
 @pytest.mark.django_db
 def test_the_pipeline_from_both_role_sessions(session_client, document, service):
@@ -476,7 +537,10 @@ def test_the_pipeline_from_both_role_sessions(session_client, document, service)
     assert str(restricted.id) not in [passage.chunk_id for passage in outcome.passages]
     assert outcome.result_count == 1
     assert outcome.no_answer_reason is None
-    assert service.generate_calls == []
+    # And the prompt, from both roles: exactly the permitted passage reached the provider.
+    (_, passages_sent) = service.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(permitted.id)]
+    assert restricted.chunk_text not in [passage.text for passage in passages_sent]
 
 
 @pytest.mark.django_db
@@ -512,3 +576,174 @@ def test_no_query_log_row_is_written_yet(document, service):
     answer_question(question=QUESTION, user=document.uploaded_by)
 
     assert QueryLog.objects.count() == 0
+
+
+# --- Step 7 and step 8: what is sent, and what comes back ------------------------------
+
+
+@pytest.mark.django_db
+def test_the_prompt_carries_the_passages_in_rank_order_and_nothing_else(document, service):
+    """Best first, each with its identifier, and no fourth thing beside them.
+
+    Rank order matters in the prompt as well as in the response: the passages are consumed
+    best-first by the context budget, and the model is more likely to draw on what it reads
+    first.
+    """
+    best = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.90, text="Best.")
+    middle = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.60, text="Middle.")
+    worst = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=3, cosine=0.35, text="Worst.")
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    (_, passages_sent) = service.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [
+        str(best.id),
+        str(middle.id),
+        str(worst.id),
+    ]
+    assert [passage.text for passage in passages_sent] == ["Best.", "Middle.", "Worst."]
+    # A Passage carries an identifier and text, and nothing else could leak through it.
+    assert {field for field in vars(passages_sent[0])} == {"chunk_id", "text"}
+    assert outcome.result_count == 3
+
+
+@pytest.mark.django_db
+def test_a_passage_below_the_threshold_never_reaches_the_prompt(document, service):
+    """The floor is applied before the prompt is built, not inside it."""
+    admitted = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE, text="Relevant.")
+    weak = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=BELOW, text="Weak.")
+
+    answer_question(question=QUESTION, user=document.uploaded_by)
+
+    (_, passages_sent) = service.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(admitted.id)]
+    assert "Weak." not in [passage.text for passage in passages_sent]
+
+
+@pytest.mark.django_db
+def test_the_context_budget_is_applied_before_generation(document, monkeypatch):
+    """Step 7 before step 8: only the passages that fit are sent.
+
+    MAXIMUM_CONTEXT_TOKENS is overridden to a small number for this test rather than the
+    corpus being made enormous. The constant is PROVISIONAL and item 5 does not tune it
+    (4000 is what docs/flm-baseline.md measured), so a test that needs the budget to bind
+    says so locally instead of moving the value everyone else reads.
+    """
+    from apps.retrieval import ranking
+
+    monkeypatch.setattr(ranking, "MAXIMUM_CONTEXT_TOKENS", 10)
+    double = install(monkeypatch, ControlledService())
+    best = make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.90, text=" ".join(["word"] * 8)
+    )
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.60, text=" ".join(["word"] * 8))
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    (_, passages_sent) = double.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(best.id)]
+    # The count reports what was supplied to generation, so it matches the passage list.
+    assert outcome.result_count == len(outcome.passages) == 1
+
+
+@pytest.mark.django_db
+def test_the_proposed_statements_are_carried_verbatim_and_not_judged(document, service_with):
+    """Whatever the model said comes back as proposed_statements, unfiltered.
+
+    Including a statement citing an identifier that was never in the prompt. This module
+    must NOT quietly drop it: verification is item 6's, it is application code over set
+    membership (invariant 5), and a pipeline that filtered here would leave item 6 testing
+    a case it could never see. The baseline measured fabrication at 2.4%, so this is a real
+    input rather than a hypothetical one.
+    """
+    chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    fabricated = "00000000-0000-4000-8000-000000000000"
+    double = service_with(
+        statements=[
+            Statement(text="A real one.", chunk_id=str(chunk.id)),
+            Statement(text="An invented one.", chunk_id=fabricated),
+        ]
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert [statement.chunk_id for statement in outcome.proposed_statements] == [
+        str(chunk.id),
+        fabricated,
+    ]
+    assert outcome.answered is False  # and it stays False until item 6 has checked them
+    assert len(double.generate_calls) == 1
+
+
+@pytest.mark.django_db
+def test_an_empty_statement_list_is_not_an_error_and_not_path_a(document, service_with):
+    """``{"statements": []}`` is the model reporting that the passages do not answer.
+
+    The pipeline returns it as an ordinary outcome: passages were retrieved, so this is not
+    no-answer path A, and the reason code stays None. Item 6 turns an empty set of VERIFIED
+    statements into path B with reason no_statement_verified — a different reason from path
+    A's, which is the distinction invariant 7 rests on.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    service_with(statements=[])
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.proposed_statements == ()
+    assert outcome.no_answer_reason is None  # NOT no_relevant_passage: passages were found
+    assert outcome.no_answer_reason != NO_STATEMENT_VERIFIED  # nor path B, which is item 6's
+    assert outcome.message is None
+    assert outcome.result_count == 1
+    assert outcome.answered is False
+
+
+@pytest.mark.django_db
+def test_three_non_conforming_replies_reach_the_view_as_an_outage_not_a_no_answer(
+    document, service_with
+):
+    """Invariant 10 and NFR-19 through the pipeline: ProviderUnavailable propagates.
+
+    The provider raises it after MAXIMUM_GENERATION_ATTEMPTS (tested in
+    apps/ai/tests/test_generation.py); here what matters is that the pipeline does not catch
+    it and return a no-answer. A 503 tells the user the system could not answer; a
+    no-answer would tell them the organisation holds no answer, which is a different and
+    false statement, and it would corrupt the one rate FR-12 asks to be watched.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    service_with(generation_failure=ProviderUnavailable("no conforming reply in 3 attempts"))
+
+    with pytest.raises(ProviderUnavailable):
+        answer_question(question=QUESTION, user=document.uploaded_by)
+
+
+@pytest.mark.django_db
+def test_generation_is_reached_through_the_module_lookup_not_a_bound_import(document, monkeypatch):
+    """The service is obtained at call time, so the suite's stub always applies.
+
+    A name bound at import time would reach a real provider in a test that patched
+    apps.ai.get_ai_service, which is the mistake docs/ai-provider.md section 6 warns about.
+    Asserted by patching AFTER the pipeline module was imported.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    late = install(monkeypatch, ControlledService(statements=[]))
+
+    answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert len(late.embed_calls) == 1
+    assert len(late.generate_calls) == 1
+
+
+@pytest.mark.django_db
+def test_generation_from_both_role_sessions(session_client, document, service):
+    """Generation over each role's own passages (CLAUDE.md section 8 item 2)."""
+    role_name = session_client.role_name
+    other_role = next(name for name in ROLE_PAIR if name != role_name)
+    make_chunk(document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest.")
+    permitted = make_chunk(document, [role_name], index=2, cosine=ABOVE, text="Permitted.")
+
+    outcome = answer_question(question=QUESTION, user=session_client.user)
+
+    (_, passages_sent) = service.generate_calls[0]
+    assert [passage.chunk_id for passage in passages_sent] == [str(permitted.id)]
+    assert [statement.chunk_id for statement in outcome.proposed_statements] == [str(permitted.id)]
+    assert outcome.answered is False

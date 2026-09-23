@@ -20,7 +20,7 @@ Swapping the application's provider to FLM does not change how the code is writt
 
 ```python
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Callable, Protocol
 
 @dataclass(frozen=True)
 class Passage:
@@ -47,9 +47,24 @@ class ProviderHealth:
     available: bool
     detail: str
 
+@dataclass(frozen=True)
+class GenerationAttempt:          # apps/ai/generation.py — the observer's record
+    number: int                   # 1-based; the last is MAXIMUM_GENERATION_ATTEMPTS
+    outcome: str                  # "parsed" | "schema-violation" | "call-failed"
+    seconds: float
+    raw: str | None = None        # the reply text, None where the call itself failed
+    detail: str | None = None     # the violation message or the failure description
+    statements: int | None = None
+
 class AIService(Protocol):
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
-    def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
+    def generate_statements(
+        self,
+        question: str,
+        passages: list[Passage],
+        *,
+        on_attempt: Callable[[GenerationAttempt], None] | None = None,
+    ) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
 ```
 
@@ -60,6 +75,38 @@ NIT3004 work and get their own methods later — do not add them speculatively.
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
 A response that does not conform to the statement schema counts as a failed attempt,
 not as an answer.
+
+### `on_attempt` — an observer, not a fourth operation
+
+`on_attempt` is keyword-only, defaults to `None`, and is called once per generation
+attempt with a `GenerationAttempt` the method already computes and would otherwise
+discard. It **cannot change what is asked of the model or what comes back**: it receives
+a record after the fact, its return value is ignored, and an exception raised inside it is
+caught and discarded in `apps/ai/generation.py`, so the attempt loop proceeds exactly as
+it would with no callback — the same number of provider calls, the same return value, the
+same `ProviderUnavailable` at the end. That last point is the reason the guarantee is
+written down: NFR-19's fault-injection test asserts the provider was called exactly three
+times before the 503, and a measuring instrument must not be able to move the number it is
+measuring.
+
+**Nothing under `apps/` passes it.** The only caller in the repository is
+`scripts/citation_harness.py`, which needs per-attempt records to report schema
+conformance **per response**, with the first-attempt rate separately, the way
+`docs/flm-baseline.md` does. Without the observer the harness would have to run its own
+retry loop, and a second retry loop beside the shipped one is exactly the duplication
+Stage 4 item 5 removed. `apps/ai/tests/test_observer_is_not_used_in_application_code.py`
+reads the source of every module under `apps/` and fails if one appears as a caller.
+
+This is still three operations. The sentence above means no classification method and no
+summarisation method until NIT3004 asks for them; it is not a rule about keyword
+arguments, and an observer on an existing operation adds nothing to the interface a
+caller must implement — every implementation already computes what it reports. A
+parameter that changed what the model is asked, such as FR-13's conversation history,
+would be a different question and is argued on its own merits when item 9 reaches it.
+
+It is declared in the Protocol signature itself, not only in the implementations: a
+contract and its implementations differing by a parameter is the defect this project keeps
+finding in other people's code, and it is not worth shipping deliberately.
 
 ---
 

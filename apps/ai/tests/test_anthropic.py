@@ -1,14 +1,23 @@
-"""AnthropicService: Voyage embeddings through the openai client, Claude health. No network."""
+"""AnthropicService: Voyage embeddings, Claude generation and health. No network.
+
+The anthropic SDK is never called for real. D-35 rules out external AI spend, so both the
+generation tests below and the health tests inject a fake client; the embed tests use the
+openai SDK's MockTransport, as the FLM tests do.
+"""
 
 import json
 
+import anthropic as anthropic_sdk
 import httpx2
 import openai
 import pytest
 from django.test import override_settings
 
 from apps.ai.anthropic import AnthropicService
-from apps.ai.base import ProviderHealth, ProviderUnavailable
+from apps.ai.base import Passage, ProviderHealth, ProviderUnavailable
+from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
+from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
+from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS
 
 VOYAGE_URL = "https://voyage.test/v1"
 VOYAGE_MODEL = "voyage-4"
@@ -127,6 +136,175 @@ def test_health_is_unavailable_and_does_not_raise_when_the_api_fails():
     assert "boom" in health.detail
 
 
-def test_generate_statements_is_not_built_yet():
-    with pytest.raises(NotImplementedError, match="Stage 4"):
-        AnthropicService().generate_statements("question?", [])
+# --- Generation through Claude (FR-12, Stage 4 item 5) ---------------------------------
+#
+# Mocked, never live: D-35 rules out external AI spend, so this path is tested exactly as
+# the Voyage embed path above is. The limitation is real and stated rather than implied —
+# the request shape below is taken from the SDK's documented parameters, and the first
+# live call will be the first live call. What the tests do establish is that the Anthropic
+# provider uses the SAME prompt, the SAME schema and the SAME retry policy as FLM, which
+# is what keeps the proposal's section 9.2 provider-independence claim true.
+
+CHUNK_ID = "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"
+PASSAGES = [Passage(chunk_id=CHUNK_ID, text="Twenty days of annual leave per year.")]
+QUESTION = "How much annual leave do I get?"
+CONFORMING = json.dumps({"statements": [{"text": "Twenty days.", "chunk_id": CHUNK_ID}]})
+
+
+class FakeTextBlock:
+    """One content block of a Claude reply."""
+
+    def __init__(self, text, block_type="text"):
+        self.text = text
+        self.type = block_type
+
+
+class FakeMessage:
+    def __init__(self, blocks):
+        self.content = blocks
+
+
+class FakeMessages:
+    """messages.create scripted with a reply per call, recording every call's kwargs."""
+
+    def __init__(self, replies):
+        self.replies = list(replies)
+        self.calls = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        reply = self.replies[min(len(self.calls) - 1, len(self.replies) - 1)]
+        if isinstance(reply, Exception):
+            raise reply
+        if isinstance(reply, FakeMessage):
+            return reply
+        return FakeMessage([FakeTextBlock(reply)])
+
+
+class FakeGeneratingClient:
+    def __init__(self, *replies):
+        self.messages = FakeMessages(replies)
+        self.models = FakeModels()
+
+
+def status_error(status_code):
+    """An anthropic APIStatusError carrying ``status_code``, built without a live call."""
+    request = httpx2.Request("POST", "https://api.anthropic.test/v1/messages")
+    response = httpx2.Response(status_code, json={"error": {"message": "scripted"}}, request=request)
+    return anthropic_sdk.APIStatusError("scripted", response=response, body=None)
+
+
+def test_generate_statements_sends_the_shared_prompt_and_returns_statements():
+    client = FakeGeneratingClient(CONFORMING)
+
+    with override_settings(ANTHROPIC_MODEL="claude-opus-5"):
+        result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert [statement.text for statement in result.statements] == ["Twenty days."]
+    assert [statement.chunk_id for statement in result.statements] == [CHUNK_ID]
+    (call,) = client.messages.calls
+    assert call["model"] == "claude-opus-5"
+    assert call["temperature"] == 0.0
+    assert call["max_tokens"] == GENERATION_MAX_TOKENS
+    assert call["timeout"] == GENERATION_TIMEOUT_SECONDS
+    # The system prompt goes in the SDK's own parameter, and it is the same string FLM
+    # receives as a system message.
+    assert call["system"] == SYSTEM_PROMPT
+    assert [message["role"] for message in call["messages"]] == ["user"]
+    assert call["messages"][0]["content"] == build_user_prompt(QUESTION, PASSAGES)
+    assert f"[chunk_id: {CHUNK_ID}]" in call["messages"][0]["content"]
+
+
+def test_generation_joins_only_the_text_blocks_of_the_reply():
+    """Claude replies in blocks; a non-text block carries no JSON and is skipped."""
+    reply = FakeMessage(
+        [FakeTextBlock("", block_type="thinking"), FakeTextBlock(CONFORMING)]
+    )
+    client = FakeGeneratingClient(reply)
+
+    result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert result.statements != []
+
+
+def test_generation_refuses_an_empty_passage_list_without_calling_the_api():
+    client = FakeGeneratingClient(CONFORMING)
+
+    with pytest.raises(ValueError, match="at least one passage"):
+        AnthropicService(anthropic_client=client).generate_statements(QUESTION, [])
+
+    assert client.messages.calls == []
+
+
+def test_an_empty_statement_list_is_returned_and_not_retried():
+    client = FakeGeneratingClient('{"statements": []}')
+
+    result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert result.statements == []
+    assert len(client.messages.calls) == 1
+
+
+def test_a_malformed_reply_is_retried_and_the_conforming_one_is_returned():
+    client = FakeGeneratingClient("Here is your answer, in prose.", CONFORMING)
+
+    result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert result.statements != []
+    assert len(client.messages.calls) == 2
+
+
+def test_three_malformed_replies_raise_provider_unavailable_after_exactly_three_calls():
+    """The same NFR-19 total as the FLM path, because it is the same loop (D-19)."""
+    client = FakeGeneratingClient("prose", "more prose", "still prose")
+
+    with override_settings(ANTHROPIC_MODEL="claude-opus-5"):
+        with pytest.raises(ProviderUnavailable, match="STATEMENT_LIST_SCHEMA"):
+            AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert len(client.messages.calls) == MAXIMUM_GENERATION_ATTEMPTS == 3
+
+
+def test_a_transport_failure_is_retried_then_becomes_provider_unavailable():
+    failure = anthropic_sdk.APIConnectionError(request=httpx2.Request("POST", "https://api.test"))
+    client = FakeGeneratingClient(failure, failure, failure)
+
+    with pytest.raises(ProviderUnavailable, match="unreachable"):
+        AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert len(client.messages.calls) == 3
+
+
+def test_a_server_error_is_retried_and_a_later_conforming_reply_is_returned():
+    client = FakeGeneratingClient(status_error(529), CONFORMING)
+
+    result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert result.statements != []
+    assert len(client.messages.calls) == 2
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 429])
+def test_a_client_error_surfaces_as_itself_and_consumes_no_retries(status):
+    """4xx is a key, model or quota problem, not an outage; a 429 included (see the
+    provider comment: retrying a rate limit inside a 3-attempt budget would exhaust it
+    and report a billing condition as an NPU fault)."""
+    client = FakeGeneratingClient(status_error(status))
+
+    with pytest.raises(anthropic_sdk.APIStatusError) as excinfo:
+        AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert excinfo.value.status_code == status
+    assert not isinstance(excinfo.value, ProviderUnavailable)
+    assert len(client.messages.calls) == 1
+
+
+def test_every_attempt_is_reported_to_on_attempt():
+    client = FakeGeneratingClient("prose", CONFORMING)
+    recorded = []
+
+    AnthropicService(anthropic_client=client).generate_statements(
+        QUESTION, PASSAGES, on_attempt=recorded.append
+    )
+
+    assert [attempt.outcome for attempt in recorded] == ["schema-violation", "parsed"]

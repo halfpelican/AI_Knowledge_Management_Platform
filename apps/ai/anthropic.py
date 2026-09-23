@@ -1,10 +1,16 @@
 """Claude + Voyage implementation: the documented production configuration.
 
-Generation goes to Claude through the official anthropic SDK (built in Stage 4).
+Generation goes to Claude through the official anthropic SDK, built at Stage 4 item 5
+and sharing the prompt (apps/ai/prompting.py), the schema (apps/ai/schema.py) and the
+retry policy (apps/ai/generation.py) with the FLM provider — so "provider independence"
+means the same prompt answered by a different model, not a second implementation.
 Embeddings go to Voyage, whose /embeddings endpoint speaks the OpenAI wire format,
 through the same openai client shape FLM uses (docs/ai-provider.md section 3).
-Kept working so the proposal's section 9.2 remains true; not used day to day.
+Kept working so the proposal's section 9.2 remains true; not used day to day, and never
+called live in the suite (D-35: no external AI spend).
 """
+
+from typing import Callable
 
 # This module is apps/ai/anthropic.py. Python 3 imports are absolute, so
 # ``import anthropic`` here resolves to the installed SDK and never to this file;
@@ -14,8 +20,13 @@ from django.conf import settings
 
 from apps.ai import _openai_compat
 from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
-
-GENERATION_NOT_BUILT = "Grounded generation is built in Stage 4 (FR-12)"
+from apps.ai.generation import (
+    GENERATION_MAX_TOKENS,
+    GENERATION_TIMEOUT_SECONDS,
+    GenerationAttempt,
+    run_generation_attempts,
+)
+from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
 
 
 class AnthropicService:
@@ -51,12 +62,64 @@ class AnthropicService:
             self._voyage(), settings.VOYAGE_MODEL, texts, endpoint=settings.VOYAGE_BASE_URL
         )
 
-    def generate_statements(self, question: str, passages: list[Passage]) -> StatementList:
-        # Stage 4 (FR-12): call self._anthropic().messages.create(...) with
-        # settings.ANTHROPIC_MODEL through the official anthropic SDK, enforce the
-        # statement schema, and raise ProviderUnavailable after
-        # MAXIMUM_GENERATION_ATTEMPTS. Never a bare string, never a partial answer.
-        raise NotImplementedError(GENERATION_NOT_BUILT)
+    def generate_statements(
+        self,
+        question: str,
+        passages: list[Passage],
+        *,
+        on_attempt: Callable[[GenerationAttempt], None] | None = None,
+    ) -> StatementList:
+        """Grounded generation through Claude (FR-12), the documented production path.
+
+        The same prompt, the same schema and the same retry loop as the FLM provider:
+        SYSTEM_PROMPT and build_user_prompt come from apps/ai/prompting.py, the loop and
+        the 503 from apps/ai/generation.py. Only the transport differs, which is what
+        keeps the proposal's section 9.2 claim of provider independence true.
+
+        Not exercised against the live API, by decision: D-35 rules out external AI
+        spend, so this path is tested against mocked SDK responses exactly as the Voyage
+        embedding path is. That is a real limitation and it is stated rather than
+        implied — the wire shape is taken from the SDK's documented types, and the first
+        live call will be the first live call.
+        """
+        if not passages:
+            raise ValueError("generate_statements() needs at least one passage")
+        user_prompt = build_user_prompt(question, passages)
+        return run_generation_attempts(
+            call_once=lambda: self._claude_once(user_prompt),
+            label=f"Claude ({settings.ANTHROPIC_MODEL})",
+            on_attempt=on_attempt,
+        )
+
+    def _claude_once(self, user_prompt: str) -> str:
+        """One messages.create call. Returns the raw reply text.
+
+        The system prompt goes in the SDK's own ``system`` parameter rather than as a
+        message, which is this API's shape; the string is the one FLM receives as its
+        system message. Transport failures become ProviderUnavailable and 4xx surfaces
+        unchanged, the same division the embed path makes.
+        """
+        try:
+            response = self._anthropic().messages.create(
+                model=settings.ANTHROPIC_MODEL,
+                max_tokens=GENERATION_MAX_TOKENS,
+                temperature=0.0,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_prompt}],
+                timeout=GENERATION_TIMEOUT_SECONDS,
+            )
+        except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
+            raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc
+        except anthropic_sdk.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise ProviderUnavailable(
+                    f"Anthropic API returned HTTP {exc.status_code}: {exc}"
+                ) from exc
+            raise  # 4xx, including a 429, is not an outage and consumes no retries
+        # Claude replies in content blocks; only the text ones carry the JSON object.
+        return "".join(
+            block.text for block in (response.content or []) if getattr(block, "type", "") == "text"
+        )
 
     def health(self) -> ProviderHealth:
         # A report, not a call path: this never raises.

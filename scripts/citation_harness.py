@@ -25,27 +25,23 @@ system does not do. The ranking, the threshold, the scoring and the reporting be
 are unchanged.
 
 --------------------------------------------------------------------------------
-TEMPORARY DUPLICATION — READ BEFORE EDITING
+THE DUPLICATION IS OVER — WHERE THE PIECES LIVE NOW
 --------------------------------------------------------------------------------
-Three things below are a deliberate, temporary copy of what Stage 4 item 5 (FR-12
-grounded generation) will own inside apps/ai/:
+Stage 4 item 5 has landed, so the schema, the prompt and the parser this harness
+once defined for itself now live in the code under test and are imported below:
 
-    STATEMENT_LIST_SCHEMA       the required response shape
-    SYSTEM_PROMPT               strict instructions plus one worked example
-    parse_statement_list()      the tolerant parser
+    STATEMENT_LIST_SCHEMA, SchemaViolation, parse_statement_list  apps/ai/schema.py
+    SYSTEM_PROMPT, build_generation_messages                      apps/ai/prompting.py
+    the attempt loop and the 503 after three tries                apps/ai/generation.py
+    rank, truncate_to_context, cosine_similarity                  apps/retrieval/ranking.py
 
-They live here because item 0 runs before item 5 exists, precisely so the schema,
-the prompt and the parser can be iterated against a live model without touching
-production code or its tests. They are written as clean, liftable units with no
-harness-specific coupling: item 5 should be able to move them into apps/ai/
-verbatim.
-
-WHEN ITEM 5 LANDS, THIS HARNESS MUST DELETE ITS COPIES AND IMPORT FROM apps/ai/,
-and call FLMService.generate_statements() instead of build_generation_messages()
-plus a raw chat call. Two definitions of the schema that drift apart would be
-invisible until a citation silently stopped being verified. The duplication is
-recorded in docs/flm-baseline.md so it reads as a decision, not as a stray second
-implementation.
+The harness no longer makes a raw chat call: it calls
+``service.generate_statements(question, passages, on_attempt=...)`` and measures the
+shipped retry loop rather than a copy of it. There is therefore one definition of
+each of these, which is the point — two that drifted apart would be invisible until
+a citation silently stopped being verified.
+apps/ai/tests/test_prompt_is_not_duplicated.py reads THIS FILE's source text and
+fails if a second copy reappears here.
 
 This harness does NOT implement FR-11, FR-12 or FR-13. Where it filters candidate
 chunks by role it is constructing a candidate set to measure against; the
@@ -57,11 +53,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from dataclasses import dataclass, field
-from math import sqrt
 from pathlib import Path
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
@@ -75,7 +69,18 @@ django.setup()
 from django.conf import settings  # noqa: E402
 
 from apps.ai import get_ai_service  # noqa: E402
-from apps.ai.base import Passage, Statement, StatementList  # noqa: E402
+from apps.ai.base import Passage, ProviderUnavailable, Statement  # noqa: E402
+
+# The units this harness used to define, now imported and never redefined (see the
+# header). SYSTEM_PROMPT and STATEMENT_LIST_SCHEMA are reported in the run header, so a
+# recorded run names the prompt and the shape it measured. parse_statement_list and
+# SchemaViolation are no longer CALLED here — apps/ai/generation.py parses inside the
+# attempt loop — and are imported deliberately anyway: the name is then taken in this
+# module, so an edit reaching for a local parser collides with it instead of quietly
+# growing a second one.
+from apps.ai.generation import GenerationAttempt  # noqa: E402
+from apps.ai.prompting import SYSTEM_PROMPT  # noqa: E402
+from apps.ai.schema import STATEMENT_LIST_SCHEMA, SchemaViolation, parse_statement_list  # noqa: E402,F401
 from apps.core.constants import (  # noqa: E402
     MAXIMUM_CONTEXT_TOKENS,
     MAXIMUM_GENERATION_ATTEMPTS,
@@ -87,215 +92,21 @@ from apps.core.constants import (  # noqa: E402
 from apps.documents.models import ContentChunk  # noqa: E402
 from apps.retrieval.query_embedding import embed_question  # noqa: E402
 
+# Ranking, the TOP_K cap and the context budget, as retrieval performs them. These were
+# also local copies until item 5; they were copied into apps/retrieval/ranking.py
+# verbatim at items 3 and 5, so importing them changes nothing the baseline measured and
+# removes three more definitions that could drift. The threshold is applied by this
+# module rather than by ranking.admit(), because --threshold sweeps it for tuning (D-37)
+# and admit() correctly reads the settled constant.
+from apps.retrieval.ranking import RankedPassage, rank, truncate_to_context  # noqa: E402
+
 DEFAULT_QUESTION_SET = Path(__file__).resolve().parent / "citation_questions.json"
 QUESTION_KINDS = ("ordinary", "scoped", "no-answer")
 
-# A single chat call's ceiling. Generous: a long passage set can justify several
-# statements, and a truncated reply would be scored as a schema failure that the
-# prompt did not cause.
-GENERATION_MAX_TOKENS = 800
-GENERATION_TIMEOUT_SECONDS = 300
-
 
 # =============================================================================
-# LIFTABLE UNIT 1 — the required response shape (Stage 4 item 5 owns this next)
-# =============================================================================
-
-# docs/ai-provider.md section 5. Expressed as JSON Schema so it can be handed to a
-# constrained-decoding option if FLM ever exposes one; validated by hand below,
-# since the project takes no jsonschema dependency for one small shape.
-STATEMENT_LIST_SCHEMA = {
-    "type": "object",
-    "required": ["statements"],
-    "additionalProperties": False,
-    "properties": {
-        "statements": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["text", "chunk_id"],
-                "additionalProperties": False,
-                "properties": {
-                    "text": {"type": "string", "minLength": 1},
-                    "chunk_id": {"type": "string", "minLength": 1},
-                },
-            },
-        }
-    },
-}
-
-
-# =============================================================================
-# LIFTABLE UNIT 2 — the prompt (docs/ai-provider.md section 5, steps 1 and 2)
-# =============================================================================
-
-# Strict instructions, then one worked example. Small local models follow a
-# demonstration far better than a description, and the example is what keeps the
-# reply free of the prose wrapper gemma3:4b otherwise volunteers.
-SYSTEM_PROMPT = """\
-You extract statements from supplied passages and cite the passage each one came from.
-
-Rules, all of them mandatory:
-1. Reply with one JSON object and nothing else: no greeting, no explanation, no
-   markdown code fence, no text before or after the object.
-2. The object has exactly one key, "statements", whose value is an array.
-3. Each element of the array is an object with exactly two keys: "text", a single
-   complete sentence answering the question, and "chunk_id", the identifier of the
-   passage that sentence came from.
-4. Copy each chunk_id exactly as it appears in the passage header. Use only the
-   chunk_id values supplied in this conversation. Never invent, shorten, renumber
-   or combine identifiers.
-5. Use only information written in the passages. Add nothing from general
-   knowledge and infer nothing beyond what the passages state.
-6. Every statement must come from one passage. If a sentence would need two
-   passages, write it as two statements.
-7. If the passages do not answer the question, reply with exactly
-   {"statements": []}. An empty array is a correct and expected answer.
-
-Worked example. The identifiers below are EXAMPLE values and appear nowhere in the
-real passages: never reuse them, and never copy their shape onto a real identifier.
-
-Passages:
-[chunk_id: 3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03]
-Purchase orders above $10,000 require two approvals. Orders below that amount
-require one approval from the team lead.
-
-[chunk_id: 8b5d04e2-1a7f-4c93-b620-de91f3805c47]
-The office is closed on public holidays and reopens the following working day.
-
-Question: How many approvals does a $25,000 purchase order need?
-
-Your reply:
-{"statements": [{"text": "Purchase orders above $10,000 require two approvals.", "chunk_id": "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"}]}\
-"""
-
-
-def build_generation_messages(question: str, passages: list[Passage]) -> list[dict]:
-    """The chat messages for one grounded-generation call.
-
-    The prompt carries the retrieved passages and nothing else, each labelled with
-    the chunk identifier that citation verification will check against (FR-12).
-    """
-    blocks = [f"[chunk_id: {passage.chunk_id}]\n{passage.text.strip()}" for passage in passages]
-    user_prompt = (
-        "Passages:\n"
-        + "\n\n".join(blocks)
-        + f"\n\nQuestion: {question}\n\n"
-        + "Reply with the JSON object only, using only the chunk_id values above."
-    )
-    return [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
-
-
-# =============================================================================
-# LIFTABLE UNIT 3 — the tolerant parser (docs/ai-provider.md section 5, step 3)
-# =============================================================================
-
-
-class SchemaViolation(Exception):
-    """The response did not parse into STATEMENT_LIST_SCHEMA.
-
-    Treated as no response at all: retried, then 503 after
-    MAXIMUM_GENERATION_ATTEMPTS (CLAUDE.md invariant 10). Never a partial answer.
-    """
-
-
-_CODE_FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*|\s*```\s*$")
-_TRAILING_COMMA = re.compile(r",\s*(?=[}\]])")
-
-
-def _strip_code_fences(raw: str) -> str:
-    """Remove a leading ```json (or bare ```) and a trailing ``` if both are present."""
-    text = raw.strip()
-    if "```" not in text:
-        return text
-    # Prefer the contents of the first fenced block; fall back to stripping markers.
-    fenced = re.search(r"```[a-zA-Z0-9_-]*\s*(.*?)```", text, re.DOTALL)
-    if fenced:
-        return fenced.group(1).strip()
-    return _CODE_FENCE.sub("", text).strip()
-
-
-def _outermost_json_object(text: str) -> str:
-    """Return the first balanced {...} span, ignoring braces inside JSON strings."""
-    start = text.find("{")
-    if start == -1:
-        raise SchemaViolation("no JSON object in the response")
-    depth = 0
-    in_string = False
-    escaped = False
-    for index in range(start, len(text)):
-        character = text[index]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif character == "\\":
-                escaped = True
-            elif character == '"':
-                in_string = False
-            continue
-        if character == '"':
-            in_string = True
-        elif character == "{":
-            depth += 1
-        elif character == "}":
-            depth -= 1
-            if depth == 0:
-                return text[start : index + 1]
-    raise SchemaViolation("unbalanced JSON object in the response")
-
-
-def parse_statement_list(raw: str) -> StatementList:
-    """Parse a raw model reply into a StatementList, or raise SchemaViolation.
-
-    Tolerant of the malformations a small model commonly produces — a markdown
-    code fence, a sentence of preamble around the object, a trailing comma — and
-    of nothing else. Anything still unparseable, or parseable but the wrong shape,
-    is rejected outright rather than repaired into a plausible-looking answer.
-    """
-    if not isinstance(raw, str) or not raw.strip():
-        raise SchemaViolation("empty response")
-    candidate = _outermost_json_object(_strip_code_fences(raw))
-    try:
-        decoded = json.loads(candidate)
-    except json.JSONDecodeError:
-        try:
-            decoded = json.loads(_TRAILING_COMMA.sub("", candidate))
-        except json.JSONDecodeError as exc:
-            raise SchemaViolation(f"not valid JSON: {exc}") from exc
-    if not isinstance(decoded, dict):
-        raise SchemaViolation(f"top level is {type(decoded).__name__}, not an object")
-    if "statements" not in decoded:
-        raise SchemaViolation(f"no 'statements' key (keys: {sorted(decoded)})")
-    extra = sorted(set(decoded) - {"statements"})
-    if extra:
-        raise SchemaViolation(f"unexpected top-level key(s): {extra}")
-    items = decoded["statements"]
-    if not isinstance(items, list):
-        raise SchemaViolation(f"'statements' is {type(items).__name__}, not an array")
-    statements: list[Statement] = []
-    for position, item in enumerate(items):
-        if not isinstance(item, dict):
-            raise SchemaViolation(f"statement {position} is {type(item).__name__}, not an object")
-        missing = sorted({"text", "chunk_id"} - set(item))
-        if missing:
-            raise SchemaViolation(f"statement {position} is missing {missing}")
-        unexpected = sorted(set(item) - {"text", "chunk_id"})
-        if unexpected:
-            raise SchemaViolation(f"statement {position} has unexpected key(s): {unexpected}")
-        text, chunk_id = item["text"], item["chunk_id"]
-        if not isinstance(text, str) or not text.strip():
-            raise SchemaViolation(f"statement {position} has an empty or non-string 'text'")
-        if not isinstance(chunk_id, str) or not chunk_id.strip():
-            raise SchemaViolation(f"statement {position} has an empty or non-string 'chunk_id'")
-        statements.append(Statement(text=text.strip(), chunk_id=chunk_id.strip()))
-    return StatementList(statements=statements)
-
-
-# =============================================================================
-# End of the liftable units. Everything below is the measuring instrument.
+# The schema, the prompt and the parser are imported above, not defined here.
+# Everything below is the measuring instrument.
 # =============================================================================
 
 
@@ -309,41 +120,13 @@ def normalise(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
-def cosine_similarity(left: list[float], right: list[float]) -> float:
-    """Cosine similarity in application code, as Stage 4 item 3 computes it.
-
-    Deliberately not a pgvector operator: the harness must measure what retrieval
-    will actually do.
-    """
-    if len(left) != len(right):
-        raise ValueError(f"dimension mismatch: {len(left)} vs {len(right)}")
-    dot = sum(a * b for a, b in zip(left, right))
-    left_norm = sqrt(sum(a * a for a in left))
-    right_norm = sqrt(sum(b * b for b in right))
-    if left_norm == 0.0 or right_norm == 0.0:
-        return 0.0
-    return dot / (left_norm * right_norm)
-
-
-def count_tokens(text: str) -> int:
-    """Whitespace-delimited words, the project's working token (docs/decisions.md D-31)."""
-    return len(text.split())
-
-
-@dataclass
-class Candidate:
-    chunk_id: str
-    text: str
-    score: float
-
-
 @dataclass
 class QuestionResult:
     question_id: str
     kind: str
     role: str
     question: str
-    retrieved: list[Candidate] = field(default_factory=list)
+    retrieved: list[RankedPassage] = field(default_factory=list)
     top_score: float | None = None
     generation_called: bool = False
     attempts: list[dict] = field(default_factory=list)
@@ -410,80 +193,29 @@ def build_candidate_set(chunks: list[ContentChunk], role: str, query_model: str)
     ]
 
 
-def rank(candidates: list[ContentChunk], query_vector: list[float]) -> list[Candidate]:
-    """Cosine similarity over the candidate set, best first, capped at TOP_K.
+def attempt_record(attempt: GenerationAttempt) -> dict:
+    """One GenerationAttempt as the dict ``report()`` groups by.
 
-    The threshold is NOT applied here. run_question applies it to this list, and
-    reads top_score off it beforehand — that pre-threshold top score is what the
-    D-37 sweep and --scores-only measure. Stage 4 item 3 applies TOP_K and the
-    threshold together in apps/retrieval/; this stays as it is so the harness keeps
-    measuring what the baseline measured.
+    The provider reports each attempt through the ``on_attempt`` hook, so the harness
+    still sees every attempt, its raw reply and its timing while the retry loop itself is
+    the shipped one in apps/ai/generation.py. That is what keeps the schema conformance
+    rate measured PER RESPONSE, as docs/flm-baseline.md reports it, rather than per
+    question — and it is now measuring the loop retrieval actually uses.
     """
-    scored = [
-        Candidate(
-            chunk_id=str(chunk.id),
-            text=chunk.chunk_text,
-            score=cosine_similarity(query_vector, list(chunk.embedding)),
-        )
-        for chunk in candidates
-    ]
-    scored.sort(key=lambda candidate: candidate.score, reverse=True)
-    return scored[:TOP_K]
-
-
-def truncate_to_context(candidates: list[Candidate]) -> list[Candidate]:
-    """Discard the lowest-ranked passages until the context fits MAXIMUM_CONTEXT_TOKENS."""
-    kept: list[Candidate] = []
-    used = 0
-    for candidate in candidates:  # already ordered best first
-        cost = count_tokens(candidate.text)
-        if kept and used + cost > MAXIMUM_CONTEXT_TOKENS:
-            break
-        kept.append(candidate)
-        used += cost
-    return kept
-
-
-def chat_client(service):
-    """The OpenAI-wire-format client the provider already built.
-
-    The harness needs a raw chat call because AIService has no such operation and
-    generate_statements() is not built until Stage 4 item 5. Reaching the client
-    the service already holds keeps the vendor SDK import inside apps/ai, where
-    CLAUDE.md section 4 requires it: scripts/ imports no openai. This accessor
-    disappears when item 5 lands and the harness calls generate_statements().
-    """
-    client = getattr(service, "_client", None)
-    if client is None:
-        raise SystemExit(
-            f"{type(service).__name__} exposes no chat client. The harness measures the "
-            "FLM provider; set AI_PROVIDER=flm, or wait for Stage 4 item 5 and call "
-            "generate_statements() instead."
-        )
-    return client
-
-
-def generate_once(client, messages: list[dict]) -> str:
-    """One chat completion. Returns the raw reply text."""
-    response = client.chat.completions.create(
-        model=settings.FLM_CHAT_MODEL,
-        messages=messages,
-        temperature=0.0,
-        max_tokens=GENERATION_MAX_TOKENS,
-        stream=False,
-        timeout=GENERATION_TIMEOUT_SECONDS,
-    )
-    choices = response.choices or []
-    if not choices:
-        return ""
-    return choices[0].message.content or ""
+    record = {"attempt": attempt.number, "outcome": attempt.outcome, "seconds": attempt.seconds}
+    if attempt.raw is not None:
+        record["raw"] = attempt.raw
+    if attempt.detail is not None:
+        record["detail"] = attempt.detail
+    if attempt.statements is not None:
+        record["statements"] = attempt.statements
+    return record
 
 
 def run_question(
     question: dict,
     chunks: list[ContentChunk],
     service,
-    client,
     threshold: float = RELEVANCE_THRESHOLD,
 ) -> QuestionResult:
     result = QuestionResult(
@@ -520,37 +252,28 @@ def run_question(
 
     passages_kept = truncate_to_context(admitted)
     result.retrieved = passages_kept
-    passages = [Passage(chunk_id=c.chunk_id, text=c.text) for c in passages_kept]
+    passages = [Passage(chunk_id=p.chunk_id, text=p.chunk_text) for p in passages_kept]
     supplied_ids = {passage.chunk_id for passage in passages}
-    messages = build_generation_messages(result.question, passages)
     result.generation_called = True
 
-    for attempt in range(1, MAXIMUM_GENERATION_ATTEMPTS + 1):
-        record = {"attempt": attempt}
-        started = time.perf_counter()
-        try:
-            raw = generate_once(client, messages)
-        except Exception as exc:  # noqa: BLE001 - a transport failure, not a schema failure
-            record.update(outcome="call-failed", detail=f"{type(exc).__name__}: {exc}")
-            result.attempts.append(record)
-            result.error = record["detail"]
-            break
-        record["seconds"] = round(time.perf_counter() - started, 1)
-        record["raw"] = raw
-        try:
-            parsed = parse_statement_list(raw)
-        except SchemaViolation as exc:
-            record.update(outcome="schema-violation", detail=str(exc))
-            result.attempts.append(record)
-            continue
-        record.update(outcome="parsed", statements=len(parsed.statements))
-        result.attempts.append(record)
-        result.parsed = True
-        result.statements = parsed.statements
-        result.fabricated_ids = sorted(
-            {s.chunk_id for s in parsed.statements if s.chunk_id not in supplied_ids}
+    # One call into the provider, which builds the prompt, retries to
+    # MAXIMUM_GENERATION_ATTEMPTS and raises ProviderUnavailable after the last one. The
+    # harness measures that loop instead of running its own.
+    try:
+        parsed = service.generate_statements(
+            result.question, passages, on_attempt=lambda a: result.attempts.append(attempt_record(a))
         )
-        break
+    except ProviderUnavailable as exc:
+        # Three non-conforming or failed attempts. In the shipped system this is the
+        # NFR-19 503; here it is a measured outcome, and the per-attempt records above
+        # already say which kind of failure each attempt was.
+        result.error = f"{type(exc).__name__}: {exc}"
+        return finish(result, forbidden)
+    result.parsed = True
+    result.statements = parsed.statements
+    result.fabricated_ids = sorted(
+        {s.chunk_id for s in parsed.statements if s.chunk_id not in supplied_ids}
+    )
 
     return finish(result, forbidden)
 
@@ -684,7 +407,7 @@ def report(results: list[QuestionResult]) -> dict:
     }
 
 
-def score_distribution(questions: list[dict], chunks: list[ContentChunk], service) -> int:
+def score_distribution(questions: list[dict], chunks: list[ContentChunk]) -> int:
     """Embed and rank every question, print top scores by kind, call no generation.
 
     This is how RELEVANCE_THRESHOLD was tuned: the sweep it prints is the evidence
@@ -786,6 +509,12 @@ def main() -> int:
     print(f"  constants       : TOP_K={TOP_K}, RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD}, "
           f"MAXIMUM_CONTEXT_TOKENS={MAXIMUM_CONTEXT_TOKENS}, "
           f"MAXIMUM_GENERATION_ATTEMPTS={MAXIMUM_GENERATION_ATTEMPTS}")
+    # Which prompt and which shape this run measured. Printed from the imported objects,
+    # so a recorded run identifies the versions in apps/ai/ rather than a copy of them.
+    print(f"  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, {len(SYSTEM_PROMPT)} characters")
+    print(f"  schema          : apps/ai/schema.py, required key(s) "
+          f"{STATEMENT_LIST_SCHEMA['required']}, per statement "
+          f"{sorted(STATEMENT_LIST_SCHEMA['properties']['statements']['items']['required'])}")
     if arguments.threshold != RELEVANCE_THRESHOLD:
         print(f"  THRESHOLD       : {arguments.threshold} (overriding the constant, for tuning)")
     if not health.available:
@@ -796,16 +525,17 @@ def main() -> int:
         return 1
 
     if arguments.scores_only:
-        return score_distribution(questions, chunks, service)
+        # No ``service``: the question path embeds through embed_question(), which looks
+        # the provider up itself, and --scores-only calls no generation at all.
+        return score_distribution(questions, chunks)
 
-    client = chat_client(service)
     results: list[QuestionResult] = []
     started = time.perf_counter()
     for position, question in enumerate(questions, start=1):
         label = question.get("id", f"#{position}")
         print(f"[{position}/{len(questions)}] {label} ({question['kind']}, {question['role']}) ...",
               flush=True)
-        results.append(run_question(question, chunks, service, client, arguments.threshold))
+        results.append(run_question(question, chunks, service, arguments.threshold))
     elapsed = time.perf_counter() - started
 
     summary = report(results)

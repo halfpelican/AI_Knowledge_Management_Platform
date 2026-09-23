@@ -30,12 +30,20 @@ from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
+    MAXIMUM_CONTEXT_TOKENS,
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
     TOP_K,
 )
 from apps.documents.models import ContentChunk
-from apps.retrieval.ranking import RankedPassage, admit, cosine_similarity, rank
+from apps.ingestion.chunking import length_in_tokens
+from apps.retrieval.ranking import (
+    RankedPassage,
+    admit,
+    cosine_similarity,
+    rank,
+    truncate_to_context,
+)
 from apps.retrieval.scoping import candidate_chunks, permission_scope
 
 ROLE_PAIR = (EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME)
@@ -75,6 +83,11 @@ def make_chunk(document, visible_to_roles, *, index, cosine, text="A passage."):
         embedding_dimension=settings.EMBEDDING_DIMENSION,
         visible_to_roles=visible_to_roles,
     )
+
+
+def words(count: int, word="word") -> str:
+    """``count`` whitespace-delimited tokens, as length_in_tokens counts them (D-31)."""
+    return " ".join([word] * count)
 
 
 def passage_scoring(score: float, *, chunk_id=None, text="A passage.") -> RankedPassage:
@@ -398,3 +411,144 @@ def test_end_to_end_from_both_role_sessions(session_client, document):
     assert restricted.chunk_text not in [passage.chunk_text for passage in ranked]
     assert candidates.count() == len(ranked) == 3
     assert len(admitted) == 2
+
+
+# --- truncate_to_context: the budget, and the exit on first overflow -------------------
+#
+# Every passage here is built from a token count, not from prose, so the budget arithmetic
+# is exact and readable. length_in_tokens is the project's one definition of a token
+# (D-31), so `words(n)` costs exactly n.
+
+
+def test_a_passage_set_inside_the_budget_is_returned_whole():
+    passages = [passage_scoring(0.9 - index / 10, text=words(100)) for index in range(5)]
+    assert truncate_to_context(passages) == passages
+
+
+def test_an_empty_list_truncates_to_an_empty_list():
+    assert truncate_to_context([]) == []
+
+
+def test_the_budget_binds_and_the_lowest_ranked_passages_are_the_ones_dropped():
+    """Enough passages to exceed MAXIMUM_CONTEXT_TOKENS, dropped worst-first.
+
+    The budget does not bind on the current corpus — 6 chunks of roughly 400 tokens
+    against a 4000-token ceiling — so, like TOP_K in item 3, this is the case the code has
+    to be correct for before it occurs. The sizes are computed from the constant rather
+    than written out, so the test still means something if the constant is tuned.
+    """
+    per_passage = MAXIMUM_CONTEXT_TOKENS // 4  # four fit; the fifth does not
+    passages = [
+        passage_scoring(0.9 - index / 100, text=words(per_passage), chunk_id=f"passage-{index}")
+        for index in range(6)
+    ]
+
+    kept = truncate_to_context(passages)
+
+    assert kept == passages[:4]
+    assert [passage.chunk_id for passage in kept] == [f"passage-{i}" for i in range(4)]
+    # The two dropped are the two lowest-ranked, and they are absent entirely.
+    assert passages[4] not in kept and passages[5] not in kept
+    assert sum(length_in_tokens(passage.chunk_text) for passage in kept) <= MAXIMUM_CONTEXT_TOKENS
+
+
+def test_the_loop_exits_on_the_first_overflow_and_does_not_look_further_down():
+    """7.10 lines 96-103: EXIT FOR, not continue. This is the assertion that proves it.
+
+    The list is arranged so that a "skip what does not fit and keep looking" implementation
+    would behave differently and visibly: after the oversized third passage is refused,
+    there is a tiny fourth passage that WOULD fit in the remaining budget. It must not be
+    pulled in. Admitting it would put a lower-ranked passage in the prompt while excluding
+    a higher-ranked one purely on length, which is a ranking that can be re-ordered by
+    passage size — and the citation that came back would be from the weaker passage.
+    """
+    budget = MAXIMUM_CONTEXT_TOKENS
+    passages = [
+        passage_scoring(0.90, text=words(budget // 2), chunk_id="best"),
+        passage_scoring(0.80, text=words(budget // 4), chunk_id="second"),
+        passage_scoring(0.70, text=words(budget), chunk_id="oversized-third"),
+        passage_scoring(0.60, text=words(5), chunk_id="tiny-fourth"),
+    ]
+
+    kept = truncate_to_context(passages)
+
+    assert [passage.chunk_id for passage in kept] == ["best", "second"]
+    assert "oversized-third" not in [passage.chunk_id for passage in kept]
+    # The whole point: the tiny passage fits the remaining budget and is still excluded.
+    assert "tiny-fourth" not in [passage.chunk_id for passage in kept]
+    remaining = budget - sum(length_in_tokens(passage.chunk_text) for passage in kept)
+    assert length_in_tokens(passages[3].chunk_text) < remaining, "the premise of this test"
+
+
+def test_the_single_best_passage_is_sent_even_when_it_alone_exceeds_the_budget():
+    """One passage over budget is still sent, which is the ``if kept and ...`` guard.
+
+    Dropping it would return the no-answer response while holding the most relevant
+    material in the corpus — the interface would say the knowledge base has nothing on the
+    subject when the truth is that it found the answer and declined to show it. An
+    over-length prompt is the provider's to refuse, and a refusal is a failed attempt,
+    retried, then an honest 503; a silent no-answer is visible to nobody. This matches what
+    the harness did when docs/flm-baseline.md was measured.
+    """
+    enormous = passage_scoring(0.9, text=words(MAXIMUM_CONTEXT_TOKENS * 3), chunk_id="only")
+
+    kept = truncate_to_context([enormous])
+
+    assert kept == [enormous]
+    assert length_in_tokens(kept[0].chunk_text) > MAXIMUM_CONTEXT_TOKENS
+
+
+def test_an_oversized_best_passage_does_not_drag_in_the_rest():
+    """The first passage is always kept; the second is then measured against the budget."""
+    passages = [
+        passage_scoring(0.9, text=words(MAXIMUM_CONTEXT_TOKENS + 1), chunk_id="oversized-best"),
+        passage_scoring(0.8, text=words(1), chunk_id="second"),
+    ]
+
+    kept = truncate_to_context(passages)
+
+    assert [passage.chunk_id for passage in kept] == ["oversized-best"]
+
+
+def test_a_passage_landing_exactly_on_the_budget_is_kept():
+    """The comparison is ``used + cost > budget``, so exactly full still fits."""
+    half = MAXIMUM_CONTEXT_TOKENS // 2
+    passages = [
+        passage_scoring(0.9, text=words(half), chunk_id="first"),
+        passage_scoring(0.8, text=words(MAXIMUM_CONTEXT_TOKENS - half), chunk_id="exactly-full"),
+        passage_scoring(0.7, text=words(1), chunk_id="one-token-too-many"),
+    ]
+
+    kept = truncate_to_context(passages)
+
+    assert [passage.chunk_id for passage in kept] == ["first", "exactly-full"]
+    assert sum(length_in_tokens(p.chunk_text) for p in kept) == MAXIMUM_CONTEXT_TOKENS
+
+
+def test_truncation_preserves_the_ranked_order():
+    passages = [passage_scoring(0.9 - index / 10, text=words(50)) for index in range(6)]
+    kept = truncate_to_context(passages)
+    assert [passage.score for passage in kept] == sorted(
+        [passage.score for passage in kept], reverse=True
+    )
+
+
+@pytest.mark.django_db
+def test_the_three_operations_compose_over_the_real_candidate_set(document):
+    """rank -> admit -> truncate_to_context, in that order, over stored rows.
+
+    The budget does not bind at this size, so this asserts the composition rather than the
+    truncation: what reaches a prompt is what was in scope, comparable, above the floor and
+    within the budget.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.80, text=words(100))
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.10, text=words(100))
+    make_chunk(document, [ADMINISTRATOR_ROLE_NAME], index=3, cosine=0.99, text=words(100))
+
+    candidates = candidate_chunks(
+        role_name=EMPLOYEE_ROLE_NAME, embedding_model=STUB_EMBEDDING_MODEL
+    )
+    supplied = truncate_to_context(admit(rank(candidates, QUERY)))
+
+    assert len(supplied) == 1
+    assert supplied[0].score == pytest.approx(0.80)

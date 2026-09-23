@@ -182,9 +182,51 @@ def test_health_is_unavailable_and_does_not_raise_when_the_server_is_down():
     assert BASE_URL in health.detail
 
 
-def test_generate_statements_is_not_built_yet():
-    with pytest.raises(NotImplementedError, match="Stage 4"):
-        make_service(models_response).generate_statements("question?", [])
+def test_generate_statements_reaches_the_chat_endpoint_and_returns_statements():
+    """FLMService's third operation, built at Stage 4 item 5 (FR-12).
+
+    The retry policy, the schema check and the 503 are exercised in
+    apps/ai/tests/test_generation.py, which owns the NFR-19 fault injection; this asserts
+    only that the operation exists, goes to /chat/completions with the configured chat
+    model, and returns parsed statements.
+    """
+    from apps.ai.base import Passage
+
+    chunk_id = "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        return httpx2.Response(
+            200,
+            json={
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "gemma3:4b",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps(
+                                {"statements": [{"text": "Twenty days.", "chunk_id": chunk_id}]}
+                            ),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+
+    with override_settings(FLM_CHAT_MODEL="gemma3:4b"):
+        result = make_service(handler).generate_statements(
+            "How much annual leave do I get?", [Passage(chunk_id=chunk_id, text="Twenty days.")]
+        )
+
+    assert [statement.chunk_id for statement in result.statements] == [chunk_id]
+    assert str(seen[0].url) == f"{BASE_URL}/chat/completions"
+    assert json.loads(seen[0].content)["model"] == "gemma3:4b"
 
 
 def test_production_client_is_built_from_settings_without_sdk_retries():
