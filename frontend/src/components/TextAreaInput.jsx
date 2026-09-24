@@ -10,6 +10,11 @@ import './TextAreaInput.css'
  * error through aria-describedby, aria-invalid on error, and the hidden "Error:"
  * prefix so the message is not distinguished by colour alone. A native textarea
  * is resizable and keyboard-operable without any extra script.
+ *
+ * Anything else, `ref` included, travels in `...rest` to the textarea itself:
+ * React 19 passes a ref to a function component as an ordinary prop, so the ask
+ * screen can move focus back to the question field without this component
+ * needing to know that it does.
  */
 export default function TextAreaInput({ id, label, hint, error, describedBy, className = '', ...rest }) {
   const generatedId = useId()

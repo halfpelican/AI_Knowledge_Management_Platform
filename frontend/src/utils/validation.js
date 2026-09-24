@@ -1,4 +1,10 @@
-import { TRANSCRIPT_SOURCE, VALIDATION } from '../constants.js'
+import {
+  QUESTION_MAXIMUM_LENGTH,
+  QUESTION_MINIMUM_LENGTH,
+  SEARCH_MINIMUM_LENGTH,
+  TRANSCRIPT_SOURCE,
+  VALIDATION,
+} from '../constants.js'
 import { todayIsoDate } from './dates.js'
 import { passwordMeetsPolicy } from './password.js'
 import { screenFile } from './uploads.js'
@@ -67,4 +73,46 @@ export function validateMeetingIngestion({ title, meetingDate, transcriptText, s
     errors.transcript_text = VALIDATION.transcriptRequired
   }
   return errors
+}
+
+/**
+ * FR-12's client-side search check: "queries shorter than two characters are
+ * rejected client-side".
+ *
+ * The length is measured on the term **as typed**, with no trimming, because that
+ * is what the server measures: it stores and matches the term character for
+ * character, and a two-character query of whitespace is long enough and matches
+ * whatever the caller may already list. Trimming here would refuse a query the
+ * server accepts, and would mean the screen and the `SearchLog` row disagreed
+ * about what was searched for.
+ *
+ * @param {string} term
+ * @returns {string | null} The message to show, or null when the term is askable.
+ */
+export function searchTermError(term) {
+  const value = term ?? ''
+  if (value.length === 0) return VALIDATION.searchTermRequired
+  if (value.length < SEARCH_MINIMUM_LENGTH) return VALIDATION.searchTermTooShort
+  return null
+}
+
+/**
+ * FR-12's question bounds, mirrored from the server so the submit button can stay
+ * disabled until the question is askable — the same arrangement FR-01's password
+ * rules use.
+ *
+ * Measured as typed for the same reason as above: the pipeline applies the bounds
+ * to the question character for character and `QueryLog.question` stores it as
+ * asked. Both bounds are inclusive. The server answers 400 either way
+ * (CLAUDE.md §6, invariant 4); this only decides what the screen says first.
+ *
+ * @param {string} question
+ * @returns {string | null}
+ */
+export function questionError(question) {
+  const value = question ?? ''
+  if (value.length === 0) return VALIDATION.questionRequired
+  if (value.length < QUESTION_MINIMUM_LENGTH) return VALIDATION.questionTooShort
+  if (value.length > QUESTION_MAXIMUM_LENGTH) return VALIDATION.questionTooLong
+  return null
 }

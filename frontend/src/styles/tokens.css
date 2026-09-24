@@ -88,6 +88,10 @@
   --border-width-emphasis: 4px; /* leading edge of a notice */
   --control-min-height: 2.75rem; /* 44px: buttons and inputs meet the touch-target guideline */
   --content-max-width: 72rem;
+  /* Comfortable reading measure for running prose: an answer's statements, a
+     search snippet, an explanatory note. Roughly 70 characters a line, which is
+     the range WCAG 2.1 SC 1.4.8 asks of a block of text. */
+  --measure-text: 68ch;
   --layout-card-min-width: 12rem;
   --layout-field-max-width: 28rem;
   --opacity-disabled: 0.55;

@@ -1,0 +1,132 @@
+/* FR-12 answer screen and FR-13 assistant. Page frame from Repository.css, answer
+   presentation from components/Answer.css; this is the layout and the thread. */
+
+/* Two columns where there is room: the question and its answers, and the list of
+   previous conversations. The aside is second in the DOM, so a single column stacks
+   it below without any reordering and the tab order is the same at both widths. */
+.ask-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 18rem);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .ask-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ask-main {
+  min-width: 0;
+}
+
+.ask-form {
+  margin-bottom: var(--space-6);
+}
+
+.ask-form__count,
+.ask-form__hint {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The acknowledgement a reply lands with: visible, and the live region at the same
+   time. Reserves its line so the layout does not jump when it fills. */
+.ask-form__status {
+  min-height: var(--space-5);
+  margin: var(--space-3) 0 0;
+  font-weight: var(--weight-medium);
+}
+
+.ask-thread__note,
+.ask-thread__empty {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+/* One turn: the question, then its answer or the no-answer state. Focusable so a
+   new reply can be moved to; the focus ring is the global one from base.css. */
+.ask-turn {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.ask-turn__question {
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--border-width) solid var(--color-border);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+/* "You asked" is a label rather than a heading, so the headings inside a turn
+   ("Answer", "Sources") stay at one level under the section heading. */
+.ask-turn__label {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+.ask-turn__date {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+  white-space: nowrap;
+}
+
+/* Previous conversations. Each is a button because it changes what is on the
+   screen rather than navigating anywhere: the thread is not a route of its own. */
+.ask-threads__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ask-threads__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: var(--control-min-height);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ask-threads__item:hover:not(:disabled) {
+  background-color: var(--color-surface-alt);
+}
+
+.ask-threads__item:disabled {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
+
+/* The open thread. A stronger border and the words "Current conversation" in the
+   date line, so it is never identified by shading alone. */
+.ask-threads__item[aria-current='true'] {
+  border-color: var(--color-border-strong);
+  border-left-width: var(--border-width-emphasis);
+  background-color: var(--color-surface-alt);
+}
+
+.ask-threads__title {
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.ask-threads__date,
+.ask-threads__empty {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

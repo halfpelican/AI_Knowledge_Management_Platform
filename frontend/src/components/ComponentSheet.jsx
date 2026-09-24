@@ -1,9 +1,10 @@
 import { useId, useState } from 'react'
 import { messageForStatus } from '../api/client.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
-import { TEXT } from '../constants.js'
+import { SOURCE_TYPE, TEXT } from '../constants.js'
 import { contrastRatio } from '../utils/contrast.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
+import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
 import Button from './Button.jsx'
 import Dialog from './Dialog.jsx'
 import FileDropZone from './FileDropZone.jsx'
@@ -12,6 +13,8 @@ import Notice from './Notice.jsx'
 import PasswordInput from './PasswordInput.jsx'
 import PasswordRequirements from './PasswordRequirements.jsx'
 import ProgressBar from './ProgressBar.jsx'
+import SearchField from './SearchField.jsx'
+import { SearchResultGroup } from './SearchResults.jsx'
 import SelectInput from './SelectInput.jsx'
 import TextAreaInput from './TextAreaInput.jsx'
 import TextInput from './TextInput.jsx'
@@ -75,13 +78,63 @@ const BUILT = [
   { name: 'Document upload (FR-08)', paths: ['/upload'] },
   { name: 'Document repository (FR-08; FR-15 adds filtered browsing in Stage 5)', paths: ['/documents'] },
   { name: 'Meeting transcripts (FR-09)', paths: ['/meetings'] },
+  { name: 'Keyword search, grouped by type (FR-12)', paths: ['/search'] },
+  { name: 'Ask, citations and Sources, with the conversation thread (FR-12, FR-13)', paths: ['/ask'] },
 ]
 
-const UPCOMING = [
-  'Filtered browsing (FR-15)',
-  'Search / Ask / Sources (FR-12)',
-  'Assistant (FR-13)',
-  'Dashboard (FR-14)',
+const UPCOMING = ['Filtered browsing (FR-15)', 'Dashboard (FR-14)']
+
+/* Fixtures for the FR-12 sections below. Invented text, so the sheet shows the
+   components without a running AI provider or a corpus; the shapes are the
+   contract's own (docs/api-contract.md, Stage 4). */
+const SAMPLE_SEARCH_GROUP = {
+  count: 2,
+  results: [
+    {
+      source_type: SOURCE_TYPE.document,
+      source_id: 'sample-document',
+      title: 'Leave policy 2026',
+      snippet: '…staff may take annual leave once probation has ended, with their manager’s approval…',
+      department: 'People',
+      date: '2026-09-21T10:00:00+10:00',
+    },
+    {
+      source_type: SOURCE_TYPE.document,
+      source_id: 'sample-document-untitled',
+      title: 'Scanned onboarding pack',
+      // "" is what a source with no indexed passage carries, matched on its title.
+      snippet: '',
+      department: '',
+      date: '2026-08-02T09:00:00+10:00',
+    },
+  ],
+}
+
+const SAMPLE_SOURCES = [
+  {
+    source_type: SOURCE_TYPE.document,
+    source_id: 'sample-document',
+    title: 'Leave policy 2026',
+    date: '2026-09-21T10:00:00+10:00',
+    passages: [
+      { chunk_id: 'sample-chunk-1', text: 'Staff accrue twenty days of annual leave a year, pro rata.' },
+    ],
+  },
+  {
+    source_type: SOURCE_TYPE.meeting,
+    source_id: 'sample-meeting',
+    title: 'People team catch-up',
+    date: '2026-09-18T14:00:00+10:00',
+    // Consulted without being cited, which is the case the Sources panel exists for.
+    passages: [{ chunk_id: 'sample-chunk-3', text: 'We agreed to restate the leave rules in the handbook.' }],
+  },
+]
+
+const SAMPLE_STATEMENTS = [
+  { position: 1, text: 'Staff accrue twenty days of annual leave a year.', chunk_id: 'sample-chunk-1' },
+  // Cited, but its passage did not travel with the answer: the number stays as
+  // plain text rather than becoming a control that expands nothing.
+  { position: 2, text: 'Leave is pro rata for part-time staff.', chunk_id: 'sample-chunk-missing' },
 ]
 
 const ALL_TOKENS = [
@@ -463,6 +516,67 @@ export default function ComponentSheet() {
           there was anything to show.
         </p>
         <NotPermitted />
+      </section>
+
+      <section aria-labelledby="sheet-search-field">
+        <h2 id="sheet-search-field">Search field (FR-12)</h2>
+        <p>
+          The field FR-12 requires "available from every page". It sits in the application header and again at
+          the top of the search screen, and both submit to <code>/search?q=</code>. A term shorter than two
+          characters is refused here with a message naming the minimum; the server refuses it too, with a 400.
+          Submitting this copy navigates to the search screen, as it is the same component.
+        </p>
+        <SearchField id="sheet-search-field-demo" hint={TEXT.searchHint} />
+      </section>
+
+      <section aria-labelledby="sheet-search-results">
+        <h2 id="sheet-search-results">Search results (FR-12)</h2>
+        <p>
+          Results grouped by type with a count per group. Each result shows the four things FR-12 names: its
+          title, the matching passage as a snippet, its department, and its date. A group with nothing in it
+          still renders with its count, and the count is the server's own post-filter number — there is no
+          "showing n of m" anywhere, because no wider figure exists in the reply.
+        </p>
+        <SearchResultGroup
+          heading={TEXT.searchDocumentsHeading}
+          headingId="sheet-search-group-documents"
+          group={SAMPLE_SEARCH_GROUP}
+          emptyMessage={TEXT.searchGroupEmptyDocuments}
+        />
+        <SearchResultGroup
+          heading={TEXT.searchMeetingsHeading}
+          headingId="sheet-search-group-meetings"
+          group={{ count: 0, results: [] }}
+          emptyMessage={TEXT.searchGroupEmptyMeetings}
+        />
+      </section>
+
+      <section aria-labelledby="sheet-answer">
+        <h2 id="sheet-answer">Answer, citations and sources (FR-12)</h2>
+        <p>
+          Every statement carries a citation, numbered from the <code>position</code> the server stored rather
+          than from its place in the array, so the number on the screen and the number on the{' '}
+          <code>AnswerCitation</code> row are the same number. Each marker is a button: it expands to the source
+          passage and links to the document or meeting it came from. There is no state here for a statement
+          without a citation, greyed out or otherwise — the API sends none (CLAUDE.md §6, invariant 6).
+        </p>
+        <AnswerBody idPrefix="sheet-answer" statements={SAMPLE_STATEMENTS} sources={SAMPLE_SOURCES} />
+        <SourcesPanel idPrefix="sheet-answer" sources={SAMPLE_SOURCES} />
+      </section>
+
+      <section aria-labelledby="sheet-no-answer">
+        <h2 id="sheet-no-answer">No answer, and partial matches (FR-12)</h2>
+        <p>
+          The platform being unable to answer is a designed outcome, not a failure, so it is an information
+          panel and not an error one — and distinct from the 503 above, which means the question could not be
+          asked at all. No answer frame is drawn around it and no fragment appears inside it. The partial
+          matches beside it come from the keyword search over the same question, because the no-answer reply
+          deliberately carries no passages; they are offered as links to sources and never as answer content.
+        </p>
+        <Notice variant="info" title={TEXT.noAnswerTitle}>
+          {TEXT.noAnswerFallback}
+        </Notice>
+        <PartialMatches idPrefix="sheet-no-answer" results={SAMPLE_SEARCH_GROUP.results} />
       </section>
 
       <section aria-labelledby="sheet-built">

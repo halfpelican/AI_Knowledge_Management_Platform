@@ -1,0 +1,75 @@
+/* FR-12 grouped search results. Tokens only; no literal colours or spacing. */
+
+.search-group {
+  margin-bottom: var(--space-6);
+}
+
+.search-group__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+/* The count beside the group name. Muted, but words rather than a bare number, so
+   it reads as "Documents, 2 results" and not as a badge that has to be decoded. */
+.search-group__count {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-regular);
+}
+
+.search-group__empty {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+}
+
+.search-group__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.search-group__list > li {
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.search-result {
+  padding: var(--space-4) 0;
+}
+
+.search-result__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+  word-break: break-word;
+}
+
+.search-result__snippet {
+  margin: 0 0 var(--space-2);
+  /* The snippet is a fragment of stored text: it wraps and can be long, so it is
+     clamped by line height rather than truncated with an ellipsis that would hide
+     where the match was. */
+  max-width: var(--measure-text);
+}
+
+.search-result__snippet--none {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.search-result__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.search-result__meta-item {
+  white-space: nowrap;
+}

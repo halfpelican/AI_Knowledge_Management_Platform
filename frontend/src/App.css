@@ -79,3 +79,11 @@
 .app-nav__logout {
   margin-left: var(--space-2);
 }
+
+/* FR-12's search field in the header. It takes the room between the title and the
+   navigation where there is any and wraps to its own line where there is not; the
+   widths themselves live in components/SearchField.css, so the field's own rules
+   stay in one place. */
+.app-header > .search-field {
+  margin: 0;
+}

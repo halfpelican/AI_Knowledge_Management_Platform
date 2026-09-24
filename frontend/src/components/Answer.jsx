@@ -1,0 +1,243 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { TEXT } from '../constants.js'
+import { formatDate } from '../utils/dates.js'
+import { sourceLinkFor, sourceTypeLabel } from '../utils/sources.js'
+import './Answer.css'
+
+/**
+ * FR-12's answer presentation: numbered inline citations, each expanding to its
+ * source passage, and the Sources panel beside them.
+ *
+ * Two rules govern this whole file.
+ *
+ * **Invariant 6 — there is no interface state that shows an uncited factual
+ * statement.** Nothing here can create one: the only statements rendered are the
+ * ones the reply carried, every one of which arrived with a `chunk_id` because the
+ * API has no field for a statement without one. There is no greyed-out variant, no
+ * disclosure holding withheld text, no count of what was removed, and no
+ * "confidence" of any kind — `no_answer_reason` and `rejected_count` are
+ * record-only and never reach the browser at all.
+ *
+ * **The number is the server's `position`, never the array index.** FR-12 asks for
+ * numbered inline citations, and the number stored on the `AnswerCitation` row is
+ * the number the reader saw. Rendering from the index would make the two agree
+ * only by accident.
+ */
+
+/** The passage behind each cited chunk, and which source it came from. */
+function passageIndex(sources) {
+  const index = new Map()
+  for (const source of sources ?? []) {
+    for (const passage of source.passages ?? []) {
+      if (passage?.chunk_id) index.set(passage.chunk_id, { source, passage })
+    }
+  }
+  return index
+}
+
+/** The source line shared by an expanded citation and the Sources panel. */
+function SourceLine({ source }) {
+  const link = sourceLinkFor(source)
+  return (
+    <p className="answer-source__line">
+      <span className="answer-source__title">{source.title}</span>{' '}
+      <span className="answer-source__meta">
+        <span className="visually-hidden">Type: </span>
+        {sourceTypeLabel(source.source_type)}
+        {' · '}
+        <span className="visually-hidden">Date: </span>
+        <time dateTime={source.date}>{formatDate(source.date)}</time>
+      </span>
+      {link ? (
+        <>
+          {' '}
+          <Link to={link.to}>{link.label}</Link>
+        </>
+      ) : null}
+    </p>
+  )
+}
+
+/**
+ * One verified statement and its citation.
+ *
+ * The marker is a real button, so it is reachable by keyboard and announces its
+ * state through `aria-expanded`; the panel it controls is always in the DOM and
+ * hidden, so `aria-controls` always resolves to something. The visible `[1]` is
+ * `aria-hidden` and the accessible name is the sentence "Source for statement 1",
+ * which is the text equivalent for a marker that would otherwise be read as a
+ * bare bracket (WCAG 2.1 SC 1.1.1, SC 2.4.6).
+ *
+ * Where the passage did not travel with the statement — a reopened thread, where
+ * no route returns what a past turn was built from — the number is plain text
+ * rather than a control that expands nothing. The statement is still cited; what
+ * is missing is the passage, and saying so is better than either inventing one or
+ * dropping the citation number the reader was given.
+ */
+function CitedStatement({ idPrefix, statement, found }) {
+  const [open, setOpen] = useState(false)
+  const panelId = `${idPrefix}-citation-${statement.position}`
+
+  return (
+    <div className="answer__statement">
+      <p className="answer__text">
+        {statement.text}{' '}
+        {found ? (
+          <button
+            type="button"
+            className="citation"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => setOpen((current) => !current)}
+          >
+            <span aria-hidden="true">[{statement.position}]</span>
+            <span className="visually-hidden">{TEXT.citationToggleLabel(statement.position)}</span>
+          </button>
+        ) : (
+          <span className="citation citation--plain">
+            <span aria-hidden="true">[{statement.position}]</span>
+            <span className="visually-hidden">{TEXT.citationToggleLabel(statement.position)}</span>
+          </span>
+        )}
+      </p>
+      <div id={panelId} className="citation-panel" hidden={!open || !found}>
+        {found ? (
+          <>
+            <p className="citation-panel__label" id={`${panelId}-label`}>
+              {TEXT.citationPassageHeading}
+            </p>
+            {/* A passage is a whole chunk and can run to thousands of characters, so
+                it scrolls rather than pushing the rest of the thread off the screen.
+                A scrollable box needs to be reachable by keyboard to be scrollable
+                at all, which is what the labelled region and tabIndex are for — the
+                same pattern the stored transcript uses (WCAG 2.1 SC 2.1.1). */}
+            <blockquote
+              className="citation-panel__passage"
+              role="region"
+              aria-labelledby={`${panelId}-label`}
+              tabIndex={0}
+            >
+              {found.passage.text}
+            </blockquote>
+            <SourceLine source={found.source} />
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The answer itself: FR-12's "written answer with numbered inline citations".
+ *
+ * The statements arrive as a list and the interface places the markers — the
+ * server composes no prose, because a single string with "[1]" spliced into it
+ * cannot be re-checked against anything afterwards.
+ *
+ * @param {object} props
+ * @param {string} props.idPrefix Unique per turn: ids must not collide across a thread.
+ * @param {{position: number, text: string, chunk_id: string}[]} props.statements
+ * @param {object[]} [props.sources] Consulted sources, whose nested passages are
+ *   what a citation expands to. Absent for a reopened turn, which has none.
+ */
+export function AnswerBody({ idPrefix, statements, sources }) {
+  const index = passageIndex(sources)
+  const headingId = `${idPrefix}-answer-heading`
+
+  return (
+    <section className="answer" aria-labelledby={headingId}>
+      <h3 id={headingId}>{TEXT.answerHeading}</h3>
+      {statements.map((statement) => (
+        <CitedStatement
+          key={statement.position}
+          idPrefix={idPrefix}
+          statement={statement}
+          found={index.get(statement.chunk_id) ?? null}
+        />
+      ))}
+    </section>
+  )
+}
+
+/**
+ * FR-12's Sources panel: "lists every item consulted with its date, allowing the
+ * user to judge how current the underlying material is".
+ *
+ * Consulted, which is a wider set than cited — a panel listing only what a
+ * surviving statement happened to cite would misdescribe what the answer was
+ * drawn from. No similarity score is shown, because none is sent: a relevance
+ * number is a tuning signal for the team, and displaying it would present
+ * relevance as a fact about the answer.
+ */
+export function SourcesPanel({ idPrefix, sources }) {
+  const headingId = `${idPrefix}-sources-heading`
+  const items = sources ?? []
+  if (items.length === 0) return null
+
+  return (
+    <section className="answer-sources" aria-labelledby={headingId}>
+      <h3 id={headingId}>{TEXT.sourcesHeading}</h3>
+      <p className="answer-sources__intro">{TEXT.sourcesIntro}</p>
+      <ul className="answer-sources__list">
+        {items.map((source) => (
+          <li key={`${source.source_type}:${source.source_id}`} className="answer-source">
+            <SourceLine source={source} />
+            <p className="answer-source__passages">{TEXT.sourcePassageCount((source.passages ?? []).length)}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+/**
+ * FR-12: "Any partially related items found are offered, clearly labelled as
+ * partial matches."
+ *
+ * These are keyword search results, not answer content, and they are here because
+ * the no-answer reply deliberately carries no passages: a reply that offered
+ * partial material would disclose that something exists which could not be cited,
+ * which is the disclosure invariant 1 forbids. The search endpoint applies the
+ * same permission filter, so everything offered here is in scope by construction.
+ *
+ * They are rendered as links to sources and nothing more — no snippet, no
+ * extract. Under a heading that has just said the question cannot be answered, a
+ * fragment of source text would read as a partial answer, and the reader is meant
+ * to open the item and judge it rather than take a line of it on trust.
+ *
+ * `term` is the word the search ran on, named on the screen so the list explains
+ * itself; src/utils/partialMatches.js records why it is a word and not the whole
+ * question.
+ */
+export function PartialMatches({ idPrefix, results, term }) {
+  const headingId = `${idPrefix}-partial-heading`
+  if (!results || results.length === 0) return null
+
+  return (
+    <section className="partial-matches" aria-labelledby={headingId}>
+      <h3 id={headingId}>{TEXT.partialMatchesHeading}</h3>
+      <p className="partial-matches__intro">
+        {TEXT.partialMatchesIntro} {term ? TEXT.partialMatchesTerm(term) : ''}
+      </p>
+      <ul className="partial-matches__list">
+        {results.map((result) => {
+          const link = sourceLinkFor(result)
+          return (
+            <li key={`${result.source_type}:${result.source_id}`}>
+              {link ? <Link to={link.to}>{result.title}</Link> : result.title}{' '}
+              <span className="partial-matches__meta">
+                <span className="visually-hidden">Type: </span>
+                {sourceTypeLabel(result.source_type)}
+                {result.department ? ` · ${result.department}` : ''}
+                {' · '}
+                <span className="visually-hidden">Date: </span>
+                <time dateTime={result.date}>{formatDate(result.date)}</time>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}

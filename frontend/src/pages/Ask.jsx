@@ -1,0 +1,480 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { askQuestion } from '../api/ask.js'
+import { ApiError } from '../api/client.js'
+import { createConversation, fetchConversation, listConversations } from '../api/conversations.js'
+import { searchKnowledge } from '../api/search.js'
+import { AnswerBody, PartialMatches, SourcesPanel } from '../components/Answer.jsx'
+import Button from '../components/Button.jsx'
+import Notice from '../components/Notice.jsx'
+import TextAreaInput from '../components/TextAreaInput.jsx'
+import { QUESTION_MAXIMUM_LENGTH, TEXT } from '../constants.js'
+import useApiResource from '../hooks/useApiResource.js'
+import useDocumentTitle from '../hooks/useDocumentTitle.js'
+import { formatDate } from '../utils/dates.js'
+import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { partialMatchTerm } from '../utils/partialMatches.js'
+import { questionError, searchTermError } from '../utils/validation.js'
+import './Repository.css'
+import './Ask.css'
+
+/** The API's own field names, so a 400's `details` lands under the right control. */
+const FIELDS = ['question', 'conversation_id']
+
+/**
+ * FR-12's question-and-answer path and FR-13's conversational assistant, on one
+ * screen because they are one endpoint: `POST /api/ask` is the answer and, when
+ * the body names a thread, the turn of it.
+ *
+ * What each requirement contributes:
+ *
+ * - FR-12: the question field, the answer with numbered inline citations, each
+ *   citation expanding to its source passage, the Sources panel listing every item
+ *   consulted with its date, the no-answer state, and the partial matches beside
+ *   it. The rendering of all of that lives in src/components/Answer.jsx.
+ * - FR-13: the thread that retains its turns so a follow-up need not restate the
+ *   subject, the list of previous conversations with a way to reopen one, and the
+ *   control that clears the active thread to begin a new topic.
+ *
+ * **Clearing the thread starts a new conversation; it deletes nothing.** There is
+ * no delete route and no rename route in the contract, and no control for either
+ * here. The old thread stays in the list and its `QueryLog` rows stay as FR-19
+ * evidence (D-12).
+ *
+ * **A thread is created lazily, on the first question.** FR-13's interface never
+ * asks the user to name a topic before typing, so `POST /api/conversations` is sent
+ * with no title: the thread is created as "New conversation" and the first turn
+ * replaces that with the question itself (D-43). Creating it on the first ask
+ * rather than on the button press is what keeps the list free of empty threads
+ * nobody asked anything in.
+ *
+ * **Three states that are not each other**, and the screen keeps them apart
+ * because a user who confuses them retries the wrong thing:
+ *
+ * - *No answer* (200, `answered: false`) — the corpus has nothing to answer from.
+ *   A designed outcome, stated plainly, with no speculative answer and no empty
+ *   answer frame pretending to be one.
+ * - *AI unavailable* (503) — the question could not be asked at all. NFR-19's
+ *   notice, shown the moment the API answers, and the question is kept in the
+ *   field because no `QueryLog` row was written and it can be asked again.
+ * - *Rejected* (400) — the question itself was not acceptable, shown under the
+ *   field.
+ *
+ * **Invariant 6 holds by construction.** No reply carries a rejected statement, a
+ * rejection count or a no-answer reason, so there is nothing on this screen to
+ * render greyed out, behind a disclosure or in a withheld panel, and nothing here
+ * invents an affordance for one.
+ */
+export default function Ask() {
+  useDocumentTitle('Ask')
+  const [params] = useSearchParams()
+  // Arriving from the search screen's "Ask this as a question" link. Prefilled
+  // and never submitted for the user: the question is theirs to send.
+  const [question, setQuestion] = useState(params.get('q') ?? '')
+  const [touched, setTouched] = useState(false)
+  const [fieldError, setFieldError] = useState(null)
+  const [failure, setFailure] = useState(null)
+  const [asking, setAsking] = useState(false)
+  const [acknowledgement, setAcknowledgement] = useState('')
+
+  // The active thread. Null means the next question starts a new conversation.
+  const [conversationId, setConversationId] = useState(null)
+  const [turns, setTurns] = useState([])
+  const [reopened, setReopened] = useState(false)
+  const [opening, setOpening] = useState(false)
+
+  const conversations = useApiResource(listConversations)
+  const turnCounter = useRef(0)
+  const lastTurnRef = useRef(null)
+  const questionRef = useRef(null)
+  // A ref rather than state: it is a one-shot instruction to the effect below and
+  // nothing renders from it, so it must not cause a render of its own.
+  const pendingTurnFocus = useRef(false)
+
+  /**
+   * Where the visible acknowledgement is completed for a keyboard and screen
+   * reader user: the reply is scrolled to and focused, so the next tab stop is the
+   * answer's own citations rather than something above the fold.
+   *
+   * It runs after the turn it focuses has rendered, which is why `turns` is the
+   * dependency.
+   */
+  useEffect(() => {
+    if (!pendingTurnFocus.current) return
+    pendingTurnFocus.current = false
+    const node = lastTurnRef.current
+    if (!node) return
+    node.focus()
+    // No smooth scrolling: an instant jump respects a reduced-motion preference
+    // without needing to ask about one.
+    node.scrollIntoView({ block: 'nearest' })
+  }, [turns])
+
+  const refusal = questionError(question)
+  const shownFieldError = fieldError ?? (touched && refusal ? refusal : null)
+
+  function appendTurn(turn) {
+    turnCounter.current += 1
+    const key = `turn-${turnCounter.current}`
+    setTurns((current) => [...current, { ...turn, key }])
+    return key
+  }
+
+  /**
+   * FR-12: "Any partially related items found are offered, clearly labelled as
+   * partial matches."
+   *
+   * The no-answer reply carries no passages on purpose — a reply that offered them
+   * would disclose that material exists which could not be cited — so the partial
+   * matches come from the keyword search instead. Everything it returns is in the
+   * caller's scope by construction, because search applies the same permission
+   * filter as retrieval.
+   *
+   * **One word from the question, not the question.** The search endpoint matches a
+   * term as a single substring, so a whole question matches nothing at all; the
+   * choice of word and the evidence for it are in src/utils/partialMatches.js, and
+   * the screen names the word it searched for.
+   *
+   * Two consequences, stated rather than hidden: the search writes its own
+   * `SearchLog` row, which is consistent with what that log is for (FR-19 gap
+   * evidence), and a search that fails or finds nothing adds nothing to the screen.
+   * A failed search is not a failed question and is never reported as one.
+   */
+  const loadPartialMatches = useCallback(async (turnKey, askedQuestion) => {
+    const term = partialMatchTerm(askedQuestion)
+    if (term === null || searchTermError(term) !== null) return
+    let results
+    try {
+      results = await searchKnowledge(term)
+    } catch {
+      return
+    }
+    const combined = [...(results?.documents?.results ?? []), ...(results?.meetings?.results ?? [])]
+    if (combined.length === 0) return
+    setTurns((current) =>
+      current.map((turn) =>
+        turn.key === turnKey ? { ...turn, partialMatches: combined, partialMatchTerm: term } : turn,
+      ),
+    )
+  }, [])
+
+  function handleFailure(error) {
+    if (!(error instanceof ApiError)) {
+      setFailure({ variant: 'error', title: TEXT.askRejected, text: TEXT.askRejected })
+      return
+    }
+    if (error.status === 503) {
+      // NFR-19. The 503 message is the client's fixed text; the second sentence is
+      // the one the contract makes true — no QueryLog row was written, so asking
+      // again is safe. The question stays in the field for exactly that reason.
+      setFailure({ variant: 'unavailable', title: TEXT.askUnavailableTitle, text: `${error.message} ${TEXT.askNotRecorded}` })
+      return
+    }
+    if (error.status === 404) {
+      // The thread is not there, or is not this caller's — one answer for both, and
+      // the screen distinguishes neither (CLAUDE.md §6, invariant 1). The thread is
+      // cleared so the next question starts a new one.
+      setConversationId(null)
+      setTurns([])
+      setReopened(false)
+      conversations.reload()
+      setFailure({ variant: 'error', title: TEXT.conversationLoadFailed, text: TEXT.conversationNotFound })
+      return
+    }
+    const extracted = extractFieldErrors(error, FIELDS)
+    if (extracted.fieldErrors.question) {
+      setFieldError(extracted.fieldErrors.question)
+      return
+    }
+    setFailure({
+      variant: 'error',
+      title: TEXT.askRejected,
+      text: extracted.formError ?? extracted.fieldErrors.conversation_id ?? error.message,
+    })
+  }
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setTouched(true)
+    if (refusal) {
+      setFieldError(refusal)
+      questionRef.current?.focus()
+      return
+    }
+    setFieldError(null)
+    setFailure(null)
+    setAcknowledgement('')
+    setAsking(true)
+
+    const asked = question
+    try {
+      // Lazily create the thread, so a follow-up has something to be a turn of
+      // (FR-13) and an untouched "New topic" leaves nothing behind (D-43).
+      let threadId = conversationId
+      if (!threadId) {
+        const created = await createConversation()
+        threadId = created?.conversation_id ?? null
+        if (threadId) setConversationId(threadId)
+      }
+
+      const reply = await askQuestion({ question: asked, conversationId: threadId ?? undefined })
+      if (reply?.conversation?.conversation_id) setConversationId(reply.conversation.conversation_id)
+
+      const statements = reply?.statements ?? []
+      const sources = reply?.sources ?? []
+      const answered = Boolean(reply?.answered)
+      const key = appendTurn({
+        question: asked,
+        answered,
+        // The server's fixed no-answer text. The fallback exists only so the state
+        // always says something plain; it is never used against a live reply.
+        message: reply?.message ?? TEXT.noAnswerFallback,
+        statements,
+        sources,
+        partialMatches: null,
+        partialMatchTerm: null,
+        expandable: true,
+      })
+      setQuestion('')
+      setTouched(false)
+      setAcknowledgement(answered ? TEXT.answerReady(statements.length, sources.length) : TEXT.noAnswerReady)
+      pendingTurnFocus.current = true
+      // The thread's title and its last-updated time changed on the server, so the
+      // list is re-read rather than guessed at.
+      conversations.reload()
+      if (!answered) loadPartialMatches(key, asked)
+    } catch (error) {
+      handleFailure(error)
+    } finally {
+      setAsking(false)
+    }
+  }
+
+  /** FR-13: "the active thread can be cleared to begin a new topic." */
+  function handleNewTopic() {
+    setConversationId(null)
+    setTurns([])
+    setReopened(false)
+    setFailure(null)
+    setFieldError(null)
+    setTouched(false)
+    setAcknowledgement(TEXT.threadNew)
+    questionRef.current?.focus()
+  }
+
+  /** FR-13: "previous conversations are listed and can be reopened." */
+  async function handleOpenConversation(id) {
+    setOpening(true)
+    setFailure(null)
+    setAcknowledgement('')
+    try {
+      const thread = await fetchConversation(id)
+      const saved = (thread?.turns ?? []).map((turn, index) => ({
+        key: `saved-${id}-${index}`,
+        question: turn.question,
+        answered: Boolean(turn.answered),
+        message: turn.message ?? TEXT.noAnswerFallback,
+        statements: turn.statements ?? [],
+        // A stored turn has no sources and no passage text: nothing returns what a
+        // past turn was built from, so its citations keep their numbers and cannot
+        // expand. Said on the screen rather than left as a control doing nothing.
+        sources: [],
+        partialMatches: null,
+        partialMatchTerm: null,
+        expandable: false,
+        askedAt: turn.asked_at,
+      }))
+      setConversationId(thread?.conversation_id ?? id)
+      setTurns(saved)
+      setReopened(true)
+      turnCounter.current = 0
+      if (saved.length > 0) pendingTurnFocus.current = true
+    } catch (error) {
+      handleFailure(error)
+    } finally {
+      setOpening(false)
+    }
+  }
+
+  const threads = conversations.data ?? []
+
+  let conversationList
+  if (conversations.loading) {
+    conversationList = <p role="status">{TEXT.loadingConversations}</p>
+  } else if (conversations.error) {
+    conversationList = (
+      <>
+        <Notice variant="error" title={TEXT.conversationsLoadFailed}>
+          {conversations.error.message}
+        </Notice>
+        <Button variant="secondary" onClick={conversations.reload}>
+          Try again
+        </Button>
+      </>
+    )
+  } else if (threads.length === 0) {
+    conversationList = <p className="ask-threads__empty">{TEXT.noConversations}</p>
+  } else {
+    conversationList = (
+      <ul className="ask-threads__list">
+        {threads.map((thread) => {
+          const current = thread.conversation_id === conversationId
+          return (
+            <li key={thread.conversation_id}>
+              <button
+                type="button"
+                className="ask-threads__item"
+                // Marks which thread is on screen for assistive technology as well
+                // as visually, so the current one is not identified by shading alone.
+                aria-current={current ? 'true' : undefined}
+                aria-label={TEXT.conversationOpen(thread.title)}
+                disabled={opening || asking}
+                onClick={() => handleOpenConversation(thread.conversation_id)}
+              >
+                <span className="ask-threads__title">{thread.title}</span>
+                <span className="ask-threads__date">
+                  <time dateTime={thread.last_updated_at}>{formatDate(thread.last_updated_at)}</time>
+                  {current ? ` · ${TEXT.conversationCurrent}` : ''}
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+    )
+  }
+
+  return (
+    <div className="repository-page ask-page">
+      <h1>{TEXT.askHeading}</h1>
+
+      <div className="ask-layout">
+        <div className="ask-main">
+          <section aria-labelledby="ask-form-heading" className="ask-form">
+            {/* The page heading already says what this is; the section still needs a
+                name for the landmark, so the heading is present and not repeated
+                visually. */}
+            <h2 id="ask-form-heading" className="visually-hidden">
+              Ask a question
+            </h2>
+            {failure ? (
+              <Notice variant={failure.variant} title={failure.title}>
+                {failure.text}
+              </Notice>
+            ) : null}
+            <form onSubmit={handleSubmit} noValidate>
+              <TextAreaInput
+                ref={questionRef}
+                id="ask-question"
+                label={TEXT.askFieldLabel}
+                hint={TEXT.askHint}
+                name="question"
+                rows={3}
+                value={question}
+                error={shownFieldError}
+                disabled={asking}
+                maxLength={QUESTION_MAXIMUM_LENGTH}
+                onBlur={() => setTouched(true)}
+                onChange={(event) => {
+                  setQuestion(event.target.value)
+                  if (fieldError) setFieldError(null)
+                }}
+              />
+              <p className="ask-form__count">
+                {question.length} of {QUESTION_MAXIMUM_LENGTH} characters
+              </p>
+              <div className="repository-page__actions">
+                {/* Disabled until the question is askable — FR-01's pattern, applied
+                    to FR-12's bounds. The server enforces them regardless. */}
+                <Button type="submit" loading={asking} disabled={asking || refusal !== null}>
+                  {asking ? TEXT.asking : TEXT.askSubmit}
+                </Button>
+                <Button variant="secondary" disabled={asking} onClick={handleNewTopic}>
+                  {TEXT.newTopic}
+                </Button>
+              </div>
+              <p className="ask-form__hint">{TEXT.newTopicHint}</p>
+              {/* Visible and live at once. Usability finding 1: an acknowledgement
+                  only assistive technology receives is half a signal, so the words
+                  that are announced are the words on the screen. */}
+              <p className="ask-form__status" role="status" aria-live="polite">
+                {asking ? TEXT.asking : acknowledgement}
+              </p>
+            </form>
+          </section>
+
+          <section aria-labelledby="ask-thread-heading" className="ask-thread">
+            <h2 id="ask-thread-heading">Conversation</h2>
+            {opening ? <p role="status">{TEXT.loadingConversation}</p> : null}
+            {/* Shown only while a turn on screen actually came back from the server
+                without its passages. A live turn asked after reopening has them, so
+                the note disappears once every turn present can expand. */}
+            {reopened && turns.some((turn) => !turn.expandable) ? (
+              <p className="ask-thread__note">{TEXT.threadReopenedNote}</p>
+            ) : null}
+            {turns.length === 0 && !opening ? <p className="ask-thread__empty">{TEXT.threadEmpty}</p> : null}
+
+            {turns.map((turn, index) => {
+              const questionId = `${turn.key}-question`
+              return (
+                <article
+                  key={turn.key}
+                  className="ask-turn"
+                  // Labelled by the question, so focusing the turn announces which
+                  // question this answer belongs to.
+                  aria-labelledby={questionId}
+                  tabIndex={-1}
+                  ref={index === turns.length - 1 ? lastTurnRef : null}
+                >
+                  <p className="ask-turn__question" id={questionId}>
+                    <span className="ask-turn__label">{TEXT.askQuestionLabel}: </span>
+                    {turn.question}
+                    {turn.askedAt ? (
+                      <span className="ask-turn__date">
+                        {' '}
+                        <time dateTime={turn.askedAt}>{formatDate(turn.askedAt)}</time>
+                      </span>
+                    ) : null}
+                  </p>
+
+                  {turn.answered ? (
+                    <>
+                      <AnswerBody
+                        idPrefix={turn.key}
+                        statements={turn.statements}
+                        sources={turn.expandable ? turn.sources : undefined}
+                      />
+                      <SourcesPanel idPrefix={turn.key} sources={turn.sources} />
+                    </>
+                  ) : (
+                    <>
+                      {/* No answer. Stated plainly, as an outcome and not an error,
+                          with no answer frame around it and no fragment in it. The
+                          two no-answer paths are byte-identical in the reply and
+                          nothing here tries to tell them apart (invariant 7). */}
+                      <Notice variant="info" title={TEXT.noAnswerTitle}>
+                        {turn.message}
+                      </Notice>
+                      <PartialMatches
+                        idPrefix={turn.key}
+                        results={turn.partialMatches}
+                        term={turn.partialMatchTerm}
+                      />
+                    </>
+                  )}
+                </article>
+              )
+            })}
+          </section>
+        </div>
+
+        {/* After the main column in the DOM, so the tab order reaches the question
+            field before the list of old ones. */}
+        <aside aria-labelledby="ask-threads-heading" className="ask-threads">
+          <h2 id="ask-threads-heading">{TEXT.conversationsHeading}</h2>
+          {conversationList}
+        </aside>
+      </div>
+    </div>
+  )
+}
