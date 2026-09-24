@@ -42,6 +42,17 @@ MAXIMUM_CLASSIFY_ATTEMPTS = 3
 MINIMUM_QUESTION_LENGTH = 10
 MAXIMUM_QUESTION_LENGTH = 500
 
+# The floor on FR-12's OTHER path, the keyword search field, also in characters. FR-12
+# Validation words it client-side — "queries shorter than two characters are rejected
+# client-side" — and apps/retrieval/search.py enforces the same number on the server as
+# well, because a browser check is a courtesy to the person typing and the server check
+# is the rule (CLAUDE.md invariant 4). Two characters exactly, as the clause words it, so
+# the two checks agree and nobody is refused by one and accepted by the other. It lives
+# beside the question bounds because it is the same family of validation constant on the
+# same requirement, not because the two paths share a bound: they do not, and a search
+# term is not a question.
+MINIMUM_SEARCH_LENGTH = 2
+
 # --- Ingestion (FR-08, FR-09) -------------------------------------------------------
 # Extracted text shorter than this is marked "Insufficient content" and is not
 # embedded: a fragment produces an unreliable vector that matches unpredictably and

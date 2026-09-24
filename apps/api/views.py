@@ -44,6 +44,7 @@ from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.models import Meeting
+from apps.retrieval.search import SearchQueryTooShort, search
 
 from .permissions import HasRolePermission
 from .serializers import (
@@ -57,6 +58,7 @@ from .serializers import (
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
+    SearchResultsSerializer,
     UserSerializer,
 )
 
@@ -123,6 +125,10 @@ UNKNOWN_ATTENDEE_MESSAGE = "One or more of those attendees is not a registered u
 # document that is already indexed is FR-15's business, not a retry's.
 ALREADY_INDEXED_MESSAGE = "This document is already indexed."
 NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
+# FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
+# restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
+# exception (D-41).
+MISSING_SEARCH_TERM_MESSAGE = "A search term is required."
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -556,6 +562,65 @@ class DocumentsView(APIView):
         if outcome.detail:
             body["detail"] = outcome.detail
         return Response(body, status=outcome.http_status)
+
+
+# --- FR-12 keyword search ----------------------------------------------------------------
+
+
+class SearchView(APIView):
+    """``GET /api/search?q=<term>`` — FR-12's keyword search half (D-41).
+
+    FR-12 is two paths. This is the Front-End clause's "search field available from every
+    page, returning results grouped by type (Documents and Meetings) with a count per
+    group", and the "200 OK with grouped results" half of FR-12's Responses. The
+    question-and-answer path is a separate endpoint.
+
+    **A session and nothing more.** ``IsAuthenticated`` is the global default (invariant 4)
+    and this route adds no role permission, exactly as ``GET /api/documents`` adds none:
+    what a search may find is decided by the scope, not by a permission code, and a role
+    that may list the repository may search it.
+
+    **The scope is not this view's to resolve, and deliberately cannot be.**
+    ``apps.retrieval.search.search`` takes the user and calls ``permission_scope`` on it
+    itself, so there is no role argument for a view to miswire — a view passing one user's
+    identity with another's role would hand an Employee an Administrator's result set and
+    log it under the Employee, plausibly and silently. Nothing is filtered after the call
+    either: the counts in the reply are properties over the rows the scoped queries
+    returned, so a number here can never be one taken before the permission filter
+    (CLAUDE.md invariant 1, which names "a result count, a total" explicitly).
+
+    **One log row per search, written by the function.** ``search`` writes the ``SearchLog``
+    row, with the same post-filter total the caller is given. This view must not write a
+    second, and a test counts the rows.
+
+    ``UnscopedRequestError`` is not caught. Behind ``IsAuthenticated`` it is unreachable,
+    and turning it into a 200 would answer a request whose scope could not be established
+    — the same backstop, uncaught, as on the answer path.
+    """
+
+    def get(self, request):
+        query_text = request.query_params.get("q")
+        if query_text is None:
+            # No term at all. DRF's validation shape, keyed on the query parameter's own
+            # name, because that is the field the client got wrong.
+            return Response(
+                {"q": [MISSING_SEARCH_TERM_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            # Passed as given: no stripping and no sanitiser, so SearchLog records what
+            # was actually typed (FR-19's evidence) and the term reaches the database only
+            # as a bound parameter of an ORM lookup.
+            results = search(query_text=query_text, user=request.user)
+        except SearchQueryTooShort as exc:
+            # FR-12's 400. The rule and its message belong to the search module; this
+            # maps the exception rather than re-checking the length, so there is one
+            # definition of "too short" and the two cannot drift. An empty ``q=`` arrives
+            # here too, which is the same answer by the same rule.
+            return Response({"q": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        # 200 even when nothing matched: an empty reply is a fact about the corpus, not an
+        # error, and the SearchLog row for it is exactly the knowledge-gap evidence FR-19
+        # wants.
+        return Response(SearchResultsSerializer(results).data)
 
 
 # --- FR-09 meeting transcript ingestion -------------------------------------------------

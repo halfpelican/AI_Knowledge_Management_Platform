@@ -1571,3 +1571,68 @@ anything stronger.
 - **Any future claim of determinism needs a measurement, not an absence of failures.**
   That is the D-36 lesson restated, and it is why this entry stays open rather than
   closing with "appears stable".
+
+## D-41 · FR-12's keyword search path was missing from the Stage 4 brief, and is built as item 8a
+
+**Status:** Settled by the user · **Date:** 2026-09-24 · **Stage:** 4, item 8a ·
+**Effect:** Stage 4's commit points go from thirteen to **fourteen**
+
+**The gap.** FR-12 is two paths. Its Server-End clause and section 7.10
+(`generateGroundedAnswer`) describe the question-and-answer path, which Stage 4 items 1
+to 9 build. Its **Front-End** clause also requires "a search field available from every
+page, returning results grouped by type (Documents and Meetings) with a count per
+group", where each result shows "its title, the matching passage as a snippet, its
+department, and its date".
+
+Nothing in the Stage 4 brief's numbered items builds that. Item 10 names the
+"Search / Ask / Sources front end", which assumes a backend the items never create.
+Section 7.10 says why it is absent from the pseudocode — "the keyword search path in
+the same requirement returns matching items grouped by type and is not reproduced here,
+as it is a filtered read rather than an algorithm" — and that exclusion from the
+*algorithm* section appears to have been read, when the stage was planned, as an
+exclusion from the *stage*. `SearchLog` has existed unwritten since migration v1 as the
+visible symptom.
+
+Found at item 7, while checking what would still be unbuilt when the stage's own
+definition of done was assessed.
+
+**Decision.** Build it, in this stage, as **item 8a** — after query logging and before
+the front end. The endpoint is item 8a; the search field on every page stays part of
+item 10. Separate commit points, so the stage's shape stays legible against its brief.
+
+**Rationale (as given).** The deciding reason is not that FR-12 is a MUST-HAVE, though
+it is. It is that **items 11 and 12 are the scoping test and the security review, and a
+search endpoint is a second route through the permission boundary.** Its grouped counts
+are the likeliest count-disclosure in the system — invariant 1 names result counts and
+totals explicitly, and a search that returns "4 documents" where one is
+Administrator-only discloses the existence of restricted material without returning a
+single restricted row. Reviewing the permission boundary before that route exists would
+review half the surface, and the review is the artefact the M6 demonstration is
+defended with.
+
+Deferring it to Stage 5 beside FR-15's filtered browsing was considered and rejected on
+schedule: Stage 5 carries seven items to 31 October, including the end-to-end
+integration pass, the accessibility pass, the alpha deployment and two audits.
+
+**Consequences.**
+
+- **It stays a filtered read.** 7.10 calling it "a filtered read rather than an
+  algorithm" is the proposal licensing the boring implementation: case-insensitive
+  substring match, a snippet windowed around the hit, a stable non-relevance ordering,
+  no ranking, no scoring, no embedding and no NPU call. A second ranked path would be a
+  second thing to keep correct and a second place for the permission filter to be got
+  wrong.
+- **Counts come from the post-filter set**, and `SearchLog.result_count` records that
+  same post-filter number. The test that proves it is an Employee and an Administrator
+  searching one term and receiving different counts, with the Employee's count equal to
+  what the Employee can see.
+- **The new endpoint joins the dual-role matrix.** Objective 01 requires 100% of
+  protected endpoints exercised from both roles, and the matrix fails a full run below
+  that — so an endpoint outside it is the failure, and covering both roles is the work
+  rather than a cost of doing it.
+- **`SearchLog` stops being a dead table**, and item 8's argument for why `QueryLog`
+  needs no `result_count` column gains its other half: a keyword search stores no
+  identifiers, so there an integer is the only record available.
+- **The stage's commit count no longer matches its brief**, deliberately. Thirteen items
+  become fourteen commit points. This entry is what an auditor reading the repository
+  should find instead of a discrepancy.

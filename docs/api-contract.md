@@ -239,3 +239,98 @@ mechanism would mean two code paths through the one filter that matters most.
 
 **A meeting outside the caller's scope is `404`, not `403`.** A 403 would confirm
 that the id names something real (`CLAUDE.md` §6 invariant 1).
+
+## Stage 4 — FR-12 (keyword search half only)
+
+**This section is half of FR-12.** FR-12 is two paths: the keyword search below, and
+question-and-answer with cited statements. The question-and-answer endpoint is not in
+this table — it is a later item in the stage — so nothing here should be read as FR-12
+being contracted in full. Both paths are MUST-HAVE for M6.
+
+FR-12's Responses clause names `200 OK with grouped results` and `400` for an invalid
+query; the codes below are its own except where marked *convention*.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| GET | `/api/search?q=<term>` | session | `200` grouped results, scoped to the caller's role; also `200` when nothing matched | `400 {"q": ["..."]}` `q` was not sent, or the term is shorter than `MINIMUM_SEARCH_LENGTH` (2 characters), which includes `?q=`; `401` |
+
+The reply:
+
+```json
+{"query": "annual leave",
+ "documents": {"count": 2, "results": [ ... ]},
+ "meetings":  {"count": 1, "results": [ ... ]},
+ "total_count": 3}
+```
+
+Each result in either group:
+
+```json
+{"source_type": "document", "source_id": "uuid", "title": "Leave policy",
+ "snippet": "...may take annual leave once probation has ended...",
+ "department": "People", "date": "2026-09-21T10:00:00+10:00"}
+```
+
+Those are the four things FR-12's Front-End clause says a result shows — "its title, the
+matching passage as a snippet, its department, and its date" — plus the type and
+identifier the front end links with. `source_type` is `"document"` or `"meeting"`, from
+the same fixed vocabulary the chunks use. Never `file_path` and never `content_hash`,
+for the two reasons the document object gives above; a search result is built from the
+scoped query's own output and not from the `Document`, `Meeting` or `ContentChunk` row,
+so neither column is reachable from it at all.
+
+**No route of this endpoint adds a role permission.** A session is the whole
+authorisation, exactly as on `GET /api/documents`: what a search may find is decided by
+the scope, not by a permission code, and a role that may list the repository may search
+it.
+
+**The counts are computed after permission filtering, so a total never discloses
+inaccessible content.** `count` is derived from the rows in the group it labels and
+`total_count` from the two counts, in `apps/retrieval/search.py`, as properties rather
+than stored integers — the serializer reads them and computes nothing. There is
+therefore no "showing n of m" anywhere in the reply, and no wider figure exists to be
+put there: `CLAUDE.md` §6 invariant 1 forbids disclosing out-of-scope material "by a
+result count, a total, or an error message", and a grouped search reply is mostly
+counts.
+
+**The same term returns different counts to different roles, and that is by design.**
+An Employee and an Administrator searching one word over one corpus are told different
+numbers whenever a matching source is Administrator-only. The Employee's count is what
+the Employee can see, not what exists, and there is no signal — no count, no total, no
+message, no altered wording — that anything was withheld. A test asserts the restricted
+title, passage and identifier appear nowhere in the Employee's rendered body.
+
+**Results are ordered by recency, never by relevance.** Documents newest-uploaded first,
+meetings newest-met first, character for character the orderings `GET /api/documents`
+and `GET /api/meetings` use, so one corpus does not appear in two orders in one
+interface. Nothing on this path embeds, ranks or scores: §7.10 excludes it from the
+pseudocode because "it is a filtered read rather than an algorithm", and an order
+presented as relevance that was not computed from relevance is precisely what FR-12
+rejects on its other path. A result is one item, not one matching chunk, so
+`"documents": {"count": 3}` means three documents.
+
+**A title match counts as a match.** A search for the name of a handbook finds the
+handbook even where the title appears nowhere in its body. Two visible consequences: a
+source that matched only by title carries the opening of its first passage as its
+snippet, which does not contain the search term; and a source with no indexed passage at
+all — an FR-08 "Insufficient content" document — carries `"snippet": ""`. Both are
+honest renderings rather than invented text.
+
+**`department` is `""` for every meeting**, permanently and by decision: schema v1 gives
+`Meetings` no department, deriving one from attendees would reintroduce attendance into
+a role-scoped path (D-16), and a literal like "Meeting" would put the item's type in the
+column that says which part of the organisation it came from. A document may also have a
+blank department, so an absent one is already a case the front end renders.
+
+**Every search writes one `SearchLog` row**, including one that found nothing — a term
+that returns nothing twice a day is a knowledge gap, which is FR-19's evidence.
+`result_count` is the same post-filter total the caller is given, so the record and the
+screen cannot disagree. A `400` writes no row at all: a query too short to run was not a
+search, and counting it would put noise into that evidence.
+
+**The term is stored and matched exactly as typed**, with no stripping and no sanitiser.
+It reaches the database only as a bound parameter of an ORM lookup, and `%` or `_` in a
+term match those characters rather than acting as wildcards. One consequence stated
+rather than hidden: a two-character query of whitespace is long enough and matches
+almost everything the caller may already list — odd-looking, but every row it can reach
+is in scope.

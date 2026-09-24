@@ -5,6 +5,8 @@
 key set so a field cannot leak in later.
 """
 
+from datetime import datetime
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -282,3 +284,80 @@ class MeetingIngestSerializer(serializers.Serializer):
                 {"transcript_text": ["Provide either transcript text or a file, not both."]}
             )
         return attrs
+
+
+# --- FR-12 keyword search ---------------------------------------------------------------
+
+# ``SearchResult.date`` is the source's own date and so is not one type: a datetime for a
+# document (``uploaded_at``) and a date for a meeting (``meeting_date``). These two render
+# whichever arrived, and they live at module level rather than on the serializer because a
+# Field assigned to a Serializer class becomes a *declared field* of it — these are
+# formatters, not fields. Reusing DRF's own fields is what keeps a search result's date
+# string byte-identical to the one ``GET /api/documents`` and ``GET /api/meetings`` already
+# return for the same row, timezone conversion included; a test asserts that equality.
+_DATETIME_FORMATTER = serializers.DateTimeField()
+_DATE_FORMATTER = serializers.DateField()
+
+
+class SearchResultSerializer(serializers.Serializer):
+    """One item in an FR-12 search group.
+
+    Exactly the four things the Front-End clause says a result shows — "its title, the
+    matching passage as a snippet, its department, and its date" — plus the identifier and
+    type the front end needs to link to the source.
+
+    **This serializes the frozen ``SearchResult`` dataclass ``apps.retrieval.search``
+    returned, and never the ``Document``, ``Meeting`` or ``ContentChunk`` row behind it.**
+    That is the security property rather than a style choice: the dataclass carries only
+    what the scoped queries selected, so no field here can reach a column nobody scoped,
+    and ``file_path`` and ``content_hash`` are not reachable from it at all — the same rule
+    the document object follows in docs/api-contract.md, for the same two reasons.
+
+    ``snippet`` and ``department`` may both be blank, and legitimately: a source matched by
+    title alone that holds no chunk has no passage to show, and a meeting has no department
+    to carry (see ``SearchResult``'s own docstring for why that is an empty string rather
+    than an invented value).
+    """
+
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    snippet = serializers.CharField(read_only=True, allow_blank=True)
+    department = serializers.CharField(read_only=True, allow_blank=True)
+    date = serializers.SerializerMethodField()
+
+    def get_date(self, result):
+        # datetime subclasses date, so the narrower test has to come first.
+        if isinstance(result.date, datetime):
+            return _DATETIME_FORMATTER.to_representation(result.date)
+        return _DATE_FORMATTER.to_representation(result.date)
+
+
+class SearchGroupSerializer(serializers.Serializer):
+    """One of FR-12's two groups and the count beside it.
+
+    ``count`` is READ from ``SearchGroup.count``, which is a property over the rows in the
+    group. It is never recomputed here, never stored, and never overridden: a number
+    computed from the list it labels cannot be a number taken before the permission filter,
+    which is what CLAUDE.md invariant 1 asks of a reply that is mostly counts. There is no
+    "showing n of m" because the wider figure does not exist in ``apps.retrieval.search``
+    to be serialized, and nothing in this module may introduce one.
+    """
+
+    count = serializers.IntegerField(read_only=True)
+    results = SearchResultSerializer(many=True, read_only=True)
+
+
+class SearchResultsSerializer(serializers.Serializer):
+    """``GET /api/search`` — two groups, their counts, and the total across both.
+
+    ``total_count`` is likewise ``SearchResults.total_count``, a property equal to the two
+    group counts added together, and is the same post-filter number written to
+    ``SearchLog.result_count``. The caller, the record and the group headings therefore
+    cannot disagree, because there is one place it is computed and it is not here.
+    """
+
+    query = serializers.CharField(source="query_text", read_only=True)
+    documents = SearchGroupSerializer(read_only=True)
+    meetings = SearchGroupSerializer(read_only=True)
+    total_count = serializers.IntegerField(read_only=True)

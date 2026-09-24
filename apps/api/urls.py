@@ -32,4 +32,7 @@ urlpatterns = [
     # Stage 3: FR-09
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
+    # Stage 4: FR-12 keyword search, the Front-End clause's grouped results (D-41).
+    # The question-and-answer half of FR-12 is a route of its own, still to come.
+    path("search", views.SearchView.as_view(), name="search"),
 ] + router.urls
