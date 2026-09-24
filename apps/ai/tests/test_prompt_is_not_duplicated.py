@@ -72,6 +72,30 @@ def test_the_harness_defines_no_prompt_schema_or_parser_of_its_own():
     assert "class SchemaViolation" not in HARNESS_SOURCE
 
 
+def test_the_harness_does_not_compose_the_fr13_history_block_itself():
+    """Stage 4 item 9a: --with-history uses the SHIPPED composer, not a copy of its wording.
+
+    The harness gained a flag that puts FR-13's labelled prior-questions block in front of
+    the question, so that the block's effect on schema conformance can be measured. The
+    block is prompt text — PRIOR_QUESTIONS_HEADING, PRIOR_QUESTION_MARKER and
+    QUESTION_LEAD_IN in apps/ai/prompting.py — and this file's whole subject is that prompt
+    text has one definition. A harness that assembled the heading itself would report a
+    conformance rate for a block FR-13 does not send, which is the same failure mode as a
+    second copy of SYSTEM_PROMPT and harder to notice, because the two would differ by a
+    clause rather than by a name.
+
+    The canned prior questions themselves are data, not prompt text, and are legitimately
+    hard-coded in the harness: they are the fixed measured input, and a run whose input
+    moved would not be comparable with the one recorded.
+    """
+    assert "from apps.ai.prompting import" in HARNESS_SOURCE
+    assert "build_conversational_question" in HARNESS_SOURCE
+    assert "def build_conversational_question" not in HARNESS_SOURCE
+    assert "PRIOR_QUESTIONS_HEADING =" not in HARNESS_SOURCE
+    assert "PRIOR_QUESTION_MARKER =" not in HARNESS_SOURCE
+    assert "QUESTION_LEAD_IN =" not in HARNESS_SOURCE
+
+
 def test_the_harness_imports_all_three_from_apps_ai():
     assert "from apps.ai.prompting import SYSTEM_PROMPT" in HARNESS_SOURCE
     assert "from apps.ai.schema import" in HARNESS_SOURCE

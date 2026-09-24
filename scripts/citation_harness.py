@@ -13,6 +13,11 @@ Usage, in PowerShell, with FLM running in another window
 
     .venv\\Scripts\\python.exe scripts\\citation_harness.py
     .venv\\Scripts\\python.exe scripts\\citation_harness.py --questions path\\to\\set.json
+    .venv\\Scripts\\python.exe scripts\\citation_harness.py --with-history
+
+``--with-history`` (Stage 4 item 9a) measures FR-13's history block and nothing else:
+retrieval is held constant, so only the generation prompt changes. See the comment on
+CANNED_PRIOR_QUESTIONS for why, and why that is not FR-13 end to end.
 
 This script READS the database and never writes to it. It ingests nothing.
 
@@ -84,10 +89,11 @@ from apps.ai.base import Passage, ProviderUnavailable, Statement  # noqa: E402
 # module, so an edit reaching for a local parser collides with it instead of quietly
 # growing a second one.
 from apps.ai.generation import GenerationAttempt  # noqa: E402
-from apps.ai.prompting import SYSTEM_PROMPT  # noqa: E402
+from apps.ai.prompting import SYSTEM_PROMPT, build_conversational_question  # noqa: E402
 from apps.ai.schema import STATEMENT_LIST_SCHEMA, SchemaViolation, parse_statement_list  # noqa: E402,F401
 from apps.core.constants import (  # noqa: E402
     MAXIMUM_CONTEXT_TOKENS,
+    MAXIMUM_CONVERSATION_TURNS,
     MAXIMUM_GENERATION_ATTEMPTS,
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
@@ -113,6 +119,32 @@ from apps.retrieval.verification import verify_citations  # noqa: E402
 DEFAULT_QUESTION_SET = Path(__file__).resolve().parent / "citation_questions.json"
 QUESTION_KINDS = ("ordinary", "scoped", "no-answer")
 
+# --- Stage 4 item 9a: --with-history, the one-variable measurement of FR-13's prompt ---
+#
+# WHAT THIS MEASURES, AND WHAT IT DOES NOT. --with-history is NOT a measurement of FR-13
+# end to end. FR-13 (apps/retrieval/conversation.py) composes TWO strings from the same
+# prior questions: a plain join that is EMBEDDED, and a labelled block that reaches the
+# PROMPT. Running both would change the retrieved passages and the prompt at once, and a
+# difference in conformance could then come from either. So this flag changes exactly one
+# thing: the BARE question is embedded, so the supplied passages are identical to the
+# item-6 run in docs/flm-baseline.md, and only the string handed to generate_statements
+# carries the labelled history block. The single variable is the block in the prompt.
+#
+# The block is composed by apps.ai.prompting.build_conversational_question — the shipped
+# function, not a copy of its wording — so what is measured is the text FR-13 sends.
+#
+# THREE prior questions, because MAXIMUM_CONVERSATION_TURNS is 3 and three is therefore
+# the longest history FR-13 can produce and the worst case for prompt size. They are the
+# first three ordinary questions of citation_questions.json itself, so the block is
+# in-domain and realistic rather than synthetic — and they are FIXED, identical in front
+# of all 64 questions, so the run is reproducible and the comparison is against one
+# constant block rather than a per-question one.
+CANNED_PRIOR_QUESTIONS = (
+    "How many days of annual leave do full-time staff accrue each year?",
+    "What is the maximum number of annual leave days that may be carried across a financial year?",
+    "How long is the probation period for permanent appointments?",
+)
+
 
 # =============================================================================
 # The schema, the prompt and the parser are imported above, not defined here.
@@ -136,6 +168,10 @@ class QuestionResult:
     kind: str
     role: str
     question: str
+    # The string actually handed to generate_statements. Equal to ``question`` on an
+    # ordinary run; the labelled composed form under --with-history. Recorded so the JSON
+    # out says which prompt produced these statements rather than leaving it to be assumed.
+    prompt_question: str = ""
     retrieved: list[RankedPassage] = field(default_factory=list)
     top_score: float | None = None
     generation_called: bool = False
@@ -240,7 +276,14 @@ def run_question(
     chunks: list[ContentChunk],
     service,
     threshold: float = RELEVANCE_THRESHOLD,
+    with_history: bool = False,
 ) -> QuestionResult:
+    """One question through the pipeline: embed, rank, admit, generate, verify.
+
+    ``with_history`` prepends the fixed CANNED_PRIOR_QUESTIONS block to the string sent to
+    generation ONLY. Retrieval is held constant on purpose — see the comment on
+    CANNED_PRIOR_QUESTIONS for why that is the whole design of the measurement.
+    """
     result = QuestionResult(
         question_id=question.get("id", "?"),
         kind=question["kind"],
@@ -249,9 +292,23 @@ def run_question(
         expected_answer=question.get("expected_answer"),
     )
 
+    # The composed form of the question, or the question itself. Built HERE, before
+    # embedding, so the two strings are visibly side by side and it is plain that the bare
+    # one is what goes to the embedder and the composed one only to generation.
+    result.prompt_question = (
+        build_conversational_question(result.question, list(CANNED_PRIOR_QUESTIONS))
+        if with_history
+        else result.question
+    )
+
     # The pipeline's own query path, not a copy of it: embed_question() applies the
     # embedding model's query task prefix and validates the response, so the harness
     # measures what the shipped system sends rather than something adjacent to it.
+    #
+    # The BARE question is embedded even under --with-history. FR-13 would embed the plain
+    # join of the history and the question; this run deliberately does not, so that the
+    # passages are the ones the item-6 run supplied and the prompt block is the only thing
+    # that changed.
     embedding = embed_question(result.question)
     query_vector = embedding.vectors[0]
 
@@ -284,7 +341,9 @@ def run_question(
     # harness measures that loop instead of running its own.
     try:
         parsed = service.generate_statements(
-            result.question, passages, on_attempt=lambda a: result.attempts.append(attempt_record(a))
+            result.prompt_question,
+            passages,
+            on_attempt=lambda a: result.attempts.append(attempt_record(a)),
         )
     except ProviderUnavailable as exc:
         # Three non-conforming or failed attempts. In the shipped system this is the
@@ -519,6 +578,20 @@ def main() -> int:
         action="store_true",
         help="embed and rank only, print the top-score distribution by kind, call no generation",
     )
+    # The help text carries the caveat because argparse --help is where the next person
+    # meets this flag, and the obvious misreading of it — "the FR-13 measurement" — is
+    # wrong in a way that would invalidate whatever they concluded. See
+    # CANNED_PRIOR_QUESTIONS for the argument at length; it cannot fit in help text and
+    # must not grow into a prompt-sized literal in this file either.
+    parser.add_argument(
+        "--with-history",
+        action="store_true",
+        help=(
+            "measure FR-13's history block ONLY: a fixed 3-question block is prepended to "
+            "the GENERATION prompt, retrieval held constant (the bare question is "
+            "embedded). NOT FR-13 end to end."
+        ),
+    )
     parser.add_argument("--kind", choices=QUESTION_KINDS, help="run only one kind of question")
     parser.add_argument("--out", type=Path, help="write the full per-question record as JSON")
     arguments = parser.parse_args()
@@ -553,6 +626,16 @@ def main() -> int:
           f"{sorted(STATEMENT_LIST_SCHEMA['properties']['statements']['items']['required'])}")
     if arguments.threshold != RELEVANCE_THRESHOLD:
         print(f"  THRESHOLD       : {arguments.threshold} (overriding the constant, for tuning)")
+    if arguments.with_history:
+        # Printed in full, because a recorded run has to say exactly which block produced
+        # its rates, and because the "retrieval held constant" caveat belongs beside them.
+        print(f"  HISTORY BLOCK   : ON — {len(CANNED_PRIOR_QUESTIONS)} canned prior question(s), "
+              f"MAXIMUM_CONVERSATION_TURNS={MAXIMUM_CONVERSATION_TURNS}")
+        for prior in CANNED_PRIOR_QUESTIONS:
+            print(f"                    - {prior}")
+        print("                    retrieval is HELD CONSTANT: the bare question is embedded, "
+              "so the passages match a default run and the prompt block is the only variable. "
+              "This is not FR-13 end to end.")
     if not health.available:
         print("\nFLM is not reachable. Start it with:  flm serve gemma3:4b --embed 1")
         return 1
@@ -571,7 +654,9 @@ def main() -> int:
         label = question.get("id", f"#{position}")
         print(f"[{position}/{len(questions)}] {label} ({question['kind']}, {question['role']}) ...",
               flush=True)
-        results.append(run_question(question, chunks, service, arguments.threshold))
+        results.append(
+            run_question(question, chunks, service, arguments.threshold, arguments.with_history)
+        )
     elapsed = time.perf_counter() - started
 
     summary = report(results)
@@ -584,6 +669,8 @@ def main() -> int:
             "embed_model": settings.FLM_EMBED_MODEL,
             "embedding_dimension": settings.EMBEDDING_DIMENSION,
             "question_set": str(arguments.questions),
+            "with_history": arguments.with_history,
+            "canned_prior_questions": list(CANNED_PRIOR_QUESTIONS) if arguments.with_history else [],
             "summary": summary,
             "results": [
                 {
@@ -591,6 +678,7 @@ def main() -> int:
                     "kind": r.kind,
                     "role": r.role,
                     "question": r.question,
+                    "prompt_question": r.prompt_question,
                     "top_score": r.top_score,
                     "retrieved": [{"chunk_id": c.chunk_id, "score": c.score} for c in r.retrieved],
                     "generation_called": r.generation_called,

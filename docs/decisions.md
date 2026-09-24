@@ -1683,12 +1683,28 @@ one question**. A multi-turn prompt carries a block those runs never contained, 
 **`scripts/citation_harness.py` cannot cover it**: the harness asks single questions, so
 item 6's re-run says nothing about this prompt. **The multi-turn prompt is unmeasured.**
 
-Why that matters concretely rather than as a disclaimer: a history block in front of
-`gemma3:4b` could move schema conformance, and nothing in the system would detect it as a
-conformance problem. A non-conforming reply is a failed attempt, three of them are a 503,
-and at the demonstration that appears as the knowledge service going down on the second
-turn of any conversation. Measuring it needs a question set of question-then-follow-up
-pairs, which does not exist.
+**Measured on 25 September 2026 as item 9a, and the risk recorded here was the wrong
+risk.** This entry first framed the danger as the 503: conformance degrading until the
+service appears to fail on the second turn of a conversation. The arithmetic does not
+support that. A 503 needs `MAXIMUM_GENERATION_ATTEMPTS` *consecutive* non-conforming
+replies, which at 90% conformance is roughly one turn in a thousand.
+
+**The exposure is NFR-08 performance, not the 503.** Every retry is another NPU generation
+call, so a drop in first-attempt conformance is invisible in correctness and loud in p90
+latency — and Objective 03 measures that p90 on 23 October. First-attempt conformance is
+therefore the number to watch, not overall conformance, which hides exactly that cost.
+
+The measurement itself: the existing 64 questions with a fixed three-question block
+prepended to the generation prompt and **retrieval held constant**, so the block is the only
+variable. First-attempt conformance stayed at 100% (50/50) with zero retries, no identifier
+was fabricated (0 of 42), out-of-scope stayed 0, and no statement's content traced to the
+block rather than to a passage. The defensible claim is no degradation. `docs/flm-baseline.md`
+has the run, its limits, and the three mis-citations it incidentally exposed.
+
+**FR-13 end to end is still unmeasured**, because holding retrieval constant deliberately
+excluded the composed join that FR-13 embeds — the half that changes which passages are
+retrieved, and on D-40's evidence the half likelier to move answers. That needs a
+question-then-follow-up set, which does not exist.
 
 **Consequences.**
 

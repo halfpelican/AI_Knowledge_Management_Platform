@@ -12,6 +12,13 @@ FR-12 on. Produced by `scripts/citation_harness.py`.
 > rates themselves are re-measured against the real pipeline at Stage 4 item 6, not
 > here; treat the figures in the next two sections as the go/no-go evidence they were
 > taken for and not as a description of the shipped system.
+>
+> **Every rate in this document was measured on a prompt of passages plus ONE question.**
+> FR-13's assistant sends a prompt that also carries a labelled block of prior questions,
+> and `scripts/citation_harness.py` asks single questions, so nothing above describes the
+> shipped assistant on a second or later turn. The history block's effect on generation is
+> measured separately in "25 September 2026 — FR-13's history block" below; FR-13 end to
+> end, where the composed question also changes what is retrieved, remains unmeasured.
 
 | | |
 |---|---|
@@ -473,6 +480,141 @@ evidence here the generator itself is not implicated: identical inputs gave iden
 outputs in all 14 groups tested. The instability that was found lives in the query
 embedding, and a threshold that a handful of real passages sit on is what turns it into
 visible behaviour. Both remain open, and D-40 records them.
+
+## 25 September 2026 — FR-13's history block
+
+Stage 4 item 9a. Item 9 shipped the multi-turn assistant on a prompt nobody had measured,
+which is the situation item 0 existed to prevent, so it was measured before the stage
+closed. Run with `scripts/citation_harness.py --with-history`.
+
+### The design: one variable, and what it deliberately does not cover
+
+The existing 64 questions, unchanged, each with a **fixed** three-question block prepended
+to the generation prompt — three because `MAXIMUM_CONVERSATION_TURNS` is 3 and that is the
+largest prompt the system can build. No new question set: n=48 ordinary questions against a
+run already recorded beats ten invented pairs on a corpus D-37 and D-40 say cannot
+adjudicate a small difference.
+
+**Retrieval is held constant, and that is the whole point of the design.** FR-13 composes
+both a retrieval string and a prompt string. If the history also changed the embedding, the
+passages would change and a conformance difference could not be attributed to the block —
+two variables. So the harness embeds the **bare** question, exactly as the item-6 run did,
+and passes the FR-13-composed labelled question to `generate_statements`. The evidence that
+it worked: the ordinary questions taking no-answer path A were `q23, q25, q45, q47`,
+question for question the same four the item-6 run recorded.
+
+**This therefore measures the block's effect on GENERATION, not FR-13 end to end.** The
+`--with-history` help text says so, and the run header prints the caveat, so a recorded run
+cannot be misread.
+
+The fixed block, the first three ordinary questions of the question set, 539 characters and
+95 tokens added to a 2331-character system prompt:
+
+```
+- How many days of annual leave do full-time staff accrue each year?
+- What is the maximum number of annual leave days that may be carried across a financial year?
+- How long is the probation period for permanent appointments?
+```
+
+### The headline is first-attempt conformance, and it did not move
+
+Overall conformance hides the retry cost, which is the thing actually at risk here, so
+first-attempt is the number to read.
+
+| | item 6 after fix | item 9a, with history |
+|---|---|---|
+| **First-attempt conformance** | **100.0% (50/50)** | **100.0% (50/50)** |
+| Overall schema conformance | 100.0% (50/50) | 100.0% (50/50) |
+| Retries | 0 | 0 |
+| Fabricated identifiers | 0 of 38 | **0 of 42** |
+| Statements proposed / verified | 38 / 38 | 42 / 42 |
+| Empty where an answer existed | 20.8% (10/48) | 12.5% (6/48) |
+| Expected-answer match (diagnostic) | 70.8% (34/48) | 75.0% (36/48) |
+| Scoped correctly empty | 8/8 | **8/8** |
+| No-answer correctly empty | 8/8 | **8/8** |
+| **Out-of-scope in any prompt or answer** | 0 | **0** |
+
+**The claim this supports is "no degradation", not "better".** The empty-answer figure moved
+from 10 to 6, and that must not be quoted as an improvement: the four questions that came
+back answered are from the set D-40 identifies as coin flips at the 0.30 threshold, and the
+two that stayed empty (q14, q46) are the two D-40 found empty in 3 of 3 stability runs. On
+six chunks this is a draw, exactly as D-37 says.
+
+### The risk was the wrong risk, and the corrected framing is NFR-08
+
+D-42 first recorded the danger as the 503: a history block degrading conformance until the
+service appears to fail on the second turn of a conversation. **That was wrong, and the
+arithmetic says so.** A 503 needs `MAXIMUM_GENERATION_ATTEMPTS` consecutive non-conforming
+replies. At 90% conformance that is roughly one turn in a thousand; the 503 is not the
+exposure.
+
+**The exposure is NFR-08 performance.** Every retry is another NPU generation call, so a
+drop in first-attempt conformance is invisible in correctness and loud in p90 latency — and
+Objective 03 measures that p90 on 23 October. Measured here:
+
+- attempts per question reaching generation: **1.00 (50/50)**, identical to the baseline's
+  1.00. Zero retries in either run, so the retry cost did not materialise at all.
+- calls per *answered* question: 1.19 (50/42) against item 6's 1.32 (50/38) — moved only
+  because more questions were answered, not because of retries.
+
+**A gap worth knowing before 23 October: there is no baseline latency to compare against.**
+This document records no timings for any earlier run and no item-6 `--out` record is kept in
+the repository, so no p90 existed to compare with. From this run's own attempt records: 50
+attempts, min 2.80 s, median 6.90 s, mean 6.86 s, **p90 8.90 s**, max 9.90 s, whole run 6.0
+minutes. Since retries are zero in both runs, the only channel the block can act through is
+prompt prefill (+539 characters), not extra calls — but that channel cannot be quantified
+without a same-day control run with `--with-history` off, which was not taken.
+
+### The block did not leak into any answer
+
+D-39's lesson is that anything in a prompt is a candidate for being cited, and the history
+block is non-passage text with no `chunk_id`. Checked directly: every one of the 42 proposed
+statements was tested for content overlap with each canned prior question, and every echo
+inspected against the supplied passage text in the database.
+
+**Four statements echo a prior question; all four trace to a supplied passage.** Three of
+them (q01, q02, q03) are cases where the asked question and a prior question are the *same
+string*, so that text appeared twice in the prompt — and conformance and citation held on
+all three. In the other direction the scan is clean: `20 days` appears only on q01, `40
+days` only on q02, `six months` only on q03 and q15. No question outside the leave and
+probation subject received a statement about the block's content. 28 of the 42 statements
+are verbatim substrings of their cited chunk.
+
+### What this run found that was not being looked for: three mis-citations
+
+Three statements carry text from one supplied passage while citing a different one.
+
+| Question | Statement traces to | Cited |
+|---|---|---|
+| q01 | `3b5054ba` ("Annual leave accrues at 20 days per year…") | `fe61bb55`, the resignation/handover chunk |
+| q07 | `3b5054ba` ("Laptops are refreshed on a four-year cycle.") | `328fe24d` |
+| q44 | `d946edb8` | `357cadf9` |
+
+All three are multi-passage questions, and **verification admitted all three because the
+identifier was supplied.** This is not a defect in `verifyCitations`. It is CLAUDE.md
+invariant 5 behaving exactly as written: verification "cannot and does not assess whether a
+passage actually supports the statement — that limitation is known, conceded, and must not
+be papered over with a second model call".
+
+What is new is that the limitation has now been **observed with examples rather than
+conceded in the abstract**, and that is worth having before someone asks at the
+demonstration. Two honest qualifications: the detection is a word-overlap heuristic, not
+proof; and no baseline count exists, because no per-statement record from item 6 is kept in
+the repository, so **this cannot be attributed to the history block** — multi-passage
+prompts are the common factor and they are not new. A fourth flagged case (q08) is a genuine
+tie, where `CHUNK_OVERLAP` put the same sentence in two chunks and either citation is
+correct.
+
+The harness measures identifier *membership* and nothing about which supplied passage a
+statement came from, which is why three runs went by without this surfacing.
+
+### What remains unmeasured
+
+FR-13 **end to end**. This run held retrieval constant on purpose, so the composed plain
+join that FR-13 actually embeds — which changes the query vector and therefore the passages
+— is untested. Given that the empty-answer differences here are already inside the noise
+D-40 describes, that is the half likeliest to move answers, and it needs a real
+question-then-follow-up set, which does not exist.
 
 ## The duplication is over — item 5 landed on 23 September 2026
 
