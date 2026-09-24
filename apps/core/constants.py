@@ -42,6 +42,18 @@ MAXIMUM_CLASSIFY_ATTEMPTS = 3
 MINIMUM_QUESTION_LENGTH = 10
 MAXIMUM_QUESTION_LENGTH = 500
 
+# --- Conversation context (FR-13), in turns -------------------------------------------
+# How many earlier turns of a conversation are folded into a follow-up question.
+# FR-13 Validation: context "is truncated to a maximum number of prior turns to control
+# prompt size and cost". Three, chosen for a 4B model (gemma3:4b) against the 4000-token
+# MAXIMUM_CONTEXT_TOKENS ceiling above, which the retrieved passages also draw on: the
+# prior questions compete with the grounding material for that budget, and passages are
+# the only thing an answer can be cited from, so the history gets the smaller share.
+# A turn costs ONE question here, never a question and an answer — prior ANSWERS are
+# never folded in, because no model-generated text may re-enter a prompt
+# (apps/retrieval/conversation.py argues it).
+MAXIMUM_CONVERSATION_TURNS = 3
+
 # The floor on FR-12's OTHER path, the keyword search field, also in characters. FR-12
 # Validation words it client-side — "queries shorter than two characters are rejected
 # client-side" — and apps/retrieval/search.py enforces the same number on the server as

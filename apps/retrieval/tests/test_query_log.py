@@ -181,7 +181,9 @@ def test_an_answered_query_writes_one_row_carrying_the_whole_traceability_clause
     assert row.no_answer_reason is None
     assert row.answer_text == "A grounded statement."
     assert row.user == document.uploaded_by
-    assert row.conversation is None  # FR-13 (item 9) wires conversations; not this item
+    # NULL is the one-off question, which is what this call is: FR-13's conversation turn
+    # is asserted in test_conversation.py, and the column still means what D-12 says.
+    assert row.conversation is None
     assert row.rejected_count == 0  # generation ran and invented nothing; not NULL
     assert row.answered_at is not None
     # The reply and the record agree on this branch, and the count is derived from the

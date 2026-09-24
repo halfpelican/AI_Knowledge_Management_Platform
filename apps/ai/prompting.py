@@ -11,11 +11,26 @@ change that must be re-measured with scripts/citation_harness.py. The harness im
 these names rather than defining its own copies;
 ``apps/ai/tests/test_prompt_is_not_duplicated.py`` asserts it holds no second copy.
 
-The prompt carries the retrieved passages and NOTHING else: no conversation history
-(that is FR-13, item 9), no document titles, no metadata, no instruction that would let
-the model answer from anywhere but the passages. Both providers build their request from
-the same two pieces here, so FLM and Claude are sent the same prompt and the baseline's
-numbers describe the prompt both use.
+The PASSAGE BLOCK carries the retrieved passages and nothing else: no document titles,
+no metadata, no instruction that would let the model answer from anywhere but the
+passages. Both providers build their request from the same two pieces here, so FLM and
+Claude are sent the same prompt and the baseline's numbers describe the prompt both use.
+
+**FR-13 (Stage 4 item 9) adds ONE thing to that, and it is not a passage.** A follow-up
+question may arrive with up to MAXIMUM_CONVERSATION_TURNS of the conversation's EARLIER
+QUESTIONS folded into it by ``build_conversational_question`` below, so that a pronoun or
+an abbreviated reference resolves. Three properties keep that inside the grounding
+constraint rather than a hole in it: the composed string occupies the QUESTION position,
+which ``build_user_prompt`` places AFTER the passage block; the block says in its own
+text that the earlier questions are not passages, carry no chunk_id and may not be cited;
+and prior ANSWERS are never included, so no model-generated text re-enters a prompt. The
+identifiers verification checks against are still exactly the passage labels
+(apps/retrieval/conversation.py holds the rest of the argument).
+
+**The measured rates do not cover a multi-turn prompt.** docs/flm-baseline.md's 100%
+schema conformance and 0% fabrication were taken on a prompt of passages plus ONE
+question, and scripts/citation_harness.py asks single questions, so re-running it says
+nothing about the composed form. Treat the multi-turn prompt as unmeasured.
 """
 
 from apps.ai.base import Passage
@@ -111,6 +126,63 @@ Your reply:
 """
 
 
+# --- FR-13: earlier questions, in the question position -------------------------------
+#
+# The heading is prompt text, so it lives here with the rest of the prompt rather than in
+# apps/retrieval/, and rewording it is a change that the lesson above applies to in full.
+#
+# It says three things and each one is load-bearing: what the lines are (earlier questions
+# in this conversation), what they are for (resolving a pronoun or a short reference), and
+# what they are NOT (passages, carrying no chunk_id, citable). The last clause is there
+# because of what this file has already learned twice — ANYTHING IN A PROMPT IS A
+# CANDIDATE FOR BEING CITED — and a user's own earlier question is no exception. The
+# question a person typed can contain a UUID, a document title or a section number, and
+# the model has no way to know those are not identifiers unless the prompt says so.
+PRIOR_QUESTIONS_HEADING = (
+    "Earlier questions in this conversation, oldest first. They are provided as context "
+    "only, so that a pronoun or an abbreviated reference in the question below can be "
+    "resolved. They are NOT passages: they carry no chunk_id, they are not a source of "
+    "facts, and nothing in them may be cited."
+)
+
+# A dash, and deliberately not "1.", "2.", "3.". One of the three fabrications measured at
+# Stage 4 item 6 was `5. Offboarding` — a numbered section heading lifted out of a passage
+# body and returned as a chunk_id. A numbered list of questions would put three more
+# number-and-text tokens of exactly that shape in the prompt. A dash is not identifier
+# shaped in any corpus this project will index.
+PRIOR_QUESTION_MARKER = "- "
+
+# What separates the history from the question actually being asked. Named, because the
+# model has to be able to tell which line it is answering, and because a test asserts that
+# the new question is still findable after the block is prepended.
+QUESTION_LEAD_IN = "The question to answer: "
+
+
+def build_conversational_question(question: str, prior_questions: list[str]) -> str:
+    """``question`` with the conversation's earlier questions labelled above it (FR-13).
+
+    Goes in the ``question`` argument of ``build_user_prompt`` and of
+    ``generate_statements``. **This is not a protocol change**: the signature fixed in
+    docs/ai-provider.md section 1 is ``(question, passages)`` and it stays that way, so
+    there is no ``history`` parameter anywhere in apps/ai/ and no provider knows that
+    conversations exist.
+
+    Returns ``question`` UNCHANGED when there is no history — not an empty heading, not a
+    trailing separator. A single-turn prompt is therefore byte-identical to the one
+    docs/flm-baseline.md measured, which is the only way the measurement keeps describing
+    the one-off path.
+
+    ``prior_questions`` is oldest first, and it is questions ONLY. The caller
+    (apps/retrieval/conversation.py) is responsible for both: for the order, because the
+    model reads them as a sequence, and for the absence of answers, because no
+    model-generated text may re-enter a prompt.
+    """
+    if not prior_questions:
+        return question
+    history = "\n".join(f"{PRIOR_QUESTION_MARKER}{prior.strip()}" for prior in prior_questions)
+    return f"{PRIOR_QUESTIONS_HEADING}\n{history}\n\n{QUESTION_LEAD_IN}{question}"
+
+
 def build_user_prompt(question: str, passages: list[Passage]) -> str:
     """The passage block, the question, and the instruction to reply with JSON only.
 
@@ -118,6 +190,13 @@ def build_user_prompt(question: str, passages: list[Passage]) -> str:
     check returned identifiers against by set membership (FR-12, invariant 5). The
     identifiers are the real ones, which is why the worked example's must not look like
     them.
+
+    **The order is passages first, question second, and FR-13 depends on it.** Where
+    ``question`` is a composed conversational string (``build_conversational_question``),
+    the earlier questions land after the passage block and after the ``[chunk_id: ...]``
+    labels, so the labelled identifiers are never interleaved with unlabelled history.
+    That separation is a property of this f-string; it is written down here because
+    reordering these three pieces for readability would quietly undo it.
     """
     blocks = [f"[chunk_id: {passage.chunk_id}]\n{passage.text.strip()}" for passage in passages]
     return (
@@ -131,8 +210,11 @@ def build_user_prompt(question: str, passages: list[Passage]) -> str:
 def build_generation_messages(question: str, passages: list[Passage]) -> list[dict]:
     """The chat messages for one grounded-generation call, in the OpenAI wire shape.
 
-    The prompt carries the retrieved passages and nothing else, each labelled with
-    the chunk identifier that citation verification will check against (FR-12).
+    The passage block carries the retrieved passages and nothing else, each labelled with
+    the chunk identifier that citation verification will check against (FR-12). Anything
+    FR-13 adds arrives inside ``question`` and is placed after that block by
+    ``build_user_prompt`` — see its docstring, and the module docstring for why the
+    composed form is not a protocol change.
 
     The Anthropic provider takes SYSTEM_PROMPT and ``build_user_prompt`` separately,
     because that SDK carries the system prompt in its own parameter rather than as a

@@ -33,6 +33,14 @@ urlpatterns = [
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
     # Stage 4: FR-12 keyword search, the Front-End clause's grouped results (D-41).
-    # The question-and-answer half of FR-12 is a route of its own, still to come.
     path("search", views.SearchView.as_view(), name="search"),
+    # Stage 4: FR-12's question-and-answer path, which is also FR-13's turn when the body
+    # names a conversation (section 7.10).
+    path("ask", views.AskView.as_view(), name="ask"),
+    # Stage 4: FR-13. Conversations are Create, Read, Update — there is no delete route,
+    # because FR-13's Database clause has no Delete and clearing the active thread means
+    # starting a new conversation rather than destroying one.
+    path("conversations", views.ConversationsView.as_view(), name="conversation-list"),
+    path("conversations/<uuid:pk>", views.ConversationDetailView.as_view(),
+         name="conversation-detail"),
 ] + router.urls

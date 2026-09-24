@@ -41,9 +41,24 @@ it settles — why ``result_count`` needs no column, what ``answer_text`` holds 
 presentation layer exists, why the row and its citations share a transaction, and why a
 failed write loses the answer rather than being swallowed.
 
+**Conversations (FR-13) are item 9's, and they are here.** ``answer_question`` takes an
+optional ``conversation``; with None it does exactly what it did before, and with a
+``Conversation`` it folds up to MAXIMUM_CONVERSATION_TURNS of that user's earlier
+QUESTIONS in that thread into the question — a plain join for the embedding, a labelled
+block for the prompt, both built by apps/retrieval/conversation.py, which holds the whole
+argument. Four things are worth naming here because they are properties of THIS function:
+the scope is re-resolved on every turn at step 2, so a follow-up cannot inherit access the
+user no longer holds; each turn is a fresh retrieval, because nothing from the previous
+turn is stored anywhere for it to reuse; prior ANSWERS are never in the prompt, so no
+model-generated text re-enters generation; and generation and verification are FR-12's,
+unchanged, so a statement citing something that appeared only among the earlier questions
+is rejected by set membership like any other fabricated identifier. The
+composed strings do not outlive the call; the row records the question as asked.
+
 Still not here: 7.10's ``composeAnswerWithInlineCitations`` and ``resolveSourceDetails``
-(the presentation layer, item 10), the view (item 11) and conversations (FR-13, item 9 —
-``QueryLog.conversation`` is NULL on every row this writes).
+(the presentation layer, item 10) and the view (item 11). FR-13's endpoints, serializers
+and Conversation CRUD are the view layer's too: this function is the engine a conversation
+turn runs on, and it neither creates a Conversation nor authorises one.
 
 **7.10 step 1, and what is NOT built for it.**
 
@@ -91,10 +106,12 @@ The spelling differs; the two paths it distinguishes are the same two.
 **Step 7 and the prompt.** The passages that clear the threshold are fitted to
 MAXIMUM_CONTEXT_TOKENS by ``truncate_to_context``, lowest-ranked discarded first, and
 those are the passages the prompt carries — each labelled with its chunk identifier, and
-nothing else beside them. No conversation history (FR-13, item 9), no titles, no
-metadata. Because the candidate set was already restricted in the query, every passage
-that reaches the AI service is one the asking role may read: the invariant 1 guarantee is
-structural here rather than a check performed at the call site.
+nothing else in the passage block: no titles, no metadata. Because the candidate set was
+already restricted in the query, every passage that reaches the AI service is one the
+asking role may read: the invariant 1 guarantee is structural here rather than a check
+performed at the call site. FR-13's earlier questions are the one other thing in the
+prompt, they arrive in the question position AFTER that block, they are labelled as not
+being passages, and they carry no identifier that verification would accept.
 
 **Counts.** On an answered outcome ``result_count`` is the number of passages supplied to
 generation — after both FR-11 predicates, after the threshold and after the context budget
@@ -109,9 +126,10 @@ because the wider number does not exist here to be taken. On EITHER no-answer pa
 ``RetrievalOutcome.no_statement_verified``: a count is part of the reply, and a reply that
 counts differently on the two paths tells the caller which path was taken.
 
-**Not built here:** the view and its status codes (item 11), and conversations (FR-13,
-item 9). ``conversation_id``, which 7.10 takes only to pass to ``recordQuery``, is
-therefore not a parameter yet, and ``record_query`` does not take one either. Item 7 left
+**Not built here:** the view and its status codes (item 11). 7.10's ``conversationId``,
+which it takes only to pass to ``recordQuery``, is now a parameter — as a ``Conversation``
+instance rather than an id, because the view must read the row to authorise it — and
+``record_query`` takes it too. Item 7 left
 a note here for item 8, and item 8 acted on it: 7.10 step 10 records
 ``suppliedPassageIds`` against a path-B row, the outcome this function returns does not
 carry them — deliberately, because they are caller-visible material — and nothing was lost
@@ -141,6 +159,7 @@ from apps.core.constants import (
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
 )
+from apps.retrieval.conversation import conversation_context
 from apps.retrieval.query_embedding import embed_question
 from apps.retrieval.query_log import record_query
 from apps.retrieval.ranking import RankedPassage, admit, rank, truncate_to_context
@@ -315,8 +334,17 @@ class RetrievalOutcome:
         )
 
 
-def answer_question(*, question: str, user) -> RetrievalOutcome:
+def answer_question(*, question: str, user, conversation=None) -> RetrievalOutcome:
     """7.10 steps 1 to 11: validate, scope, embed, rank, admit, fit, generate, verify, record.
+
+    ``conversation`` is FR-13's thread, or None for a one-off question — **and with None
+    this function behaves exactly as it did before FR-13 existed**, byte for byte, because
+    both composed strings are then the question itself (apps/retrieval/conversation.py).
+    It takes a ``Conversation`` INSTANCE rather than an id: the view has to fetch the row
+    to authorise it against the requesting user anyway, so an id here would mean the same
+    row read twice, and the second read would be the one with no permission predicate on
+    it. The history query applies its own ``user`` predicate regardless, so a conversation
+    belonging to someone else yields no history whatever the view did.
 
     Every exit writes its QueryLog row before returning — answered, path A and path B —
     because 7.10 records at all three and because an answer that was not recorded is an
@@ -345,12 +373,25 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
         )
 
     # Step 2. Re-resolved from the user row on every question, never cached from the
-    # first, so a role changed mid-conversation takes effect on the next question.
+    # first, so a role changed mid-conversation takes effect on the next question. That is
+    # also the whole of FR-13's re-evaluation clause: this line runs on every turn, the
+    # role is read from the database rather than from anything the conversation carries,
+    # and no scope is stored between turns for a follow-up to inherit.
     role_name = permission_scope(user)
 
+    # FR-13. The turn's two composed strings: a plain join for the query vector and a
+    # labelled block for the prompt, from the same up-to-MAXIMUM_CONVERSATION_TURNS
+    # earlier questions of THIS user's conversation. With no conversation both are
+    # ``question`` and no query is made. Read after the scope, so an unauthenticated
+    # caller is refused before any row is read on their behalf.
+    context = conversation_context(question=question, conversation=conversation, user=user)
+
     # Step 3. The model name comes back on the result and is used as-is below: what the
-    # provider answered with, never what settings expected (risk R10).
-    embedding = embed_question(question)
+    # provider answered with, never what settings expected (risk R10). The PLAIN composed
+    # string is what gets embedded: a follow-up finds the right passages because its
+    # predecessors' nouns are in the vector, and the labelling prose is left out of it
+    # because every word of instruction in an embedded string dilutes the query.
+    embedding = embed_question(context.for_retrieval)
 
     # Step 4. Both FR-11 predicates are conditions on this query, so no out-of-scope row
     # and no row from another embedding model is ever fetched, let alone ranked.
@@ -371,7 +412,11 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
         # to reject, and a 0 here would read as a clean generation that never happened.
         record_query(
             user=user,
+            # The question AS ASKED, never ``context.for_retrieval`` or
+            # ``context.for_prompt``: a follow-up's row would otherwise contain its
+            # predecessors and the log would repeat itself (apps/retrieval/query_log.py).
             question=question,
+            conversation=conversation,
             outcome=outcome,
             supplied_chunk_ids=(),
             rejected_count=None,
@@ -386,9 +431,15 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
     # section 6), and the identifiers going in are the ones step 9 checks the returned
     # ones against. ProviderUnavailable after MAXIMUM_GENERATION_ATTEMPTS is allowed out:
     # the view answers 503.
+    # The LABELLED composed string goes in the question position, which
+    # ``build_user_prompt`` places after the passage block: the earlier questions are
+    # therefore separated from the labelled passages by construction, and the block's own
+    # text says they are not passages, carry no chunk_id and may not be cited. Nothing in
+    # it widens what step 9 will accept.
     service = apps.ai.get_ai_service()
     proposed = service.generate_statements(
-        question, [Passage(chunk_id=passage.chunk_id, text=passage.chunk_text) for passage in supplied]
+        context.for_prompt,
+        [Passage(chunk_id=passage.chunk_id, text=passage.chunk_text) for passage in supplied],
     )
 
     # Named once and used twice, by step 9 and by the record: 7.10's ``suppliedPassageIds``.
@@ -419,7 +470,8 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
         # declining (0) from verification rejecting everything it proposed (> 0).
         record_query(
             user=user,
-            question=question,
+            question=question,  # as asked, not composed
+            conversation=conversation,
             outcome=outcome,
             supplied_chunk_ids=supplied_chunk_ids,
             rejected_count=verification.rejected_count,
@@ -437,7 +489,8 @@ def answer_question(*, question: str, user) -> RetrievalOutcome:
     outcome = RetrievalOutcome.verified(supplied, verification)
     record_query(
         user=user,
-        question=question,
+        question=question,  # as asked, not composed
+        conversation=conversation,
         outcome=outcome,
         supplied_chunk_ids=supplied_chunk_ids,
         rejected_count=verification.rejected_count,

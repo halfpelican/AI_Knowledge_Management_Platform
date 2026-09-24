@@ -43,7 +43,9 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
                     "meeting-list", "meeting-detail",  # Stage 3: FR-09
-                    "search"}  # Stage 4: FR-12 keyword search (D-41)
+                    "search",  # Stage 4: FR-12 keyword search (D-41)
+                    "ask",  # Stage 4: FR-12's answer path, FR-13's turn
+                    "conversation-list", "conversation-detail"}  # Stage 4: FR-13
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method

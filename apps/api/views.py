@@ -14,6 +14,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.utils.text import Truncator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
@@ -24,6 +25,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
+from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
@@ -36,6 +38,7 @@ from apps.core.constants import (
     MINIMUM_CONTENT_LENGTH,
     ROLE_NAMES,
 )
+from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
@@ -44,10 +47,18 @@ from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.models import Meeting
+from apps.retrieval.models import Conversation
+from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
 from apps.retrieval.search import SearchQueryTooShort, search
 
+from .answers import reply_for
 from .permissions import HasRolePermission
 from .serializers import (
+    AnswerSerializer,
+    AskSerializer,
+    ConversationCreateSerializer,
+    ConversationDetailSerializer,
+    ConversationSerializer,
     DirectoryEntrySerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
@@ -129,6 +140,19 @@ NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess.
 # restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
 # exception (D-41).
 MISSING_SEARCH_TERM_MESSAGE = "A search term is required."
+# NFR-19 Fault Tolerance: the system "must return a 503 Service Unavailable response with
+# an informative notice, rather than crashing or hanging indefinitely", and FR-12's
+# Responses clause names 503 for the AI service being unreachable after retries. The
+# wording is 7.10 line 146's, with the one thing the reader can act on added: the question
+# was not recorded and nothing partial was stored, so re-asking it is safe.
+KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE = (
+    "The knowledge service is temporarily unavailable. Your question was not recorded; "
+    "please ask it again shortly."
+)
+# FR-13's thread list needs a legible entry from the moment a thread exists, and the
+# interface never asks the user to name a topic before typing (D-43). This placeholder
+# stands only until the first question, which replaces it.
+NEW_CONVERSATION_TITLE = "New conversation"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -785,3 +809,184 @@ class DocumentReprocessView(APIView):
         if outcome.detail:
             body["detail"] = outcome.detail
         return Response(body, status=outcome.http_status)
+
+
+# --- FR-12 answer generation and FR-13 conversations -------------------------------------
+
+
+def name_thread_from(conversation, question: str) -> None:
+    """FR-13's Update: name a still-unnamed thread after its first question (D-43).
+
+    Truncated to the column width rather than refused, because MAXIMUM_QUESTION_LENGTH is
+    500 and ``Conversations.title`` holds 255. A question of nothing but whitespace is long
+    enough to be asked and leaves nothing to name a thread with, so the placeholder stands
+    — a list entry a user cannot tell apart is the failure this whole function exists to
+    avoid, and a blank one is the worst case of it.
+
+    ``update_fields`` names the title alone: ``last_updated_at`` is ``auto_now``, so it is
+    written only when it is named, and the pipeline has already set it for this turn inside
+    the log transaction. Naming it here would move the thread's timestamp on after the
+    reply was composed from it.
+    """
+    conversation.title = Truncator(question.strip()).chars(NAME_MAX_LENGTH) or NEW_CONVERSATION_TITLE
+    conversation.save(update_fields=["title"])
+
+
+class AskView(APIView):
+    """``POST /api/ask`` — FR-12's question-and-answer path, and FR-13's turn.
+
+    One endpoint for both, because FR-13 says so: "Answer generation and citation
+    verification follow FR-12 unchanged", and each turn "triggers a fresh retrieval based
+    on the resolved question rather than reusing the previous turn's passages". A separate
+    conversational endpoint would be the same call with a conversation attached, and two
+    routes through generation is two places for the permission scope to be got wrong.
+
+    **What this view does not do.** It does not resolve the permission scope, rank,
+    truncate, generate, verify or log: ``answer_question`` does all of it and takes the
+    user, so there is no role argument here to miswire (the argument the search view
+    makes). It composes no prompt and reads no chunk. Its whole job is the three things a
+    view is for — decide whether this caller may use this conversation, map the pipeline's
+    exceptions to status codes, and render the outcome.
+
+    **The 404 is this view's own work and the pipeline cannot do it.** The history read is
+    filtered by conversation AND user, so passing someone else's thread yields no history
+    rather than their questions — but the turn's ``QueryLog`` row would still be written
+    against their conversation, and would then appear in the owner's thread as a turn that
+    is not theirs. So the row is fetched with the user as a predicate and anything else is
+    404. **Not 403**: a 403 confirms the id names a real thread, which is the disclosure
+    ``GET /api/meetings/{id}`` already refuses to make (CLAUDE.md invariant 1).
+
+    ``UnscopedRequestError`` is deliberately not caught, as on the search route: behind
+    ``IsAuthenticated`` it is unreachable, and answering a request whose scope could not be
+    established is the one thing worse than a 500.
+    """
+
+    def post(self, request):
+        serializer = AskSerializer(data=request.data)
+        # 400 for a missing question or a conversation_id that is not a UUID. NOT for the
+        # question's length: that rule belongs to the pipeline and arrives below as an
+        # exception, so there is one definition of it (see AskSerializer).
+        serializer.is_valid(raise_exception=True)
+        question = serializer.validated_data["question"]
+        conversation = self._conversation_for(
+            request, serializer.validated_data.get("conversation_id")
+        )
+        # Read BEFORE the call: the pipeline writes this turn's row, after which no thread
+        # has ever had a first turn.
+        awaiting_a_name = conversation is not None and self._awaiting_a_name(conversation)
+
+        try:
+            outcome = answer_question(
+                question=question, user=request.user, conversation=conversation
+            )
+        except QuestionLengthOutOfRange as exc:
+            # FR-12's 400. The bounds and the message belong to the pipeline; this maps the
+            # exception rather than restating the rule, exactly as the search view maps
+            # SearchQueryTooShort. No QueryLog row is written for a question that never ran.
+            return Response(
+                {"question": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except ProviderUnavailable:
+            # NFR-19: "must return a 503 Service Unavailable response with an informative
+            # notice, rather than crashing or hanging indefinitely", and FR-12's Responses
+            # clause names 503 explicitly. Reached after MAXIMUM_GENERATION_ATTEMPTS — one
+            # initial call and two retries — or on a transport failure while embedding. A
+            # provider outage is never turned into a no-answer: "the system could not ask"
+            # and "the corpus has no answer" are different events, and invariant 7's signal
+            # depends on them staying apart.
+            return Response(
+                {"detail": KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if awaiting_a_name:
+            name_thread_from(conversation, question)
+        # 200 on all three exits, including both no-answer paths: FR-12's Responses clause
+        # is "200 OK with answered: false where nothing was sufficiently relevant or no
+        # statement survived verification". Not being answerable from the corpus is a fact
+        # about the corpus, not a client error.
+        return Response(
+            AnswerSerializer(reply_for(outcome=outcome, conversation=conversation)).data
+        )
+
+    @staticmethod
+    def _conversation_for(request, conversation_id):
+        """The caller's own thread, or None for a one-off question; 404 for anyone else's.
+
+        ``QueryLog.conversation`` stays NULL where this returns None, which is what that
+        column has always meant (D-12).
+        """
+        if conversation_id is None:
+            return None
+        return get_object_or_404(
+            Conversation.objects.filter(user=request.user), pk=conversation_id
+        )
+
+    @staticmethod
+    def _awaiting_a_name(conversation) -> bool:
+        """Whether this turn should name the thread (D-43): the placeholder still stands
+        and no turn has been logged against it yet.
+
+        Both conditions, so a title the user chose is never overwritten and a thread that
+        has been used is never renamed out from under them.
+        """
+        return conversation.title == NEW_CONVERSATION_TITLE and not conversation.queries.exists()
+
+
+class ConversationsView(APIView):
+    """``/api/conversations`` — FR-13's thread list (GET) and a new thread (POST).
+
+    FR-13's Database clause is ``Conversations (Create, Read, Update)``, with no Delete, so
+    there is no delete route and the class defines no ``delete`` method: clearing the
+    active thread "to begin a new topic" is starting a new conversation, not destroying the
+    old one, and a thread the user asked questions in is the FR-19 evidence QueryLog rows
+    exist to be.
+
+    Every route here is scoped to ``request.user``. A caller may not enumerate the
+    existence of another user's threads, so someone else's id is 404 and not 403.
+    """
+
+    def get(self, request):
+        # Newest activity first: "previous conversations are listed" is a list a person
+        # scans for the thread they were last in, and last_updated_at is the column the
+        # pipeline touches on every turn. The primary key is a deterministic tie-break for
+        # two threads created in the same microsecond, nothing more.
+        conversations = Conversation.objects.filter(user=request.user).order_by(
+            "-last_updated_at", "pk"
+        )
+        return Response(ConversationSerializer(conversations, many=True).data)
+
+    def post(self, request):
+        serializer = ConversationCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # D-43: a title from the client if one was typed, otherwise the placeholder, which
+        # the first turn replaces with that turn's question. FR-13's interface has the user
+        # clear the thread and start typing — it never asks them to name a topic first — so
+        # requiring a title here would be a field the requirement does not have.
+        title = serializer.validated_data.get("title", "").strip() or NEW_CONVERSATION_TITLE
+        conversation = Conversation.objects.create(user=request.user, title=title)
+        # 201 is a convention: FR-13 enumerates only "200 OK with the answer and updated
+        # conversation state", which is the turn rather than the thread, and a created
+        # resource is 201 everywhere else in this contract (FR-01, FR-08, FR-09).
+        return Response(
+            ConversationSerializer(conversation).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ConversationDetailView(APIView):
+    """``GET /api/conversations/{id}`` — FR-13: "previous conversations are listed and can
+    be reopened".
+
+    A reopened thread renders from the server, so the questions and the cited statements a
+    user sees after signing in on another machine are the ones that were logged rather than
+    whatever a browser still held. The turns carry no ``no_answer_reason`` and no
+    ``rejected_count``: see ``ConversationTurnSerializer``.
+
+    Another user's thread is 404, as on ``POST /api/ask`` and for the same reason.
+    """
+
+    def get(self, request, pk):
+        conversation = get_object_or_404(
+            Conversation.objects.filter(user=request.user), pk=pk
+        )
+        return Response(ConversationDetailSerializer(conversation).data)

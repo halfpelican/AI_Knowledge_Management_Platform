@@ -1636,3 +1636,171 @@ integration pass, the accessibility pass, the alpha deployment and two audits.
 - **The stage's commit count no longer matches its brief**, deliberately. Thirteen items
   become fourteen commit points. This entry is what an auditor reading the repository
   should find instead of a discrepancy.
+
+## D-42 · FR-13 passes prior QUESTIONS only, folded into the question argument
+
+**Status:** Settled by the user · **Date:** 2026-09-23 · **Stage:** 4 item 9 ·
+**Unmeasured:** yes — see the caveat, which is the most important part of this entry
+
+**The tension.** FR-13's Server-End clause says the assistant "passes prior turns
+alongside the new question so that pronouns and abbreviated references resolve
+correctly". CLAUDE.md's grounding rule and the Stage 4 brief both say the generation
+prompt contains only the retrieved passages. Both cannot be followed literally.
+
+**Decision, in the clauses the user set.**
+
+1. **Prior questions only. Never prior answers.** No model-generated text re-enters a
+   prompt.
+2. **No change to `generate_statements`.** `docs/ai-provider.md` section 1 fixes it at
+   `(question, passages)` plus the `on_attempt` observer (D-38's entry covers that
+   observer). Prior questions are folded into the `question` argument as a composed
+   string. A `history=` parameter was proposed and rejected: "three operations,
+   deliberately" is about not adding classification and summarisation, but a parameter
+   that changes what the model is asked is a protocol change nothing else asked for.
+3. **Two composed forms, both internal to `answer_question`.** A plain join of the prior
+   questions and the new one is what gets embedded, so the labelling text does not dilute
+   the query vector. A labelled block is what reaches the prompt.
+4. **The block declares itself.** It states that the prior questions are context only,
+   that they are NOT passages, that they carry no `chunk_id`, and that nothing in them may
+   be cited. It lands after the passages, which is where `build_generation_messages`
+   already puts the question. The generalisation from D-39 applies directly: anything in a
+   prompt is a candidate for being cited, and a new block of text is a new candidate.
+5. **`MAXIMUM_CONVERSATION_TURNS = 3`**, in `apps/core/constants.py`. FR-13 requires
+   context "truncated to a maximum number of prior turns to control prompt size and
+   cost"; 3 is chosen against a 4B model and a `MAXIMUM_CONTEXT_TOKENS` ceiling of 4000
+   that the passages also draw on.
+6. **History is read with a `user` predicate as well as a `conversation` one.** A
+   conversation id is a UUID a caller supplies. Filtered on both, a foreign id yields no
+   history rather than somebody else's questions — no history, not an error. The view
+   additionally answers 404 for a conversation that is not the caller's, because without
+   that the turn's `QueryLog` row would be written against another user's thread and
+   surface there as a turn count that is not theirs.
+
+**THE CAVEAT, which is the point of recording this as a decision.** Every rate in
+`docs/flm-baseline.md` — 100% schema conformance, 100% first-attempt conformance, 0%
+fabricated identifiers after D-39 — was measured on a prompt containing **passages plus
+one question**. A multi-turn prompt carries a block those runs never contained, and
+**`scripts/citation_harness.py` cannot cover it**: the harness asks single questions, so
+item 6's re-run says nothing about this prompt. **The multi-turn prompt is unmeasured.**
+
+Why that matters concretely rather than as a disclaimer: a history block in front of
+`gemma3:4b` could move schema conformance, and nothing in the system would detect it as a
+conformance problem. A non-conforming reply is a failed attempt, three of them are a 503,
+and at the demonstration that appears as the knowledge service going down on the second
+turn of any conversation. Measuring it needs a question set of question-then-follow-up
+pairs, which does not exist.
+
+**Consequences.**
+
+- **The design's cost is real and conceded.** A follow-up referring into the previous
+  *answer* — "what about the second one?" after an answer that listed three — does not
+  resolve, because the list was in the answer and answers are not passed. FR-13's "follow-up
+  questions need not restate the subject" holds for subject nouns and not for references
+  into an answer's wording. Worth saying in the demonstration script rather than
+  discovering live.
+- **The history block is a citable surface until proven otherwise**, so a statement citing
+  an identifier that appeared only in a prior question must be rejected by
+  `verifyCitations`. That has its own test, arranged so the identifier belongs to a chunk
+  the asking role may not read — it carries invariant 1 as well as D-39.
+- **History markers are `- `, not `1.`** One of item 6's three fabrications was
+  `5. Offboarding`, a numbered heading returned as a `chunk_id`. A numbered history list
+  would add tokens of exactly that shape.
+- **The scope is re-resolved every turn**, which `answer_question` already did per call, so
+  FR-13's "re-evaluated on every turn rather than cached from the first" is structural
+  rather than remembered. A test proves it across two turns of one conversation: a role
+  demoted between turns does not inherit the first turn's access.
+- **Every logged turn counts toward the history, answered or not.** A user whose question
+  was not answered rephrases it, so filtering to answered rows would drop exactly the
+  turns a follow-up is most likely to be shortening.
+- `QueryLog.question` stores the bare question, never the composed string, or every
+  follow-up row would contain its predecessors and the log would stop being readable.
+
+## D-43 · A conversation's title is optional on create and derived from its first question
+
+**Status:** Settled here, by the agent that built the endpoints · **Date:** 2026-09-24 ·
+**Stage:** 4 item 9, API half · **Effect:** `POST /api/conversations` accepts no title;
+`POST /api/ask` performs FR-13's `Update`
+
+**The gap.** `Conversations.title` is a `CharField` with no blank allowed (schema v1, and
+the proposal's own Conversations table gives the example `"Leave policy questions"`). FR-13
+requires that "previous conversations are listed and can be reopened", so the list has to be
+legible — a thread a user cannot tell apart in a list is a failed requirement. But FR-13's
+interface never asks for a title: it has "the active thread can be cleared to begin a new
+topic", which is a user clearing the pane and typing a question. Nothing in the proposal says
+where the string comes from.
+
+**Decision.** `title` is optional on `POST /api/conversations`.
+
+- Supplied and non-blank: used as sent, trimmed, bounded by the column (255). A title over
+  that is `400`, not a silent truncation.
+- Omitted or blank: the thread is created as **"New conversation"**, and the **first turn**
+  through `POST /api/ask` replaces that with the turn's question, truncated to 255 with
+  Django's `Truncator`. The turn itself stores the question in full; the truncation is a
+  display name.
+- The rename happens only while **both** conditions hold — the placeholder still stands and
+  no `QueryLog` row exists for the thread. So a title the user chose is never overwritten,
+  and a thread already in use is never renamed under them.
+
+**Rationale.** Requiring a title would add a field FR-13's interface does not have, and
+would put a naming dialogue in front of the first question of every conversation. Deriving
+it from the first question costs nothing and produces exactly what a user would have typed:
+the question is the topic. The window in which the placeholder is visible is the gap between
+creating a thread and asking in it, which in the built interface is one request.
+
+This is also the `Update` in FR-13's `Conversations (Create, Read, Update)`, alongside the
+`last_updated_at` the pipeline touches inside the log transaction on every turn. Those two
+are the whole of `Update`: **no rename route and no `PATCH` were built**, because FR-13's
+interface has no rename control and inventing one would be inventing a requirement. If it is
+wanted later it is a `PATCH` on an existing path rather than a new resource.
+
+**Consequences.**
+
+- A thread named from a no-answer turn is named all the same. The turn happened, it is
+  logged, and the user will look for it by what they asked.
+- A question of nothing but whitespace is long enough to be asked (the length rule counts
+  characters) and leaves nothing to name a thread with, so the placeholder stands. A blank
+  list entry is the worst case of the problem this decision exists to avoid.
+- `name_thread_from` saves with `update_fields=["title"]` only. `last_updated_at` is
+  `auto_now`, so it is written only when named, and the pipeline has already set it for that
+  turn — naming it here would move the thread's timestamp on after the reply was composed
+  from it.
+
+## D-44 · The Sources panel carries every item consulted, with its passages nested under it
+
+**Status:** Settled here, by the agent that built the endpoints · **Date:** 2026-09-24 ·
+**Stage:** 4 item 9, API half · **Effect:** the shape of `sources` in a `POST /api/ask` reply
+
+**The question the proposal half-answers.** Section 7.10 step 11 is
+`SET sourceList TO resolveSourceDetails(suppliedPassageIds) // title, date`, and FR-12's
+Front-End clause says a "Sources panel lists every item consulted with its date". That fixes
+*which* items (the supplied passages' items, not the cited ones) and *what* of them (title,
+date). It does not say how a citation gets the passage text that the same clause requires it
+to expand into: "each citation expands to display the source passage and links to the source
+document or meeting".
+
+**Decision.** One list, `sources`, one entry per item consulted in rank order, each carrying
+`source_type`, `source_id`, `title`, `date` and `passages` — the supplied passages of that
+item, each with its `chunk_id` and text. A statement's `chunk_id` is looked up inside the
+entry it belongs to.
+
+**Rationale.** The alternative was two flat lists, `sources` and `passages`, with the client
+joining them on `source_id`. Nesting answers "which item did this citation come from" with
+the shape of the reply instead of with a join the client has to get right, and no endpoint in
+the API returns a chunk, so the text has to travel with the answer that was drawn from it or
+the expansion cannot be built at all.
+
+**What this does not do.** It exposes no similarity score — a tuning number the team reads,
+and an interface that displayed it would present relevance as a fact about the answer. It
+exposes no `file_path` and no `content_hash`, for the two reasons the document object gives.
+It resolves **no permission predicate of its own**: every passage reached the reply through
+`candidate_chunks`, whose query carries both FR-11 predicates, so the chunk's stamped
+`visible_to_roles` already admitted this role and the source row is read for a title and a
+date only. A second filter in a second place is two filters that can disagree, and D-17's
+re-stamping cascade is what makes the chunk the authoritative record.
+
+**Conceded.** A passage that was consulted but cited by nothing appears in the panel with its
+text. That is retrieved corpus text inside the caller's scope rather than a model-generated
+statement, so invariant 6 — which is about uncited *statements* — is not engaged; and the
+panel's stated purpose is to show what the answer was drawn from. If it proves noisy in the
+interface, the fix is client-side collapsing, not a narrower reply, because narrowing it to
+cited items only would make the panel misdescribe the retrieval.

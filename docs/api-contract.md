@@ -240,12 +240,13 @@ mechanism would mean two code paths through the one filter that matters most.
 **A meeting outside the caller's scope is `404`, not `403`.** A 403 would confirm
 that the id names something real (`CLAUDE.md` §6 invariant 1).
 
-## Stage 4 — FR-12 (keyword search half only)
+## Stage 4 — FR-12, FR-13
 
-**This section is half of FR-12.** FR-12 is two paths: the keyword search below, and
-question-and-answer with cited statements. The question-and-answer endpoint is not in
-this table — it is a later item in the stage — so nothing here should be read as FR-12
-being contracted in full. Both paths are MUST-HAVE for M6.
+FR-12 is two paths, and both are contracted here: the keyword search immediately below,
+and `POST /api/ask` further down, which returns an answer built from cited statements and
+is also FR-13's conversational turn.
+
+### FR-12 — keyword search
 
 FR-12's Responses clause names `200 OK with grouped results` and `400` for an invalid
 query; the codes below are its own except where marked *convention*.
@@ -334,3 +335,212 @@ term match those characters rather than acting as wildcards. One consequence sta
 rather than hidden: a two-character query of whitespace is long enough and matches
 almost everything the caller may already list — odd-looking, but every row it can reach
 is in scope.
+
+### FR-12 — the answer path, which is also FR-13's turn
+
+One endpoint serves both, because FR-13 says so: "Answer generation and citation
+verification follow FR-12 unchanged", and each turn "triggers a fresh retrieval based on
+the resolved question rather than reusing the previous turn's passages". A separate
+conversational route would be the same call with a conversation attached, and two routes
+through generation is two places for the permission scope to be got wrong.
+
+Every code below is FR-12's own except where marked *convention*: its Responses clause
+names `200 OK with ... answer and citations`, `200 OK with answered: false where nothing
+was sufficiently relevant or no statement survived verification`, `400` for an invalid
+query and `503 Service Unavailable where the AI service cannot be reached after retries`.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/ask` | session | `200` the answer: verified statements, each with its `chunk_id`, and the sources consulted; also `200` with `answered: false` and the fixed no-answer message | `400 {"question": ["..."]}` no question was sent, or its length is outside `MINIMUM_QUESTION_LENGTH`–`MAXIMUM_QUESTION_LENGTH`; `400 {"conversation_id": ["..."]}` the id is not a UUID; `401`; `404` (*convention*) a well-formed `conversation_id` that is not this caller's; `503` the AI service could not be reached after `MAXIMUM_GENERATION_ATTEMPTS` |
+
+The request:
+
+```json
+{"question": "How much annual leave do I get?", "conversation_id": "uuid"}
+```
+
+`conversation_id` is optional. Omitted, the question is a one-off and its `QueryLog.conversation`
+stays NULL, which is that column's documented meaning (D-12). Present, the question is a
+turn of that thread and the prior questions of it are composed into the retrieval and the
+prompt (D-42).
+
+The reply, answered:
+
+```json
+{"answered": true, "message": null, "result_count": 2,
+ "statements": [{"position": 1, "text": "Staff accrue twenty days a year.",
+                 "chunk_id": "uuid"}],
+ "sources": [{"source_type": "document", "source_id": "uuid",
+              "title": "Leave Policy 2026", "date": "2026-09-21T10:00:00+10:00",
+              "passages": [{"chunk_id": "uuid", "text": "Staff may take annual leave..."}]}],
+ "conversation": {"conversation_id": "uuid", "title": "Leave policy questions",
+                  "last_updated_at": "2026-09-24T09:26:00+10:00"}}
+```
+
+The reply, not answered:
+
+```json
+{"answered": false,
+ "message": "This question cannot be answered from the available knowledge base.",
+ "result_count": 0, "statements": [], "sources": [], "conversation": null}
+```
+
+**The key set is the same on every exit**, so the two shapes above are one shape with
+different contents. That is one branch in the front end rather than two response formats,
+and it is what makes the paragraph below true without the serializer arranging anything.
+
+**The two no-answer paths are one reply, byte for byte.** Section 7.10 returns
+`response(200, answered = FALSE, message = NO_ANSWER_MESSAGE)` from step 6 — nothing
+cleared `RELEVANCE_THRESHOLD`, so generation was never called — and identically from step
+10, where passages were supplied and no statement survived verification. A caller must not
+be able to tell which happened: the second discloses that material exists which could not
+be cited, which is the disclosure `CLAUDE.md` §6 invariant 1 forbids and the one a user
+would act on ("there *is* something there, keep asking"). **`no_answer_reason` and
+`rejected_count` are therefore record-only and no response body carries either**, on this
+route or on the conversation read below. They live in `QueryLog`, for the team reading the
+log, and invariant 7 is what they are for. A test asserts both are absent from the raw
+rendered body, and that the two paths' bodies compare equal while their rows carry
+different reasons.
+
+**A no-answer reply carries `result_count` 0 and no sources**, on both paths. On path B
+passages genuinely were supplied to generation, so a non-zero count would be the more
+literal report of what happened, and it is still wrong: any other value would make the
+count the field that leaks which path was taken. The identifiers of what was supplied are
+in `QueryLog.retrieved_chunk_ids`, which is the traceability record and is not part of any
+reply.
+
+**Every statement carries its `chunk_id`, and there is no field for one that does not.**
+Invariant 6: there is no interface state that shows an uncited factual statement. A
+statement whose citation was absent, unrecognised or fabricated is removed by
+`verifyCitations` before the pipeline returns, and `RetrievalOutcome` carries no list of
+rejected statements for a serializer to reach — so the guarantee is that the text is
+unreachable rather than that no view chose to render it. `position` starts at 1 and is the
+same number stored on that statement's `AnswerCitation` row, so FR-12's "numbered inline
+citations" and the traceability record cannot disagree. No prose is composed server-side:
+the statements arrive as a list and the interface places the markers, because a single
+string with "[1]" spliced into it cannot be re-checked against anything afterwards.
+
+**`sources` is every item CONSULTED, not only every item cited.** FR-12: "a Sources panel
+lists every item consulted with its date, allowing the user to judge how current the
+underlying material is", which is section 7.10 step 11's
+`resolveSourceDetails(suppliedPassageIds)`. A panel listing only the items a surviving
+statement happened to cite would misdescribe what the answer was drawn from. Each entry
+carries the passages of that item that were supplied, because FR-12 also requires that
+"each citation expands to display the source passage and links to the source document or
+meeting" and no endpoint in this API returns a chunk — so the passage travels with the
+answer built from it. `date` is the source's own date, `uploaded_at` for a document and
+`meeting_date` for a meeting, rendered by the same field `GET /api/documents` and
+`GET /api/meetings` use, so one row never appears with two date strings in one interface.
+**No similarity score is exposed**: it is a tuning signal for the team, and an interface
+showing it would present relevance as a fact about the answer.
+
+**A `conversation_id` that is not the caller's is `404`, never `403`.** This is the one
+status code on this route that the FR does not name, and it is load-bearing rather than
+tidy. A 403 confirms that the id names a real thread, which is the disclosure invariant 1
+forbids and the rule `GET /api/meetings/{id}` already follows. It also has a second job: the
+conversation history read is filtered by conversation **and** user, so passing a foreign
+thread would yield no history rather than someone else's questions — but the turn's
+`QueryLog` row would still be written against that thread, and would then surface in its
+owner's reopened thread as a turn that is not theirs. The row is fetched with the user as a
+predicate and anything else is 404; a test asserts that no `QueryLog` row was written.
+
+**The length rule is the pipeline's, and the request serializer does not restate it.**
+`MINIMUM_QUESTION_LENGTH` and `MAXIMUM_QUESTION_LENGTH` are checked in
+`apps/retrieval/pipeline.py`, which raises, and the view maps the exception — the same
+arrangement the keyword search uses for its minimum term length (D-41), so there is one
+definition of "too short" and the two cannot drift. Both bounds are inclusive. The question
+travels character for character, with no trimming and no sanitiser, and `QueryLog.question`
+stores it as asked.
+
+**`503` is NFR-19's**, which requires "a 503 Service Unavailable response with an
+informative notice, rather than crashing or hanging indefinitely". It is reached after
+`MAXIMUM_GENERATION_ATTEMPTS` — one initial call and two retries — or on a transport
+failure while embedding the question. **An outage is never converted into a no-answer**:
+"the system could not ask" and "the corpus has no answer" are different events and
+invariant 7's signal depends on them staying apart. No `QueryLog` row is written, as 7.10
+returns its 503 without calling `recordQuery`, so the notice says the question was not
+recorded and can safely be asked again.
+
+**A question outside the caller's scope cannot reach the reply, the log or the provider.**
+The candidate set is restricted in the query, before ranking (invariant 1), and there is a
+test asserting that an Administrator-only passage nearer the question than any visible one
+appears nowhere in an Employee's rendered body, moves their `result_count` by nothing, and
+was never put in front of the AI service.
+
+### FR-13 — conversations
+
+FR-13's Database clause is `Conversations (Create, Read, Update)`, and its Front-End clause
+needs three things of them: previous conversations listed, a conversation reopened with its
+thread, and the active thread cleared to begin a new topic — which is starting a new
+conversation, not deleting one. FR-13 enumerates only `200 OK with the answer and updated
+conversation state`, which describes the turn rather than the thread, so every code below
+is *convention* and follows the rest of this contract.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| GET | `/api/conversations` | session | `200 [conversation object, ...]`, newest activity first, the caller's own only | `401` |
+| POST | `/api/conversations` | session | `201` conversation object | `400` a title over 255 characters; `401` |
+| GET | `/api/conversations/{id}` | session | `200` conversation object **with** `turns` | `401`; `404` no such thread, or one that is not the caller's |
+
+The conversation object, which is also the `conversation` field of an `/api/ask` reply:
+
+```json
+{"conversation_id": "uuid", "title": "Leave policy questions",
+ "last_updated_at": "2026-09-24T09:26:00+10:00"}
+```
+
+Never `user`: every thread a caller can reach is their own, so the field would only echo
+the requester back to themselves and would invite a client to send one.
+
+The thread, on the detail route:
+
+```json
+{"conversation_id": "uuid", "title": "How do I request annual leave?",
+ "last_updated_at": "2026-09-24T09:26:00+10:00",
+ "turns": [{"question": "How do I request annual leave?", "answered": true,
+            "asked_at": "2026-09-24T09:25:00+10:00", "message": null,
+            "statements": [{"position": 1, "text": "Your manager approves it.",
+                            "chunk_id": "uuid"}]}]}
+```
+
+Turns are chronological and each answered turn's statements are in the order they were
+numbered in, so a reopened thread reads as it did when it was live. An unanswered turn
+carries `answered: false`, the same fixed `message` the live reply carried, and no
+statements. **A turn carries no `no_answer_reason`, no `rejected_count` and no
+`retrieved_chunk_ids`**: the first two for the reason the answer path gives — a thread read
+is a second route past them — and the third because it records what was put in front of the
+model, including passages nothing cited, which is traceability rather than something the
+reader was shown.
+
+**Where a title comes from (D-43).** `Conversations.title` is a non-blank column and FR-13's
+interface never asks the user to name a topic before typing — it clears the thread and lets
+them start. So `title` is **optional on create**: supplied, it is used as sent; omitted or
+blank, the thread is created as "New conversation" and **the first turn through
+`POST /api/ask` replaces that with that turn's question**, truncated to the column width.
+That replacement is the `Update` in FR-13's CRUD, alongside the `last_updated_at` the
+pipeline touches on every turn. Both conditions are required for the rename — the
+placeholder still standing and no turn logged yet — so a title the user chose is never
+overwritten and a thread in use is never renamed under them. What keeps the list legible is
+therefore the question itself, which is what the user would have typed as a name anyway;
+the placeholder is visible only in the gap between creating a thread and asking in it.
+
+**There is no rename route and no delete route.** FR-13's CRUD has no Delete, and its
+interface has no rename control, so the two server-side updates above are the whole of
+`Update`; `DELETE` on either path is `405`. Clearing the active thread is `POST
+/api/conversations`, and the old thread's `QueryLog` rows are FR-19 evidence that survives
+deletion on purpose (D-12) — deleting the thread would remove only the part a user could
+still read. If a rename is wanted later it is one `PATCH` on an existing route rather than a
+new resource.
+
+**Every conversation route is scoped to `request.user`, and someone else's id is `404`**,
+for the same reason `POST /api/ask` answers 404: a caller must not be able to enumerate the
+existence of another user's threads one request at a time. The list is filtered by user
+rather than filtered after reading, so no count or ordering can reflect a thread that is
+not the caller's.
+
+**The permission scope is re-resolved on every turn, never cached from the first.** That is
+FR-13's Validation clause — "so that a follow-up cannot inherit access the user no longer
+holds" — and it is structural rather than remembered: `answer_question` reads the role from
+the user row on each call and the conversation carries no scope for a follow-up to inherit.
+A test demotes and promotes across two turns of one thread, on one session cookie with no
+re-login, and asserts the second turn's answer changed with the role.

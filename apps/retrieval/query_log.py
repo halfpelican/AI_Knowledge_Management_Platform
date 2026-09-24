@@ -109,12 +109,35 @@ log never delays the reader. We are synchronous and cannot have that ordering; t
 pseudocode's own ordering is the one implemented — ``recordQuery`` at line 185, ``RETURN``
 at line 189 — and it is the boring choice as well as the honest one.
 
+**``conversation`` is recorded, and NULL still means a one-off question.** Stage 4 item 9
+(FR-13) wired it: the pipeline passes the ``Conversation`` the turn belongs to, or None
+where the caller asked a single question outside any thread, which is what the column's
+``null=True`` has always meant (D-12 keeps those rows when a conversation is deleted). The
+parameter has NO DEFAULT, for the reason ``rejected_count`` has none: a future call site
+must decide which of the two it is rather than fall into a silent NULL that would read as
+"one-off" for a turn that was part of a thread.
+
+``question`` is still the question AS ASKED, on a conversation turn as much as on a
+one-off. The composed conversational string — the new question with up to
+MAXIMUM_CONVERSATION_TURNS of earlier ones folded in (apps/retrieval/conversation.py) —
+exists only inside ``answer_question`` and is never stored. Storing it would put every
+predecessor in every follow-up's row, so the log would repeat itself, grow quadratically
+in a long thread, and stop answering the one question it is for: what did this person ask.
+The thread is already reconstructible without it, by ``conversation_id`` and
+``answered_at``.
+
+**``Conversation.last_updated_at`` is touched here, in the same transaction.** The column
+is ``auto_now``, so saving the row is the whole update. It happens in the pipeline layer
+rather than the view because this is the code that knows a turn happened, and inside this
+transaction because a thread that claims a turn whose record failed to write would be
+ordering itself by an event that left no evidence. It is touched on all three outcomes —
+answered, no-answer path A, no-answer path B — since a question that could not be answered
+is still activity in the thread and is still a turn a follow-up may refer to. It is NOT
+touched where no row is written at all: a rejected question length and a provider outage
+leave the thread exactly as it was, which is the same rule the rest of this module applies.
+
 **What is deliberately not recorded here.**
 
-- ``conversation`` stays NULL. This module takes no conversation parameter, because
-  FR-13 is Stage 4 item 9 and there is nothing yet that could supply one; the column is
-  nullable for the one-off question, which is every question today. Item 9 adds the
-  parameter and passes it through from the pipeline.
 - No ``SearchLog`` row. That table records FR-12's *keyword search* — the "200 OK with
   grouped results" half of FR-12's Responses, as against the "answer and citations" half
   this pipeline serves — and that path is not built. It is a deliberate absence, not an
@@ -138,7 +161,7 @@ from uuid import UUID
 from django.db import transaction
 
 from apps.ai.base import Statement
-from apps.retrieval.models import AnswerCitation, QueryLog
+from apps.retrieval.models import AnswerCitation, Conversation, QueryLog
 
 if TYPE_CHECKING:  # pragma: no cover - the pipeline imports this module, not the reverse
     from apps.retrieval.pipeline import RetrievalOutcome
@@ -174,6 +197,7 @@ def record_query(
     *,
     user,
     question: str,
+    conversation: Conversation | None,
     outcome: "RetrievalOutcome",
     supplied_chunk_ids: Sequence[str],
     rejected_count: int | None,
@@ -184,7 +208,13 @@ def record_query(
     ``question`` is the question as asked, unaltered — no sanitiser ran on the way in
     (see the pipeline's step-1 notes), and a question rewritten before being stored would
     be wrong in the log, wrong in FR-16's gap register and wrong when shown back to the
-    person who asked it.
+    person who asked it. **On a conversation turn it is the bare question, never the
+    composed conversational string**; the module docstring argues why.
+
+    ``conversation`` is the thread this turn belongs to, or None for a one-off question.
+    No default: the caller states which. Where it is not None its ``last_updated_at`` is
+    touched inside this transaction, so FR-13's "updated conversation state" is true of the
+    instance the caller still holds.
 
     ``outcome`` supplies ``answered`` and ``no_answer_reason`` rather than the caller
     restating them, so a row can never disagree with the reply it accompanies about which
@@ -212,9 +242,10 @@ def record_query(
     with transaction.atomic():
         row = QueryLog.objects.create(
             user=user,
-            # NULL until FR-13 (Stage 4 item 9) has a conversation to pass; see the
-            # module docstring.
-            conversation=None,
+            # The thread this turn belongs to, or NULL for a one-off question — which is
+            # what the column has always meant and still means (D-12, and the module
+            # docstring).
+            conversation=conversation,
             question=question,
             answer_text=answer_text_for(outcome.verified_statements),
             # UUIDs, from a list of strings: RankedPassage.chunk_id is a string because
@@ -247,4 +278,11 @@ def record_query(
                 )
             ]
         )
+        if conversation is not None:
+            # FR-13: a turn happened, so the thread moves to the top of the user's list.
+            # ``last_updated_at`` is auto_now, so naming it in update_fields is the whole
+            # update — no timestamp is computed here, and no other column of a possibly
+            # stale instance is written back. Inside the transaction on purpose: see the
+            # module docstring.
+            conversation.save(update_fields=["last_updated_at"])
         return row

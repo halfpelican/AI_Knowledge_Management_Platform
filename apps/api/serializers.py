@@ -15,10 +15,11 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from apps.accounts.models import Role
-from apps.core.constants import ROLE_NAMES
+from apps.core.constants import NO_ANSWER_MESSAGE, ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.meetings.models import Meeting
+from apps.retrieval.models import Conversation
 
 User = get_user_model()
 
@@ -299,6 +300,18 @@ _DATETIME_FORMATTER = serializers.DateTimeField()
 _DATE_FORMATTER = serializers.DateField()
 
 
+def _rendered_date(value):
+    """Whichever of the two arrived, rendered by DRF's own field.
+
+    Shared by the search result and the FR-12 Sources panel, so one row's date is the
+    same string wherever it appears in the interface. datetime subclasses date, so the
+    narrower test has to come first.
+    """
+    if isinstance(value, datetime):
+        return _DATETIME_FORMATTER.to_representation(value)
+    return _DATE_FORMATTER.to_representation(value)
+
+
 class SearchResultSerializer(serializers.Serializer):
     """One item in an FR-12 search group.
 
@@ -327,10 +340,7 @@ class SearchResultSerializer(serializers.Serializer):
     date = serializers.SerializerMethodField()
 
     def get_date(self, result):
-        # datetime subclasses date, so the narrower test has to come first.
-        if isinstance(result.date, datetime):
-            return _DATETIME_FORMATTER.to_representation(result.date)
-        return _DATE_FORMATTER.to_representation(result.date)
+        return _rendered_date(result.date)
 
 
 class SearchGroupSerializer(serializers.Serializer):
@@ -361,3 +371,196 @@ class SearchResultsSerializer(serializers.Serializer):
     documents = SearchGroupSerializer(read_only=True)
     meetings = SearchGroupSerializer(read_only=True)
     total_count = serializers.IntegerField(read_only=True)
+
+
+# --- FR-12 answer path, FR-13 conversations ---------------------------------------------
+
+
+class AskSerializer(serializers.Serializer):
+    """``POST /api/ask`` request body: the question, and optionally the thread it is a
+    turn of.
+
+    **No length bounds on ``question``, deliberately.** MINIMUM_QUESTION_LENGTH and
+    MAXIMUM_QUESTION_LENGTH are enforced by ``answer_question``, which raises
+    ``QuestionLengthOutOfRange``; the view maps that exception to FR-12's 400. Declaring
+    ``min_length`` here would be a second definition of "too short" that could drift from
+    the one the pipeline applies, exactly as the keyword search endpoint leaves the
+    minimum term length to ``apps.retrieval.search`` (D-41). So this field accepts a blank
+    string and untrimmed whitespace: the question travels to the pipeline character for
+    character, which is also what ``QueryLog.question`` stores.
+
+    ``conversation_id`` absent means a one-off question and ``QueryLog.conversation``
+    stays NULL, which is that column's documented meaning (D-12). A value that is not a
+    UUID is a malformed body and is 400 here; a well-formed id that is not this user's is
+    404, which the view decides — see the view for why it is not 403.
+    """
+
+    question = serializers.CharField(allow_blank=True, trim_whitespace=False)
+    conversation_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class AnswerStatementSerializer(serializers.Serializer):
+    """One verified statement of an answer, with its citation number and its identifier.
+
+    ``chunk_id`` is not optional and there is no serializer for an unverified statement:
+    invariant 6 — the interface has no state in which an uncited factual statement is
+    shown — is kept by the statement arriving with its identifier or not existing. The
+    object behind this is ``NumberedStatement``, built only from
+    ``RetrievalOutcome.verified_statements``, which is the only statement list the
+    pipeline lets out.
+    """
+
+    position = serializers.IntegerField(read_only=True)
+    text = serializers.CharField(read_only=True)
+    chunk_id = serializers.CharField(read_only=True)
+
+
+class ConsultedPassageSerializer(serializers.Serializer):
+    """The passage a citation expands to show (FR-12: "Each citation expands to display
+    the source passage and links to the source document or meeting")."""
+
+    chunk_id = serializers.CharField(read_only=True)
+    text = serializers.CharField(read_only=True)
+
+
+class ConsultedSourceSerializer(serializers.Serializer):
+    """One item in FR-12's Sources panel: "every item consulted with its date".
+
+    Consulted, not merely cited — see ``apps.api.answers``. ``date`` is rendered by the
+    same helper the search result uses, so the same row carries one date string across the
+    interface. No score is exposed: a similarity number is a tuning signal for the team,
+    and an interface that displayed it would be presenting relevance as a fact about the
+    answer.
+    """
+
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    date = serializers.SerializerMethodField()
+    passages = ConsultedPassageSerializer(many=True, read_only=True)
+
+    def get_date(self, source):
+        return _rendered_date(source.date)
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """A thread, as the list and as the "updated conversation state" FR-13 returns.
+
+    Never ``user``: every conversation a caller can reach is their own, so the field would
+    only ever echo the requester back to themselves, and a conversation object that
+    carried a user id would invite a client to send one.
+    """
+
+    conversation_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = ("conversation_id", "title", "last_updated_at")
+        read_only_fields = fields
+
+
+class AnswerSerializer(serializers.Serializer):
+    """``POST /api/ask`` reply, on all three of the pipeline's exits.
+
+    **The key set does not change between them**, so an answered reply and a no-answer
+    reply are the same shape with different contents: ``answered`` false, ``message`` set,
+    ``result_count`` 0, and both lists empty. That is one branch in the front end instead
+    of two response formats, and it is why the two no-answer paths are byte-identical
+    without the serializer having to arrange anything.
+
+    **There is no field for ``no_answer_reason`` and none for ``rejected_count``.** They
+    are record-only (``QueryLog``'s docstring), and ``AnswerReply`` carries no value for
+    either, so there is nothing here to name — see ``apps.api.answers`` for the
+    disclosure this protects against.
+    """
+
+    answered = serializers.BooleanField(read_only=True)
+    message = serializers.CharField(read_only=True, allow_null=True)
+    result_count = serializers.IntegerField(read_only=True)
+    statements = AnswerStatementSerializer(many=True, read_only=True)
+    sources = ConsultedSourceSerializer(many=True, read_only=True)
+    # Null for a one-off question. FR-13's Responses clause: "200 OK with the answer and
+    # updated conversation state" — the pipeline refreshed ``last_updated_at`` inside the
+    # log transaction, so the instance rendered here is already current.
+    conversation = ConversationSerializer(read_only=True, allow_null=True)
+
+
+class ConversationCreateSerializer(serializers.Serializer):
+    """``POST /api/conversations`` body. ``title`` is optional; see the view for where an
+    omitted one comes from instead (D-43)."""
+
+    title = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, allow_blank=True, trim_whitespace=True
+    )
+
+
+class CitedStatementSerializer(serializers.Serializer):
+    """One stored ``AnswerCitation``, rendered exactly as the live answer renders a
+    statement, so a reopened thread and the turn as first answered are the same shape.
+
+    Rows exist only for statements that survived verification, so a thread read back from
+    the server can no more show an uncited statement than the original reply could.
+    """
+
+    position = serializers.IntegerField(read_only=True)
+    text = serializers.CharField(source="statement_text", read_only=True)
+    chunk_id = serializers.UUIDField(read_only=True)
+
+
+class ConversationTurnSerializer(serializers.Serializer):
+    """One logged turn of a thread: the question, whether it was answered, its citations.
+
+    The object is a ``QueryLog`` row, and only four of its columns are read.
+    ``no_answer_reason`` and ``rejected_count`` are not among them, for the same reason
+    they are absent from the live reply: a reopened thread that showed which no-answer
+    path a turn took would disclose across two requests exactly what one request may not
+    (``QueryLog``'s docstring; invariant 1). ``retrieved_chunk_ids`` is not read either —
+    it is the traceability record of what was put in front of the model, including
+    passages nothing cited, and it is not part of what the user was shown.
+
+    ``message`` is derived rather than stored: a turn that was not answered was answered
+    with NO_ANSWER_MESSAGE, the one fixed text both no-answer paths return, so
+    re-rendering it from ``answered`` cannot leak which path was taken.
+    """
+
+    question = serializers.CharField(read_only=True)
+    answered = serializers.BooleanField(read_only=True)
+    asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
+    message = serializers.SerializerMethodField()
+    statements = serializers.SerializerMethodField()
+
+    def get_message(self, turn):
+        return None if turn.answered else NO_ANSWER_MESSAGE
+
+    def get_statements(self, turn):
+        # Ordered by the position stored on the row, which is the citation number the
+        # reader saw (FIRST_POSITION in apps/retrieval/query_log.py).
+        citations = sorted(turn.citations.all(), key=lambda citation: citation.position)
+        return CitedStatementSerializer(citations, many=True).data
+
+
+class ConversationDetailSerializer(ConversationSerializer):
+    """A thread and its turns, so FR-13's "previous conversations ... can be reopened"
+    renders from the server rather than from whatever the browser still holds.
+
+    The turns are read here rather than prefetched by the view, so the turn ordering and
+    the citation ordering live beside the fields that use them: two queries per read, at a
+    thread length bounded by how much one person types.
+    """
+
+    turns = serializers.SerializerMethodField()
+
+    class Meta(ConversationSerializer.Meta):
+        fields = ConversationSerializer.Meta.fields + ("turns",)
+        read_only_fields = fields
+
+    def get_turns(self, conversation):
+        turns = conversation.queries.prefetch_related("citations").order_by(
+            # Chronological, with the primary key as a deterministic tie-break only: it is
+            # a random UUID and says nothing about time, but two turns sharing a
+            # microsecond would otherwise order arbitrarily between reads. The ordering
+            # apps/retrieval/conversation.py reads history with, reversed.
+            "answered_at",
+            "id",
+        )
+        return ConversationTurnSerializer(turns, many=True).data
