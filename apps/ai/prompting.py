@@ -31,7 +31,17 @@ identifiers verification checks against are still exactly the passage labels
 schema conformance and 0% fabrication were taken on a prompt of passages plus ONE
 question, and scripts/citation_harness.py asks single questions, so re-running it says
 nothing about the composed form. Treat the multi-turn prompt as unmeasured.
+
+**The one transformation applied to user text lives here too** —
+``neutralise_passage_delimiter`` (D-45), which is the only thing in this project that
+alters a question before it is used. It is here, next to the delimiter it is about,
+because the two are one fact read together: this module invents the ``[chunk_id: ...]``
+label, so this module is where the consequence of a question containing that label is
+dealt with. Nothing else about a question is stripped, escaped, trimmed or filtered —
+D-45 gives the reasoning for that at length.
 """
+
+import re
 
 from apps.ai.base import Passage
 
@@ -126,6 +136,89 @@ Your reply:
 """
 
 
+# --- D-45: the prompt's own delimiter, neutralised in user-supplied text ---------------
+#
+# THE NEUTRALISATION AND THE DELIMITER MUST STAY TOGETHER, in this module, for one reason:
+# a future prompt that gains another structural delimiter inherits this problem the moment
+# it is written, and it will only be noticed if the delimiter and the thing that defends
+# it are read on the same screen. Moving either one away from the other is the change that
+# reopens this.
+#
+# The label ``build_user_prompt`` writes in front of every passage is
+# ``[chunk_id: <uuid>]``. A question containing that literal syntax injects a
+# PSEUDO-PASSAGE into the asker's own prompt: text the model reads as a supplied passage,
+# carrying an identifier of the asker's choosing.
+#
+# It is not a security hole and D-45 is precise about why. ``verify_citations`` checks
+# returned identifiers against the set built from the RETRIEVAL RESULT, never against
+# anything parsed out of the prompt, so a smuggled identifier is not in the supplied set
+# and every statement carrying it is removed; and the injected text is the asker's own, so
+# there is no cross-user disclosure. It is a DEMONSTRATION hole: a crafted question can
+# make the model answer from text the asker wrote, which verification then strips, giving a
+# no-answer for a question that looked answerable — or, where a real identifier is echoed
+# alongside it, a statement attributed to a passage that does not support it.
+#
+# THE TRANSFORMATION: the label's SQUARE brackets become ROUND ones, and nothing else
+# changes. A question containing "[chunk_id: 9f2...]" reaches the prompt as
+# "(chunk_id: 9f2...)". Four properties were wanted and this is the least that has all four:
+#
+#   * The question stays readable. Every word, digit and space survives in place, so the
+#     question reads the same to the model answering it and to a human reading it in the log
+#     beside the stored original. Deleting the text, masking it or replacing it with a
+#     marker would each hide what was asked.
+#   * The meaning of an ordinary question cannot change. At most two characters move, and
+#     only where "[" is immediately followed by the label and its colon. A question
+#     discussing chunk_id in prose, quoting a chunk_id value, or putting square brackets
+#     around anything else is passed through byte for byte. Nothing is trimmed and no
+#     whitespace is normalised, so the length is preserved exactly.
+#   * The passage-header form is gone. SYSTEM_PROMPT tells the model to "copy each chunk_id
+#     exactly as it appears in the passage header", and the header is the SQUARE-bracketed
+#     label. No "[chunk_id:" in the user's text means no line in it is shaped like one.
+#   * It is idempotent. "(chunk_id:" contains no "[chunk_id:", so applying this twice is
+#     applying it once — which matters, because the composed conversational string passes
+#     through ``build_user_prompt`` after ``build_conversational_question`` has already
+#     been over it.
+#
+# Two patterns, ONE sequence. The first matches the whole label, closing bracket included,
+# so the result is balanced rather than "(chunk_id: 9f2...]". The second catches the same
+# opening where the asker never closed it: an unclosed "[chunk_id:" is still the header
+# shape, and leaving it would be a hole with a one-character key.
+#
+# Case and inner spacing are matched loosely and preserved exactly: "[CHUNK_ID :" is as
+# header-shaped to a model as the canonical form, and the replacement keeps whatever the
+# asker typed rather than normalising it. This is a targeted transformation of ONE known
+# sequence. It is not a sanitiser, it is not a place to add a second rule, and D-45 is the
+# argument for why there is nothing else here.
+_DELIMITER_PATTERN = re.compile(r"\[(\s*chunk_id\s*:[^\[\]\n]*)\]", re.IGNORECASE)
+_DELIMITER_OPENING_PATTERN = re.compile(r"\[(\s*chunk_id\s*:)", re.IGNORECASE)
+
+
+def neutralise_passage_delimiter(text: str) -> str:
+    """``text`` with the passage delimiter's square brackets turned into round ones (D-45).
+
+    The ONLY transformation this project applies to user-supplied text before prompting,
+    and the reasoning for both halves of that — why this one, and why nothing else — is in
+    the comment above and in D-45.
+
+    **THE NEUTRALISATION AND THE DELIMITER MUST STAY TOGETHER, in this module.** It defends
+    a label that ``build_user_prompt`` invents a few lines below, and a future prompt that
+    gains another structural delimiter inherits this problem the moment it is written — it
+    will only be noticed if the delimiter and the thing that defends it are read on the same
+    screen. Moving either away from the other is the change that reopens this.
+
+    What it does NOT do: it does not trim, normalise whitespace, strip characters, escape
+    anything or shorten the text. The result is the same length as the input and differs
+    from it only in the brackets of the label itself.
+
+    **It applies to what reaches the PROMPT, never to what is recorded.**
+    ``QueryLog.question`` stores the question as asked (apps/retrieval/query_log.py), the
+    same separation the embedding prefixes keep from ``chunk_text``: the record is evidence
+    of what a person typed and must not be a transformed version of it.
+    """
+    text = _DELIMITER_PATTERN.sub(r"(\1)", text)
+    return _DELIMITER_OPENING_PATTERN.sub(r"(\1", text)
+
+
 # --- FR-13: earlier questions, in the question position -------------------------------
 #
 # The heading is prompt text, so it lives here with the rest of the prompt rather than in
@@ -170,16 +263,30 @@ def build_conversational_question(question: str, prior_questions: list[str]) -> 
     Returns ``question`` UNCHANGED when there is no history — not an empty heading, not a
     trailing separator. A single-turn prompt is therefore byte-identical to the one
     docs/flm-baseline.md measured, which is the only way the measurement keeps describing
-    the one-off path.
+    the one-off path. "Unchanged" is exact for every question that does not contain the
+    passage delimiter, and for one that does it means "with that one sequence neutralised"
+    (D-45, ``neutralise_passage_delimiter``): no question the baseline measured, and no
+    question anybody asks in earnest, is affected either way.
+
+    **The neutralisation is applied to the PRIOR questions as well, one by one.** A prior
+    question is user-supplied text that this function lifts back into a prompt, so a
+    delimiter smuggled into turn one would otherwise inject through turn two's history
+    block — which is where it would be least expected, since the question being asked at
+    that point is innocent. ``QueryLog.question`` still holds turn one as asked; what is
+    neutralised is the copy going into the prompt.
 
     ``prior_questions`` is oldest first, and it is questions ONLY. The caller
     (apps/retrieval/conversation.py) is responsible for both: for the order, because the
     model reads them as a sequence, and for the absence of answers, because no
     model-generated text may re-enter a prompt.
     """
+    question = neutralise_passage_delimiter(question)
     if not prior_questions:
         return question
-    history = "\n".join(f"{PRIOR_QUESTION_MARKER}{prior.strip()}" for prior in prior_questions)
+    history = "\n".join(
+        f"{PRIOR_QUESTION_MARKER}{neutralise_passage_delimiter(prior.strip())}"
+        for prior in prior_questions
+    )
     return f"{PRIOR_QUESTIONS_HEADING}\n{history}\n\n{QUESTION_LEAD_IN}{question}"
 
 
@@ -197,7 +304,20 @@ def build_user_prompt(question: str, passages: list[Passage]) -> str:
     labels, so the labelled identifiers are never interleaved with unlabelled history.
     That separation is a property of this f-string; it is written down here because
     reordering these three pieces for readability would quietly undo it.
+
+    ``question`` goes through ``neutralise_passage_delimiter`` on the way in (D-45).
+    ``build_conversational_question`` has already done it for anything arriving through the
+    conversational path, and the transformation is idempotent, so this is not a second rule
+    — it is the guarantee made where the delimiter is actually written, so that a caller
+    handing a raw question straight to this function cannot reopen the hole.
+
+    **Passage text is NOT transformed.** D-45 is about the question, and a passage is the
+    material a citation is verified against — altering it here would mean the prompt and
+    the stored chunk disagreed about what was supplied. A document whose own body contains
+    the sequence is the adjacent case D-45 does not settle; it is a different question
+    (whether ingestion should notice it) and it is not decided by this line.
     """
+    question = neutralise_passage_delimiter(question)
     blocks = [f"[chunk_id: {passage.chunk_id}]\n{passage.text.strip()}" for passage in passages]
     return (
         "Passages:\n"

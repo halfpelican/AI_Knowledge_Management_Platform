@@ -297,7 +297,11 @@ def test_the_two_no_answer_paths_are_one_reply_and_two_rows(document, monkeypatc
 
     # The rows are not.
     assert QueryLog.objects.count() == 2
-    row_a, row_b = QueryLog.objects.order_by("answered_at")
+    # Told apart by CONTENT rather than by answered_at: path A supplied no passages and
+    # path B did. auto_now_add is ~15.6 ms granular on Windows, so two rows written in one
+    # tick share the timestamp and an order_by on it tie-breaks on a random UUID.
+    row_a = QueryLog.objects.get(retrieved_chunk_ids=[])
+    row_b = QueryLog.objects.exclude(retrieved_chunk_ids=[]).get()
     assert row_a.no_answer_reason != row_b.no_answer_reason
     assert {row_a.no_answer_reason, row_b.no_answer_reason} == set(NO_ANSWER_REASONS)
     assert row_a.no_answer_reason == NO_RELEVANT_PASSAGE
@@ -694,9 +698,13 @@ def test_the_two_ways_of_reaching_path_b_are_one_reason_and_two_counts(document,
     all_rejected = answer_question(question=QUESTION, user=document.uploaded_by)
 
     assert declined.no_answer_reason == all_rejected.no_answer_reason == NO_STATEMENT_VERIFIED
-    row_declined, row_all_rejected = QueryLog.objects.order_by("answered_at")
-    assert row_declined.rejected_count == 0
-    assert row_all_rejected.rejected_count == 2
+    # Asserted as a multiset, because the two rows cannot be told apart by anything but
+    # the very field under test, and answered_at cannot order them reliably — it is
+    # ~15.6 ms granular on Windows, so two rows written in one tick tie and the tie-break
+    # is a random UUID. One row counts 0 and the other 2, which is the whole claim.
+    assert sorted(QueryLog.objects.values_list("rejected_count", flat=True)) == [0, 2]
+    row_declined = QueryLog.objects.get(rejected_count=0)
+    row_all_rejected = QueryLog.objects.get(rejected_count=2)
     assert row_declined.no_answer_reason == row_all_rejected.no_answer_reason
     # Both reached generation, so neither is NULL: the count is a real 0, not an absence.
     assert row_declined.rejected_count is not None

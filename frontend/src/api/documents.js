@@ -15,6 +15,22 @@ export function listDocuments(options = {}) {
 }
 
 /**
+ * One document — the route a citation links to (D-46, Stage 4 item 10b).
+ *
+ * FR-12 requires each citation to link "to the source document or meeting", and
+ * before this endpoint existed a document citation could only be pointed at the
+ * repository list. Any signed-in user, scoped by `visible_to_roles`, and the
+ * body is the same document object the list returns.
+ *
+ * 404 both for an id that names nothing and for a document outside the caller's
+ * scope, so a refusal does not confirm that the id names something real
+ * (CLAUDE.md §6, invariant 1).
+ */
+export function fetchDocument(docId, options = {}) {
+  return get(`/documents/${encodeURIComponent(docId)}`, options)
+}
+
+/**
  * FR-08 upload. `multipart/form-data`, the one endpoint that is not JSON.
  *
  * 201 with the document object, whose `status` is "Indexed" or "Partially

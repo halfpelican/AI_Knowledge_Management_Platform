@@ -112,6 +112,7 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB; `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or every chunk failed to embed |
 | POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
+| GET | `/api/documents/{id}` | session | `200` document object | `401`; `404` no such document, or one outside the caller's scope |
 
 The document object:
 
@@ -183,6 +184,25 @@ bytes are submitted. The retry genuinely recovers only an `Indexing failed` — 
 provider outage. The action is shown in every case the clause names; its wording
 differs by status so it stops promising what identical bytes cannot deliver. D-32
 records this as a flaw in the requirement rather than in the build.
+
+**`GET /api/documents/{id}` was added at Stage 4 item 10b, for FR-12 (D-46).** It is in
+this table rather than in the Stage 4 section because it is a document route and a reader
+asking what the API offers for a document should find all three in one place — and because
+FR-15 (Stage 5) reads it for its detail screen rather than adding one of its own, so it
+outlives the clause that prompted it. The clause that prompted it is FR-12's "each
+citation … links to the source document or meeting": `GET /api/meetings/{id}` had served
+the meeting half since Stage 3, and a document citation could only be pointed at the list.
+
+Its authorisation is `GET /api/documents`'s exactly — a session, and no permission beyond
+it, because reading a document one's role may see is not a privileged action and a citation
+must stay followable for the role the answer was generated for. **A document outside the
+caller's scope is `404`, never `403`.** A 403 distinguishes "exists but you may not see it"
+from "does not exist", which is the disclosure `CLAUDE.md` invariant 1 forbids by name; the
+precedent is D-33's treatment of the upload `409` as an existence oracle, and the sibling
+behaviour is `GET /api/meetings/{id}`. An unknown id and an out-of-scope id are answered by
+the same scoped query, so the two replies are identical in status and in body. The response
+is the document object above, so `file_path` and `content_hash` are absent here for the
+same reasons.
 
 **`GET /api/documents` is scoped by `visible_to_roles` from the first day it exists.**
 FR-11 is Stage 4 work and this is not that filter, but a list disclosing documents
@@ -500,6 +520,9 @@ meeting" and no endpoint in this API returns a chunk — so the passage travels 
 answer built from it. `date` is the source's own date, `uploaded_at` for a document and
 `meeting_date` for a meeting, rendered by the same field `GET /api/documents` and
 `GET /api/meetings` use, so one row never appears with two date strings in one interface.
+FR-12's "links to the source document or meeting" is `GET /api/meetings/{id}` for a meeting
+and `GET /api/documents/{id}` for a document — the second added at Stage 4 item 10b (D-46),
+before which a document citation could only be pointed at the repository list.
 **No similarity score is exposed**: it is a tuning signal for the team, and an interface
 showing it would present relevance as a fact about the answer.
 
@@ -520,6 +543,15 @@ arrangement the keyword search uses for its minimum term length (D-41), so there
 definition of "too short" and the two cannot drift. Both bounds are inclusive. The question
 travels character for character, with no trimming and no sanitiser, and `QueryLog.question`
 stores it as asked.
+
+**One sequence is neutralised on the way into the prompt, and only there (D-45).** A
+question containing the prompt's own passage label, `[chunk_id: <uuid>]`, would inject a
+pseudo-passage into the asker's own prompt, so those square brackets become round ones
+before the question reaches generation — every other character is untouched, and nothing is
+trimmed. It is a targeted transformation of one known sequence and not a sanitiser; D-45
+says at length why a general sanitiser is the wrong instrument here. It changes nothing a
+caller can observe: the reply is unaffected, and `QueryLog.question` still holds the
+question as asked, delimiter included, because the record is evidence of what was typed.
 
 **`503` is NFR-19's**, which requires "a 503 Service Unavailable response with an
 informative notice, rather than crashing or hanging indefinitely". It is reached after

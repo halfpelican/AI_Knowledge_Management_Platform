@@ -108,6 +108,11 @@ class ConversationContext:
     ``for_retrieval == for_prompt == question``. A one-off question therefore produces
     byte-identical retrieval and generation inputs to the ones the pipeline produced
     before FR-13 existed, which is what keeps docs/flm-baseline.md describing that path.
+
+    The one exception is a question containing the passage delimiter ``[chunk_id:``, where
+    ``for_prompt`` carries it neutralised (D-45, ``apps.ai.prompting``): generation must not
+    be handed a pseudo-passage the asker wrote. ``for_retrieval`` is not neutralised,
+    because it is embedded rather than prompted and a vector has no delimiters.
     """
 
     prior_questions: tuple[str, ...]

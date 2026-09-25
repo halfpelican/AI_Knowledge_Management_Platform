@@ -42,6 +42,7 @@ OPEN_ROUTES = {"auth-register", "auth-login"}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
+                    "document-detail",  # Stage 4 item 10b: FR-12's citation link (D-46)
                     "meeting-list", "meeting-detail",  # Stage 3: FR-09
                     "search",  # Stage 4: FR-12 keyword search (D-41)
                     "ask",  # Stage 4: FR-12's answer path, FR-13's turn

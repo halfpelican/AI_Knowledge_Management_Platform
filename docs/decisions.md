@@ -1820,3 +1820,151 @@ statement, so invariant 6 — which is about uncited *statements* — is not eng
 panel's stated purpose is to show what the answer was drawn from. If it proves noisy in the
 interface, the fix is client-side collapsing, not a narrower reply, because narrowing it to
 cited items only would make the panel misdescribe the retrieval.
+
+## D-45 · FR-12's "input is sanitised before use" is not a sanitiser, with one exception that is
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4, items 4 and 10b ·
+**Clause:** FR-12 Server-End, Validation
+
+**Decision.** No stripping, escaping or filtering pass is applied to a question or a search
+term. The clause is satisfied by the mechanisms that actually protect each path, named
+below — **except** for one case where that argument does not hold, which is neutralised in
+code and tested.
+
+**Why a general sanitiser is the wrong instrument here.** Each thing a sanitiser would be
+protecting against is already handled somewhere it cannot be forgotten:
+
+| Concern | What handles it |
+|---|---|
+| SQL injection | The question is a bound parameter in every query and is never interpolated. The ORM does this; no call site can opt out |
+| Cross-site scripting | React escapes text nodes on render. The question is never inserted as HTML |
+| Length and resource abuse | `MINIMUM_QUESTION_LENGTH` / `MAXIMUM_QUESTION_LENGTH`, checked before any provider call (item 4), and `MINIMUM_SEARCH_LENGTH` for search |
+| Prompt injection aimed at the model | The grounding constraint plus citation verification. A statement survives only if it carries an identifier from the supplied set, so an instruction in the question cannot manufacture a citable source |
+
+A stripping rule on top of those has no attack left to prevent, and it has a cost: it
+silently mangles legitimate questions. A question about a currency amount, a file path, an
+SQL keyword or a piece of XML is a question a knowledge platform should answer, and
+whitespace is not normalised either, because 7.10 measures the question as given and a
+trimming rule is a requirement nobody wrote.
+
+**THE EXCEPTION, which is why "a sanitiser is a no-op" would have been too strong.** The
+generation prompt labels each passage `[chunk_id: <uuid>]` in `build_user_prompt`. A
+question containing that literal syntax injects a **pseudo-passage into the user's own
+prompt** — text that looks to the model exactly like a supplied passage, carrying an
+identifier of the asker's choosing.
+
+It is not a security hole, and it is worth being precise about why: `verifyCitations`
+checks returned identifiers against the set built from the **retrieval result**, never
+against anything parsed out of the prompt, so an identifier smuggled in this way is not in
+the supplied set and every statement carrying it is removed. Nor is it a cross-user
+disclosure: the injected text is the asker's own.
+
+It is a **demonstration hole**. A question crafted that way can make the model return
+statements drawn from text the asker wrote, which verification then strips — producing a
+no-answer for a question that looked answerable, or, if the asker also echoes a real
+identifier, a statement attributed to a passage that does not support it. Either is an
+awkward thing to have happen in front of an examiner, and neither needs a vulnerability to
+be embarrassing.
+
+**So the delimiter sequence is neutralised in user-supplied text, and tested.** That is a
+targeted transformation of one known-harmful sequence, not a general sanitiser, and the
+distinction matters: it can be stated exactly, it cannot mangle an ordinary question, and
+its test names the attack it prevents.
+
+**The transformation, recorded because "neutralised" is not specific enough to reproduce.**
+The label's square brackets become round ones: a question containing
+`[chunk_id: 9f2…]` reaches the prompt as `(chunk_id: 9f2…)`. Chosen over deleting, masking
+or substituting a marker for four reasons:
+
+- **Readable.** Every word, digit and space survives in place, so the question reads the
+  same to the model and to a human comparing it against the stored original.
+- **Cannot change an ordinary question.** At most two characters move, and only where `[` is
+  immediately followed by the label and its colon. Prose about `chunk_id`, a quoted
+  `chunk_id:` value, and square brackets around anything else all pass through byte for
+  byte. Length is preserved exactly and nothing is trimmed.
+- **The header shape is what goes.** `SYSTEM_PROMPT` tells the model to copy the identifier
+  "exactly as it appears in the passage header", and the header *is* the square-bracketed
+  label. Removing the brackets removes the resemblance.
+- **Idempotent**, since `(chunk_id:` contains no `[chunk_id:`, which is what makes applying
+  it twice harmless.
+
+Two patterns, one sequence: the whole label including its closing bracket, so the output is
+balanced rather than `(chunk_id: 9f2…]`; and the same opening where the asker never closed
+it, which is still header-shaped. Case and inner spacing are matched loosely and preserved
+exactly, because `[CHUNK_ID :` is as header-shaped to a model as the canonical form.
+
+Applied at **two** sites: `build_conversational_question`, to the new question and to each
+prior question, so a delimiter smuggled into turn one cannot inject through turn two's
+history block; and `build_user_prompt`, where the delimiter is written, so a caller handing
+it a raw question cannot reopen the hole. Idempotency is what makes the double pass a no-op.
+**Passage text is not transformed** — see the adjacent case below.
+
+**An adjacent case this does NOT settle.** A *document* whose own body contains `[chunk_id:`
+produces a genuine passage whose text carries the sequence, and passage text is deliberately
+left alone. That is prompt injection through ingested content rather than through user
+input, which is a different threat with a different owner: the Stage 4 security review
+covers it explicitly, and whether ingestion should notice such content is a question for
+that pass rather than this decision.
+
+**Consequences.**
+
+- The audit table in `docs/stage-4-clause-audit.md` marks this clause 🔧 rather than ✅ and
+  points here. A requirements-auditor reading FR-12 will find a clause with no sanitiser
+  behind it, and should find this argument rather than an apparent oversight.
+- "Input is sanitised" remains, on the whole, a requirement written for a different
+  architecture — one where the question is concatenated into SQL or into HTML. Saying so is
+  more useful than implementing a no-op to satisfy the wording.
+- If a future prompt gains another structural delimiter, it inherits this problem. The
+  neutralisation lives beside the prompt for that reason, so the two are read together.
+
+## D-46 · `GET /api/documents/{id}`, so a citation can link to its source
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4, item 10b ·
+**Clause:** FR-12 Front-End ("each citation … links to the source document or meeting")
+
+**Decision.** Add `GET /api/documents/{id}`, scoped to the caller's role, answering **404**
+for a document that does not exist *and* for one outside the caller's scope. Add a minimal
+front-end document route so a citation resolves to its own source rather than to the
+repository list.
+
+**Why it was missing.** FR-12 requires a citation to link to its source document or
+meeting. `GET /api/meetings/{id}` has existed since Stage 3, so meeting citations already
+resolved; documents had no detail endpoint and no route, so item 10 linked them to the
+repository list with a label saying to find it there. That satisfies "a link" and not "links
+to the source document".
+
+**Rationale (as given).** Two reasons, and the second is the one that fixed the timing.
+First, the clause plainly asks for it. Second, **it is another route through the permission
+boundary, and items 11 and 12 are the scoping test and the security review** — the same
+argument that moved the keyword search path into this stage as item 8a (D-41). A route added
+after the review is a route the review never saw.
+
+**404 and never 403.** A 403 distinguishes "exists but you may not see it" from "does not
+exist", which is the disclosure invariant 1 forbids by name. The precedent to cite is
+**D-33's treatment of the 409 existence oracle** on upload, and the sibling behaviour is
+`GET /api/meetings/{id}`, which already answers 404 for a meeting outside the caller's
+scope for exactly this reason.
+
+**Consequences.**
+
+- **The endpoint is shared infrastructure, not a duplicate of Stage 5's work.** FR-15
+  (Stage 5 item 1) owns document presentation — filtered browsing, metadata, permissioned
+  deletion — and will read this endpoint rather than replace it. The front-end route added
+  here is deliberately minimal: enough for a citation to reach its source, no more, so that
+  FR-15 is building on it rather than around it.
+- It joins the dual-role coverage matrix, which fails a full suite run below 100%, so it
+  carries an Employee test and an Administrator test. As with D-41, that is the work rather
+  than a cost of doing it.
+- The response reuses the existing document object, so `file_path` and `content_hash` stay
+  out of it for the reasons `GET /api/documents` already excludes them: a path inside
+  `MEDIA_ROOT` is of no use to a client and an invitation to construct one, and echoing a
+  content hash would let a caller probe whether a document they cannot see has been
+  uploaded.
+- **The contract entry sits in the Stage 3 FR-08 table, not the Stage 4 section**, with a
+  one-sentence cross-reference from the Stage 4 `sources` paragraph. A reader asking what
+  the API offers for a document should find all three document routes in one place, and the
+  endpoint outlives the clause that prompted it — FR-15 reads it rather than adding its own.
+- Unknown and out-of-scope are answered by **one** code path: a single scoped queryset plus
+  `get_object_or_404`, so there is no branch that could come to distinguish them. That is
+  the same shape `MeetingDetailView` uses, and it is stronger than two branches that return
+  the same status today.

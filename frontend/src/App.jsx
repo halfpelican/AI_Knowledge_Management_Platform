@@ -11,6 +11,7 @@ import SearchField from './components/SearchField.jsx'
 import { APP_TITLE, ROLES, TEXT } from './constants.js'
 import AccessDenied from './pages/AccessDenied.jsx'
 import Ask from './pages/Ask.jsx'
+import DocumentDetail from './pages/DocumentDetail.jsx'
 import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
@@ -161,6 +162,11 @@ export default function App() {
                 ingestion and the full stored transcript. */}
             <Route path="upload" element={<Upload />} />
             <Route path="documents" element={<DocumentRepository />} />
+            {/* Stage 4 item 10b: where a document citation lands, so FR-12's
+                "links to the source document or meeting" reaches the document
+                itself (D-46). Minimal by intent — FR-15's document presentation
+                is Stage 5 and builds on the same endpoint. */}
+            <Route path="documents/:docId" element={<DocumentDetail />} />
             <Route path="meetings" element={<Meetings />} />
             <Route path="meetings/:meetingId" element={<MeetingDetail />} />
             {/* Stage 4: FR-12's grouped keyword search, and FR-12's answer path,

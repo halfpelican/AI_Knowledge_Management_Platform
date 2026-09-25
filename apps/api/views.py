@@ -588,6 +588,44 @@ class DocumentsView(APIView):
         return Response(body, status=outcome.http_status)
 
 
+class DocumentDetailView(APIView):
+    """``GET /api/documents/{id}`` — the route FR-12's citation clause links to (D-46).
+
+    FR-12 requires that each citation "links to the source document or meeting".
+    ``GET /api/meetings/{id}`` has existed since Stage 3, so a meeting citation already
+    resolved; a document citation had nowhere to go but the repository list, which is a
+    link and not a link to the source. This is that route, and it is deliberately the
+    document object the repository list already returns rather than a new shape: FR-15
+    (Stage 5) owns document presentation and reads this endpoint rather than replacing it.
+
+    **The same authorisation as ``GET /api/documents``**: a session, and no more. Reading a
+    document one's role may see is not a privileged action, and adding a permission class
+    here would make a citation unfollowable for the role it was generated for.
+
+    **Scoped by ``visible_to_roles``, and out of scope is 404 — never 403.** A 403
+    distinguishes "exists but you may not see it" from "does not exist", which is the
+    disclosure CLAUDE.md invariant 1 forbids by name; D-33's treatment of the upload 409 as
+    an existence oracle is the precedent, and ``GET /api/meetings/{id}`` is the sibling that
+    already behaves this way. An unknown id and an id outside the caller's scope are
+    answered identically, by the same query, so there is no branch that could tell them
+    apart even by timing.
+
+    ``file_path`` and ``content_hash`` stay out of the body, because ``DocumentSerializer``
+    leaves them out for every endpoint: a path inside MEDIA_ROOT is of no use to a client
+    and an invitation to construct one, and echoing a content hash would let a caller probe
+    whether a document they cannot see has been uploaded.
+    """
+
+    def get(self, request, pk):
+        document = get_object_or_404(
+            Document.objects.select_related("uploaded_by").filter(
+                visible_to_roles__contains=[request.user.role.role_name]
+            ),
+            pk=pk,
+        )
+        return Response(DocumentSerializer(document).data)
+
+
 # --- FR-12 keyword search ----------------------------------------------------------------
 
 

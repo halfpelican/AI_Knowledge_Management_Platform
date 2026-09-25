@@ -181,6 +181,19 @@ def test_only_the_callers_own_threads_are_listed_newest_activity_first(
 def test_a_turn_moves_its_thread_to_the_top_of_the_list(employee_client, employee):
     first = Conversation.objects.create(user=employee, title="First")
     second = Conversation.objects.create(user=employee, title="Second")
+    # Order is what this test asserts, so the two rows must not tie on last_updated_at.
+    # timezone.now() is ~15.6 ms granular on this platform — six consecutive calls can
+    # return the identical microsecond — so two rows created back to back share the
+    # timestamp, "-last_updated_at, pk" then tie-breaks on a random UUID, and the first
+    # assertion below becomes a coin flip. An UPDATE sets the column directly, bypassing
+    # auto_now, which a save() would overwrite.
+    #
+    # "First" is pushed into the PAST rather than "Second" into the future, and that
+    # direction matters: the turn below touches "First" with a real timezone.now(), which
+    # could never beat a timestamp set ahead of the clock.
+    Conversation.objects.filter(pk=first.pk).update(
+        last_updated_at=second.last_updated_at - timedelta(minutes=1)
+    )
     assert [entry["title"] for entry in employee_client.get(CONVERSATIONS_URL).json()] == [
         "Second",
         "First",

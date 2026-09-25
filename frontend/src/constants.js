@@ -251,6 +251,16 @@ export const TEXT = {
   // One message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
   documentNotFound: 'That document could not be found. The list has been reloaded.',
   documentReprocessNotPermitted: 'You do not have permission to process documents.',
+  // The document screen a citation links to (D-46). A document outside the
+  // caller's scope answers 404, exactly as an id that names nothing does, so this
+  // message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
+  loadingDocument: 'Loading the document…',
+  documentLoadFailed: 'Could not load the document',
+  documentRecordNotFound: 'That document could not be found.',
+  // FR-15 (Stage 5) owns document presentation: filtered browsing, the metadata
+  // panel and permissioned deletion. This screen is the citation's destination
+  // and says so rather than looking like an unfinished version of that one.
+  documentDetailScope: 'The record for this document. Its text is read through search and the assistant.',
 
   /* ---- FR-09 meeting transcripts ---------------------------------------- */
   loadingMeetings: 'Loading meetings…',
@@ -370,11 +380,13 @@ export const TEXT = {
   sourcesIntro:
     'Every item consulted to build this answer, with its date. Some were consulted without being cited.',
   sourcePassageCount: (count) => (count === 1 ? '1 passage consulted' : `${count} passages consulted`),
-  // FR-12's "links to the source document or meeting". A meeting has a screen of
-  // its own; a document is reached through the repository, which is the only read
-  // route the API offers for one.
+  // FR-12's "links to the source document or meeting". Both types now have a
+  // screen of their own, served by `GET /api/meetings/{id}` and
+  // `GET /api/documents/{id}` (D-46) — until Stage 4 item 10b a document citation
+  // could only be pointed at the repository list, which is a link and not a link
+  // to the source.
   viewMeeting: 'View the transcript',
-  viewDocument: 'Find in the document repository',
+  viewDocument: 'View the document',
   sourceTypeDocument: 'Document',
   sourceTypeMeeting: 'Meeting',
 
