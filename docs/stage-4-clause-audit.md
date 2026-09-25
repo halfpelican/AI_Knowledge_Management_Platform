@@ -91,6 +91,33 @@ Nineteen clauses, plus the database CRUD line.
 
 ---
 
+## The ten invariants, audited as claims
+
+CLAUDE.md section 6 says breaking one of these "fails the project, not just a test". Several
+are written in a voice that asserts their own enforcement — "it has its own test", "is set
+before the first protected route exists", "is a model-level guarantee". **One of those claims
+was measured false on 25 September**, which is reason enough to check the rest as claims
+rather than read them as description.
+
+| | Invariant | State |
+|---|---|---|
+| 1 | Permission filtering before ranking, existence never disclosed | ✅ The predicate compiles into the SQL, asserted; four absences asserted at every exit, including the payload sent to the AI service. Item 11 is its first real evidence — everything before measured the filter's output |
+| 2 | `visible_to_roles` denormalised; a visibility change re-stamps every chunk in the same transaction, as a model-level guarantee with its own test | ❌ → ✅ **Was false for thirteen days.** No override, no signal, no test. Implemented as D-47 at item 11a; the failing test flips green in that commit |
+| 3 | Meetings scoped by role, never by attendance | ✅ Structural — no module under `apps/retrieval/` consults `MeetingAttendees` at all. Tested in both directions: an Employee who *attended* an Administrator-only meeting still cannot read it, and an Administrator who attended nothing reads both |
+| 4 | Authorisation server-side; `DEFAULT_PERMISSION_CLASSES` is `IsAuthenticated` before the first protected route | ✅ Set in `config/settings.py`; the dual-role matrix enumerates protected routes from the URL conf and fails a full run below 100%, currently 19/19 |
+| 5 | Citation verification is application code, not a model judgement | ✅ Asserted structurally: `apps/retrieval/verification.py` imports nothing from `apps.ai` but a dataclass, so an entailment check cannot be added without a test failing. Its conceded limitation was observed with three real examples at item 9a |
+| 6 | No interface state shows an uncited factual statement | ⚠️ **Qualified, and the qualification is the interface.** Asserted at the API boundary — replies carry no rejected text and no withheld affordance — but the front end has **no test runner** (D-25, audit finding 8). A component that rendered `partial_matches` into a Sources list, or held a stale answer across a role change, is caught by nothing in the suite. The invariant is about the interface; the interface is the untested half |
+| 7 | Two no-answer paths, logged separately | ✅ One reply, two reasons, asserted byte-identical at the HTTP layer while the rows differ. `rejected_count` separates path B's two kinds (D-40's evidence for why that mattered) |
+| 8 | A failed AI step never discards the source | ✅ Tested across extraction, indexing and reprocess |
+| 9 | Ingestion is atomic | ✅ Tested with an induced mid-ingestion failure leaving nothing behind |
+| 10 | Structured output or nothing | ✅ A non-conforming response is a failed attempt, retried, then 503 — and `test_generation.py` is the *only* evidence the retry path works, because every live run conformed first time |
+
+**What the audit is worth saying about itself.** Invariant 2 was not found by reading
+CLAUDE.md; it was found by writing a test that tried to use it. The other nine are ticked
+above on evidence that already existed, which is a weaker check than the one that caught
+number 2 — and invariant 6's qualification shows the shape of what such a check misses: the
+claim is true of the half that has tests and unverified of the half that does not.
+
 ## What is measured, and what is not
 
 Not a clause audit, but the same kind of honesty and the auditor will want it.

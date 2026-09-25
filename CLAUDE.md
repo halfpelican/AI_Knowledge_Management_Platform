@@ -204,7 +204,24 @@ constants module.
    table as the vector rather than a discipline someone has to remember. No query
    shape can rank first. Changing a source's visibility **re-stamps every one of its
    chunks in the same transaction** — that cascade is a model-level guarantee, not a
-   convention, and it has its own test. See D-17.
+   convention, and it has its own test. See D-17 and D-47.
+
+   > **This invariant asserted something untrue from 12 September to 25 September
+   > 2026, and the correction is dated rather than quietly applied.** The cascade was
+   > written here as a model-level guarantee with its own test; it was neither. There
+   > was no `save()` override, no signal, and no test. It was found by the FR-11
+   > scoping work at Stage 4 item 11, after the clause enumeration, and implemented
+   > the same day as item 11a. The measured consequence was invariant 1 broken with
+   > evidence: narrow a document to `[Administrator]`, and `GET /api/documents`
+   > correctly returned `[]` while `POST /api/ask` still answered an Employee with a
+   > citation from that document. It was latent only in the sense that no shipped
+   > route mutated the column — the corpus loads by script and `README.md` documents
+   > a `manage.py shell` snippet for direct row edits, which is how it would have
+   > been reached in practice. The lesson is about this file: an invariant that
+   > describes its own enforcement is a claim, and a claim in a document nobody tests
+   > is indistinguishable from an intention. Nine of the other ten were audited as
+   > claims at the same time; `docs/stage-4-clause-audit.md` records what that
+   > found.
 3. **Meetings are scoped by role, never by attendance.** `Meetings.visible_to_roles`
    mirrors `Documents` exactly. Knowledge has to outlive the people who were in the
    room, and a second scoping mechanism would mean two code paths through the single

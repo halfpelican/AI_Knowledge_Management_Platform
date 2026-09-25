@@ -1968,3 +1968,130 @@ scope for exactly this reason.
   `get_object_or_404`, so there is no branch that could come to distinguish them. That is
   the same shape `MeetingDetailView` uses, and it is stronger than two branches that return
   the same status today.
+
+## D-47 · The visibility cascade is a save() override and a manager, not a signal
+
+**Status:** Settled · **Date:** 2026-09-25 · **Stage:** 4 item 11a ·
+**Closes:** a claim CLAUDE.md invariant 2 made from 12 September and did not keep
+
+**What was wrong.** Invariant 2 stated that changing a source's visibility "re-stamps every
+one of its chunks in the same transaction — that cascade is a model-level guarantee, not a
+convention, and it has its own test". There was no `save()` override, no signal and no test.
+Measured consequence: narrow a document to `[Administrator]`, and `GET /api/documents`
+correctly returns `[]` while `POST /api/ask` still answers an Employee **with a citation
+from that document**. The row filter and the chunk filter disagreed, and retrieval uses the
+chunk filter.
+
+**Latent is not the same as unreachable.** No shipped route mutates `visible_to_roles` after
+ingestion, so the API could not trigger it. But the corpus loads by script, `README.md`
+documents a `manage.py shell` snippet for direct row edits, and demonstration preparation is
+precisely when somebody narrows a document by hand. FR-15 in Stage 5 adds the repository
+control that would have made it routine.
+
+**Decision: a `save()` override on `Document` and `Meeting`, plus a `QuerySet` manager for
+`update()`.** Not a signal, and invariant 2's own two words decide it:
+
+- *"in the same transaction"* — a `post_save` receiver on a save in autocommit, which is
+  every `document.save()` outside an `atomic()` block, runs **after** the source row has
+  committed. The phrase would be literally false, and a failing cascade would leave the
+  source narrowed and its chunks wide. The override opens the `atomic()` itself.
+  `test_a_failed_cascade_rolls_the_sources_own_change_back` patches the cascade to raise and
+  asserts the source keeps its old scope.
+- *"a model-level guarantee"* — a receiver is connected only if its module is imported, which
+  is one `AppConfig` edit away from being silently absent. That is a convention.
+
+`QuerySet.update()` is covered by a manager on both models, because `update()` bypasses
+`save()` and every signal and is already used in this codebase for single-column writes. Two
+subtleties are tested: affected primary keys are read **before** the UPDATE, so filtering on
+the old value still cascades; and the new scope is read back **from the rows**, so a database
+expression cascades per row.
+
+**Not covered, stated rather than discovered:** `bulk_update`, `bulk_create`, raw SQL and
+`psql`. Each bypasses `save()` for every model in this project, none is used for visibility
+anywhere in the repository, and `manage.py reindex` re-derives the stamp correctly because it
+rebuilds the chunk.
+
+**Expressed as a condition to restore, not a diff to apply.** One UPDATE saying every chunk
+of this source carries this scope, with an `exclude()` guard so a save that did not change
+the scope writes zero rows. No change detection and no shadow copy. A
+`save(update_fields=[...])` that does not name the column skips the cascade, because the
+cascade mirrors what the save wrote and not what the instance holds — which is what keeps
+ingestion's frequent status saves cheap.
+
+**Consequences.**
+
+- **The test was written failing and flips green in the implementing commit**, which is the
+  D-36 property: a check with a demonstrated failure mode is better evidence than one that
+  has only ever passed. It was a `strict` xfail, so leaving it behind was impossible — an
+  unexpected pass is a failure.
+- No migration. A plain mixin rather than an abstract model, and an `as_manager()` manager,
+  change nothing the autodetector records.
+- CLAUDE.md invariant 2 now carries a **dated** correction rather than a silent edit. The
+  claim stands; the note records that it was untrue for thirteen days and how it was found.
+
+## D-48 · A reopened thread is re-scoped on read, and its statements are renumbered
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4 item 11b ·
+**Class:** the same bug as D-47, one instance further on
+
+**The leak, framed correctly.** `GET /api/conversations/{id}` was filtered by owner and never
+re-scoped, so an Administrator who asked a question answered from Administrator-only
+material, was then demoted, and reopened the thread still received it.
+
+It is tempting to record this as "only an identifier leaked, since no route resolves a
+`chunk_id` to passage text". **That understates it, and the understatement is the thing worth
+recording.** A statement generated from a restricted passage carries that passage's substance
+in natural language: the sentence *is* the restricted fact, written out. The identifier is
+the lesser half.
+
+**Decision.** Re-scope on read. Stored `chunk_id`s are filtered through
+`scoping.scoped_chunks` under the reader's current role, and a statement whose citation is no
+longer permitted is dropped. **The same predicate, not a second implementation** — invariant
+3's argument is that a second scoping mechanism means two code paths through the one filter
+that matters most, and it applies here unchanged.
+
+FR-13's Validation clause already requires that a follow-up "cannot inherit access the user
+no longer holds". A thread read is that principle one step on, and every other route in the
+system re-resolves the scope per request.
+
+**A turn that loses every statement renders as the existing no-answer state**, reusing what
+item 7 built. Not blank, and not a "content withheld" notice or a removed-count: such a
+notice is itself an existence disclosure, which invariant 1 forbids. Asserted three ways —
+no removal vocabulary in the bytes, no record-only field, and exact key sets.
+
+**Surviving statements are renumbered contiguously**, and this is the part the proposal does
+not settle. Rendering the stored positions would show `[1] … [3]`, and **a gap in citation
+numbering is itself an indication that something was removed.** Where nothing is dropped the
+renumbering is the identity, so an ordinary read is unchanged, and `AnswerCitation.position`
+is never rewritten — the mutation is in memory only.
+
+**The stored rows are untouched**, deliberately. `QueryLog` and `AnswerCitation` are FR-19's
+record of what was actually answered at the time. Re-scoping is a read concern; rewriting
+history to match a role change would destroy the evidence while fixing the disclosure. The
+question text and the thread title stay, for the reason D-42 passes prior questions: they are
+the user's own words.
+
+**THE CLASS, which is the reason this entry exists as well as the instance.** Derived records
+do not carry visibility, and nothing re-derives it. Four instances, three found and one by
+inspection:
+
+1. **`ContentChunk`** — stamped at ingestion, never re-stamped when the source changed. Fixed
+   as D-47.
+2. **A reopened thread** — statements replayed under the role that asked, not the role
+   reading. Fixed here.
+3. **`QueryLog.answer_text`** — generated under the role held at the time, and it is a stored
+   record rather than a response, so it is correct that it is not re-scoped. It becomes a
+   disclosure the moment anything renders it: **FR-14's dashboard of recent queries (Stage 5)
+   is the next reader**, and it must reuse `ConversationTurnSerializer`'s treatment rather
+   than reading the column.
+4. **`SearchLog.result_count`** — a post-filter total computed under the role held at the
+   time. A demoted user's own search history therefore records counts from a scope they have
+   lost. Nothing renders it today.
+
+The pattern to hunt, and the Stage 4 security review is asked to: **any column whose value
+was derived under a permission scope, read back later without re-deriving it.**
+
+**Consequence worth knowing.** `ConversationTurnSerializer` reads `permitted_chunk_ids` from
+its context with **no default**, so a caller that renders turns without supplying it raises
+rather than returning a body. Deliberate: permitting everything is the leak, and permitting
+nothing would look like a retrieval fault, so failing loudly is the only safe default.
