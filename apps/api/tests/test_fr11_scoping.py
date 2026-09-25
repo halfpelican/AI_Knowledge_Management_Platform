@@ -284,12 +284,20 @@ class TwoLevelCorpus:
         Document.objects.filter(id=self.restricted_document.id).delete()
 
 
-def build_corpus(employee, administrator, *, shared_cosine) -> TwoLevelCorpus:
+def build_corpus(
+    employee, administrator, *, shared_cosine, restricted_roles=(ADMINISTRATOR_ROLE_NAME,)
+) -> TwoLevelCorpus:
     """The corpus, with the in-scope material's distance from the question as the knob.
 
     ``shared_cosine=ABOVE`` gives an Employee an answerable question; ``BELOW`` gives them
     no-answer path A while the Administrator can still answer it, which is the headline
     arrangement: the only good answer lives out of scope.
+
+    ``restricted_roles`` is the scope the restricted trio is INGESTED with, and it exists for
+    section 8: passing ``BOTH_ROLES`` builds the identical corpus with those three items
+    visible to everybody and their chunks stamped that way, so a test can then narrow them
+    afterwards and hold the result to exactly the same four absences. The default is the
+    static case — material an Employee never could see.
     """
     shared_document, shared_document_chunk = make_document(
         employee,
@@ -308,7 +316,7 @@ def build_corpus(employee, administrator, *, shared_cosine) -> TwoLevelCorpus:
     restricted_document, restricted_document_chunk = make_document(
         administrator,
         title=RESTRICTED_DOCUMENT_TITLE,
-        roles=[ADMINISTRATOR_ROLE_NAME],
+        roles=list(restricted_roles),
         text=RESTRICTED_DOCUMENT_TEXT,
         cosine=NEAREST,
         department=RESTRICTED_DOCUMENT_DEPARTMENT,
@@ -317,7 +325,7 @@ def build_corpus(employee, administrator, *, shared_cosine) -> TwoLevelCorpus:
     # an access control would pass every other test in this file and fail the pair below.
     restricted_meeting, restricted_meeting_chunk = make_meeting(
         title=RESTRICTED_MEETING_TITLE,
-        roles=[ADMINISTRATOR_ROLE_NAME],
+        roles=list(restricted_roles),
         text=RESTRICTED_MEETING_TEXT,
         cosine=NEAREST - 0.05,
         attendees=[employee],
@@ -326,7 +334,7 @@ def build_corpus(employee, administrator, *, shared_cosine) -> TwoLevelCorpus:
     # must still be able to read it. Knowledge outlives the people who were in the room.
     unattended_meeting, unattended_meeting_chunk = make_meeting(
         title=UNATTENDED_MEETING_TITLE,
-        roles=[ADMINISTRATOR_ROLE_NAME],
+        roles=list(restricted_roles),
         text=UNATTENDED_MEETING_TEXT,
         cosine=BELOW,
     )
@@ -1233,21 +1241,25 @@ def test_a_document_whose_chunk_is_scoped_to_nobody_carries_no_passage_in_its_de
     assert str(chunk.id) not in raw
 
 
-# --- 8. The invariant-2 cascade, which is NOT implemented ---------------------------------
+# --- 8. The invariant-2 cascade: a scope that CHANGES after ingestion ---------------------
 #
-# Found while writing this file, and recorded as a strict xfail rather than as a green test,
-# because a green test here would be a false one and a red suite is not this file's to leave
-# behind. The marker is the ratchet: the day the cascade lands, this XPASSes, strict makes
-# that a failure, and whoever implemented it removes the marker.
+# Item 11 found this gap and left it here as a strict xfail, because a green test would have
+# been a false one: nothing on Document or Meeting cascaded a visibility change, so narrowing
+# a document removed it from GET /api/documents — that filter is on the row — and left
+# POST /api/ask answering an Employee with a citation from it, because that filter is on the
+# chunk, which still carried both roles. One change, two filters, two answers, the worse of
+# them being the one that returns content.
+#
+# The cascade is now a model-level guarantee (apps/core/visibility.py), the marker is off,
+# and the tests below are its consequence at the boundary. Sections 1 to 7 cover the STATIC
+# case — a scope an Employee never could see. This section covers the SEQUENCE, which is
+# what was actually broken: ingested visible to everybody, narrowed afterwards, then asked.
+# The model-level properties — every chunk, both source types, widening, the same
+# transaction, QuerySet.update() — are in apps/core/tests/test_visibility_cascade.py, and
+# the split is deliberate: these tests would still pass if a view did the re-stamping, and
+# those would not.
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="D-17 / invariant 2's re-stamp cascade is not implemented: narrowing a "
-    "Document's visible_to_roles leaves its chunks stamped with the old scope. Latent "
-    "today because no route mutates visibility after ingestion; reachable as soon as one "
-    "does (FR-15, Stage 5). Reported at Stage 4 item 11.",
-)
 def test_narrowing_a_documents_visibility_re_stamps_its_chunks(
     employee_client, service, employee
 ):
@@ -1255,24 +1267,10 @@ def test_narrowing_a_documents_visibility_re_stamps_its_chunks(
     chunks in the same transaction** — that cascade is a model-level guarantee, not a
     convention, and it has its own test. See D-17."
 
-    It is neither. Nothing on ``Document`` or ``ContentChunk`` cascades a visibility change;
-    the only re-stamping code is in the re-index path
-    (``apps/ingestion/tests/test_reindex.py::test_restamps_visibility_from_the_source_not_the_stale_chunk``),
-    which re-derives the stamp because it rebuilds the chunk, not because the source changed.
-
-    What the gap costs, measured rather than argued — an ordinary ``save()`` narrowing a
-    document to Administrators only produces, for an Employee:
-
-    - ``GET /api/documents`` — the document is gone, because that filter is on the row;
-    - ``POST /api/ask`` — the passage is still retrieved, still sent to the AI service and
-      still cited, because that filter is on the chunk, which still carries both roles.
-
-    So the Employee is answered, with a citation, from a document they can no longer open.
-    It is latent only because no M6 route changes visibility after ingestion: upload and
-    transcript ingestion set the array once, and there is no PATCH on either resource. FR-15
-    (Stage 5) is where a repository gains that control, and this must land with it.
-
-    The assertion below is the model-level guarantee itself, stated as invariant 2 words it.
+    The assertion is the guarantee itself, stated as invariant 2 words it, and then the
+    consequence the gap used to cost: an ordinary ``save()`` narrowing a document to
+    Administrators only leaves the Employee with no answer, where before it left them
+    answered, with a citation, from a document they could no longer open.
     """
     document, chunk = make_document(
         employee,
@@ -1292,3 +1290,199 @@ def test_narrowing_a_documents_visibility_re_stamps_its_chunks(
     body = ask(employee_client).json()
     assert body["answered"] is False
     assert SHARED_DOCUMENT_TEXT not in ask(employee_client).content.decode()
+
+
+def test_narrowing_a_meetings_visibility_re_stamps_its_chunks(employee_client, service):
+    """The same guarantee for a meeting, because D-16 makes meeting visibility mirror document
+    visibility exactly and a cascade that only covered documents would be the second code
+    path invariant 3 refuses. The attendee record is written and changes nothing."""
+    meeting, chunk = make_meeting(
+        title=SHARED_MEETING_TITLE,
+        roles=BOTH_ROLES,
+        text=SHARED_MEETING_TEXT,
+        cosine=ABOVE,
+    )
+
+    meeting.visible_to_roles = [ADMINISTRATOR_ROLE_NAME]
+    meeting.save()
+
+    chunk.refresh_from_db()
+    assert chunk.visible_to_roles == [ADMINISTRATOR_ROLE_NAME]
+    body = ask(employee_client).json()
+    assert body["answered"] is False
+    assert SHARED_MEETING_TEXT not in ask(employee_client).content.decode()
+
+
+@pytest.fixture
+def narrowed_after_ingestion(employee, administrator):
+    """The headline corpus, except that its restricted trio was ingested visible to EVERYBODY
+    and narrowed to Administrators afterwards.
+
+    One document and two meetings, so both source types travel this path in one request, and
+    the chunks were genuinely stamped with both roles at ingestion — the fixture asserts that
+    before narrowing, so a cascade that never ran could not be mistaken for a corpus that was
+    restricted all along. Afterwards the arrangement is bit-for-bit the one sections 1 to 7
+    assert against, which is the point: the same four absences must hold, and the same helper
+    must be the thing that checks them.
+    """
+    corpus = build_corpus(
+        employee, administrator, shared_cosine=BELOW, restricted_roles=BOTH_ROLES
+    )
+    assert corpus.restricted_document_chunk.visible_to_roles == BOTH_ROLES
+    assert corpus.restricted_meeting_chunk.visible_to_roles == BOTH_ROLES
+    for source in (
+        corpus.restricted_document,
+        corpus.restricted_meeting,
+        corpus.unattended_meeting,
+    ):
+        source.visible_to_roles = [ADMINISTRATOR_ROLE_NAME]
+        source.save()
+    return corpus
+
+
+def test_a_document_narrowed_after_ingestion_leaves_no_trace_on_the_answer_path(
+    employee_client, service, narrowed_after_ingestion
+):
+    """**The sequence case, which is the one that was broken.** Ingest, narrow, then ask.
+
+    The narrowed document is still the nearest passage in the store at 0.95, and everything
+    the Employee may read is below the floor, so there is every incentive for it to surface:
+    if the chunk still carried both roles it would be retrieved, sent to the provider and
+    cited, and the four absences would fail one after another. All four are asserted through
+    item 11's own helper rather than a local subset, so this exit is held to the identical
+    standard as a scope that was always narrow.
+    """
+    response = ask(employee_client)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answered"] is False
+    assert body["message"] == NO_ANSWER_MESSAGE
+    assert body["result_count"] == 0
+    assert service.generate_calls == []  # nothing in scope cleared the floor
+    assert_nothing_restricted_reached(response, service, narrowed_after_ingestion)
+    assert RESTRICTED_DOCUMENT_TEXT not in response.content.decode()
+
+
+def test_a_meeting_narrowed_after_ingestion_leaves_no_trace_on_the_answer_path(
+    employee_client, service, narrowed_after_ingestion
+):
+    """The same sequence for a meeting, named separately because FR-11's meeting half has its
+    own column, its own source type and its own decision behind it (D-16).
+
+    The Employee ATTENDED the narrowed meeting, which is exactly the case where an
+    implementation tempted to treat attendance as access would keep answering from it after
+    the role scope was narrowed underneath.
+    """
+    corpus = narrowed_after_ingestion
+    assert MeetingAttendee.objects.filter(meeting=corpus.restricted_meeting).exists()
+
+    response = ask(employee_client)
+
+    raw = response.content.decode()
+    assert response.json()["answered"] is False
+    assert RESTRICTED_MEETING_TEXT not in raw and UNATTENDED_MEETING_TEXT not in raw
+    assert_nothing_restricted_reached(response, service, corpus)
+
+
+def test_the_administrator_still_answers_from_the_material_that_was_narrowed(
+    administrator_client, service, narrowed_after_ingestion
+):
+    """The negative control for the whole section: narrowing narrowed, it did not blank.
+
+    A cascade that stamped every chunk with an empty array, or that dropped the rows, would
+    satisfy every absence above and destroy the corpus. The role the material was narrowed TO
+    still gets its answer, from the same vectors, with no re-index in between — which is also
+    the assertion that nothing was re-embedded, because the provider was never asked to embed
+    anything but this question.
+    """
+    corpus = narrowed_after_ingestion
+
+    response = ask(administrator_client)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answered"] is True
+    [statement] = body["statements"]
+    assert statement["chunk_id"] == str(corpus.restricted_document_chunk.id)
+    assert RESTRICTED_DOCUMENT_TITLE in {source["title"] for source in body["sources"]}
+    # One embed call, carrying the question and its retrieval task prefix — and no chunk
+    # text, because the cascade re-stamped the rows without going near the provider.
+    [[embedded]] = service.embed_calls
+    assert QUESTION in embedded
+    assert RESTRICTED_DOCUMENT_TEXT not in embedded
+
+
+def test_a_document_narrowed_and_then_widened_again_is_answerable(
+    employee_client, service, narrowed_after_ingestion
+):
+    """Widening, which is the direction that gets found later.
+
+    A document restricted by mistake and corrected must become answerable again without a
+    re-index: the vectors were never wrong, only the stamp moved. The Employee asks the same
+    question across the correction and the answer appears.
+    """
+    corpus = narrowed_after_ingestion
+    assert ask(employee_client).json()["answered"] is False
+
+    corpus.restricted_document.visible_to_roles = BOTH_ROLES
+    corpus.restricted_document.save()
+    response = ask(employee_client)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answered"] is True
+    [statement] = body["statements"]
+    assert statement["chunk_id"] == str(corpus.restricted_document_chunk.id)
+    # The meetings were not corrected, so they are still absent — the widening is not a
+    # blanket amnesty for everything narrowed in the same fixture.
+    raw = response.content.decode()
+    assert RESTRICTED_MEETING_TEXT not in raw and UNATTENDED_MEETING_TEXT not in raw
+
+
+def test_both_roles_see_the_cascade_take_effect_on_the_route_they_share(
+    session_client, service, narrowed_after_ingestion
+):
+    """The dual-role pairing for the sequence, on ``POST /api/ask``: after the same change,
+    the Employee has no answer and the Administrator has one. FR-11's Front-End clause —
+    "two users asking the same question may receive different results" — now holding across a
+    visibility change rather than only across an ingestion-time scope.
+    """
+    corpus = narrowed_after_ingestion
+
+    response = ask(session_client.client)
+
+    assert response.status_code == 200
+    body = response.json()
+    if session_client.role_name == EMPLOYEE_ROLE_NAME:
+        assert body["answered"] is False
+        assert_nothing_restricted_reached(response, service, corpus)
+    else:
+        assert body["answered"] is True
+        assert RESTRICTED_DOCUMENT_TITLE in {source["title"] for source in body["sources"]}
+
+
+def test_a_narrowed_document_disappears_from_the_repository_and_the_search_together(
+    employee_client, service, narrowed_after_ingestion
+):
+    """The row filter and the chunk filter now agree, which is what the gap was.
+
+    Before the cascade these two routes disagreed about the same document after the same
+    change: it was absent from the list, whose predicate is on the source row, and present in
+    an answer, whose predicate is on the chunk. Asserting them in one test is the form of the
+    original defect, so a regression that re-opened it would fail here as a disagreement
+    rather than as two unrelated tests.
+    """
+    corpus = narrowed_after_ingestion
+
+    listing = employee_client.get(DOCUMENTS_URL)
+    detail = document_detail(employee_client, corpus.restricted_document.id)
+    searched = employee_client.get(SEARCH_URL, {"q": TERM})
+    answer = ask(employee_client)
+
+    assert [row["title"] for row in listing.json()] == [SHARED_DOCUMENT_TITLE]
+    assert detail.status_code == 404
+    assert RESTRICTED_DOCUMENT_TEXT not in searched.content.decode()
+    assert searched.json()["documents"]["count"] == 1
+    assert answer.json()["answered"] is False
+    assert_nothing_restricted_reached(answer, service, corpus)
