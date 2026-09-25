@@ -137,6 +137,21 @@ by that, because ``record_query`` is called from inside this function where the 
 identifiers are still the local ``supplied_chunk_ids``, which is also the exact list
 verification checked against.
 
+**FR-12's partial matches are item 10a's, and they are here.** ``rank``'s output is now
+named before ``admit`` narrows it, because the second sentence of FR-12's no-answer clause —
+"Any partially related items found are offered, clearly labelled as partial matches" — is
+derived from the ranked SCOPED candidates irrespective of the threshold, and from nothing
+else. One call, above the path-A branch, so the same value reaches BOTH no-answer
+constructors and the two identical replies stay identical; a list built from the admitted
+set, the truncated set or the rejected statements would differ between the paths and hand a
+caller the distinction invariant 7 keeps in the log. The value is source identity only —
+type and id, no passage text, no score — and ``apps/retrieval/partial_matches.py`` holds
+the whole argument for that, for the cap, and for one entry per source. An ANSWERED outcome
+carries none: the clause is about the no-answer state, an answered reply already lists every
+item consulted, and offering near misses beside an answer would present unadmitted material
+as though it supported one. The reply's KEY is present either way, empty on an answer, as
+``message`` is present and null there.
+
 **``rejected_count`` IS recorded, on a column added for it.** Item 8 first shipped without
 one — ``QueryLog`` had no such field — and said so rather than inventing a migration; the
 column was then asked for and added (``0002_querylog_rejected_count``). It is written on
@@ -161,6 +176,7 @@ from apps.core.constants import (
 )
 from apps.retrieval.conversation import conversation_context
 from apps.retrieval.query_embedding import embed_question
+from apps.retrieval.partial_matches import PartialMatch, partial_matches
 from apps.retrieval.query_log import record_query
 from apps.retrieval.ranking import RankedPassage, admit, rank, truncate_to_context
 from apps.retrieval.scoping import candidate_chunks, permission_scope
@@ -214,6 +230,16 @@ class RetrievalOutcome:
     - answered — ``verified_statements`` is non-empty, ``answered`` is True, and
       ``no_answer_reason`` and ``message`` are both None.
 
+    **``partial_matches`` is non-empty only on the two no-answer branches**, which is a
+    decision and not an oversight. FR-12 asks for partially related items in the sentence
+    that describes the no-answer state; an answered reply already lists every item consulted
+    with its date, and a second list of items that did NOT make it into the answer, sitting
+    beside statements that cite the ones that did, would present unadmitted material as
+    though it supported the answer. The field stays on the dataclass and the reply's key
+    stays present and empty, so the shape does not vary between outcomes — ``message`` is
+    present and null on an answered reply for the same reason. Both no-answer branches
+    receive it as a required argument, computed once, so it cannot differ between them.
+
     **There is no longer any outcome with ``answered=False`` and ``no_answer_reason``
     None.** Item 6 returned one, as the stated absence item 7 would fill; item 7 filled
     it, and ``verified`` now refuses to construct one (see its guard) so the hole cannot
@@ -239,20 +265,37 @@ class RetrievalOutcome:
     rejected_count: int = 0
     no_answer_reason: str | None = None
     message: str | None = None
+    # FR-12's "partially related items", as source identities and nothing else: no text, no
+    # score, no title (the presentation layer resolves one). Derived from the ranked scoped
+    # candidates BEFORE the threshold, so the value is the same whichever no-answer path was
+    # taken — apps/retrieval/partial_matches.py argues why that is a disclosure property and
+    # not a shortcut. Empty on an answered outcome, by decision: see the class docstring.
+    partial_matches: tuple[PartialMatch, ...] = ()
 
     @classmethod
-    def no_relevant_passage(cls) -> "RetrievalOutcome":
-        """No-answer path A: nothing cleared the threshold, generation never called."""
+    def no_relevant_passage(
+        cls, *, partial_matches: tuple[PartialMatch, ...]
+    ) -> "RetrievalOutcome":
+        """No-answer path A: nothing cleared the threshold, generation never called.
+
+        ``partial_matches`` is required rather than defaulted, on this constructor and on
+        path B's, so that the two cannot be built with different values by a caller who
+        remembered the field on one branch and forgot it on the other. That divergence is
+        exactly what would make this field the one that tells the two paths apart.
+        """
         return cls(
             answered=False,
             result_count=0,
             passages=(),
             no_answer_reason=NO_RELEVANT_PASSAGE,
             message=NO_ANSWER_MESSAGE,
+            partial_matches=partial_matches,
         )
 
     @classmethod
-    def no_statement_verified(cls, verification: "VerificationResult") -> "RetrievalOutcome":
+    def no_statement_verified(
+        cls, verification: "VerificationResult", *, partial_matches: tuple[PartialMatch, ...]
+    ) -> "RetrievalOutcome":
         """No-answer path B: passages were retrieved, generation ran, nothing survived.
 
         **Byte for byte the same reply as path A**, and that is the requirement rather than
@@ -288,6 +331,13 @@ class RetrievalOutcome:
         apart, on this object and in ``QueryLog.rejected_count``, which exists for exactly
         this distinction: same reason code, different count, and item 6's runs showed the
         two moving independently under a change that left their total almost unmoved.
+
+        **``partial_matches`` is the ONE field this constructor shares with path A's by
+        value rather than by coincidence.** It is passed in, from the pipeline's single
+        pre-threshold derivation, so the field cannot become the thing that distinguishes the
+        two replies. The passages supplied on this path are among the items it names, which
+        is correct and discloses nothing: the same items would be named on path A under the
+        same question and the same corpus, and no score, count or text accompanies them.
         """
         return cls(
             answered=False,
@@ -297,6 +347,7 @@ class RetrievalOutcome:
             rejected_count=verification.rejected_count,
             no_answer_reason=NO_STATEMENT_VERIFIED,
             message=NO_ANSWER_MESSAGE,
+            partial_matches=partial_matches,
         )
 
     @classmethod
@@ -398,13 +449,24 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
     candidates = candidate_chunks(role_name=role_name, embedding_model=embedding.model)
 
     # Step 5. Cosine in application code, best first, capped at TOP_K, then the floor.
-    admitted = admit(rank(candidates, embedding.vectors[0]))
+    # The ranked list is NAMED rather than passed straight into ``admit`` because FR-12's
+    # partial matches are derived from it before the floor narrows it (see below).
+    ranked = rank(candidates, embedding.vectors[0])
+
+    # FR-12's "partially related items", derived HERE — once, from the pre-threshold ranked
+    # list, above the path-A branch — so that both no-answer paths are handed the same value
+    # and no field of the reply can tell them apart (invariant 7,
+    # apps/retrieval/partial_matches.py). Every item named is in the asking role's scope
+    # because ``candidates`` was (invariant 1), and none of them carries passage text.
+    offered = partial_matches(ranked)
+
+    admitted = admit(ranked)
 
     # Step 6. No-answer path A: return BEFORE the call site below, not around it.
     # Answerability is settled on the scores, so with no grounding material the model is
     # not asked at all — there is nothing it could do with the question but invent.
     if not admitted:
-        outcome = RetrievalOutcome.no_relevant_passage()
+        outcome = RetrievalOutcome.no_relevant_passage(partial_matches=offered)
         # 7.10 line 76: recorded with an EMPTY identifier list, because nothing was
         # supplied to generation. That empty array beside answered=False is what
         # distinguishes this row from a path-B row for FR-19, on top of the reason code.
@@ -462,7 +524,9 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
     # NO_STATEMENT_VERIFIED, and ``rejected_count`` is what tells them apart, on the outcome
     # and in the row.
     if not verification.verified_statements:
-        outcome = RetrievalOutcome.no_statement_verified(verification)
+        outcome = RetrievalOutcome.no_statement_verified(
+            verification, partial_matches=offered
+        )
         # 7.10 line 165: the row carries ``suppliedPassageIds`` where the reply carries
         # none. The record is not the reply — that is the whole of invariant 7, and the
         # traceability clause is why the identifiers are written down at all. The rejected

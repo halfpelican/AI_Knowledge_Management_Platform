@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { askQuestion } from '../api/ask.js'
 import { ApiError } from '../api/client.js'
 import { createConversation, fetchConversation, listConversations } from '../api/conversations.js'
-import { searchKnowledge } from '../api/search.js'
 import { AnswerBody, PartialMatches, SourcesPanel } from '../components/Answer.jsx'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
@@ -13,8 +12,7 @@ import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
-import { partialMatchTerm } from '../utils/partialMatches.js'
-import { questionError, searchTermError } from '../utils/validation.js'
+import { questionError } from '../utils/validation.js'
 import './Repository.css'
 import './Ask.css'
 
@@ -31,7 +29,9 @@ const FIELDS = ['question', 'conversation_id']
  * - FR-12: the question field, the answer with numbered inline citations, each
  *   citation expanding to its source passage, the Sources panel listing every item
  *   consulted with its date, the no-answer state, and the partial matches beside
- *   it. The rendering of all of that lives in src/components/Answer.jsx.
+ *   it — which are a field of the reply (`partial_matches`), not something this
+ *   screen derives: one request per question, and no second one. The rendering of
+ *   all of that lives in src/components/Answer.jsx.
  * - FR-13: the thread that retains its turns so a follow-up need not restate the
  *   subject, the list of previous conversations with a way to reopen one, and the
  *   control that clears the active thread to begin a new topic.
@@ -117,46 +117,7 @@ export default function Ask() {
     turnCounter.current += 1
     const key = `turn-${turnCounter.current}`
     setTurns((current) => [...current, { ...turn, key }])
-    return key
   }
-
-  /**
-   * FR-12: "Any partially related items found are offered, clearly labelled as
-   * partial matches."
-   *
-   * The no-answer reply carries no passages on purpose — a reply that offered them
-   * would disclose that material exists which could not be cited — so the partial
-   * matches come from the keyword search instead. Everything it returns is in the
-   * caller's scope by construction, because search applies the same permission
-   * filter as retrieval.
-   *
-   * **One word from the question, not the question.** The search endpoint matches a
-   * term as a single substring, so a whole question matches nothing at all; the
-   * choice of word and the evidence for it are in src/utils/partialMatches.js, and
-   * the screen names the word it searched for.
-   *
-   * Two consequences, stated rather than hidden: the search writes its own
-   * `SearchLog` row, which is consistent with what that log is for (FR-19 gap
-   * evidence), and a search that fails or finds nothing adds nothing to the screen.
-   * A failed search is not a failed question and is never reported as one.
-   */
-  const loadPartialMatches = useCallback(async (turnKey, askedQuestion) => {
-    const term = partialMatchTerm(askedQuestion)
-    if (term === null || searchTermError(term) !== null) return
-    let results
-    try {
-      results = await searchKnowledge(term)
-    } catch {
-      return
-    }
-    const combined = [...(results?.documents?.results ?? []), ...(results?.meetings?.results ?? [])]
-    if (combined.length === 0) return
-    setTurns((current) =>
-      current.map((turn) =>
-        turn.key === turnKey ? { ...turn, partialMatches: combined, partialMatchTerm: term } : turn,
-      ),
-    )
-  }, [])
 
   function handleFailure(error) {
     if (!(error instanceof ApiError)) {
@@ -223,7 +184,7 @@ export default function Ask() {
       const statements = reply?.statements ?? []
       const sources = reply?.sources ?? []
       const answered = Boolean(reply?.answered)
-      const key = appendTurn({
+      appendTurn({
         question: asked,
         answered,
         // The server's fixed no-answer text. The fallback exists only so the state
@@ -231,8 +192,10 @@ export default function Ask() {
         message: reply?.message ?? TEXT.noAnswerFallback,
         statements,
         sources,
-        partialMatches: null,
-        partialMatchTerm: null,
+        // FR-12's partially related items, straight off the reply: the key is present
+        // on every reply and populated only on a no-answer, so there is nothing to
+        // derive here and no second request to make (item 10a).
+        partialMatches: reply?.partial_matches ?? [],
         expandable: true,
       })
       setQuestion('')
@@ -242,7 +205,6 @@ export default function Ask() {
       // The thread's title and its last-updated time changed on the server, so the
       // list is re-read rather than guessed at.
       conversations.reload()
-      if (!answered) loadPartialMatches(key, asked)
     } catch (error) {
       handleFailure(error)
     } finally {
@@ -279,8 +241,10 @@ export default function Ask() {
         // past turn was built from, so its citations keep their numbers and cannot
         // expand. Said on the screen rather than left as a control doing nothing.
         sources: [],
-        partialMatches: null,
-        partialMatchTerm: null,
+        // And no partial matches: they were derived from the ranking of the turn that
+        // was live, and no route returns a past turn's candidates. Empty, not absent,
+        // so the same branch renders a stored turn and a live one.
+        partialMatches: [],
         expandable: false,
         askedAt: turn.asked_at,
       }))
@@ -455,11 +419,7 @@ export default function Ask() {
                       <Notice variant="info" title={TEXT.noAnswerTitle}>
                         {turn.message}
                       </Notice>
-                      <PartialMatches
-                        idPrefix={turn.key}
-                        results={turn.partialMatches}
-                        term={turn.partialMatchTerm}
-                      />
+                      <PartialMatches idPrefix={turn.key} results={turn.partialMatches} />
                     </>
                   )}
                 </article>

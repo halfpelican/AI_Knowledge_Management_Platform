@@ -48,6 +48,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
 )
 from apps.documents.models import ContentChunk, Document
+from apps.retrieval.partial_matches import MAXIMUM_PARTIAL_MATCHES
 from apps.meetings.models import Meeting
 from apps.retrieval.models import AnswerCitation, Conversation, QueryLog
 
@@ -84,6 +85,13 @@ def wide(*components) -> list[float]:
 
 
 QUERY = wide(1.0)
+
+# A query vector orthogonal to every chunk ``at_cosine`` builds, so each of them scores 0.0
+# against it: still a candidate, still ranked, and below any floor this project would set.
+# It is how a test drives no-answer path A over a corpus that path B also answers on — which
+# item 10a made necessary, because ``partial_matches`` is derived from the corpus and two
+# tests that differ in their corpus no longer differ only in their path.
+ELSEWHERE = wide(0.0, 0.0, 1.0)
 
 
 def at_cosine(value: float) -> list[float]:
@@ -139,7 +147,11 @@ def make_meeting(*, title, roles, text, cosine):
 class ControlledService:
     """An AIService whose query vector is known and whose generation reply is scripted."""
 
-    def __init__(self, *, statements=None, generation_failure=None):
+    def __init__(self, *, vector=None, statements=None, generation_failure=None):
+        # ``vector`` is what ``embed`` answers with: QUERY by default, so a chunk built by
+        # at_cosine(v) scores exactly v. A test passes ELSEWHERE to take the same corpus down
+        # no-answer path A instead.
+        self.vector = QUERY if vector is None else vector
         self.statements = statements
         self.generation_failure = generation_failure
         self.embed_calls: list[list[str]] = []
@@ -148,7 +160,7 @@ class ControlledService:
     def embed(self, texts):
         self.embed_calls.append(list(texts))
         return EmbeddingResult(
-            vectors=[list(QUERY)],
+            vectors=[list(self.vector)],
             model=STUB_EMBEDDING_MODEL,
             dimension=settings.EMBEDDING_DIMENSION,
         )
@@ -234,7 +246,7 @@ def test_an_answered_turn_carries_its_statements_and_the_items_consulted(
     assert response.status_code == 200
     body = response.json()
     assert set(body) == {"answered", "message", "result_count", "statements", "sources",
-                         "conversation"}
+                         "partial_matches", "conversation"}
     assert body["answered"] is True
     assert body["message"] is None
     assert body["result_count"] == 1
@@ -409,26 +421,46 @@ def test_the_two_no_answer_paths_return_byte_identical_bodies(
     step 6 and from step 10, identically, and the rows record different reasons.
 
     The pairing is the test: the paths differ in the log and not in the reply.
-    """
-    make_document(
-        employee, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=BELOW
-    )
-    install(monkeypatch, ControlledService())
-    path_a = employee_client.post(ASK_URL, {"question": QUESTION}, format="json")
 
-    make_document(
-        employee, title="Second", roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=ABOVE
+    **One corpus, two query vectors** — and that is item 10a's doing. This test used to add a
+    second document before the path-B request, which made the corpus the difference as well
+    as the path; now that ``partial_matches`` is derived FROM the corpus, a test built that
+    way would compare two bodies that differ for the wrong reason and would pass or fail for
+    the wrong reason too. So the single document above stays put, and path A is reached by a
+    query vector orthogonal to it (``ELSEWHERE``): nothing clears the floor, generation is
+    never called. Both bodies therefore carry the same non-empty partial-match list, which is
+    the strongest form of the assertion item 10a needed — the field is present, populated,
+    and identical on both paths.
+    """
+    document, _ = make_document(
+        employee, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=ABOVE
     )
-    install(
+
+    # Path A: nothing scores above the floor, so generation is never called.
+    path_a_service = install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    path_a = employee_client.post(ASK_URL, {"question": QUESTION}, format="json")
+    assert path_a_service.generate_calls == []
+
+    # Path B: the same document is admitted and supplied, and the model cites an identifier
+    # that was never supplied, so verification strips the only statement it proposed.
+    path_b_service = install(
         monkeypatch,
         ControlledService(
             statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))]
         ),
     )
     path_b = employee_client.post(ASK_URL, {"question": QUESTION}, format="json")
+    assert len(path_b_service.generate_calls) == 1
 
     assert path_a.status_code == path_b.status_code == 200
     assert path_a.content == path_b.content
+    # Non-empty on both, so the equality above is not two empty lists agreeing.
+    [offered] = path_a.json()["partial_matches"]
+    assert set(offered) == {"source_type", "source_id", "title", "date"}
+    assert offered["source_type"] == DOCUMENT_SOURCE_TYPE
+    assert offered["source_id"] == str(document.id)
+    assert offered["title"] == DOCUMENT_TITLE
+    assert offered["date"]
     reasons = list(QueryLog.objects.order_by("answered_at").values_list("no_answer_reason", flat=True))
     assert reasons == [NO_RELEVANT_PASSAGE, NO_STATEMENT_VERIFIED]
 
@@ -463,6 +495,215 @@ def test_a_no_answer_reply_discloses_neither_the_reason_nor_the_rejected_count(
     assert NO_STATEMENT_VERIFIED not in raw
     # The row does carry it: the distinction exists, in the log, for the team.
     assert QueryLog.objects.exclude(no_answer_reason=None).count() == 1
+
+
+# --- FR-12's partial matches, on the reply (item 10a) --------------------------------------
+#
+# The derivation is tested in apps/retrieval/tests/test_partial_matches.py (the reduction) and
+# apps/retrieval/tests/test_pipeline.py (where in the pipeline it is taken, and that both
+# no-answer paths get the same value). What is tested here is the FIELD: its four sub-fields,
+# that it is present on every exit, that it carries no passage text anywhere in the bytes the
+# client receives, and that an out-of-scope near miss is not in it.
+
+
+@pytest.mark.parametrize("path", ["a", "b"])
+def test_a_no_answer_reply_offers_the_partially_related_items_found(
+    session_client, monkeypatch, path
+):
+    """FR-12: "Any partially related items found are offered, clearly labelled as partial
+    matches" — from an Employee session and from an Administrator session, on both no-answer
+    paths.
+
+    One document and one meeting, the document nearer, so the test also pins rank order over
+    the HTTP boundary. Four sub-fields and no fifth: **no snippet and no score**, asserted on
+    the keys rather than on the values, because the failure this guards against is a field
+    somebody adds later rather than a value somebody sets wrong. And the passage text is
+    asserted absent from the whole rendered body, not from these entries alone, since a
+    no-answer reply carries no passages at all (``sources`` is empty on both paths).
+    """
+    user = session_client.user
+    document, _ = make_document(
+        user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=0.60
+    )
+    meeting, _ = make_meeting(
+        title=MEETING_TITLE, roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT, cosine=0.50
+    )
+    if path == "a":
+        # Nothing clears the floor: generation is never called.
+        install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    else:
+        # Both passages clear it and the model cites an identifier that was never supplied.
+        install(
+            monkeypatch,
+            ControlledService(
+                statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))]
+            ),
+        )
+
+    response = ask(session_client.client)
+
+    body = response.json()
+    assert body["answered"] is False and body["sources"] == []
+    offered = body["partial_matches"]
+    assert [entry["source_id"] for entry in offered] == [str(document.id), str(meeting.id)]
+    assert [entry["title"] for entry in offered] == [DOCUMENT_TITLE, MEETING_TITLE]
+    assert [entry["source_type"] for entry in offered] == [
+        DOCUMENT_SOURCE_TYPE,
+        MEETING_SOURCE_TYPE,
+    ]
+    for entry in offered:
+        assert set(entry) == {"source_type", "source_id", "title", "date"}
+        assert entry["date"]
+    # No passage text, anywhere in the bytes the client is sent. A fragment of source text
+    # under a message that has just said the question cannot be answered reads as a partial
+    # answer, which is invariant 6 by a side door (apps/retrieval/partial_matches.py).
+    raw = response.content.decode()
+    assert PASSAGE_TEXT not in raw
+    assert MEETING_PASSAGE_TEXT not in raw
+    assert "snippet" not in raw and "score" not in raw
+
+
+def test_one_entry_per_source_however_many_of_its_passages_were_near_misses(
+    session_client, service
+):
+    """A document with three ranked passages is one item in the offer, not three.
+
+    ``search.py`` settled the same question the same way: a list of items whose length counts
+    chunks misdescribes the corpus, and two rows for one document read as two documents.
+    """
+    user = session_client.user
+    document, _ = make_document(
+        user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=BELOW
+    )
+    for index, cosine in ((1, 0.09), (2, 0.08)):
+        make_chunk(
+            source_type=DOCUMENT_SOURCE_TYPE,
+            source_id=document.id,
+            text=PASSAGE_TEXT,
+            roles=BOTH_ROLES,
+            cosine=cosine,
+            index=index,
+        )
+
+    body = ask(session_client.client).json()
+
+    assert body["answered"] is False
+    assert [entry["source_id"] for entry in body["partial_matches"]] == [str(document.id)]
+
+
+def test_no_more_than_the_cap_is_offered(session_client, service):
+    """MAXIMUM_PARTIAL_MATCHES bounds the list, and the nearest items are the ones kept.
+
+    Built from the constant rather than a literal, so the test follows the cap if it changes.
+    A no-answer notice with twenty-five items under it stops reading as "you might look at
+    these" and starts reading as the result set the notice has just said does not exist.
+    """
+    user = session_client.user
+    documents = [
+        make_document(
+            user,
+            title=f"Near miss {index}",
+            roles=BOTH_ROLES,
+            text=PASSAGE_TEXT,
+            cosine=0.29 - index / 100,
+        )[0]
+        for index in range(MAXIMUM_PARTIAL_MATCHES + 2)
+    ]
+
+    body = ask(session_client.client).json()
+
+    assert body["answered"] is False
+    assert [entry["source_id"] for entry in body["partial_matches"]] == [
+        str(document.id) for document in documents[:MAXIMUM_PARTIAL_MATCHES]
+    ]
+
+
+def test_an_answered_reply_carries_the_key_with_nothing_in_it(session_client, service):
+    """The key is present on every exit; only the two no-answer ones populate it.
+
+    FR-12's clause is about the state where nothing sufficiently relevant was retrieved, and
+    an answered reply already lists every item consulted with its date. A second list of items
+    that did NOT make it into the answer, beside statements citing the ones that did, would
+    present unadmitted material as though it supported the answer. The key stays so the shape
+    does not vary between outcomes — ``message`` is present and null there for the same
+    reason — and one front-end branch renders both.
+    """
+    user = session_client.user
+    make_document(user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=ABOVE)
+    make_document(user, title="Also related", roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=BELOW)
+
+    body = ask(session_client.client).json()
+
+    assert body["answered"] is True
+    assert "partial_matches" in body
+    assert body["partial_matches"] == []
+
+
+def test_the_key_is_present_and_empty_when_there_is_nothing_to_rank(session_client, service):
+    """No candidate chunks at all: present and empty, never absent.
+
+    A client that had to distinguish "no partial matches" from "no such field" would grow a
+    second code path for a reply that is one shape. Nothing here concludes anything from the
+    emptiness either: the no-answer message is the same fixed text every path returns.
+    """
+    body = ask(session_client.client).json()
+
+    assert body["answered"] is False
+    assert body["message"] == NO_ANSWER_MESSAGE
+    assert body["partial_matches"] == []
+
+
+def test_a_restricted_source_is_never_offered_as_a_partial_match(
+    employee_client, service, unanswerable, restricted
+):
+    """Invariant 1 on the new field, asserted against the raw body.
+
+    The Administrator-only document scores 0.99 — nearer the question than anything the
+    Employee may read — so an offer built from an unscoped list would put it first, and one
+    scoped after the fact would too. Its title, its identifier and its text appear nowhere in
+    the bytes the Employee is sent, and the number of items offered does not disclose it
+    either: the list is exactly the one document they may read.
+    """
+    restricted_document, restricted_chunk = restricted
+
+    response = ask(employee_client)
+
+    body = response.json()
+    assert body["answered"] is False
+    assert [entry["source_id"] for entry in body["partial_matches"]] == [str(unanswerable[0].id)]
+    raw = response.content.decode()
+    assert RESTRICTED_TITLE not in raw
+    assert RESTRICTED_PASSAGE_TEXT not in raw
+    assert str(restricted_document.id) not in raw
+    assert str(restricted_chunk.id) not in raw
+
+
+def test_an_administrator_is_offered_the_item_an_employee_is_not(
+    administrator_client, monkeypatch, unanswerable, restricted
+):
+    """The other half of the scope: the same question, the wider role, the extra item.
+
+    Without this the test above would pass on a field that was empty for everybody — the
+    weakest way to satisfy invariant 1 is to offer nobody anything. Both documents are taken
+    below the floor by ``ELSEWHERE`` so the Administrator reaches a no-answer too; the
+    assertion is on the SET, because two passages tied at the same score are ordered by the
+    candidate set and ``rank``'s stable sort makes that deterministic without making it
+    meaningful.
+    """
+    restricted_document, _ = restricted
+    install(monkeypatch, ControlledService(vector=ELSEWHERE))
+
+    body = ask(administrator_client).json()
+
+    assert body["answered"] is False
+    assert {entry["source_id"] for entry in body["partial_matches"]} == {
+        str(restricted_document.id),
+        str(unanswerable[0].id),
+    }
+    assert {entry["title"] for entry in body["partial_matches"]} == {
+        RESTRICTED_TITLE,
+        DOCUMENT_TITLE,
+    }
 
 
 # --- 400 -----------------------------------------------------------------------------------

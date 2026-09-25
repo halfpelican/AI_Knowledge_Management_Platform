@@ -34,6 +34,18 @@ Changing a source's visibility re-stamps its chunks in the same transaction (D-1
 the chunk is the authoritative record of what this role may read, and the source row is
 consulted only for a title and a date.
 
+**FR-12's partial matches are resolved here too, and only their titles and dates are.**
+``resolve_partial_matches`` is the third thing this module does, added at item 10a for the
+second sentence of FR-12's no-answer clause: "Any partially related items found are offered,
+clearly labelled as partial matches." The pipeline derived WHICH items — from the ranked
+scoped candidates before the threshold, identically on both no-answer paths, as source
+identities carrying no passage text (``apps/retrieval/partial_matches.py`` holds that whole
+argument). This module does for them exactly what ``resolve_sources`` does for a consulted
+passage's source and no more: one title, one date, from the same two queries. It adds no
+snippet, because there is no field for one and because a fragment of source text under a
+message that has just said the question cannot be answered reads as a partial answer, which
+is invariant 6 by a side door. It adds no permission predicate, for the reason given below.
+
 **A passage whose source row has gone is dropped from the panel**, not rendered with a
 blank title. Nothing in the M6 build deletes a Document or a Meeting — FR-15's
 permissioned deletion is Stage 5 — so this is unreachable today; when it is reachable, an
@@ -100,6 +112,33 @@ class ConsultedSource:
 
 
 @dataclass(frozen=True)
+class PartialMatchSource:
+    """One partially related item offered beside a no-answer: identity, title and date.
+
+    The same four shapes a search result and a Sources panel entry carry —
+    ``source_type``, ``source_id``, ``title``, ``date`` — and deliberately not a fifth.
+    **There is no ``passages`` field and no ``snippet``**, which is the difference between
+    this and ``ConsultedSource``: those are the items an answer was drawn from, and their
+    passages travel so a citation can expand to one. These are items nothing could be cited
+    from, offered under a notice that has just said the question cannot be answered, so a
+    line of their text would read as the partial answer FR-12 says not to present
+    (invariant 6). The reader is meant to open the item and judge it.
+
+    No score either, as nowhere in this API: relevance is a tuning signal for the team, and
+    a number here would invite the reader to treat the nearest item as the answer.
+
+    ``date`` is the source's own date and so is not one type — ``uploaded_at`` for a
+    document, ``meeting_date`` for a meeting — rendered by the serializer's shared
+    formatter, exactly as ``ConsultedSource.date`` and ``SearchResult.date`` are.
+    """
+
+    source_type: str
+    source_id: UUID
+    title: str
+    date: date | datetime
+
+
+@dataclass(frozen=True)
 class AnswerReply:
     """What ``POST /api/ask`` returns, on all three of the pipeline's exits.
 
@@ -125,6 +164,13 @@ class AnswerReply:
     result_count: int
     statements: tuple[NumberedStatement, ...]
     sources: tuple[ConsultedSource, ...]
+    # FR-12's partially related items. Present on every reply and empty on an answered one,
+    # so the key set does not vary between outcomes — the argument ``message`` makes by being
+    # present and null there. Taken from the outcome, which derived it from the ranked scoped
+    # candidates before the threshold and gave both no-answer paths the same value: this
+    # module must not recompute it, filter it or order it, or it becomes a second derivation
+    # able to differ between the two paths.
+    partial_matches: tuple[PartialMatchSource, ...]
     message: str | None
     # FR-13's "updated conversation state": the thread this turn belongs to, refreshed by
     # the pipeline inside the log transaction, or None for a one-off question.
@@ -178,11 +224,49 @@ def resolve_sources(passages) -> tuple[ConsultedSource, ...]:
     return tuple(resolved)
 
 
-def _titles_and_dates(grouped) -> dict:
-    """One query per source type, over the ids actually consulted."""
+def resolve_partial_matches(matches) -> tuple[PartialMatchSource, ...]:
+    """A title and a date for each partially related item the pipeline offered.
+
+    Rank order, preserved exactly as it arrived: ``partial_matches`` deduplicated the ranked
+    list by source and capped it, and re-sorting here would either invent an order or undo
+    that one. Nothing is added to the list and nothing is removed from it except an item
+    whose source row has gone, which is dropped rather than rendered with a blank title —
+    the same rule ``resolve_sources`` follows, and unreachable for the same reason (nothing
+    in the M6 build deletes a Document or a Meeting).
+
+    **No permission predicate, and no snippet.** Every identity here came off a chunk that
+    ``scoping.candidate_chunks`` admitted for the asking role, so the scope has already been
+    applied on the table that carries the vector (invariant 1, D-17); a second filter here
+    could only disagree with the first. And a snippet has nowhere to go: see
+    ``PartialMatchSource``.
+
+    Two queries at most, and none at all for the empty tuple an answered reply carries.
+    """
+    keys = [(match.source_type, match.source_id) for match in matches]
+    titles_and_dates = _titles_and_dates(keys)
+    offered = []
+    for source_type, source_id in keys:
+        details = titles_and_dates.get((source_type, source_id))
+        if details is None:
+            continue  # the source row has gone; see the docstring
+        title, source_date = details
+        offered.append(
+            PartialMatchSource(
+                source_type=source_type, source_id=source_id, title=title, date=source_date
+            )
+        )
+    return tuple(offered)
+
+
+def _titles_and_dates(keys) -> dict:
+    """One query per source type, over the ``(source_type, source_id)`` keys given.
+
+    Any iterable of those pairs will do, which is why both callers can use it: the grouped
+    dict of consulted passages iterates as its keys, and the partial matches pass a list.
+    """
 
     def ids_for(source_type):
-        return [source_id for (kind, source_id) in grouped if kind == source_type]
+        return [source_id for (kind, source_id) in keys if kind == source_type]
 
     details = {}
     document_ids = ids_for(DOCUMENT_SOURCE_TYPE)
@@ -200,7 +284,7 @@ def reply_for(*, outcome: RetrievalOutcome, conversation: Conversation | None) -
     """The reply for one turn, from the outcome the pipeline returned.
 
     The one place the outcome becomes a reply, so the fields that do not cross can be
-    pointed at: of ``RetrievalOutcome``'s seven fields this reads five, and
+    pointed at: of ``RetrievalOutcome``'s eight fields this reads six, and
     ``no_answer_reason`` and ``rejected_count`` are the two it does not. See
     ``AnswerReply``.
     """
@@ -209,6 +293,10 @@ def reply_for(*, outcome: RetrievalOutcome, conversation: Conversation | None) -
         result_count=outcome.result_count,
         statements=number_statements(outcome.verified_statements),
         sources=resolve_sources(outcome.passages),
+        # Resolved, never re-derived: the pipeline decided which items these are, once, for
+        # both no-answer paths. An answered outcome carries none, so this is an empty tuple
+        # and no query runs.
+        partial_matches=resolve_partial_matches(outcome.partial_matches),
         message=outcome.message,
         conversation=conversation,
     )

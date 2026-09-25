@@ -443,6 +443,31 @@ class ConsultedSourceSerializer(serializers.Serializer):
         return _rendered_date(source.date)
 
 
+class PartialMatchSerializer(serializers.Serializer):
+    """One partially related item offered beside a no-answer (FR-12: "Any partially related
+    items found are offered, clearly labelled as partial matches").
+
+    The same four shapes a search result and a Sources panel entry carry, and deliberately
+    no fifth: **there is no ``passages`` field, no ``snippet`` and no score.** A fragment of
+    source text under a message that has just said the question cannot be answered reads as
+    the speculative answer FR-12 refuses in the sentence before, and a score would invite
+    the reader to treat the nearest item as the answer. The object behind this is
+    ``PartialMatchSource``, which has no field for either — so the guarantee is that the
+    text is unreachable, not that this serializer chose not to name it.
+
+    ``date`` goes through the shared formatter, so the same row shows one date string
+    wherever it appears in the interface.
+    """
+
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    date = serializers.SerializerMethodField()
+
+    def get_date(self, match):
+        return _rendered_date(match.date)
+
+
 class ConversationSerializer(serializers.ModelSerializer):
     """A thread, as the list and as the "updated conversation state" FR-13 returns.
 
@@ -472,6 +497,13 @@ class AnswerSerializer(serializers.Serializer):
     are record-only (``QueryLog``'s docstring), and ``AnswerReply`` carries no value for
     either, so there is nothing here to name — see ``apps.api.answers`` for the
     disclosure this protects against.
+
+    **``partial_matches`` is present on every exit and non-empty only on the two no-answer
+    ones**, and it is IDENTICAL on those two by design: the pipeline derives it once from the
+    ranked scoped candidates before the threshold, so this field cannot become the one that
+    tells a caller which no-answer path ran. It is also the field most likely to be
+    "improved" into a leak — a score, a snippet, a count of what was left out — and each of
+    those is refused in ``PartialMatchSource``'s docstring rather than here.
     """
 
     answered = serializers.BooleanField(read_only=True)
@@ -479,6 +511,7 @@ class AnswerSerializer(serializers.Serializer):
     result_count = serializers.IntegerField(read_only=True)
     statements = AnswerStatementSerializer(many=True, read_only=True)
     sources = ConsultedSourceSerializer(many=True, read_only=True)
+    partial_matches = PartialMatchSerializer(many=True, read_only=True)
     # Null for a one-off question. FR-13's Responses clause: "200 OK with the answer and
     # updated conversation state" — the pipeline refreshed ``last_updated_at`` inside the
     # log transaction, so the instance rendered here is already current.

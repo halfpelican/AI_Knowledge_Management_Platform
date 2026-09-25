@@ -351,7 +351,7 @@ query and `503 Service Unavailable where the AI service cannot be reached after 
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/ask` | session | `200` the answer: verified statements, each with its `chunk_id`, and the sources consulted; also `200` with `answered: false` and the fixed no-answer message | `400 {"question": ["..."]}` no question was sent, or its length is outside `MINIMUM_QUESTION_LENGTH`–`MAXIMUM_QUESTION_LENGTH`; `400 {"conversation_id": ["..."]}` the id is not a UUID; `401`; `404` (*convention*) a well-formed `conversation_id` that is not this caller's; `503` the AI service could not be reached after `MAXIMUM_GENERATION_ATTEMPTS` |
+| POST | `/api/ask` | session | `200` the answer: verified statements, each with its `chunk_id`, and the sources consulted; also `200` with `answered: false`, the fixed no-answer message and any partially related items found | `400 {"question": ["..."]}` no question was sent, or its length is outside `MINIMUM_QUESTION_LENGTH`–`MAXIMUM_QUESTION_LENGTH`; `400 {"conversation_id": ["..."]}` the id is not a UUID; `401`; `404` (*convention*) a well-formed `conversation_id` that is not this caller's; `503` the AI service could not be reached after `MAXIMUM_GENERATION_ATTEMPTS` |
 
 The request:
 
@@ -373,6 +373,7 @@ The reply, answered:
  "sources": [{"source_type": "document", "source_id": "uuid",
               "title": "Leave Policy 2026", "date": "2026-09-21T10:00:00+10:00",
               "passages": [{"chunk_id": "uuid", "text": "Staff may take annual leave..."}]}],
+ "partial_matches": [],
  "conversation": {"conversation_id": "uuid", "title": "Leave policy questions",
                   "last_updated_at": "2026-09-24T09:26:00+10:00"}}
 ```
@@ -382,7 +383,11 @@ The reply, not answered:
 ```json
 {"answered": false,
  "message": "This question cannot be answered from the available knowledge base.",
- "result_count": 0, "statements": [], "sources": [], "conversation": null}
+ "result_count": 0, "statements": [], "sources": [],
+ "partial_matches": [{"source_type": "document", "source_id": "uuid",
+                      "title": "Parental leave guidance",
+                      "date": "2026-07-14T11:30:00+10:00"}],
+ "conversation": null}
 ```
 
 **The key set is the same on every exit**, so the two shapes above are one shape with
@@ -408,6 +413,70 @@ literal report of what happened, and it is still wrong: any other value would ma
 count the field that leaks which path was taken. The identifiers of what was supplied are
 in `QueryLog.retrieved_chunk_ids`, which is the traceability record and is not part of any
 reply.
+
+**`partial_matches` is FR-12's "partially related items", and it is present on every
+reply.** The clause is one sentence of the Front-End section: "Where no sufficiently
+relevant content is retrieved, the interface states plainly that it cannot answer from the
+available knowledge base and does not present a speculative answer. Any partially related
+items found are offered, clearly labelled as partial matches." Each entry carries exactly
+four sub-fields — the same four shapes a search result and a Sources panel entry use:
+
+```json
+{"source_type": "document", "source_id": "uuid", "title": "Parental leave guidance",
+ "date": "2026-07-14T11:30:00+10:00"}
+```
+
+`source_type` is `"document"` or `"meeting"` from the same fixed vocabulary; `date` is the
+source's own date, `uploaded_at` or `meeting_date`, rendered by the same field the listing
+endpoints use.
+
+- **Derived from the ranked, permission-scoped candidates, irrespective of the
+  threshold.** It is taken from the output of ranking *before* `RELEVANCE_THRESHOLD` is
+  applied, so an item that came close is offered whether or not it cleared the floor. The
+  scope is not in question and is not applied twice: the candidate set was restricted in the
+  query before it was ranked (invariant 1), so every item named is one the asking role may
+  read, and a second filter here could only disagree with the first. A test asserts that an
+  Administrator-only document nearer the question than anything an Employee may read appears
+  nowhere in the Employee's rendered body, and that the same document *is* offered to an
+  Administrator asking the same question — the weakest way to pass the first assertion would
+  be a field that is empty for everybody.
+- **Identical on both no-answer paths, by design.** It is derived once, from the
+  pre-threshold ranked list, above the point where path A returns, and both no-answer
+  replies are built from that one value. A list derived from anything that differs between
+  the paths — the admitted set, the passages supplied to generation, the statements
+  verification rejected, or a count of any of them — would hand a caller the distinction the
+  paragraphs above keep in `QueryLog`: that material existed which could not be cited. A
+  test asserts the two rendered bodies compare equal with the list non-empty on both.
+- **No passage text, and no score.** There is no `snippet`, no `text` and no `passages` key,
+  and the objects behind the field have no attribute for any of them. A fragment of source
+  text sitting under a message that has just said the question cannot be answered reads as a
+  partial answer — an uncited factual statement in all but name, which is invariant 6
+  arriving by a side door, and FR-12's own "does not present a speculative answer" in the
+  sentence before. A title, a type and a date are an offer to go and read something, which
+  is what the clause asks for. A score is withheld for the reason it is withheld everywhere
+  else in this API: it would invite the reader to treat the nearest item as the answer.
+- **One entry per source, capped, in rank order.** A document with five near-miss passages
+  is one item, because a list whose length counts chunks misdescribes the corpus — the rule
+  `GET /api/search` already follows. The cap is `MAXIMUM_PARTIAL_MATCHES` in
+  `apps/retrieval/partial_matches.py` (5): `TOP_K` is 25, and twenty-five items under a
+  notice saying the question cannot be answered stop reading as "you might look at these"
+  and start reading as the result set the notice has just denied.
+- **Present on every exit, and empty on an answered reply.** The key set does not vary
+  between outcomes — `message` is present and null on an answered reply for the same reason
+  — so one client branch renders both. An answered reply carries `[]`: the clause is about
+  the no-answer state, that reply already lists every item consulted with its date, and a
+  second list of items that did *not* make it into the answer, beside statements citing the
+  ones that did, would present unadmitted material as though it supported the answer. It is
+  also `[]`, rather than absent, where the caller's scope holds nothing rankable at all.
+- **A stored turn carries none.** The conversation detail route returns no
+  `partial_matches` for a past turn, as it returns no `sources`: nothing records what a
+  turn's ranking found, and the field would have to be invented to be filled.
+
+This replaced a front-end heuristic. Until Stage 4 item 10a the screen built this list
+itself, from `GET /api/search` on one word plucked out of the question, because the search
+endpoint matches a term as a single substring and a whole question matches nothing. Those
+were keyword hits rather than near misses, and each no-answer cost an extra request and an
+extra `SearchLog` row. Both are gone.
 
 **Every statement carries its `chunk_id`, and there is no field for one that does not.**
 Invariant 6: there is no interface state that shows an uncited factual statement. A

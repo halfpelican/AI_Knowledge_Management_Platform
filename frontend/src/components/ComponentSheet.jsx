@@ -130,6 +130,25 @@ const SAMPLE_SOURCES = [
   },
 ]
 
+// FR-12's partially related items, in the shape the ask reply sends them: source
+// identity, title and date, and no passage text — there is no field for one, which
+// is the point (apps/retrieval/partial_matches.py). One document and one meeting,
+// in the rank order the server put them in.
+const SAMPLE_PARTIAL_MATCHES = [
+  {
+    source_type: SOURCE_TYPE.document,
+    source_id: 'sample-document-near-miss',
+    title: 'Parental leave guidance',
+    date: '2026-07-14T11:30:00+10:00',
+  },
+  {
+    source_type: SOURCE_TYPE.meeting,
+    source_id: 'sample-meeting-near-miss',
+    title: 'Leave planning, March',
+    date: '2026-03-02',
+  },
+]
+
 const SAMPLE_STATEMENTS = [
   { position: 1, text: 'Staff accrue twenty days of annual leave a year.', chunk_id: 'sample-chunk-1' },
   // Cited, but its passage did not travel with the answer: the number stays as
@@ -570,13 +589,14 @@ export default function ComponentSheet() {
           The platform being unable to answer is a designed outcome, not a failure, so it is an information
           panel and not an error one — and distinct from the 503 above, which means the question could not be
           asked at all. No answer frame is drawn around it and no fragment appears inside it. The partial
-          matches beside it come from the keyword search over the same question, because the no-answer reply
-          deliberately carries no passages; they are offered as links to sources and never as answer content.
+          matches beside it are the reply&rsquo;s own <code>partial_matches</code> — the items its
+          permission-scoped candidates found, whatever they scored — carrying source identity, title and date
+          and no passage text at all, so they are offered as links and never as answer content.
         </p>
         <Notice variant="info" title={TEXT.noAnswerTitle}>
           {TEXT.noAnswerFallback}
         </Notice>
-        <PartialMatches idPrefix="sheet-no-answer" results={SAMPLE_SEARCH_GROUP.results} />
+        <PartialMatches idPrefix="sheet-no-answer" results={SAMPLE_PARTIAL_MATCHES} />
       </section>
 
       <section aria-labelledby="sheet-built">

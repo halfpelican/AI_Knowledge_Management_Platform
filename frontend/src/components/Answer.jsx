@@ -195,31 +195,36 @@ export function SourcesPanel({ idPrefix, sources }) {
  * FR-12: "Any partially related items found are offered, clearly labelled as
  * partial matches."
  *
- * These are keyword search results, not answer content, and they are here because
- * the no-answer reply deliberately carries no passages: a reply that offered
- * partial material would disclose that something exists which could not be cited,
- * which is the disclosure invariant 1 forbids. The search endpoint applies the
- * same permission filter, so everything offered here is in scope by construction.
+ * **These come off the reply.** `POST /api/ask` carries `partial_matches` on every
+ * reply — the items its own ranked, permission-scoped candidates found, whatever
+ * their similarity score — so this component renders a field rather than deriving
+ * one. Until item 10a it was built in the browser from `GET /api/search` on one
+ * word plucked out of the question; that heuristic is deleted, not left unused,
+ * along with the extra request and the extra `SearchLog` row per no-answer.
  *
- * They are rendered as links to sources and nothing more — no snippet, no
- * extract. Under a heading that has just said the question cannot be answered, a
- * fragment of source text would read as a partial answer, and the reader is meant
- * to open the item and judge it rather than take a line of it on trust.
+ * Everything offered is in the caller's scope by construction: the candidate set
+ * was restricted in the query before it was ranked (CLAUDE.md §6, invariant 1).
  *
- * `term` is the word the search ran on, named on the screen so the list explains
- * itself; src/utils/partialMatches.js records why it is a word and not the whole
- * question.
+ * **No snippet, and that is the whole shape of the reply, not a choice made here.**
+ * An entry carries `source_type`, `source_id`, `title` and `date` and there is no
+ * field for passage text: under a heading that has just said the question cannot be
+ * answered, a fragment of source text would read as a partial answer — invariant 6
+ * by a side door — and the reader is meant to open the item and judge it rather
+ * than take a line of it on trust. No score either, for the reason the Sources
+ * panel gives.
+ *
+ * `department` is rendered where a caller supplies one, which the ask reply does
+ * not: it carries source identity, title and date only. A search result does carry
+ * one, and a blank department is already a case this line handles.
  */
-export function PartialMatches({ idPrefix, results, term }) {
+export function PartialMatches({ idPrefix, results }) {
   const headingId = `${idPrefix}-partial-heading`
   if (!results || results.length === 0) return null
 
   return (
     <section className="partial-matches" aria-labelledby={headingId}>
       <h3 id={headingId}>{TEXT.partialMatchesHeading}</h3>
-      <p className="partial-matches__intro">
-        {TEXT.partialMatchesIntro} {term ? TEXT.partialMatchesTerm(term) : ''}
-      </p>
+      <p className="partial-matches__intro">{TEXT.partialMatchesIntro}</p>
       <ul className="partial-matches__list">
         {results.map((result) => {
           const link = sourceLinkFor(result)

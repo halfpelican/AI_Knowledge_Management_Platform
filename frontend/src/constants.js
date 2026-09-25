@@ -388,19 +388,13 @@ export const TEXT = {
   // somehow carries none, so the state always says something plain.
   noAnswerFallback: 'This question cannot be answered from the available knowledge base.',
   // FR-12: "Any partially related items found are offered, clearly labelled as
-  // partial matches." The no-answer reply deliberately carries no passages, so
-  // these come from the keyword search over the same question — in scope by
-  // construction, since search applies the same permission filter. They are
-  // offered as links to sources and never as answer content, which is why no
-  // snippet is shown here.
+  // partial matches." These arrive on the ask reply as `partial_matches`: the items
+  // its own permission-scoped, ranked candidates found, whatever they scored. They
+  // are offered as links to sources and never as answer content, which is why the
+  // reply carries no passage text for them and nothing here shows a snippet.
   partialMatchesHeading: 'Partial matches',
   partialMatchesIntro:
     'These items are related to your question. They are not an answer and nothing in them was cited — open one to read it yourself.',
-  // The search runs on one word taken from the question, because the endpoint
-  // matches a term as a single substring and a whole question matches nothing
-  // (src/utils/partialMatches.js). The word is named so nobody has to guess why an
-  // item is in the list.
-  partialMatchesTerm: (term) => `Found by searching for “${term}”.`,
 
   /* ---- FR-13 the conversation thread ------------------------------------ */
   conversationsHeading: 'Your conversations',

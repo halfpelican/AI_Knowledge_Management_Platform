@@ -44,7 +44,7 @@ from apps.core.constants import (
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
-from apps.documents.models import ContentChunk
+from apps.documents.models import ContentChunk, Document
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
 from apps.retrieval.scoping import UnscopedRequestError
 
@@ -72,6 +72,13 @@ def wide(*components) -> list[float]:
 
 
 QUERY = wide(1.0)
+
+# A query vector orthogonal to every chunk ``at_cosine`` builds, so each scores 0.0 against
+# it: still a candidate, still ranked, below any floor. It is how no-answer path A is reached
+# over the same corpus path B is reached over — which matters for the partial matches, since
+# they are derived from the corpus and a test that changed the corpus between the two would
+# not be comparing the two paths.
+ELSEWHERE = wide(0.0, 0.0, 1.0)
 
 
 def at_cosine(value: float) -> list[float]:
@@ -730,6 +737,10 @@ def test_the_outcome_has_no_field_carrying_rejected_statement_text(document, ser
         "rejected_count",
         "no_answer_reason",
         "message",
+        # FR-12's partially related items: source identities, no text. Item 10a added it,
+        # and it is named here so the field list stays the whole field list — the point of
+        # this assertion is that a NEW field holding model text would fail it.
+        "partial_matches",
     }
     for banned in ("proposed_statements", "rejected_statements", "unverified_statements"):
         assert banned not in names
@@ -988,7 +999,7 @@ def test_an_unanswered_outcome_with_no_reason_cannot_be_built():
         RetrievalOutcome.verified([], nothing_survived)
 
     # The same input through the path-B constructor is the outcome that was wanted.
-    outcome = RetrievalOutcome.no_statement_verified(nothing_survived)
+    outcome = RetrievalOutcome.no_statement_verified(nothing_survived, partial_matches=())
     assert outcome.answered is False
     assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
     assert outcome.message == NO_ANSWER_MESSAGE
@@ -1155,3 +1166,136 @@ def test_a_statement_citing_an_out_of_scope_chunk_cannot_be_verified(document, s
     assert str(restricted.id) not in repr(outcome)
     assert "Restricted fact." not in repr(outcome)
     assert outcome.rejected_count == 1
+
+
+# --- FR-12's partial matches (item 10a): derived once, before the floor ------------------
+#
+# The reduction itself — rank order, one entry per source, the cap, the absence of any text
+# field — is tested in apps/retrieval/tests/test_partial_matches.py, and the rendered field
+# in apps/api/tests/test_ask.py. What is tested here is the property that belongs to THIS
+# module: where in ``answer_question`` the derivation happens, and therefore that it cannot
+# differ between the two no-answer paths or reach an answered reply.
+
+
+def second_document(owner, title="Second"):
+    """Another document of the same owner, visible to Employees, so a test can offer two."""
+    return Document.objects.create(
+        title=title, file_type="pdf", uploaded_by=owner, visible_to_roles=[EMPLOYEE_ROLE_NAME]
+    )
+
+
+@pytest.mark.django_db
+def test_the_offer_is_identical_on_both_no_answer_paths(document, monkeypatch):
+    """One corpus, one question, both paths: the same partial matches, non-empty.
+
+    The reply is byte-identical on the two paths by design (invariant 7), and this field is
+    the one most able to break that, because it is the only caller-visible thing derived from
+    the ranked list. Path A is reached with a query vector orthogonal to the only passage and
+    path B with the ordinary one plus a fabricated citation, so the CORPUS is held constant
+    and the path is the only difference. A derivation taken from the admitted set, the
+    supplied set or the rejected statements would give an empty tuple on path A and a
+    populated one on path B — which is exactly the distinction the log is for and the reply
+    is not.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+
+    install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    path_a = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    install(
+        monkeypatch,
+        ControlledService(statements=[Statement(text="Invented.", chunk_id="not-supplied")]),
+    )
+    path_b = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert path_a.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert path_b.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert path_a.partial_matches == path_b.partial_matches
+    assert [match.source_id for match in path_a.partial_matches] == [document.id]
+
+
+@pytest.mark.django_db
+def test_the_offer_is_taken_before_the_threshold_and_not_from_the_admitted_set(
+    document, service_with
+):
+    """A source whose only passage scored below the floor is still offered.
+
+    This is the "irrespective of the threshold" clause as a test. The admitted set here holds
+    one passage and the supplied set holds one passage, and the offer holds TWO items — so it
+    cannot have been built from either, and the sub-threshold item is the one that proves it.
+    It also fixes the order: the nearer source leads, because ``rank`` ordered the list before
+    anything narrowed it.
+    """
+    near = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    far = second_document(document.uploaded_by)
+    make_chunk(far, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW)
+    double = service_with(statements=[Statement(text="Invented.", chunk_id="not-supplied")])
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert [match.source_id for match in outcome.partial_matches] == [document.id, far.id]
+    # Only the admitted passage was ever supplied to generation: the second item is offered
+    # without ever having been sent anywhere.
+    [(_, supplied)] = double.generate_calls
+    assert [passage.chunk_id for passage in supplied] == [str(near.id)]
+
+
+@pytest.mark.django_db
+def test_an_answered_outcome_offers_no_partial_matches(document, service):
+    """FR-12 asks for partially related items in the sentence about the no-answer state.
+
+    An answered outcome carries every item consulted with its date already; a second list of
+    items that did NOT make it into the answer, beside statements that cite the ones that
+    did, would present unadmitted material as though it supported the answer. The field
+    stays on the dataclass — the reply's key must not vary between outcomes — and is empty.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=BELOW)
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.answered is True
+    assert outcome.partial_matches == ()
+
+
+@pytest.mark.django_db
+def test_a_restricted_source_is_not_offered_as_a_partial_match(document, service_with):
+    """Invariant 1 on the new field: the nearest source is Administrator-only and absent.
+
+    A near miss is precisely what an out-of-scope document would look like from the outside —
+    it is nearer the question than anything visible, so an offer built from an unscoped list
+    would put it first. The candidate set was restricted in the query, so it is not in the
+    ranked list to be offered, and its title, id and text are unreachable from the outcome.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW, text="Barely related.")
+    restricted_source = second_document(document.uploaded_by, title="Board remuneration")
+    restricted_source.visible_to_roles = [ADMINISTRATOR_ROLE_NAME]
+    restricted_source.save(update_fields=["visible_to_roles"])
+    restricted = make_chunk(
+        restricted_source, [ADMINISTRATOR_ROLE_NAME], index=1, cosine=NEAREST, text="Not yours."
+    )
+    double = service_with()
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert [match.source_id for match in outcome.partial_matches] == [document.id]
+    assert str(restricted_source.id) not in repr(outcome)
+    assert str(restricted.id) not in repr(outcome)
+    assert double.generate_calls == []  # path A never called generation either
+
+
+@pytest.mark.django_db
+def test_a_scope_with_no_indexed_chunk_offers_nothing(document, service):
+    """No candidates at all: the tuple is empty, and nothing concludes anything from it.
+
+    The document exists and has no chunk — an FR-08 "Insufficient content" upload is this
+    shape — so retrieval genuinely ran, ranked nothing and offered nothing. The no-answer
+    message is the same one every other path returns.
+    """
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert outcome.message == NO_ANSWER_MESSAGE
+    assert outcome.partial_matches == ()
