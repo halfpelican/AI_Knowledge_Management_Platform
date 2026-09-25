@@ -20,6 +20,8 @@ from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation
+from apps.retrieval.query_log import FIRST_POSITION
+from apps.retrieval.scoping import permission_scope, scoped_chunks
 
 User = get_user_model()
 
@@ -540,6 +542,25 @@ class CitedStatementSerializer(serializers.Serializer):
     chunk_id = serializers.UUIDField(read_only=True)
 
 
+def permitted_citation_chunk_ids(turns, *, role_name) -> frozenset:
+    """Which of these turns' cited chunks the reader's CURRENT role may still see.
+
+    One query for the whole thread, and it is ``scoped_chunks`` — the same predicate the
+    answer path and the keyword search run, not a second implementation of it. Invariant 3's
+    reasoning is the argument: "a second scoping mechanism would mean two code paths through
+    the single filter that matters most", and a thread read is a route that returns material
+    exactly as much as those two are. A chunk that has been deleted, or whose stamp is now an
+    empty array, is absent from the result for the same reason a restricted one is: this asks
+    the store what is readable and takes the answer, rather than deciding anything itself.
+    """
+    cited = {citation.chunk_id for turn in turns for citation in turn.citations.all()}
+    if not cited:
+        return frozenset()
+    return frozenset(
+        scoped_chunks(role_name=role_name).filter(id__in=cited).values_list("id", flat=True)
+    )
+
+
 class ConversationTurnSerializer(serializers.Serializer):
     """One logged turn of a thread: the question, whether it was answered, its citations.
 
@@ -554,22 +575,86 @@ class ConversationTurnSerializer(serializers.Serializer):
     ``message`` is derived rather than stored: a turn that was not answered was answered
     with NO_ANSWER_MESSAGE, the one fixed text both no-answer paths return, so
     re-rendering it from ``answered`` cannot leak which path was taken.
+
+    **A STORED ANSWER IS RE-SCOPED HERE, ON EVERY READ.** A turn is a derived record: its
+    statements were generated from passages the asker's role admitted at the time, and the
+    stored row carries no visibility of its own. If the reader's role has narrowed since —
+    or the source's scope has — nothing about the row knows that, so every citation is
+    filtered through ``scoped_chunks`` under the role resolved for THIS request and a
+    statement whose chunk is no longer permitted is dropped.
+
+    **What is being withheld is the PROSE, and framing it as an identifier understates it by
+    an order of magnitude.** It is tempting to say that a turn returns no passage text, so at
+    worst a ``chunk_id`` leaks and an identifier is not content. That is wrong. A statement
+    generated from an Administrator-only passage carries that passage's substance in natural
+    language: "Directors accrue annual leave at twice the ordinary rate" IS the restricted
+    fact, written out, and it does not become less so for having been produced by a model
+    rather than copied. The identifier is the lesser half of the leak and the sentence is the
+    greater one. This is why the statement is removed rather than merely unlinked.
+
+    **A turn that loses every statement renders as the ordinary no-answer state** —
+    ``answered`` false, the fixed message, an empty list — which is the state item 7 already
+    built and the front end already renders. Not a blank turn, and emphatically not "content
+    withheld" and not a count of what was removed: a notice that something was removed is
+    itself a disclosure that material exists which this role may not read, which is the
+    disclosure invariant 1 forbids by name. Nothing here can tell the reader whether a turn
+    was re-scoped, whether it hit no-answer path A or B when it was live, or whether it was
+    ever answered at all.
+
+    **Surviving statements are renumbered from FIRST_POSITION**, for the same reason: a turn
+    rendered as "[1] ... [3] ..." announces that [2] was taken out. Where nothing is dropped
+    the renumbering is the identity, so an ordinary thread read is byte-for-byte what it was.
+
+    **Re-scoping on read, rather than re-writing the rows when a role or a scope changes.**
+    The scope is re-resolved per request everywhere else in this system — ``permission_scope``
+    re-reads the role from the users table on every turn, D-21 caches nothing in the session —
+    and FR-13's Validation clause already requires that a follow-up "cannot inherit access the
+    user no longer holds". A thread read is that principle one step on: the same thread, read
+    twice by the same person across a demotion, must not still show what the first read did.
+    Re-writing stored citations on a role change would instead destroy the FR-19 evidence of
+    what was actually answered, and would have to be re-run for every role and every source
+    whose scope ever moves.
     """
 
     question = serializers.CharField(read_only=True)
-    answered = serializers.BooleanField(read_only=True)
+    answered = serializers.SerializerMethodField()
     asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
     message = serializers.SerializerMethodField()
     statements = serializers.SerializerMethodField()
 
+    def surviving_citations(self, turn):
+        """This turn's citations the reader may still see, in the order they were numbered.
+
+        ``permitted_chunk_ids`` is read from the context with no default, so a caller that
+        renders turns without supplying it raises rather than returning a body. Both
+        available defaults are wrong: permitting everything is precisely the leak, and
+        permitting nothing would render every thread in the system as no-answer and look
+        like a retrieval problem for as long as it took someone to find.
+        """
+        permitted = self.context["permitted_chunk_ids"]
+        citations = sorted(turn.citations.all(), key=lambda citation: citation.position)
+        return [citation for citation in citations if citation.chunk_id in permitted]
+
+    def get_answered(self, turn):
+        # Answered when it was answered AND something it said is still readable. The two
+        # conditions are one fact for the reader: an answer they can be shown.
+        return bool(turn.answered) and bool(self.surviving_citations(turn))
+
     def get_message(self, turn):
-        return None if turn.answered else NO_ANSWER_MESSAGE
+        return None if self.get_answered(turn) else NO_ANSWER_MESSAGE
 
     def get_statements(self, turn):
-        # Ordered by the position stored on the row, which is the citation number the
-        # reader saw (FIRST_POSITION in apps/retrieval/query_log.py).
-        citations = sorted(turn.citations.all(), key=lambda citation: citation.position)
-        return CitedStatementSerializer(citations, many=True).data
+        if not self.get_answered(turn):
+            # The no-answer state, whether this turn was never answered or has just lost
+            # every statement it had. One branch, so the two are indistinguishable.
+            return []
+        surviving = self.surviving_citations(turn)
+        for position, citation in enumerate(surviving, start=FIRST_POSITION):
+            # Contiguous numbering, in memory only — these instances are never saved, and
+            # the stored position stays what the original reader saw. A gap in the numbers
+            # would be the "something was removed" notice this must not give.
+            citation.position = position
+        return CitedStatementSerializer(surviving, many=True).data
 
 
 class ConversationDetailSerializer(ConversationSerializer):
@@ -578,7 +663,20 @@ class ConversationDetailSerializer(ConversationSerializer):
 
     The turns are read here rather than prefetched by the view, so the turn ordering and
     the citation ordering live beside the fields that use them: two queries per read, at a
-    thread length bounded by how much one person types.
+    thread length bounded by how much one person types, plus one for the scope.
+
+    **The reader's role is resolved here, from the request, not passed in by the view.**
+    ``permission_scope`` re-reads it from the users table for this request (D-21 caches
+    nothing in the session), and taking the user rather than a role name means there is no
+    role argument for a view to miswire — the argument ``apps/api/views.py``'s search view
+    makes for ``apps.retrieval.search`` doing its own resolution. ``UnscopedRequestError`` is
+    not caught, as on every other route: behind ``IsAuthenticated`` it is unreachable, and
+    rendering a thread whose scope could not be established is the one thing worse than
+    raising.
+
+    ``title`` needs no re-scoping. It is either what the user typed or their own first
+    question, truncated (D-43) — their words, kept for the same reason D-42 keeps prior
+    questions — so nothing in it was derived from a passage.
     """
 
     turns = serializers.SerializerMethodField()
@@ -588,12 +686,25 @@ class ConversationDetailSerializer(ConversationSerializer):
         read_only_fields = fields
 
     def get_turns(self, conversation):
-        turns = conversation.queries.prefetch_related("citations").order_by(
-            # Chronological, with the primary key as a deterministic tie-break only: it is
-            # a random UUID and says nothing about time, but two turns sharing a
-            # microsecond would otherwise order arbitrarily between reads. The ordering
-            # apps/retrieval/conversation.py reads history with, reversed.
-            "answered_at",
-            "id",
+        turns = list(
+            conversation.queries.prefetch_related("citations").order_by(
+                # Chronological, with the primary key as a deterministic tie-break only: it
+                # is a random UUID and says nothing about time, but two turns sharing a
+                # microsecond would otherwise order arbitrarily between reads. The ordering
+                # apps/retrieval/conversation.py reads history with, reversed.
+                "answered_at",
+                "id",
+            )
         )
-        return ConversationTurnSerializer(turns, many=True).data
+        role_name = permission_scope(self.context["request"].user)
+        return ConversationTurnSerializer(
+            turns,
+            many=True,
+            context={
+                **self.context,
+                # One scope query for the whole thread, not one per turn.
+                "permitted_chunk_ids": permitted_citation_chunk_ids(
+                    turns, role_name=role_name
+                ),
+            },
+        ).data

@@ -1021,10 +1021,21 @@ class ConversationDetailView(APIView):
     ``rejected_count``: see ``ConversationTurnSerializer``.
 
     Another user's thread is 404, as on ``POST /api/ask`` and for the same reason.
+
+    **Owner is not the same test as scope, and this route needs both.** The queryset answers
+    "is this thread yours"; it says nothing about whether the material the thread's answers
+    were generated from is still readable by the role you hold now. A stored turn is a derived
+    record carrying no visibility of its own, so every citation is re-scoped on read, through
+    the same ``scoped_chunks`` predicate the answer path uses, and a turn that loses every
+    statement renders as the ordinary no-answer state. The serializer holds that whole
+    argument, including why the leak is the statement prose rather than the identifier; the
+    request is passed into its context because the role is resolved from it per request.
     """
 
     def get(self, request, pk):
         conversation = get_object_or_404(
             Conversation.objects.filter(user=request.user), pk=pk
         )
-        return Response(ConversationDetailSerializer(conversation).data)
+        return Response(
+            ConversationDetailSerializer(conversation, context={"request": request}).data
+        )

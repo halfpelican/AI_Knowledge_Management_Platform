@@ -33,6 +33,8 @@ from django.utils import timezone
 from apps.api.answers import RECORD_ONLY_FIELDS
 from apps.api.views import NEW_CONVERSATION_TITLE
 from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    EMPLOYEE_ROLE_NAME,
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
     NO_ANSWER_MESSAGE,
@@ -222,7 +224,17 @@ def build_thread(user, chunk):
     under test is the read: a thread reopened long after the turns happened, from rows that
     are all the server has. The unanswered row carries a ``no_answer_reason`` and a
     ``rejected_count`` precisely so the leak test below has something to fail on.
+
+    **The cited chunk is stamped for both roles here, and it has to be.** A thread read
+    re-scopes every stored citation through ``scoped_chunks`` under the reader's current role,
+    so a statement cited to the shared ``content_chunk`` fixture — which is deliberately
+    unstamped, ``visible_to_roles == []``, readable by no role at all (conftest.py) — would be
+    dropped and the turn would render as the no-answer state. That re-scoping is the subject
+    of ``test_fr11_thread_scope.py``; what this file tests is the read of a thread whose
+    citations the reader may still see, so the premise is made true rather than assumed.
     """
+    chunk.visible_to_roles = [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME]
+    chunk.save(update_fields=["visible_to_roles"])
     conversation = Conversation.objects.create(user=user, title="Leave")
     answered = QueryLog.objects.create(
         user=user,
