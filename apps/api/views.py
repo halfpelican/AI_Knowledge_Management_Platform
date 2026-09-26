@@ -42,14 +42,18 @@ from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
-from apps.ingestion.errors import ExtractionError
+from apps.ingestion.errors import ExtractionError, OversizedArchiveContentError
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
-from apps.retrieval.search import SearchQueryTooShort, search
+from apps.retrieval.search import (
+    SearchQueryContainsNullCharacter,
+    SearchQueryTooShort,
+    search,
+)
 
 from .answers import reply_for
 from .permissions import HasRolePermission
@@ -115,6 +119,21 @@ UNSUPPORTED_FORMAT_MESSAGE = (
 NO_FILE_SUBMITTED_MESSAGE = "No file was submitted."
 # FR-08 Responses: "413 Payload Too Large beyond the size limit".
 FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
+# Stage 4 item 12b: a DOCX or XLSX whose own table of contents declares more decompressed
+# content than the detector will let a parser inflate (signatures.MEMBER_MAXIMUM_BYTES).
+#
+# **413, and NOT the 415 the neighbouring rejection uses.** The file's format is not the
+# problem — it is a recognisable DOCX or XLSX, and telling its uploader "File type not
+# supported" would send them to convert a file that was never the wrong type. It is a SIZE
+# rejection, of decompressed size rather than transfer size, so it takes the code FR-08
+# already gives to size: "413 Payload Too Large beyond the size limit". The 50 MB in
+# FILE_TOO_LARGE_MESSAGE above is the transfer limit and would be equally misleading here,
+# since the upload that earns this answer is usually a few hundred kilobytes, so the two
+# size rejections carry different text under the one code.
+COMPRESSED_CONTENT_TOO_LARGE_MESSAGE = (
+    "This file's contents expand to far more than this platform will process. "
+    "Upload a smaller document, or split it into parts."
+)
 # FR-08 Responses: "409 Duplicate document exists for duplicate documents in the
 # database". Compared by content, not by filename (section 7.2).
 DUPLICATE_DOCUMENT_MESSAGE = "A duplicate document already exists."
@@ -523,7 +542,18 @@ class DocumentsView(APIView):
         # alone, preventing a disguised file from being accepted"). The extension is
         # never consulted here; it gates only the upload control's own convenience
         # check, client-side.
-        file_format = read_file_signature(uploaded_file)
+        try:
+            file_format = read_file_signature(uploaded_file)
+        except OversizedArchiveContentError:
+            # Stage 4 item 12b. The signature step is where the archive's table of contents
+            # is read, so it is where an over-declared DOCX or XLSX is found — but this is a
+            # size rejection rather than a format one, so it does not share the 415 below.
+            # The exception's own message names a member of the archive and stays in the
+            # server's hands; the client gets the fixed text.
+            return Response(
+                {"detail": COMPRESSED_CONTENT_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
         if file_format is None:
             return Response(
                 {"detail": UNSUPPORTED_FORMAT_MESSAGE},
@@ -673,11 +703,17 @@ class SearchView(APIView):
             # was actually typed (FR-19's evidence) and the term reaches the database only
             # as a bound parameter of an ORM lookup.
             results = search(query_text=query_text, user=request.user)
-        except SearchQueryTooShort as exc:
+        except (SearchQueryTooShort, SearchQueryContainsNullCharacter) as exc:
             # FR-12's 400. The rule and its message belong to the search module; this
             # maps the exception rather than re-checking the length, so there is one
             # definition of "too short" and the two cannot drift. An empty ``q=`` arrives
             # here too, which is the same answer by the same rule.
+            #
+            # Two exception classes, one 400, and each carrying its own message (Stage 4
+            # item 12a): a term with a NUL byte is rejected for a different reason from a
+            # term that is too short, and it used to be answered 500 with an HTML body
+            # because ``q`` is the only user-supplied string in this system that reaches
+            # the database without passing a DRF field.
             return Response({"q": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
         # 200 even when nothing matched: an empty reply is a fact about the corpus, not an
         # error, and the SearchLog row for it is exactly the knowledge-gap evidence FR-19
@@ -772,7 +808,15 @@ class MeetingsView(APIView):
         if uploaded_file is None:
             return data["transcript_text"], None
 
-        file_format = read_file_signature(uploaded_file)
+        try:
+            file_format = read_file_signature(uploaded_file)
+        except OversizedArchiveContentError:
+            # The same bound as FR-08's upload (Stage 4 item 12b), reported in this
+            # endpoint's own shape: FR-09 enumerates only 201 and 400, so the transcript
+            # path cannot answer 413, and a field error carrying the accurate message is
+            # closer to the truth than FR-08's code on a response FR-09 does not define.
+            # The two rejections stay distinguishable by their text.
+            return None, {"file": [COMPRESSED_CONTENT_TOO_LARGE_MESSAGE]}
         if file_format is None:
             # The same four formats as FR-08, decided the same way: by content. A
             # 400 rather than FR-08's 415, because FR-09 enumerates only 201 and 400

@@ -2006,10 +2006,36 @@ subtleties are tested: affected primary keys are read **before** the UPDATE, so 
 the old value still cascades; and the new scope is read back **from the rows**, so a database
 expression cascades per row.
 
-**Not covered, stated rather than discovered:** `bulk_update`, `bulk_create`, raw SQL and
-`psql`. Each bypasses `save()` for every model in this project, none is used for visibility
-anywhere in the repository, and `manage.py reindex` re-derives the stamp correctly because it
-rebuilds the chunk.
+**Coverage, corrected on 25 September after measuring it.** This paragraph originally said
+`bulk_update` and `bulk_create` were not covered. That was **wrong**, and wrong in the safe
+direction, which is worse for maintenance than being wrong the other way: a reader who
+believes `bulk_update` is uncovered does not write a test for it. Measured on Django 5.2.17:
+
+| write path | cascades |
+|---|---|
+| `save()`, `save(update_fields=["visible_to_roles"])` | yes |
+| `QuerySet.update()`, including filtered on the column being written | yes |
+| expression update (`F()`, `Func`) — and it re-stamps the value the database stored | yes |
+| `bulk_update()` | **yes** |
+| `update_or_create()` | **yes** |
+| `bulk_create(update_conflicts=True, update_fields=["visible_to_roles"])` | **no** |
+| raw SQL, `psql` | no |
+
+**`bulk_update` cascades by accident, not by design**, because Django implements it internally
+as `self.filter(pk__in=pks).update(**kwargs)` and so inherits the `update()` override. That is
+coverage held hostage to a dependency's implementation detail: a Django release reimplementing
+it as a single `CASE` statement would make invariant 2 false again **with every existing test
+still green** — the same shape as the original defect, true where checked and false where used.
+
+The test that guards it is therefore **behavioural**: it asserts the condition invariant 2
+states (every chunk carries its source's scope) over every ORM write path, so it fails on a
+Django upgrade rather than on a refactor of the override. The `bulk_create` upsert hole is
+pinned by a test asserting it does **not** cascade, named so the gap reads as known rather than
+believed closed — an unpinned "not covered" claim is exactly how invariant 2's own falsehood
+survived thirteen days.
+
+`manage.py reindex` re-derives the stamp correctly by a different route, because it rebuilds
+the chunk.
 
 **Expressed as a condition to restore, not a diff to apply.** One UPDATE saying every chunk
 of this source carries this scope, with an `exclude()` guard so a save that did not change
@@ -2091,7 +2117,283 @@ inspection:
 The pattern to hunt, and the Stage 4 security review is asked to: **any column whose value
 was derived under a permission scope, read back later without re-deriving it.**
 
+**The review walked the schema and found NINE, not four-plus-one** (D-49). The five above, plus:
+
+6. **`QueryLog.retrieved_chunk_ids`** — identifiers of passages supplied under the asker's
+   scope. `answered` plus `len(retrieved_chunk_ids)` also reconstructs the path A/B distinction,
+   which `query_log.py` states explicitly, so any reader leaks that too.
+7. **`QueryLog.answered`** — `ConversationTurnSerializer` correctly **re-derives** it as
+   `answered AND surviving citations`. A reader that trusts the column reports "answered" for a
+   turn whose every statement is now unreadable. FR-14 must reuse that serializer, not the
+   column.
+8. **`ContentTag` and `Tag`** — the one that was missed by inspection and is next to bite.
+   FR-10 derives tags from content; neither table carries `visible_to_roles` and nothing
+   re-derives one. A tag list or a facet count built from them discloses the **topics and the
+   volume** of restricted material without returning a word of it. `apps/documents/models.py`
+   says Tags are in v1 "because FR-15's browse mode queries them" — so **FR-15 browse-by-tag,
+   Stage 5 item 1, is the reader that opens it.**
+9. **`ExtractedContent.extracted_text`** — derived from a document with no visibility column at
+   all, reachable only through its `doc_id` foreign key, so the join is the guard rather than a
+   stamp. Any future "view extracted text" surface inherits the problem.
+
+**The generalisation.** There are exactly two safe treatments — re-stamp eagerly at the moment
+of the change (instance 1), or re-scope on read through `scoped_chunks` (instance 2) — and a
+third that is safe only by accident, which is having no reader (3, 4, 6, 7, 8, 9). **Stage 5
+adds readers to two of them.** The cheapest structural guard is the one
+`ConversationTurnSerializer` already uses: read `permitted_chunk_ids` from context **with no
+default**, so a new reader that forgets the scope raises instead of quietly returning a body.
+
+That the class had nine members when it was written with five is the point of recording a class
+at all — and that instance 8 was found by walking the schema rather than by inspection is the
+argument for enumerating rather than listing.
+
 **Consequence worth knowing.** `ConversationTurnSerializer` reads `permitted_chunk_ids` from
 its context with **no default**, so a caller that renders turns without supplying it raises
 rather than returning a body. Deliberate: permitting everything is the leak, and permitting
 nothing would look like a retrieval fault, so failing loudly is the only safe default.
+
+## D-49 · The Stage 4 security review: what was closed, what was deferred, what stands conceded
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4 items 12 and 12a
+
+The review executed its findings against the real database rather than reasoning about them,
+and separated what it demonstrated from what it traced. This entry records the disposition.
+
+### The gate criterion is met, and it was proved rather than asserted
+
+Stage 4's "done when" requires that **a user cannot retrieve across the permission boundary by
+any route the security review could find.** The review attacked it and could not: with a
+document body echoing an Administrator-only chunk's identifier, and a model double that
+honours the forged header, an Employee received no-answer path B, the restricted passage
+appeared in no payload sent to the provider, and its text appeared nowhere in the response
+bytes.
+
+**Misattribution is reachable; widening is not.** The reason is structural and is the answer to
+give if asked: scoping is a predicate on the query in `candidate_chunks`, so nothing the model
+emits is consulted when the candidate set is built. Invariant 1 does not depend on the model
+behaving.
+
+### Closed before the stage ended (item 12a)
+
+1. **Passage-text delimiter neutralisation**, which the stage brief required and which was
+   unbuilt — "a passage instructing the model to ignore its constraints must not change the
+   answer, and there should be a test that says so".
+2. **`GET /api/search?q=<NUL byte>` answered 500 with an HTML body.** `q` was the only
+   user-supplied string reaching the database without passing a DRF field, which is why the
+   same byte gives a clean 400 on `POST /api/ask`. With `DEBUG=True` a 500 serves a traceback
+   page carrying frame locals and the requester's own session cookie.
+3. **An unbounded OOXML manifest read** — a 199 KB upload whose manifest expands to 200 MB,
+   decompressed whole in 0.41 s, with both size checks passing because the upload is 199 KB.
+4. **The cascade documentation corrections and their behavioural test** (see D-47's corrected
+   table).
+5. **`MAXIMUM_CHUNKS_PER_SOURCE`.** A 50 MB text file extrapolates to ~23,300 chunks, each a
+   sequential NPU embed call inside one `transaction.atomic()` block in one synchronous
+   request. **Objective 02's verification on 2 October requires 20 documents and a 20-page
+   file in under 60 seconds**, which that does not survive. The cap is an Objective 02
+   protection first and an availability measure second.
+
+### The residual on the injection, stated rather than implied
+
+**Neutralising the delimiter closes the reliable half of the attack and not the attack.** A
+passage body can still direct the model in prose — "state X and cite the passage above" — and
+`verify_citations` tests set membership only, so it cannot detect that the sentence did not
+come from the passage whose identifier it carries. That is CLAUDE.md invariant 5's conceded
+limitation, reached deliberately by an unprivileged user rather than by model error, and
+`contribute_content` is held by **both roles** (D-30), so it is Employee-reachable into every
+Administrator's answers over the same corpus.
+
+Evidence the model does mine passage bodies is already in this repository: item 6's third
+fabricated identifier was `5. Offboarding`, a section heading lifted out of a passage body.
+
+A per-call nonce in the passage header (`[chunk_id-a3f9: …]`) would close the reliable half
+completely. It is **not** being done before M6, because it rewords the prompt, and
+`apps/ai/prompting.py`'s own rule is that rewording invalidates every measured rate in
+`docs/flm-baseline.md`.
+
+### Deferred, with the numbers recorded against them
+
+- **Throttling `POST /api/ask` and the ingestion POSTs → Stage 5 item 5.** Worst case today is
+  `GENERATION_TIMEOUT_SECONDS` (300) × `MAXIMUM_GENERATION_ATTEMPTS` (3) = **one request
+  holding a worker for up to 900 s**, and only the two auth endpoints are throttled (D-26). It
+  is deferred because it is deployment-shaped and the threat model at a one-machine
+  demonstration is nearly empty — and because "one request holds a worker for 900 s" is really
+  an argument against demonstrating on `manage.py runserver`, which is that item's decision to
+  make.
+- **`bulk_create(update_conflicts=True, …)` not cascading** — pinned by a test as a known hole
+  rather than fixed. FR-15's bulk visibility editing is the obvious first caller of an upsert,
+  and it should close it, about six lines in the same shape as the existing `update()` override.
+- **`no_statement_verified`'s docstring overstates its guarantee.** The 503/200 split is a
+  deterministic oracle for which no-answer path ran when generation fails while embedding
+  succeeds — plausible under FLM serving two models — and the timing channel gives the same
+  answer with no outage, since path A makes no provider call and path B costs one generation
+  (p90 8.90 s, item 9a). Severity is genuinely low: what leaks is that material **in the
+  caller's own scope** cleared the threshold and could not be cited, which `partial_matches`
+  already discloses by design on both paths. So invariant 1 is intact and the stronger claim in
+  that docstring is not. The docstring should say "no field of the reply distinguishes them".
+  **No artificial delay is to be added.**
+
+### The pattern behind three of this stage's findings: "closed" claimed too early
+
+Three times in Stage 4, something was recorded as closed where **the observed instance stopped
+reproducing rather than where the class did.**
+
+1. **CLAUDE.md invariant 2** claimed the visibility cascade "has its own test". The claim held
+   where it was read and failed where it was used — there was no test and no cascade (D-47).
+2. **D-47** then claimed `bulk_update` was not covered. It is. Wrong in the *safe* direction,
+   which is worse for maintenance: a reader who believes a path is uncovered never writes the
+   test, so the real coverage stayed hostage to a Django implementation detail.
+3. **This entry's own Part C** claimed the decompression bomb closed after bounding the
+   manifest read. The manifest stopped working; the class did not — `word/document.xml` was
+   still unbounded, and a per-member bound then turned out to need a whole-archive bound beside
+   it, because 800 honest members of 63 MB each pass a per-member check (D-50).
+
+The instruction this yields is durable and outlives Stage 4: **treat every "closed" in this
+file as a claim to verify**, the same way invariant 2 taught this project to read CLAUDE.md. A
+closure is only as wide as the thing that was measured, and the measurement is usually the
+instance.
+
+Applied immediately: D-50 declares the bomb class **closed for OOXML and open for PDF**, because
+`pypdf` inflates object streams with no ZIP involved and nothing in item 12b touches it. No
+docstring, comment or document in this repository says the class is closed.
+
+### Confirmed clean, which is worth recording as much as the findings
+
+Upload path traversal (sanitised twice, stored under the document's own UUID); `MEDIA_ROOT`
+unreachable — no media route, no download view, and `file_path`/`content_hash` absent from
+every serializer including the new `GET /api/documents/{id}`; the 503 body carrying no provider
+detail, host, question or stack; all 19 protected routes carrying a server-side check
+enumerated from the URL conf rather than trusted; 404-not-403 through a single scoped queryset
+on every object route, so there is no branch to time; no header, `Content-Length` or ordering
+channel between the two no-answer paths (measured identical, 323/323, `Vary: Cookie` on both);
+session invalidation intact and untouched by Stage 4; and no secret, question, prompt or
+passage written by any logger — the only logger in `apps/` is FR-05's audit log.
+
+## D-50 · An oversized archive member is a 413 with its own message, and the bomb class is closed for OOXML only
+
+**Status:** Settled by the user · **Date:** 2026-09-26 · **Stage:** 4 item 12b ·
+**Supersedes:** item 12a's partial closure of the same finding
+
+**The defect.** `_ooxml_format` read `[Content_Types].xml` unbounded: a 199 KB upload whose
+manifest expanded to 200 MB was decompressed whole in 0.41 s, with both of FR-08's size checks
+passing because the *upload* was 199 KB. Item 12a bounded that read — **and did not close the
+class**, because the parsers run after the format is accepted and are unbounded too, so the
+same archive with the payload in `word/document.xml` still decompressed whole inside the
+ingestion transaction.
+
+**Decision.** In `_ooxml_format`, with the archive handle already open, reject an archive whose
+members declare more than `MEMBER_MAXIMUM_BYTES` individually or
+`ARCHIVE_MAXIMUM_DECLARED_BYTES` in total, before any parser runs.
+
+**Why a declared size can be trusted, and what that trust depends on.** The obvious objection is
+that the declaration is attacker-supplied. It cannot usefully lie, and the reason is **not** item
+12a's read bound (that covers the manifest only): **Python's `zipfile` caps decompressed output
+at `zinfo.file_size`.** Measured on this interpreter — an archive declaring 1,024 bytes over
+20 MB of payload raises `BadZipFile: Bad CRC-32` on `ZipFile.open(...).read()`, on
+`ZipFile.read(...)` and on a bounded read; and with the CRC patched to match the truncated
+prefix it returns **exactly 1,024 bytes with no exception**. So the *cap* is the guarantee and
+the CRC error is only how it usually surfaces.
+
+**That guarantee is inherited, not ours, and it is recorded with its dependency:** it holds
+because `python-docx` (`docx.opc.phys_pkg`) and `openpyxl` (`openpyxl.reader.excel`) read
+through `zipfile`. **A parser bringing its own inflate would void it.** Asserted by a test
+rather than left as a comment.
+
+A member that lies downwards is therefore not caught by the 413 at all — it declares 2 KB and
+passes. It is caught one step later: the parser cannot get more than the declaration out of it,
+`zipfile` raises, extraction turns that into `ExtractionError`, and the document lands on
+"Extraction failed" with the original kept. The test is named for that mechanism rather than
+implying the 413 covers it.
+
+**413, not 415, and this is the third instance of one principle.** The file really is a DOCX or
+an XLSX; its manifest names the Word or Excel content type. "File type not supported" would be a
+false statement about the request, and an uploader acting on it would convert a file whose format
+was never the problem. It is a size rejection — of decompressed size rather than transfer size —
+and FR-08 already gives 413 to size, after signature. Its message deliberately never says
+"50 MB", because the upload that earns it is about 100 KB.
+
+The principle, now applied three times in this stage: **an error that misstates its reason is
+worse than a generic one.** A NUL byte in a search term is not "too short" (item 12a); an
+oversized member is not "unsupported format"; and a refused-before-attempting document is not
+"Indexing failed" (D-51).
+
+**The whole-archive bound was necessary and went beyond the brief.** A per-member bound alone
+does not close what it claims: at deflate's ~1032:1, a 50 MB upload can honestly declare ~51 GB
+spread over 800 members of 63 MB, every one inside the per-member bound. That is the same
+"closed where the instance stops" error one layer in, so the sum is bounded too.
+
+**The values are deliberately generous, because a false rejection is the expensive direction.**
+64 MB per member is *larger than the entire 50 MB upload ceiling*, so an archive storing a member
+uncompressed can never be refused for it. The measurement that justifies the generosity: a
+minimal real DOCX of one paragraph is a 36 KB archive declaring **827 KB across 17 members**,
+the largest being `word/stylesWithEffects.xml` at 438 KB — **a real document is itself a 22:1
+expansion**, and a tight bound would have refused every DOCX this stack writes.
+
+**Ordering inside the detector is deliberate.** The member scan runs only after the manifest has
+named an accepted content type, so item 12a's oversized-*manifest* case stays 415, and a plain
+ZIP of photos with a 200 MB member stays 415 — a 413 there would imply a smaller ZIP would have
+been indexed. Both pinned by tests.
+
+**PDF IS OPEN AND IS NOT CLAIMED OTHERWISE.** `pypdf` inflates object streams with no ZIP
+involved, so nothing here touches it, and a PDF object-stream bomb is a live hole in ingestion.
+Closing it means a pre-parse scan of `/Length` declarations or a memory ceiling around the
+parser — not a five-line check, and it needs its own item. **The class is closed for OOXML and
+open for PDF**, and no docstring, comment or document in this repository says otherwise.
+
+**Residue, recorded rather than smoothed:** this is validation doing extraction's job. It was
+chosen because one check with the archive handle already open beats three guards across three
+libraries.
+
+## D-51 · A seventh document status: "Too large to index"
+
+**Status:** Settled by the user · **Date:** 2026-09-26 · **Stage:** 4 item 12b ·
+**Migration:** `documents/0007_document_status_too_large_to_index` — additive, reversible,
+choices only
+
+**Decision.** `DOCUMENT_STATUS_VALUES` gains `"Too large to index"`, fourth in the tuple beside
+`"Insufficient content"`. A document exceeding `MAXIMUM_CHUNKS_PER_SOURCE` lands there rather
+than on `"Indexing failed"`.
+
+**Why this is completing a distinction and not inventing a requirement.** The vocabulary already
+separates *refused before attempting, on a property of the content* — `Insufficient content` —
+from *attempted and failed* — `Indexing failed`. An over-cap document is the first kind and had
+no term. **D-28 extended schema v1's five values to the proposal's six because five could not
+express a state the system had; this is that argument one state further on.** The proposal is
+**silent, not contrary**: `MAXIMUM_CHUNKS_PER_SOURCE` was settled in the same week and the
+proposal predates it.
+
+**Why the overload it replaces was not acceptable.** Item 12a put the over-cap case on
+`Indexing failed`, which means *attempted and every chunk failed*. The new case is *refused
+before attempting*, and the difference is user-visible: FR-08's "Processing failed. Please try
+again" offers a retry that cannot work, because nothing about the file has changed.
+
+**D-32 does not cover this, and filing it there would have been wrong.** D-32 records that
+FR-08's retry recovers only an `Indexing failed` caused by a provider outage, and that a scanned
+PDF parses identically however many times it is submitted. Those cases *may* succeed. This one
+cannot — and D-32's own rule makes it worse, because the retry re-runs ingestion on the stored
+original, so **every attempt redoes extraction and chunking in full before failing at the
+identical point.**
+
+**The name.** It states a property of the content and makes no claim that anything was
+attempted; a test asserts the string contains no "failed". Its one imprecision is recorded: the
+trigger is chunk count rather than bytes, so "large" is the user's word rather than the code's —
+`"Too many chunks to index"` would leak an implementation term into a column a person reads.
+
+**Consequences.**
+
+- **The pairing test is what keeps the two values apart.** Over-cap lands on the new value and
+  **not** on `Indexing failed`, with zero embed calls; a document whose every chunk genuinely
+  fails lands on `Indexing failed` and **not** on the new value, having spent
+  `MAXIMUM_EMBED_ATTEMPTS`. One test, both halves — either alone would still pass if a refactor
+  collapsed them.
+- `docs/schema-v1.md` §3 and `apps/core/tests/test_schema.py` both carry the value, because that
+  test transcribes that document. The migration had to be placed immediately after `0006` in the
+  test's plan rather than at the end, which is where the executor plans it.
+- **REQUIRED FOLLOW-UP, Stage 5 presentation work: the front end must suppress FR-08's retry
+  affordance for this status.** Until it does, the row states the truth and the button still
+  lies. Recorded in `documents.py`, `constants.py` and `docs/schema-v1.md` so it cannot be lost.
+- **The meetings asymmetry is deliberate and explicit.** An over-cap transcript keeps
+  `Processing failed`: the proposal defines no meeting status column (D-28), and FR-09 offers no
+  retry affordance to mislead. If FR-09 ever grows one, it needs the same treatment.
+- `manage.py reindex` has no chunk-cap guard, which is harmless today only because the over-cap
+  branch writes no `ExtractedContent` row for it to rebuild from. That is a fragile reason and
+  deserves an item if `reindex` ever learns to re-extract.

@@ -64,13 +64,54 @@ on the two properties invariant 2 names — *same transaction* and *model-level 
 ``apps/api`` already writes several single-column changes, and an FR-15 bulk visibility edit
 is the obvious next caller. Two paths write the column, so both cascade.
 
-**What is NOT covered, stated plainly.** ``bulk_update()``, ``bulk_create()``, raw SQL and a
-``psql`` session all write the column without passing through either path. That is accepted:
-each of them bypasses ``save()`` for every model in this project — auto fields, validation
-and the FR-05 audit log included — so a caller reaching for one has already left the layer
-where model guarantees hold, and none of them is used for visibility anywhere in the
-repository. ``manage.py reindex`` re-derives the stamp from the source as it rebuilds each
-chunk, so it is correct by a different route. The remedy if one is ever needed is
+**COVERAGE, MEASURED RATHER THAN REASONED — and corrected on 25 September 2026.** This
+paragraph previously said ``bulk_update()`` and ``bulk_create()`` were not covered. That was
+**wrong**, and wrong in the *safe* direction, which is worse for maintenance than being wrong
+the other way round: a reader who believes ``bulk_update`` is uncovered does not write the
+test for it, so the claim protects nothing and suppresses the check that would have. Measured
+on **Django 5.2.17**, against the real database, every ORM write path that reaches the column:
+
+===========================================================  ==========
+write path                                                   cascades
+===========================================================  ==========
+``save()``                                                   yes
+``save(update_fields=["visible_to_roles"])``                 yes
+``save(update_fields=[...])`` not naming the column          no write, so nothing to cascade
+``QuerySet.update()``                                        yes
+``QuerySet.update()`` filtered on the column being written   yes
+expression update (``F()``, ``Func``, ``Value``)             yes — and it stamps the value the database stored
+``bulk_update()``                                            **yes, but see below**
+``update_or_create()``                                       yes
+``bulk_create(update_conflicts=True, update_fields=[...])``  **NO — a known hole**
+raw SQL, ``psql``                                            no
+===========================================================  ==========
+
+``update_or_create`` cascades because it ends in ``save()``.
+
+**``bulk_update()`` cascades BY ACCIDENT, not by design, and that is worth knowing rather
+than relying on.** Django implements it internally as ``self.filter(pk__in=pks).update(
+**kwargs)`` — so it inherits ``VisibilityCascadeQuerySet.update`` for free. The coverage is
+therefore held hostage to a dependency's implementation detail: a Django release that
+reimplements ``bulk_update`` as a single ``CASE WHEN`` statement would make invariant 2 false
+again **with every existing test still green**, which is the same shape as the original
+defect — true where it was checked and false where it was used. The test that guards it is
+consequently BEHAVIOURAL (``apps/core/tests/test_visibility_cascade.py``, the write-path
+matrix): it asserts the condition invariant 2 states — every chunk carries its source's
+scope — over each write path in turn, so it fails on a Django upgrade rather than on a
+refactor of this module.
+
+**``bulk_create(update_conflicts=True, update_fields=["visible_to_roles"])`` is a KNOWN HOLE,
+pinned by a test rather than fixed.** It is an INSERT ... ON CONFLICT DO UPDATE, which never
+touches ``save()`` and is not routed through ``update()``, so an upsert writing the column
+leaves the chunks carrying the old scope. Nothing in this repository upserts a source today;
+FR-15's bulk visibility editing is the obvious first caller, and closing it is about six
+lines in the same shape as the ``update()`` override. It is pinned instead of believed closed
+because an unpinned "not covered" claim is exactly how invariant 2's own falsehood survived
+thirteen days — see ``test_bulk_create_upsert_is_a_known_hole_and_does_not_cascade``.
+
+Raw SQL and a ``psql`` session are outside the ORM entirely and no application guarantee can
+reach them; ``manage.py reindex`` re-derives the stamp from the source as it rebuilds each
+chunk, so it is correct by a different route. The remedy where one is ever needed is
 ``restamp_chunks`` below, called directly.
 """
 

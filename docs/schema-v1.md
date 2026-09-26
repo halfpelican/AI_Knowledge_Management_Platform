@@ -244,7 +244,8 @@ now for work that may be descoped.
 
 ```python
 DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient content",
-                          "Indexing failed", "Partially indexed", "Indexed")
+                          "Too large to index", "Indexing failed", "Partially indexed",
+                          "Indexed")
 MEETING_STATUS_VALUES  = ("Received", "Indexed", "Processing failed")
 CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
 SOURCE_TYPES = ("document", "meeting")
@@ -262,6 +263,25 @@ summaries, before `Project_8-proposal_complete_V4.5.docx` reached the team. See
 **D-28** for the mapping and for why `Partially indexed` had to exist: §7.7 abandons a
 chunk after `MAXIMUM_EMBED_ATTEMPTS`, and the superseded set had no status for a
 document whose chunks partly embedded.
+
+**`Too large to index` is the seventh value**, added on 2026-09-26 by Stage 4 item 12b
+(`documents 0007_document_status_too_large_to_index`). `MAXIMUM_CHUNKS_PER_SOURCE`
+refuses a document before the first embed call, and item 12a recorded that refusal as
+`Indexing failed` — which in this vocabulary means *attempted, and every chunk failed*.
+Nothing was attempted. The set already separated **refused before attempting, on a
+property of the content** (`Insufficient content`) from **attempted and failed**
+(`Indexing failed`), so the new value completes that distinction rather than
+introducing one, which is D-28's own argument one state further on; it sits beside
+`Insufficient content` for that reason rather than at the end. The proposal is silent
+here, not contrary: `MAXIMUM_CHUNKS_PER_SOURCE` was settled in the week the value was
+added and the proposal predates it.
+
+The difference is user-visible, which is why the detail message was not enough. FR-08's
+interface offers "Processing failed. Please try again" against a document that did not
+index; a reprocess of an over-cap document fails identically every time, because nothing
+about the file has changed, and D-32's retry re-runs extraction and chunking in full
+before failing at the same point. **The front end must suppress the retry affordance for
+this status** — that is Stage 5 presentation work and is not yet done.
 
 `MEETING_STATUS_VALUES` is untouched. The proposal defines no status column on
 `Meetings` at all, only FR-09's CRUD line "Meetings (Create, Read, Update status)", so

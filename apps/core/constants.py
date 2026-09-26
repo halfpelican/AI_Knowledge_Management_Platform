@@ -14,6 +14,33 @@ from datetime import timedelta
 CHUNK_SIZE = 500
 CHUNK_OVERLAP = 50
 
+# Most chunks one document or transcript may produce before ingestion refuses to index
+# it (Stage 4 item 12a). Not a size limit — MAX_UPLOAD_BYTES is that — but a ceiling on
+# the WORK one synchronous request may commit itself to.
+#
+# **The measurement.** 2.4 MB of extracted text yields 1,111 chunks, so a chunk costs
+# about 2.2 KB of text. A 50 MB TXT at MAX_UPLOAD_BYTES therefore extrapolates to
+# ~23,300 chunks, and every one of them is a SEPARATE, SEQUENTIAL embed call to the NPU
+# inside one ``transaction.atomic()`` block in one synchronous request — a request
+# holding a worker, a database transaction and the NPU for as long as it takes.
+#
+# **Why 1,000, against the Objective 02 figures.** Objective 02's verification on
+# 2 October requires 20 documents and a 20-page file ingested in under 60 seconds. A
+# 20-page document is roughly 11,000 whitespace tokens, which at CHUNK_SIZE 500 with
+# CHUNK_OVERLAP 50 is about 25 chunks — so the cap sits about FORTY TIMES above the
+# largest file Objective 02 names, and cannot interfere with it. In the other direction
+# it is ~2.2 MB of extracted text, about 900 pages: larger than any document this
+# corpus holds, and 23 times less work than the 50 MB worst case. Round, so it reads as
+# a policy rather than as a measurement of one machine.
+#
+# **What the cap is and is not.** It is not a promise that a document AT the cap is fast
+# — 1,000 sequential embed calls is minutes, not seconds. It is the point at which the
+# platform refuses the work instead of attempting it, and the refusal is decided after
+# chunking and BEFORE the first embed call, so a rejected file costs extraction and
+# chunking (in-process, fast) and zero NPU time. Objective 02 protection first, an
+# availability measure second.
+MAXIMUM_CHUNKS_PER_SOURCE = 1000
+
 # --- Retrieval (FR-11, FR-12) -------------------------------------------------------
 # Candidate passages fetched per query, after permission filtering. Tuned in Stage 4.
 TOP_K = 25
@@ -160,12 +187,35 @@ NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowled
 # "Partially indexed" and "Indexing failed" are terminal, committed outcomes inside
 # the one NFR-21 transaction, not half-written records: an unexpected failure still
 # rolls the whole ingestion back (CLAUDE.md invariant 9).
+#
+# **The seventh value, "Too large to index" (Stage 4 item 12b).** Added beside
+# "Insufficient content" rather than appended, because it belongs to the same kind: this
+# vocabulary already separates REFUSED BEFORE ATTEMPTING, on a property of the content
+# ("Insufficient content"), from ATTEMPTED AND FAILED ("Indexing failed"). A document over
+# MAXIMUM_CHUNKS_PER_SOURCE is the first kind and had no term, so item 12a put it on
+# "Indexing failed", which says an attempt was made and every chunk failed — and no attempt
+# was made at all. This COMPLETES AN EXISTING DISTINCTION rather than introducing one, which
+# is the same argument D-28 made one state earlier when five values could not express a
+# document whose chunks partly embedded.
+#
+# The difference is user-visible, which is why the message was not enough: FR-08 offers
+# "Processing failed. Please try again" against a document that did not index, and a
+# reprocess of an over-cap document fails identically every time, because nothing about the
+# file has changed. D-32's retry cases MAY succeed — a provider outage does — and this one
+# cannot; worse, D-32 re-runs ingestion on the stored original, so every attempt redoes
+# extraction and chunking in full before failing at the identical point.
+#
+# The proposal is SILENT here, not contrary: MAXIMUM_CHUNKS_PER_SOURCE was settled this week
+# and the proposal predates it. The name says what happened and does not imply an attempt —
+# not a variant of "failed".
 DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient content",
-                          "Indexing failed", "Partially indexed", "Indexed")
+                          "Too large to index", "Indexing failed", "Partially indexed",
+                          "Indexed")
 # Named so ingestion never spells a status as a literal and a typo is an
 # ImportError rather than a row nothing can filter on.
 (DOCUMENT_PROCESSING, DOCUMENT_EXTRACTION_FAILED, DOCUMENT_INSUFFICIENT_CONTENT,
- DOCUMENT_INDEXING_FAILED, DOCUMENT_PARTIALLY_INDEXED, DOCUMENT_INDEXED) = DOCUMENT_STATUS_VALUES
+ DOCUMENT_TOO_LARGE_TO_INDEX, DOCUMENT_INDEXING_FAILED, DOCUMENT_PARTIALLY_INDEXED,
+ DOCUMENT_INDEXED) = DOCUMENT_STATUS_VALUES
 
 # The proposal defines no status column on Meetings at all, only FR-09's CRUD line
 # "Meetings (Create, Read, Update status)", so schema v1's three values stand: there

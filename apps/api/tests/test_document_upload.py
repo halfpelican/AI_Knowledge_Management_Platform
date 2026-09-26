@@ -152,6 +152,65 @@ def test_an_oversized_body_is_refused_before_it_is_parsed(employee_client, uploa
     assert not Document.objects.exists()
 
 
+# --- 413 again: decompressed size, not transfer size (Stage 4 item 12b) ----------------
+#
+# A DOCX or XLSX whose own table of contents declares more decompressed content than any
+# parser will be allowed to inflate. The archive below is about a hundred kilobytes and
+# declares 200 MB in one member, which is the finding: item 12a bounded the manifest read,
+# and the parsers that run after the format is accepted were still unbounded, so the same
+# bomb worked one member further on — inside the ingestion transaction.
+#
+# 413 AND NOT 415 is the assertion that matters here. The file really is a DOCX — its
+# manifest names the Word content type — so "File type not supported" would be a false
+# statement about the request, and an uploader acting on it would go and convert a file
+# whose format was never the problem. See apps/ingestion/signatures.py for the bound and
+# for what it does not cover (PDF).
+
+DECLARED_MEMBER_BOMB_BYTES = 200 * 1024 * 1024
+
+
+def declared_bomb():
+    """An archive that CLAIMS a 200 MB member and holds 100 KB. Built here, never committed."""
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.ingestion.tests.builders import ooxml_declaring
+
+    return SimpleUploadedFile(
+        "quarterly-report.docx",
+        ooxml_declaring(
+            {"word/document.xml": b"A" * 100_003},
+            declared_sizes={"word/document.xml": DECLARED_MEMBER_BOMB_BYTES},
+        ),
+    )
+
+
+@pytest.mark.django_db
+def test_an_archive_declaring_more_than_it_may_inflate_is_413(session_client):
+    """From either role, and nothing is recorded: the pipeline is never entered at all.
+
+    ``not Document.objects.exists()`` is the half that says no parser ran — ingestion
+    creates the row before extraction begins (section 7.8), so no row means no extraction,
+    no chunking and no transaction.
+    """
+    response = post_upload(session_client.client, declared_bomb())
+
+    assert response.status_code == 413
+    assert response.status_code != 415  # stated as well as implied: this is the correction
+    assert "expand" in response.data["detail"]
+    # Not the transfer-size message either: this upload is about 100 KB, and telling its
+    # sender it exceeded 50 MB would be the same kind of false statement as the 415.
+    assert "50 MB" not in response.data["detail"]
+    assert not Document.objects.exists()
+
+
+@pytest.mark.django_db
+def test_the_decompressed_size_rejection_comes_before_the_title_check(employee_client):
+    """It is found in the signature step, which section 7.2 puts before the form."""
+    response = post_upload(employee_client, declared_bomb(), title="")
+
+    assert response.status_code == 413
+
+
 # --- 400: the title ------------------------------------------------------------------
 
 

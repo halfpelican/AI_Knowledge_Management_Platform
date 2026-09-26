@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.ai.testing import STUB_EMBEDDING_MODEL
@@ -37,6 +38,7 @@ from apps.retrieval.models import SearchLog
 from apps.retrieval.scoping import UnscopedRequestError
 from apps.retrieval.search import (
     SNIPPET_WINDOW_CHARACTERS,
+    SearchQueryContainsNullCharacter,
     SearchQueryTooShort,
     search,
     snippet_for,
@@ -627,3 +629,73 @@ def test_search_from_both_role_sessions(session_client, two_matching_documents):
     assert SearchLog.objects.get().result_count == expected
     if role_name == EMPLOYEE_ROLE_NAME:
         assert RESTRICTED_TITLE not in repr(results)
+
+
+# --- Stage 4 item 12a: a NUL byte in q --------------------------------------------------
+#
+# THE FINDING, once, for the three tests below. ``GET /api/search?q=ab%00cd`` from any
+# authenticated session raised ``psycopg.DataError`` out of the ``chunk_text__icontains``
+# lookup and was answered **500 with an HTML body** — a traceback page under ``DEBUG``,
+# carrying frame locals and the requester's own session cookie. ``POST /api/ask`` answers the
+# same input a clean 400, because its serializer field carries DRF's
+# ``ProhibitNullCharactersValidator``; ``q`` is read straight off ``request.query_params``
+# and is the only user-supplied string in this system that reaches the database without
+# passing through a DRF field.
+
+NULL_TERM = "ab\x00cd"
+
+
+def test_a_query_containing_a_null_character_raises_its_own_exception_and_writes_no_row(
+    two_matching_documents, employee
+):
+    """THE FINDING at the function boundary, and the distinct exception is the point.
+
+    NOT ``SearchQueryTooShort``: the term is four characters, comfortably over the floor, and
+    a message saying it is too short would state something false about the request. Raised
+    before any query runs, so no ``SearchLog`` row is written — this was not a search, the
+    same reasoning the length check uses.
+    """
+    assert len(NULL_TERM) >= MINIMUM_SEARCH_LENGTH  # not the length rule
+    with pytest.raises(SearchQueryContainsNullCharacter):
+        search(query_text=NULL_TERM, user=employee)
+    assert SearchLog.objects.count() == 0
+    assert not issubclass(SearchQueryTooShort, SearchQueryContainsNullCharacter)
+    assert not issubclass(SearchQueryContainsNullCharacter, SearchQueryTooShort)
+
+
+def test_a_null_character_in_q_is_400_json_from_both_role_sessions(session_client):
+    """THE FINDING at the endpoint, from an Employee session and an Administrator session
+    (CLAUDE.md section 8 item 2): 400 and not 500, and a JSON body rather than an HTML
+    traceback page.
+
+    The status and the content type are asserted separately because the defect was both: a
+    500 would have been wrong on its own, and a 500 rendered as ``text/html`` is the part
+    that carries frame locals and a session cookie to whoever sent the byte.
+    """
+    response = session_client.client.get(reverse("search"), {"q": NULL_TERM})
+
+    assert response.status_code == 400
+    assert response["Content-Type"].startswith("application/json")
+    assert "q" in response.json()
+    assert SearchLog.objects.count() == 0
+    # And the reply says what was actually wrong, not that the term was too short.
+    message = " ".join(response.json()["q"])
+    assert "null character" in message
+    assert "characters" not in message.replace("null character", "")
+
+
+def test_an_ordinary_query_is_unaffected_by_the_null_check(employee):
+    """The check is one character and nothing else: no stripping, no normalising, and a term
+    that merely mentions or escapes the byte in prose is a term this platform may search
+    for."""
+    make_document(
+        employee,
+        title="Encoding notes",
+        roles=[EMPLOYEE_ROLE_NAME],
+        texts=[r"The loader rejects a literal \x00 in a CSV column."],
+    )
+
+    results = search(query_text=r"\x00", user=employee)
+
+    assert results.documents.count == 1
+    assert SearchLog.objects.get().query_text == r"\x00"

@@ -36,6 +36,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
 )
 from apps.core.models import VOCABULARY_MAX_LENGTH
+from apps.core.visibility import VISIBILITY_FIELD
 from apps.documents.models import ContentChunk, Document
 from apps.meetings.models import Meeting
 
@@ -424,3 +425,188 @@ def test_a_queryset_update_reads_the_stored_scope_back_rather_than_the_argument(
     # And the sources agree with their chunks, which is the whole condition the cascade keeps.
     assert Document.objects.get(pk=wide.pk).visible_to_roles == ADMINISTRATOR_ONLY
     assert Document.objects.get(pk=already_narrow.pk).visible_to_roles == []
+
+
+# --- The write-path matrix: the condition, over every ORM path that reaches the column ----
+#
+# WHY THIS EXISTS AND WHAT SHAPE IT IS, because the shape is the point (Stage 4 item 12a,
+# D-47's corrected table).
+#
+# The tests above each exercise one path and assert the stamp that path should have produced.
+# This matrix asserts something weaker per case and stronger overall: **the condition
+# invariant 2 states** — every chunk carries its source's scope — read from the SOURCE ROW
+# rather than compared against a constant the test chose. It never asserts that
+# ``restamp_chunks`` was called, that ``update()`` was routed anywhere, or that any particular
+# code path ran.
+#
+# That is deliberate, and the reason is ``bulk_update``. It cascades only because Django
+# implements it internally as ``self.filter(pk__in=pks).update(**kwargs)``, inheriting
+# ``VisibilityCascadeQuerySet.update`` BY ACCIDENT. So the coverage of that path rests on a
+# dependency's implementation detail: a Django release reimplementing it as a single
+# ``CASE WHEN`` statement would make invariant 2 false again, and a test asserting "the
+# override was called" would either still pass or fail for the wrong reason. A test asserting
+# the CONDITION fails on that upgrade, and does not fail when this module is refactored.
+#
+# Parametrised over Document and Meeting through the ``source`` fixture, because D-16's
+# "mirrors Documents exactly" has to mean it for every path and not only for ``save()``.
+
+
+def assert_every_chunk_carries_its_sources_scope(source):
+    """Invariant 2's condition, asserted against the stored source row. Returns that scope.
+
+    The expected value is READ FROM THE DATABASE, not passed in: the assertion is that the
+    two agree, which is the whole of the invariant, and a test that compared both to a
+    literal could pass while the source row held something else entirely.
+    """
+    stored = type(source)._default_manager.get(pk=source.pk).visible_to_roles
+    stamps = stamps_of(source)
+    assert stamps, "the fixture must leave chunks for the cascade to be wrong about"
+    assert all(stamp == stored for stamp in stamps), (
+        f"source carries {stored}; its chunks carry {stamps}"
+    )
+    return stored
+
+
+def _narrow_by_save(source):
+    source.visible_to_roles = ADMINISTRATOR_ONLY
+    source.save()
+
+
+def _narrow_by_save_with_update_fields(source):
+    source.visible_to_roles = ADMINISTRATOR_ONLY
+    source.save(update_fields=[VISIBILITY_FIELD])
+
+
+def _narrow_by_queryset_update(source):
+    type(source).objects.filter(pk=source.pk).update(visible_to_roles=ADMINISTRATOR_ONLY)
+
+
+def _narrow_by_queryset_update_filtered_on_the_column(source):
+    type(source).objects.filter(visible_to_roles=BOTH_ROLES).update(
+        visible_to_roles=ADMINISTRATOR_ONLY
+    )
+
+
+def _narrow_by_expression_update(source):
+    """``array_remove(visible_to_roles, 'Employee')``: a value only the database computes."""
+    from django.contrib.postgres.fields import ArrayField
+    from django.db.models import CharField, F, Func, Value
+
+    type(source).objects.filter(pk=source.pk).update(
+        visible_to_roles=Func(
+            F(VISIBILITY_FIELD),
+            Value(EMPLOYEE_ROLE_NAME),
+            function="array_remove",
+            output_field=ArrayField(CharField(max_length=VOCABULARY_MAX_LENGTH)),
+        )
+    )
+
+
+def _narrow_by_bulk_update(source):
+    source.visible_to_roles = ADMINISTRATOR_ONLY
+    type(source).objects.bulk_update([source], [VISIBILITY_FIELD])
+
+
+def _narrow_by_update_or_create(source):
+    type(source).objects.update_or_create(
+        pk=source.pk, defaults={VISIBILITY_FIELD: ADMINISTRATOR_ONLY}
+    )
+
+
+WRITE_PATHS = {
+    "save": _narrow_by_save,
+    "save(update_fields)": _narrow_by_save_with_update_fields,
+    "update()": _narrow_by_queryset_update,
+    "update() filtered on the column": _narrow_by_queryset_update_filtered_on_the_column,
+    "expression update": _narrow_by_expression_update,
+    "bulk_update()": _narrow_by_bulk_update,
+    "update_or_create()": _narrow_by_update_or_create,
+}
+
+
+@pytest.mark.parametrize("write_path", list(WRITE_PATHS.values()), ids=list(WRITE_PATHS))
+def test_every_orm_write_path_that_reaches_the_column_keeps_the_condition(source, write_path):
+    """Invariant 2's condition after a narrowing written by each ORM path in turn.
+
+    Two assertions per case, and both are needed. The first is that the SOURCE actually
+    changed — otherwise a path that silently wrote nothing would satisfy the condition
+    vacuously, chunks and source agreeing on the old value. The second is the condition
+    itself, read from the source row.
+
+    ``bulk_update`` is the case this exists for: it is green today by inheritance from
+    ``update()``, and it is the one a Django release can break without touching this
+    repository.
+    """
+    write_path(source)
+
+    stored = assert_every_chunk_carries_its_sources_scope(source)
+    assert stored == ADMINISTRATOR_ONLY  # the write happened; the condition is not vacuous
+
+
+def test_the_matrix_covers_every_path_the_module_docstring_claims(source):
+    """The docstring's table and this file must not drift apart.
+
+    D-47's table was wrong for thirteen days in the direction that suppresses tests. This
+    asserts that each path named as covered in ``apps/core/visibility.py`` appears in the
+    matrix above, so adding a row to the prose without adding a case here fails.
+    """
+    import apps.core.visibility as module
+
+    claimed = module.__doc__
+    for path in ("save()", "QuerySet.update()", "bulk_update()", "update_or_create()"):
+        assert path in claimed
+    assert "bulk_create(update_conflicts=True" in claimed
+    assert set(WRITE_PATHS) >= {
+        "save",
+        "save(update_fields)",
+        "update()",
+        "update() filtered on the column",
+        "expression update",
+        "bulk_update()",
+        "update_or_create()",
+    }
+
+
+# --- The known hole, pinned rather than believed closed -----------------------------------
+
+
+def test_bulk_create_upsert_is_a_known_hole_and_does_not_cascade(source):
+    """``bulk_create(update_conflicts=True, update_fields=["visible_to_roles"])`` does NOT
+    cascade, and this test PINS that gap instead of fixing it.
+
+    It is an ``INSERT ... ON CONFLICT DO UPDATE``: it never calls ``save()`` and Django does
+    not route it through ``QuerySet.update()``, so the source row is narrowed and its chunks
+    keep the old, wider scope — invariant 2's condition is false afterwards. That is asserted
+    here **as the current behaviour**, deliberately, because an unpinned "not covered" claim
+    in a docstring is exactly how invariant 2's own falsehood survived thirteen days: nobody
+    tests what the prose says is broken, so nobody notices when it changes in either
+    direction.
+
+    Nothing in this repository upserts a source today. FR-15's bulk visibility editing is the
+    obvious first caller, and closing it is about six lines in the shape of the ``update()``
+    override. **When it is closed, this test fails** — and that failure is the notification
+    that the docstring's table needs its last row changed, which is the whole reason the
+    assertion is written this way round.
+    """
+    source.visible_to_roles = ADMINISTRATOR_ONLY
+
+    type(source).objects.bulk_create(
+        [source],
+        update_conflicts=True,
+        update_fields=[VISIBILITY_FIELD],
+        unique_fields=["id"],
+    )
+
+    # The source row moved.
+    assert type(source)._default_manager.get(pk=source.pk).visible_to_roles == ADMINISTRATOR_ONLY
+    # The chunks did not: the hole, stated as the behaviour it currently is.
+    assert stamps_of(source) == [BOTH_ROLES, BOTH_ROLES]
+    with pytest.raises(AssertionError):
+        assert_every_chunk_carries_its_sources_scope(source)
+    # And the remedy, available to any caller that needs it today.
+    visibility.restamp_chunks(
+        source_type=source.visibility_source_type,
+        source_ids=[source.pk],
+        visible_to_roles=ADMINISTRATOR_ONLY,
+    )
+    assert_every_chunk_carries_its_sources_scope(source)

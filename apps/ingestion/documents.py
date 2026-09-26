@@ -29,11 +29,17 @@ from apps.core.constants import (
     DOCUMENT_INDEXING_FAILED,
     DOCUMENT_INSUFFICIENT_CONTENT,
     DOCUMENT_PARTIALLY_INDEXED,
+    DOCUMENT_TOO_LARGE_TO_INDEX,
+    MAXIMUM_CHUNKS_PER_SOURCE,
     MINIMUM_CONTENT_LENGTH,
 )
 from apps.documents.models import ContentChunk, Document, ExtractedContent
 from apps.ingestion.signatures import compute_content_hash
-from apps.ingestion.chunking import length_in_tokens, split_into_overlapping_chunks
+from apps.ingestion.chunking import (
+    chunk_count_for_tokens,
+    length_in_tokens,
+    split_into_overlapping_chunks,
+)
 from apps.ingestion.embedding import DOCUMENT_SOURCE_TYPE, embed_and_store_chunks
 from apps.ingestion.extraction import extract_plain_text
 
@@ -52,6 +58,14 @@ INSUFFICIENT_CONTENT_MESSAGE = (
 
 # Section 7.8 lines 89-91: every chunk failed to embed.
 INDEXING_FAILED_MESSAGE = "The document could not be indexed."
+
+# MAXIMUM_CHUNKS_PER_SOURCE exceeded (Stage 4 item 12a). Its own status as well as its own
+# message since item 12b — DOCUMENT_TOO_LARGE_TO_INDEX, because this document was refused
+# before anything was attempted, which is not what "Indexing failed" means. See the guard in
+# _run_pipeline.
+TOO_MANY_CHUNKS_MESSAGE = (
+    "The document was stored, but it holds too much text to index in one request."
+)
 
 
 @dataclass(frozen=True)
@@ -184,6 +198,43 @@ def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
         # re-parsing could not produce again.
         return _decided_failure(
             document, DOCUMENT_INSUFFICIENT_CONTENT, INSUFFICIENT_CONTENT_MESSAGE
+        )
+
+    if chunk_count_for_tokens(length_in_tokens(text)) > MAXIMUM_CHUNKS_PER_SOURCE:
+        # MAXIMUM_CHUNKS_PER_SOURCE (Stage 4 item 12a). Every chunk is a separate,
+        # sequential NPU embed call inside the transaction below, in one synchronous
+        # request: a 50 MB text file extrapolates to ~23,300 of them, which Objective
+        # 02's "20 documents and a 20-page file in under 60 seconds" does not survive.
+        #
+        # **Decided BEFORE any cost is paid.** No embed call, no ContentChunks row, and
+        # deliberately no ExtractedContent row either — there is nothing that would read
+        # a 50 MB text column for a document with no chunks (``manage.py reindex``
+        # rebuilds from it and would otherwise re-embed past the cap outside a request),
+        # and returning here mirrors the insufficient-content branch's own order above.
+        # The ORIGINAL FILE IS KEPT and stays downloadable: CLAUDE.md invariant 8 says a
+        # failed AI step never discards the source, and this is a refusal to run one.
+        #
+        # **"Too large to index", its own status value since Stage 4 item 12b.** Item 12a
+        # put this outcome on "Indexing failed", which means "attempted, and every chunk
+        # failed to embed" — and nothing was attempted here. The vocabulary already
+        # separated refused-before-attempting ("Insufficient content") from
+        # attempted-and-failed ("Indexing failed"); this condition was the first of the
+        # former kind with no term of its own, so the seventh value completes that
+        # distinction rather than inventing one (apps/core/constants.py argues it,
+        # documents migration 0007 carries it).
+        #
+        # The overload was user-visible, not merely untidy: FR-08's interface offers
+        # "Processing failed. Please try again" against a document that did not index, and
+        # a reprocess of an over-cap document fails identically every time because nothing
+        # about the file has changed — and D-32's retry re-runs extraction and chunking in
+        # full before failing at the identical point. FR-08's retry affordance must be
+        # suppressed for this status; that is Stage 5 presentation work and is NOT done.
+        # Until it is, the row states the truth and the button still lies.
+        #
+        # 422 either way: docs/api-contract.md already gives that code to "stored but could
+        # not be indexed", and the message distinguishes this from the embedding failure.
+        return _decided_failure(
+            document, DOCUMENT_TOO_LARGE_TO_INDEX, TOO_MANY_CHUNKS_MESSAGE
         )
 
     # Stored separately from the original so that search and AI processing never

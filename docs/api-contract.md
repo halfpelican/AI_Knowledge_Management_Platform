@@ -109,7 +109,7 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB; `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or every chunk failed to embed |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or every chunk failed to embed |
 | POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/documents/{id}` | session | `200` document object | `401`; `404` no such document, or one outside the caller's scope |
@@ -140,7 +140,9 @@ Fields: `file` (required), `title` (required, non-blank), `department` (optional
 
 **The rejection order is fixed** by the proposal's §7.2 `validateUpload()` and is
 part of the contract, not an implementation detail: contribute permission (403),
-then signature (415), then size (413), then title (400), then duplicate (409). §7.2
+then signature (415, **or the 413 below where the archive declares more decompressed
+content than may be inflated — the same step, a different rejection**), then size
+(413), then title (400), then duplicate (409). §7.2
 says why the permission is first — "it is the cheapest rejection, and the user's role
 may have changed during a transfer of up to 50 MB".
 
@@ -148,6 +150,26 @@ may have changed during a transfer of up to 50 MB".
 before the body is parsed, so a 50 MB transfer is refused without being buffered; and
 once against the bytes actually received, for a client that lies about or omits the
 header.
+
+**A third size rejection shares the 413 and does not share the message** (Stage 4
+item 12b). Both checks above are checks on the *upload*, and a 199 KB DOCX whose
+`word/document.xml` declares 200 MB passes both: the size that matters there is the
+decompressed one. The signature step now reads every member's declared size out of the
+archive's central directory — no member is inflated to do it — and refuses a DOCX or
+XLSX declaring more than `MEMBER_MAXIMUM_BYTES` in one member or
+`ARCHIVE_MAXIMUM_DECLARED_BYTES` across all of them (`apps/ingestion/signatures.py`,
+which also records why a declared size cannot usefully lie). It is **413 and
+deliberately not the neighbouring 415**: the file's format is not the problem, it is a
+real DOCX, and answering "File type not supported" would send its uploader to convert
+something that was never the wrong type — the argument that made a NUL byte in a
+search term its own rejection rather than "too short". Its message names decompressed
+size and never the 50 MB transfer limit, which does not apply to it. **The protection
+is OOXML-only: PDF is not covered**, because `pypdf` inflates object streams with no
+ZIP involved, and that gap is stated rather than implied.
+
+The same bound applies to an uploaded FR-09 transcript file, which reports it as a
+`400` on the `file` field with the same message, because FR-09 enumerates only `201`
+and `400`.
 
 **Format is decided by content, never by extension.** FR-08: "file type is confirmed
 by inspecting the file signature rather than the extension alone, preventing a

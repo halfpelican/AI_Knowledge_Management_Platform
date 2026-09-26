@@ -131,6 +131,41 @@ SNIPPET_WINDOW_CHARACTERS = 240
 SNIPPET_ELLIPSIS = "..."
 
 
+# The one byte Postgres cannot hold in a text value at all, and the one character this
+# module refuses. Named rather than written as a literal in the check below, because
+# "\x00" in a condition reads as a typo and this one is deliberate.
+NULL_CHARACTER = "\x00"
+
+
+class SearchQueryContainsNullCharacter(ValueError):
+    """The search term contains a NUL byte (Stage 4 item 12a).
+
+    **A DISTINCT exception, not ``SearchQueryTooShort``.** The two map to the same 400, and
+    reusing the other one would have been one fewer class — but its message says the term is
+    too short, and a term carrying a NUL byte is not too short. An error message that states
+    something false about the request is worse than an extra exception class, and FR-19's
+    evidence would record the wrong rejection reason for it.
+
+    **What it is for.** ``q`` arrives off ``request.query_params`` and is the only
+    user-supplied string in this system that reaches the database without passing through a
+    DRF field. Every serializer field carries DRF's ``ProhibitNullCharactersValidator``, which
+    is why ``POST /api/ask`` answers the identical input with a clean 400 while
+    ``GET /api/search?q=ab%00cd`` raised ``psycopg.DataError`` out of the ``icontains`` lookup
+    below and was answered **500 with an HTML body** — a traceback page under ``DEBUG``,
+    carrying frame locals and the requester's own session cookie.
+
+    Postgres text values cannot contain U+0000, so this is not a policy choice about what
+    people may search for: no row in the database can contain the character, so no search for
+    it could ever match, and the driver refuses to send it. Raised BEFORE any query runs and
+    before any ``SearchLog`` row is written, for the same reason ``SearchQueryTooShort`` is:
+    this was not a search.
+
+    It is checked here rather than in the view so that the rule lives with the query that
+    cannot survive it, and so the two rejections are one shape — the view maps exceptions and
+    re-checks nothing.
+    """
+
+
 class SearchQueryTooShort(ValueError):
     """The search term is shorter than MINIMUM_SEARCH_LENGTH.
 
@@ -389,12 +424,22 @@ def search(*, query_text: str, user) -> SearchResults:
     request was largely doomed anyway. Unlike ``record_query`` there is no second table, so
     no transaction is needed for one row.
 
-    Raises SearchQueryTooShort for a term under MINIMUM_SEARCH_LENGTH, before any query runs
-    and before any row is written.
+    Raises SearchQueryTooShort for a term under MINIMUM_SEARCH_LENGTH, and
+    SearchQueryContainsNullCharacter for a term carrying a NUL byte, both before any query
+    runs and before any row is written. Two exceptions rather than one because they are two
+    different things to tell the user; see SearchQueryContainsNullCharacter.
     """
     if len(query_text) < MINIMUM_SEARCH_LENGTH:
         raise SearchQueryTooShort(
             f"A search term must be at least {MINIMUM_SEARCH_LENGTH} characters."
+        )
+
+    if NULL_CHARACTER in query_text:
+        # Beside the length check, and before the three reads below: the ``icontains``
+        # lookup raises psycopg.DataError on this byte, which reached the client as a 500
+        # with an HTML body until Stage 4 item 12a.
+        raise SearchQueryContainsNullCharacter(
+            "A search term cannot contain a null character."
         )
 
     role_name = permission_scope(user)

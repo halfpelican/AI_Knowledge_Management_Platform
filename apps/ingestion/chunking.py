@@ -45,6 +45,27 @@ def length_in_tokens(text: str) -> int:
     return sum(1 for _ in _TOKEN.finditer(text))
 
 
+def chunk_count_for_tokens(total_tokens: int) -> int:
+    """How many chunks a text of ``total_tokens`` tokens produces. No text needed.
+
+    THE definition of that count, used twice and defined once (the same rule
+    ``length_in_tokens`` follows for tokens): by
+    ``split_into_overlapping_chunks`` below as its non-termination guard, and by the
+    MAXIMUM_CHUNKS_PER_SOURCE check in ingestion, which has to know the count BEFORE
+    paying for the chunks — the whole point of that ceiling is that an oversized
+    document costs no embed call and no 50 MB text row.
+
+    The first chunk, plus one per advance of ``CHUNK_SIZE - CHUNK_OVERLAP`` tokens over
+    what remains. Zero for an empty text, because the chunker manufactures no passage out
+    of nothing. A test asserts this agrees with the chunker's actual output at the three
+    boundary sizes, so the two cannot drift.
+    """
+    if total_tokens <= 0:
+        return 0
+    step = CHUNK_SIZE - CHUNK_OVERLAP
+    return 1 + -(-max(total_tokens - CHUNK_SIZE, 0) // step)
+
+
 def split_into_overlapping_chunks(source_text: str) -> list[Chunk]:
     """Split ``source_text`` into CHUNK_SIZE-token chunks overlapping by CHUNK_OVERLAP.
 
@@ -79,7 +100,7 @@ def split_into_overlapping_chunks(source_text: str) -> list[Chunk]:
     # read. Section 7.5 singles this out as the mistake to avoid, so it is worth one
     # comparison per chunk to make it impossible rather than merely warned against.
     step = CHUNK_SIZE - CHUNK_OVERLAP
-    maximum_chunks = 1 + -(-max(total_tokens - CHUNK_SIZE, 0) // step)
+    maximum_chunks = chunk_count_for_tokens(total_tokens)
 
     chunks: list[Chunk] = []
     start = 0
