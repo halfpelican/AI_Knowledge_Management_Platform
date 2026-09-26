@@ -75,6 +75,32 @@ const PARTIALLY_INDEXED_DETAIL =
   'Some passages could not be indexed, so parts of this document will not appear in search results.'
 
 /**
+ * FR-12 search and question bounds, mirroring apps/core/constants.py
+ * (MINIMUM_SEARCH_LENGTH, MINIMUM_QUESTION_LENGTH, MAXIMUM_QUESTION_LENGTH).
+ *
+ * FR-12 asks for the search minimum client-side in as many words — "queries
+ * shorter than two characters are rejected client-side" — and the question bounds
+ * are mirrored so the submit button can be disabled until the question is
+ * askable, the pattern FR-01's password rules already use. Both remain the
+ * server's decision: `GET /api/search` answers 400 `{"q": [...]}` and
+ * `POST /api/ask` answers 400 `{"question": [...]}` regardless of what the
+ * browser allowed (CLAUDE.md §6, invariant 4). Both question bounds are
+ * inclusive.
+ */
+export const SEARCH_MINIMUM_LENGTH = 2
+export const QUESTION_MINIMUM_LENGTH = 10
+export const QUESTION_MAXIMUM_LENGTH = 500
+
+/**
+ * The two source types, from the fixed vocabulary the chunks, the search results
+ * and the consulted sources all use (docs/schema-v1.md §3).
+ */
+export const SOURCE_TYPE = {
+  document: 'document',
+  meeting: 'meeting',
+}
+
+/**
  * Client-side validation text. Fixed here so every form says the same thing.
  * The password rules themselves live in src/utils/password.js, which is the
  * single copy of the policy the server also enforces (FR-01).
@@ -104,6 +130,14 @@ export const VALIDATION = {
   meetingDateFuture: 'A meeting date may not be in the future.',
   transcriptRequired: 'Paste the transcript text.',
   transcriptFileRequired: 'Choose a transcript file.',
+  // FR-12: "queries shorter than two characters are rejected client-side". The
+  // message names the minimum, so a refusal says what would be accepted.
+  searchTermRequired: 'Enter something to search for.',
+  searchTermTooShort: `Enter at least ${SEARCH_MINIMUM_LENGTH} characters to search.`,
+  // FR-12's question bounds. Named in the message for the same reason.
+  questionRequired: 'Enter a question.',
+  questionTooShort: `A question needs at least ${QUESTION_MINIMUM_LENGTH} characters.`,
+  questionTooLong: `A question can be at most ${QUESTION_MAXIMUM_LENGTH} characters.`,
 }
 
 /**
@@ -217,6 +251,16 @@ export const TEXT = {
   // One message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
   documentNotFound: 'That document could not be found. The list has been reloaded.',
   documentReprocessNotPermitted: 'You do not have permission to process documents.',
+  // The document screen a citation links to (D-46). A document outside the
+  // caller's scope answers 404, exactly as an id that names nothing does, so this
+  // message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
+  loadingDocument: 'Loading the document…',
+  documentLoadFailed: 'Could not load the document',
+  documentRecordNotFound: 'That document could not be found.',
+  // FR-15 (Stage 5) owns document presentation: filtered browsing, the metadata
+  // panel and permissioned deletion. This screen is the citation's destination
+  // and says so rather than looking like an unfinished version of that one.
+  documentDetailScope: 'The record for this document. Its text is read through search and the assistant.',
 
   /* ---- FR-09 meeting transcripts ---------------------------------------- */
   loadingMeetings: 'Loading meetings…',
@@ -261,4 +305,131 @@ export const TEXT = {
   // version, so the stored text is shown exactly as it was supplied.
   transcriptVerbatim:
     'Stored and shown exactly as it was supplied, including any speaker labels and timestamps.',
+
+  /* ---- FR-12 keyword search --------------------------------------------- */
+  searchFieldLabel: 'Search',
+  searchNavLabel: 'Search the knowledge base',
+  searchSubmit: 'Search',
+  searchHeading: 'Search',
+  searchHint: `Searches document and meeting titles and their indexed passages. At least ${SEARCH_MINIMUM_LENGTH} characters.`,
+  // No term yet: a prompt, not an error. Typing a URL with no `q` lands here too.
+  searchPrompt: 'Enter a word or phrase to search the documents and meeting transcripts you can see.',
+  searching: 'Searching…',
+  searchFailed: 'Could not run that search',
+  searchResultsFor: (term) => `Results for “${term}”`,
+  // Nothing matched is an ordinary empty state and never an error. It says
+  // nothing about what exists outside the caller's scope, because the screen is
+  // not told and there is nothing to say (CLAUDE.md §6, invariant 1).
+  searchNothingMatched: (term) => `Nothing in the knowledge base matched “${term}”.`,
+  searchNothingMatchedHint: 'Try a different word, or ask the question in your own words instead.',
+  searchDocumentsHeading: 'Documents',
+  searchMeetingsHeading: 'Meeting transcripts',
+  // A group with no results still reads as zero rather than vanishing, so the
+  // two groups FR-12 names are always both on the screen.
+  searchGroupEmptyDocuments: 'No documents matched.',
+  searchGroupEmptyMeetings: 'No meeting transcripts matched.',
+  searchGroupCount: (count) => (count === 1 ? '1 result' : `${count} results`),
+  searchTotalAnnouncement: (term, total) =>
+    total === 1 ? `1 result for ${term}.` : `${total} results for ${term}.`,
+  // `snippet` is "" only where the source has no indexed passage at all — an
+  // FR-08 "Insufficient content" document, matched on its title. An honest note
+  // rather than invented text.
+  searchSnippetUnavailable: 'Matched on its title. This item has no indexed passage to show.',
+  searchAskInstead: 'Ask this as a question',
+
+  /* ---- FR-12 the answer path, FR-13 the assistant ----------------------- */
+  askNavLabel: 'Ask',
+  askHeading: 'Ask the knowledge base',
+  askFieldLabel: 'Your question',
+  askHint: `Ask in your own words, between ${QUESTION_MINIMUM_LENGTH} and ${QUESTION_MAXIMUM_LENGTH} characters. Answers come only from material you can see, and every statement carries a citation.`,
+  askSubmit: 'Ask',
+  // Retrieval, generation and citation verification all happen inside the
+  // request, so this is the wait. It is announced as well as spun.
+  asking: 'Looking for an answer…',
+  askRejected: 'That question was not accepted. Check it and try again.',
+  // FR-12's 503 is NFR-19's notice: shown the moment the API answers, in place of
+  // a spinner that never resolves. Distinct from the no-answer state below,
+  // because "we could not ask" and "the corpus has no answer" are different
+  // events and a user who conflates them retries the wrong thing.
+  askUnavailableTitle: 'The AI service is unavailable',
+  askNotRecorded: 'Your question was not recorded, so you can ask it again in a moment.',
+  askQuestionLabel: 'You asked',
+  answerHeading: 'Answer',
+  // The visible acknowledgement a reply lands with. Usability finding 1: an
+  // announcement that only assistive technology receives is half a signal, so
+  // this text is on the screen and in a live region at once.
+  answerReady: (statements, sources) =>
+    `Answer ready: ${statements === 1 ? '1 statement' : `${statements} statements`} from ` +
+    `${sources === 1 ? '1 source' : `${sources} sources`}.`,
+  noAnswerReady: 'No answer could be found in the knowledge base.',
+  // Every statement carries a citation and the number rendered is the `position`
+  // the server stored, so the screen and the AnswerCitation row are the same
+  // number (FR-12 "numbered inline citations").
+  citationToggleLabel: (position) => `Source for statement ${position}`,
+  citationPassageHeading: 'Source passage',
+  // Defensive only: the contract makes `sources` a superset of the cited chunks,
+  // so a citation whose passage is not in the reply should not occur. If one
+  // does, the number stays on the screen as plain text — the statement is cited,
+  // and inventing a passage or hiding the citation would both be worse.
+  citationPassageUnavailable: 'The source passage did not arrive with this answer.',
+  sourcesHeading: 'Sources',
+  // FR-12: "a 'Sources' panel lists every item consulted with its date, allowing
+  // the user to judge how current the underlying material is". Consulted, which
+  // is a wider set than cited, and the panel says so rather than implying that
+  // everything listed was quoted.
+  sourcesIntro:
+    'Every item consulted to build this answer, with its date. Some were consulted without being cited.',
+  sourcePassageCount: (count) => (count === 1 ? '1 passage consulted' : `${count} passages consulted`),
+  // FR-12's "links to the source document or meeting". Both types now have a
+  // screen of their own, served by `GET /api/meetings/{id}` and
+  // `GET /api/documents/{id}` (D-46) — until Stage 4 item 10b a document citation
+  // could only be pointed at the repository list, which is a link and not a link
+  // to the source.
+  viewMeeting: 'View the transcript',
+  viewDocument: 'View the document',
+  sourceTypeDocument: 'Document',
+  sourceTypeMeeting: 'Meeting',
+
+  /* ---- FR-12 no answer, and the partial matches beside it ---------------- */
+  // FR-12: "the interface states plainly that it cannot answer from the available
+  // knowledge base and does not present a speculative answer". There is no empty
+  // answer frame here pretending to be one, and no fragment: nothing that failed
+  // citation verification reaches the browser at all (invariant 6).
+  noAnswerTitle: 'This cannot be answered from the knowledge base',
+  // The server sends the fixed text; this is the copy used only if a reply
+  // somehow carries none, so the state always says something plain.
+  noAnswerFallback: 'This question cannot be answered from the available knowledge base.',
+  // FR-12: "Any partially related items found are offered, clearly labelled as
+  // partial matches." These arrive on the ask reply as `partial_matches`: the items
+  // its own permission-scoped, ranked candidates found, whatever they scored. They
+  // are offered as links to sources and never as answer content, which is why the
+  // reply carries no passage text for them and nothing here shows a snippet.
+  partialMatchesHeading: 'Partial matches',
+  partialMatchesIntro:
+    'These items are related to your question. They are not an answer and nothing in them was cited — open one to read it yourself.',
+
+  /* ---- FR-13 the conversation thread ------------------------------------ */
+  conversationsHeading: 'Your conversations',
+  loadingConversations: 'Loading your conversations…',
+  conversationsLoadFailed: 'Could not load your conversations',
+  noConversations: 'You have no previous conversations yet.',
+  loadingConversation: 'Opening that conversation…',
+  conversationLoadFailed: 'Could not open that conversation',
+  // The 404, which is the answer both for a thread that does not exist and for
+  // one that is not the caller's. One message, and it distinguishes neither.
+  conversationNotFound: 'That conversation could not be found. Your list has been reloaded.',
+  conversationOpen: (title) => `Open the conversation “${title}”`,
+  conversationCurrent: 'Current conversation',
+  // FR-13: "the active thread can be cleared to begin a new topic" — which is
+  // starting a new conversation, not deleting one. There is no delete route and
+  // no rename route, so there is no control for either.
+  newTopic: 'Start a new topic',
+  newTopicHint: 'Clears the thread on screen and begins a new conversation. Your previous conversations are kept.',
+  threadEmpty: 'Ask a question to start this conversation. Follow-up questions can refer back to it.',
+  threadNew: 'New topic. Your first question will start a new conversation.',
+  // A reopened thread keeps each statement and its citation number. It cannot
+  // expand a citation, because no route returns the passages a past turn was
+  // built from. Said plainly rather than left as a control that does nothing.
+  threadReopenedNote:
+    'Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number.',
 }

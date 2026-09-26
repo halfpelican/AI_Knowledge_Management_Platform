@@ -149,9 +149,14 @@ def test_no_answer_message_is_fixed_non_empty_text():
 def test_schema_v1_vocabularies_match_the_document():
     # DOCUMENT_STATUS_VALUES is the proposal's section 7.0 set, which supersedes the
     # five values schema v1 wrote before the proposal reached this machine (D-28).
+    # "Too large to index" is the seventh, added by Stage 4 item 12b and recorded in
+    # docs/schema-v1.md §3: MAXIMUM_CHUNKS_PER_SOURCE refuses a document before the first
+    # embed call, and "Indexing failed" means an attempt was made and every chunk failed.
+    # It sits beside "Insufficient content" because that is the kind it belongs to —
+    # refused before attempting, on a property of the content.
     assert constants.DOCUMENT_STATUS_VALUES == (
         "Processing", "Extraction failed", "Insufficient content",
-        "Indexing failed", "Partially indexed", "Indexed",
+        "Too large to index", "Indexing failed", "Partially indexed", "Indexed",
     )
     assert constants.MEETING_STATUS_VALUES == ("Received", "Indexed", "Processing failed")
     assert constants.CLASSIFICATION_DIMENSIONS == ("Department", "Project", "Process", "Topic")

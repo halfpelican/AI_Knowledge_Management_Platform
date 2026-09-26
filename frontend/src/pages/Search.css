@@ -1,0 +1,28 @@
+/* FR-12 search screen. The page frame and table styles come from Repository.css;
+   this is only what is particular to search. */
+
+.search-page__field {
+  margin-bottom: var(--space-4);
+}
+
+.search-page__ask {
+  margin: 0 0 var(--space-5);
+}
+
+.search-page__prompt {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+.search-page__results-heading {
+  margin-bottom: var(--space-1);
+  word-break: break-word;
+}
+
+/* The acknowledgement: on the screen and in a live region at once, so a sighted
+   reader and a screen-reader user are told the same thing. */
+.search-page__summary {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

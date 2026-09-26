@@ -4,16 +4,24 @@ from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
 
-from apps.core.constants import DEFAULT_MEETING_STATUS, MEETING_STATUS_VALUES
+from apps.core.constants import DEFAULT_MEETING_STATUS, MEETING_STATUS_VALUES, SOURCE_TYPES
 from apps.core.models import (
     NAME_MAX_LENGTH,
     VOCABULARY_MAX_LENGTH,
     uuid_primary_key,
     vocabulary_field,
 )
+from apps.core.visibility import VisibilityCascadeMixin, VisibilityCascadeQuerySet
+
+DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
 
-class Meeting(models.Model):
+class Meeting(VisibilityCascadeMixin, models.Model):
+    """A meeting record. Its chunks follow its ``visible_to_roles``, exactly as a
+    Document's do — the same mixin, because D-16 makes meeting visibility mirror document
+    visibility and a second cascade would be the second code path invariant 3 refuses.
+    """
+
     id = uuid_primary_key("meeting_id")
     title = models.CharField(max_length=NAME_MAX_LENGTH)
     # "May not be in the future" is application validation in Stage 3 (FR-09),
@@ -28,6 +36,11 @@ class Meeting(models.Model):
     visible_to_roles = ArrayField(
         models.CharField(max_length=VOCABULARY_MAX_LENGTH), default=list, blank=True
     )
+
+    # See Document for both: the source type the cascade re-stamps on, and the manager that
+    # carries it to ``Meeting.objects.filter(...).update(visible_to_roles=...)``.
+    visibility_source_type = MEETING_SOURCE_TYPE
+    objects = VisibilityCascadeQuerySet.as_manager()
 
     class Meta:
         db_table = "meetings"

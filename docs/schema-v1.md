@@ -143,11 +143,36 @@ recorded model before ranking.
 | `answered` | boolean | |
 | `no_answer_reason` | text, nullable | see §3 — the two paths are recorded distinctly |
 | `answered_at` | timestamp | |
+| `rejected_count` | integer, nullable | statements verification removed; null where generation was not called |
 
 `no_answer_reason` is the one field in this table the proposal does not name
 explicitly, but FR-12 requires the two no-answer cases be "recorded separately", and
 this is how. Without it the platform cannot tell a threshold that is too high from
 retrieval that is returning irrelevant passages.
+
+`rejected_count` is the second such field, added on 24 September 2026 and justified
+the same way. Invariant 7 requires that no-answer path B's two kinds stay separable,
+and `no_answer_reason` alone cannot do it: a model that proposes nothing and a model
+whose every citation is rejected both arrive as `no_statement_verified`. The evidence
+is the Stage 4 item 6 live runs — before the prompt fix, 2 questions where the model
+declined and 3 where verification rejected everything; after it, 6 and 0. **The
+aggregate moved 5 to 6, which on its own reads as "no effect"**, while what actually
+happened was one failure mode removed and the other grown. Only the split shows it.
+
+It is populated on **every call that reached generation**, answered rows included: an
+answered row with `rejected_count` above zero is fabrication that has not yet cost
+anyone an answer, which is the earliest warning the system produces. **Null means
+generation was not called** — no-answer path A, and the keyword search path. It never
+means "path B did not occur" and it never means zero.
+
+It stores a count and never the claimed identifier, which section 7.9's rejection log
+would also record. A fabricated identifier has no referent, so storing one invites a
+later reader to resolve it against `ContentChunks` and read a hit or a miss as
+provenance. A database column is a surface, and invariant 6 applies to it.
+
+`rejected_count` and `no_answer_reason` are **record-only**. No serializer may expose
+either: both would hand a caller the path-A/path-B distinction that the two paths'
+identical reply exists to hide.
 
 ### SearchLogs — FR-12
 
@@ -219,7 +244,8 @@ now for work that may be descoped.
 
 ```python
 DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient content",
-                          "Indexing failed", "Partially indexed", "Indexed")
+                          "Too large to index", "Indexing failed", "Partially indexed",
+                          "Indexed")
 MEETING_STATUS_VALUES  = ("Received", "Indexed", "Processing failed")
 CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
 SOURCE_TYPES = ("document", "meeting")
@@ -237,6 +263,25 @@ summaries, before `Project_8-proposal_complete_V4.5.docx` reached the team. See
 **D-28** for the mapping and for why `Partially indexed` had to exist: §7.7 abandons a
 chunk after `MAXIMUM_EMBED_ATTEMPTS`, and the superseded set had no status for a
 document whose chunks partly embedded.
+
+**`Too large to index` is the seventh value**, added on 2026-09-26 by Stage 4 item 12b
+(`documents 0007_document_status_too_large_to_index`). `MAXIMUM_CHUNKS_PER_SOURCE`
+refuses a document before the first embed call, and item 12a recorded that refusal as
+`Indexing failed` — which in this vocabulary means *attempted, and every chunk failed*.
+Nothing was attempted. The set already separated **refused before attempting, on a
+property of the content** (`Insufficient content`) from **attempted and failed**
+(`Indexing failed`), so the new value completes that distinction rather than
+introducing one, which is D-28's own argument one state further on; it sits beside
+`Insufficient content` for that reason rather than at the end. The proposal is silent
+here, not contrary: `MAXIMUM_CHUNKS_PER_SOURCE` was settled in the week the value was
+added and the proposal predates it.
+
+The difference is user-visible, which is why the detail message was not enough. FR-08's
+interface offers "Processing failed. Please try again" against a document that did not
+index; a reprocess of an over-cap document fails identically every time, because nothing
+about the file has changed, and D-32's retry re-runs extraction and chunking in full
+before failing at the same point. **The front end must suppress the retry affordance for
+this status** — that is Stage 5 presentation work and is not yet done.
 
 `MEETING_STATUS_VALUES` is untouched. The proposal defines no status column on
 `Meetings` at all, only FR-09's CRUD line "Meetings (Create, Read, Update status)", so

@@ -19,6 +19,7 @@ extracted text, its chunks and its vectors commit together or not at all.
 import pytest
 from django.core.files.storage import default_storage
 
+from apps.ai.prefixes import document_text
 from apps.core.constants import (
     DOCUMENT_INDEXED,
     DOCUMENT_INDEXING_FAILED,
@@ -33,14 +34,23 @@ from apps.documents.models import ContentChunk, Document, ExtractedContent
 from apps.ingestion.tests.ai_doubles import ScriptedEmbedService, install
 
 UPLOAD_URL = "/api/documents"
+DOCUMENT_TITLE = "Leave Policy 2026"
 DOCUMENT_SOURCE_TYPE = SOURCE_TYPES[0]
 
 pytestmark = pytest.mark.django_db
 
 
 def post_upload(client, upload_file, **fields):
-    body = {"file": upload_file, "title": "Leave Policy 2026", **fields}
+    body = {"file": upload_file, "title": DOCUMENT_TITLE, **fields}
     return client.post(UPLOAD_URL, body, format="multipart")
+
+
+def sent(text):
+    """What the provider is sent for a chunk of an uploaded document: the document
+    task prefix wraps it when the embedding model takes prefixes
+    (apps/ai/prefixes.py). What is STORED is the verbatim chunk, asserted in
+    apps/ingestion/tests/test_embedding.py."""
+    return document_text(DOCUMENT_TITLE, text)
 
 
 def chunks_for(doc_id):
@@ -123,7 +133,7 @@ def test_a_chunk_recovers_within_the_attempt_budget(monkeypatch, employee_client
     # An equality, not a floor: the constant is 1 initial call plus 2 retries, and
     # asserting "at least" would pass just as well if someone read it as a retry
     # count and made it four.
-    assert service.attempts_for(chunk.chunk_text) == MAXIMUM_EMBED_ATTEMPTS == 3
+    assert service.attempts_for(sent(chunk.chunk_text)) == MAXIMUM_EMBED_ATTEMPTS == 3
 
 
 def test_a_chunk_that_never_embeds_is_flagged_and_the_document_is_not_indexed(
@@ -144,7 +154,7 @@ def test_a_chunk_that_never_embeds_is_flagged_and_the_document_is_not_indexed(
     document = Document.objects.get(pk=response.data["doc_id"])
     assert document.file_path.storage.exists(document.file_path.name)
     assert ExtractedContent.objects.filter(document=document).exists()
-    assert service.attempts_for(ExtractedContent.objects.get(document=document).extracted_text)
+    assert service.attempts_for(sent(ExtractedContent.objects.get(document=document).extracted_text))
 
 
 def test_one_failing_chunk_leaves_the_document_partially_indexed(
@@ -161,7 +171,10 @@ def test_one_failing_chunk_leaves_the_document_partially_indexed(
     long_file = SimpleUploadedFile("long.txt", words.encode("utf-8"), content_type="text/plain")
 
     service = ScriptedEmbedService(
-        failures=MAXIMUM_EMBED_ATTEMPTS, should_fail=lambda text: text.startswith("clause450 ")
+        failures=MAXIMUM_EMBED_ATTEMPTS,
+        # The chunk that begins at clause450, named through sent() so the predicate
+        # matches the prefixed string the provider is actually handed.
+        should_fail=lambda text: text.startswith(sent("clause450 ")),
     )
     install(monkeypatch, service)
 

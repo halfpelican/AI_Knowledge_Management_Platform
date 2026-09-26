@@ -1255,6 +1255,16 @@ system. The subsequent pass on v0.9.39 means something because the failure came 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the placeholder value carried
 since Stage 1 · **Provisional:** re-measured against a real corpus
 
+**Erratum, 23 September 2026.** This record first gave the corpus as 9 chunks. It is
+**6** — four documents and one meeting, of which only the Employee Handbook splits,
+into two. The count was read back from `ContentChunk`, and `--scores-only` was re-run
+against those rows: it reproduced the distribution below to the three decimal places
+the table prints, so the numbers were measured on these 6 chunks and only the count
+was wrong. The chunk rows were all written at 11:22 on 22 September and nothing wrote
+a chunk between then and this decision, which is the evidence that no other corpus
+was ever involved. The 0.30 value and every argument here stand, and `TOP_K = 25`
+binds even less at 6 than at 9.
+
 **Decision.** `RELEVANCE_THRESHOLD` in `apps/core/constants.py` moves from 0.5 to
 **0.30**.
 
@@ -1304,7 +1314,7 @@ wrongly admits is a generation call, not a wrong answer.
   two no-answer reason codes must stay distinguishable in the query log — a rising
   rate of (b) is the only signal that generation is degrading.
 - **The value is provisional and the comment in `constants.py` says so.** It is
-  measured against 9 chunks. At that size `TOP_K = 25` never binds, so the threshold
+  measured against 6 chunks. At that size `TOP_K = 25` never binds, so the threshold
   is currently performing all the selection in the pipeline. It is re-measured when a
   real corpus arrives.
 - **It is re-measured again if the EmbeddingGemma task prefixes are adopted.** The
@@ -1321,3 +1331,1069 @@ because the role filter removed the Administrator-only content from the candidat
 before ranking. That is correct behaviour and it is invariant 1 working, but it means
 the scoped result measures the filter's output, not the filter under test. FR-11 is
 evidenced at Stage 4 item 11, not here.
+## D-38 · EmbeddingGemma's task prefixes are adopted, and the reason is not the measurement
+
+**Status:** Settled by the user · **Date:** 2026-09-23 · **Stage:** 4 item 2a ·
+**Re-index event:** yes · **Supersedes:** the "we do not send the task prefixes"
+caveat in `docs/flm-baseline.md`
+
+**Decision.** `apps/ai/prefixes.py` applies EmbeddingGemma's two documented task
+prefixes — `task: search result | query: {content}` for a query and
+`title: {title} | text: {content}` for a document, with `title: none` where a source
+has none. The corpus was re-indexed on the pinned FLM build (D-36). The prefixes are
+kept **because the model is documented to expect them**, not because adopting them
+was measured to improve anything.
+
+**The hypothesis that motivated the change is disproved.** `docs/flm-baseline.md`
+reasoned that the absent prefixes likely explained why query-to-chunk scores
+(0.18–0.66) sat below the chunk-to-chunk mean of 0.488 — query and document being
+embedded into one space rather than the two the model relates. After adopting both
+prefixes and rebuilding every vector, the answerable median moved from 0.3892 to
+**0.3937: +0.0045**, and the query band moved from 0.18–0.66 to 0.22–0.69. Had the
+two-spaces account been the main cause, the query band would have moved substantially
+toward the chunk-to-chunk range. It did not. Whatever depresses query-to-chunk scores
+relative to chunk-to-chunk scores is still unidentified, and the baseline no longer
+offers a candidate for it. This is the finding of item 2a, not a footnote to it.
+
+**Rationale (as given).** On 6 chunks and 64 questions every delta is inside noise, so
+the measurement cannot adjudicate the change in either direction — and a measurement
+that cannot adjudicate is not a reason to keep the code or to remove it. What settles
+it is that the model is documented to expect these prefixes and was previously not
+being given them. *"We use the model as documented"* survives a question at the
+demonstration; *"we measured no difference on six chunks, so we kept the undocumented
+usage"* does not.
+
+**What the numbers did show.**
+
+| | before | after |
+|---|---|---|
+| answerable admitted at 0.30 | 41/48 (85.4%) | **44/48 (91.7%)** |
+| unanswerable admitted at 0.30 | 5/16 (31.3%) | 6/16 (37.5%) |
+| answerable median / max | 0.3892 / 0.6607 | 0.3937 / 0.6856 |
+| unanswerable ceiling | 0.5348 | 0.5067 |
+| answerable max − unanswerable ceiling | 0.126 | **0.179** |
+
+Three more answerable questions admitted for one more unanswerable one: a **3:1
+recall-to-wasted-call trade**. An unanswerable question clearing the threshold is a
+wasted NPU call that no-answer path B catches. It is deliberately not called a leak
+anywhere in this record: a leak is out-of-scope content reaching the prompt, which the
+role filter prevents before ranking and which the harness asserts at zero on every
+question (invariant 1). One is a cost; the other would be a failure of the thing this
+project is most often asked about, and the vocabulary should not blur them.
+
+That trade should improve the worst of the three baseline rates.
+Empty-answer-where-available was 14.6% (7 of 48), and all seven were questions the
+threshold excluded rather than ones generation declined; four are now excluded, which
+projects **14.6% → about 8.3% (4/48), down by a third.** A projection, not a
+measurement: generation's behaviour on the three newly admitted questions is untested,
+and Stage 4 item 6 re-runs the full harness against the real pipeline to settle it.
+
+**Consequences.**
+
+- **`docs/flm-baseline.md`'s three rates now describe a superseded index**, and the
+  document says so at the top rather than only in the new dated section. Its
+  "Tuning RELEVANCE_THRESHOLD" table is void by its own closing sentence, which named
+  a change of embedding prefixes as one of the three things that would void it. The
+  table is left as written rather than edited in place, because it is the evidence
+  D-37 was decided on and rewriting it would leave that decision citing numbers nobody
+  measured.
+- **D-37's re-measurement trigger has fired and is discharged, not deferred.** D-37
+  recorded that the threshold "is re-measured again if the EmbeddingGemma task
+  prefixes are adopted". The `--scores-only` sweep in the new dated section is that
+  re-measurement, and it does not move the value: 0.30 still admits 91.7% of
+  answerable questions and still clears the scoped ceiling. `RELEVANCE_THRESHOLD` is
+  **not** re-tuned in Stage 4, and would not be worth re-tuning against 6 chunks in
+  any case. The re-measure that matters is **Stage 5 item 3**, the end-to-end
+  integration pass over a real corpus.
+- **D-37's central finding stands.** 0.5067 still sits well above the answerable
+  median of 0.3937; the first threshold admitting no unanswerable question is 0.52,
+  which keeps 10 of 48 real answers. No threshold separates answerable from
+  unanswerable on this corpus, so invariant 7(b) is still doing the work the threshold
+  cannot.
+- **A thin margin worth watching, and not a regression.** The scoped ceiling rose
+  0.2856 → 0.2947, so headroom under the 0.30 threshold fell from 0.0144 to 0.0053.
+  Reading that as a regression would repeat the error D-37 corrected: a scoped
+  question's top score measures the best of what the role filter *left*, not the
+  filter. Nothing depends on the headroom — the role filter, never the threshold, is
+  what keeps scoped content out, and a scoped question crossing 0.30 reaches
+  generation over permitted passages only. It is a retrieval-quality signal to watch
+  as the corpus grows, not a security one.
+- **The prefix never enters `chunk_text`.** The prefixed string goes to the provider;
+  the stored chunk stays the verbatim substring `apps/ingestion/chunking.py` produced,
+  because a prefix in that column would be read back out into answers, citations and
+  snippets (FR-12). Asserted as two separate assertions — what was sent, and what was
+  stored — in `apps/ingestion/tests/test_embedding.py`.
+- **Dispatch is on the embedding model's name, not on `AI_PROVIDER`**, so a future FLM
+  build serving some other embedding model inherits nothing. The provider is consulted
+  only to learn which model name is in play: reading `FLM_EMBED_MODEL` unconditionally
+  would have applied an EmbeddingGemma convention to Voyage in every environment that
+  left the FLM default in place, which is every environment. A test covers Voyage with
+  the FLM default present.
+- **`scripts/citation_harness.py` now embeds its questions through
+  `apps.retrieval.query_embedding.embed_question()`** rather than a raw
+  `service.embed()` of its own. Without that the harness would have measured raw
+  queries against a prefixed index — the worst of both configurations, and a
+  measurement of something the shipped system will never do. It is the same reason
+  item 5 makes the harness import the prompt and the schema instead of defining them:
+  a second copy of a code path stops describing the first one the day they diverge.
+- Switching the provider remains a full re-index event, and adopting or dropping a
+  prefix now is too.
+
+## D-39 · The worked example is training data for the response, in its content as well as its identifiers
+
+**Status:** Settled by the user · **Date:** 2026-09-24 · **Stage:** 4 item 6 ·
+**Supersedes:** the item-0 conclusion that UUID-shaping the example identifiers was the
+whole fix
+
+**Decision.** `SYSTEM_PROMPT` in `apps/ai/prompting.py` gets a new worked example, and
+both halves of the cause are removed: the example moves to an **alien domain**
+(houseplant care — no policy, procedure, approval, money, staff, meeting or IT content),
+and it carries **one identifier, which its own reply cites**. A second example
+demonstrating the empty-array reply reuses the same passage rather than introducing a
+second identifier, so the prompt contains nothing uncited to borrow.
+
+**The finding.** The first live run of the shipped pipeline measured a fabricated-
+identifier rate of **6.8% (3 of 44)**, up from the prototype's 2.4% (1 of 42). All three
+had one cause and it was ours:
+
+- **q30** and **q31**, both purchase-approval questions, cited
+  `8b5d04e2-1a7f-4c93-b620-de91f3805c47`. That is the worked example's **second**
+  identifier — the one the example's own reply does *not* cite. Both statements were
+  factually correct, drawn from the corpus's real AUD approval-threshold table, and
+  both were discarded by `verifyCitations()` because the citation was invented.
+- **q21** cited `5. Offboarding`, a section heading lifted from a passage body.
+
+The example's subject matter — "Purchase orders above $10,000 require two approvals" —
+collided directly with the corpus's real approval-threshold table. The model was asked a
+purchase-approval question, answered it correctly from the corpus, and reached into the
+example for the citation.
+
+**Rationale (as given).** Item 0 found that 9 of 10 fabrications were the example's own
+short identifiers, gave the examples UUID shapes, and the rate fell from 23.8% to 2.4%.
+That fix was right but the conclusion drawn from it was too narrow: it treated identifier
+*shape* as the mechanism. The mechanism is that **a worked example is training data for
+the response, in its identifiers and in its content**, and the second recurrence is what
+shows the first conclusion was incomplete. Deferring the fix to Stage 5 was rejected:
+the cause was identified and specific, Stage 5 has seven items including the integration
+pass, the accessibility pass, deployment and two audits by 31 October, and shipping a
+documented rate that describes a system we already intend to change is not a saving.
+
+**The re-measurement, bounded to one run.** Fabricated identifiers went **3 of 44 to 0
+of 38**, and no identifier was invented in the 36 further question-runs of the stability
+measurement. The three statements verification had been correctly discarding are now
+correctly cited. **This does not establish that fabrication is solved** — it is 0 of 38
+on one run of a 6-chunk corpus, at an n D-37 already says cannot adjudicate small
+differences. One fix, one re-measure, deliberately: iterating the prompt against this
+question set at n=3 would be tuning noise.
+
+**Consequences.**
+
+- **The lesson is now an assertion, not a comment.**
+  `test_no_identifier_appears_in_the_prompt_without_its_example_reply_citing_it` checks
+  `shown == cited` over whatever identifiers the prompt contains, so a future
+  three-passage example fails in under a second instead of in a six-minute live run. A
+  subject-matter guard asserts the example text contains none of the corpus's own
+  vocabulary (purchase, approval, invoice, procurement, policy, leave, onboarding,
+  offboarding, employee, staff, manager, meeting, incident, account, password, AUD, `$`).
+- **The block comment above `SYSTEM_PROMPT` records both recurrences**, not just the
+  first. Recording only the first would again suggest UUID-shaping was the whole fix,
+  which is the conclusion that permitted the second.
+- **Verification did its job in the before-run and that is the point worth keeping.**
+  Three fabricated citations reached verification and none reached an answer. The
+  measurable cost was two correct answers withheld — which is the trade invariant 5
+  exists to make, made in the right direction.
+- **Every rate in `docs/flm-baseline.md` before 23 September describes the old prompt.**
+  The before and after runs are both recorded there, because the before-run is the only
+  evidence for the mechanism.
+
+## D-40 · Retrieval is unstable at the threshold, and FLM's stability is not established
+
+**Status:** Open — recorded, not resolved · **Date:** 2026-09-24 · **Stage:** 4 item 6 ·
+**Owner:** unassigned · **Re-measure at:** Stage 5 item 3, over a real corpus
+
+**The observation.** Running the shipped prompt three times, unchanged, over the same 12
+questions in three separate processes, two questions changed answer between runs — q04
+answered in 1 run of 3, q06 in 2 of 3, swapping with each other. The other ten were
+stable in count *and* in character-identical statement text.
+
+**The mechanism, as far as it is established.** Both flips were retrieval, not
+generation. A chunk sitting **0.0003 to 0.0014 above `RELEVANCE_THRESHOLD`** crossed the
+floor in opposite directions on the two questions, changing how many passages reached the
+prompt. Across 14 distinct (question, supplied-passage-set) groups, identical input gave
+identical output every time, so **the generator is not implicated on this evidence.**
+
+Two facts make it matter:
+
+1. **About 6% of admitted passages sit on the floor.** 5 of 86 admitted passages are
+   within 0.005 of 0.30, three within 0.0017. q04 and q06 are two of those five.
+2. **Query embeddings vary by roughly 1e-4 on some questions and not others**, which is
+   what moves a passage across the floor. Reproduced independently: q04's top score was
+   0.358032 on one invocation and 0.358459 on two others.
+
+**What is NOT established, and is deliberately left open rather than guessed.** The
+trigger for the embedding variation is unknown. Two plausible candidates were tested and
+ruled out: embedding the same questions in three separate processes gave bit-identical
+vectors (elementwise difference 0.000e+00), and interleaving a chat completion between
+two embeddings inside one process also gave bit-identical vectors. Every observation so
+far shows the first run of a sequence differing and later runs agreeing, but what
+distinguishes that first run is not known.
+
+**`scripts/check_flm.py` does not catch this, and that is a gap rather than a fault.** It
+requires cosine ≥ 0.999 between repeated embeddings; the variation here is around 1e-4,
+four orders of magnitude inside that tolerance. The check was built for the v1.0.4 bug
+where a string scored 0.09 against itself (D-36) and it still does that job. It simply
+does not measure at the resolution retrieval turns out to need at a threshold boundary.
+
+**Why this is recorded before it causes a visible failure.** Generation determinism on
+the NPU was assumed and never measured until 24 September, exactly as embedding
+determinism was assumed until D-36 — where the assumption turned out to be load-bearing
+and wrong, and an index of pure noise looked entirely plausible for four days. If FLM
+output is not stable run to run, **every rate in `docs/flm-baseline.md` is one draw from
+a distribution rather than a measurement, including the first-attempt conformance of 100%
+from which NFR-19's retry policy is reasoned.** Nothing observed so far says that is the
+case for generation. The point is that it has not been shown either way, and the wording
+in the baseline says "no variance observed across 3 runs on 12 questions" rather than
+anything stronger.
+
+**Consequences.**
+
+- **`RELEVANCE_THRESHOLD` is NOT re-tuned on this.** D-37 and D-38 both say the value is
+  not tuned against a 6-chunk corpus, and moving a floor to dodge two questions that sit
+  on it would be fitting a constant to noise. The instability is a property of where the
+  corpus happens to land, not evidence about where the floor belongs.
+- **A demonstration can show the same question answering differently on two runs.** That
+  is worth knowing before 1 November rather than discovering it live. It is not a
+  correctness failure — both outcomes are honest, and the no-answer response is a
+  legitimate reply — but it will be asked about.
+- **It changes nothing about the permission boundary.** Out-of-scope chunks were 0 in
+  every run, before the fix, after it, and in all three stability runs. Instability at
+  the floor moves passages the asking role may already read.
+- **Any future claim of determinism needs a measurement, not an absence of failures.**
+  That is the D-36 lesson restated, and it is why this entry stays open rather than
+  closing with "appears stable".
+
+## D-41 · FR-12's keyword search path was missing from the Stage 4 brief, and is built as item 8a
+
+**Status:** Settled by the user · **Date:** 2026-09-24 · **Stage:** 4, item 8a ·
+**Effect:** Stage 4's commit points go from thirteen to **fourteen**
+
+**The gap.** FR-12 is two paths. Its Server-End clause and section 7.10
+(`generateGroundedAnswer`) describe the question-and-answer path, which Stage 4 items 1
+to 9 build. Its **Front-End** clause also requires "a search field available from every
+page, returning results grouped by type (Documents and Meetings) with a count per
+group", where each result shows "its title, the matching passage as a snippet, its
+department, and its date".
+
+Nothing in the Stage 4 brief's numbered items builds that. Item 10 names the
+"Search / Ask / Sources front end", which assumes a backend the items never create.
+Section 7.10 says why it is absent from the pseudocode — "the keyword search path in
+the same requirement returns matching items grouped by type and is not reproduced here,
+as it is a filtered read rather than an algorithm" — and that exclusion from the
+*algorithm* section appears to have been read, when the stage was planned, as an
+exclusion from the *stage*. `SearchLog` has existed unwritten since migration v1 as the
+visible symptom.
+
+Found at item 7, while checking what would still be unbuilt when the stage's own
+definition of done was assessed.
+
+**Decision.** Build it, in this stage, as **item 8a** — after query logging and before
+the front end. The endpoint is item 8a; the search field on every page stays part of
+item 10. Separate commit points, so the stage's shape stays legible against its brief.
+
+**Rationale (as given).** The deciding reason is not that FR-12 is a MUST-HAVE, though
+it is. It is that **items 11 and 12 are the scoping test and the security review, and a
+search endpoint is a second route through the permission boundary.** Its grouped counts
+are the likeliest count-disclosure in the system — invariant 1 names result counts and
+totals explicitly, and a search that returns "4 documents" where one is
+Administrator-only discloses the existence of restricted material without returning a
+single restricted row. Reviewing the permission boundary before that route exists would
+review half the surface, and the review is the artefact the M6 demonstration is
+defended with.
+
+Deferring it to Stage 5 beside FR-15's filtered browsing was considered and rejected on
+schedule: Stage 5 carries seven items to 31 October, including the end-to-end
+integration pass, the accessibility pass, the alpha deployment and two audits.
+
+**Consequences.**
+
+- **It stays a filtered read.** 7.10 calling it "a filtered read rather than an
+  algorithm" is the proposal licensing the boring implementation: case-insensitive
+  substring match, a snippet windowed around the hit, a stable non-relevance ordering,
+  no ranking, no scoring, no embedding and no NPU call. A second ranked path would be a
+  second thing to keep correct and a second place for the permission filter to be got
+  wrong.
+- **Counts come from the post-filter set**, and `SearchLog.result_count` records that
+  same post-filter number. The test that proves it is an Employee and an Administrator
+  searching one term and receiving different counts, with the Employee's count equal to
+  what the Employee can see.
+- **The new endpoint joins the dual-role matrix.** Objective 01 requires 100% of
+  protected endpoints exercised from both roles, and the matrix fails a full run below
+  that — so an endpoint outside it is the failure, and covering both roles is the work
+  rather than a cost of doing it.
+- **`SearchLog` stops being a dead table**, and item 8's argument for why `QueryLog`
+  needs no `result_count` column gains its other half: a keyword search stores no
+  identifiers, so there an integer is the only record available.
+- **The stage's commit count no longer matches its brief**, deliberately. Thirteen items
+  become fourteen commit points. This entry is what an auditor reading the repository
+  should find instead of a discrepancy.
+
+## D-42 · FR-13 passes prior QUESTIONS only, folded into the question argument
+
+**Status:** Settled by the user · **Date:** 2026-09-23 · **Stage:** 4 item 9 ·
+**Unmeasured:** yes — see the caveat, which is the most important part of this entry
+
+**The tension.** FR-13's Server-End clause says the assistant "passes prior turns
+alongside the new question so that pronouns and abbreviated references resolve
+correctly". CLAUDE.md's grounding rule and the Stage 4 brief both say the generation
+prompt contains only the retrieved passages. Both cannot be followed literally.
+
+**Decision, in the clauses the user set.**
+
+1. **Prior questions only. Never prior answers.** No model-generated text re-enters a
+   prompt.
+2. **No change to `generate_statements`.** `docs/ai-provider.md` section 1 fixes it at
+   `(question, passages)` plus the `on_attempt` observer (D-38's entry covers that
+   observer). Prior questions are folded into the `question` argument as a composed
+   string. A `history=` parameter was proposed and rejected: "three operations,
+   deliberately" is about not adding classification and summarisation, but a parameter
+   that changes what the model is asked is a protocol change nothing else asked for.
+3. **Two composed forms, both internal to `answer_question`.** A plain join of the prior
+   questions and the new one is what gets embedded, so the labelling text does not dilute
+   the query vector. A labelled block is what reaches the prompt.
+4. **The block declares itself.** It states that the prior questions are context only,
+   that they are NOT passages, that they carry no `chunk_id`, and that nothing in them may
+   be cited. It lands after the passages, which is where `build_generation_messages`
+   already puts the question. The generalisation from D-39 applies directly: anything in a
+   prompt is a candidate for being cited, and a new block of text is a new candidate.
+5. **`MAXIMUM_CONVERSATION_TURNS = 3`**, in `apps/core/constants.py`. FR-13 requires
+   context "truncated to a maximum number of prior turns to control prompt size and
+   cost"; 3 is chosen against a 4B model and a `MAXIMUM_CONTEXT_TOKENS` ceiling of 4000
+   that the passages also draw on.
+6. **History is read with a `user` predicate as well as a `conversation` one.** A
+   conversation id is a UUID a caller supplies. Filtered on both, a foreign id yields no
+   history rather than somebody else's questions — no history, not an error. The view
+   additionally answers 404 for a conversation that is not the caller's, because without
+   that the turn's `QueryLog` row would be written against another user's thread and
+   surface there as a turn count that is not theirs.
+
+**THE CAVEAT, which is the point of recording this as a decision.** Every rate in
+`docs/flm-baseline.md` — 100% schema conformance, 100% first-attempt conformance, 0%
+fabricated identifiers after D-39 — was measured on a prompt containing **passages plus
+one question**. A multi-turn prompt carries a block those runs never contained, and
+**`scripts/citation_harness.py` cannot cover it**: the harness asks single questions, so
+item 6's re-run says nothing about this prompt. **The multi-turn prompt is unmeasured.**
+
+**Measured on 25 September 2026 as item 9a, and the risk recorded here was the wrong
+risk.** This entry first framed the danger as the 503: conformance degrading until the
+service appears to fail on the second turn of a conversation. The arithmetic does not
+support that. A 503 needs `MAXIMUM_GENERATION_ATTEMPTS` *consecutive* non-conforming
+replies, which at 90% conformance is roughly one turn in a thousand.
+
+**The exposure is NFR-08 performance, not the 503.** Every retry is another NPU generation
+call, so a drop in first-attempt conformance is invisible in correctness and loud in p90
+latency — and Objective 03 measures that p90 on 23 October. First-attempt conformance is
+therefore the number to watch, not overall conformance, which hides exactly that cost.
+
+The measurement itself: the existing 64 questions with a fixed three-question block
+prepended to the generation prompt and **retrieval held constant**, so the block is the only
+variable. First-attempt conformance stayed at 100% (50/50) with zero retries, no identifier
+was fabricated (0 of 42), out-of-scope stayed 0, and no statement's content traced to the
+block rather than to a passage. The defensible claim is no degradation. `docs/flm-baseline.md`
+has the run, its limits, and the three mis-citations it incidentally exposed.
+
+**FR-13 end to end is still unmeasured**, because holding retrieval constant deliberately
+excluded the composed join that FR-13 embeds — the half that changes which passages are
+retrieved, and on D-40's evidence the half likelier to move answers. That needs a
+question-then-follow-up set, which does not exist.
+
+**Consequences.**
+
+- **The design's cost is real and conceded.** A follow-up referring into the previous
+  *answer* — "what about the second one?" after an answer that listed three — does not
+  resolve, because the list was in the answer and answers are not passed. FR-13's "follow-up
+  questions need not restate the subject" holds for subject nouns and not for references
+  into an answer's wording. Worth saying in the demonstration script rather than
+  discovering live.
+- **The history block is a citable surface until proven otherwise**, so a statement citing
+  an identifier that appeared only in a prior question must be rejected by
+  `verifyCitations`. That has its own test, arranged so the identifier belongs to a chunk
+  the asking role may not read — it carries invariant 1 as well as D-39.
+- **History markers are `- `, not `1.`** One of item 6's three fabrications was
+  `5. Offboarding`, a numbered heading returned as a `chunk_id`. A numbered history list
+  would add tokens of exactly that shape.
+- **The scope is re-resolved every turn**, which `answer_question` already did per call, so
+  FR-13's "re-evaluated on every turn rather than cached from the first" is structural
+  rather than remembered. A test proves it across two turns of one conversation: a role
+  demoted between turns does not inherit the first turn's access.
+- **Every logged turn counts toward the history, answered or not.** A user whose question
+  was not answered rephrases it, so filtering to answered rows would drop exactly the
+  turns a follow-up is most likely to be shortening.
+- `QueryLog.question` stores the bare question, never the composed string, or every
+  follow-up row would contain its predecessors and the log would stop being readable.
+
+## D-43 · A conversation's title is optional on create and derived from its first question
+
+**Status:** Settled here, by the agent that built the endpoints · **Date:** 2026-09-24 ·
+**Stage:** 4 item 9, API half · **Effect:** `POST /api/conversations` accepts no title;
+`POST /api/ask` performs FR-13's `Update`
+
+**The gap.** `Conversations.title` is a `CharField` with no blank allowed (schema v1, and
+the proposal's own Conversations table gives the example `"Leave policy questions"`). FR-13
+requires that "previous conversations are listed and can be reopened", so the list has to be
+legible — a thread a user cannot tell apart in a list is a failed requirement. But FR-13's
+interface never asks for a title: it has "the active thread can be cleared to begin a new
+topic", which is a user clearing the pane and typing a question. Nothing in the proposal says
+where the string comes from.
+
+**Decision.** `title` is optional on `POST /api/conversations`.
+
+- Supplied and non-blank: used as sent, trimmed, bounded by the column (255). A title over
+  that is `400`, not a silent truncation.
+- Omitted or blank: the thread is created as **"New conversation"**, and the **first turn**
+  through `POST /api/ask` replaces that with the turn's question, truncated to 255 with
+  Django's `Truncator`. The turn itself stores the question in full; the truncation is a
+  display name.
+- The rename happens only while **both** conditions hold — the placeholder still stands and
+  no `QueryLog` row exists for the thread. So a title the user chose is never overwritten,
+  and a thread already in use is never renamed under them.
+
+**Rationale.** Requiring a title would add a field FR-13's interface does not have, and
+would put a naming dialogue in front of the first question of every conversation. Deriving
+it from the first question costs nothing and produces exactly what a user would have typed:
+the question is the topic. The window in which the placeholder is visible is the gap between
+creating a thread and asking in it, which in the built interface is one request.
+
+This is also the `Update` in FR-13's `Conversations (Create, Read, Update)`, alongside the
+`last_updated_at` the pipeline touches inside the log transaction on every turn. Those two
+are the whole of `Update`: **no rename route and no `PATCH` were built**, because FR-13's
+interface has no rename control and inventing one would be inventing a requirement. If it is
+wanted later it is a `PATCH` on an existing path rather than a new resource.
+
+**Consequences.**
+
+- A thread named from a no-answer turn is named all the same. The turn happened, it is
+  logged, and the user will look for it by what they asked.
+- A question of nothing but whitespace is long enough to be asked (the length rule counts
+  characters) and leaves nothing to name a thread with, so the placeholder stands. A blank
+  list entry is the worst case of the problem this decision exists to avoid.
+- `name_thread_from` saves with `update_fields=["title"]` only. `last_updated_at` is
+  `auto_now`, so it is written only when named, and the pipeline has already set it for that
+  turn — naming it here would move the thread's timestamp on after the reply was composed
+  from it.
+
+## D-44 · The Sources panel carries every item consulted, with its passages nested under it
+
+**Status:** Settled here, by the agent that built the endpoints · **Date:** 2026-09-24 ·
+**Stage:** 4 item 9, API half · **Effect:** the shape of `sources` in a `POST /api/ask` reply
+
+**The question the proposal half-answers.** Section 7.10 step 11 is
+`SET sourceList TO resolveSourceDetails(suppliedPassageIds) // title, date`, and FR-12's
+Front-End clause says a "Sources panel lists every item consulted with its date". That fixes
+*which* items (the supplied passages' items, not the cited ones) and *what* of them (title,
+date). It does not say how a citation gets the passage text that the same clause requires it
+to expand into: "each citation expands to display the source passage and links to the source
+document or meeting".
+
+**Decision.** One list, `sources`, one entry per item consulted in rank order, each carrying
+`source_type`, `source_id`, `title`, `date` and `passages` — the supplied passages of that
+item, each with its `chunk_id` and text. A statement's `chunk_id` is looked up inside the
+entry it belongs to.
+
+**Rationale.** The alternative was two flat lists, `sources` and `passages`, with the client
+joining them on `source_id`. Nesting answers "which item did this citation come from" with
+the shape of the reply instead of with a join the client has to get right, and no endpoint in
+the API returns a chunk, so the text has to travel with the answer that was drawn from it or
+the expansion cannot be built at all.
+
+**What this does not do.** It exposes no similarity score — a tuning number the team reads,
+and an interface that displayed it would present relevance as a fact about the answer. It
+exposes no `file_path` and no `content_hash`, for the two reasons the document object gives.
+It resolves **no permission predicate of its own**: every passage reached the reply through
+`candidate_chunks`, whose query carries both FR-11 predicates, so the chunk's stamped
+`visible_to_roles` already admitted this role and the source row is read for a title and a
+date only. A second filter in a second place is two filters that can disagree, and D-17's
+re-stamping cascade is what makes the chunk the authoritative record.
+
+**Conceded.** A passage that was consulted but cited by nothing appears in the panel with its
+text. That is retrieved corpus text inside the caller's scope rather than a model-generated
+statement, so invariant 6 — which is about uncited *statements* — is not engaged; and the
+panel's stated purpose is to show what the answer was drawn from. If it proves noisy in the
+interface, the fix is client-side collapsing, not a narrower reply, because narrowing it to
+cited items only would make the panel misdescribe the retrieval.
+
+## D-45 · FR-12's "input is sanitised before use" is not a sanitiser, with one exception that is
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4, items 4 and 10b ·
+**Clause:** FR-12 Server-End, Validation
+
+**Decision.** No stripping, escaping or filtering pass is applied to a question or a search
+term. The clause is satisfied by the mechanisms that actually protect each path, named
+below — **except** for one case where that argument does not hold, which is neutralised in
+code and tested.
+
+**Why a general sanitiser is the wrong instrument here.** Each thing a sanitiser would be
+protecting against is already handled somewhere it cannot be forgotten:
+
+| Concern | What handles it |
+|---|---|
+| SQL injection | The question is a bound parameter in every query and is never interpolated. The ORM does this; no call site can opt out |
+| Cross-site scripting | React escapes text nodes on render. The question is never inserted as HTML |
+| Length and resource abuse | `MINIMUM_QUESTION_LENGTH` / `MAXIMUM_QUESTION_LENGTH`, checked before any provider call (item 4), and `MINIMUM_SEARCH_LENGTH` for search |
+| Prompt injection aimed at the model | The grounding constraint plus citation verification. A statement survives only if it carries an identifier from the supplied set, so an instruction in the question cannot manufacture a citable source |
+
+A stripping rule on top of those has no attack left to prevent, and it has a cost: it
+silently mangles legitimate questions. A question about a currency amount, a file path, an
+SQL keyword or a piece of XML is a question a knowledge platform should answer, and
+whitespace is not normalised either, because 7.10 measures the question as given and a
+trimming rule is a requirement nobody wrote.
+
+**THE EXCEPTION, which is why "a sanitiser is a no-op" would have been too strong.** The
+generation prompt labels each passage `[chunk_id: <uuid>]` in `build_user_prompt`. A
+question containing that literal syntax injects a **pseudo-passage into the user's own
+prompt** — text that looks to the model exactly like a supplied passage, carrying an
+identifier of the asker's choosing.
+
+It is not a security hole, and it is worth being precise about why: `verifyCitations`
+checks returned identifiers against the set built from the **retrieval result**, never
+against anything parsed out of the prompt, so an identifier smuggled in this way is not in
+the supplied set and every statement carrying it is removed. Nor is it a cross-user
+disclosure: the injected text is the asker's own.
+
+It is a **demonstration hole**. A question crafted that way can make the model return
+statements drawn from text the asker wrote, which verification then strips — producing a
+no-answer for a question that looked answerable, or, if the asker also echoes a real
+identifier, a statement attributed to a passage that does not support it. Either is an
+awkward thing to have happen in front of an examiner, and neither needs a vulnerability to
+be embarrassing.
+
+**So the delimiter sequence is neutralised in user-supplied text, and tested.** That is a
+targeted transformation of one known-harmful sequence, not a general sanitiser, and the
+distinction matters: it can be stated exactly, it cannot mangle an ordinary question, and
+its test names the attack it prevents.
+
+**The transformation, recorded because "neutralised" is not specific enough to reproduce.**
+The label's square brackets become round ones: a question containing
+`[chunk_id: 9f2…]` reaches the prompt as `(chunk_id: 9f2…)`. Chosen over deleting, masking
+or substituting a marker for four reasons:
+
+- **Readable.** Every word, digit and space survives in place, so the question reads the
+  same to the model and to a human comparing it against the stored original.
+- **Cannot change an ordinary question.** At most two characters move, and only where `[` is
+  immediately followed by the label and its colon. Prose about `chunk_id`, a quoted
+  `chunk_id:` value, and square brackets around anything else all pass through byte for
+  byte. Length is preserved exactly and nothing is trimmed.
+- **The header shape is what goes.** `SYSTEM_PROMPT` tells the model to copy the identifier
+  "exactly as it appears in the passage header", and the header *is* the square-bracketed
+  label. Removing the brackets removes the resemblance.
+- **Idempotent**, since `(chunk_id:` contains no `[chunk_id:`, which is what makes applying
+  it twice harmless.
+
+Two patterns, one sequence: the whole label including its closing bracket, so the output is
+balanced rather than `(chunk_id: 9f2…]`; and the same opening where the asker never closed
+it, which is still header-shaped. Case and inner spacing are matched loosely and preserved
+exactly, because `[CHUNK_ID :` is as header-shaped to a model as the canonical form.
+
+Applied at **two** sites: `build_conversational_question`, to the new question and to each
+prior question, so a delimiter smuggled into turn one cannot inject through turn two's
+history block; and `build_user_prompt`, where the delimiter is written, so a caller handing
+it a raw question cannot reopen the hole. Idempotency is what makes the double pass a no-op.
+**Passage text is not transformed** — see the adjacent case below.
+
+**An adjacent case this does NOT settle.** A *document* whose own body contains `[chunk_id:`
+produces a genuine passage whose text carries the sequence, and passage text is deliberately
+left alone. That is prompt injection through ingested content rather than through user
+input, which is a different threat with a different owner: the Stage 4 security review
+covers it explicitly, and whether ingestion should notice such content is a question for
+that pass rather than this decision.
+
+**Consequences.**
+
+- The audit table in `docs/stage-4-clause-audit.md` marks this clause 🔧 rather than ✅ and
+  points here. A requirements-auditor reading FR-12 will find a clause with no sanitiser
+  behind it, and should find this argument rather than an apparent oversight.
+- "Input is sanitised" remains, on the whole, a requirement written for a different
+  architecture — one where the question is concatenated into SQL or into HTML. Saying so is
+  more useful than implementing a no-op to satisfy the wording.
+- If a future prompt gains another structural delimiter, it inherits this problem. The
+  neutralisation lives beside the prompt for that reason, so the two are read together.
+
+## D-46 · `GET /api/documents/{id}`, so a citation can link to its source
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4, item 10b ·
+**Clause:** FR-12 Front-End ("each citation … links to the source document or meeting")
+
+**Decision.** Add `GET /api/documents/{id}`, scoped to the caller's role, answering **404**
+for a document that does not exist *and* for one outside the caller's scope. Add a minimal
+front-end document route so a citation resolves to its own source rather than to the
+repository list.
+
+**Why it was missing.** FR-12 requires a citation to link to its source document or
+meeting. `GET /api/meetings/{id}` has existed since Stage 3, so meeting citations already
+resolved; documents had no detail endpoint and no route, so item 10 linked them to the
+repository list with a label saying to find it there. That satisfies "a link" and not "links
+to the source document".
+
+**Rationale (as given).** Two reasons, and the second is the one that fixed the timing.
+First, the clause plainly asks for it. Second, **it is another route through the permission
+boundary, and items 11 and 12 are the scoping test and the security review** — the same
+argument that moved the keyword search path into this stage as item 8a (D-41). A route added
+after the review is a route the review never saw.
+
+**404 and never 403.** A 403 distinguishes "exists but you may not see it" from "does not
+exist", which is the disclosure invariant 1 forbids by name. The precedent to cite is
+**D-33's treatment of the 409 existence oracle** on upload, and the sibling behaviour is
+`GET /api/meetings/{id}`, which already answers 404 for a meeting outside the caller's
+scope for exactly this reason.
+
+**Consequences.**
+
+- **The endpoint is shared infrastructure, not a duplicate of Stage 5's work.** FR-15
+  (Stage 5 item 1) owns document presentation — filtered browsing, metadata, permissioned
+  deletion — and will read this endpoint rather than replace it. The front-end route added
+  here is deliberately minimal: enough for a citation to reach its source, no more, so that
+  FR-15 is building on it rather than around it.
+- It joins the dual-role coverage matrix, which fails a full suite run below 100%, so it
+  carries an Employee test and an Administrator test. As with D-41, that is the work rather
+  than a cost of doing it.
+- The response reuses the existing document object, so `file_path` and `content_hash` stay
+  out of it for the reasons `GET /api/documents` already excludes them: a path inside
+  `MEDIA_ROOT` is of no use to a client and an invitation to construct one, and echoing a
+  content hash would let a caller probe whether a document they cannot see has been
+  uploaded.
+- **The contract entry sits in the Stage 3 FR-08 table, not the Stage 4 section**, with a
+  one-sentence cross-reference from the Stage 4 `sources` paragraph. A reader asking what
+  the API offers for a document should find all three document routes in one place, and the
+  endpoint outlives the clause that prompted it — FR-15 reads it rather than adding its own.
+- Unknown and out-of-scope are answered by **one** code path: a single scoped queryset plus
+  `get_object_or_404`, so there is no branch that could come to distinguish them. That is
+  the same shape `MeetingDetailView` uses, and it is stronger than two branches that return
+  the same status today.
+
+## D-47 · The visibility cascade is a save() override and a manager, not a signal
+
+**Status:** Settled · **Date:** 2026-09-25 · **Stage:** 4 item 11a ·
+**Closes:** a claim CLAUDE.md invariant 2 made from 12 September and did not keep
+
+**What was wrong.** Invariant 2 stated that changing a source's visibility "re-stamps every
+one of its chunks in the same transaction — that cascade is a model-level guarantee, not a
+convention, and it has its own test". There was no `save()` override, no signal and no test.
+Measured consequence: narrow a document to `[Administrator]`, and `GET /api/documents`
+correctly returns `[]` while `POST /api/ask` still answers an Employee **with a citation
+from that document**. The row filter and the chunk filter disagreed, and retrieval uses the
+chunk filter.
+
+**Latent is not the same as unreachable.** No shipped route mutates `visible_to_roles` after
+ingestion, so the API could not trigger it. But the corpus loads by script, `README.md`
+documents a `manage.py shell` snippet for direct row edits, and demonstration preparation is
+precisely when somebody narrows a document by hand. FR-15 in Stage 5 adds the repository
+control that would have made it routine.
+
+**Decision: a `save()` override on `Document` and `Meeting`, plus a `QuerySet` manager for
+`update()`.** Not a signal, and invariant 2's own two words decide it:
+
+- *"in the same transaction"* — a `post_save` receiver on a save in autocommit, which is
+  every `document.save()` outside an `atomic()` block, runs **after** the source row has
+  committed. The phrase would be literally false, and a failing cascade would leave the
+  source narrowed and its chunks wide. The override opens the `atomic()` itself.
+  `test_a_failed_cascade_rolls_the_sources_own_change_back` patches the cascade to raise and
+  asserts the source keeps its old scope.
+- *"a model-level guarantee"* — a receiver is connected only if its module is imported, which
+  is one `AppConfig` edit away from being silently absent. That is a convention.
+
+`QuerySet.update()` is covered by a manager on both models, because `update()` bypasses
+`save()` and every signal and is already used in this codebase for single-column writes. Two
+subtleties are tested: affected primary keys are read **before** the UPDATE, so filtering on
+the old value still cascades; and the new scope is read back **from the rows**, so a database
+expression cascades per row.
+
+**Coverage, corrected on 25 September after measuring it.** This paragraph originally said
+`bulk_update` and `bulk_create` were not covered. That was **wrong**, and wrong in the safe
+direction, which is worse for maintenance than being wrong the other way: a reader who
+believes `bulk_update` is uncovered does not write a test for it. Measured on Django 5.2.17:
+
+| write path | cascades |
+|---|---|
+| `save()`, `save(update_fields=["visible_to_roles"])` | yes |
+| `QuerySet.update()`, including filtered on the column being written | yes |
+| expression update (`F()`, `Func`) — and it re-stamps the value the database stored | yes |
+| `bulk_update()` | **yes** |
+| `update_or_create()` | **yes** |
+| `bulk_create(update_conflicts=True, update_fields=["visible_to_roles"])` | **no** |
+| raw SQL, `psql` | no |
+
+**`bulk_update` cascades by accident, not by design**, because Django implements it internally
+as `self.filter(pk__in=pks).update(**kwargs)` and so inherits the `update()` override. That is
+coverage held hostage to a dependency's implementation detail: a Django release reimplementing
+it as a single `CASE` statement would make invariant 2 false again **with every existing test
+still green** — the same shape as the original defect, true where checked and false where used.
+
+The test that guards it is therefore **behavioural**: it asserts the condition invariant 2
+states (every chunk carries its source's scope) over every ORM write path, so it fails on a
+Django upgrade rather than on a refactor of the override. The `bulk_create` upsert hole is
+pinned by a test asserting it does **not** cascade, named so the gap reads as known rather than
+believed closed — an unpinned "not covered" claim is exactly how invariant 2's own falsehood
+survived thirteen days.
+
+`manage.py reindex` re-derives the stamp correctly by a different route, because it rebuilds
+the chunk.
+
+**Expressed as a condition to restore, not a diff to apply.** One UPDATE saying every chunk
+of this source carries this scope, with an `exclude()` guard so a save that did not change
+the scope writes zero rows. No change detection and no shadow copy. A
+`save(update_fields=[...])` that does not name the column skips the cascade, because the
+cascade mirrors what the save wrote and not what the instance holds — which is what keeps
+ingestion's frequent status saves cheap.
+
+**Consequences.**
+
+- **The test was written failing and flips green in the implementing commit**, which is the
+  D-36 property: a check with a demonstrated failure mode is better evidence than one that
+  has only ever passed. It was a `strict` xfail, so leaving it behind was impossible — an
+  unexpected pass is a failure.
+- No migration. A plain mixin rather than an abstract model, and an `as_manager()` manager,
+  change nothing the autodetector records.
+- CLAUDE.md invariant 2 now carries a **dated** correction rather than a silent edit. The
+  claim stands; the note records that it was untrue for thirteen days and how it was found.
+
+## D-48 · A reopened thread is re-scoped on read, and its statements are renumbered
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4 item 11b ·
+**Class:** the same bug as D-47, one instance further on
+
+**The leak, framed correctly.** `GET /api/conversations/{id}` was filtered by owner and never
+re-scoped, so an Administrator who asked a question answered from Administrator-only
+material, was then demoted, and reopened the thread still received it.
+
+It is tempting to record this as "only an identifier leaked, since no route resolves a
+`chunk_id` to passage text". **That understates it, and the understatement is the thing worth
+recording.** A statement generated from a restricted passage carries that passage's substance
+in natural language: the sentence *is* the restricted fact, written out. The identifier is
+the lesser half.
+
+**Decision.** Re-scope on read. Stored `chunk_id`s are filtered through
+`scoping.scoped_chunks` under the reader's current role, and a statement whose citation is no
+longer permitted is dropped. **The same predicate, not a second implementation** — invariant
+3's argument is that a second scoping mechanism means two code paths through the one filter
+that matters most, and it applies here unchanged.
+
+FR-13's Validation clause already requires that a follow-up "cannot inherit access the user
+no longer holds". A thread read is that principle one step on, and every other route in the
+system re-resolves the scope per request.
+
+**A turn that loses every statement renders as the existing no-answer state**, reusing what
+item 7 built. Not blank, and not a "content withheld" notice or a removed-count: such a
+notice is itself an existence disclosure, which invariant 1 forbids. Asserted three ways —
+no removal vocabulary in the bytes, no record-only field, and exact key sets.
+
+**Surviving statements are renumbered contiguously**, and this is the part the proposal does
+not settle. Rendering the stored positions would show `[1] … [3]`, and **a gap in citation
+numbering is itself an indication that something was removed.** Where nothing is dropped the
+renumbering is the identity, so an ordinary read is unchanged, and `AnswerCitation.position`
+is never rewritten — the mutation is in memory only.
+
+**The stored rows are untouched**, deliberately. `QueryLog` and `AnswerCitation` are FR-19's
+record of what was actually answered at the time. Re-scoping is a read concern; rewriting
+history to match a role change would destroy the evidence while fixing the disclosure. The
+question text and the thread title stay, for the reason D-42 passes prior questions: they are
+the user's own words.
+
+**THE CLASS, which is the reason this entry exists as well as the instance.** Derived records
+do not carry visibility, and nothing re-derives it. Four instances, three found and one by
+inspection:
+
+1. **`ContentChunk`** — stamped at ingestion, never re-stamped when the source changed. Fixed
+   as D-47.
+2. **A reopened thread** — statements replayed under the role that asked, not the role
+   reading. Fixed here.
+3. **`QueryLog.answer_text`** — generated under the role held at the time, and it is a stored
+   record rather than a response, so it is correct that it is not re-scoped. It becomes a
+   disclosure the moment anything renders it: **FR-14's dashboard of recent queries (Stage 5)
+   is the next reader**, and it must reuse `ConversationTurnSerializer`'s treatment rather
+   than reading the column.
+4. **`SearchLog.result_count`** — a post-filter total computed under the role held at the
+   time. A demoted user's own search history therefore records counts from a scope they have
+   lost. Nothing renders it today.
+
+The pattern to hunt, and the Stage 4 security review is asked to: **any column whose value
+was derived under a permission scope, read back later without re-deriving it.**
+
+**The review walked the schema and found NINE, not four-plus-one** (D-49). The five above, plus:
+
+6. **`QueryLog.retrieved_chunk_ids`** — identifiers of passages supplied under the asker's
+   scope. `answered` plus `len(retrieved_chunk_ids)` also reconstructs the path A/B distinction,
+   which `query_log.py` states explicitly, so any reader leaks that too.
+7. **`QueryLog.answered`** — `ConversationTurnSerializer` correctly **re-derives** it as
+   `answered AND surviving citations`. A reader that trusts the column reports "answered" for a
+   turn whose every statement is now unreadable. FR-14 must reuse that serializer, not the
+   column.
+8. **`ContentTag` and `Tag`** — the one that was missed by inspection and is next to bite.
+   FR-10 derives tags from content; neither table carries `visible_to_roles` and nothing
+   re-derives one. A tag list or a facet count built from them discloses the **topics and the
+   volume** of restricted material without returning a word of it. `apps/documents/models.py`
+   says Tags are in v1 "because FR-15's browse mode queries them" — so **FR-15 browse-by-tag,
+   Stage 5 item 1, is the reader that opens it.**
+9. **`ExtractedContent.extracted_text`** — derived from a document with no visibility column at
+   all, reachable only through its `doc_id` foreign key, so the join is the guard rather than a
+   stamp. Any future "view extracted text" surface inherits the problem.
+
+**The generalisation.** There are exactly two safe treatments — re-stamp eagerly at the moment
+of the change (instance 1), or re-scope on read through `scoped_chunks` (instance 2) — and a
+third that is safe only by accident, which is having no reader (3, 4, 6, 7, 8, 9). **Stage 5
+adds readers to two of them.** The cheapest structural guard is the one
+`ConversationTurnSerializer` already uses: read `permitted_chunk_ids` from context **with no
+default**, so a new reader that forgets the scope raises instead of quietly returning a body.
+
+That the class had nine members when it was written with five is the point of recording a class
+at all — and that instance 8 was found by walking the schema rather than by inspection is the
+argument for enumerating rather than listing.
+
+**Consequence worth knowing.** `ConversationTurnSerializer` reads `permitted_chunk_ids` from
+its context with **no default**, so a caller that renders turns without supplying it raises
+rather than returning a body. Deliberate: permitting everything is the leak, and permitting
+nothing would look like a retrieval fault, so failing loudly is the only safe default.
+
+## D-49 · The Stage 4 security review: what was closed, what was deferred, what stands conceded
+
+**Status:** Settled by the user · **Date:** 2026-09-25 · **Stage:** 4 items 12 and 12a
+
+The review executed its findings against the real database rather than reasoning about them,
+and separated what it demonstrated from what it traced. This entry records the disposition.
+
+### The gate criterion is met, and it was proved rather than asserted
+
+Stage 4's "done when" requires that **a user cannot retrieve across the permission boundary by
+any route the security review could find.** The review attacked it and could not: with a
+document body echoing an Administrator-only chunk's identifier, and a model double that
+honours the forged header, an Employee received no-answer path B, the restricted passage
+appeared in no payload sent to the provider, and its text appeared nowhere in the response
+bytes.
+
+**Misattribution is reachable; widening is not.** The reason is structural and is the answer to
+give if asked: scoping is a predicate on the query in `candidate_chunks`, so nothing the model
+emits is consulted when the candidate set is built. Invariant 1 does not depend on the model
+behaving.
+
+### Closed before the stage ended (item 12a)
+
+1. **Passage-text delimiter neutralisation**, which the stage brief required and which was
+   unbuilt — "a passage instructing the model to ignore its constraints must not change the
+   answer, and there should be a test that says so".
+2. **`GET /api/search?q=<NUL byte>` answered 500 with an HTML body.** `q` was the only
+   user-supplied string reaching the database without passing a DRF field, which is why the
+   same byte gives a clean 400 on `POST /api/ask`. With `DEBUG=True` a 500 serves a traceback
+   page carrying frame locals and the requester's own session cookie.
+3. **An unbounded OOXML manifest read** — a 199 KB upload whose manifest expands to 200 MB,
+   decompressed whole in 0.41 s, with both size checks passing because the upload is 199 KB.
+4. **The cascade documentation corrections and their behavioural test** (see D-47's corrected
+   table).
+5. **`MAXIMUM_CHUNKS_PER_SOURCE`.** A 50 MB text file extrapolates to ~23,300 chunks, each a
+   sequential NPU embed call inside one `transaction.atomic()` block in one synchronous
+   request. **Objective 02's verification on 2 October requires 20 documents and a 20-page
+   file in under 60 seconds**, which that does not survive. The cap is an Objective 02
+   protection first and an availability measure second.
+
+### The residual on the injection, stated rather than implied
+
+**Neutralising the delimiter closes the reliable half of the attack and not the attack.** A
+passage body can still direct the model in prose — "state X and cite the passage above" — and
+`verify_citations` tests set membership only, so it cannot detect that the sentence did not
+come from the passage whose identifier it carries. That is CLAUDE.md invariant 5's conceded
+limitation, reached deliberately by an unprivileged user rather than by model error, and
+`contribute_content` is held by **both roles** (D-30), so it is Employee-reachable into every
+Administrator's answers over the same corpus.
+
+Evidence the model does mine passage bodies is already in this repository: item 6's third
+fabricated identifier was `5. Offboarding`, a section heading lifted out of a passage body.
+
+A per-call nonce in the passage header (`[chunk_id-a3f9: …]`) would close the reliable half
+completely. It is **not** being done before M6, because it rewords the prompt, and
+`apps/ai/prompting.py`'s own rule is that rewording invalidates every measured rate in
+`docs/flm-baseline.md`.
+
+### Deferred, with the numbers recorded against them
+
+- **Throttling `POST /api/ask` and the ingestion POSTs → Stage 5 item 5.** Worst case today is
+  `GENERATION_TIMEOUT_SECONDS` (300) × `MAXIMUM_GENERATION_ATTEMPTS` (3) = **one request
+  holding a worker for up to 900 s**, and only the two auth endpoints are throttled (D-26). It
+  is deferred because it is deployment-shaped and the threat model at a one-machine
+  demonstration is nearly empty — and because "one request holds a worker for 900 s" is really
+  an argument against demonstrating on `manage.py runserver`, which is that item's decision to
+  make.
+- **`bulk_create(update_conflicts=True, …)` not cascading** — pinned by a test as a known hole
+  rather than fixed. FR-15's bulk visibility editing is the obvious first caller of an upsert,
+  and it should close it, about six lines in the same shape as the existing `update()` override.
+- **`no_statement_verified`'s docstring overstates its guarantee.** The 503/200 split is a
+  deterministic oracle for which no-answer path ran when generation fails while embedding
+  succeeds — plausible under FLM serving two models — and the timing channel gives the same
+  answer with no outage, since path A makes no provider call and path B costs one generation
+  (p90 8.90 s, item 9a). Severity is genuinely low: what leaks is that material **in the
+  caller's own scope** cleared the threshold and could not be cited, which `partial_matches`
+  already discloses by design on both paths. So invariant 1 is intact and the stronger claim in
+  that docstring is not. The docstring should say "no field of the reply distinguishes them".
+  **No artificial delay is to be added.**
+
+### The pattern behind three of this stage's findings: "closed" claimed too early
+
+Three times in Stage 4, something was recorded as closed where **the observed instance stopped
+reproducing rather than where the class did.**
+
+1. **CLAUDE.md invariant 2** claimed the visibility cascade "has its own test". The claim held
+   where it was read and failed where it was used — there was no test and no cascade (D-47).
+2. **D-47** then claimed `bulk_update` was not covered. It is. Wrong in the *safe* direction,
+   which is worse for maintenance: a reader who believes a path is uncovered never writes the
+   test, so the real coverage stayed hostage to a Django implementation detail.
+3. **This entry's own Part C** claimed the decompression bomb closed after bounding the
+   manifest read. The manifest stopped working; the class did not — `word/document.xml` was
+   still unbounded, and a per-member bound then turned out to need a whole-archive bound beside
+   it, because 800 honest members of 63 MB each pass a per-member check (D-50).
+
+The instruction this yields is durable and outlives Stage 4: **treat every "closed" in this
+file as a claim to verify**, the same way invariant 2 taught this project to read CLAUDE.md. A
+closure is only as wide as the thing that was measured, and the measurement is usually the
+instance.
+
+Applied immediately: D-50 declares the bomb class **closed for OOXML and open for PDF**, because
+`pypdf` inflates object streams with no ZIP involved and nothing in item 12b touches it. No
+docstring, comment or document in this repository says the class is closed.
+
+### Confirmed clean, which is worth recording as much as the findings
+
+Upload path traversal (sanitised twice, stored under the document's own UUID); `MEDIA_ROOT`
+unreachable — no media route, no download view, and `file_path`/`content_hash` absent from
+every serializer including the new `GET /api/documents/{id}`; the 503 body carrying no provider
+detail, host, question or stack; all 19 protected routes carrying a server-side check
+enumerated from the URL conf rather than trusted; 404-not-403 through a single scoped queryset
+on every object route, so there is no branch to time; no header, `Content-Length` or ordering
+channel between the two no-answer paths (measured identical, 323/323, `Vary: Cookie` on both);
+session invalidation intact and untouched by Stage 4; and no secret, question, prompt or
+passage written by any logger — the only logger in `apps/` is FR-05's audit log.
+
+## D-50 · An oversized archive member is a 413 with its own message, and the bomb class is closed for OOXML only
+
+**Status:** Settled by the user · **Date:** 2026-09-26 · **Stage:** 4 item 12b ·
+**Supersedes:** item 12a's partial closure of the same finding
+
+**The defect.** `_ooxml_format` read `[Content_Types].xml` unbounded: a 199 KB upload whose
+manifest expanded to 200 MB was decompressed whole in 0.41 s, with both of FR-08's size checks
+passing because the *upload* was 199 KB. Item 12a bounded that read — **and did not close the
+class**, because the parsers run after the format is accepted and are unbounded too, so the
+same archive with the payload in `word/document.xml` still decompressed whole inside the
+ingestion transaction.
+
+**Decision.** In `_ooxml_format`, with the archive handle already open, reject an archive whose
+members declare more than `MEMBER_MAXIMUM_BYTES` individually or
+`ARCHIVE_MAXIMUM_DECLARED_BYTES` in total, before any parser runs.
+
+**Why a declared size can be trusted, and what that trust depends on.** The obvious objection is
+that the declaration is attacker-supplied. It cannot usefully lie, and the reason is **not** item
+12a's read bound (that covers the manifest only): **Python's `zipfile` caps decompressed output
+at `zinfo.file_size`.** Measured on this interpreter — an archive declaring 1,024 bytes over
+20 MB of payload raises `BadZipFile: Bad CRC-32` on `ZipFile.open(...).read()`, on
+`ZipFile.read(...)` and on a bounded read; and with the CRC patched to match the truncated
+prefix it returns **exactly 1,024 bytes with no exception**. So the *cap* is the guarantee and
+the CRC error is only how it usually surfaces.
+
+**That guarantee is inherited, not ours, and it is recorded with its dependency:** it holds
+because `python-docx` (`docx.opc.phys_pkg`) and `openpyxl` (`openpyxl.reader.excel`) read
+through `zipfile`. **A parser bringing its own inflate would void it.** Asserted by a test
+rather than left as a comment.
+
+A member that lies downwards is therefore not caught by the 413 at all — it declares 2 KB and
+passes. It is caught one step later: the parser cannot get more than the declaration out of it,
+`zipfile` raises, extraction turns that into `ExtractionError`, and the document lands on
+"Extraction failed" with the original kept. The test is named for that mechanism rather than
+implying the 413 covers it.
+
+**413, not 415, and this is the third instance of one principle.** The file really is a DOCX or
+an XLSX; its manifest names the Word or Excel content type. "File type not supported" would be a
+false statement about the request, and an uploader acting on it would convert a file whose format
+was never the problem. It is a size rejection — of decompressed size rather than transfer size —
+and FR-08 already gives 413 to size, after signature. Its message deliberately never says
+"50 MB", because the upload that earns it is about 100 KB.
+
+The principle, now applied three times in this stage: **an error that misstates its reason is
+worse than a generic one.** A NUL byte in a search term is not "too short" (item 12a); an
+oversized member is not "unsupported format"; and a refused-before-attempting document is not
+"Indexing failed" (D-51).
+
+**The whole-archive bound was necessary and went beyond the brief.** A per-member bound alone
+does not close what it claims: at deflate's ~1032:1, a 50 MB upload can honestly declare ~51 GB
+spread over 800 members of 63 MB, every one inside the per-member bound. That is the same
+"closed where the instance stops" error one layer in, so the sum is bounded too.
+
+**The values are deliberately generous, because a false rejection is the expensive direction.**
+64 MB per member is *larger than the entire 50 MB upload ceiling*, so an archive storing a member
+uncompressed can never be refused for it. The measurement that justifies the generosity: a
+minimal real DOCX of one paragraph is a 36 KB archive declaring **827 KB across 17 members**,
+the largest being `word/stylesWithEffects.xml` at 438 KB — **a real document is itself a 22:1
+expansion**, and a tight bound would have refused every DOCX this stack writes.
+
+**Ordering inside the detector is deliberate.** The member scan runs only after the manifest has
+named an accepted content type, so item 12a's oversized-*manifest* case stays 415, and a plain
+ZIP of photos with a 200 MB member stays 415 — a 413 there would imply a smaller ZIP would have
+been indexed. Both pinned by tests.
+
+**PDF IS OPEN AND IS NOT CLAIMED OTHERWISE.** `pypdf` inflates object streams with no ZIP
+involved, so nothing here touches it, and a PDF object-stream bomb is a live hole in ingestion.
+Closing it means a pre-parse scan of `/Length` declarations or a memory ceiling around the
+parser — not a five-line check, and it needs its own item. **The class is closed for OOXML and
+open for PDF**, and no docstring, comment or document in this repository says otherwise.
+
+**Residue, recorded rather than smoothed:** this is validation doing extraction's job. It was
+chosen because one check with the archive handle already open beats three guards across three
+libraries.
+
+## D-51 · A seventh document status: "Too large to index"
+
+**Status:** Settled by the user · **Date:** 2026-09-26 · **Stage:** 4 item 12b ·
+**Migration:** `documents/0007_document_status_too_large_to_index` — additive, reversible,
+choices only
+
+**Decision.** `DOCUMENT_STATUS_VALUES` gains `"Too large to index"`, fourth in the tuple beside
+`"Insufficient content"`. A document exceeding `MAXIMUM_CHUNKS_PER_SOURCE` lands there rather
+than on `"Indexing failed"`.
+
+**Why this is completing a distinction and not inventing a requirement.** The vocabulary already
+separates *refused before attempting, on a property of the content* — `Insufficient content` —
+from *attempted and failed* — `Indexing failed`. An over-cap document is the first kind and had
+no term. **D-28 extended schema v1's five values to the proposal's six because five could not
+express a state the system had; this is that argument one state further on.** The proposal is
+**silent, not contrary**: `MAXIMUM_CHUNKS_PER_SOURCE` was settled in the same week and the
+proposal predates it.
+
+**Why the overload it replaces was not acceptable.** Item 12a put the over-cap case on
+`Indexing failed`, which means *attempted and every chunk failed*. The new case is *refused
+before attempting*, and the difference is user-visible: FR-08's "Processing failed. Please try
+again" offers a retry that cannot work, because nothing about the file has changed.
+
+**D-32 does not cover this, and filing it there would have been wrong.** D-32 records that
+FR-08's retry recovers only an `Indexing failed` caused by a provider outage, and that a scanned
+PDF parses identically however many times it is submitted. Those cases *may* succeed. This one
+cannot — and D-32's own rule makes it worse, because the retry re-runs ingestion on the stored
+original, so **every attempt redoes extraction and chunking in full before failing at the
+identical point.**
+
+**The name.** It states a property of the content and makes no claim that anything was
+attempted; a test asserts the string contains no "failed". Its one imprecision is recorded: the
+trigger is chunk count rather than bytes, so "large" is the user's word rather than the code's —
+`"Too many chunks to index"` would leak an implementation term into a column a person reads.
+
+**Consequences.**
+
+- **The pairing test is what keeps the two values apart.** Over-cap lands on the new value and
+  **not** on `Indexing failed`, with zero embed calls; a document whose every chunk genuinely
+  fails lands on `Indexing failed` and **not** on the new value, having spent
+  `MAXIMUM_EMBED_ATTEMPTS`. One test, both halves — either alone would still pass if a refactor
+  collapsed them.
+- `docs/schema-v1.md` §3 and `apps/core/tests/test_schema.py` both carry the value, because that
+  test transcribes that document. The migration had to be placed immediately after `0006` in the
+  test's plan rather than at the end, which is where the executor plans it.
+- **REQUIRED FOLLOW-UP, Stage 5 presentation work: the front end must suppress FR-08's retry
+  affordance for this status.** Until it does, the row states the truth and the button still
+  lies. Recorded in `documents.py`, `constants.py` and `docs/schema-v1.md` so it cannot be lost.
+- **The meetings asymmetry is deliberate and explicit.** An over-cap transcript keeps
+  `Processing failed`: the proposal defines no meeting status column (D-28), and FR-09 offers no
+  retry affordance to mislead. If FR-09 ever grows one, it needs the same treatment.
+- `manage.py reindex` has no chunk-cap guard, which is harmless today only because the over-cap
+  branch writes no `ExtractedContent` row for it to rebuild from. That is a fragile reason and
+  deserves an item if `reindex` ever learns to re-extract.

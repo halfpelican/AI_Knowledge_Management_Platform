@@ -31,8 +31,17 @@ from dataclasses import dataclass
 
 from django.db import transaction
 
-from apps.core.constants import MEETING_INDEXED, MEETING_PROCESSING_FAILED, MINIMUM_CONTENT_LENGTH
-from apps.ingestion.chunking import length_in_tokens, split_into_overlapping_chunks
+from apps.core.constants import (
+    MAXIMUM_CHUNKS_PER_SOURCE,
+    MEETING_INDEXED,
+    MEETING_PROCESSING_FAILED,
+    MINIMUM_CONTENT_LENGTH,
+)
+from apps.ingestion.chunking import (
+    chunk_count_for_tokens,
+    length_in_tokens,
+    split_into_overlapping_chunks,
+)
 from apps.ingestion.embedding import MEETING_SOURCE_TYPE, embed_and_store_chunks
 from apps.meetings.models import Meeting, MeetingAttendee
 
@@ -41,6 +50,16 @@ from apps.meetings.models import Meeting, MeetingAttendee
 # carries the reason (CLAUDE.md invariant 8), and the caller is told it is not
 # searchable.
 INDEXING_FAILED_MESSAGE = "The transcript was stored but could not be indexed."
+
+# MAXIMUM_CHUNKS_PER_SOURCE exceeded (Stage 4 item 12a). FR-09 says a transcript is
+# "passed to the chunking and embedding process in FR-08", so it inherits FR-08's
+# ceiling for the same reason — one synchronous request, one transaction, one sequential
+# embed call per chunk — and it reaches it the same way, since a transcript may be
+# pasted rather than uploaded. Same 422 and the same "stored, not indexed" shape as
+# INDEXING_FAILED_MESSAGE above; only the message differs.
+TOO_MANY_CHUNKS_MESSAGE = (
+    "The transcript was stored, but it holds too much text to index in one request."
+)
 
 
 @dataclass(frozen=True)
@@ -99,6 +118,26 @@ def ingest_meeting_transcript(
             [MeetingAttendee(meeting=meeting, user=user) for user in attendees]
         )
 
+        if chunk_count_for_tokens(length_in_tokens(transcript_text)) > MAXIMUM_CHUNKS_PER_SOURCE:
+            # MAXIMUM_CHUNKS_PER_SOURCE, decided before any embed call is made and with
+            # the transcript already stored verbatim above (CLAUDE.md invariant 8: a
+            # failed AI step never discards the source, and this is a refusal to start
+            # one). MEETING_STATUS_VALUES holds three values (D-28) and "Processing
+            # failed" is the one that means "stored, not searchable".
+            #
+            # **The asymmetry is deliberate and is recorded rather than tidied.** Stage 4
+            # item 12b gave the FR-08 side its own "Too large to index" status, because
+            # "Indexing failed" there claims an attempt that never happened and FR-08's
+            # interface offers a retry on it. This side keeps the generic value: the
+            # proposal defines no status column on Meetings at all (D-28), so a fourth
+            # value here would be invented rather than completing an existing distinction,
+            # and FR-09 offers no retry affordance for it to mislead. The detail message
+            # carries the reason. If FR-09 ever grows a retry, this needs the same
+            # treatment and the same argument applies.
+            meeting.status = MEETING_PROCESSING_FAILED
+            meeting.save(update_fields=["status"])
+            return MeetingIngestionOutcome(meeting, 422, TOO_MANY_CHUNKS_MESSAGE)
+
         # The FR-08 path, unforked. A meeting chunk differs from a document chunk
         # only in source_type, which is what makes FR-12 able to answer from both
         # without knowing which it read.
@@ -108,6 +147,7 @@ def ingest_meeting_transcript(
             source_type=MEETING_SOURCE_TYPE,
             source_id=meeting.id,
             visible_to_roles=meeting.visible_to_roles,
+            title=meeting.title,
         )
 
         # MEETING_STATUS_VALUES has no "Partially indexed" counterpart, because the

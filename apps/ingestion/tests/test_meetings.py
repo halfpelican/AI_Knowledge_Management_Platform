@@ -16,6 +16,7 @@ import datetime
 
 import pytest
 
+from apps.ai.prefixes import document_text
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
@@ -28,7 +29,7 @@ from apps.core.constants import (
 from apps.documents.models import ContentChunk
 from apps.ingestion.chunking import length_in_tokens, split_into_overlapping_chunks
 from apps.ingestion.embedding import MEETING_SOURCE_TYPE
-from apps.ingestion.meetings import ingest_meeting_transcript
+from apps.ingestion.meetings import TOO_MANY_CHUNKS_MESSAGE, ingest_meeting_transcript
 from apps.ingestion.tests.ai_doubles import ScriptedEmbedService, install
 from apps.ingestion.tests.builders import words
 from apps.meetings.models import Meeting, MeetingAttendee
@@ -36,6 +37,7 @@ from apps.meetings.models import Meeting, MeetingAttendee
 pytestmark = pytest.mark.django_db
 
 MEETING_DATE = datetime.date(2026, 9, 14)
+MEETING_TITLE = "Records management working group"
 
 # A transcript in the shape FR-09 receives one: speaker labels, timestamps, and a
 # blank line between turns. Long enough to clear MINIMUM_CONTENT_LENGTH.
@@ -54,7 +56,7 @@ SPEAKER_LABEL = "[00:01:37] Sagarika Dey:"
 
 def ingest(transcript=TRANSCRIPT, *, roles=None, attendees=()):
     return ingest_meeting_transcript(
-        title="Records management working group",
+        title=MEETING_TITLE,
         meeting_date=MEETING_DATE,
         transcript_text=transcript,
         visible_to_roles=roles if roles is not None else list(ROLE_NAMES),
@@ -74,8 +76,11 @@ def test_a_transcript_is_stored_chunked_and_embedded(stub_ai_service):
     assert chunks.count() == 1
     assert {chunk.source_type for chunk in chunks} == {MEETING_SOURCE_TYPE}
     # The same AIService, called the same way: one embed call per chunk (section 7.7).
+    # A meeting takes the document path unchanged, prefix included: the title is the
+    # meeting's own (apps/ai/prefixes.py).
     assert stub_ai_service.embed_calls == [
-        [chunk.text] for chunk in split_into_overlapping_chunks(TRANSCRIPT)
+        [document_text(MEETING_TITLE, chunk.text)]
+        for chunk in split_into_overlapping_chunks(TRANSCRIPT)
     ]
 
 
@@ -227,3 +232,43 @@ def test_a_transcript_below_the_minimum_is_refused_before_anything_is_written(st
 
     assert not Meeting.objects.exists()
     assert stub_ai_service.embed_calls == []
+
+
+# --- MAXIMUM_CHUNKS_PER_SOURCE, on the FR-09 side too (Stage 4 item 12a) ----------------
+
+
+def test_a_transcript_over_the_chunk_ceiling_is_stored_and_not_indexed(
+    stub_ai_service, monkeypatch
+):
+    """FR-09 inherits FR-08's ceiling, because it inherits FR-08's chunking and embedding.
+
+    A transcript may be PASTED rather than uploaded, so the size of the text is not bounded
+    by anything an upload check can see, and each chunk is the same sequential NPU embed call
+    inside the same one transaction.
+
+    The transcript is STORED VERBATIM and the row carries "Processing failed" (invariant 8,
+    NFR-20). No embed call is made: the guard is decided on the predicted chunk count, before
+    the provider is reached.
+
+    **Still the generic value, and that is deliberate.** Stage 4 item 12b gave the FR-08 side
+    its own "Too large to index" status, because "Indexing failed" there claims an attempt
+    that never happened and FR-08's interface offers a retry on it. MEETING_STATUS_VALUES is
+    left alone: the proposal defines no status column on Meetings at all (D-28), so a fourth
+    value would be invented rather than completing an existing distinction, and FR-09 offers
+    no retry affordance for the generic one to mislead. See apps/ingestion/meetings.py.
+    """
+    import apps.ingestion.meetings as meetings_module
+
+    monkeypatch.setattr(meetings_module, "MAXIMUM_CHUNKS_PER_SOURCE", 1)
+    long_transcript = words(501)  # two chunks against a ceiling of one
+
+    outcome = ingest(long_transcript)
+
+    assert outcome.http_status == 422
+    assert outcome.detail == TOO_MANY_CHUNKS_MESSAGE
+    assert outcome.meeting.status == MEETING_PROCESSING_FAILED
+    assert stub_ai_service.embed_calls == []
+    assert not ContentChunk.objects.filter(source_id=outcome.meeting.id).exists()
+    # Stored, and stored verbatim: the source outlives the refusal to index it.
+    outcome.meeting.refresh_from_db()
+    assert outcome.meeting.transcript_text == long_transcript

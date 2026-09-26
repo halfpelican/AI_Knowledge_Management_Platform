@@ -51,7 +51,10 @@ SCHEMA_V1 = {
     "query_log": (
         ("query_id",),
         {"query_id", "user_id", "conversation_id", "question", "answer_text",
-         "retrieved_chunk_ids", "answered", "no_answer_reason", "answered_at"},
+         "retrieved_chunk_ids", "answered", "no_answer_reason", "answered_at",
+         # Post-v1, 24 September 2026: invariant 7 needs path B's two kinds
+         # separable and no_answer_reason cannot do it alone (docs/schema-v1.md §1).
+         "rejected_count"},
     ),
     "search_logs": (
         ("search_id",),
@@ -181,7 +184,15 @@ SECTION_5_PLAN = [
     # Schema v2, at the start of Stage 3: the storage columns G7/D-18 deferred, and
     # the corrected status vocabulary (D-28).
     ("documents", "0006_schema_v2_storage_and_status"),
+    # Stage 4 item 12b: the seventh document status, immediately after 0006 because that is
+    # where its dependency puts it in the plan. "Indexing failed" means "attempted, and
+    # every chunk failed"; a document refused over MAXIMUM_CHUNKS_PER_SOURCE was never
+    # attempted, and the vocabulary already separated those two kinds (schema-v1.md §3).
+    ("documents", "0007_document_status_too_large_to_index"),
     ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
+    # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
+    # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
+    ("retrieval", "0002_querylog_rejected_count"),
 ]
 
 

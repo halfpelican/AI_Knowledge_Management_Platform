@@ -7,7 +7,13 @@ a vendor SDK (CLAUDE.md section 4). Classification (FR-10) and summarisation
 """
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Callable, Protocol
+
+if TYPE_CHECKING:
+    # The observer's record type. Imported for type checkers only: it lives beside the
+    # attempt loop that builds it (apps/ai/generation.py), which imports this module, so
+    # a runtime import here would be a cycle.
+    from apps.ai.generation import GenerationAttempt
 
 
 @dataclass(frozen=True)
@@ -52,6 +58,29 @@ class ProviderUnavailable(Exception):
 class AIService(Protocol):
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
 
-    def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
+    def generate_statements(
+        self,
+        question: str,
+        passages: list[Passage],
+        *,
+        on_attempt: Callable[["GenerationAttempt"], None] | None = None,
+    ) -> StatementList:
+        """Statements drawn only from ``passages``, each tagged with a passage id.
+
+        ``on_attempt`` is an OBSERVER, not an operation. It is keyword-only, defaults to
+        None, and is called once per generation attempt with a record the method already
+        computes and would otherwise discard. It cannot change what is asked of the model
+        or what comes back, and an exception raised inside it is swallowed
+        (apps/ai/generation.py), so a measuring instrument cannot alter the attempt count
+        it is measuring. Nothing under ``apps/`` passes it — asserted by
+        apps/ai/tests/test_observer_is_not_used_in_application_code.py — and it exists so
+        scripts/citation_harness.py can report schema conformance per response with a
+        separate first-attempt rate, as docs/flm-baseline.md does.
+
+        It is declared here, in the signature, rather than left to the implementations:
+        a contract and its implementations differing by a parameter is the defect this
+        project keeps finding elsewhere, and it is not worth shipping deliberately.
+        """
+        ...
 
     def health(self) -> ProviderHealth: ...

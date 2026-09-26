@@ -1,0 +1,149 @@
+/* FR-12 answer presentation: statements with numbered inline citations, the
+   expanded passage, the Sources panel, and the partial matches offered beside a
+   no-answer. Tokens only.
+
+   Nothing in this file styles a rejected or unverified statement, because none
+   exists to style (invariant 6). There is no muted, struck-through or "withheld"
+   treatment for answer text anywhere here. */
+
+.answer {
+  margin-bottom: var(--space-5);
+}
+
+.answer__statement {
+  margin-bottom: var(--space-3);
+}
+
+.answer__text {
+  margin: 0;
+  max-width: var(--measure-text);
+}
+
+/* The citation marker. A button that looks like a marker, not a marker that
+   behaves like one: it keeps the 44px touch target off the text flow by using
+   padding rather than min-height, so a line of prose is not spaced apart by its
+   own citations. */
+.citation {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-alt);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
+  cursor: pointer;
+}
+
+.citation:hover {
+  background-color: var(--color-surface);
+  color: var(--color-primary-hover);
+}
+
+/* Where no passage travelled with the statement, the number is text rather than a
+   control. It is deliberately not styled as interactive. */
+.citation--plain {
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.citation-panel {
+  margin: var(--space-2) 0 var(--space-4) var(--space-4);
+  padding: var(--space-3);
+  border-left: var(--border-width-emphasis) solid var(--color-border-strong);
+  background-color: var(--color-surface-alt);
+}
+
+.citation-panel__label {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* The passage as it is stored, wrapping and keeping its line breaks, so the
+   reader sees what the answer was drawn from rather than a reflowed paraphrase. A
+   chunk can be 500 tokens, so it scrolls at a height that leaves the rest of the
+   thread visible. */
+.citation-panel__passage {
+  max-height: 20rem;
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.answer-sources {
+  margin-bottom: var(--space-5);
+}
+
+.answer-sources__intro {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.answer-sources__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.answer-source {
+  padding: var(--space-3) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.answer-source__line {
+  margin: 0;
+  word-break: break-word;
+}
+
+.answer-source__title {
+  font-weight: var(--weight-medium);
+}
+
+.answer-source__meta,
+.answer-source__passages {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.answer-source__passages {
+  margin: var(--space-1) 0 0;
+}
+
+/* Partial matches. Clearly labelled, visually separated from anything that could
+   be read as an answer, and links only. */
+.partial-matches {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+.partial-matches__intro {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  max-width: var(--measure-text);
+}
+
+.partial-matches__list {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.partial-matches__list > li {
+  margin-bottom: var(--space-2);
+}
+
+.partial-matches__meta {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}

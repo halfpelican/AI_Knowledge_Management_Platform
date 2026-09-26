@@ -7,8 +7,11 @@ import useAuth from './auth/useAuth.js'
 import Button from './components/Button.jsx'
 import ComponentSheet from './components/ComponentSheet.jsx'
 import Notice from './components/Notice.jsx'
-import { APP_TITLE, ROLES } from './constants.js'
+import SearchField from './components/SearchField.jsx'
+import { APP_TITLE, ROLES, TEXT } from './constants.js'
 import AccessDenied from './pages/AccessDenied.jsx'
+import Ask from './pages/Ask.jsx'
+import DocumentDetail from './pages/DocumentDetail.jsx'
 import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
@@ -16,6 +19,7 @@ import MeetingDetail from './pages/MeetingDetail.jsx'
 import Meetings from './pages/Meetings.jsx'
 import Register from './pages/Register.jsx'
 import RoleManagement from './pages/RoleManagement.jsx'
+import Search from './pages/Search.jsx'
 import Upload from './pages/Upload.jsx'
 import './App.css'
 
@@ -57,6 +61,10 @@ function PrimaryNav({ onLogoutError }) {
           <NavLink to="/documents">Documents</NavLink>
           <NavLink to="/upload">Upload</NavLink>
           <NavLink to="/meetings">Meetings</NavLink>
+          {/* FR-12's answer path and FR-13's assistant are one screen, because they
+              are one endpoint. FR-13 asks for it to be "reachable from any page",
+              which is what this link is. */}
+          <NavLink to="/ask">{TEXT.askNavLabel}</NavLink>
         </>
       ) : null}
       {/* FR-05: the role management screen "is entirely hidden and inaccessible
@@ -91,8 +99,25 @@ function PrimaryNav({ onLogoutError }) {
 }
 
 /**
+ * FR-12: "a search field available from every page".
+ *
+ * It lives in the shell's header, so it is on every screen a signed-in user can
+ * reach, and it is a `role="search"` landmark of its own rather than part of the
+ * navigation. It is rendered only while signed in, for the same reason the
+ * navigation's own links are: an anonymous visitor is sent to /login by
+ * RequireAuth before any screen with results could render, and the server
+ * authorises the call regardless (CLAUDE.md §6, invariant 4).
+ */
+function HeaderSearch() {
+  const { user } = useAuth()
+  if (!user) return null
+  return <SearchField id="header-search" className="search-field--header" />
+}
+
+/**
  * Layout shell: skip link (first focusable element), banner with the app title,
- * primary navigation, and the main landmark that pages render into.
+ * the search field FR-12 wants on every page, primary navigation, and the main
+ * landmark that pages render into.
  */
 export function Shell() {
   const [logoutError, setLogoutError] = useState(null)
@@ -104,6 +129,7 @@ export function Shell() {
       </a>
       <header className="app-header">
         <p className="app-title">{APP_TITLE}</p>
+        <HeaderSearch />
         <PrimaryNav onLogoutError={setLogoutError} />
       </header>
       <main id="main" className="app-main" tabIndex={-1}>
@@ -136,8 +162,17 @@ export default function App() {
                 ingestion and the full stored transcript. */}
             <Route path="upload" element={<Upload />} />
             <Route path="documents" element={<DocumentRepository />} />
+            {/* Stage 4 item 10b: where a document citation lands, so FR-12's
+                "links to the source document or meeting" reaches the document
+                itself (D-46). Minimal by intent — FR-15's document presentation
+                is Stage 5 and builds on the same endpoint. */}
+            <Route path="documents/:docId" element={<DocumentDetail />} />
             <Route path="meetings" element={<Meetings />} />
             <Route path="meetings/:meetingId" element={<MeetingDetail />} />
+            {/* Stage 4: FR-12's grouped keyword search, and FR-12's answer path,
+                which is also FR-13's conversational turn. */}
+            <Route path="search" element={<Search />} />
+            <Route path="ask" element={<Ask />} />
           </Route>
           {/* FR-06: where a guarded route sends an unauthorised navigation attempt. */}
           <Route path="403" element={<AccessDenied />} />

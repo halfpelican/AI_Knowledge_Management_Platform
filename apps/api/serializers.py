@@ -5,6 +5,8 @@
 key set so a field cannot leak in later.
 """
 
+from datetime import datetime
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -13,10 +15,13 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from apps.accounts.models import Role
-from apps.core.constants import ROLE_NAMES
+from apps.core.constants import NO_ANSWER_MESSAGE, ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.meetings.models import Meeting
+from apps.retrieval.models import Conversation
+from apps.retrieval.query_log import FIRST_POSITION
+from apps.retrieval.scoping import permission_scope, scoped_chunks
 
 User = get_user_model()
 
@@ -282,3 +287,424 @@ class MeetingIngestSerializer(serializers.Serializer):
                 {"transcript_text": ["Provide either transcript text or a file, not both."]}
             )
         return attrs
+
+
+# --- FR-12 keyword search ---------------------------------------------------------------
+
+# ``SearchResult.date`` is the source's own date and so is not one type: a datetime for a
+# document (``uploaded_at``) and a date for a meeting (``meeting_date``). These two render
+# whichever arrived, and they live at module level rather than on the serializer because a
+# Field assigned to a Serializer class becomes a *declared field* of it — these are
+# formatters, not fields. Reusing DRF's own fields is what keeps a search result's date
+# string byte-identical to the one ``GET /api/documents`` and ``GET /api/meetings`` already
+# return for the same row, timezone conversion included; a test asserts that equality.
+_DATETIME_FORMATTER = serializers.DateTimeField()
+_DATE_FORMATTER = serializers.DateField()
+
+
+def _rendered_date(value):
+    """Whichever of the two arrived, rendered by DRF's own field.
+
+    Shared by the search result and the FR-12 Sources panel, so one row's date is the
+    same string wherever it appears in the interface. datetime subclasses date, so the
+    narrower test has to come first.
+    """
+    if isinstance(value, datetime):
+        return _DATETIME_FORMATTER.to_representation(value)
+    return _DATE_FORMATTER.to_representation(value)
+
+
+class SearchResultSerializer(serializers.Serializer):
+    """One item in an FR-12 search group.
+
+    Exactly the four things the Front-End clause says a result shows — "its title, the
+    matching passage as a snippet, its department, and its date" — plus the identifier and
+    type the front end needs to link to the source.
+
+    **This serializes the frozen ``SearchResult`` dataclass ``apps.retrieval.search``
+    returned, and never the ``Document``, ``Meeting`` or ``ContentChunk`` row behind it.**
+    That is the security property rather than a style choice: the dataclass carries only
+    what the scoped queries selected, so no field here can reach a column nobody scoped,
+    and ``file_path`` and ``content_hash`` are not reachable from it at all — the same rule
+    the document object follows in docs/api-contract.md, for the same two reasons.
+
+    ``snippet`` and ``department`` may both be blank, and legitimately: a source matched by
+    title alone that holds no chunk has no passage to show, and a meeting has no department
+    to carry (see ``SearchResult``'s own docstring for why that is an empty string rather
+    than an invented value).
+    """
+
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    snippet = serializers.CharField(read_only=True, allow_blank=True)
+    department = serializers.CharField(read_only=True, allow_blank=True)
+    date = serializers.SerializerMethodField()
+
+    def get_date(self, result):
+        return _rendered_date(result.date)
+
+
+class SearchGroupSerializer(serializers.Serializer):
+    """One of FR-12's two groups and the count beside it.
+
+    ``count`` is READ from ``SearchGroup.count``, which is a property over the rows in the
+    group. It is never recomputed here, never stored, and never overridden: a number
+    computed from the list it labels cannot be a number taken before the permission filter,
+    which is what CLAUDE.md invariant 1 asks of a reply that is mostly counts. There is no
+    "showing n of m" because the wider figure does not exist in ``apps.retrieval.search``
+    to be serialized, and nothing in this module may introduce one.
+    """
+
+    count = serializers.IntegerField(read_only=True)
+    results = SearchResultSerializer(many=True, read_only=True)
+
+
+class SearchResultsSerializer(serializers.Serializer):
+    """``GET /api/search`` — two groups, their counts, and the total across both.
+
+    ``total_count`` is likewise ``SearchResults.total_count``, a property equal to the two
+    group counts added together, and is the same post-filter number written to
+    ``SearchLog.result_count``. The caller, the record and the group headings therefore
+    cannot disagree, because there is one place it is computed and it is not here.
+    """
+
+    query = serializers.CharField(source="query_text", read_only=True)
+    documents = SearchGroupSerializer(read_only=True)
+    meetings = SearchGroupSerializer(read_only=True)
+    total_count = serializers.IntegerField(read_only=True)
+
+
+# --- FR-12 answer path, FR-13 conversations ---------------------------------------------
+
+
+class AskSerializer(serializers.Serializer):
+    """``POST /api/ask`` request body: the question, and optionally the thread it is a
+    turn of.
+
+    **No length bounds on ``question``, deliberately.** MINIMUM_QUESTION_LENGTH and
+    MAXIMUM_QUESTION_LENGTH are enforced by ``answer_question``, which raises
+    ``QuestionLengthOutOfRange``; the view maps that exception to FR-12's 400. Declaring
+    ``min_length`` here would be a second definition of "too short" that could drift from
+    the one the pipeline applies, exactly as the keyword search endpoint leaves the
+    minimum term length to ``apps.retrieval.search`` (D-41). So this field accepts a blank
+    string and untrimmed whitespace: the question travels to the pipeline character for
+    character, which is also what ``QueryLog.question`` stores.
+
+    ``conversation_id`` absent means a one-off question and ``QueryLog.conversation``
+    stays NULL, which is that column's documented meaning (D-12). A value that is not a
+    UUID is a malformed body and is 400 here; a well-formed id that is not this user's is
+    404, which the view decides — see the view for why it is not 403.
+    """
+
+    question = serializers.CharField(allow_blank=True, trim_whitespace=False)
+    conversation_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class AnswerStatementSerializer(serializers.Serializer):
+    """One verified statement of an answer, with its citation number and its identifier.
+
+    ``chunk_id`` is not optional and there is no serializer for an unverified statement:
+    invariant 6 — the interface has no state in which an uncited factual statement is
+    shown — is kept by the statement arriving with its identifier or not existing. The
+    object behind this is ``NumberedStatement``, built only from
+    ``RetrievalOutcome.verified_statements``, which is the only statement list the
+    pipeline lets out.
+    """
+
+    position = serializers.IntegerField(read_only=True)
+    text = serializers.CharField(read_only=True)
+    chunk_id = serializers.CharField(read_only=True)
+
+
+class ConsultedPassageSerializer(serializers.Serializer):
+    """The passage a citation expands to show (FR-12: "Each citation expands to display
+    the source passage and links to the source document or meeting")."""
+
+    chunk_id = serializers.CharField(read_only=True)
+    text = serializers.CharField(read_only=True)
+
+
+class ConsultedSourceSerializer(serializers.Serializer):
+    """One item in FR-12's Sources panel: "every item consulted with its date".
+
+    Consulted, not merely cited — see ``apps.api.answers``. ``date`` is rendered by the
+    same helper the search result uses, so the same row carries one date string across the
+    interface. No score is exposed: a similarity number is a tuning signal for the team,
+    and an interface that displayed it would be presenting relevance as a fact about the
+    answer.
+    """
+
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    date = serializers.SerializerMethodField()
+    passages = ConsultedPassageSerializer(many=True, read_only=True)
+
+    def get_date(self, source):
+        return _rendered_date(source.date)
+
+
+class PartialMatchSerializer(serializers.Serializer):
+    """One partially related item offered beside a no-answer (FR-12: "Any partially related
+    items found are offered, clearly labelled as partial matches").
+
+    The same four shapes a search result and a Sources panel entry carry, and deliberately
+    no fifth: **there is no ``passages`` field, no ``snippet`` and no score.** A fragment of
+    source text under a message that has just said the question cannot be answered reads as
+    the speculative answer FR-12 refuses in the sentence before, and a score would invite
+    the reader to treat the nearest item as the answer. The object behind this is
+    ``PartialMatchSource``, which has no field for either — so the guarantee is that the
+    text is unreachable, not that this serializer chose not to name it.
+
+    ``date`` goes through the shared formatter, so the same row shows one date string
+    wherever it appears in the interface.
+    """
+
+    source_type = serializers.CharField(read_only=True)
+    source_id = serializers.CharField(read_only=True)
+    title = serializers.CharField(read_only=True)
+    date = serializers.SerializerMethodField()
+
+    def get_date(self, match):
+        return _rendered_date(match.date)
+
+
+class ConversationSerializer(serializers.ModelSerializer):
+    """A thread, as the list and as the "updated conversation state" FR-13 returns.
+
+    Never ``user``: every conversation a caller can reach is their own, so the field would
+    only ever echo the requester back to themselves, and a conversation object that
+    carried a user id would invite a client to send one.
+    """
+
+    conversation_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = Conversation
+        fields = ("conversation_id", "title", "last_updated_at")
+        read_only_fields = fields
+
+
+class AnswerSerializer(serializers.Serializer):
+    """``POST /api/ask`` reply, on all three of the pipeline's exits.
+
+    **The key set does not change between them**, so an answered reply and a no-answer
+    reply are the same shape with different contents: ``answered`` false, ``message`` set,
+    ``result_count`` 0, and both lists empty. That is one branch in the front end instead
+    of two response formats, and it is why the two no-answer paths are byte-identical
+    without the serializer having to arrange anything.
+
+    **There is no field for ``no_answer_reason`` and none for ``rejected_count``.** They
+    are record-only (``QueryLog``'s docstring), and ``AnswerReply`` carries no value for
+    either, so there is nothing here to name — see ``apps.api.answers`` for the
+    disclosure this protects against.
+
+    **``partial_matches`` is present on every exit and non-empty only on the two no-answer
+    ones**, and it is IDENTICAL on those two by design: the pipeline derives it once from the
+    ranked scoped candidates before the threshold, so this field cannot become the one that
+    tells a caller which no-answer path ran. It is also the field most likely to be
+    "improved" into a leak — a score, a snippet, a count of what was left out — and each of
+    those is refused in ``PartialMatchSource``'s docstring rather than here.
+    """
+
+    answered = serializers.BooleanField(read_only=True)
+    message = serializers.CharField(read_only=True, allow_null=True)
+    result_count = serializers.IntegerField(read_only=True)
+    statements = AnswerStatementSerializer(many=True, read_only=True)
+    sources = ConsultedSourceSerializer(many=True, read_only=True)
+    partial_matches = PartialMatchSerializer(many=True, read_only=True)
+    # Null for a one-off question. FR-13's Responses clause: "200 OK with the answer and
+    # updated conversation state" — the pipeline refreshed ``last_updated_at`` inside the
+    # log transaction, so the instance rendered here is already current.
+    conversation = ConversationSerializer(read_only=True, allow_null=True)
+
+
+class ConversationCreateSerializer(serializers.Serializer):
+    """``POST /api/conversations`` body. ``title`` is optional; see the view for where an
+    omitted one comes from instead (D-43)."""
+
+    title = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, allow_blank=True, trim_whitespace=True
+    )
+
+
+class CitedStatementSerializer(serializers.Serializer):
+    """One stored ``AnswerCitation``, rendered exactly as the live answer renders a
+    statement, so a reopened thread and the turn as first answered are the same shape.
+
+    Rows exist only for statements that survived verification, so a thread read back from
+    the server can no more show an uncited statement than the original reply could.
+    """
+
+    position = serializers.IntegerField(read_only=True)
+    text = serializers.CharField(source="statement_text", read_only=True)
+    chunk_id = serializers.UUIDField(read_only=True)
+
+
+def permitted_citation_chunk_ids(turns, *, role_name) -> frozenset:
+    """Which of these turns' cited chunks the reader's CURRENT role may still see.
+
+    One query for the whole thread, and it is ``scoped_chunks`` — the same predicate the
+    answer path and the keyword search run, not a second implementation of it. Invariant 3's
+    reasoning is the argument: "a second scoping mechanism would mean two code paths through
+    the single filter that matters most", and a thread read is a route that returns material
+    exactly as much as those two are. A chunk that has been deleted, or whose stamp is now an
+    empty array, is absent from the result for the same reason a restricted one is: this asks
+    the store what is readable and takes the answer, rather than deciding anything itself.
+    """
+    cited = {citation.chunk_id for turn in turns for citation in turn.citations.all()}
+    if not cited:
+        return frozenset()
+    return frozenset(
+        scoped_chunks(role_name=role_name).filter(id__in=cited).values_list("id", flat=True)
+    )
+
+
+class ConversationTurnSerializer(serializers.Serializer):
+    """One logged turn of a thread: the question, whether it was answered, its citations.
+
+    The object is a ``QueryLog`` row, and only four of its columns are read.
+    ``no_answer_reason`` and ``rejected_count`` are not among them, for the same reason
+    they are absent from the live reply: a reopened thread that showed which no-answer
+    path a turn took would disclose across two requests exactly what one request may not
+    (``QueryLog``'s docstring; invariant 1). ``retrieved_chunk_ids`` is not read either —
+    it is the traceability record of what was put in front of the model, including
+    passages nothing cited, and it is not part of what the user was shown.
+
+    ``message`` is derived rather than stored: a turn that was not answered was answered
+    with NO_ANSWER_MESSAGE, the one fixed text both no-answer paths return, so
+    re-rendering it from ``answered`` cannot leak which path was taken.
+
+    **A STORED ANSWER IS RE-SCOPED HERE, ON EVERY READ.** A turn is a derived record: its
+    statements were generated from passages the asker's role admitted at the time, and the
+    stored row carries no visibility of its own. If the reader's role has narrowed since —
+    or the source's scope has — nothing about the row knows that, so every citation is
+    filtered through ``scoped_chunks`` under the role resolved for THIS request and a
+    statement whose chunk is no longer permitted is dropped.
+
+    **What is being withheld is the PROSE, and framing it as an identifier understates it by
+    an order of magnitude.** It is tempting to say that a turn returns no passage text, so at
+    worst a ``chunk_id`` leaks and an identifier is not content. That is wrong. A statement
+    generated from an Administrator-only passage carries that passage's substance in natural
+    language: "Directors accrue annual leave at twice the ordinary rate" IS the restricted
+    fact, written out, and it does not become less so for having been produced by a model
+    rather than copied. The identifier is the lesser half of the leak and the sentence is the
+    greater one. This is why the statement is removed rather than merely unlinked.
+
+    **A turn that loses every statement renders as the ordinary no-answer state** —
+    ``answered`` false, the fixed message, an empty list — which is the state item 7 already
+    built and the front end already renders. Not a blank turn, and emphatically not "content
+    withheld" and not a count of what was removed: a notice that something was removed is
+    itself a disclosure that material exists which this role may not read, which is the
+    disclosure invariant 1 forbids by name. Nothing here can tell the reader whether a turn
+    was re-scoped, whether it hit no-answer path A or B when it was live, or whether it was
+    ever answered at all.
+
+    **Surviving statements are renumbered from FIRST_POSITION**, for the same reason: a turn
+    rendered as "[1] ... [3] ..." announces that [2] was taken out. Where nothing is dropped
+    the renumbering is the identity, so an ordinary thread read is byte-for-byte what it was.
+
+    **Re-scoping on read, rather than re-writing the rows when a role or a scope changes.**
+    The scope is re-resolved per request everywhere else in this system — ``permission_scope``
+    re-reads the role from the users table on every turn, D-21 caches nothing in the session —
+    and FR-13's Validation clause already requires that a follow-up "cannot inherit access the
+    user no longer holds". A thread read is that principle one step on: the same thread, read
+    twice by the same person across a demotion, must not still show what the first read did.
+    Re-writing stored citations on a role change would instead destroy the FR-19 evidence of
+    what was actually answered, and would have to be re-run for every role and every source
+    whose scope ever moves.
+    """
+
+    question = serializers.CharField(read_only=True)
+    answered = serializers.SerializerMethodField()
+    asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
+    message = serializers.SerializerMethodField()
+    statements = serializers.SerializerMethodField()
+
+    def surviving_citations(self, turn):
+        """This turn's citations the reader may still see, in the order they were numbered.
+
+        ``permitted_chunk_ids`` is read from the context with no default, so a caller that
+        renders turns without supplying it raises rather than returning a body. Both
+        available defaults are wrong: permitting everything is precisely the leak, and
+        permitting nothing would render every thread in the system as no-answer and look
+        like a retrieval problem for as long as it took someone to find.
+        """
+        permitted = self.context["permitted_chunk_ids"]
+        citations = sorted(turn.citations.all(), key=lambda citation: citation.position)
+        return [citation for citation in citations if citation.chunk_id in permitted]
+
+    def get_answered(self, turn):
+        # Answered when it was answered AND something it said is still readable. The two
+        # conditions are one fact for the reader: an answer they can be shown.
+        return bool(turn.answered) and bool(self.surviving_citations(turn))
+
+    def get_message(self, turn):
+        return None if self.get_answered(turn) else NO_ANSWER_MESSAGE
+
+    def get_statements(self, turn):
+        if not self.get_answered(turn):
+            # The no-answer state, whether this turn was never answered or has just lost
+            # every statement it had. One branch, so the two are indistinguishable.
+            return []
+        surviving = self.surviving_citations(turn)
+        for position, citation in enumerate(surviving, start=FIRST_POSITION):
+            # Contiguous numbering, in memory only — these instances are never saved, and
+            # the stored position stays what the original reader saw. A gap in the numbers
+            # would be the "something was removed" notice this must not give.
+            citation.position = position
+        return CitedStatementSerializer(surviving, many=True).data
+
+
+class ConversationDetailSerializer(ConversationSerializer):
+    """A thread and its turns, so FR-13's "previous conversations ... can be reopened"
+    renders from the server rather than from whatever the browser still holds.
+
+    The turns are read here rather than prefetched by the view, so the turn ordering and
+    the citation ordering live beside the fields that use them: two queries per read, at a
+    thread length bounded by how much one person types, plus one for the scope.
+
+    **The reader's role is resolved here, from the request, not passed in by the view.**
+    ``permission_scope`` re-reads it from the users table for this request (D-21 caches
+    nothing in the session), and taking the user rather than a role name means there is no
+    role argument for a view to miswire — the argument ``apps/api/views.py``'s search view
+    makes for ``apps.retrieval.search`` doing its own resolution. ``UnscopedRequestError`` is
+    not caught, as on every other route: behind ``IsAuthenticated`` it is unreachable, and
+    rendering a thread whose scope could not be established is the one thing worse than
+    raising.
+
+    ``title`` needs no re-scoping. It is either what the user typed or their own first
+    question, truncated (D-43) — their words, kept for the same reason D-42 keeps prior
+    questions — so nothing in it was derived from a passage.
+    """
+
+    turns = serializers.SerializerMethodField()
+
+    class Meta(ConversationSerializer.Meta):
+        fields = ConversationSerializer.Meta.fields + ("turns",)
+        read_only_fields = fields
+
+    def get_turns(self, conversation):
+        turns = list(
+            conversation.queries.prefetch_related("citations").order_by(
+                # Chronological, with the primary key as a deterministic tie-break only: it
+                # is a random UUID and says nothing about time, but two turns sharing a
+                # microsecond would otherwise order arbitrarily between reads. The ordering
+                # apps/retrieval/conversation.py reads history with, reversed.
+                "answered_at",
+                "id",
+            )
+        )
+        role_name = permission_scope(self.context["request"].user)
+        return ConversationTurnSerializer(
+            turns,
+            many=True,
+            context={
+                **self.context,
+                # One scope query for the whole thread, not one per turn.
+                "permitted_chunk_ids": permitted_citation_chunk_ids(
+                    turns, role_name=role_name
+                ),
+            },
+        ).data

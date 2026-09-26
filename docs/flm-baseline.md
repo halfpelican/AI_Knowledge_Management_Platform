@@ -4,6 +4,22 @@ Stage 4 item 0 of `M6-BUILD-PROMPT.md`, run before any retrieval code exists, to
 establish whether the provider's structured output is reliable enough to build
 FR-12 on. Produced by `scripts/citation_harness.py`.
 
+> **The three rates below were measured against an index that no longer exists.**
+> Stage 4 item 2a adopted EmbeddingGemma's task prefixes on 23 September 2026 and
+> re-indexed the corpus (D-38), so every vector behind the numbers in "The three
+> rates" and in "Tuning RELEVANCE_THRESHOLD" was rebuilt. The score distributions are
+> re-measured in "23 September 2026 — adopting the task prefixes" below. The three
+> rates themselves are re-measured against the real pipeline at Stage 4 item 6, not
+> here; treat the figures in the next two sections as the go/no-go evidence they were
+> taken for and not as a description of the shipped system.
+>
+> **Every rate in this document was measured on a prompt of passages plus ONE question.**
+> FR-13's assistant sends a prompt that also carries a labelled block of prior questions,
+> and `scripts/citation_harness.py` asks single questions, so nothing above describes the
+> shipped assistant on a second or later turn. The history block's effect on generation is
+> measured separately in "25 September 2026 — FR-13's history block" below; FR-13 end to
+> end, where the composed question also changes what is retrieved, remains unmeasured.
+
 | | |
 |---|---|
 | Date | 22 September 2026 |
@@ -13,7 +29,7 @@ FR-12 on. Produced by `scripts/citation_harness.py`.
 | Chat model | `gemma3:4b` |
 | Embedding model | `embed-gemma` (embeddinggemma-300m) |
 | Embedding dimension | 768 |
-| Corpus | the placeholder Meridian fixture set, 9 chunks, all recorded against `embed-gemma` |
+| Corpus | the placeholder Meridian fixture set, 6 chunks, all recorded against `embed-gemma` |
 | Question set | `scripts/citation_questions.json`, 64 questions |
 | Constants | `TOP_K=25`, `MAXIMUM_CONTEXT_TOKENS=4000`, `MAXIMUM_GENERATION_ATTEMPTS=3` |
 | Threshold used | **0.30** — see "Tuning RELEVANCE_THRESHOLD" |
@@ -97,6 +113,15 @@ sits clear of the scoped maximum. The constant is now 0.30 (D-37); this section
 is the evidence for that decision, and both are void if the corpus, the embedding
 prefixes or the FLM build change.
 
+**The embedding prefixes changed on 23 September 2026, so this section is void by its
+own last sentence.** The distribution above is superseded by the one in "23 September
+2026 — adopting the task prefixes" below, which is the re-measurement D-37 required on
+exactly this trigger. The value itself does not move: 0.30 admits 44/48 answerable
+and 6/16 unanswerable on the rebuilt index, and still sits clear of the scoped
+maximum. The table is left here as written rather than edited in place, because it is
+the evidence D-37 was decided on and rewriting it would leave that decision citing
+numbers nobody ever measured.
+
 ## The worked example was fabricating identifiers
 
 First run of this harness measured a **23.8%** fabricated-identifier rate. The
@@ -171,42 +196,463 @@ corpus after a version or provider change.
 - **These are local-model baselines, not the platform's capability.** The
   proposal's production path is Claude plus Voyage. Do not present these numbers as
   what the system can do (`docs/ai-provider.md` section 7).
-- **The corpus is a placeholder.** Nine chunks over five sources is small enough
-  that a single chunk's wording moves a rate by two percentage points. The rates
+- **The corpus is a placeholder.** Six chunks over five sources is small enough
+  that a single chunk's wording moves a rate by two percentage points. (The count
+  read 9 between 22 and 23 September; it was corrected against `ContentChunk` and
+  the rates above were measured on these 6 chunks — see D-37's erratum.) The rates
   are a go/no-go signal for building FR-12, not a quality measurement. Re-run
   against the real corpus when there is one; the question-set path is a CLI
   argument precisely so that replacement is a flag, not an edit.
-- **We do not send EmbeddingGemma's task prefixes.** The model is documented to
-  expect `task: search result | query: …` for queries and `title: … | text: …` for
-  documents. We embed raw text through one code path for both. This likely explains
-  why query-to-chunk scores (0.18–0.66) sit below chunk-to-chunk scores (mean
-  0.488). Adopting the prefixes would shift every score in this document and is a
-  full re-index event; it has not been done and is not scheduled.
+- ~~**We do not send EmbeddingGemma's task prefixes.**~~ **Adopted on 23 September
+  2026, and the explanation offered here was wrong.** This caveat used to read that
+  the missing prefixes "likely explain why query-to-chunk scores (0.18–0.66) sit
+  below chunk-to-chunk scores (mean 0.488)". They do not. The prefixes were adopted
+  and the corpus re-indexed (D-38), and the answerable median moved from 0.3892 to
+  0.3937 — **+0.0045**, which on this corpus is nothing. The query band is now
+  0.22–0.69 rather than 0.18–0.66. Had the two-spaces hypothesis been the main cause,
+  the query band would have moved substantially toward the chunk-to-chunk range; it
+  did not, so whatever holds query-to-chunk scores below chunk-to-chunk scores is
+  still unidentified. The prefixes are kept because the model is documented to expect
+  them, not because they were measured to help. See the dated section below.
 - **Conformance was measured on the happy path.** No malformed response occurred,
   so nothing here evidences the retry-then-503 behaviour NFR-19 requires.
 
-## Temporary duplication — deliberate, and with an expiry
+## 23 September 2026 — adopting the task prefixes
 
-`scripts/citation_harness.py` currently defines three things that Stage 4 item 5
-(FR-12 grounded generation) will own inside `apps/ai/`:
+Stage 4 item 2a. EmbeddingGemma is documented to expect a task prefix on each side of
+a search — `task: search result | query: {content}` for a query and
+`title: {title} | text: {content}` for a document. The project sent raw text in both
+directions. `apps/ai/prefixes.py` now applies both, the corpus was re-indexed with
+`manage.py reindex --provider flm`, and the harness was re-run over the same 64
+questions, the same 6 chunks and the same 0.30 threshold. Settled as D-38.
 
-- `STATEMENT_LIST_SCHEMA` — the required response shape
-- `SYSTEM_PROMPT` — strict instructions plus the worked example
-- `parse_statement_list()` — the tolerant parser
+**The hypothesis this change was built on is disproved.** The caveat above reasoned
+that the missing prefixes likely explained why query-to-chunk scores sat below the
+chunk-to-chunk mean. The answerable median moved **from 0.3892 to 0.3937: +0.0045.**
+On a corpus where a single chunk's wording moves a rate by two percentage points that
+is not a result at all. The gap between query-to-chunk and chunk-to-chunk scores has
+some other cause, and this document no longer offers a candidate for it.
 
-They live in `scripts/` because item 0 runs **before** item 5 exists, which is the
-whole point of the ordering: the schema, the prompt and the parser can be iterated
-against a live model without touching production code or its tests. The 23.8% → 2.4%
-fix above is exactly that iteration, and it happened without a single change under
-`apps/`.
+**The prefixes were kept anyway, and the reason is correctness of use rather than
+measurement.** On 6 chunks and 64 questions every delta below is inside noise, so the
+measurement cannot adjudicate the change in either direction. What is not inside
+noise is that the model is documented to expect these prefixes and was previously not
+being given them. "We use the model as documented" answers a question at the
+demonstration; "we measured no difference on six chunks, so we kept the undocumented
+usage" does not.
 
-They are written as clean, liftable units with no harness-specific coupling, so item
-5 can move them into `apps/ai/` verbatim.
+### The distributions, before and after
 
-**When item 5 lands, the harness must delete its copies and import from `apps/ai/`,
-and call `FLMService.generate_statements()` instead of `build_generation_messages()`
-plus a raw chat call.** Two definitions of the schema that drift apart would be
-invisible until a citation silently stopped being verified — the same failure mode
-as a front-end password rule drifting from `ComplexityValidator`, and harder to
-notice. This note exists so that the duplication reads as a decision with a
-termination condition rather than as a stray second implementation.
+| | before | after | delta |
+|---|---|---|---|
+| ordinary (answerable), n=48 — min / median / max | 0.2192 / 0.3892 / 0.6607 | 0.2179 / 0.3937 / 0.6856 | −0.0013 / **+0.0045** / +0.0249 |
+| scoped, n=8 — min / median / max | 0.1786 / 0.2522 / 0.2856 | 0.1982 / 0.2761 / 0.2947 | +0.0196 / +0.0239 / +0.0091 |
+| no-answer, n=8 — min / median / max | 0.1795 / 0.4745 / 0.5348 | 0.2063 / 0.4452 / 0.5067 | +0.0268 / −0.0293 / −0.0281 |
+
+At the settled 0.30 threshold:
+
+| | before | after |
+|---|---|---|
+| answerable admitted | 41/48 (85.4%) | **44/48 (91.7%)** |
+| unanswerable admitted | 5/16 (31.3%) | 6/16 (37.5%) |
+
+**Three more answerable questions admitted for one more unanswerable one: a 3:1
+recall-to-wasted-call trade.** An unanswerable question clearing the threshold is a
+wasted NPU call that no-answer path B then catches; it is not a leak. A leak is
+out-of-scope content reaching the prompt, which the role filter prevents before
+ranking and which the harness asserts at zero on every question (invariant 1). The
+two are worth keeping apart in the vocabulary, because one is a cost and the other
+would be a failure.
+
+That trade should improve the worst of the three baseline rates.
+Empty-answer-where-available was 14.6% (7 of 48), and all seven were questions the
+threshold excluded rather than questions generation declined. Four are now excluded,
+which projects **14.6% → about 8.3% (4/48), down by a third.** It is a projection, not
+a measurement: generation's behaviour on the three newly admitted questions is
+unmeasured, and item 6 re-runs the full harness against the real pipeline to settle
+it.
+
+### Separation widened, and D-37's central finding still stands
+
+The answerable maximum rose to 0.6856 while the unanswerable ceiling fell to 0.5067,
+so the gap between them widened **from 0.126 to 0.179**. The most damaging kind of
+overlap — an irrelevant passage outscoring the genuinely answerable range — got less
+severe.
+
+**It did not get less real.** 0.5067 still sits well above the answerable median of
+0.3937, so a threshold high enough to exclude every unanswerable question still
+discards most of the answerable ones: the first zero-admission row in the after sweep
+is 0.52, which keeps 10 of 48. D-37's central finding is unchanged by this work — no
+threshold separates answerable from unanswerable on this corpus — and invariant 7(b)
+is still what does the work the threshold cannot.
+
+### The scoped questions, and a margin worth watching
+
+The scoped band rose: ceiling 0.2856 → 0.2947, median 0.2522 → 0.2761. This is not a
+regression, and reading it as one would repeat the error D-37 already corrected: a
+scoped question's top score measures the best of what the role filter *left*, not the
+filter itself. The filter removed the Administrator-only content before ranking, so
+the number describes the permitted remainder.
+
+What it does affect is a margin. **The headroom between the scoped ceiling and the
+0.30 threshold has fallen from 0.0144 to 0.0053.** Nothing depends on that headroom —
+the role filter, not the threshold, is what keeps scoped content out, and a scoped
+question crossing 0.30 would reach generation over permitted passages and return an
+honest answer or an honest no-answer. But it is thin enough to be worth watching if
+the corpus grows, because a scoped question scoring above the threshold is a question
+whose permitted remainder looks relevant, and that is a retrieval-quality signal
+rather than a security one.
+
+### RELEVANCE_THRESHOLD is not re-tuned here
+
+D-37 recorded that the value "is re-measured again if the EmbeddingGemma task
+prefixes are adopted". **That trigger has now fired, and the sweep above is the
+re-measurement.** It does not move the value: 0.30 still admits 91.7% of answerable
+questions and still sits clear of the scoped ceiling at 0.2947. Re-tuning is
+explicitly out of scope for Stage 4, and re-tuning against 6 chunks would in any case
+be fitting a constant to a corpus nobody intends to ship.
+
+The re-measure that matters is deferred to **Stage 5 item 3**, the end-to-end
+integration pass over a real corpus, which is the first point at which the question
+can be answered with evidence rather than with six chunks.
+
+## 23 September 2026 — item 6, the first measurement of the shipped pipeline
+
+Stage 4 item 6. Everything before this was measured with the harness's own prompt,
+schema and parser; item 5 moved those into `apps/ai/`, so these runs measure the code
+the application actually runs. Two runs, because the first found a defect in our own
+prompt, which was fixed and re-measured once (D-39).
+
+**Counts are given beside every rate.** At 38–44 statements a single event moves the
+fabrication rate by more than two points, so a percentage alone overstates how much is
+known — the same caution the 6-chunk corpus already earns.
+
+| | baseline (prototype, pre-prefix) | item 6 before fix | item 6 after fix |
+|---|---|---|---|
+| Schema conformance | 100.0% (46/46) | **100.0% (50/50)** | **100.0% (50/50)** |
+| First-attempt conformance | 100.0% | **100.0% (50/50)** | **100.0% (50/50)** |
+| Fabricated identifiers | 2.4% (1 of 42) | **6.8% (3 of 44)** | **0.0% (0 of 38)** |
+| Statements proposed / verified | — | 44 / 41 | 38 / 38 |
+| Empty where an answer existed | 14.6% (7 of 48) | 18.8% (9 of 48) | **20.8% (10 of 48)** |
+| Expected-answer match (diagnostic) | 72.9% (35/48) | 66.7% (32/48) | 70.8% (34/48) |
+| Scoped correctly empty | 8/8 | **8/8** | **8/8** |
+| No-answer correctly empty | 8/8 | **8/8** | **8/8** |
+| **Out-of-scope in any prompt or answer** | 0 | **0** | **0** |
+
+**Invariant 1 holds against the real retrieval path.** The baseline's zero was measured
+over a candidate set the harness assembled itself; this one is measured through
+`scoping.candidate_chunks`, over 64 questions in each run and 36 more in the stability
+runs below. No out-of-scope identifier reached any prompt, statement or count in any of
+them. The harness checks the *proposed* statements, not only the verified ones, so a
+model naming a restricted chunk would be a finding even where verification then
+discarded it.
+
+### Two definitions of "answered", and which number compares with which
+
+The harness's `answered` now means `bool(verified_statements)` — what
+`RetrievalOutcome.answered` means, now that the harness runs the shipped pipeline. The
+baseline meant "the model returned at least one statement", which counts an answer whose
+every citation was fabricated as answered.
+
+The new definition is the correct one and it stays. It also moves the number, so both
+are recorded:
+
+| | before fix | after fix |
+|---|---|---|
+| empty-answer, `bool(verified_statements)` (current) | 18.8% (9/48) | 20.8% (10/48) |
+| empty-answer, baseline's "model returned at least one statement" | **12.5% (6/48)** | 20.8% (10/48) |
+
+**12.5% is the figure comparable with the baseline's 14.6%, and it is lower.** 18.8%
+against 14.6% is not like-for-like and must not be quoted as though it were. After the
+fix the two definitions coincide, because nothing was fabricated for verification to
+strip.
+
+### What the D-38 projection got right, and what it got wrong
+
+D-38 projected that empty-answer-where-available would fall to about 8.3% (4/48),
+because the prefix change admitted 44 of 48 answerable questions instead of 41.
+
+**The retrieval half was exactly right.** In both runs precisely 4 ordinary questions
+took no-answer path A — q23, q25, q45, q47 — with top scores of 0.218 to 0.298 against
+the 0.30 floor. That is 8.3%, question for question, in both runs.
+
+**The generation half was wrong.** Every remaining empty answer is generation or
+verification, not the threshold. Before the fix: 4 path A, 2 the model declined with
+passages in front of it, 3 that lost every statement to verification. After: 4 path A,
+6 declined, 0 lost to verification. The projection assumed generation would answer what
+retrieval admitted; it does not always.
+
+### The fabrication rose because of our own prompt, and the fix removed the mechanism
+
+D-39 records the three fabrications. Two cited `8b5d04e2-…`, the *uncited* second
+identifier from the worked example, while answering purchase-approval questions
+correctly out of the real AUD threshold table: the example's subject matter collided
+with the corpus. The third was a section heading lifted from a passage body.
+
+After removing both halves of the cause — an alien example domain, and no uncited
+identifier left to borrow — no identifier was invented across 64 questions, nor across
+the 36 question-runs of the stability measurement. The three statements verification had
+been correctly discarding are now correctly cited.
+
+**This is not "fabrication is solved."** It is 0 of 38 on one run of a 6-chunk corpus,
+the same n that D-37 says cannot adjudicate small differences.
+
+## 24 September 2026 — measurement stability, and a threshold exposed
+
+The fix appeared to cost four answers: q04, q06, q07 and q46 answered before it and
+returned `{"statements": []}` after. Before attributing that to the prompt, the shipped
+prompt was run again unchanged — 12 questions, the 4 that flipped plus 8 that did not,
+chosen to span and interleave the same score band, three times, in three separate
+processes, with nothing else altered.
+
+**Different questions came back empty in different runs.** The empty sets were
+{q06, q12, q14, q46}, then {q04, q12, q14, q46}, then {q04, q12, q14, q46} — q04 and q06
+swap. The four-question regression is therefore largely a draw rather than a result:
+
+| | across 3 runs | reading |
+|---|---|---|
+| q07 | answered 3 of 3 | its "loss" in the after-run was an unlucky draw |
+| q04 | answered 1 of 3 | unstable |
+| q06 | answered 2 of 3 | unstable |
+| q46 | empty 3 of 3 | the only one with a claim to being a real change, and one question is not a finding |
+
+For the other ten questions there was **no variance observed across 3 runs on 12
+questions**, in statement count or in statement text — the verified statements are
+character-identical, `chunk_id` included. That is an absence of observed variance on a
+small sample. It is **not** evidence that generation is deterministic at temperature 0.
+A check that has never failed cannot support that claim, which is the lesson this
+repository paid the most for (D-36, and `check_flm.py` passing on a broken build).
+
+### The cause is a threshold crossing, and the generator is not implicated
+
+Both flips changed how many passages the question was given:
+
+```
+q04  run 1:    supplied 2  ->  answered     chunk fe61bb55 BELOW the floor
+     runs 2,3: supplied 3  ->  empty        chunk fe61bb55 at 0.301412  (+0.0014)
+
+q06  run 1:    supplied 3  ->  empty        chunk 39d5c220 at 0.300344  (+0.0003)
+     runs 2,3: supplied 2  ->  answered     chunk 39d5c220 BELOW the floor
+```
+
+A passage sitting 0.0003 to 0.0014 above `RELEVANCE_THRESHOLD` crossed it, in opposite
+directions on two questions. In both cases 2 supplied passages produced an answer and 3
+produced an empty list — the same relationship both ways.
+
+**Across 14 distinct (question, supplied-passage-set) groups, identical input produced
+identical output every time.** Every difference observed traces to the input set
+changing, not to the model's reply to a fixed input.
+
+**About 6% of admitted passages are effectively coin flips.** In the item-6 run, 5 of 86
+admitted passages sit within 0.005 of the 0.30 floor and three within 0.0017: q06
++0.00056, q12 +0.00070, q04 +0.00111, q08 +0.00157, q13 +0.00165. q04 and q06 are two of
+those five, which is why they are the two that moved.
+
+### An unexplained source of variation in query embeddings, which check_flm.py misses
+
+Those scores move because the query vector moves, by roughly 1e-4 to 1e-3, on some
+questions and not others. Reproduced independently while checking this write-up: q04's
+top score was 0.358032 on one invocation of the real pipeline and 0.358459 on two
+others.
+
+**The trigger is not established, and two plausible ones were ruled out.** Embedding the
+same four questions in three separate processes gave **bit-identical** vectors (maximum
+elementwise difference 0.000e+00, cosine 1.000000000), so a process boundary alone does
+not cause it. Interleaving a chat completion between two embeddings of the same question
+inside one process also gave bit-identical vectors, so chat/embed alternation on the NPU
+is not obviously the cause either. The pattern in every observation so far is that the
+first run of a sequence differs and later runs agree, but what distinguishes that first
+run is not known. It is recorded as unidentified rather than guessed at.
+
+**`scripts/check_flm.py` asserts embedding determinism, passes, and does not catch
+this.** It embeds one string twice within a request and once in a second request, and
+requires cosine ≥ 0.999. The variation here is around 1e-4 — four orders of magnitude
+inside that tolerance and invisible to it. That is not a fault in the check, which was
+built to catch the v1.0.4 noise bug where a string scored 0.09 against itself; it is a
+gap between what it proves and what retrieval needs at a threshold boundary.
+
+**Why this is recorded now rather than when it bites.** Generation determinism on the
+NPU was assumed and never measured until today, exactly as embedding determinism was
+before D-36. If FLM output is not stable run to run, every rate in this document is one
+draw from a distribution rather than a measurement — **including the first-attempt
+conformance of 100%, which is what NFR-19's retry policy is reasoned from.** On the
+evidence here the generator itself is not implicated: identical inputs gave identical
+outputs in all 14 groups tested. The instability that was found lives in the query
+embedding, and a threshold that a handful of real passages sit on is what turns it into
+visible behaviour. Both remain open, and D-40 records them.
+
+## 25 September 2026 — FR-13's history block
+
+Stage 4 item 9a. Item 9 shipped the multi-turn assistant on a prompt nobody had measured,
+which is the situation item 0 existed to prevent, so it was measured before the stage
+closed. Run with `scripts/citation_harness.py --with-history`.
+
+### The design: one variable, and what it deliberately does not cover
+
+The existing 64 questions, unchanged, each with a **fixed** three-question block prepended
+to the generation prompt — three because `MAXIMUM_CONVERSATION_TURNS` is 3 and that is the
+largest prompt the system can build. No new question set: n=48 ordinary questions against a
+run already recorded beats ten invented pairs on a corpus D-37 and D-40 say cannot
+adjudicate a small difference.
+
+**Retrieval is held constant, and that is the whole point of the design.** FR-13 composes
+both a retrieval string and a prompt string. If the history also changed the embedding, the
+passages would change and a conformance difference could not be attributed to the block —
+two variables. So the harness embeds the **bare** question, exactly as the item-6 run did,
+and passes the FR-13-composed labelled question to `generate_statements`. The evidence that
+it worked: the ordinary questions taking no-answer path A were `q23, q25, q45, q47`,
+question for question the same four the item-6 run recorded.
+
+**This therefore measures the block's effect on GENERATION, not FR-13 end to end.** The
+`--with-history` help text says so, and the run header prints the caveat, so a recorded run
+cannot be misread.
+
+The fixed block, the first three ordinary questions of the question set, 539 characters and
+95 tokens added to a 2331-character system prompt:
+
+```
+- How many days of annual leave do full-time staff accrue each year?
+- What is the maximum number of annual leave days that may be carried across a financial year?
+- How long is the probation period for permanent appointments?
+```
+
+### The headline is first-attempt conformance, and it did not move
+
+Overall conformance hides the retry cost, which is the thing actually at risk here, so
+first-attempt is the number to read.
+
+| | item 6 after fix | item 9a, with history |
+|---|---|---|
+| **First-attempt conformance** | **100.0% (50/50)** | **100.0% (50/50)** |
+| Overall schema conformance | 100.0% (50/50) | 100.0% (50/50) |
+| Retries | 0 | 0 |
+| Fabricated identifiers | 0 of 38 | **0 of 42** |
+| Statements proposed / verified | 38 / 38 | 42 / 42 |
+| Empty where an answer existed | 20.8% (10/48) | 12.5% (6/48) |
+| Expected-answer match (diagnostic) | 70.8% (34/48) | 75.0% (36/48) |
+| Scoped correctly empty | 8/8 | **8/8** |
+| No-answer correctly empty | 8/8 | **8/8** |
+| **Out-of-scope in any prompt or answer** | 0 | **0** |
+
+**The claim this supports is "no degradation", not "better".** The empty-answer figure moved
+from 10 to 6, and that must not be quoted as an improvement: the four questions that came
+back answered are from the set D-40 identifies as coin flips at the 0.30 threshold, and the
+two that stayed empty (q14, q46) are the two D-40 found empty in 3 of 3 stability runs. On
+six chunks this is a draw, exactly as D-37 says.
+
+### The risk was the wrong risk, and the corrected framing is NFR-08
+
+D-42 first recorded the danger as the 503: a history block degrading conformance until the
+service appears to fail on the second turn of a conversation. **That was wrong, and the
+arithmetic says so.** A 503 needs `MAXIMUM_GENERATION_ATTEMPTS` consecutive non-conforming
+replies. At 90% conformance that is roughly one turn in a thousand; the 503 is not the
+exposure.
+
+**The exposure is NFR-08 performance.** Every retry is another NPU generation call, so a
+drop in first-attempt conformance is invisible in correctness and loud in p90 latency — and
+Objective 03 measures that p90 on 23 October. Measured here:
+
+- attempts per question reaching generation: **1.00 (50/50)**, identical to the baseline's
+  1.00. Zero retries in either run, so the retry cost did not materialise at all.
+- calls per *answered* question: 1.19 (50/42) against item 6's 1.32 (50/38) — moved only
+  because more questions were answered, not because of retries.
+
+**A gap worth knowing before 23 October: there is no baseline latency to compare against.**
+This document records no timings for any earlier run and no item-6 `--out` record is kept in
+the repository, so no p90 existed to compare with. From this run's own attempt records: 50
+attempts, min 2.80 s, median 6.90 s, mean 6.86 s, **p90 8.90 s**, max 9.90 s, whole run 6.0
+minutes. Since retries are zero in both runs, the only channel the block can act through is
+prompt prefill (+539 characters), not extra calls — but that channel cannot be quantified
+without a same-day control run with `--with-history` off, which was not taken.
+
+### The block did not leak into any answer
+
+D-39's lesson is that anything in a prompt is a candidate for being cited, and the history
+block is non-passage text with no `chunk_id`. Checked directly: every one of the 42 proposed
+statements was tested for content overlap with each canned prior question, and every echo
+inspected against the supplied passage text in the database.
+
+**Four statements echo a prior question; all four trace to a supplied passage.** Three of
+them (q01, q02, q03) are cases where the asked question and a prior question are the *same
+string*, so that text appeared twice in the prompt — and conformance and citation held on
+all three. In the other direction the scan is clean: `20 days` appears only on q01, `40
+days` only on q02, `six months` only on q03 and q15. No question outside the leave and
+probation subject received a statement about the block's content. 28 of the 42 statements
+are verbatim substrings of their cited chunk.
+
+### What this run found that was not being looked for: three mis-citations
+
+Three statements carry text from one supplied passage while citing a different one.
+
+| Question | Statement traces to | Cited |
+|---|---|---|
+| q01 | `3b5054ba` ("Annual leave accrues at 20 days per year…") | `fe61bb55`, the resignation/handover chunk |
+| q07 | `3b5054ba` ("Laptops are refreshed on a four-year cycle.") | `328fe24d` |
+| q44 | `d946edb8` | `357cadf9` |
+
+All three are multi-passage questions, and **verification admitted all three because the
+identifier was supplied.** This is not a defect in `verifyCitations`. It is CLAUDE.md
+invariant 5 behaving exactly as written: verification "cannot and does not assess whether a
+passage actually supports the statement — that limitation is known, conceded, and must not
+be papered over with a second model call".
+
+What is new is that the limitation has now been **observed with examples rather than
+conceded in the abstract**, and that is worth having before someone asks at the
+demonstration. Two honest qualifications: the detection is a word-overlap heuristic, not
+proof; and no baseline count exists, because no per-statement record from item 6 is kept in
+the repository, so **this cannot be attributed to the history block** — multi-passage
+prompts are the common factor and they are not new. A fourth flagged case (q08) is a genuine
+tie, where `CHUNK_OVERLAP` put the same sentence in two chunks and either citation is
+correct.
+
+The harness measures identifier *membership* and nothing about which supplied passage a
+statement came from, which is why three runs went by without this surfacing.
+
+### What remains unmeasured
+
+FR-13 **end to end**. This run held retrieval constant on purpose, so the composed plain
+join that FR-13 actually embeds — which changes the query vector and therefore the passages
+— is untested. Given that the empty-answer differences here are already inside the noise
+D-40 describes, that is the half likeliest to move answers, and it needs a real
+question-then-follow-up set, which does not exist.
+
+## The duplication is over — item 5 landed on 23 September 2026
+
+This section used to record a deliberate, temporary copy: `scripts/citation_harness.py`
+defined `STATEMENT_LIST_SCHEMA`, `SYSTEM_PROMPT` and `parse_statement_list()` itself,
+because item 0 ran before item 5 existed and the three had to be iterated against a
+live model without touching production code or its tests. The 23.8% → 2.4%
+fabrication fix above is exactly that iteration, and it happened without a single
+change under `apps/`.
+
+**Its termination condition has been met.** Stage 4 item 5 moved all three, and the
+harness now imports them and calls `FLMService.generate_statements()` rather than
+building messages and making a raw chat call of its own.
+
+| What | Where it lives now |
+|---|---|
+| `STATEMENT_LIST_SCHEMA`, `SchemaViolation`, `parse_statement_list()` | `apps/ai/schema.py` |
+| `SYSTEM_PROMPT`, `build_user_prompt()`, `build_generation_messages()` | `apps/ai/prompting.py` |
+| the attempt loop, `GENERATION_MAX_TOKENS`, `GENERATION_TIMEOUT_SECONDS` | `apps/ai/generation.py` |
+
+The harness also gave up its own `cosine_similarity`, `rank`, `truncate_to_context`
+and `count_tokens`, which now come from `apps/retrieval/ranking.py` and
+`apps/ingestion/chunking.py`. It defines none of them.
+
+**The note that used to live here is now an assertion.**
+`apps/ai/tests/test_prompt_is_not_duplicated.py` reads the harness's *source text* —
+not its imported namespace, since an imported name would satisfy a namespace check
+while a copied literal sat beside it — and fails if any of the three is redefined
+there. A second test asserts that nothing under `apps/` passes the `on_attempt`
+observer, so the harness stays its only caller. An assertion in the suite outlives an
+instruction in a document, which is the whole reason this section could be retired
+rather than merely updated.
+
+**What this buys the numbers above.** The prompt, the schema and the parser that
+produced the three rates are now the ones the application runs, so the rates describe
+the shipped system rather than a copy of it. The three units moved with only imports
+and docstrings changed — no wording, no rule, no parser branch altered — so the
+measurements above carry over by construction. Item 6 re-runs the harness against the
+real pipeline and reports them again; until that run, the figures in "The three rates"
+remain the last measurement, taken on the pre-prefix index (see the notice at the top
+of this document).

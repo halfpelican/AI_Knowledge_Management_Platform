@@ -15,8 +15,18 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from apps.core.constants import CHUNK_OVERLAP, CHUNK_SIZE
-from apps.ingestion.chunking import Chunk, length_in_tokens, split_into_overlapping_chunks
+from apps.core.constants import (
+    CHUNK_OVERLAP,
+    CHUNK_SIZE,
+    MAX_UPLOAD_BYTES,
+    MAXIMUM_CHUNKS_PER_SOURCE,
+)
+from apps.ingestion.chunking import (
+    Chunk,
+    chunk_count_for_tokens,
+    length_in_tokens,
+    split_into_overlapping_chunks,
+)
 from apps.ingestion.tests.builders import words
 
 
@@ -183,3 +193,61 @@ def test_the_non_termination_guard_never_fires_on_valid_input():
         chunks = split_into_overlapping_chunks(" ".join(f"w{n}" for n in range(total)))
         expected = 1 + -(-max(total - CHUNK_SIZE, 0) // step)
         assert len(chunks) == expected, total
+
+
+# --- chunk_count_for_tokens: the count without the chunks (Stage 4 item 12a) -------------
+
+
+@pytest.mark.parametrize(
+    "total",
+    [
+        pytest.param(0, id="empty"),
+        pytest.param(1, id="one token"),
+        pytest.param(CHUNK_SIZE - 1, id="shorter than one chunk"),
+        pytest.param(CHUNK_SIZE, id="exactly one chunk"),
+        pytest.param(CHUNK_SIZE + 1, id="one chunk plus one token"),
+        pytest.param(CHUNK_SIZE + (CHUNK_SIZE - CHUNK_OVERLAP), id="exactly two steps"),
+        pytest.param(CHUNK_SIZE + (CHUNK_SIZE - CHUNK_OVERLAP) + 1, id="two steps plus one"),
+        pytest.param(5000, id="long"),
+    ],
+)
+def test_chunk_count_for_tokens_agrees_with_the_chunker(total):
+    """The predicted count and the produced count are the same number, at the three
+    boundary sizes and either side of the overlap step.
+
+    ``MAXIMUM_CHUNKS_PER_SOURCE`` is enforced on the PREDICTION, because the point of the
+    ceiling is to refuse an oversized document before paying for its chunks or its embed
+    calls. So the prediction being exact is what makes the guard exact: if it over-counted,
+    a legitimate document would be refused, and if it under-counted, the cap would be a
+    number the pipeline quietly exceeds.
+    """
+    text = words(total)
+
+    assert chunk_count_for_tokens(length_in_tokens(text)) == len(
+        split_into_overlapping_chunks(text)
+    )
+    assert chunk_count_for_tokens(total) == len(split_into_overlapping_chunks(text))
+
+
+def test_the_chunk_ceiling_sits_between_objective_02s_file_and_the_50_mb_worst_case():
+    """The constant, checked against the two figures it was chosen from (Stage 4 item 12a).
+
+    Arithmetic only, no I/O: this is the test that fails if MAXIMUM_CHUNKS_PER_SOURCE is
+    ever retuned to a value that either refuses Objective 02's own corpus or stops bounding
+    the case it exists for.
+
+    - **Objective 02, 2 October:** 20 documents and a 20-page file ingested in under 60
+      seconds. A 20-page document is roughly 11,000 whitespace tokens, about 25 chunks. The
+      cap must be far above that — it is about forty times above it.
+    - **The 50 MB worst case:** measured, 2.4 MB of text yields 1,111 chunks, so a 50 MB TXT
+      extrapolates to ~23,300 chunks, each a sequential NPU embed call inside one
+      transaction in one synchronous request. The cap must be far below that.
+    """
+    twenty_page_document = chunk_count_for_tokens(11_000)
+    assert twenty_page_document == 25
+    assert twenty_page_document * 40 <= MAXIMUM_CHUNKS_PER_SOURCE
+
+    measured_chunks_per_byte = 1111 / (2.4 * 1024 * 1024)
+    fifty_megabyte_text = round(MAX_UPLOAD_BYTES * measured_chunks_per_byte)
+    assert 23_000 < fifty_megabyte_text < 23_600  # the extrapolation, restated as a check
+    assert MAXIMUM_CHUNKS_PER_SOURCE < fifty_megabyte_text / 20

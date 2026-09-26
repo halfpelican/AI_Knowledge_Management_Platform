@@ -27,6 +27,9 @@ from apps.core.models import (
     uuid_primary_key,
     vocabulary_field,
 )
+from apps.core.visibility import VisibilityCascadeMixin, VisibilityCascadeQuerySet
+
+DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
 
 def document_upload_path(instance, filename):
@@ -40,7 +43,16 @@ def document_upload_path(instance, filename):
     return f"documents/{instance.id}/{filename}"
 
 
-class Document(models.Model):
+class Document(VisibilityCascadeMixin, models.Model):
+    """A document record. Its chunks follow its ``visible_to_roles`` (invariant 2, D-17).
+
+    ``VisibilityCascadeMixin`` is what makes that following a property of the model: a save
+    or an ``objects.update()`` that writes ``visible_to_roles`` re-stamps every
+    ``ContentChunk`` of this document in the same transaction. See
+    ``apps/core/visibility.py`` for why it is a ``save()`` override rather than a signal, and
+    for what it deliberately does not cover.
+    """
+
     id = uuid_primary_key("doc_id")
     title = models.CharField(max_length=NAME_MAX_LENGTH)
     # ACCEPTED_FORMATS is a set; sorted so the migration state is stable between runs.
@@ -70,6 +82,14 @@ class Document(models.Model):
     visible_to_roles = ArrayField(
         models.CharField(max_length=VOCABULARY_MAX_LENGTH), default=list, blank=True
     )
+
+    # The chunks this model is the source of, for the cascade. Declared rather than
+    # inferred, so the mixin never has to guess a source type from a class name.
+    visibility_source_type = DOCUMENT_SOURCE_TYPE
+    # Carries the cascade to ``Document.objects.filter(...).update(visible_to_roles=...)``,
+    # which no ``save()`` override and no signal can reach. ``use_in_migrations`` is false,
+    # as it is for any ``as_manager()`` manager, so this adds no migration.
+    objects = VisibilityCascadeQuerySet.as_manager()
 
     class Meta:
         db_table = "documents"

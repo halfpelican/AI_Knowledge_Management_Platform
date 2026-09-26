@@ -161,6 +161,8 @@ class Command(BaseCommand):
                     source_id=locked.id,
                     # From the document row, so the chunks carry what it says (D-17).
                     visible_to_roles=locked.visible_to_roles,
+                    # Into the document task prefix that is embedded, not into a column.
+                    title=locked.title,
                 )
                 # The same three decided outcomes _run_pipeline() sets, so a
                 # re-indexed document and a freshly ingested one cannot disagree
@@ -204,6 +206,7 @@ class Command(BaseCommand):
                     source_type=MEETING_SOURCE_TYPE,
                     source_id=locked.id,
                     visible_to_roles=locked.visible_to_roles,
+                    title=locked.title,
                 )
                 # MEETING_STATUS_VALUES has no "Partially indexed" counterpart, so a
                 # partly indexed meeting is Indexed — the asymmetry recorded in

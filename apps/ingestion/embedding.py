@@ -33,6 +33,7 @@ from django.conf import settings
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.prefixes import document_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS, SOURCE_TYPES
 from apps.documents.models import ContentChunk
 
@@ -41,12 +42,18 @@ from apps.documents.models import ContentChunk
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
 
-def embed_and_store_chunks(*, chunks, source_type: str, source_id, visible_to_roles) -> int:
+def embed_and_store_chunks(
+    *, chunks, source_type: str, source_id, visible_to_roles, title: str | None = None
+) -> int:
     """Embed each chunk and write its ContentChunk row. Returns failed_chunk_count.
 
     ``chunks`` is a sequence of chunking.Chunk. The caller runs this inside its own
     transaction.atomic() block, so the rows written here commit with the source
     record or not at all.
+
+    ``title`` is the owning Document's or Meeting's title, and it goes into the
+    document task prefix the embedding model is sent (apps/ai/prefixes.py). The
+    prefixed string is what the provider receives; ``chunk.text`` is what is stored.
 
     A chunk that exhausts MAXIMUM_EMBED_ATTEMPTS, or that the provider answers
     unusably for, is counted and gets no row. Every other chunk gets one. The caller
@@ -60,7 +67,11 @@ def embed_and_store_chunks(*, chunks, source_type: str, source_id, visible_to_ro
 
     failed_chunk_count = 0
     for chunk in chunks:
-        result = _embed_one(service, chunk.text)
+        # Two different strings, deliberately: the prefixed one is embedded, the
+        # verbatim one is stored. A prefix in chunk_text would be read back out into
+        # answers, citations and snippets (FR-12), and chunking.py keeps each chunk a
+        # verbatim substring of its source so that cannot happen.
+        result = _embed_one(service, document_text(title, chunk.text))
         if result is None:
             failed_chunk_count += 1
             continue
@@ -68,7 +79,7 @@ def embed_and_store_chunks(*, chunks, source_type: str, source_id, visible_to_ro
             source_type=source_type,
             source_id=source_id,
             chunk_index=chunk.index,
-            chunk_text=chunk.text,
+            chunk_text=chunk.text,  # never the prefixed form
             embedding=result.vectors[0],
             # From the response, not from settings (risk R10).
             embedding_model=result.model,

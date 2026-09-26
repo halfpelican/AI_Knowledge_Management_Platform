@@ -9,11 +9,15 @@ Not named test_*.py, so pytest collects the tests and not the builders.
 """
 
 import io
+import struct
 import zipfile
 
 import docx
 import openpyxl
 from django.core.files.uploadedfile import SimpleUploadedFile
+
+from apps.core.constants import WORD_CONTENT_TYPE
+from apps.ingestion.signatures import CONTENT_TYPES_ENTRY
 
 
 def upload(content: bytes, name: str = "upload.bin") -> SimpleUploadedFile:
@@ -94,6 +98,51 @@ def zip_bytes(entries) -> bytes:
         for name, content in entries.items():
             archive.writestr(name, content)
     return buffer.getvalue()
+
+
+def ooxml_declaring(members, *, content_type=WORD_CONTENT_TYPE, declared_sizes=None) -> bytes:
+    """An archive that identifies itself as ``content_type`` and carries ``members``.
+
+    Built in the test and never committed: a checked-in bomb is a file in the repository
+    whose only purpose is to be dangerous (Stage 4 item 12a's own rule, and item 12b's).
+
+    ``members`` maps a member name to its real bytes. The manifest is a minimal but genuine
+    ``[Content_Types].xml`` naming ``content_type``, so ``read_file_signature`` recognises
+    the package as a DOCX or an XLSX and a test can tell "refused by the size bound" from
+    "refused because the archive was unreadable".
+
+    ``declared_sizes`` rewrites a member's DECLARED uncompressed size in both places a ZIP
+    records it — the local file header and the central directory — so the archive can CLAIM
+    200 MB while holding a few hundred kilobytes. That is the shape of the finding (a 199 KB
+    upload asking the server to inflate 200 MB), and it is also what keeps this test cheap:
+    the declared-size check reads only the claim, so an archive that really held 200 MB would
+    be the same input to it, and would cost 200 MB of memory to build.
+
+    Rewriting DOWNWARDS is the other case — an archive that lies to get past the check. See
+    ``test_a_member_that_lies_downwards_cannot_expand_past_its_lie``.
+    """
+    manifest = (
+        '<?xml version="1.0"?><Types><Default Extension="xml" ContentType="'
+        + content_type
+        + '"/></Types>'
+    ).encode("ascii")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(CONTENT_TYPES_ENTRY, manifest)
+        for name, content in members.items():
+            archive.writestr(name, content)
+    content = buffer.getvalue()
+
+    for name, declared in (declared_sizes or {}).items():
+        true_size = struct.pack("<I", len(members[name]))
+        # Loud rather than silent: if a member's real length happens to appear a third time
+        # anywhere in the compressed bytes, the rewrite would corrupt something else and the
+        # test would be measuring the wrong thing. Give the members distinct lengths.
+        assert content.count(true_size) == 2, (
+            f"expected the local header and the central directory to record {name}'s size"
+        )
+        content = content.replace(true_size, struct.pack("<I", declared))
+    return content
 
 
 def words(count: int, prefix: str = "w") -> str:

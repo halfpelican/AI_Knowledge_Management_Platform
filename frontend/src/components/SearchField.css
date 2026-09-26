@@ -1,0 +1,37 @@
+/* FR-12's search field. The field itself is a TextInput, so everything about the
+   label, the hint, the error and the focus ring is already the house pattern; this
+   only decides how much room it takes. */
+
+.search-field {
+  flex: 1 1 var(--layout-field-max-width);
+  min-width: 0;
+  max-width: var(--layout-field-max-width);
+}
+
+/* The field carries the page's field spacing by default. In the header the form
+   is one row among several, so the margin comes off and the header's own gap
+   does the spacing. */
+.search-field .search-field__input {
+  margin-bottom: 0;
+}
+
+.search-field__submit {
+  flex: none;
+}
+
+/* In the header the label sits above a compact field. It stays visible rather
+   than becoming a placeholder: a placeholder disappears as soon as anything is
+   typed and is not a label (WCAG 2.1 SC 3.3.2). */
+.search-field--header .field__label {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+/* Narrow widths: the header stacks, and the field takes the width it has rather
+   than squeezing the input to nothing beside its button. */
+@media (max-width: 40rem) {
+  .search-field {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}

@@ -149,6 +149,42 @@ def test_a_transcript_file_of_an_unrecognised_format_is_rejected(employee_client
     assert not Meeting.objects.exists()
 
 
+def test_a_transcript_archive_declaring_more_than_it_may_inflate_is_rejected(employee_client):
+    """The same bound as FR-08's upload (Stage 4 item 12b), in this endpoint's own shape.
+
+    FR-09 enumerates only 201 and 400, so the transcript path cannot answer FR-08's 413 —
+    it reports a field error instead, and the MESSAGE is what keeps the two rejections
+    distinguishable: this file's format was never the problem, so it must not be told that
+    its type is unsupported.
+    """
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.ingestion.tests.builders import ooxml_declaring
+
+    bomb = SimpleUploadedFile(
+        "workshop.docx",
+        ooxml_declaring(
+            {"word/document.xml": b"A" * 100_003},
+            declared_sizes={"word/document.xml": 200 * 1024 * 1024},
+        ),
+    )
+
+    response = employee_client.post(
+        MEETINGS_URL,
+        {
+            "title": "Policy workshop",
+            "meeting_date": str(timezone.localdate()),
+            "file": bomb,
+        },
+        format="multipart",
+    )
+
+    assert response.status_code == 400
+    assert "expand" in response.data["file"][0]
+    assert "not supported" not in response.data["file"][0]
+    assert not Meeting.objects.exists()
+
+
 # --- Validation: FR-09's own 400s -----------------------------------------------------
 
 

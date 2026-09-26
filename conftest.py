@@ -11,7 +11,14 @@ autouse fixtures below enforce that:
   connection error instead of quietly succeeding against a running FLM server.
 
 The model fixtures give every test the same small, realistic set of rows: one
-user per role and one document with one chunk, visible to Employees.
+user per role, and one document visible to Employees carrying one chunk.
+
+The chunk is NOT stamped: ``content_chunk.visible_to_roles`` is ``[]``, the model
+default, because stamping it from the source is ingestion's job (D-17) and
+apps/documents/tests/test_models.py asserts the unstamped default here. Under FR-11
+an unstamped chunk is visible to no role at all, so a retrieval test must build its
+own chunks with an explicit scope rather than reach for this one and wonder why the
+candidate set came back empty (apps/retrieval/tests/test_scoping.py does that).
 
 The client fixtures cover the dual-role gate (CLAUDE.md section 8): api_client is
 anonymous, employee_client and administrator_client are logged in as one role, and

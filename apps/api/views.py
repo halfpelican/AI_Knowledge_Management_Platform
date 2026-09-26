@@ -14,6 +14,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
+from django.utils.text import Truncator
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
@@ -24,6 +25,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
+from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
@@ -36,17 +38,31 @@ from apps.core.constants import (
     MINIMUM_CONTENT_LENGTH,
     ROLE_NAMES,
 )
+from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
-from apps.ingestion.errors import ExtractionError
+from apps.ingestion.errors import ExtractionError, OversizedArchiveContentError
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.models import Meeting
+from apps.retrieval.models import Conversation
+from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
+from apps.retrieval.search import (
+    SearchQueryContainsNullCharacter,
+    SearchQueryTooShort,
+    search,
+)
 
+from .answers import reply_for
 from .permissions import HasRolePermission
 from .serializers import (
+    AnswerSerializer,
+    AskSerializer,
+    ConversationCreateSerializer,
+    ConversationDetailSerializer,
+    ConversationSerializer,
     DirectoryEntrySerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
@@ -57,6 +73,7 @@ from .serializers import (
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
+    SearchResultsSerializer,
     UserSerializer,
 )
 
@@ -102,6 +119,21 @@ UNSUPPORTED_FORMAT_MESSAGE = (
 NO_FILE_SUBMITTED_MESSAGE = "No file was submitted."
 # FR-08 Responses: "413 Payload Too Large beyond the size limit".
 FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
+# Stage 4 item 12b: a DOCX or XLSX whose own table of contents declares more decompressed
+# content than the detector will let a parser inflate (signatures.MEMBER_MAXIMUM_BYTES).
+#
+# **413, and NOT the 415 the neighbouring rejection uses.** The file's format is not the
+# problem — it is a recognisable DOCX or XLSX, and telling its uploader "File type not
+# supported" would send them to convert a file that was never the wrong type. It is a SIZE
+# rejection, of decompressed size rather than transfer size, so it takes the code FR-08
+# already gives to size: "413 Payload Too Large beyond the size limit". The 50 MB in
+# FILE_TOO_LARGE_MESSAGE above is the transfer limit and would be equally misleading here,
+# since the upload that earns this answer is usually a few hundred kilobytes, so the two
+# size rejections carry different text under the one code.
+COMPRESSED_CONTENT_TOO_LARGE_MESSAGE = (
+    "This file's contents expand to far more than this platform will process. "
+    "Upload a smaller document, or split it into parts."
+)
 # FR-08 Responses: "409 Duplicate document exists for duplicate documents in the
 # database". Compared by content, not by filename (section 7.2).
 DUPLICATE_DOCUMENT_MESSAGE = "A duplicate document already exists."
@@ -123,6 +155,23 @@ UNKNOWN_ATTENDEE_MESSAGE = "One or more of those attendees is not a registered u
 # document that is already indexed is FR-15's business, not a retry's.
 ALREADY_INDEXED_MESSAGE = "This document is already indexed."
 NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
+# FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
+# restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
+# exception (D-41).
+MISSING_SEARCH_TERM_MESSAGE = "A search term is required."
+# NFR-19 Fault Tolerance: the system "must return a 503 Service Unavailable response with
+# an informative notice, rather than crashing or hanging indefinitely", and FR-12's
+# Responses clause names 503 for the AI service being unreachable after retries. The
+# wording is 7.10 line 146's, with the one thing the reader can act on added: the question
+# was not recorded and nothing partial was stored, so re-asking it is safe.
+KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE = (
+    "The knowledge service is temporarily unavailable. Your question was not recorded; "
+    "please ask it again shortly."
+)
+# FR-13's thread list needs a legible entry from the moment a thread exists, and the
+# interface never asks the user to name a topic before typing (D-43). This placeholder
+# stands only until the first question, which replaces it.
+NEW_CONVERSATION_TITLE = "New conversation"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -493,7 +542,18 @@ class DocumentsView(APIView):
         # alone, preventing a disguised file from being accepted"). The extension is
         # never consulted here; it gates only the upload control's own convenience
         # check, client-side.
-        file_format = read_file_signature(uploaded_file)
+        try:
+            file_format = read_file_signature(uploaded_file)
+        except OversizedArchiveContentError:
+            # Stage 4 item 12b. The signature step is where the archive's table of contents
+            # is read, so it is where an over-declared DOCX or XLSX is found — but this is a
+            # size rejection rather than a format one, so it does not share the 415 below.
+            # The exception's own message names a member of the archive and stays in the
+            # server's hands; the client gets the fixed text.
+            return Response(
+                {"detail": COMPRESSED_CONTENT_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
         if file_format is None:
             return Response(
                 {"detail": UNSUPPORTED_FORMAT_MESSAGE},
@@ -556,6 +616,109 @@ class DocumentsView(APIView):
         if outcome.detail:
             body["detail"] = outcome.detail
         return Response(body, status=outcome.http_status)
+
+
+class DocumentDetailView(APIView):
+    """``GET /api/documents/{id}`` — the route FR-12's citation clause links to (D-46).
+
+    FR-12 requires that each citation "links to the source document or meeting".
+    ``GET /api/meetings/{id}`` has existed since Stage 3, so a meeting citation already
+    resolved; a document citation had nowhere to go but the repository list, which is a
+    link and not a link to the source. This is that route, and it is deliberately the
+    document object the repository list already returns rather than a new shape: FR-15
+    (Stage 5) owns document presentation and reads this endpoint rather than replacing it.
+
+    **The same authorisation as ``GET /api/documents``**: a session, and no more. Reading a
+    document one's role may see is not a privileged action, and adding a permission class
+    here would make a citation unfollowable for the role it was generated for.
+
+    **Scoped by ``visible_to_roles``, and out of scope is 404 — never 403.** A 403
+    distinguishes "exists but you may not see it" from "does not exist", which is the
+    disclosure CLAUDE.md invariant 1 forbids by name; D-33's treatment of the upload 409 as
+    an existence oracle is the precedent, and ``GET /api/meetings/{id}`` is the sibling that
+    already behaves this way. An unknown id and an id outside the caller's scope are
+    answered identically, by the same query, so there is no branch that could tell them
+    apart even by timing.
+
+    ``file_path`` and ``content_hash`` stay out of the body, because ``DocumentSerializer``
+    leaves them out for every endpoint: a path inside MEDIA_ROOT is of no use to a client
+    and an invitation to construct one, and echoing a content hash would let a caller probe
+    whether a document they cannot see has been uploaded.
+    """
+
+    def get(self, request, pk):
+        document = get_object_or_404(
+            Document.objects.select_related("uploaded_by").filter(
+                visible_to_roles__contains=[request.user.role.role_name]
+            ),
+            pk=pk,
+        )
+        return Response(DocumentSerializer(document).data)
+
+
+# --- FR-12 keyword search ----------------------------------------------------------------
+
+
+class SearchView(APIView):
+    """``GET /api/search?q=<term>`` — FR-12's keyword search half (D-41).
+
+    FR-12 is two paths. This is the Front-End clause's "search field available from every
+    page, returning results grouped by type (Documents and Meetings) with a count per
+    group", and the "200 OK with grouped results" half of FR-12's Responses. The
+    question-and-answer path is a separate endpoint.
+
+    **A session and nothing more.** ``IsAuthenticated`` is the global default (invariant 4)
+    and this route adds no role permission, exactly as ``GET /api/documents`` adds none:
+    what a search may find is decided by the scope, not by a permission code, and a role
+    that may list the repository may search it.
+
+    **The scope is not this view's to resolve, and deliberately cannot be.**
+    ``apps.retrieval.search.search`` takes the user and calls ``permission_scope`` on it
+    itself, so there is no role argument for a view to miswire — a view passing one user's
+    identity with another's role would hand an Employee an Administrator's result set and
+    log it under the Employee, plausibly and silently. Nothing is filtered after the call
+    either: the counts in the reply are properties over the rows the scoped queries
+    returned, so a number here can never be one taken before the permission filter
+    (CLAUDE.md invariant 1, which names "a result count, a total" explicitly).
+
+    **One log row per search, written by the function.** ``search`` writes the ``SearchLog``
+    row, with the same post-filter total the caller is given. This view must not write a
+    second, and a test counts the rows.
+
+    ``UnscopedRequestError`` is not caught. Behind ``IsAuthenticated`` it is unreachable,
+    and turning it into a 200 would answer a request whose scope could not be established
+    — the same backstop, uncaught, as on the answer path.
+    """
+
+    def get(self, request):
+        query_text = request.query_params.get("q")
+        if query_text is None:
+            # No term at all. DRF's validation shape, keyed on the query parameter's own
+            # name, because that is the field the client got wrong.
+            return Response(
+                {"q": [MISSING_SEARCH_TERM_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            # Passed as given: no stripping and no sanitiser, so SearchLog records what
+            # was actually typed (FR-19's evidence) and the term reaches the database only
+            # as a bound parameter of an ORM lookup.
+            results = search(query_text=query_text, user=request.user)
+        except (SearchQueryTooShort, SearchQueryContainsNullCharacter) as exc:
+            # FR-12's 400. The rule and its message belong to the search module; this
+            # maps the exception rather than re-checking the length, so there is one
+            # definition of "too short" and the two cannot drift. An empty ``q=`` arrives
+            # here too, which is the same answer by the same rule.
+            #
+            # Two exception classes, one 400, and each carrying its own message (Stage 4
+            # item 12a): a term with a NUL byte is rejected for a different reason from a
+            # term that is too short, and it used to be answered 500 with an HTML body
+            # because ``q`` is the only user-supplied string in this system that reaches
+            # the database without passing a DRF field.
+            return Response({"q": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        # 200 even when nothing matched: an empty reply is a fact about the corpus, not an
+        # error, and the SearchLog row for it is exactly the knowledge-gap evidence FR-19
+        # wants.
+        return Response(SearchResultsSerializer(results).data)
 
 
 # --- FR-09 meeting transcript ingestion -------------------------------------------------
@@ -645,7 +808,15 @@ class MeetingsView(APIView):
         if uploaded_file is None:
             return data["transcript_text"], None
 
-        file_format = read_file_signature(uploaded_file)
+        try:
+            file_format = read_file_signature(uploaded_file)
+        except OversizedArchiveContentError:
+            # The same bound as FR-08's upload (Stage 4 item 12b), reported in this
+            # endpoint's own shape: FR-09 enumerates only 201 and 400, so the transcript
+            # path cannot answer 413, and a field error carrying the accurate message is
+            # closer to the truth than FR-08's code on a response FR-09 does not define.
+            # The two rejections stay distinguishable by their text.
+            return None, {"file": [COMPRESSED_CONTENT_TOO_LARGE_MESSAGE]}
         if file_format is None:
             # The same four formats as FR-08, decided the same way: by content. A
             # 400 rather than FR-08's 415, because FR-09 enumerates only 201 and 400
@@ -720,3 +891,195 @@ class DocumentReprocessView(APIView):
         if outcome.detail:
             body["detail"] = outcome.detail
         return Response(body, status=outcome.http_status)
+
+
+# --- FR-12 answer generation and FR-13 conversations -------------------------------------
+
+
+def name_thread_from(conversation, question: str) -> None:
+    """FR-13's Update: name a still-unnamed thread after its first question (D-43).
+
+    Truncated to the column width rather than refused, because MAXIMUM_QUESTION_LENGTH is
+    500 and ``Conversations.title`` holds 255. A question of nothing but whitespace is long
+    enough to be asked and leaves nothing to name a thread with, so the placeholder stands
+    — a list entry a user cannot tell apart is the failure this whole function exists to
+    avoid, and a blank one is the worst case of it.
+
+    ``update_fields`` names the title alone: ``last_updated_at`` is ``auto_now``, so it is
+    written only when it is named, and the pipeline has already set it for this turn inside
+    the log transaction. Naming it here would move the thread's timestamp on after the
+    reply was composed from it.
+    """
+    conversation.title = Truncator(question.strip()).chars(NAME_MAX_LENGTH) or NEW_CONVERSATION_TITLE
+    conversation.save(update_fields=["title"])
+
+
+class AskView(APIView):
+    """``POST /api/ask`` — FR-12's question-and-answer path, and FR-13's turn.
+
+    One endpoint for both, because FR-13 says so: "Answer generation and citation
+    verification follow FR-12 unchanged", and each turn "triggers a fresh retrieval based
+    on the resolved question rather than reusing the previous turn's passages". A separate
+    conversational endpoint would be the same call with a conversation attached, and two
+    routes through generation is two places for the permission scope to be got wrong.
+
+    **What this view does not do.** It does not resolve the permission scope, rank,
+    truncate, generate, verify or log: ``answer_question`` does all of it and takes the
+    user, so there is no role argument here to miswire (the argument the search view
+    makes). It composes no prompt and reads no chunk. Its whole job is the three things a
+    view is for — decide whether this caller may use this conversation, map the pipeline's
+    exceptions to status codes, and render the outcome.
+
+    **The 404 is this view's own work and the pipeline cannot do it.** The history read is
+    filtered by conversation AND user, so passing someone else's thread yields no history
+    rather than their questions — but the turn's ``QueryLog`` row would still be written
+    against their conversation, and would then appear in the owner's thread as a turn that
+    is not theirs. So the row is fetched with the user as a predicate and anything else is
+    404. **Not 403**: a 403 confirms the id names a real thread, which is the disclosure
+    ``GET /api/meetings/{id}`` already refuses to make (CLAUDE.md invariant 1).
+
+    ``UnscopedRequestError`` is deliberately not caught, as on the search route: behind
+    ``IsAuthenticated`` it is unreachable, and answering a request whose scope could not be
+    established is the one thing worse than a 500.
+    """
+
+    def post(self, request):
+        serializer = AskSerializer(data=request.data)
+        # 400 for a missing question or a conversation_id that is not a UUID. NOT for the
+        # question's length: that rule belongs to the pipeline and arrives below as an
+        # exception, so there is one definition of it (see AskSerializer).
+        serializer.is_valid(raise_exception=True)
+        question = serializer.validated_data["question"]
+        conversation = self._conversation_for(
+            request, serializer.validated_data.get("conversation_id")
+        )
+        # Read BEFORE the call: the pipeline writes this turn's row, after which no thread
+        # has ever had a first turn.
+        awaiting_a_name = conversation is not None and self._awaiting_a_name(conversation)
+
+        try:
+            outcome = answer_question(
+                question=question, user=request.user, conversation=conversation
+            )
+        except QuestionLengthOutOfRange as exc:
+            # FR-12's 400. The bounds and the message belong to the pipeline; this maps the
+            # exception rather than restating the rule, exactly as the search view maps
+            # SearchQueryTooShort. No QueryLog row is written for a question that never ran.
+            return Response(
+                {"question": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        except ProviderUnavailable:
+            # NFR-19: "must return a 503 Service Unavailable response with an informative
+            # notice, rather than crashing or hanging indefinitely", and FR-12's Responses
+            # clause names 503 explicitly. Reached after MAXIMUM_GENERATION_ATTEMPTS — one
+            # initial call and two retries — or on a transport failure while embedding. A
+            # provider outage is never turned into a no-answer: "the system could not ask"
+            # and "the corpus has no answer" are different events, and invariant 7's signal
+            # depends on them staying apart.
+            return Response(
+                {"detail": KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        if awaiting_a_name:
+            name_thread_from(conversation, question)
+        # 200 on all three exits, including both no-answer paths: FR-12's Responses clause
+        # is "200 OK with answered: false where nothing was sufficiently relevant or no
+        # statement survived verification". Not being answerable from the corpus is a fact
+        # about the corpus, not a client error.
+        return Response(
+            AnswerSerializer(reply_for(outcome=outcome, conversation=conversation)).data
+        )
+
+    @staticmethod
+    def _conversation_for(request, conversation_id):
+        """The caller's own thread, or None for a one-off question; 404 for anyone else's.
+
+        ``QueryLog.conversation`` stays NULL where this returns None, which is what that
+        column has always meant (D-12).
+        """
+        if conversation_id is None:
+            return None
+        return get_object_or_404(
+            Conversation.objects.filter(user=request.user), pk=conversation_id
+        )
+
+    @staticmethod
+    def _awaiting_a_name(conversation) -> bool:
+        """Whether this turn should name the thread (D-43): the placeholder still stands
+        and no turn has been logged against it yet.
+
+        Both conditions, so a title the user chose is never overwritten and a thread that
+        has been used is never renamed out from under them.
+        """
+        return conversation.title == NEW_CONVERSATION_TITLE and not conversation.queries.exists()
+
+
+class ConversationsView(APIView):
+    """``/api/conversations`` — FR-13's thread list (GET) and a new thread (POST).
+
+    FR-13's Database clause is ``Conversations (Create, Read, Update)``, with no Delete, so
+    there is no delete route and the class defines no ``delete`` method: clearing the
+    active thread "to begin a new topic" is starting a new conversation, not destroying the
+    old one, and a thread the user asked questions in is the FR-19 evidence QueryLog rows
+    exist to be.
+
+    Every route here is scoped to ``request.user``. A caller may not enumerate the
+    existence of another user's threads, so someone else's id is 404 and not 403.
+    """
+
+    def get(self, request):
+        # Newest activity first: "previous conversations are listed" is a list a person
+        # scans for the thread they were last in, and last_updated_at is the column the
+        # pipeline touches on every turn. The primary key is a deterministic tie-break for
+        # two threads created in the same microsecond, nothing more.
+        conversations = Conversation.objects.filter(user=request.user).order_by(
+            "-last_updated_at", "pk"
+        )
+        return Response(ConversationSerializer(conversations, many=True).data)
+
+    def post(self, request):
+        serializer = ConversationCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # D-43: a title from the client if one was typed, otherwise the placeholder, which
+        # the first turn replaces with that turn's question. FR-13's interface has the user
+        # clear the thread and start typing — it never asks them to name a topic first — so
+        # requiring a title here would be a field the requirement does not have.
+        title = serializer.validated_data.get("title", "").strip() or NEW_CONVERSATION_TITLE
+        conversation = Conversation.objects.create(user=request.user, title=title)
+        # 201 is a convention: FR-13 enumerates only "200 OK with the answer and updated
+        # conversation state", which is the turn rather than the thread, and a created
+        # resource is 201 everywhere else in this contract (FR-01, FR-08, FR-09).
+        return Response(
+            ConversationSerializer(conversation).data, status=status.HTTP_201_CREATED
+        )
+
+
+class ConversationDetailView(APIView):
+    """``GET /api/conversations/{id}`` — FR-13: "previous conversations are listed and can
+    be reopened".
+
+    A reopened thread renders from the server, so the questions and the cited statements a
+    user sees after signing in on another machine are the ones that were logged rather than
+    whatever a browser still held. The turns carry no ``no_answer_reason`` and no
+    ``rejected_count``: see ``ConversationTurnSerializer``.
+
+    Another user's thread is 404, as on ``POST /api/ask`` and for the same reason.
+
+    **Owner is not the same test as scope, and this route needs both.** The queryset answers
+    "is this thread yours"; it says nothing about whether the material the thread's answers
+    were generated from is still readable by the role you hold now. A stored turn is a derived
+    record carrying no visibility of its own, so every citation is re-scoped on read, through
+    the same ``scoped_chunks`` predicate the answer path uses, and a turn that loses every
+    statement renders as the ordinary no-answer state. The serializer holds that whole
+    argument, including why the leak is the statement prose rather than the identifier; the
+    request is passed into its context because the role is resolved from it per request.
+    """
+
+    def get(self, request, pk):
+        conversation = get_object_or_404(
+            Conversation.objects.filter(user=request.user), pk=pk
+        )
+        return Response(
+            ConversationDetailSerializer(conversation, context={"request": request}).data
+        )

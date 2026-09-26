@@ -1,0 +1,155 @@
+"""The tolerant parser (apps/ai/schema.py): what it repairs, and what it refuses.
+
+Moved from scripts/citation_harness.py at Stage 4 item 5 and given the tests it never
+had while it lived in scripts/. The malformations exercised here are the ones a small
+local model actually produces — a code fence, a sentence of preamble, a trailing comma —
+and the refusals are everything else, because a parser that repairs too much turns a
+wrong answer into a plausible one.
+
+No provider, no network, no database: this is a pure function over a string.
+"""
+
+import json
+
+import pytest
+
+from apps.ai.base import StatementList
+from apps.ai.schema import STATEMENT_LIST_SCHEMA, SchemaViolation, parse_statement_list
+
+CHUNK_ID = "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"
+VALID = json.dumps({"statements": [{"text": "Twenty days of leave.", "chunk_id": CHUNK_ID}]})
+
+
+# --- The happy path ---------------------------------------------------------------------
+
+
+def test_a_conforming_reply_parses_into_statements():
+    parsed = parse_statement_list(VALID)
+
+    assert isinstance(parsed, StatementList)
+    assert len(parsed.statements) == 1
+    assert parsed.statements[0].text == "Twenty days of leave."
+    assert parsed.statements[0].chunk_id == CHUNK_ID
+
+
+def test_an_empty_statement_list_is_a_valid_response_not_a_violation():
+    """``{"statements": []}`` is the model correctly saying the passages do not answer.
+
+    This one matters more than it looks. If it were treated as a violation it would be
+    retried three times and then raise a 503 — turning the model's most honest possible
+    reply into an outage, and destroying the evidence for no-answer path B, which is the
+    project's main quality signal (invariant 7).
+    """
+    parsed = parse_statement_list('{"statements": []}')
+
+    assert parsed.statements == []
+
+
+def test_several_statements_keep_their_order_and_their_own_identifiers():
+    other = "8b5d04e2-1a7f-4c93-b620-de91f3805c47"
+    raw = json.dumps(
+        {
+            "statements": [
+                {"text": "First.", "chunk_id": CHUNK_ID},
+                {"text": "Second.", "chunk_id": other},
+            ]
+        }
+    )
+
+    parsed = parse_statement_list(raw)
+
+    assert [s.text for s in parsed.statements] == ["First.", "Second."]
+    assert [s.chunk_id for s in parsed.statements] == [CHUNK_ID, other]
+
+
+# --- What it repairs, and nothing beyond ------------------------------------------------
+
+
+def test_a_markdown_code_fence_is_stripped():
+    assert parse_statement_list(f"```json\n{VALID}\n```").statements[0].chunk_id == CHUNK_ID
+    assert parse_statement_list(f"```\n{VALID}\n```").statements[0].chunk_id == CHUNK_ID
+
+
+def test_prose_around_the_object_is_discarded():
+    raw = f"Certainly! Here is the JSON you asked for:\n{VALID}\nLet me know if you need more."
+    assert parse_statement_list(raw).statements[0].text == "Twenty days of leave."
+
+
+def test_a_trailing_comma_is_repaired():
+    raw = '{"statements": [{"text": "Twenty days.", "chunk_id": "%s"},]}' % CHUNK_ID
+    assert parse_statement_list(raw).statements[0].chunk_id == CHUNK_ID
+
+
+def test_a_brace_inside_a_string_does_not_end_the_object():
+    raw = json.dumps({"statements": [{"text": "Use {braces} carefully.", "chunk_id": CHUNK_ID}]})
+    assert parse_statement_list(raw).statements[0].text == "Use {braces} carefully."
+
+
+def test_text_and_identifiers_are_stripped_of_surrounding_whitespace():
+    raw = json.dumps({"statements": [{"text": "  Padded.  ", "chunk_id": f" {CHUNK_ID} "}]})
+    parsed = parse_statement_list(raw)
+    assert parsed.statements[0].text == "Padded."
+    assert parsed.statements[0].chunk_id == CHUNK_ID
+
+
+# --- What it refuses (each one is a failed attempt, never a partial answer) --------------
+
+
+@pytest.mark.parametrize(
+    "raw,because",
+    [
+        ("", "empty response"),
+        ("   ", "empty response"),
+        ("I am afraid I cannot answer that.", "no JSON object"),
+        ('{"statements": [', "unbalanced"),
+        ("[1, 2, 3]", "no JSON object"),  # no brace at all, so nothing to extract
+        ('{"statements": {}}', "not an array"),
+        ('{"answers": []}', "no 'statements' key"),
+        ('{"statements": [], "note": "hi"}', "unexpected top-level key"),
+        ('{"statements": ["a sentence"]}', "not an object"),
+        ('{"statements": [{"text": "No id."}]}', "missing"),
+        ('{"statements": [{"chunk_id": "x"}]}', "missing"),
+        ('{"statements": [{"text": "t", "chunk_id": "x", "score": 1}]}', "unexpected key"),
+        ('{"statements": [{"text": "", "chunk_id": "x"}]}', "empty or non-string 'text'"),
+        ('{"statements": [{"text": "t", "chunk_id": ""}]}', "empty or non-string 'chunk_id'"),
+        ('{"statements": [{"text": 42, "chunk_id": "x"}]}', "empty or non-string 'text'"),
+        ('{"statements": [{"text": "t", "chunk_id": 7}]}', "empty or non-string 'chunk_id'"),
+        ('{"statements": "none"}', "not an array"),
+        ("not json {at all", "unbalanced"),
+        # Balanced braces, so the object is extracted, and then it is not JSON: a comma
+        # is missing between the two keys, which no repair here guesses at.
+        ('{"statements": [{"text": "t" "chunk_id": "x"}]}', "not valid JSON"),
+    ],
+)
+def test_a_non_conforming_reply_raises_schema_violation(raw, because):
+    with pytest.raises(SchemaViolation, match=because):
+        parse_statement_list(raw)
+
+
+def test_a_non_string_reply_raises_rather_than_crashing():
+    """The provider returns a string; None would mean a bug upstream, not an answer."""
+    with pytest.raises(SchemaViolation, match="empty response"):
+        parse_statement_list(None)
+
+
+def test_a_json_array_at_the_top_level_is_refused():
+    """Refused rather than unwrapped: guessing at a shape is how a wrong answer gets in."""
+    with pytest.raises(SchemaViolation):
+        parse_statement_list('[{"text": "t", "chunk_id": "x"}]')
+
+
+# --- The schema object itself -----------------------------------------------------------
+
+
+def test_the_schema_describes_what_the_parser_enforces():
+    """The declared shape and the hand-written checks must not drift apart.
+
+    The schema is not executed — the project takes no jsonschema dependency for one small
+    shape — so this asserts the two agree on the keys, which is the part a future edit
+    could change in one place and not the other.
+    """
+    assert STATEMENT_LIST_SCHEMA["required"] == ["statements"]
+    assert STATEMENT_LIST_SCHEMA["additionalProperties"] is False
+    item = STATEMENT_LIST_SCHEMA["properties"]["statements"]["items"]
+    assert sorted(item["required"]) == ["chunk_id", "text"]
+    assert item["additionalProperties"] is False
