@@ -118,6 +118,19 @@ above on evidence that already existed, which is a weaker check than the one tha
 number 2 — and invariant 6's qualification shows the shape of what such a check misses: the
 claim is true of the half that has tests and unverified of the half that does not.
 
+## A runtime figure, because a belief that a suite is slow is how a suite stops being run
+
+`apps/api/tests/test_fr11_scoping.py` is **55 tests in 38.2 seconds**. A figure of "about ten
+minutes" was quoted for it during Stage 4 — in briefs, never in this repository. It was a **cold
+migration build**, timed once by a subagent and then repeated without being re-measured. The full
+suite is about six minutes of test time.
+
+It is recorded because the error is instructive rather than because the number is: a measurement
+taken from someone else's run and restated as a property of the code is the same shape as every
+"closed" claim this stage had to correct — true of one observation, then generalised. The second
+requirements-auditor re-measured it and was right that it was worth correcting, because a team that
+believes its suite is slow stops running it.
+
 ## What is measured, and what is not
 
 Not a clause audit, but the same kind of honesty and the auditor will want it.
