@@ -177,6 +177,51 @@ AUTHENTICATION_THROTTLE_RATE = "20/min"
 # replace it with the proposal's text when the coordinator has it. Defined once.
 NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowledge base."
 
+# What a STORED turn says when its citation rows no longer exist (Stage 4 item 1c).
+#
+# **Not NO_ANSWER_MESSAGE, because that text would be false.** ``AnswerCitation.chunk`` is
+# ``on_delete=CASCADE`` (D-12), and both ``reprocess_document`` and ``manage.py reindex``
+# delete a source's chunks and write new ones with fresh identifiers, so every citation of
+# the old ones is destroyed while the material itself still exists. A turn in that state was
+# answered, and nothing about the knowledge base has stopped being able to answer it — so
+# telling the reader their question "cannot be answered from the available knowledge base" is
+# the interface stating something untrue about the corpus.
+# ``apps/api/tests/test_fr12_traceability_lost_on_reprocess.py`` pins the loss itself.
+#
+# **What it may and may not say.** It says the answer's own sources are no longer on record.
+# It does not mention permissions, withholding or restriction in any form: this state says
+# nothing whatever about what the reader may see, and a re-scoped turn — a turn whose
+# citation rows DO exist but are no longer readable by this role — must stay
+# indistinguishable from a never-answered one, which is invariant 1 and which
+# ``ConversationTurnSerializer`` keeps by discriminating on row existence. No count of
+# anything removed, for the same reason.
+# Shown for a turn that WAS answered and whose AnswerCitation rows no longer exist. It is a
+# second fixed text rather than a reuse of NO_ANSWER_MESSAGE, because that one says the question
+# cannot be answered from the available knowledge base, which is a claim about the corpus and is
+# not what happened here.
+#
+# The second sentence deliberately promises NOTHING about what asking again will return. An
+# earlier version said "for an answer from the current material", and that was false on two of
+# the FOUR paths that reach this state — the sixth instance of a coverage claim describing the
+# case that prompted it, found by the 27 September re-audit. (This comment said "three" over a
+# list of four until the fourth audit caught it: the same miscount, in the fix for the miscount.)
+#
+# WHAT REACHES THIS STATE, all four paths, because two of them make any promise about the
+# corpus wrong:
+#   1. manage.py reindex — the material is re-chunked and still indexed. Asking again works.
+#   2. A SUCCESSFUL reprocess — same.
+#   3. A reprocess that FAILS — reprocess_document deletes ExtractedContent and every chunk
+#      before running the pipeline, and a decided failure is committed, so an FLM outage during
+#      the retry leaves the document with ZERO chunks and "Indexing failed". Asking again returns
+#      no-answer. This is reachable today, and it is reachable precisely when the retry button is
+#      most likely to be pressed.
+#   4. FR-15's permissioned deletion, Stage 5 — the material is gone for good. D-48's own
+#      not-covered list names it; nothing in item 1c's material carried it forward.
+PROVENANCE_REMOVED_MESSAGE = (
+    "The citations for this answer are no longer on record, so the answer cannot be shown. "
+    "You can ask the question again."
+)
+
 # --- Fixed vocabularies (docs/schema-v1.md section 3) --------------------------------
 # Status values are fixed rather than free text so a status can be filtered on and
 # its meaning does not drift. Every model ``choices=`` is derived from these tuples.

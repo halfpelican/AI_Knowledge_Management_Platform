@@ -280,8 +280,10 @@ The difference is user-visible, which is why the detail message was not enough. 
 interface offers "Processing failed. Please try again" against a document that did not
 index; a reprocess of an over-cap document fails identically every time, because nothing
 about the file has changed, and D-32's retry re-runs extraction and chunking in full
-before failing at the same point. **The front end must suppress the retry affordance for
-this status** — that is Stage 5 presentation work and is not yet done.
+before failing at the same point. **The front end suppresses the retry affordance for this
+status** — done on 27 September 2026, not deferred to Stage 5: `canReprocess()` refuses it,
+and the row carries a sentence explaining why no retry is offered rather than a button that
+cannot honour one.
 
 `MEETING_STATUS_VALUES` is untouched. The proposal defines no status column on
 `Meetings` at all, only FR-09's CRUD line "Meetings (Create, Read, Update status)", so

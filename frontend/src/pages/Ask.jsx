@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { askQuestion } from '../api/ask.js'
 import { ApiError } from '../api/client.js'
 import { createConversation, fetchConversation, listConversations } from '../api/conversations.js'
-import { AnswerBody, PartialMatches, SourcesPanel } from '../components/Answer.jsx'
+import { TurnBody } from '../components/Answer.jsx'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import TextAreaInput from '../components/TextAreaInput.jsx'
@@ -12,6 +12,13 @@ import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import {
+  threadAfterNewTopic,
+  threadForNextQuestion,
+  unusedThreadAfterFailure,
+  unusedThreadAfterTurn,
+} from '../utils/threads.js'
+import { liveTurnFrom, savedTurnFrom } from '../utils/turns.js'
 import { questionError } from '../utils/validation.js'
 import './Repository.css'
 import './Ask.css'
@@ -41,19 +48,55 @@ const FIELDS = ['question', 'conversation_id']
  * here. The old thread stays in the list and its `QueryLog` rows stay as FR-19
  * evidence (D-12).
  *
- * **A thread is created lazily, on the first question.** FR-13's interface never
- * asks the user to name a topic before typing, so `POST /api/conversations` is sent
- * with no title: the thread is created as "New conversation" and the first turn
- * replaces that with the question itself (D-43). Creating it on the first ask
- * rather than on the button press is what keeps the list free of empty threads
- * nobody asked anything in.
+ * **A thread is created lazily, on the first question, and reused until a question
+ * has actually landed in it.** FR-13's interface never asks the user to name a
+ * topic before typing, so `POST /api/conversations` is sent with no title: the
+ * thread is created as "New conversation" and the first turn replaces that with
+ * the question itself (D-43).
  *
- * **Three states that are not each other**, and the screen keeps them apart
- * because a user who confuses them retries the wrong thing:
+ * **The claim this docstring used to make was false, and is not repeated.** It said
+ * that creating the thread on the first ask rather than on the button press "keeps
+ * the list free of empty threads nobody asked anything in". Creating it there is
+ * *necessary* — `POST /api/ask` attaches a turn to a thread that already exists and
+ * creates none of its own, so the id must exist before the question is sent or the
+ * first turn is a one-off with `QueryLog.conversation` NULL that no thread can ever
+ * hold, and the thread would reopen without its own first question. It is not
+ * *sufficient*: the create succeeds and the ask can still fail. A 503 — NFR-19's
+ * own demonstration path, reachable whenever FLM drops — or a 400 the client
+ * pre-check missed left a "New conversation" behind at the top of the list, because
+ * `last_updated_at` is `auto_now` on create, and FR-13 specifies no Delete.
+ *
+ * What is true instead:
+ *
+ * - A thread that has had no successful turn is **reused, not abandoned**. The
+ *   question stays in the field after a 503, so the retry lands in the same thread
+ *   and names it. "Start a new topic" keeps it too: nothing has been asked in it,
+ *   so it already *is* a new topic and clearing it would only mean a second empty
+ *   row on the next ask. One failed first question therefore costs at most one
+ *   thread, however many times it is retried or the topic is cleared.
+ * - The list is **not** re-read after a failed ask. Nothing the user asked for
+ *   happened, and re-reading would move a "New conversation" to the top of it.
+ * - **The residue, stated rather than implied.** One created thread can still
+ *   outlive the session that made it: its first ask failed and the user left
+ *   without asking again. Nothing under `frontend/` can remove it. Closing it needs
+ *   something the contract does not have — a turn count or `has_turns` on
+ *   `GET /api/conversations`, so a thread nobody asked anything in can be left out
+ *   of the list, or a Delete FR-13 does not specify. Neither is invented here.
+ *
+ * **Four states that are not each other**, and the screen keeps them apart
+ * because a user who confuses them retries the wrong thing. The second was added
+ * at Stage 4 item 1c, by separating it from the first:
  *
  * - *No answer* (200, `answered: false`) — the corpus has nothing to answer from.
  *   A designed outcome, stated plainly, with no speculative answer and no empty
- *   answer frame pretending to be one.
+ *   answer frame pretending to be one. A turn the reader's current role may no
+ *   longer see renders as this state too, and deliberately cannot be told from it:
+ *   see `src/utils/turns.js`, which holds that argument and the one below.
+ * - *Sources no longer on record* (a stored turn carrying `provenance_removed`) —
+ *   the turn was answered and the record of what it was drawn from has been
+ *   destroyed by a reprocess or a re-index. No statements, and not the no-answer
+ *   copy either, because "this cannot be answered from the knowledge base" is
+ *   false of a question whose material is still indexed.
  * - *AI unavailable* (503) — the question could not be asked at all. NFR-19's
  *   notice, shown the moment the API answers, and the question is kept in the
  *   field because no `QueryLog` row was written and it can be asked again.
@@ -90,6 +133,17 @@ export default function Ask() {
   // A ref rather than state: it is a one-shot instruction to the effect below and
   // nothing renders from it, so it must not cause a render of its own.
   const pendingTurnFocus = useRef(false)
+  /**
+   * The id of a thread this screen created that no turn has landed in yet, or
+   * null. Also a ref rather than state: nothing renders from it, and it has to be
+   * readable inside the async submit that set it a few lines earlier, which a
+   * state value batched for the next render would not be.
+   *
+   * It exists because `POST /api/conversations` is not undoable — FR-13 has no
+   * Delete and no delete route was built — so the only way not to leave a second
+   * empty thread behind is to go back into the first one.
+   */
+  const unusedThreadRef = useRef(null)
 
   /**
    * Where the visible acknowledgement is completed for a keyboard and screen
@@ -169,35 +223,37 @@ export default function Ask() {
 
     const asked = question
     try {
-      // Lazily create the thread, so a follow-up has something to be a turn of
-      // (FR-13) and an untouched "New topic" leaves nothing behind (D-43).
-      let threadId = conversationId
+      // Lazily create the thread, and before the ask rather than after it: `POST
+      // /api/ask` attaches a turn to a thread and creates none, so a question sent
+      // without an id is a one-off that no thread can later adopt (D-43). A thread
+      // already created for a question that failed is reused, so a retry after a
+      // 503 goes back into it instead of leaving a second empty one beside it.
+      // The rules themselves are in src/utils/threads.js, with the argument for
+      // each one and nothing React in any of them, so they can be run.
+      let threadId = threadForNextQuestion(conversationId, unusedThreadRef.current)
       if (!threadId) {
         const created = await createConversation()
         threadId = created?.conversation_id ?? null
-        if (threadId) setConversationId(threadId)
+        // Recorded before the ask, so it is still known if the ask throws.
+        unusedThreadRef.current = threadId
       }
+      if (threadId) setConversationId(threadId)
 
       const reply = await askQuestion({ question: asked, conversationId: threadId ?? undefined })
+      // The turn landed — answered or not, a `QueryLog` row exists and the thread
+      // has been named from the question — so it is no longer an empty one to
+      // return to.
+      unusedThreadRef.current = unusedThreadAfterTurn(unusedThreadRef.current, threadId)
       if (reply?.conversation?.conversation_id) setConversationId(reply.conversation.conversation_id)
 
-      const statements = reply?.statements ?? []
-      const sources = reply?.sources ?? []
-      const answered = Boolean(reply?.answered)
-      appendTurn({
-        question: asked,
-        answered,
-        // The server's fixed no-answer text. The fallback exists only so the state
-        // always says something plain; it is never used against a live reply.
-        message: reply?.message ?? TEXT.noAnswerFallback,
-        statements,
-        sources,
-        // FR-12's partially related items, straight off the reply: the key is present
-        // on every reply and populated only on a no-answer, so there is nothing to
-        // derive here and no second request to make (item 10a).
-        partialMatches: reply?.partial_matches ?? [],
-        expandable: true,
-      })
+      // The mapping lives in src/utils/turns.js, with the live turn and the stored
+      // turn beside each other: they are rendered by one branch below, so the two
+      // shapes have to carry the same keys and that is easiest to keep true in one
+      // place. A live turn can never be in the provenance-removed state — its
+      // citations were written in the same transaction as the answer.
+      const turn = liveTurnFrom(reply, { question: asked })
+      const { statements, sources, answered } = turn
+      appendTurn(turn)
       setQuestion('')
       setTouched(false)
       setAcknowledgement(answered ? TEXT.answerReady(statements.length, sources.length) : TEXT.noAnswerReady)
@@ -206,15 +262,29 @@ export default function Ask() {
       // list is re-read rather than guessed at.
       conversations.reload()
     } catch (error) {
+      // Kept for a 503 and a 400 — no turn was written, so the thread is still
+      // empty and still where the next attempt belongs — and dropped for a 404.
+      // src/utils/threads.js carries the reasoning.
+      unusedThreadRef.current = unusedThreadAfterFailure(
+        unusedThreadRef.current,
+        error instanceof ApiError ? error.status : null,
+      )
       handleFailure(error)
     } finally {
       setAsking(false)
     }
   }
 
-  /** FR-13: "the active thread can be cleared to begin a new topic." */
+  /**
+   * FR-13: "the active thread can be cleared to begin a new topic."
+   *
+   * A thread with no turns in it is not cleared, because there is nothing in it to
+   * clear: it already is a new topic, and starting another would leave it behind
+   * empty and permanent. So this drops a thread that has turns and keeps one that
+   * does not.
+   */
   function handleNewTopic() {
-    setConversationId(null)
+    setConversationId(threadAfterNewTopic(unusedThreadRef.current))
     setTurns([])
     setReopened(false)
     setFailure(null)
@@ -231,23 +301,11 @@ export default function Ask() {
     setAcknowledgement('')
     try {
       const thread = await fetchConversation(id)
-      const saved = (thread?.turns ?? []).map((turn, index) => ({
-        key: `saved-${id}-${index}`,
-        question: turn.question,
-        answered: Boolean(turn.answered),
-        message: turn.message ?? TEXT.noAnswerFallback,
-        statements: turn.statements ?? [],
-        // A stored turn has no sources and no passage text: nothing returns what a
-        // past turn was built from, so its citations keep their numbers and cannot
-        // expand. Said on the screen rather than left as a control doing nothing.
-        sources: [],
-        // And no partial matches: they were derived from the ranking of the turn that
-        // was live, and no route returns a past turn's candidates. Empty, not absent,
-        // so the same branch renders a stored turn and a live one.
-        partialMatches: [],
-        expandable: false,
-        askedAt: turn.asked_at,
-      }))
+      // src/utils/turns.js holds the mapping and the three states a stored turn can
+      // be in, including the one where the answer's citation records no longer exist.
+      const saved = (thread?.turns ?? []).map((turn, index) =>
+        savedTurnFrom(turn, { key: `saved-${id}-${index}` }),
+      )
       setConversationId(thread?.conversation_id ?? id)
       setTurns(saved)
       setReopened(true)
@@ -401,27 +459,10 @@ export default function Ask() {
                     ) : null}
                   </p>
 
-                  {turn.answered ? (
-                    <>
-                      <AnswerBody
-                        idPrefix={turn.key}
-                        statements={turn.statements}
-                        sources={turn.expandable ? turn.sources : undefined}
-                      />
-                      <SourcesPanel idPrefix={turn.key} sources={turn.sources} />
-                    </>
-                  ) : (
-                    <>
-                      {/* No answer. Stated plainly, as an outcome and not an error,
-                          with no answer frame around it and no fragment in it. The
-                          two no-answer paths are byte-identical in the reply and
-                          nothing here tries to tell them apart (invariant 7). */}
-                      <Notice variant="info" title={TEXT.noAnswerTitle}>
-                        {turn.message}
-                      </Notice>
-                      <PartialMatches idPrefix={turn.key} results={turn.partialMatches} />
-                    </>
-                  )}
+                  {/* The three states a turn can be in, and which of them may be
+                      told apart from which, live in src/components/Answer.jsx
+                      beside the answer presentation itself. */}
+                  <TurnBody turn={turn} />
                 </article>
               )
             })}

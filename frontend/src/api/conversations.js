@@ -50,6 +50,12 @@ export function createConversation({ title } = {}, options = {}) {
  * `no_answer_reason` and no `rejected_count` either — a thread read is a second
  * route past them and is closed for the same reason (invariant 1).
  *
+ * A sixth key, `provenance_removed: true`, appears on a turn that WAS answered and
+ * whose citation records no longer exist — a reprocess or a re-index of the material
+ * deleted them. **It is absent, never false**, so that a turn re-scoped away from
+ * the reader stays byte-for-byte a turn that was never answered. `src/utils/turns.js`
+ * maps the three states and carries the argument.
+ *
  * 200; 401; 404 both for an id that names nothing and for another user's thread,
  * which is what stops a caller enumerating threads one request at a time.
  */

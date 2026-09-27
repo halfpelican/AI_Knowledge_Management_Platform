@@ -29,15 +29,34 @@ export function dashboardPathForRole(role) {
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on
  * these two and displays whatever status the server actually recorded, so a
  * value added later shows up rather than being silently rendered as "Indexed".
+ *
+ * **Displaying an unknown value is not the same as handling one.** The seventh
+ * value, "Too large to index", was added backend-side at Stage 4 item 12b and the
+ * rows did show it — while `canReprocess` went on offering FR-08's retry for it
+ * and `statusMessageFor` went on calling it a transient failure. The fall-through
+ * protects the *status text*, never the rule that goes with it, so a new value
+ * has to be listed here as well (D-51, and D-57 on how it came to be missed).
  */
 export const DOCUMENT_STATUS = {
   indexed: 'Indexed',
+  // Transient: set inside the ingestion transaction before extraction begins, so a client
+  // normally never sees it — an unexpected failure rolls the row back rather than leaving it
+  // here. Listed anyway, because the fall-through below protects the status TEXT and not the
+  // rule that goes with it, and this was the one of the server's seven values that was missing
+  // (found by the 27 September re-audit). Unlisted, it fell through to "Processing failed.
+  // Please try again.", so a row would have read "Processing — Processing failed."
+  processing: 'Processing',
   partiallyIndexed: 'Partially indexed',
   // The three the 422 paths record. Each gets its own retry wording (D-32),
   // because only one of them describes a failure a retry can actually recover.
   extractionFailed: 'Extraction failed',
   insufficientContent: 'Insufficient content',
   indexingFailed: 'Indexing failed',
+  // The fourth a 422 can record, and the only one of them that is refused FR-08's
+  // retry: the document was turned away before extraction was attempted, on a
+  // property of the content, so there is no attempt for a second press to vary
+  // (D-51, and src/utils/documentStatus.js for the argument).
+  tooLargeToIndex: 'Too large to index',
 }
 
 /**
@@ -208,6 +227,10 @@ export const TEXT = {
   // action is offered in every case the clause names; its text stops promising
   // what identical bytes cannot deliver. D-32 records this as a flaw in the
   // requirement rather than in the build.
+  //
+  // One status is refused the action outright, and it is not one FR-08's clause
+  // names: "Too large to index", where the file was never extracted at all
+  // (D-51). See `documentTooLargeToIndex` below.
   processingFailed: 'Processing failed. Please try again.',
   processingFailedExtraction:
     'Processing failed. No text could be read from this file. Trying again will ' +
@@ -216,6 +239,25 @@ export const TEXT = {
   processingFailedInsufficient:
     'Processing failed. This file holds too little text to index, so trying again ' +
     'will not change the result.',
+  // D-51's seventh status, and the one row with a sentence and no button beside
+  // it. It says three things: that the document is not searchable, why there is
+  // nothing to press — D-32's retry re-runs ingestion on the same stored file, so
+  // every attempt would redo extraction and chunking in full and stop at the
+  // identical point — and what would actually get the material indexed. It does
+  // not say "Processing failed", because nothing was attempted: the document was
+  // refused on a property of its content, which is the distinction D-51 exists to
+  // draw.
+  documentTooLargeToIndex:
+    'This document is too large to index, so it will not appear in search results. ' +
+    'Indexing it again would repeat the same work and stop at the same point, which ' +
+    'is why no retry is offered. A shorter document, or this one split into parts, ' +
+    'can be indexed.',
+  // "Processing" is transient — set inside the ingestion transaction before extraction
+  // begins — so a client should never see it, and an unexpected failure rolls the row
+  // back rather than leaving it here. It has wording anyway because the status is now
+  // listed: nothing has failed, so it must not fall through to the retry sentence and
+  // tell the user that a document still being worked on had failed.
+  documentProcessing: 'This document is still being processed.',
   // Not a failure, so it does not claim to be one: the document is searchable and
   // some of its passages are not. Running ingestion again over the stored file is
   // worth offering, because a provider outage is the usual reason a chunk did not
@@ -399,6 +441,28 @@ export const TEXT = {
   // The server sends the fixed text; this is the copy used only if a reply
   // somehow carries none, so the state always says something plain.
   noAnswerFallback: 'This question cannot be answered from the available knowledge base.',
+  // A stored turn that WAS answered and whose citation records no longer exist —
+  // `provenance_removed` on the turn (Stage 4 item 1c). Not the no-answer copy
+  // above, which would tell the reader their question cannot be answered from the
+  // knowledge base: the material is still there, re-embedded under new
+  // identifiers, and a user who believed that sentence would stop asking a
+  // question the system can answer. No statements are shown, because a statement
+  // without its citation is what invariant 6 forbids.
+  //
+  // The wording says what happened to the RECORD. It says nothing about
+  // permissions, because this state has nothing to do with them — the material is
+  // readable and the answer's provenance is not. A turn the reader may no longer
+  // see renders as the silent no-answer state above and says nothing whatever
+  // (invariant 1), which is why the two do not share copy.
+  provenanceRemovedTitle: 'The sources for this answer can no longer be shown',
+  // Must match apps/core/constants.py PROVENANCE_REMOVED_MESSAGE. It promises NOTHING
+  // about the corpus: a failed reprocess leaves the document with zero chunks, and
+  // FR-15's deletion removes the material for good, so "ask again for an answer from
+  // the current material" — which this string said until the 27 September audit found
+  // it shipping in the bundle — is false on two of the four paths that reach the state.
+  // Nothing enforces that these two copies agree; a front-end test runner would.
+  provenanceRemovedFallback:
+    'The citations for this answer are no longer on record, so the answer cannot be shown. You can ask the question again.',
   // FR-12: "Any partially related items found are offered, clearly labelled as
   // partial matches." These arrive on the ask reply as `partial_matches`: the items
   // its own permission-scoped, ranked candidates found, whatever they scored. They
@@ -424,12 +488,26 @@ export const TEXT = {
   // starting a new conversation, not deleting one. There is no delete route and
   // no rename route, so there is no control for either.
   newTopic: 'Start a new topic',
-  newTopicHint: 'Clears the thread on screen and begins a new conversation. Your previous conversations are kept.',
+  // **The promise is qualified rather than dropped, because it was not true as
+  // written** (Stage 4 item 1c). "Your previous conversations are kept" full stop
+  // was read by a user as "everything on this screen will still be here", and an
+  // answer's citations do not survive a reprocess or a re-index of the material
+  // they came from: `AnswerCitation.chunk` is `on_delete=CASCADE` (D-12). The
+  // thread, the questions and the answers that still have their sources are kept,
+  // which is what it now says.
+  newTopicHint:
+    'Clears the thread on screen and begins a new conversation. Your previous conversations are kept, though an answer whose sources have left the record can no longer be shown.',
   threadEmpty: 'Ask a question to start this conversation. Follow-up questions can refer back to it.',
   threadNew: 'New topic. Your first question will start a new conversation.',
   // A reopened thread keeps each statement and its citation number. It cannot
   // expand a citation, because no route returns the passages a past turn was
   // built from. Said plainly rather than left as a control that does nothing.
+  //
+  // **The second sentence is qualified for the reason `newTopicHint` is**: the
+  // statements are kept only while the citation rows behind them exist, and a
+  // reprocess or a re-index of the material destroys them (D-12's cascade). The
+  // qualification is unconditional copy, shown on every reopened thread, so it
+  // cannot become a signal about any particular turn.
   threadReopenedNote:
-    'Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number.',
+    "Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number for as long as that answer's sources are on record.",
 }

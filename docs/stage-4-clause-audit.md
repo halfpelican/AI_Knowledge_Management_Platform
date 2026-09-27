@@ -18,7 +18,8 @@ is the thing this document exists to prevent.
 
 ## FR-12 — Knowledge Search and Answer Generation (MUST)
 
-Nineteen clauses, plus the database CRUD line.
+Twenty-three numbered clauses, plus the database CRUD line. (This line read "Nineteen"
+until 27 September, over a table that has always had 23 rows.)
 
 ### Front-End
 
@@ -32,7 +33,7 @@ Nineteen clauses, plus the database CRUD line.
 | 6 | A "Sources" panel lists every item consulted with its date | ✅ | item 9 (reply), item 10 (panel). "Consulted" is every supplied passage's source, not only the cited ones (D-44) |
 | 7 | Every factual statement displayed carries a citation; no interface state shows an uncited factual statement | ✅ | items 6, 7, 10. Enforced by omission: the reply carries no rejected or unverified text, and no withheld affordance exists |
 | 8 | Where nothing sufficiently relevant is retrieved, the interface states plainly it cannot answer and presents no speculative answer | ✅ | items 4, 7, 10 |
-| 9 | …**any partially related items found are offered, clearly labelled as partial matches** | ✅ | item 10a. Derived from the top-ranked scoped candidates irrespective of the threshold, so it is identical on both no-answer paths; source identity and date only, never passage text |
+| 9 | …**any partially related items found are offered, clearly labelled as partial matches** | ⚠️ | item 10a, **D-56**. Derived from the top-ranked scoped candidates irrespective of the threshold, so it is identical on both no-answer paths; source identity and date only, never passage text. **D-56 records the gap as Unresolved: there is no relevance floor at all.** On a corpus holding nothing related this offers the five nearest in-scope sources — five titles not partially related to anything. Invisible on six chunks; on a real corpus, a screen recommending five documents to someone who asked about a subject the platform does not hold. Stage 5 item 3 is when the evidence to choose a floor exists |
 
 ### Server-End
 
@@ -40,9 +41,9 @@ Nineteen clauses, plus the database CRUD line.
 |---|---|---|---|
 | 10 | Queries shorter than two characters rejected client-side | ✅ | item 8a (`MINIMUM_SEARCH_LENGTH`, enforced server-side too — the client check is usability, the server check is the rule) |
 | 11 | Question length is capped | ✅ | item 4, in characters, both bounds inclusive |
-| 12 | **Input is sanitised before use** | 🔧 | **D-45.** No stripping or escaping pass: SQL is parameterised, render is escaped by React, length is capped, and prompt content is constrained by grounding plus citation verification. The one case where the argument does not hold — a question containing the prompt's own `[chunk_id: …]` delimiter — is neutralised and tested |
+| 12 | **Input is sanitised before use** | 🔧 | **D-45.** No stripping or escaping pass: SQL is parameterised, render is escaped by React, length is capped, and prompt content is constrained by grounding plus citation verification. **Corrected 27 September: there are THREE injection cases, not one.** (a) a question forging the `[chunk_id: …]` delimiter — closed; (b) an uploaded **document body** forging it — closed at the prompt boundary by item 12a; (c) a document body **directing the model in prose** — **open, and not closable** by set-membership verification, and Employee-reachable because `contribute_content` is held by both roles (D-30). The boundary that holds is the permission scope, applied before generation: injection can misattribute and cannot widen (D-49) |
 | 13 | Retrieval executes only over chunks whose recorded model version matches the current query model | ✅ | item 2; excluded from the candidate set entirely, not ranked lower (risk R10) |
-| 14 | Retrieved context truncated to fit the window, discarding the lowest-ranked passages first | ✅ | item 5; exits on the first passage that will not fit, per 7.10 lines 96-103 |
+| 14 | Retrieved context truncated to fit the window, discarding the lowest-ranked passages first | ✅ | item 5; exits on the first passage that will not fit, per 7.10 lines 96-103. Built and unit-tested against an overridden constant — but **the budget never binds on the demonstration corpus** (six chunks of ~400 tokens against `MAXIMUM_CONTEXT_TOKENS = 4000`, itself still PROVISIONAL), so a demonstration cannot show this clause working. The same honest position `ranking.py` takes about `TOP_K` |
 | 15 | Scoping: results restricted by FR-11 **before** ranking, not by filtering a ranked list afterwards | ✅ | item 1; a predicate on the query, asserted against the compiled SQL |
 | 16 | Ranking: query vectorised with the recorded model; cosine over stored vectors; highest-scoring in rank order; below-threshold excluded; similarity computed in the application | ✅ | items 2, 3. The proposal contradicts itself on where ranking happens; item 3's docstring records which clause governs and concedes the scaling objection |
 | 17 | Grounding: the prompt contains only the retrieved passages, each with its chunk identifier, constraining the model to answer solely from them | ✅ | item 5. FR-13's prior-questions block is the one addition, declared in the prompt as non-citable and recorded in D-42 |
@@ -50,7 +51,7 @@ Nineteen clauses, plus the database CRUD line.
 | 19 | Deterministic verification: each returned identifier checked against the supplied set; absent, unrecognised or fabricated statements removed; the check is application code | ✅ | item 6. Invariant 5's limitation — it cannot judge whether a passage supports a statement — is conceded, and item 9a observed it with three real examples |
 | 20 | No answer: path A returns without invoking generation; path B returns the same response; the two cases are recorded separately | ✅ | items 4, 7, 8. One reply, two reasons; `rejected_count` separates path B's two kinds |
 | 21 | Gap evidence: every query logged with its result count and answered status | ✅ | item 8. The count is `len(retrieved_chunk_ids)`, derived rather than stored, argued in `query_log.py` |
-| 22 | Traceability: the question, the retrieved chunk identifiers, the answer and its verified citations are logged | ✅ | item 8 |
+| 22 | Traceability: the question, the retrieved chunk identifiers, the answer and its verified citations are logged | ⚠️ | item 8 writes all four, **and D-48's qualification records that two ordinary operations falsify the clause afterwards.** `AnswerCitation.chunk` is `on_delete=CASCADE`, so a reprocess or a `manage.py reindex` — which CLAUDE.md §4 *mandates* on any provider change — destroys every citation while the question, `answer_text` and `retrieved_chunk_ids` survive, the last naming rows that no longer exist. Pinned by `test_fr12_traceability_lost_on_reprocess.py`. ✅ at write time; falsified after maintenance |
 | 23 | Responses: 200 with grouped results; 200 with answer and citations; 200 with `answered: false`; 503 where the AI service cannot be reached after retries | ✅ | items 8a, 9 |
 
 ### Database
@@ -71,7 +72,8 @@ Nineteen clauses, plus the database CRUD line.
 | Validation: where the scope resolves to no accessible content, FR-12's no-answer response is returned rather than an error disclosing that restricted material exists | ✅ | item 4; an empty candidate set and an all-below-threshold set are indistinguishable in the reply |
 | Filtering at retrieval, not at generation | ✅ | item 1. Out-of-scope material reaches no prompt: 0 occurrences across every harness run |
 | Result counts computed after filtering | ✅ | items 1, 7, 8a. Search counts are properties over post-filter rows; a no-answer reply counts 0 on both paths |
-| Database: Roles, RolePermissions, Documents (Read) | ✅ | Stage 2 seeds, item 1 reads |
+| **Responses: returns a permission-scoped result set, or an empty set** | ✅ | `GET /api/search` returns the scoped groups with their post-filter counts, and `POST /api/ask` the scoped answer or the no-answer reply; an empty set is an ordinary 200 and never an error that would disclose why. **This row was absent entirely until the fourth audit** — in the document whose own rule is that a clause with no state beside it is the thing it exists to prevent, and FR-11's section, unlike FR-12's, carries no clause count to catch the omission |
+| Database: Roles, RolePermissions, Documents (Read) | ⚠️ | **The FR-11 retrieval path reads `Roles` (through the user) and `Documents.visible_to_roles`. It reads `RolePermissions` nowhere** — `RolePermission` appears only in `apps/api/permissions.py`, which is FR-06's code, so a ✅ here was earned by citing a different requirement. No behaviour gap: visibility is role-name membership by design (D-11, D-17) and FR-11's filter deliberately consults no permission code. Recorded because an assessor reading the CRUD line literally will ask, and the answer is the design rather than the citation |
 
 ---
 
@@ -81,7 +83,7 @@ Nineteen clauses, plus the database CRUD line.
 |---|---|---|
 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ | items 9, 10. Holds for subject nouns; a follow-up referring into the previous **answer** does not resolve, because prior answers are never passed (D-42, conceded) |
 | Previous conversations listed and reopenable; the active thread can be cleared to begin a new topic | ⚠️ | items 9, 10. Listed, reopened and cleared — but a reopened thread cannot expand its citations, because `GET /api/conversations/{id}` carries statements without sources or passage text. The thread says so once rather than rendering dead controls. Owner: Stage 5 |
-| Maintains conversation context per session and passes prior turns alongside the new question | ✅ | item 9, as prior questions only (D-42) |
+| Maintains conversation context per session and passes prior turns alongside the new question | ⚠️ | item 9, **prior QUESTIONS only (D-42)** — never prior answers, so no model output re-enters a prompt. The proposal says "prior turns"; this is a deliberate narrowing carrying the same shortfall the front-end row above names, and by this table's own legend a narrowed clause is ⚠️ rather than ✅ with a decision appended. It was ✅ until the fourth audit read it, one row below the two that had just been corrected for exactly this |
 | Validation: context truncated to a maximum number of prior turns | ✅ | item 9, `MAXIMUM_CONVERSATION_TURNS = 3` |
 | Validation: FR-11's scope re-evaluated on every turn rather than cached from the first | ✅ | item 9. Structural — the scope is re-resolved per call — and tested by demoting a role between two turns of one thread on one session cookie |
 | Business logic: each turn triggers a fresh retrieval on the resolved question, not the previous turn's passages | ✅ | item 9 |
@@ -117,6 +119,19 @@ CLAUDE.md; it was found by writing a test that tried to use it. The other nine a
 above on evidence that already existed, which is a weaker check than the one that caught
 number 2 — and invariant 6's qualification shows the shape of what such a check misses: the
 claim is true of the half that has tests and unverified of the half that does not.
+
+## A runtime figure, because a belief that a suite is slow is how a suite stops being run
+
+`apps/api/tests/test_fr11_scoping.py` is **55 tests in 38.2 seconds**. A figure of "about ten
+minutes" was quoted for it during Stage 4 — in briefs, never in this repository. It was a **cold
+migration build**, timed once by a subagent and then repeated without being re-measured. The full
+suite is about six minutes of test time.
+
+It is recorded because the error is instructive rather than because the number is: a measurement
+taken from someone else's run and restated as a property of the code is the same shape as every
+"closed" claim this stage had to correct — true of one observation, then generalised. The second
+requirements-auditor re-measured it and was right that it was worth correcting, because a team that
+believes its suite is slow stops running it.
 
 ## What is measured, and what is not
 

@@ -15,10 +15,14 @@ Rules for this file:
   editing the original.
 - **A decision that claims coverage names what it does not cover.** If an entry says
   something is closed, enforced, covered or tested, it lists the paths it covers and
-  the paths it does not, as a list rather than as prose. Four entries in this file
+  the paths it does not, as a list rather than as prose. **Seven** entries in this file
   have been true where they were read and false where they were used: the visibility
   cascade (D-17, and CLAUDE.md invariant 2), D-45's exemptions, D-47's ORM write
-  paths, and D-49's archive members. Each described the instance that prompted it
+  paths, D-49's archive members, D-48's untouched-rows sentence, D-51's follow-up
+  count, and `PROVENANCE_REMOVED_MESSAGE`'s promise about the corpus — the last
+  introduced by the very commit that corrected the one before it. Four audits have
+  each found one. **The count in this sentence read "Four" for eleven commits of
+  enforcing the rule, which is the same defect one level up.** Each described the instance that prompted it
   rather than the class it belonged to. Write the boundary, not just the fix.
 
 | ID | Decision | Status | Date |
@@ -75,6 +79,13 @@ Rules for this file:
 | D-50 | An oversized archive member is a 413; the bomb class is closed for OOXML only | Settled by the user | 2026-09-26 |
 | D-51 | A seventh document status: "Too large to index" | Settled by the user | 2026-09-26 |
 | D-52 | FR-15's detail view shows metadata and a download link, not extracted content | Settled by the user | 2026-09-27 |
+| D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · **due with FR-15** | 2026-09-27 |
+| D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Open** | 2026-09-27 |
+| D-55 | `rejected_count` on QueryLog — numbering a column that shipped without one | Settled retroactively | 2026-09-27 |
+| D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
+| D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
+| D-58 | An unused conversation can outlive a session; closing it needs a contract addition | **Open** | 2026-09-27 |
+| D-59 | Nine of eleven finishing-pass commits carry no FR ID | Recorded · **a decision is raised** | 2026-09-27 |
 
 ---
 
@@ -1915,11 +1926,38 @@ balanced rather than `(chunk_id: 9f2…]`; and the same opening where the asker 
 it, which is still header-shaped. Case and inner spacing are matched loosely and preserved
 exactly, because `[CHUNK_ID :` is as header-shaped to a model as the canonical form.
 
-Applied at **two** sites: `build_conversational_question`, to the new question and to each
-prior question, so a delimiter smuggled into turn one cannot inject through turn two's
-history block; and `build_user_prompt`, where the delimiter is written, so a caller handing
-it a raw question cannot reopen the hole. Idempotency is what makes the double pass a no-op.
-**Passage text is not transformed** — see the adjacent case below.
+**Applied at three sites, corrected 27 September 2026.** This paragraph said "two" and said
+"**Passage text is not transformed**". Item 12a made both false on 26 September, and neither
+sentence was revised — the same error D-47 made about `bulk_update`, and the one this file's
+header rule now exists to prevent: **wrong in the safe direction**, so a reader believes a
+guarantee is absent and has no reason to preserve it.
+
+Written as the rule requires — the paths covered and the path deliberately not:
+
+| Site | Neutralised | Since |
+|---|---|---|
+| `build_user_prompt`, the question argument | yes | D-45, item 10b |
+| `build_conversational_question`, the new question and each prior question | yes — a delimiter smuggled into turn one cannot inject through turn two's history block | D-45, item 10b |
+| `build_user_prompt`, **each passage's text** | **yes** | **item 12a**, when the security review found an uploaded document body could forge a passage header |
+| `ConversationContext.for_retrieval` | **no, deliberately** | the string is embedded and never prompted; a vector has no delimiters to forge. This exemption was named nowhere before today |
+
+Idempotency is what lets the three passes compose without double-transforming.
+
+**And the exception is no longer the only one.** This entry was written when a question forging
+the header was the single case. There are three, and the third cannot be closed by any
+transformation:
+
+1. a **question** forging the header — closed;
+2. a **document body** forging the header — closed at the prompt boundary by item 12a;
+3. a **document body directing the model in prose** — **not closed, and not closable** by
+   set-membership verification, because `verify_citations` tests identifiers and a prose
+   directive carries none. `apps/ai/prompting.py` states this at length. `contribute_content`
+   is held by both roles (D-30), so it is Employee-reachable into every Administrator's answers
+   over the same corpus.
+
+The boundary that does hold, and the sentence to use if asked: **the permission scope**, because
+it is applied in application code before generation. D-49 records the proof — injection can
+misattribute, and it cannot widen.
 
 **An adjacent case this does NOT settle.** A *document* whose own body contains `[chunk_id:`
 produces a genuine passage whose text carries the sequence, and passage text is deliberately
@@ -2118,6 +2156,49 @@ record of what was actually answered at the time. Re-scoping is a read concern; 
 history to match a role change would destroy the evidence while fixing the disclosure. The
 question text and the thread title stay, for the reason D-42 passes prior questions: they are
 the user's own words.
+
+> **QUALIFIED, 27 September 2026, and this entry is the fourth instance of the pattern in this
+> file's own header rule.** The sentence above is true of the re-scoping path it was written
+> about and false of the system. **Two shipped paths destroy `AnswerCitation` rows outright**,
+> because `AnswerCitation.chunk` is `on_delete=CASCADE`:
+>
+> | Path | Reachable by | Effect |
+> |---|---|---|
+> | `POST /api/documents/{id}/reprocess` | either role — it is gated on `contribute_content`, which D-30 gives to both | deletes the source's chunks, recreates them with fresh UUIDs, and every citation row naming the old ones dies with them |
+> | `manage.py reindex` | anyone with a shell; **CLAUDE.md §4 mandates it on any provider or embedding-model change** | the same, for every source in the corpus |
+>
+> Measured against the live database in a rolled-back transaction: citations 1 → 0, the
+> `QueryLog` row survives, `answered` is still `True`, `answer_text` survives, and
+> `retrieved_chunk_ids` is left naming rows that no longer exist.
+>
+> **What this entry covers:** a role narrowing, a source's scope narrowing, and a reader whose
+> permissions changed between writing a turn and reading it. Stored rows genuinely are
+> untouched on all three.
+>
+> **What it does not cover:** any operation that deletes a chunk row. Reprocess, re-index, and
+> FR-15's permissioned document deletion when it lands.
+>
+> **Why the original closure was as wide as its instance.** D-12 settled the cascade on
+> `AnswerCitations` by reasoning about exactly one case — FR-15's document deletion, where
+> "with the chunk gone the citation has nothing to cite" is a fair argument, because the
+> material really is gone. Reprocess and re-index delete chunks for material that **still
+> exists**: the same text, re-chunked, under new identifiers. Nothing in the repository
+> connected D-12's model-layer decision to FR-12's traceability clause or to the FR-13 route
+> that reads those rows, and Stage 1's own
+> `test_citation_cascades_when_its_chunk_is_deleted` asserted the deletion *as desirable*,
+> which is why three stages passed without anyone joining the two.
+>
+> **Consequences, recorded rather than fixed before M6.** FR-12's traceability clause — "the
+> question, the retrieved chunk identifiers, the answer and its verified citations are logged,
+> so that any answer can later be traced to the material that produced it" — is satisfied at
+> write time and not afterwards. The behaviour is pinned by a test at the FR level (item 1a)
+> rather than assumed. The rendering consequence is separated from the re-scoping case in item
+> 1c, because a turn whose provenance was destroyed by maintenance is not the same state as a
+> turn whose citations this reader may no longer see, and only the second must stay silent.
+>
+> Changing `on_delete` to `SET_NULL` with a nullable identifier snapshot would make the
+> original sentence true. That is a migration and a serializer decision, and it is not being
+> made before M6.
 
 **THE CLASS, which is the reason this entry exists as well as the instance.** Derived records
 do not carry visibility, and nothing re-derives it. Four instances, three found and one by
@@ -2410,9 +2491,19 @@ trigger is chunk count rather than bytes, so "large" is the user's word rather t
 - `docs/schema-v1.md` §3 and `apps/core/tests/test_schema.py` both carry the value, because that
   test transcribes that document. The migration had to be placed immediately after `0006` in the
   test's plan rather than at the end, which is where the executor plans it.
-- **REQUIRED FOLLOW-UP, Stage 5 presentation work: the front end must suppress FR-08's retry
-  affordance for this status.** Until it does, the row states the truth and the button still
-  lies. Recorded in `documents.py`, `constants.py` and `docs/schema-v1.md` so it cannot be lost.
+- ~~**REQUIRED FOLLOW-UP, Stage 5 presentation work: the front end must suppress FR-08's retry
+  affordance for this status.**~~ **DONE 27 September 2026**, in the Stage 4 finishing pass
+  rather than in Stage 5: `canReprocess()` refuses the status, and because `DocumentTable` only
+  rendered its status sentence for retryable rows, the rule was split into `canReprocess` and
+  `statusMessageFor` so the one row nobody can act on is not also the only row with no
+  explanation. The same defect existed a second time in the upload queue, where `failureFor`'s
+  422 branch marked every failure retryable and a first upload over the cap is a 422 carrying
+  this status.
+
+  It was recorded in `documents.py` and `docs/schema-v1.md`, both now corrected — and this
+  bullet said "`constants.py`" as a third, which was never true: that file carries the
+  reasoning and never carried the not-done note. A follow-up recorded in one place fewer than
+  claimed is the same defect as a closure wider than measured, in the other direction.
 - **The meetings asymmetry is deliberate and explicit.** An over-cap transcript keeps
   `Processing failed`: the proposal defines no meeting status column (D-28), and FR-09 offers no
   retry affordance to mislead. If FR-09 ever grows one, it needs the same treatment.
@@ -2471,3 +2562,265 @@ is warranted for a second presentation of material already shown.
 - **Whether the detail view should show extracted content after M6.** This is a
   decision about the gate, not about the product. Revisiting it means settling the
   de-overlap-or-store question above, which this decision deliberately leaves open.
+
+## D-53 · Fail closed on a source/chunk visibility disagreement, and the mechanism is one helper
+
+**Status:** Settled · **Date:** 2026-09-27 · **Comes due:** FR-15, Stage 5 item 1 ·
+**Closes:** a contradiction nobody decided
+
+Two modules resolve source rows for chunks that scoping already admitted, and they disagree:
+
+| Module | Behaviour | Its own argument |
+|---|---|---|
+| `apps/retrieval/search.py` | **fails closed** — a source whose chunks are stamped visible while the source is not simply does not appear | "the cheap direction to be wrong in is the one that returns less" |
+| `apps/api/answers.py` | **fails open** — no `visible_to_roles` predicate when resolving titles and dates | the chunk stamp already admitted the role, and "two filters that can disagree is worse than one that cannot" |
+
+Both are documented; they contradict each other; nobody decided which is right. Harmless while
+D-47's cascade holds — and `bulk_create(update_conflicts=True, update_fields=["visible_to_roles"])`
+is the hole D-47 pins as **open**, which is exactly the route FR-15's bulk visibility editing will
+take. When it does, the Sources panel and the partial-match list will name a source the source
+table says the reader may not see, while search hides it.
+
+**Decision: fail closed is authoritative.** Invariant 1's cost is asymmetric — returning less is a
+usability defect, returning more is a disclosure — and FR-11's clause is about what must never be
+disclosed rather than what must always appear.
+
+**But `answers.py`'s argument is also right, and the resolution is not "add a second predicate".**
+It is that there should be **one** predicate for source rows, in one place, as `scoped_chunks` is
+the one predicate for chunk rows. There is none: `visible_to_roles__contains=[...]` is written
+**eight times** by hand — `apps/api/views.py` ×5 (documents list, document detail, meetings list,
+meeting detail, document reprocess), `apps/retrieval/search.py` ×2, `apps/retrieval/scoping.py` ×1
+— and the five in `views.py` read the role off `request.user.role.role_name` rather than through
+`permission_scope`, which exists so that no caller has to remember to resolve it. Equivalent today
+because DRF loads the user per request; that is luck, not design.
+
+Invariant 2's stated purpose is that invariant 1 be "a predicate on the same table as the vector
+rather than a discipline someone has to remember". One layer up it **is** a discipline someone has
+to remember, eight times, and **FR-15 is the ninth caller.**
+
+**What is owed before FR-15 writes that ninth copy:** `scoped_documents()` and `scoped_meetings()`
+beside `scoped_chunks`, both failing closed; `answers.py` and the five `views.py` sites moved onto
+them; and **one test enumerating the routes that return source rows, asserting each carries the
+predicate** — because the dual-role matrix would credit a route that returned everything, so long
+as both roles got a 200 from it.
+
+**What this entry covers:** the direction to fail in, and where the predicate belongs. **What it
+does not:** the code. Nothing changes today, and the disagreement stays harmless until the
+`bulk_create` hole is reached.
+
+## D-54 · The NUL-byte rejection is fixed at the instance; the class reopens with FR-15
+
+**Status:** Open — recorded, not resolved · **Date:** 2026-09-27 · **Comes due:** FR-15,
+Stage 5 item 1
+
+`GET /api/search?q=<NUL>` raised `psycopg.DataError` out of an ORM `icontains` lookup, uncaught,
+answered **500 with an HTML body** — and under `DEBUG=True` that page carries the traceback, the
+frame locals and the requester's own session cookie. Item 12a closed it with a distinct exception
+raised in `search()` before any query runs.
+
+The fix is right, and its docstring's claim is **verified rather than asserted**: `q` is the only
+user-supplied string reaching the database without passing a DRF field, because
+`request.query_params` and `request.GET` appear in exactly one place in production code. DRF's
+`CharField` carries `ProhibitNullCharactersValidator`, which is why `POST /api/ask` answers a clean
+400 for the same byte.
+
+**What it covers:** `q` on `GET /api/search`. **What it does not cover:** every query parameter
+that does not exist yet.
+
+**FR-15 is "document repository and *filtered* browsing".** The moment it adds `?department=`,
+`?tag=`, `?status=` or a date range read off `query_params` into an ORM lookup, each reopens the
+identical class — and the fix will not carry forward, because it lives **inside `search()`** rather
+than at the request boundary.
+
+This is D-49's pattern once more: the payload moves and the class does not close. The remedy is a
+shared query-parameter reader, or a rule that every query parameter goes through a serializer
+field — decided **before** FR-15 writes its first filter rather than after.
+
+## D-55 · `rejected_count` on QueryLog — numbering a column that shipped without a decision
+
+**Status:** Settled retroactively · **Date:** 2026-09-27 · **Numbers:** commit `964f73e`,
+Stage 4 item 8 · **Migration:** `retrieval/0002_querylog_rejected_count`
+
+`964f73e` added a column and a migration beyond the proposal's `QueryLog` table, carrying no
+D-number. CLAUDE.md §9 requires settled decisions to be numbered and the number cited in code and
+commit messages; the argument existed in `docs/schema-v1.md` and in three docstrings, in none of
+them as a decision. Both auditors named it. This entry is the number.
+
+**Decision.** `QueryLog.rejected_count`, nullable, populated on every call that reached
+generation — including answered ones.
+
+**Rationale.** Invariant 7 requires no-answer path B's two kinds to stay separable, and
+`no_answer_reason` cannot do it: a model that proposes nothing and a model whose every citation is
+rejected both arrive as `no_statement_verified`. Item 6's live runs moved 2 declined / 3
+all-rejected before the prompt fix to 6 / 0 after, while the aggregate moved 5 → 6 — **the
+aggregate alone reads as "no effect"**, and the whole finding lives in the split.
+
+Answered rows are populated too, and that is the point rather than an edge case: `verifyCitations`
+strips individual statements, so `answered=True` with `rejected_count=1` is fabrication that has
+not yet cost anyone an answer — the earliest warning the system produces.
+
+**What it covers:** every call that reached generation. **What it does not:** a call that did not —
+no-answer path A and the keyword search path, where it is NULL. NULL never means "path B did not
+occur" and never means zero.
+
+**Why a count and never the claimed identifier.** §7.9's rejection log would record both. A
+fabricated identifier has no referent, so storing one invites a later reader to resolve it against
+`ContentChunks` and read a hit or a miss as provenance. A database column is a surface, and
+invariant 6 applies to it.
+
+**Record-only.** No serializer may expose `rejected_count` or `no_answer_reason`; either hands a
+caller the path-A/path-B distinction that the identical reply exists to hide.
+
+## D-56 · Partial matches are a reply field, derived before the threshold
+
+**Status:** Settled retroactively · **Date:** 2026-09-27 · **Numbers:** commit `2c10364`,
+Stage 4 item 10a · **One gap open:** no relevance floor
+
+The second auditor called this "the largest untraced change of the stage": a new module, a new
+field on every `POST /api/ask`, a presentation dataclass and serializer, a cap constant, a change
+to the disclosure surface of both no-answer paths, and the deletion of a shipped front-end
+heuristic — argued well in `apps/retrieval/partial_matches.py` and recorded in no decision. D-44 is
+the Sources panel, not this.
+
+**Decision.** FR-12's "any partially related items found are offered, clearly labelled as partial
+matches" is served by a `partial_matches` field on the ask reply, derived from `rank(...)` output
+**before** `admit()` applies `RELEVANCE_THRESHOLD`, deduplicated to one entry per source in rank
+order, capped at `MAXIMUM_PARTIAL_MATCHES = 5`.
+
+**It replaced a front-end keyword heuristic** that took one word from the question and searched on
+it, because a whole question is a single substring matching nothing — measured, a full question
+returned `total_count: 0` while one of its words found the right meeting. That worked, put a
+server-side job in the client, and returned keyword hits rather than the near misses the clause
+describes.
+
+**Derived identically on both no-answer paths, which is the constraint that shaped it.** Not from
+the admitted set, not from the rejected statements, not from anything differing between the paths:
+item 7 made the two replies byte-identical on purpose and item 8 keeps the record-only fields out
+of every serializer for the same reason. Both no-answer constructors **require** the argument
+rather than defaulting it, so the two branches cannot be built with different values.
+
+**Source identity and date only, never passage text**, and structurally so — the objects carry no
+attribute for text, passages or score. A snippet beside a message that has just said the question
+cannot be answered reads as a partial answer: invariant 6 through a side door.
+
+**What it covers:** both no-answer paths, identically, and an answered reply carries the key empty
+so the shape never varies between outcomes. **What it does not cover: any relevance floor at all.**
+The list is the five nearest in-scope sources whatever their score, so on a corpus holding nothing
+related it offers five titles that are not partially related to anything. On six chunks that is
+invisible; on a real corpus it is a screen recommending five documents to someone who asked about a
+subject the platform does not hold. **Unresolved** — either a floor or an explicit acknowledgement
+is owed, and Stage 5 item 3's re-measurement against a real corpus is when the evidence to choose
+will exist.
+
+## D-57 · Three Stage 4 commit-discipline departures, recorded rather than left to be found
+
+**Status:** Recorded · **Date:** 2026-09-27 · **Concerns:** commits `964f73e`, `2c10364`,
+`9d5b5f7`
+
+Both auditors checked every Stage 4 commit against CLAUDE.md §7 and §9. Twenty of twenty-three
+trace cleanly to a numbered item or decision. Three did not.
+
+1. **`964f73e`** — a column and a migration with no D-number. Numbered now as **D-55**.
+2. **`2c10364`** — a reply field, a module, a serializer and a constant with no D-number, plus the
+   deletion of a shipped front-end heuristic. Numbered now as **D-56**.
+3. **`9d5b5f7`** — **items 12, 12a and 12b in one commit**, against §7's "commit at every stage
+   increment ... at each numbered step". D-50 explicitly *supersedes* item 12a's partial closure, so
+   that commit contains both a decision and the decision correcting it.
+
+   **And its subject is wrong in a way that matters for the M6 write-up.** It reads
+   `fix(FR-11/FR-12)` while much of its content is **FR-08**: `MAXIMUM_CHUNKS_PER_SOURCE`, the
+   archive member and total bounds, migration `documents/0007`, and D-51's seventh document status.
+   **Anyone grepping the history for FR-08 will not find the seventh document status.** Per §7 a
+   pushed commit's message is not rewritten, so this entry is the cross-reference: FR-08 work landed
+   in `9d5b5f7` under an FR-11/FR-12 subject.
+
+**The lesson, and the reason to record this at all.** Three increments in one commit is what let
+D-51's front-end half ship missing: the seventh status went in backend-side and the retry affordance
+that contradicts it sat in the same commit's blast radius with nothing forcing a second look. Item 2
+of this finishing pass is that affordance — a defect whose direct cause is the departure recorded
+here.
+
+**A fourth, from this finishing pass itself, for the same reason.** Items 4, 5, 6 and 7 were first
+committed together under a subject naming only item 4, one commit after this entry was drafted. It
+was reset and split before being pushed. Recorded because a rule its own author breaks within the
+hour is evidence about the rule's difficulty, not only about the author: the pressure is always to
+batch documentation edits that touch one file.
+
+## D-58 · An unused conversation can outlive a session, and closing it needs a contract addition
+
+**Status:** Open — recorded, not resolved · **Date:** 2026-09-27 · **Comes due:** Stage 5 ·
+**Arises from:** the finishing pass's item 3
+
+`POST /api/ask` attaches a turn to a thread and **creates none**: an omitted `conversation_id`
+means `QueryLog.conversation` stays NULL and the reply's `conversation` is `null`. So the client
+must create the thread *before* asking, and a first question that fails — a 503 on NFR-19's own
+demonstration path, or a 400 the client pre-check missed — leaves a thread with nothing in it.
+
+**Create-then-ask is forced by the contract, and the obvious fix is worse than the defect.**
+Creating the thread only after a reply succeeds would make the first question a one-off that no
+thread can adopt: the thread would reopen without its own first question, and the prior questions
+a follow-up resolves against are read from that thread's `QueryLog` rows (D-42). That trades a
+cosmetic defect for an FR-13 one.
+
+**What item 3 fixed:** abandonment. A thread whose question failed is reused rather than
+abandoned, "start a new topic" keeps an unused thread instead of stranding it, a reply of either
+kind retires the reuse, and a 404 drops the id. One failed first question now costs **at most one**
+thread per session however many retries or topic clears follow, where each cycle previously cost
+another.
+
+**What is not fixed, and is not claimed to be:** a thread created for a question that failed, after
+which the user leaves, persists. Nothing under `frontend/` can remove it and nothing was invented
+to try.
+
+**The two ways to close it, neither chosen here.**
+
+1. **`has_turns`, or a turn count, on the `GET /api/conversations` list object.** A thread nobody
+   asked anything in is then omitted from the list. Cheapest: no new route, no new verb, no
+   departure from FR-13's CRUD line.
+2. **A Delete route.** FR-13's Database clause is Create, Read, Update, so this would be a verb the
+   requirement does not specify — and D-43 already argued against inventing FR-13 controls the
+   interface does not ask for.
+
+Option 1 is the likelier answer and it is still a contract addition, so it is raised rather than
+taken.
+
+**One thing deliberately not done.** Emptiness is *not* inferred from the `"New conversation"`
+title. D-43's own consequence is that a whitespace-only question leaves the placeholder standing,
+so a title test would be a heuristic on a display string — the class of thing this file has spent
+the stage removing.
+
+## D-59 · Nine of eleven finishing-pass commits carry no FR ID, and D-57 is why that is a finding
+
+**Status:** Recorded · **Date:** 2026-09-27 · **Concerns:** every commit on
+`feat/M5-retrieval-and-generation` after `9508442` · **Breaches:** CLAUDE.md §7 and §8 condition 4
+
+CLAUDE.md §7 requires "Conventional commits, FR ID in the subject", and §8 condition 4 makes it
+part of the definition of done. On the eleven commits of the Stage 4 finishing pass, **the only FR
+IDs in any subject are FR-08 and FR-15** — and neither is one of the three requirements the stage
+owns. **Nothing in this branch's history names FR-11, FR-12 or FR-13.**
+
+Every subject cites its item number instead (`docs(item 4):`, `fix(item 1c):`), which was the
+instruction for the pass and is genuinely useful for tracing a finding to its fix. It is not what
+§7 asks for, and the two are not alternatives: an item number is meaningless to anyone who does not
+have the finishing-pass brief, and the brief is not in the repository.
+
+**Why this is a finding rather than a nit.** D-57, written *during this same pass*, records that
+`9d5b5f7`'s subject said FR-11/FR-12 while its content was FR-08, and draws the lesson that
+"anyone grepping the history for FR-08 will not find the seventh document status". The pass then
+committed nine more times without an FR ID at all. **The lesson was written down and broken in the
+same pass, nine times, and the breach was not in the log until the fourth audit put it there.**
+That is the same shape as every entry in this file's header rule, one level up: a rule applied to
+the instance in front of the author and not to the class.
+
+**What this entry covers:** the eleven commits named above. **What it does not:** the twenty-three
+Stage 4 commits before them, which D-57 already audited and found compliant apart from the three it
+names.
+
+**Not fixed, and the choice is recorded rather than made silently.** These eleven commits are
+**unpushed** — `origin/feat/M5-retrieval-and-generation` is still at `9508442` — so the subjects
+*could* be rewritten to make condition 4 genuinely pass rather than recording a breach, which is
+what the rest of this stage's lessons would argue for. It was not done because the branch already
+had a merged pull request (#15) and rewriting its history means a force-push to a shared ref, which
+is a decision for the repository's owner rather than for whoever happens to be editing. **Raised
+for that decision, not deferred.** If the subjects are rewritten, this entry becomes the record of
+why, and condition 4 passes; if they are not, it is the record of a known departure.
