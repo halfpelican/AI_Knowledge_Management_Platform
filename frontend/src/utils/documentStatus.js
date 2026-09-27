@@ -23,7 +23,7 @@ import { DOCUMENT_STATUS, TEXT } from '../constants.js'
  * Whether FR-08's "Processing failed. Please try again" action is offered for a
  * document in this status.
  *
- * Two statuses are refused it, for different reasons:
+ * Three statuses are refused it, for different reasons:
  *
  * - **"Indexed"** — there is nothing to redo, and the server agrees: a reprocess
  *   of an indexed document is `409` (D-32).
@@ -37,7 +37,7 @@ import { DOCUMENT_STATUS, TEXT } from '../constants.js'
  *   required follow-up; until it landed, the row stated the truth and the button
  *   lied.
  *
- * Every other status is offered the action: the statuses a 422 records,
+ * Every remaining status is offered the action: the statuses a 422 records,
  * "Partially indexed" where the document is searchable but some of its passages
  * are not, and a status this build does not know about — the safe direction for an
  * **unrecognised** value is to let the user ask rather than to decide silently
@@ -67,7 +67,7 @@ export function canReprocess(status) {
  * actually change the outcome instead of inviting an attempt that cannot work
  * (D-32).
  *
- * "Too large to index" is the one status whose sentence stands without an action
+ * "Too large to index" and "Processing" are the two statuses whose sentence stands without an action
  * beside it, so it has to say why there is nothing to press as well as what would
  * help (D-51). An unrecognised status still gets FR-08's own wording, which is
  * true for a transient failure and matches the action `canReprocess` still

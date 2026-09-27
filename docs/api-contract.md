@@ -651,14 +651,16 @@ material exists which this role may not read (invariant 1). `provenance_removed`
 place for that notice to grow.
 
 The third state is not a permission state at all and says nothing about one.
-`AnswerCitation.chunk` is `on_delete=CASCADE` (D-12), and both
-`POST /api/documents/{id}/reprocess`, `manage.py reindex`, and FR-15's deletion when it lands
-delete a source's chunks and
-write new ones with fresh identifiers, so every citation of the old ones is destroyed while
-the passage still exists, word for word, under a new id. The turn carries no statements
+`AnswerCitation.chunk` is `on_delete=CASCADE` (D-12), and `POST /api/documents/{id}/reprocess`,
+`manage.py reindex` and FR-15's deletion when it lands **each** delete a source's chunks, so
+every citation of the old ones is destroyed. A re-index and a successful reprocess write new
+ones with fresh identifiers, so the passage still exists word for word under a new id; **a
+reprocess that fails leaves none at all**, because it deletes the chunks before running the
+pipeline and a decided failure commits, and FR-15's deletion removes the material for good. The turn carries no statements
 (invariant 6) and its own message, because `NO_ANSWER_MESSAGE` would tell the reader their
-question cannot be answered from the knowledge base, which is false of material that is still
-indexed. **No count of what was lost**, in either state.
+question cannot be answered from the knowledge base, which asserts a corpus state that is false on a failed
+reprocess and on FR-15's deletion. Its own message promises nothing about the corpus for that
+reason. **No count of what was lost**, in either state.
 
 **Where a title comes from (D-43).** `Conversations.title` is a non-blank column and FR-13's
 interface never asks the user to name a topic before typing — it clears the thread and lets

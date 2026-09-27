@@ -22,8 +22,8 @@ mode this document exists to prevent.
 
 FR-14 and FR-15 remain. Stage 5 also carries what Stage 4 deferred, and that list is
 longer than the two requirements: the `/api/ask` throttle, PDF decompression bombs,
-FR-13's end-to-end measurement, D-40's demonstration mitigation, the
-affordance, the front-end test decision, and every measurement currently fitted to a
+FR-13's end-to-end measurement, D-40's demonstration mitigation, the front-end
+test decision, and every measurement currently fitted to a
 six-chunk corpus. None of those appeared in Stage 4's brief either, which is why they
 are written down here rather than discovered at the integration pass.
 

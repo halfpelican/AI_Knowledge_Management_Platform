@@ -455,8 +455,14 @@ export const TEXT = {
   // see renders as the silent no-answer state above and says nothing whatever
   // (invariant 1), which is why the two do not share copy.
   provenanceRemovedTitle: 'The sources for this answer can no longer be shown',
+  // Must match apps/core/constants.py PROVENANCE_REMOVED_MESSAGE. It promises NOTHING
+  // about the corpus: a failed reprocess leaves the document with zero chunks, and
+  // FR-15's deletion removes the material for good, so "ask again for an answer from
+  // the current material" — which this string said until the 27 September audit found
+  // it shipping in the bundle — is false on two of the four paths that reach the state.
+  // Nothing enforces that these two copies agree; a front-end test runner would.
   provenanceRemovedFallback:
-    'The citations for this answer are no longer on record, so the answer cannot be shown. Ask the question again for an answer from the current material.',
+    'The citations for this answer are no longer on record, so the answer cannot be shown. You can ask the question again.',
   // FR-12: "Any partially related items found are offered, clearly labelled as
   // partial matches." These arrive on the ask reply as `partial_matches`: the items
   // its own permission-scoped, ranked candidates found, whatever they scored. They

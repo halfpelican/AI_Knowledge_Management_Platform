@@ -15,10 +15,14 @@ Rules for this file:
   editing the original.
 - **A decision that claims coverage names what it does not cover.** If an entry says
   something is closed, enforced, covered or tested, it lists the paths it covers and
-  the paths it does not, as a list rather than as prose. Four entries in this file
+  the paths it does not, as a list rather than as prose. **Seven** entries in this file
   have been true where they were read and false where they were used: the visibility
   cascade (D-17, and CLAUDE.md invariant 2), D-45's exemptions, D-47's ORM write
-  paths, and D-49's archive members. Each described the instance that prompted it
+  paths, D-49's archive members, D-48's untouched-rows sentence, D-51's follow-up
+  count, and `PROVENANCE_REMOVED_MESSAGE`'s promise about the corpus — the last
+  introduced by the very commit that corrected the one before it. Four audits have
+  each found one. **The count in this sentence read "Four" for eleven commits of
+  enforcing the rule, which is the same defect one level up.** Each described the instance that prompted it
   rather than the class it belonged to. Write the boundary, not just the fix.
 
 | ID | Decision | Status | Date |
@@ -81,6 +85,7 @@ Rules for this file:
 | D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
 | D-58 | An unused conversation can outlive a session; closing it needs a contract addition | **Open** | 2026-09-27 |
+| D-59 | Nine of eleven finishing-pass commits carry no FR ID | Recorded · **a decision is raised** | 2026-09-27 |
 
 ---
 
@@ -2783,3 +2788,39 @@ taken.
 title. D-43's own consequence is that a whitespace-only question leaves the placeholder standing,
 so a title test would be a heuristic on a display string — the class of thing this file has spent
 the stage removing.
+
+## D-59 · Nine of eleven finishing-pass commits carry no FR ID, and D-57 is why that is a finding
+
+**Status:** Recorded · **Date:** 2026-09-27 · **Concerns:** every commit on
+`feat/M5-retrieval-and-generation` after `9508442` · **Breaches:** CLAUDE.md §7 and §8 condition 4
+
+CLAUDE.md §7 requires "Conventional commits, FR ID in the subject", and §8 condition 4 makes it
+part of the definition of done. On the eleven commits of the Stage 4 finishing pass, **the only FR
+IDs in any subject are FR-08 and FR-15** — and neither is one of the three requirements the stage
+owns. **Nothing in this branch's history names FR-11, FR-12 or FR-13.**
+
+Every subject cites its item number instead (`docs(item 4):`, `fix(item 1c):`), which was the
+instruction for the pass and is genuinely useful for tracing a finding to its fix. It is not what
+§7 asks for, and the two are not alternatives: an item number is meaningless to anyone who does not
+have the finishing-pass brief, and the brief is not in the repository.
+
+**Why this is a finding rather than a nit.** D-57, written *during this same pass*, records that
+`9d5b5f7`'s subject said FR-11/FR-12 while its content was FR-08, and draws the lesson that
+"anyone grepping the history for FR-08 will not find the seventh document status". The pass then
+committed nine more times without an FR ID at all. **The lesson was written down and broken in the
+same pass, nine times, and the breach was not in the log until the fourth audit put it there.**
+That is the same shape as every entry in this file's header rule, one level up: a rule applied to
+the instance in front of the author and not to the class.
+
+**What this entry covers:** the eleven commits named above. **What it does not:** the twenty-three
+Stage 4 commits before them, which D-57 already audited and found compliant apart from the three it
+names.
+
+**Not fixed, and the choice is recorded rather than made silently.** These eleven commits are
+**unpushed** — `origin/feat/M5-retrieval-and-generation` is still at `9508442` — so the subjects
+*could* be rewritten to make condition 4 genuinely pass rather than recording a breach, which is
+what the rest of this stage's lessons would argue for. It was not done because the branch already
+had a merged pull request (#15) and rewriting its history means a force-push to a shared ref, which
+is a decision for the repository's owner rather than for whoever happens to be editing. **Raised
+for that decision, not deferred.** If the subjects are rewritten, this entry becomes the record of
+why, and condition 4 passes; if they are not, it is the record of a known departure.

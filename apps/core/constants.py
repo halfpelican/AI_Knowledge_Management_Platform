@@ -202,10 +202,11 @@ NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowled
 #
 # The second sentence deliberately promises NOTHING about what asking again will return. An
 # earlier version said "for an answer from the current material", and that was false on two of
-# the three paths that reach this state — the sixth instance of a coverage claim describing the
-# case that prompted it, found by the 27 September re-audit.
+# the FOUR paths that reach this state — the sixth instance of a coverage claim describing the
+# case that prompted it, found by the 27 September re-audit. (This comment said "three" over a
+# list of four until the fourth audit caught it: the same miscount, in the fix for the miscount.)
 #
-# WHAT REACHES THIS STATE, all three paths, because two of them make any promise about the
+# WHAT REACHES THIS STATE, all four paths, because two of them make any promise about the
 # corpus wrong:
 #   1. manage.py reindex — the material is re-chunked and still indexed. Asking again works.
 #   2. A SUCCESSFUL reprocess — same.
