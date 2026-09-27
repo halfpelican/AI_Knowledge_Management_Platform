@@ -13,6 +13,13 @@ Rules for this file:
   example anyone moving development into WSL (`docs/ai-provider.md` §3).
 - To change a settled decision, add a dated entry that supersedes it rather than
   editing the original.
+- **A decision that claims coverage names what it does not cover.** If an entry says
+  something is closed, enforced, covered or tested, it lists the paths it covers and
+  the paths it does not, as a list rather than as prose. Four entries in this file
+  have been true where they were read and false where they were used: the visibility
+  cascade (D-17, and CLAUDE.md invariant 2), D-45's exemptions, D-47's ORM write
+  paths, and D-49's archive members. Each described the instance that prompted it
+  rather than the class it belonged to. Write the boundary, not just the fix.
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -53,6 +60,21 @@ Rules for this file:
 | D-35 | No external AI spend; demonstration runs on one machine | Settled | 2026-09-22 |
 | D-36 | FastFlowLM pinned to v0.9.39; `check_flm.py` asserts embedding determinism | Settled | 2026-09-22 |
 | D-37 | RELEVANCE_THRESHOLD lowered to 0.30; no threshold separates answerable from unanswerable | Settled | 2026-09-22 |
+| D-38 | EmbeddingGemma's task prefixes adopted; kept on correctness, not on the measurement | Settled by the user | 2026-09-23 |
+| D-39 | A worked example is training data in its content as well as its identifiers | Settled by the user | 2026-09-24 |
+| D-40 | Retrieval is unstable at the threshold; generation determinism unestablished | Open — recorded, not resolved | 2026-09-24 |
+| D-41 | FR-12's keyword search path, missing from the Stage 4 brief, built as item 8a | Settled by the user | 2026-09-24 |
+| D-42 | FR-13 passes prior questions only, folded into the question argument | Settled by the user | 2026-09-23 |
+| D-43 | A conversation's title is optional on create, derived from its first question | Settled here, by the agent that built the endpoints | 2026-09-24 |
+| D-44 | The Sources panel lists every item consulted, with its passages nested under it | Settled here, by the agent that built the endpoints | 2026-09-24 |
+| D-45 | FR-12's "input is sanitised before use": not a sanitiser, with one exception that is | Settled by the user | 2026-09-25 |
+| D-46 | `GET /api/documents/{id}`, so a citation can link to its source | Settled by the user | 2026-09-25 |
+| D-47 | The visibility cascade is a save() override and a manager, not a signal | Settled | 2026-09-25 |
+| D-48 | A reopened thread is re-scoped on read and its statements renumbered | Settled by the user | 2026-09-25 |
+| D-49 | Stage 4 security review: what closed, what deferred, what stands conceded | Settled by the user | 2026-09-25 |
+| D-50 | An oversized archive member is a 413; the bomb class is closed for OOXML only | Settled by the user | 2026-09-26 |
+| D-51 | A seventh document status: "Too large to index" | Settled by the user | 2026-09-26 |
+| D-52 | FR-15's detail view shows metadata and a download link, not extracted content | Settled by the user | 2026-09-27 |
 
 ---
 
@@ -2397,3 +2419,55 @@ trigger is chunk count rather than bytes, so "large" is the user's word rather t
 - `manage.py reindex` has no chunk-cap guard, which is harmless today only because the over-cap
   branch writes no `ExtractedContent` row for it to rebuild from. That is a fragile reason and
   deserves an item if `reindex` ever learns to re-extract.
+## D-52 · FR-15's detail view shows metadata and a download link, not extracted content
+
+**Status:** Settled by the user · **Date:** 2026-09-27 · **Closes:** what the document
+detail view built early in Stage 4 as D-46 is required to grow into
+
+**Decision.** FR-15 reads: "Selecting a document opens a detail view showing its
+metadata, extracted content, and a download link." The detail view shows **metadata
+and a download link**. It does not show extracted content.
+
+**Rationale.** `CLAUDE.md` §2 directs that depth is cut inside a requirement rather
+than a requirement being cut, and names FR-15 as the example — "fewer filter
+dimensions on FR-15". Two of three parts of one clause is depth.
+
+The extracted content is already surfaced where it answers the question a reader
+actually has. A citation on the Ask screen expands to its source passage, and that
+passage *is* extracted content, at the granularity of "what text did this answer come
+from". A document-scale panel would show the same material divorced from any
+question. The cut removes a second presentation, not a capability.
+
+It also avoids a schema decision the clause does not otherwise force. The stored form
+of extracted text is `ContentChunk.chunk_text`, and `CHUNK_OVERLAP` is 50 tokens, so
+the chunks cannot simply be concatenated to reconstruct the document — the text would
+repeat fifty tokens at every boundary. Honouring the clause would require either
+de-overlapping on read, which couples the detail view to the chunker's contract, or
+storing the extracted text on `Documents`, which is a column and a migration. Neither
+is warranted for a second presentation of material already shown.
+
+**Consequences.**
+
+- FR-15's clause is satisfied in two parts of three. The requirements-auditor should
+  mark it **declined**, not missed. That distinction is the point of recording this.
+- The answer to "how do you know extraction was faithful?" is the citation expansion
+  and the Sources panel, not this page. That is the answer to give at the
+  demonstration, and it is a better one than a wall of text.
+- A document's title links to its record; the download action lives on that record.
+  The Ask screen's link is to the record, and is labelled as such.
+- Four of the seven document statuses would have had no extracted content to show in
+  any case — "Extraction failed", "Insufficient content", "Indexing failed", and
+  D-51's "Too large to index". The cut removes the need to define a display for each.
+  The download link still works for all four, because the stored original exists
+  whether or not it was indexed.
+
+**What this decision does not cover.**
+
+- **The download link**, which is FR-15's third part and is built. Its storage path
+  depends on D-18 and its scoping on the shared `scoped_documents()` helper.
+- **Extracted content anywhere else.** The citation expansion continues to show
+  passage text and the Sources panel continues to list every item consulted; this
+  decision removes one presentation, at one place.
+- **Whether the detail view should show extracted content after M6.** This is a
+  decision about the gate, not about the product. Revisiting it means settling the
+  de-overlap-or-store question above, which this decision deliberately leaves open.
