@@ -95,8 +95,13 @@ const FIELDS = ['question', 'conversation_id']
  * - *Sources no longer on record* (a stored turn carrying `provenance_removed`) —
  *   the turn was answered and the record of what it was drawn from has been
  *   destroyed by a reprocess or a re-index. No statements, and not the no-answer
- *   copy either, because "this cannot be answered from the knowledge base" is
- *   false of a question whose material is still indexed.
+ *   copy either, because "this cannot be answered from the knowledge base" is a
+ *   claim about the corpus, and this state makes none: a re-index or a successful
+ *   reprocess leaves the material indexed, while a failed reprocess and FR-15's
+ *   deletion leave none of it. See the four paths enumerated at
+ *   `apps/core/constants.py`'s PROVENANCE_REMOVED_MESSAGE. The earlier wording here
+ *   asserted the material was "still indexed", which is the claim
+ *   `docs/api-contract.md` retired on 27 September and this file kept.
  * - *AI unavailable* (503) — the question could not be asked at all. NFR-19's
  *   notice, shown the moment the API answers, and the question is kept in the
  *   field because no `QueryLog` row was written and it can be asked again.

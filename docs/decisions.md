@@ -15,15 +15,40 @@ Rules for this file:
   editing the original.
 - **A decision that claims coverage names what it does not cover.** If an entry says
   something is closed, enforced, covered or tested, it lists the paths it covers and
-  the paths it does not, as a list rather than as prose. **Seven** entries in this file
-  have been true where they were read and false where they were used: the visibility
-  cascade (D-17, and CLAUDE.md invariant 2), D-45's exemptions, D-47's ORM write
-  paths, D-49's archive members, D-48's untouched-rows sentence, D-51's follow-up
-  count, and `PROVENANCE_REMOVED_MESSAGE`'s promise about the corpus — the last
-  introduced by the very commit that corrected the one before it. Four audits have
-  each found one. **The count in this sentence read "Four" for eleven commits of
-  enforcing the rule, which is the same defect one level up.** Each described the instance that prompted it
-  rather than the class it belonged to. Write the boundary, not just the fix.
+  the paths it does not, as a list rather than as prose. Every instance in the table
+  below described the case in front of its author rather than the class it belonged
+  to. Write the boundary, not just the fix.
+- **Count nothing you can list.** This is the sharper statement of the same defect,
+  reached on 27 September 2026. Every instance found so far is prose that *counts*, or
+  names a member *by reference*, where it could have enumerated: "four entries",
+  "nineteen clauses", "two of the three paths", "both", "three statuses", "nine of
+  eleven", "the sixth instance", "the only FR IDs in any subject are", "the two rows
+  above", "nothing in this branch's history names". Each asserts a fact about a set it
+  does not list, and the next addition to the set falsifies it — repeatedly in the same
+  commit that wrote the sentence. **Text that enumerates its members cannot go stale by
+  miscounting.** So name them; do not count them. A commit range, an explicit list, a
+  table row, a `git` hash: each is durable where a number or a position is not.
+  **To record another instance, add a row below. There is deliberately no total to
+  increment, and no ordinals — a row is identified by where it is, not by its number.**
+
+  Entries that have been true where they were read and false where they were used:
+
+  | Where | The claim |
+  |---|---|
+  | D-17, and `CLAUDE.md` invariant 2 | the visibility cascade was written as a model-level guarantee with its own test, and for thirteen days was neither |
+  | D-45 | which inputs the sanitiser exempts |
+  | D-47 | which ORM write paths carry the cascade |
+  | D-49 | which archive members the decompression bound covers |
+  | D-48 | the sentence about rows the re-scope leaves untouched |
+  | D-51 | how many follow-up paths the status could honour |
+  | `PROVENANCE_REMOVED_MESSAGE` | promised "an answer from the current material" on the two paths that leave no material |
+  | D-59 | "nothing in this branch's history names FR-11, FR-12 or FR-13", written from a reading of subject lines, in a commit whose own subject is `fix(FR-11/FR-12/FR-13)` |
+  | this rule, in `9508442..e81c6e6` | said "Four entries" for the eleven commits in which it was being enforced, then "Seven" in the commit that made it eight |
+  | this rule, until the fifth pass | "the last introduced by the very commit that corrected the one before it" — `116a422` introduced it and touches no decision entry; `4400b7b`, two commits later, corrected the previous one |
+  | this rule, until the fifth pass | "Four audits have each found one", set immediately beneath a list of seven |
+  | `apps/core/constants.py` | called this list's last entry "the sixth instance" while the same commit's subject called it "the seventh" |
+  | `frontend/src/utils/documentStatus.js` | "Three statuses are refused it" over a list of two, in the commit that corrected the same docstring's "Two" |
+  | `docs/stage-4-clause-audit.md` | "one row below the two that had just been corrected" — the re-audit corrected rows 9, 14, 22 and FR-11's Database row, none of them in that table |
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -85,7 +110,8 @@ Rules for this file:
 | D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
 | D-58 | An unused conversation can outlive a session; closing it needs a contract addition | **Open** | 2026-09-27 |
-| D-59 | Nine of eleven finishing-pass commits carry no FR ID | Recorded · **a decision is raised** | 2026-09-27 |
+| D-59 | Most finishing-pass subjects omit the FR ID; the entry's first draft was an instance of the rule | Recorded | 2026-09-27 |
+| D-60 | Stage 4 fails §8 conditions 4 and 5; neither is closed by rewording, and both are recorded as failing | **Open** | 2026-09-28 |
 
 ---
 
@@ -2789,38 +2815,115 @@ title. D-43's own consequence is that a whitespace-only question leaves the plac
 so a title test would be a heuristic on a display string — the class of thing this file has spent
 the stage removing.
 
-## D-59 · Nine of eleven finishing-pass commits carry no FR ID, and D-57 is why that is a finding
+## D-59 · The finishing pass omits the FR ID from most commit subjects, and this entry's first draft was an instance of the rule above
 
-**Status:** Recorded · **Date:** 2026-09-27 · **Concerns:** every commit on
-`feat/M5-retrieval-and-generation` after `9508442` · **Breaches:** CLAUDE.md §7 and §8 condition 4
+**Status:** Recorded · **Date:** 2026-09-27, corrected 2026-09-28 · **Concerns:** every
+commit in `9508442..e81c6e6` · **Breaches:** CLAUDE.md §7, and §8 condition 4 in part
 
-CLAUDE.md §7 requires "Conventional commits, FR ID in the subject", and §8 condition 4 makes it
-part of the definition of done. On the eleven commits of the Stage 4 finishing pass, **the only FR
-IDs in any subject are FR-08 and FR-15** — and neither is one of the three requirements the stage
-owns. **Nothing in this branch's history names FR-11, FR-12 or FR-13.**
+CLAUDE.md §7 requires "Conventional commits, FR ID in the subject". §8 condition 4
+requires the work "committed on its branch with the FR ID in the message". Those are
+different tests and the finishing pass fails them by different margins. Both are
+measured here over the range `9508442..e81c6e6`, so this entry cannot go stale the way
+its first draft did.
 
-Every subject cites its item number instead (`docs(item 4):`, `fix(item 1c):`), which was the
-instruction for the pass and is genuinely useful for tracing a finding to its fix. It is not what
-§7 asks for, and the two are not alternatives: an item number is meaningless to anyone who does not
-have the finishing-pass brief, and the brief is not in the repository.
+**§7, the FR ID in the *subject* — these nine fail:** `6949343`, `72c26ed`, `033879f`,
+`96b4bbe`, `33534ea`, `116a422`, `a05692d`, `4400b7b`, `52ff2b7`. **These three
+comply:** `6e563cf` (FR-15), `ba5382f` (FR-08), `e81c6e6` (FR-11/FR-12/FR-13). Each of
+the nine cites its item number instead — `docs(item 4):`, `fix(item 1c):` — which was
+the instruction for the pass and traces a finding to its fix, but is not what §7 asks
+for, and the two are not alternatives: an item number means nothing to a reader without
+the finishing-pass brief, and that brief is not in the repository.
 
-**Why this is a finding rather than a nit.** D-57, written *during this same pass*, records that
-`9d5b5f7`'s subject said FR-11/FR-12 while its content was FR-08, and draws the lesson that
-"anyone grepping the history for FR-08 will not find the seventh document status". The pass then
-committed nine more times without an FR ID at all. **The lesson was written down and broken in the
-same pass, nine times, and the breach was not in the log until the fourth audit put it there.**
-That is the same shape as every entry in this file's header rule, one level up: a rule applied to
-the instance in front of the author and not to the class.
+**§8 condition 4, the FR ID anywhere in the *message* — these three fail:** `72c26ed`,
+`96b4bbe`, `116a422`. The other nine name a requirement in the body.
 
-**What this entry covers:** the eleven commits named above. **What it does not:** the twenty-three
-Stage 4 commits before them, which D-57 already audited and found compliant apart from the three it
-names.
+**This entry's first draft was itself an instance of the rule above, and it is
+corrected here rather than quietly rewritten.** It said *"the only FR IDs in any
+subject are FR-08 and FR-15"* and *"Nothing in this branch's history names FR-11,
+FR-12 or FR-13."* Both were false when committed. `e81c6e6`, the commit carrying that
+text, has the subject `fix(FR-11/FR-12/FR-13): close the fourth audit, including the
+seventh instance`; the bodies of `6949343`, `033879f`, `33534ea`, `a05692d` and
+`52ff2b7` name those requirements; and across the whole history reachable from that
+commit, forty messages do. The error was not arithmetic — it was reading subject lines
+and writing a sentence about messages, in the entry recording a breach of the rule
+against exactly that. It was found by running `git log --format=%B` over the range,
+which is the only difference between the two drafts.
 
-**Not fixed, and the choice is recorded rather than made silently.** These eleven commits are
-**unpushed** — `origin/feat/M5-retrieval-and-generation` is still at `9508442` — so the subjects
-*could* be rewritten to make condition 4 genuinely pass rather than recording a breach, which is
-what the rest of this stage's lessons would argue for. It was not done because the branch already
-had a merged pull request (#15) and rewriting its history means a force-push to a shared ref, which
-is a decision for the repository's owner rather than for whoever happens to be editing. **Raised
-for that decision, not deferred.** If the subjects are rewritten, this entry becomes the record of
-why, and condition 4 passes; if they are not, it is the record of a known departure.
+**Two further claims of the first draft, withdrawn.** It said the commits were
+"**unpushed** — `origin/feat/M5-retrieval-and-generation` is still at `9508442`", and
+reasoned from that that the subjects could be rewritten cheaply. True when written, and false
+before the end of the same session: the reflog dates the commit of `e81c6e6` at 21:07:52
+and its push at 21:20:20, the branch is the head of **open PR #17**, and `5a4ed61`
+merges `main` back into it. It also said the
+branch "already had a merged pull request (#15)"; there are two, #15 (`39a183b`) and
+#16 (`6d6c619`), and #16 is the one that pushed `9508442`. A claim about a mutable ref
+is the same failure mode as a count — `origin/<branch>` is not a list of hashes.
+
+**What this entry covers:** the twelve commits in `9508442..e81c6e6`. **What it does
+not:** the twenty-three commits of PR #15, audited by D-57, which found three
+departures and named them; and the single commit of PR #16.
+
+**The subjects were not rewritten.** D-60 records why, and the short reason is that
+rewriting them cannot make §8 pass, because condition 5 fails for a reason no rewrite
+touches.
+
+
+## D-60 · Stage 4 fails §8 conditions 4 and 5, and both are recorded as failing rather than described as met
+
+**Status:** Open · **Date:** 2026-09-28 · **Concerns:** CLAUDE.md §8 conditions 4 and 5
+for FR-11, FR-12 and FR-13 · **Supersedes:** the closing paragraph of D-59's first draft
+
+CLAUDE.md §8 says a requirement is done when **all** five conditions hold, "not four of
+five". Two do not hold for this stage. They were pointed at each other, so the honest
+resolution was to do both or neither — to reword the subjects, run a pass that returns
+clean, and have §8 genuinely satisfied; or to do neither and record the failures with
+their evidence. Doing one and describing it as both is the outcome this entry exists to
+prevent.
+
+**Condition 4 — "committed on its branch with the FR ID in the message" — fails.**
+D-59 names the nine subjects that omit it under §7 and the three messages that omit it
+entirely. Not fixed. The subjects *could* be rewritten: no commit in
+`9508442..e81c6e6` is an ancestor of `main`. But they are pushed, they are the content
+of **open PR #17**, and `5a4ed61` merges `main` into the branch on top of them, so a
+rewrite is a force-push to a shared ref that a reviewer may already be reading — a
+decision for the repository's owner. It was raised in D-59's first draft and is raised
+again here rather than taken quietly in either direction.
+
+**Condition 5 — "`requirements-auditor` has checked it against the FR text and reported
+no gaps" — fails, and this is why rewording would not have helped.** The two conditions
+are independent: no commit subject affects what an audit finds. Five passes have now
+run. The fifth was deliberately bounded — scoped to the diff of `e81c6e6` alone, with a
+single stated pass condition, "does this commit introduce another instance of the
+coverage rule?" — because the four before it each found something real in what the
+previous one had written, which is a loop with no fixed point: the audit reads text, and
+every fix writes new text. A bounded pass can come back clean rather than merely come
+back. **It did not come back clean.** It returned six instances in that one commit, all
+verified independently before being accepted: the two D-59 sentences above; this file's
+rule saying "Seven"; its "the last introduced by the very commit that corrected the one
+before it" (`116a422` introduced it and touches no decision entry, and `4400b7b`
+corrected the previous one two commits later); its "Four audits have each found one" set
+beneath a list of seven; `apps/core/constants.py` calling that entry "the sixth" while
+the same commit's subject called it "the seventh"; `frontend/src/utils/documentStatus.js`
+saying "Three statuses are refused it" over a list of two, in the commit correcting that
+docstring's "Two"; and `docs/stage-4-clause-audit.md` placing a correction "one row below
+the two that had just been corrected" when the rows corrected were 9, 14, 22 and FR-11's
+Database row, none of them in that table.
+
+**What the fifth pass changes, and what it does not.** All six are fixed in the commit
+carrying this entry, and fixed *structurally* — by deleting the count or the positional
+reference and substituting a list, a range or a commit hash — because correcting the
+number is precisely what produced five of the six. That is the amendment the rule above
+now carries, and it is the only fix that ends the loop: prose that enumerates cannot be
+falsified by the next addition. **It does not make condition 5 pass.** No pass has
+reported no gaps, and the commit that fixes these six is itself unaudited. A sixth pass
+would read new text and could find a new instance; the difference is that the new text
+is a table of rows rather than a sentence with a total in it.
+
+**Consequence, stated plainly.** FR-11, FR-12 and FR-13 meet conditions 1, 2 and 3 —
+the behaviour, the dual-role tests at 19/19, and a failure path each. They do not meet
+conditions 4 and 5. By §8's own wording that means they are **not done**, and the M6
+gate list should carry them as such until an audit returns clean and the subject
+question is decided. What is demonstrable is unaffected: the pipeline, the permission
+boundary and the assistant work, and every defect the five passes found was in prose
+describing the work, with the single exception of the shipped no-answer string, which is
+fixed at both sites with the bundle rebuilt.
