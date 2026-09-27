@@ -29,6 +29,13 @@ export function dashboardPathForRole(role) {
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on
  * these two and displays whatever status the server actually recorded, so a
  * value added later shows up rather than being silently rendered as "Indexed".
+ *
+ * **Displaying an unknown value is not the same as handling one.** The seventh
+ * value, "Too large to index", was added backend-side at Stage 4 item 12b and the
+ * rows did show it — while `canReprocess` went on offering FR-08's retry for it
+ * and `statusMessageFor` went on calling it a transient failure. The fall-through
+ * protects the *status text*, never the rule that goes with it, so a new value
+ * has to be listed here as well (D-51, and D-57 on how it came to be missed).
  */
 export const DOCUMENT_STATUS = {
   indexed: 'Indexed',
@@ -38,6 +45,11 @@ export const DOCUMENT_STATUS = {
   extractionFailed: 'Extraction failed',
   insufficientContent: 'Insufficient content',
   indexingFailed: 'Indexing failed',
+  // The fourth a 422 can record, and the only one of them that is refused FR-08's
+  // retry: the document was turned away before extraction was attempted, on a
+  // property of the content, so there is no attempt for a second press to vary
+  // (D-51, and src/utils/documentStatus.js for the argument).
+  tooLargeToIndex: 'Too large to index',
 }
 
 /**
@@ -208,6 +220,10 @@ export const TEXT = {
   // action is offered in every case the clause names; its text stops promising
   // what identical bytes cannot deliver. D-32 records this as a flaw in the
   // requirement rather than in the build.
+  //
+  // One status is refused the action outright, and it is not one FR-08's clause
+  // names: "Too large to index", where the file was never extracted at all
+  // (D-51). See `documentTooLargeToIndex` below.
   processingFailed: 'Processing failed. Please try again.',
   processingFailedExtraction:
     'Processing failed. No text could be read from this file. Trying again will ' +
@@ -216,6 +232,19 @@ export const TEXT = {
   processingFailedInsufficient:
     'Processing failed. This file holds too little text to index, so trying again ' +
     'will not change the result.',
+  // D-51's seventh status, and the one row with a sentence and no button beside
+  // it. It says three things: that the document is not searchable, why there is
+  // nothing to press — D-32's retry re-runs ingestion on the same stored file, so
+  // every attempt would redo extraction and chunking in full and stop at the
+  // identical point — and what would actually get the material indexed. It does
+  // not say "Processing failed", because nothing was attempted: the document was
+  // refused on a property of its content, which is the distinction D-51 exists to
+  // draw.
+  documentTooLargeToIndex:
+    'This document is too large to index, so it will not appear in search results. ' +
+    'Indexing it again would repeat the same work and stop at the same point, which ' +
+    'is why no retry is offered. A shorter document, or this one split into parts, ' +
+    'can be indexed.',
   // Not a failure, so it does not claim to be one: the document is searchable and
   // some of its passages are not. Running ingestion again over the stored file is
   // worth offering, because a provider outage is the usual reason a chunk did not

@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { reprocessDocument, uploadDocument } from '../api/documents.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
@@ -11,8 +10,9 @@ import SelectInput from '../components/SelectInput.jsx'
 import TextInput from '../components/TextInput.jsx'
 import { DOCUMENT_STATUS, TEXT, VALIDATION } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
-import { retryMessageFor } from '../utils/documentStatus.js'
-import { extractFieldErrors } from '../utils/fieldErrors.js'
+// The per-code mapping lives outside this file so it can be run without a test
+// runner (D-25); D-51's suppressed retry is one of its rules.
+import { failureFor } from '../utils/uploadFailure.js'
 import { FILE_INPUT_ACCEPT, screenFile, titleFromFilename } from '../utils/uploads.js'
 import { rolesForVisibility, VISIBILITY_EVERYONE, visibilityOptionsFor } from '../utils/visibility.js'
 import './Upload.css'
@@ -34,60 +34,6 @@ function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} bytes`
   if (bytes < 1024 * 1024) return `${sizeFormat.format(bytes / 1024)} KB`
   return `${sizeFormat.format(bytes / (1024 * 1024))} MB`
-}
-
-/**
- * What a failed upload shows against its own row.
- *
- * Every code FR-08 enumerates gets the message for that case, against that file,
- * rather than a page-level banner: in a queue of five files a banner cannot say
- * which one it means. Only the two cases a second attempt could plausibly change
- * are retryable — the 422, which is FR-08's own "Processing failed. Please try
- * again" action, and a request that never reached the server.
- *
- * The 409 does not use `error.message`: the client's generic 409 text is FR-01's
- * duplicate email address, while FR-08's 409 is a document whose *content* has
- * been uploaded before, compared by hash and not by filename.
- */
-function failureFor(error) {
-  if (!(error instanceof ApiError)) {
-    return { message: messageForStatus(NETWORK_ERROR_STATUS), retryable: true }
-  }
-  switch (error.status) {
-    case 422:
-      // The body still carries `doc_id` and `status`, so the row can name the
-      // document that was stored but could not be indexed (the file is kept —
-      // NFR-20, a failed AI step never discards the source). The status also
-      // selects the wording: only an "Indexing failed" is a failure that trying
-      // again can recover, so the other two say what would actually change the
-      // outcome instead of inviting a retry that cannot work (D-32).
-      return {
-        message: retryMessageFor(error.details?.status),
-        retryable: true,
-        document: error.details,
-      }
-    case 415:
-      // The signature disagreed with the extension. The same message the
-      // client-side check uses, because it is the same refusal on better evidence.
-      return { message: VALIDATION.fileTypeUnsupported }
-    case 413:
-      return { message: VALIDATION.fileTooLarge }
-    case 409:
-      return { message: TEXT.uploadDuplicate }
-    case 403:
-      // The role lacks `contribute_content`. The form never offers a scope
-      // excluding the uploader's own role, so D-29's 403 is not reachable here.
-      return { message: TEXT.uploadNotPermitted }
-    case 400: {
-      const { fieldErrors } = extractFieldErrors(error, ['title', 'file', 'visible_to_roles'])
-      return {
-        message: fieldErrors.file ?? fieldErrors.visible_to_roles ?? TEXT.uploadRejected,
-        titleError: fieldErrors.title ?? null,
-      }
-    }
-    default:
-      return { message: error.message, retryable: error.status === NETWORK_ERROR_STATUS }
-  }
 }
 
 /** Visible state text for a row, before the server has recorded a status. */

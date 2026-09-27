@@ -9,7 +9,7 @@ import { TEXT } from '../constants.js'
 import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
-import { canReprocess, retryMessageFor } from '../utils/documentStatus.js'
+import { canReprocess, statusMessageFor } from '../utils/documentStatus.js'
 import './Repository.css'
 
 /** The roles a document is visible to, as the server recorded them. */
@@ -25,8 +25,11 @@ function formatVisibility(roles) {
  * a filter control that filtered nothing would be a promise the screen does not
  * keep.
  *
- * The one action a row carries is FR-08's retry, on any document that is not
- * "Indexed". It belongs here and not only in the upload queue: the queue is in
+ * The one action a row carries is FR-08's retry, on a document `canReprocess`
+ * admits — every status but "Indexed", which has nothing to redo, and "Too large
+ * to index", which would stop at the same point on every press (D-51). Those two
+ * rows still say where they stand; the sentence goes with the status and not with
+ * the button. It belongs here and not only in the upload queue: the queue is in
  * memory, so before this column existed a document left at "Indexing failed"
  * had no route back once the tab was closed. `retryingId` is the doc_id whose
  * reprocess is in flight; while one is running the rest are disabled, so a
@@ -59,6 +62,9 @@ export function DocumentTable({ documents, retryingId, onRetry }) {
         <tbody>
           {documents.map((record) => {
             const retryable = canReprocess(record.status)
+            // Asked separately from the action: "Too large to index" is explained
+            // on the row and offered no button (D-51).
+            const message = statusMessageFor(record.status)
             const retrying = retryingId === record.doc_id
             return (
               <tr key={record.doc_id}>
@@ -70,12 +76,13 @@ export function DocumentTable({ documents, retryingId, onRetry }) {
                   {/* The status the server recorded, in its own words and never
                       in colour alone. A status that is not "Indexed" carries the
                       sentence for that status (D-32), so the difference between
-                      a retry that can work and one that cannot is on the screen
-                      rather than discovered by pressing the button. */}
+                      a retry that can work, one that cannot, and one that is not
+                      offered at all is on the screen rather than discovered by
+                      pressing the button. The sentence is tied to the status and
+                      not to the action: the row with no action is the one that
+                      most needs explaining. */}
                   {record.status}
-                  {retryable ? (
-                    <span className="data-table__message">{retryMessageFor(record.status)}</span>
-                  ) : null}
+                  {message ? <span className="data-table__message">{message}</span> : null}
                 </td>
                 <td className="data-table__meta">
                   <time dateTime={record.uploaded_at}>{formatDate(record.uploaded_at)}</time>
@@ -142,7 +149,12 @@ export default function DocumentRepository() {
   }
 
   function announce(title, status) {
-    const detail = canReprocess(status) ? `${status}. ${retryMessageFor(status)}` : status
+    // The same words the row shows, which now includes the status that is
+    // explained without being offered an action (D-51). Announcing the bare
+    // status for that one would leave a screen reader user with the single fact
+    // the sentence exists to qualify.
+    const message = statusMessageFor(status)
+    const detail = message ? `${status}. ${message}` : status
     setAnnouncement(TEXT.statusAnnouncement(title, detail))
   }
 
@@ -179,14 +191,20 @@ export default function DocumentRepository() {
       return
     }
     switch (caught.status) {
-      case 422:
-        // It failed the same way again. The body still carries the document, so
-        // the row shows the status the server has now recorded and the sentence
-        // that goes with it; the action stays, because the row is still not
-        // indexed and the server is the one that decides that.
+      case 422: {
+        // It failed again. The body still carries the document, so the row shows
+        // the status the server has now recorded and the sentence that goes with
+        // it, and the action stays for every status but the one a further press
+        // cannot change — a reprocess can come back "Too large to index", and the
+        // button withdraws for the same reason it is never offered (D-51).
+        const status = caught.details?.status ?? record.status
         replaceRow(caught.details)
-        announce(record.title, caught.details?.status ?? record.status)
+        announce(record.title, status)
+        // Same as the success path: the button that had focus is unmounting, so
+        // focus is moved somewhere deliberate rather than dropped on the body.
+        if (!canReprocess(status)) headingRef.current?.focus()
         return
+      }
       case 409:
         // Already indexed, or a copy was indexed while this list sat open.
         setNotice({ title: TEXT.documentReprocessFailed, text: TEXT.documentAlreadyIndexed })
