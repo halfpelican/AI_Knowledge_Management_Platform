@@ -41,14 +41,21 @@ Rules for this file:
   | D-49 | which archive members the decompression bound covers |
   | D-48 | the sentence about rows the re-scope leaves untouched |
   | D-51 | how many follow-up paths the status could honour |
-  | `PROVENANCE_REMOVED_MESSAGE` | promised "an answer from the current material" on the two paths that leave no material |
+  | `PROVENANCE_REMOVED_MESSAGE` | promised "an answer from the current material" on the paths that leave no material — a failed reprocess and FR-15's deletion |
   | D-59 | "nothing in this branch's history names FR-11, FR-12 or FR-13", written from a reading of subject lines, in a commit whose own subject is `fix(FR-11/FR-12/FR-13)` |
-  | this rule, in `9508442..e81c6e6` | said "Four entries" for the eleven commits in which it was being enforced, then "Seven" in the commit that made it eight |
-  | this rule, until the fifth pass | "the last introduced by the very commit that corrected the one before it" — `116a422` introduced it and touches no decision entry; `4400b7b`, two commits later, corrected the previous one |
-  | this rule, until the fifth pass | "Four audits have each found one", set immediately beneath a list of seven |
-  | `apps/core/constants.py` | called this list's last entry "the sixth instance" while the same commit's subject called it "the seventh" |
+  | this rule, in `9508442..e81c6e6` | said "Four entries" in every commit of `9508442..52ff2b7`, then "Seven" in `e81c6e6`, the commit that introduced the D-59 instance it did not count |
+  | this rule, until `403087f` | "the last introduced by the very commit that corrected the one before it" — `116a422` introduced it and touches no decision entry; `4400b7b`, two commits later, corrected the previous one |
+  | this rule, until `403087f` | "Four audits have each found one", set immediately beneath a list of seven |
+  | `apps/core/constants.py` | called the `PROVENANCE_REMOVED_MESSAGE` instance "the sixth" while the same commit's subject called it "the seventh" |
   | `frontend/src/utils/documentStatus.js` | "Three statuses are refused it" over a list of two, in the commit that corrected the same docstring's "Two" |
   | `docs/stage-4-clause-audit.md` | "one row below the two that had just been corrected" — the re-audit corrected rows 9, 14, 22 and FR-11's Database row, none of them in that table |
+  | D-60, in `403087f` | "It returned six instances in that one commit" over a list of seven, then "All six are fixed" and "five of the six" — the last naming a subset it never identifies |
+  | D-60, in `403087f` | "Five passes have now run", "the four before it", "A sixth pass" — counts and ordinals over audit passes listed nowhere, falsified by the next pass to run |
+  | D-60, in `403087f` | "D-59 names the nine subjects … and the three messages", and "the two D-59 sentences above" — counts of lists held in another entry, and a position |
+  | this table, in `403087f` | rows keyed "until the fifth pass", and "this list's last entry" — ordinals and a position, in the table whose rule forbids them; the last was falsified by the next row added |
+  | this table, in `403087f` | "for the eleven commits in which it was being enforced … the commit that made it eight", and "the two paths that leave no material" — counts where a range, a hash and a list existed |
+  | D-59, in `403087f` | "The other nine name a requirement in the body", and D-57 "found three departures" — counts over sets listed elsewhere or not at all |
+  | `frontend/src/pages/Ask.jsx`, in `403087f` | "the four paths enumerated at" `apps/core/constants.py` — a count of a list held in another file |
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -111,7 +118,8 @@ Rules for this file:
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
 | D-58 | An unused conversation can outlive a session; closing it needs a contract addition | **Open** | 2026-09-27 |
 | D-59 | Most finishing-pass subjects omit the FR ID; the entry's first draft was an instance of the rule | Recorded | 2026-09-27 |
-| D-60 | Stage 4 fails §8 conditions 4 and 5; neither is closed by rewording, and both are recorded as failing | **Open** | 2026-09-28 |
+| D-60 | Stage 4 closes with §8 condition 4 declined and condition 5 failed; both recorded | Recorded · **4 declined, 5 failed** | 2026-09-28 |
+| D-61 | The Stage 4 closing audit: INCOMPLETE, recorded verbatim; its findings are carried to Stage 5 unfixed | Recorded · **findings open against Stage 5** | 2026-09-28 |
 
 ---
 
@@ -2835,7 +2843,7 @@ for, and the two are not alternatives: an item number means nothing to a reader 
 the finishing-pass brief, and that brief is not in the repository.
 
 **§8 condition 4, the FR ID anywhere in the *message* — these three fail:** `72c26ed`,
-`96b4bbe`, `116a422`. The other nine name a requirement in the body.
+`96b4bbe`, `116a422`. Every other commit in the range names a requirement in the body.
 
 **This entry's first draft was itself an instance of the rule above, and it is
 corrected here rather than quietly rewritten.** It said *"the only FR IDs in any
@@ -2860,46 +2868,63 @@ branch "already had a merged pull request (#15)"; there are two, #15 (`39a183b`)
 is the same failure mode as a count — `origin/<branch>` is not a list of hashes.
 
 **What this entry covers:** the twelve commits in `9508442..e81c6e6`. **What it does
-not:** the twenty-three commits of PR #15, audited by D-57, which found three
-departures and named them; and the single commit of PR #16.
+not:** the commits of PR #15, audited by D-57, which names the departures it found;
+and the commit of PR #16.
 
 **The subjects were not rewritten.** D-60 records why, and the short reason is that
 rewriting them cannot make §8 pass, because condition 5 fails for a reason no rewrite
 touches.
 
 
-## D-60 · Stage 4 fails §8 conditions 4 and 5, and both are recorded as failing rather than described as met
+## D-60 · Stage 4 closes with §8 condition 4 declined and condition 5 failed, both recorded rather than described as met
 
-**Status:** Open · **Date:** 2026-09-28 · **Concerns:** CLAUDE.md §8 conditions 4 and 5
-for FR-11, FR-12 and FR-13 · **Supersedes:** the closing paragraph of D-59's first draft
+**Status:** Recorded · condition 4 **declined**, condition 5 **failed** · **Date:**
+2026-09-28, corrected the same day · **Concerns:** CLAUDE.md §8 conditions 4 and 5 for
+FR-11, FR-12 and FR-13 · **Supersedes:** the closing paragraph of D-59's first draft
 
 CLAUDE.md §8 says a requirement is done when **all** five conditions hold, "not four of
-five". Two do not hold for this stage. They were pointed at each other, so the honest
-resolution was to do both or neither — to reword the subjects, run a pass that returns
-clean, and have §8 genuinely satisfied; or to do neither and record the failures with
-their evidence. Doing one and describing it as both is the outcome this entry exists to
-prevent.
+five". Conditions 4 and 5 do not hold for this stage, and they do not hold for different
+reasons: condition 5 failed on measurement, and condition 4 was declined. **This entry's
+first version framed the two as pointed at each other — do both or neither — and that
+framing was wrong.** They are independent in both directions. No commit subject changes
+what an audit finds, which is why rewording could not have made §8 *pass*; but equally no
+audit finding stopped the subjects being reworded, so condition 4 could have been *met*
+on its own. The first version let the first fact stand in for the second.
 
-**Condition 4 — "committed on its branch with the FR ID in the message" — fails.**
-D-59 names the nine subjects that omit it under §7 and the three messages that omit it
-entirely. Not fixed. The subjects *could* be rewritten: no commit in
-`9508442..e81c6e6` is an ancestor of `main`. But they are pushed, they are the content
-of **open PR #17**, and `5a4ed61` merges `main` into the branch on top of them, so a
-rewrite is a force-push to a shared ref that a reviewer may already be reading — a
-decision for the repository's owner. It was raised in D-59's first draft and is raised
-again here rather than taken quietly in either direction.
+**Condition 4 — "committed on its branch with the FR ID in the message" — DECLINED.**
+D-59 lists the subjects in `9508442..e81c6e6` that omit the FR ID under §7, and the
+messages that omit it entirely. Condition 4 was independently achievable while those
+commits were unpushed: rewording them was a local rebase, touching no shared ref, at no
+risk to anyone, and requiring nothing of condition 5. **It was declined.** The first
+version of this paragraph said only that condition 4 "fails", and called it "a decision
+for the repository's owner" as if the decision were still pending — from which a reader
+infers it could not be done. That is the same shape of defect the rule at the head of
+this file exists to prevent, in the entry recording that rule's own outcome, and it is
+corrected here rather than quietly rewritten.
+
+**It stays declined, and the reason is that the window has closed.** The commits in
+`9508442..e81c6e6` were pushed at 21:20:20 on 27 September and merged to `main` by PR
+#17 (`e71a0f9`) at 21:31:49 that evening. `403087f`, the commit carrying this entry's
+first version, is pushed and merged to `main` by PR #18 (`1220e96`). Rewording the
+subjects now would rewrite `main`'s history beneath merged pull requests — a force-push
+to the shared default branch — and an FR ID in a subject line is not worth that. The
+first version also called PR #17 **open** and said no commit in the range was an ancestor
+of `main`. Both were false when committed: `403087f` is dated 08:00:30 on 28 September,
+and #17 had merged at 21:31:49 the evening before. A claim about the state of a pull
+request is a claim about a mutable ref, which D-59 already names as the same failure mode
+as a count.
 
 **Condition 5 — "`requirements-auditor` has checked it against the FR text and reported
 no gaps" — fails, and this is why rewording would not have helped.** The two conditions
-are independent: no commit subject affects what an audit finds. Five passes have now
-run. The fifth was deliberately bounded — scoped to the diff of `e81c6e6` alone, with a
-single stated pass condition, "does this commit introduce another instance of the
-coverage rule?" — because the four before it each found something real in what the
-previous one had written, which is a loop with no fixed point: the audit reads text, and
-every fix writes new text. A bounded pass can come back clean rather than merely come
-back. **It did not come back clean.** It returned six instances in that one commit, all
-verified independently before being accepted: the two D-59 sentences above; this file's
-rule saying "Seven"; its "the last introduced by the very commit that corrected the one
+are independent: no commit subject affects what an audit finds. The pass over
+`e81c6e6` was deliberately bounded — scoped to that commit's diff alone, with a single
+stated pass condition, "does this commit introduce another instance of the coverage
+rule?" — because unbounded passes had become a loop with no fixed point: the audit reads
+text, and every fix writes new text. A bounded pass can come back clean rather than
+merely come back. **It did not come back clean.** It returned these, in that one commit,
+all verified independently before being accepted: D-59's "the only FR IDs in any subject
+are FR-08 and FR-15" and "Nothing in this branch's history names FR-11, FR-12 or FR-13";
+this file's rule saying "Seven"; its "the last introduced by the very commit that corrected the one
 before it" (`116a422` introduced it and touches no decision entry, and `4400b7b`
 corrected the previous one two commits later); its "Four audits have each found one" set
 beneath a list of seven; `apps/core/constants.py` calling that entry "the sixth" while
@@ -2909,21 +2934,234 @@ docstring's "Two"; and `docs/stage-4-clause-audit.md` placing a correction "one 
 the two that had just been corrected" when the rows corrected were 9, 14, 22 and FR-11's
 Database row, none of them in that table.
 
-**What the fifth pass changes, and what it does not.** All six are fixed in the commit
-carrying this entry, and fixed *structurally* — by deleting the count or the positional
-reference and substituting a list, a range or a commit hash — because correcting the
-number is precisely what produced five of the six. That is the amendment the rule above
-now carries, and it is the only fix that ends the loop: prose that enumerates cannot be
-falsified by the next addition. **It does not make condition 5 pass.** No pass has
-reported no gaps, and the commit that fixes these six is itself unaudited. A sixth pass
-would read new text and could find a new instance; the difference is that the new text
-is a table of rows rather than a sentence with a total in it.
+**What the pass over `e81c6e6` changes, and what it does not.** Each of those is fixed
+in `403087f`, and fixed *structurally* — by deleting the count or the positional
+reference and substituting a list, a range or a commit hash — because a corrected number
+is still a number, and the next addition falsifies it. That is the amendment the rule
+above now carries: prose that enumerates cannot be falsified by the next addition.
+**It does not make condition 5 pass.** No pass has reported no gaps.
+
+**The pass over `403087f`, and where the loop stops.** `403087f` was then given the same
+bounded pass, with its condition stated in advance: does this commit introduce a further
+instance of a coverage claim that counts, enumerates or refers by position instead of
+listing? The expectation was a clean result, since that fix was structural rather than
+corrective. **It was not clean.** The table stayed free of totals, but two of its own row
+keys carried ordinals, and the prose written around it — this entry, D-59, `Ask.jsx` —
+counted sets it did not list. The findings are rows in the table at the head of this file,
+each keyed "in `403087f`", and they are fixed in the commit that adds those rows. **That
+fix is deliberately not audited.** Auditing the fix is the recursion the bound exists to
+end, so the loop stops here by decision, not at a demonstrated fixed point: the table
+closes the class structurally, and prose outside it is not yet shown to.
 
 **Consequence, stated plainly.** FR-11, FR-12 and FR-13 meet conditions 1, 2 and 3 —
 the behaviour, the dual-role tests at 19/19, and a failure path each. They do not meet
 conditions 4 and 5. By §8's own wording that means they are **not done**, and the M6
-gate list should carry them as such until an audit returns clean and the subject
-question is decided. What is demonstrable is unaffected: the pipeline, the permission
-boundary and the assistant work, and every defect the five passes found was in prose
-describing the work, with the single exception of the shipped no-answer string, which is
-fixed at both sites with the bundle rebuilt.
+gate list carries them that way: condition 4 is declined for `9508442..e81c6e6` and will
+not pass, and condition 5 stands failed unless a later audit returns clean — the Stage 4
+closing audit, recorded in D-61, did not. What is
+demonstrable is unaffected: the pipeline, the permission
+boundary and the assistant work, and the defects the audit passes found were in prose
+describing the work, apart from the shipped no-answer string, which is fixed at both
+sites with the bundle rebuilt.
+
+## D-61 · The Stage 4 closing audit returned INCOMPLETE, and its verdict is recorded here verbatim
+
+**Status:** Recorded · findings **open against Stage 5** · **Date:** 2026-09-28 ·
+**Concerns:** FR-11, FR-12, FR-13 · **Audited:** `2ba4de9`
+
+One full `requirements-auditor` run against Stage 4, at `2ba4de9`, after D-60 was
+corrected and the bounded pass over `403087f` was fixed. It is recorded here because a
+verdict that lives only in a terminal is the same failure mode as an invariant that lives
+only in a document. **Nothing it found was fixed in the session that ran it**, by
+instruction: the stage closed that day whatever the verdict, and the findings are
+carried to Stage 5 below.
+
+**What it settles.** It found no route by which out-of-scope material reaches the AI
+service, contributes to an answer, or has its existence disclosed, and it passes
+invariant 1 over `/api/ask`, `/api/search`, `/api/conversations*`, `/api/documents/{id}`,
+`/api/meetings/{id}` and reprocess. It marks each of FR-11, FR-12 and FR-13 as
+demonstrable locally, and none as done under §8. Condition 5 fails on this audit, as
+D-60 said it stands until an audit returns clean.
+
+**What it adds that was recorded nowhere before:** its gap 3. The active thread in
+`frontend/src/pages/Ask.jsx` lives only in component state, so following a citation's
+same-tab source link and pressing Back returns an empty conversation. This is on the
+path an assessor will walk.
+
+**Carried to Stage 5, unfixed.** The owner column records what the audit reports. Where
+the audit names no Stage 5 item, the row says so; that is a finding against
+`M6-BUILD-PROMPT.md`, not an assignment made here.
+
+| Audit gap | Stage 5 owner, as the audit reports it |
+|---|---|
+| 1 — §8 condition 5 | none; recorded in D-60 and here |
+| 2 — §8 condition 4 | none; declined in D-60, and cannot be fixed |
+| 3 — thread lost on navigation, including a citation link | **no Stage 5 item** |
+| 4 — reopened turns: no expansion, no source link, no Sources panel | **no Stage 5 item** |
+| 5 — `AnswerCitation.chunk` `CASCADE` (D-48) | **no Stage 5 item** |
+| 6 — partial matches have no relevance floor (D-56) | Stage 5 item 6 |
+| 7 — "input is sanitised" deliberately not done (D-45) | none named; to be presented as a deviation |
+| 8 — prior questions only (D-42) | none named; a deliberate narrowing |
+| 9 — no front-end test runner (D-25) | Stage 5 item 4 |
+| 10 — `answers.py` fails open against `search.py` (D-53) | Stage 5 item 1 |
+| 11 — provenance state discloses maintenance on out-of-scope sources | none named |
+| 12 — orphaned empty conversations (D-58) | **no Stage 5 item** |
+| 13 — front-end constants duplicated; literal "50 MB" | none named |
+| 14 — branch name breaks §7's per-FR convention | none; historical |
+| 15 — deployment topology undecided; a provider switch triggers gap 5 | Stage 5 item 9 |
+
+**The verdict, verbatim.** Reproduced as the auditor returned it, quoted rather than
+re-headed so its structure does not interleave with this file's.
+
+> ## Audit: Stage 4 (FR-11, FR-12, FR-13), branch feat/M5-retrieval-and-generation @ 2ba4de9, 2026-09-28
+>
+> **Verdict:** INCOMPLETE
+>
+> Source text: I read the FR-11, FR-12 and FR-13 clauses directly from `proposal.txt` lines 729–936, which is the text extracted from the .docx, so I did not rely on the clause audit's quotations. I made no file edits and did not re-run pytest. The only commands I ran were read-only git and grep.
+>
+> Short version: I found no route by which out-of-scope material reaches the AI service, contributes to an answer, or has its existence disclosed. The permission boundary is the strongest part of the stage and it is well tested. The stage is still not done under §8. Condition 4 is declined (D-60) and condition 5 fails because this audit reports gaps. Several clauses are partial, and one front-end defect is recorded nowhere in the repository and sits on the exact demo path.
+>
+> ---
+>
+> ### Clause coverage — FR-11
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | FE: no dedicated interface; different results per role; no hint that anything was withheld | satisfied | `apps/api/tests/test_fr11_scoping.py:557` (Admin gets the answer the Employee was refused), `:585` (Employee reply is byte-identical whether or not the restricted rows exist), `:679` (search counts differ per role) |
+> | Permission filter built from the role before retrieval, applied as a query condition | satisfied | `apps/retrieval/scoping.py:99-112`, `:115-133`. The predicate is asserted in the compiled SQL at `apps/retrieval/tests/test_scoping.py:90`. The tests are shown to fail when the predicate is removed: `apps/api/tests/test_fr11_scoping_bites.py:64-105` |
+> | Validation: invalid session rejected before any retrieval | satisfied | `config/settings.py:143-144`; 401 subclass `apps/api/authentication.py`; `test_ask.py:817` asserts 401, no QueryLog row, zero embed calls |
+> | Validation: an empty scope returns FR-12's no-answer, not an error | satisfied | `pipeline.py:468-486`; `test_pipeline.py:221`; `test_fr11_scoping.py:1183` |
+> | Filtering at retrieval, not at generation | satisfied | `pipeline.py:449-505`. The generation payload is asserted clean at `test_fr11_scoping.py:458-471`, on all three exits (`:483`) |
+> | Counts computed after filtering | satisfied | `pipeline.py:379` (`len(passages)`); `search.py:228-252` (derived properties); `test_fr11_scoping.py:453-456` |
+> | Responses: a scoped result set or an empty set | satisfied | `views.py:917-992`, `:662-721` |
+> | CRUD: Roles, RolePermissions, Documents (Read) | partial | Retrieval reads Roles (`scoping.py:87-92`) and `visible_to_roles` from the chunk stamp. It never reads RolePermissions. This is by design (D-11/D-17) and the clause audit already records it. |
+>
+> ### Clause coverage — FR-12
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | Search field on every page | satisfied (no automated test) | `frontend/src/App.jsx:111-115,132` |
+> | Results grouped by type with a count per group | satisfied | `search.py:215-252,471-494`; `test_search.py:131` |
+> | Each result shows title, snippet, department, date | satisfied | `search.py:181-212`; `SearchResults.jsx:19-45`; `test_search.py:152` |
+> | Natural-language question returns an answer with numbered inline citations | satisfied (live reply) | `answers.py:180-191`; `Answer.jsx:80-131` (renders the server's `position`) |
+> | Each citation expands to show the source passage | **partial** | Works on a live reply (`answers.py:194-224`, `Answer.jsx:106-127`). On a reopened turn it does not expand: `utils/turns.js` `savedTurnFrom` sets `sources: []` and `expandable: false`. |
+> | …and links to the source document or meeting | **partial** | Works live (`utils/sources.js`, `views.py:621-656`). A reopened turn has no link at all. |
+> | Sources panel lists every item consulted, with its date | **partial** | Works live (`answers.py:194-224`, `Answer.jsx:175-194`). A reopened turn has no Sources panel. |
+> | No interface state shows an uncited factual statement | satisfied at the API; **untested at the UI** | `pipeline.py:255-273` (no field for rejected statements); `test_pipeline.py:712`; no front-end test runner exists |
+> | No-answer stated plainly, with no speculative answer | satisfied | `Answer.jsx:313-324`; `test_ask.py:379` |
+> | Partially related items offered, labelled as partial matches | **partial** | `partial_matches.py:119-148`. There is no relevance floor, so the five nearest in-scope sources are offered even when none is related (D-56 is open). |
+> | Queries under two characters rejected client-side | satisfied | `utils/validation.js` `searchTermError`; also enforced on the server at `search.py:432` |
+> | Question length capped | satisfied | `pipeline.py:418-424`; `test_pipeline.py:332-382` |
+> | Input sanitised before use | **partial (deliberate deviation)** | D-45: no sanitiser. The only change is neutralising the `[chunk_id:` delimiter (`apps/ai/prompting.py:204,408`). Prose injection through a document body is open (D-45 case c). |
+> | Retrieval only over chunks whose recorded model matches the query model | satisfied | `scoping.py:133`; `test_pipeline.py:239`; `test_scoping.py:244,279` |
+> | Context truncated to the window, lowest-ranked dropped first | satisfied (never triggered on the demo corpus) | `ranking.py:178-222`; `test_pipeline.py:648,1070` |
+> | Scoping applied before ranking | satisfied | `pipeline.py:449-454` |
+> | Ranking: recorded model, cosine similarity in the application, rank order, threshold exclusion | satisfied | `ranking.py:68-175`; constants `apps/core/constants.py:46,51` (`RELEVANCE_THRESHOLD` provisional, D-37/D-40) |
+> | Grounding: prompt holds only the passages plus their ids | satisfied | `pipeline.py:501-505`; `test_pipeline.py:609`. The FR-13 history block is the one addition (D-42). |
+> | Structured output of discrete tagged statements | satisfied | `apps/ai/schema.py`; `generation.py:95-121` |
+> | Deterministic verification in application code | satisfied | `verification.py:90-121`; `test_pipeline.py:674,1143` |
+> | No-answer path A without generation; path B returns the same reply; the two recorded separately | satisfied | `pipeline.py:468-486,526-543`; `test_pipeline.py:186` (generation called zero times), `:839`; `test_ask.py:418` (bodies byte-identical) |
+> | Gap evidence: every query logged with result count and answered status | satisfied (narrow reading) | `query_log.py:242-288`. The count is derived from `retrieved_chunk_ids`. 503s and 400s write no row, following 7.10. |
+> | Traceability: question, chunk ids, answer and verified citations logged so any answer can later be traced | **partial** | The write is correct (`query_log.py:242-280`). `AnswerCitation.chunk` is `on_delete=CASCADE` (`apps/retrieval/models.py:114-116`), so a reprocess or reindex destroys citations. The loss is pinned by `test_fr12_traceability_lost_on_reprocess.py` (D-48). |
+> | Responses: 200 grouped / 200 answer / 200 `answered:false` / 503 | satisfied | `views.py:960-992`; `test_ask.py:791`; three-attempt count asserted at `apps/ai/tests/test_generation.py:190,361` |
+> | CRUD: read ContentChunks, Documents, Meetings; create SearchLogs, QueryLog, AnswerCitations | satisfied | `search.py:496-500`; `query_log.py:243-280` |
+>
+> ### Clause coverage — FR-13
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | Interface reachable from any page | satisfied (it is a nav link) | `App.jsx:67` |
+> | …retaining the thread so follow-ups need not restate the subject | **partial** | The thread lives only in component state (`Ask.jsx:129-130`), with no URL or storage persistence. See gap 3. |
+> | Previous conversations listed and reopenable | **partial** | `views.py:1031-1039,1086-1092` work. Reopened citations cannot expand and there is no Sources panel (see FR-12 above). |
+> | Active thread can be cleared for a new topic | satisfied | `Ask.jsx:291-300` |
+> | Context kept per session; prior turns passed with the new question | **partial** | Only prior questions are passed, never prior answers (`conversation.py:123-179`, D-42). A follow-up that refers to something in the previous answer does not resolve. |
+> | Validation: context truncated to a maximum number of prior turns | satisfied | `constants.py:82`; `conversation.py:154`; `test_conversation.py:439` |
+> | Validation: scope re-evaluated on every turn | satisfied | `pipeline.py:431`; `test_fr11_scoping.py:606,631` (same cookie, role changed by UPDATE) |
+> | Each turn does a fresh retrieval | satisfied | `test_conversation.py:572` |
+> | Generation and verification follow FR-12 unchanged | satisfied | Same `answer_question` path; `test_conversation.py:612` |
+> | Responses: 200 with the answer and updated conversation state | satisfied | `answers.py:175-177`; `serializers.py:520`; `test_ask.py:842` |
+> | CRUD: Conversations (Create, Read, Update); QueryLog (Create) | satisfied | Create `views.py:1041-1055`; Read `:1031,1086`; Update happens server-side through the title (`views.py:899-914`) and `last_updated_at` (`query_log.py:287`). The database operation exists; there is no PATCH route (D-43). |
+>
+> ---
+>
+> ### Missing or partial
+>
+> 1. **FR-11/12/13: §8 condition 5 fails.** This audit reports gaps, so condition 5 fails whatever else is fixed.
+> 2. **FR-11/12/13: §8 condition 4 fails.** Commit `116a422` ("fix(item 1c): separate a destroyed provenance record from a re-scoped turn") changes FR-12/FR-13 behaviour in `serializers.py` and `Answer.jsx` and has no FR ID anywhere in its message. D-59 lists the other two, `72c26ed` and `96b4bbe`. D-60 records this as declined, and the commits are now on `main`. It cannot be fixed.
+> 3. **FR-13 "retaining the thread" (plus FR-12's citation link): not recorded anywhere in the repo.** `Ask.jsx:129-130` holds `conversationId` and `turns` in `useState` only, and nothing uses the URL or storage. The citation's own "View document/meeting" link (`Answer.jsx:54-58`, a same-tab `<Link>`) unmounts the Ask screen. Pressing Back returns to an empty conversation. The only way back is to reopen the thread from the list, and then its citations no longer expand (gap 4). That is the exact flow an assessor will try. I found no mention of this in `docs/` or `frontend/`.
+>    - Smallest fix: put the active thread in the URL (`/ask?c=<id>`) and on mount call `fetchConversation`. Or open source links in a new tab as a stopgap.
+>    - Severity: §8 gap, high demo risk.
+> 4. **FR-12 citation expansion, link and Sources panel on a reopened thread.** `GET /api/conversations/{id}` returns statements with no passages and no sources (`serializers.py:744-755`, `turns.js` `savedTurnFrom`).
+>    - The clause audit says "Owner: Stage 5", but no Stage 5 item in `M6-BUILD-PROMPT.md` names it. I grepped for reopen, D-48, D-58 and expand, and the only hit is item 11's field walk.
+>    - Fix: for each surviving citation, return its passage text and source title/date, taken from the same `permitted_citation_chunk_ids` result (`serializers.py:550-566`) so it is re-scoped on read.
+>    - Severity: §8 gap.
+> 5. **FR-12 traceability (D-48).** `apps/retrieval/models.py:114-116` has `AnswerCitation.chunk` as `on_delete=CASCADE`.
+>    - Reprocess can be run by an Employee: `views.py:863` needs only `contribute_content`, and `views.py:870` blocks only already-Indexed documents, so a "Partially indexed" document that has cited chunks can be reprocessed. `manage.py reindex` does the same damage.
+>    - Project memory already calls for pinning FLM to v0.9.39 and re-indexing, and any provider switch is a mandated re-index (CLAUDE.md §4). So this is likely to happen before the demo.
+>    - No Stage 5 item owns it.
+>    - Fix: a migration adding `SET_NULL` plus a stored `chunk_uuid` and passage-text snapshot on `AnswerCitation`.
+>    - Severity: §8 gap.
+> 6. **FR-12 partial matches (D-56).** `partial_matches.py:119-148` has no relevance floor, so on an off-topic question it offers five unrelated titles as "partially related". Stage 5 item 6 owns this. Severity: §8 gap.
+> 7. **FR-12 "input is sanitised before use" (D-45).** The code deliberately does not do what the clause says. The argument is defensible (parameterised SQL, React escaping, delimiter neutralisation), but it has to be presented to the assessor as a deviation, not as ✅. Prose injection through a document body is open and can be triggered by an Employee. It cannot widen scope (D-49). Severity: §8 gap (low).
+> 8. **FR-13 "passes prior turns" (D-42).** Only questions are passed, so a follow-up that refers to something in the previous answer does not resolve. This is a deliberate narrowing. Severity: §8 gap (low).
+> 9. **No automated evidence for any front-end clause.** That covers FR-12's search field, grouping, citations, expansion, links, Sources panel, no-answer state and partial-match label; FR-13's thread, list, reopen and clear; and invariant 6 at the interface. There is no runner (D-25). Gap 3 is exactly the kind of defect this lets through. Stage 5 item 4 owns it. Severity: §8 gap (evidence).
+> 10. **D-53 fail-open.** `answers.py:261-280` resolves titles with no source-side predicate, and the prompt trusts the chunk stamp alone. `search.py:456-469` does the opposite and fails closed. Today this is reachable only through `bulk_create(update_conflicts=True)` or raw SQL, and no shipped route uses either (I grepped). Stage 5 item 1 owns it. Severity: minor.
+> 11. **Minor disclosure through the provenance state.** `serializers.py:710-716` shows state 3 regardless of scope. A reader demoted since asking can therefore tell whether a source now outside their scope has been reprocessed or re-indexed (state 3) or not (state 2, silent). That leaks a maintenance event on restricted material, not its content, and they were entitled to the answer when they asked. Severity: minor.
+> 12. **D-58.** An unused "New conversation" can outlive the session that created it. No Stage 5 item owns this. Severity: minor.
+> 13. **Duplicated constants.** `frontend/src/constants.js:109-111` restates 2, 10 and 500 outside `apps/core/constants.py`, and no test catches drift. `apps/api/views.py:121` has a literal "50 MB" in a message (FR-08). Severity: minor.
+> 14. **§7 branch naming.** The branch is `feat/M5-retrieval-and-generation`, not per-FR as §7 requires. Severity: minor.
+>
+> ### Invariant check
+>
+> 1. Filter before ranking, no disclosure: **pass.** I checked `/api/ask` (all three exits), `/api/search` (both the body branch and the title branch), `/api/conversations*` (owner check plus re-scope on read), `/api/documents/{id}`, `/api/meetings/{id}` and reprocess. Every one is scoped in the query, and out-of-scope ids return 404, never 403. The latent risk is gap 10.
+> 2. Denormalised stamp plus cascade: **pass.** Covered by `save()`/`update()`/`bulk_update`. The `bulk_create` upsert hole is pinned by a test and not reachable from any shipped code.
+> 3. Role, not attendance: **pass.** `MeetingAttendees` is never consulted under `apps/retrieval`; tests at `test_fr11_scoping.py:881,913,943`.
+> 4. Server-side authorisation, 401/403: **pass.**
+> 5. Verification is set membership: **pass.**
+> 6. No uncited statement shown: **pass at the API, unverified at the UI.**
+> 7. Two no-answer paths logged separately: **pass.**
+> 8. A failed AI step discards nothing: **pass** for this slice (an outage writes no row and deletes nothing).
+> 9. Atomic writes: **pass.** QueryLog and its citations commit in one transaction (`query_log.py:242`).
+> 10. Structured output or 503: **pass** (`generation.py:95-121`).
+> - No AI SDK import outside `apps/ai/`: **pass** (I grepped the whole repo).
+> - Every chunk write records model and dimension: **pass.** There is one write site, `apps/ingestion/embedding.py:78-89`.
+> - Constants: **pass** on the Python side; front-end duplication is gap 13.
+>
+> ### Set-level notes
+>
+> - **No deployment exists** (only a DB `docker-compose.yml`), and FLM runs on one laptop's NPU. A "deployed alpha" of FR-11/12/13 either means that laptop is the host, or it means switching to `anthropic`. A switch is a full re-index, which triggers gap 5 and breaks D-40's rule of no re-index before the demo. Decide the deployment topology now, not at Stage 5 item 9.
+> - **Demo risks outside the clauses:** D-40 (answers change between identical runs near the threshold), p90 of 8.90 s against NFR-08's 4 s, and `RELEVANCE_THRESHOLD`/`MAXIMUM_CONTEXT_TOKENS` still provisional.
+> - **FR-03 lockout** is already implemented (`views.py:220-260`). That is SHOULD-tier effort spent before FR-14 and FR-15 exist. Do nothing more on FR-03, FR-07 or FR-10 until the twelve are demonstrable.
+>
+> ### Gate impact
+>
+> None of these gaps stops FR-11, FR-12 or FR-13 being demonstrated locally today. Gap 3 is the one an assessor is most likely to hit live, and it is about a day's front-end work. Gaps 4 and 5 need a contract change and a migration and have no Stage 5 owner, so add them to Stage 5 explicitly or they will surface at item 10. None of the three can be claimed "done" under §8: condition 4 is permanently declined and condition 5 fails.
+>
+> ---
+>
+> ## VERDICT
+>
+> | Requirement | §8 done | Failing conditions | M6-demonstrable |
+> |---|---|---|---|
+> | FR-11 | **No** | 4 (declined, D-60), 5 (this audit) | **Yes, locally.** Not yet on a deployed alpha, because none exists. |
+> | FR-12 | **No** | 1 (partial: traceability, partial-match floor, sanitisation deviation, reopened-thread citations), 4, 5 | **Yes, locally,** with D-40, latency and re-index risks |
+> | FR-13 | **No** | 1 (partial: prior questions only, thread not kept across navigation, reopened citations inert), 4 (includes `116a422`), 5 | **Yes, locally.** The navigation defect is visible if a citation link is followed. |
+>
+> Every gap:
+> 1. §8 condition 5 fails for FR-11/12/13 because this audit reports gaps. **§8 gap**
+> 2. §8 condition 4: `116a422` (plus `72c26ed`, `96b4bbe` per D-59) has no FR ID in its message; declined in D-60. **§8 gap**
+> 3. `frontend/src/pages/Ask.jsx:129-130` with `frontend/src/components/Answer.jsx:54-58`: the active thread is lost on any navigation, including following a citation link. Not recorded anywhere. **§8 gap, high demo risk**
+> 4. `apps/api/serializers.py:744-755` and `frontend/src/utils/turns.js` (`savedTurnFrom`): reopened turns have no passage expansion, no source link and no Sources panel. No Stage 5 owner. **§8 gap**
+> 5. `apps/retrieval/models.py:114-116`: `CASCADE` destroys citations on reprocess (Employee-reachable, `apps/api/views.py:863,870`) and on reindex (D-48). No Stage 5 owner. **§8 gap**
+> 6. `apps/retrieval/partial_matches.py:119-148`: no relevance floor (D-56). **§8 gap**
+> 7. `apps/retrieval/pipeline.py:75-88` and `apps/ai/prompting.py:204`: "input is sanitised" deliberately not done (D-45); prose injection open. **§8 gap (low)**
+> 8. `apps/retrieval/conversation.py:123-179`: prior questions only, not prior turns (D-42). **§8 gap (low)**
+> 9. No front-end test runner, so every FE clause of FR-12/13 and invariant 6 at the UI has no automated evidence. **§8 gap**
+> 10. `apps/api/answers.py:261-280`: fails open against `apps/retrieval/search.py:456-469`, which fails closed (D-53); not currently reachable. **minor**
+> 11. `apps/api/serializers.py:710-716`: provenance state reveals reprocess/reindex events on out-of-scope sources to a demoted reader. **minor**
+> 12. D-58: orphaned empty threads; no Stage 5 owner. **minor**
+> 13. `frontend/src/constants.js:109-111` duplicates tuned constants; `apps/api/views.py:121` has a literal "50 MB". **minor**
+> 14. Branch `feat/M5-retrieval-and-generation` breaks the §7 per-FR branch convention. **minor**
+> 15. Deployment topology for the FLM-backed alpha is undecided; switching provider forces a re-index and triggers gap 5. **Gate risk (set-level, Stage 5 item 9)**
+>
+> **Stage 4 is INCOMPLETE:** the permission boundary holds, but none of FR-11, FR-12 or FR-13 meets §8, and gap 3 sits on the path the assessor will walk.
