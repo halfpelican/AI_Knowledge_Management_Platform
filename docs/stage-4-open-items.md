@@ -233,15 +233,30 @@ a cause of something above, or a claim in the repository that is not true where 
 7. **Objective 02's verification corpus is due 2 October and is not assembled.** The
    placeholder corpus that every current measurement is fitted to is a different, smaller
    thing and is not it. Item 6 is blocked on this, and the date is before Stage 5 starts.
-8. **The §7 subject-line breach recurred in Stage 5 item 4, and the window to fix it is
-   still open.** `ec6f39b` (`ci(D-25):`), `9d04f3c` and `90fbbe7` (both `docs(D-62):`)
-   carry no FR ID in the subject; `ec6f39b` and `9d04f3c` carry none in the body either,
-   so §8 condition 4 fails for those two as well as §7. It is the same substitution D-59
+8. **The §7 subject-line breach recurred in Stage 5 item 4, and was left as found.**
+   `ec6f39b` (`ci(D-25):`), `9d04f3c` and `90fbbe7` (both `docs(D-62):`) carry no FR ID
+   in the subject; `ec6f39b` and `9d04f3c` carry none in the body either, so §8
+   condition 4 fails for those two as well as §7. It is the same substitution D-59
    records — a D-number standing where the FR ID belongs — and the cause was in
    `M6-BUILD-PROMPT.md`, whose session rules told the session to cite "its item number or
-   its D-number". That wording is corrected. Unlike D-59's case these commits are
-   **unpushed**, so amending the subjects costs one rebase; once pushed and merged, the
-   record says "left as found" for the second time.
+   its D-number". That wording is corrected, so the cause is closed even though these
+   instances are not.
+
+   **Corrected 28 September, after this entry went stale within the hour it was
+   written.** It first said the commits were "**unpushed**, so amending the subjects
+   costs one rebase". The branch was pushed the same morning, which makes amending a
+   force-push rather than a local rebase. It is a claim about a mutable ref, which D-59
+   already records as the same failure mode as a count, written in the file that exists
+   to track exactly that, and it is corrected here rather than quietly rewritten.
+
+   **Stated as a condition rather than a status, so it cannot go stale again:** these
+   subjects are amendable for as long as the branch is unmerged and nobody else has
+   based work on it — a force-push to the feature branch, before the pull request that
+   carries it merges. Once merged, §7 rules the rewrite out and the entry becomes "left
+   as found" for the second time. Neither commit changes application behaviour — one is
+   CI configuration, the other a `CLAUDE.md` edit — so no reader tracing a requirement
+   through the history is sent anywhere by their absence. `116a422` remains the instance
+   that costs something.
 
 ---
 
