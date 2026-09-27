@@ -1915,11 +1915,38 @@ balanced rather than `(chunk_id: 9f2…]`; and the same opening where the asker 
 it, which is still header-shaped. Case and inner spacing are matched loosely and preserved
 exactly, because `[CHUNK_ID :` is as header-shaped to a model as the canonical form.
 
-Applied at **two** sites: `build_conversational_question`, to the new question and to each
-prior question, so a delimiter smuggled into turn one cannot inject through turn two's
-history block; and `build_user_prompt`, where the delimiter is written, so a caller handing
-it a raw question cannot reopen the hole. Idempotency is what makes the double pass a no-op.
-**Passage text is not transformed** — see the adjacent case below.
+**Applied at three sites, corrected 27 September 2026.** This paragraph said "two" and said
+"**Passage text is not transformed**". Item 12a made both false on 26 September, and neither
+sentence was revised — the same error D-47 made about `bulk_update`, and the one this file's
+header rule now exists to prevent: **wrong in the safe direction**, so a reader believes a
+guarantee is absent and has no reason to preserve it.
+
+Written as the rule requires — the paths covered and the path deliberately not:
+
+| Site | Neutralised | Since |
+|---|---|---|
+| `build_user_prompt`, the question argument | yes | D-45, item 10b |
+| `build_conversational_question`, the new question and each prior question | yes — a delimiter smuggled into turn one cannot inject through turn two's history block | D-45, item 10b |
+| `build_user_prompt`, **each passage's text** | **yes** | **item 12a**, when the security review found an uploaded document body could forge a passage header |
+| `ConversationContext.for_retrieval` | **no, deliberately** | the string is embedded and never prompted; a vector has no delimiters to forge. This exemption was named nowhere before today |
+
+Idempotency is what lets the three passes compose without double-transforming.
+
+**And the exception is no longer the only one.** This entry was written when a question forging
+the header was the single case. There are three, and the third cannot be closed by any
+transformation:
+
+1. a **question** forging the header — closed;
+2. a **document body** forging the header — closed at the prompt boundary by item 12a;
+3. a **document body directing the model in prose** — **not closed, and not closable** by
+   set-membership verification, because `verify_citations` tests identifiers and a prose
+   directive carries none. `apps/ai/prompting.py` states this at length. `contribute_content`
+   is held by both roles (D-30), so it is Employee-reachable into every Administrator's answers
+   over the same corpus.
+
+The boundary that does hold, and the sentence to use if asked: **the permission scope**, because
+it is applied in application code before generation. D-49 records the proof — injection can
+misattribute, and it cannot widen.
 
 **An adjacent case this does NOT settle.** A *document* whose own body contains `[chunk_id:`
 produces a genuine passage whose text carries the sequence, and passage text is deliberately
