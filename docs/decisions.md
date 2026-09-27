@@ -77,6 +77,9 @@ Rules for this file:
 | D-52 | FR-15's detail view shows metadata and a download link, not extracted content | Settled by the user | 2026-09-27 |
 | D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · **due with FR-15** | 2026-09-27 |
 | D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Open** | 2026-09-27 |
+| D-55 | `rejected_count` on QueryLog — numbering a column that shipped without one | Settled retroactively | 2026-09-27 |
+| D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
+| D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
 
 ---
 
@@ -2616,3 +2619,113 @@ than at the request boundary.
 This is D-49's pattern once more: the payload moves and the class does not close. The remedy is a
 shared query-parameter reader, or a rule that every query parameter goes through a serializer
 field — decided **before** FR-15 writes its first filter rather than after.
+
+## D-55 · `rejected_count` on QueryLog — numbering a column that shipped without a decision
+
+**Status:** Settled retroactively · **Date:** 2026-09-27 · **Numbers:** commit `964f73e`,
+Stage 4 item 8 · **Migration:** `retrieval/0002_querylog_rejected_count`
+
+`964f73e` added a column and a migration beyond the proposal's `QueryLog` table, carrying no
+D-number. CLAUDE.md §9 requires settled decisions to be numbered and the number cited in code and
+commit messages; the argument existed in `docs/schema-v1.md` and in three docstrings, in none of
+them as a decision. Both auditors named it. This entry is the number.
+
+**Decision.** `QueryLog.rejected_count`, nullable, populated on every call that reached
+generation — including answered ones.
+
+**Rationale.** Invariant 7 requires no-answer path B's two kinds to stay separable, and
+`no_answer_reason` cannot do it: a model that proposes nothing and a model whose every citation is
+rejected both arrive as `no_statement_verified`. Item 6's live runs moved 2 declined / 3
+all-rejected before the prompt fix to 6 / 0 after, while the aggregate moved 5 → 6 — **the
+aggregate alone reads as "no effect"**, and the whole finding lives in the split.
+
+Answered rows are populated too, and that is the point rather than an edge case: `verifyCitations`
+strips individual statements, so `answered=True` with `rejected_count=1` is fabrication that has
+not yet cost anyone an answer — the earliest warning the system produces.
+
+**What it covers:** every call that reached generation. **What it does not:** a call that did not —
+no-answer path A and the keyword search path, where it is NULL. NULL never means "path B did not
+occur" and never means zero.
+
+**Why a count and never the claimed identifier.** §7.9's rejection log would record both. A
+fabricated identifier has no referent, so storing one invites a later reader to resolve it against
+`ContentChunks` and read a hit or a miss as provenance. A database column is a surface, and
+invariant 6 applies to it.
+
+**Record-only.** No serializer may expose `rejected_count` or `no_answer_reason`; either hands a
+caller the path-A/path-B distinction that the identical reply exists to hide.
+
+## D-56 · Partial matches are a reply field, derived before the threshold
+
+**Status:** Settled retroactively · **Date:** 2026-09-27 · **Numbers:** commit `2c10364`,
+Stage 4 item 10a · **One gap open:** no relevance floor
+
+The second auditor called this "the largest untraced change of the stage": a new module, a new
+field on every `POST /api/ask`, a presentation dataclass and serializer, a cap constant, a change
+to the disclosure surface of both no-answer paths, and the deletion of a shipped front-end
+heuristic — argued well in `apps/retrieval/partial_matches.py` and recorded in no decision. D-44 is
+the Sources panel, not this.
+
+**Decision.** FR-12's "any partially related items found are offered, clearly labelled as partial
+matches" is served by a `partial_matches` field on the ask reply, derived from `rank(...)` output
+**before** `admit()` applies `RELEVANCE_THRESHOLD`, deduplicated to one entry per source in rank
+order, capped at `MAXIMUM_PARTIAL_MATCHES = 5`.
+
+**It replaced a front-end keyword heuristic** that took one word from the question and searched on
+it, because a whole question is a single substring matching nothing — measured, a full question
+returned `total_count: 0` while one of its words found the right meeting. That worked, put a
+server-side job in the client, and returned keyword hits rather than the near misses the clause
+describes.
+
+**Derived identically on both no-answer paths, which is the constraint that shaped it.** Not from
+the admitted set, not from the rejected statements, not from anything differing between the paths:
+item 7 made the two replies byte-identical on purpose and item 8 keeps the record-only fields out
+of every serializer for the same reason. Both no-answer constructors **require** the argument
+rather than defaulting it, so the two branches cannot be built with different values.
+
+**Source identity and date only, never passage text**, and structurally so — the objects carry no
+attribute for text, passages or score. A snippet beside a message that has just said the question
+cannot be answered reads as a partial answer: invariant 6 through a side door.
+
+**What it covers:** both no-answer paths, identically, and an answered reply carries the key empty
+so the shape never varies between outcomes. **What it does not cover: any relevance floor at all.**
+The list is the five nearest in-scope sources whatever their score, so on a corpus holding nothing
+related it offers five titles that are not partially related to anything. On six chunks that is
+invisible; on a real corpus it is a screen recommending five documents to someone who asked about a
+subject the platform does not hold. **Unresolved** — either a floor or an explicit acknowledgement
+is owed, and Stage 5 item 3's re-measurement against a real corpus is when the evidence to choose
+will exist.
+
+## D-57 · Three Stage 4 commit-discipline departures, recorded rather than left to be found
+
+**Status:** Recorded · **Date:** 2026-09-27 · **Concerns:** commits `964f73e`, `2c10364`,
+`9d5b5f7`
+
+Both auditors checked every Stage 4 commit against CLAUDE.md §7 and §9. Twenty of twenty-three
+trace cleanly to a numbered item or decision. Three did not.
+
+1. **`964f73e`** — a column and a migration with no D-number. Numbered now as **D-55**.
+2. **`2c10364`** — a reply field, a module, a serializer and a constant with no D-number, plus the
+   deletion of a shipped front-end heuristic. Numbered now as **D-56**.
+3. **`9d5b5f7`** — **items 12, 12a and 12b in one commit**, against §7's "commit at every stage
+   increment ... at each numbered step". D-50 explicitly *supersedes* item 12a's partial closure, so
+   that commit contains both a decision and the decision correcting it.
+
+   **And its subject is wrong in a way that matters for the M6 write-up.** It reads
+   `fix(FR-11/FR-12)` while much of its content is **FR-08**: `MAXIMUM_CHUNKS_PER_SOURCE`, the
+   archive member and total bounds, migration `documents/0007`, and D-51's seventh document status.
+   **Anyone grepping the history for FR-08 will not find the seventh document status.** Per §7 a
+   pushed commit's message is not rewritten, so this entry is the cross-reference: FR-08 work landed
+   in `9d5b5f7` under an FR-11/FR-12 subject.
+
+**The lesson, and the reason to record this at all.** Three increments in one commit is what let
+D-51's front-end half ship missing: the seventh status went in backend-side and the retry affordance
+that contradicts it sat in the same commit's blast radius with nothing forcing a second look. Item 2
+of this finishing pass is that affordance — a defect whose direct cause is the departure recorded
+here.
+
+**A fourth, from this finishing pass itself, for the same reason.** Items 4, 5, 6 and 7 were first
+committed together under a subject naming only item 4, one commit after this entry was drafted. It
+was reset and split before being pushed. Recorded because a rule its own author breaks within the
+hour is evidence about the rule's difficulty, not only about the author: the pressure is always to
+batch documentation edits that touch one file.
