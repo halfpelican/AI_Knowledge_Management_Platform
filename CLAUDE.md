@@ -79,7 +79,7 @@ cut a requirement.
 | Frontend | React + Vite |
 | Generation & embeddings | **FastFlowLM (FLM)** on the AMD Ryzen AI NPU — see §4 |
 | Extraction | `pypdf`, `python-docx`, `openpyxl`; TXT read directly |
-| Tests | `pytest-django` |
+| Tests | `pytest-django`; Vitest + Testing Library + jsdom for `frontend/` (D-62) |
 | Python | **3.12** — matches the CI runner. Pinned in `.python-version` and CI. |
 
 One database serves both the relational schema and the vectors, so a record and its
@@ -296,9 +296,18 @@ A requirement is done when **all** of these hold — not four of five:
 
 1. The endpoint or component behaves as its FR section specifies, including the
    error paths and the stated HTTP status codes.
-2. `pytest` passes, including a test exercising the requirement from **both** an
-   Employee and an Administrator session (Objective 01 requires 100% of protected
-   endpoints covered from both roles).
+2. **Both suites pass: `pytest`, and the front-end suite (`npm test` in
+   `frontend/`).** The server side is tested from **both** an Employee and an
+   Administrator session (Objective 01 requires 100% of protected endpoints
+   covered from both roles). A clause that only the interface can satisfy — what
+   a screen shows, withholds or offers — is tested in the front-end suite. An API
+   test does not stand in for it, and neither does hand-testing.
+
+   > **Amended 28 September 2026 (D-62).** This condition used to read "`pytest`
+   > passes", and that wording is why the front end had no automated evidence from
+   > Stage 2 until Stage 5 item 4. A front-end test could not satisfy it, and the
+   > condition could not require one, so this file's definition of done left out a
+   > whole layer. D-25 raised the gap and it stayed open.
 3. The happy path and at least one failure path are both tested.
 4. The work is committed on its branch with the FR ID in the message.
 5. `requirements-auditor` has checked it against the FR text and reported no gaps.
