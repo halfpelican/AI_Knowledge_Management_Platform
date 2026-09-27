@@ -399,6 +399,22 @@ export const TEXT = {
   // The server sends the fixed text; this is the copy used only if a reply
   // somehow carries none, so the state always says something plain.
   noAnswerFallback: 'This question cannot be answered from the available knowledge base.',
+  // A stored turn that WAS answered and whose citation records no longer exist —
+  // `provenance_removed` on the turn (Stage 4 item 1c). Not the no-answer copy
+  // above, which would tell the reader their question cannot be answered from the
+  // knowledge base: the material is still there, re-embedded under new
+  // identifiers, and a user who believed that sentence would stop asking a
+  // question the system can answer. No statements are shown, because a statement
+  // without its citation is what invariant 6 forbids.
+  //
+  // The wording says what happened to the RECORD. It says nothing about
+  // permissions, because this state has nothing to do with them — the material is
+  // readable and the answer's provenance is not. A turn the reader may no longer
+  // see renders as the silent no-answer state above and says nothing whatever
+  // (invariant 1), which is why the two do not share copy.
+  provenanceRemovedTitle: 'The sources for this answer can no longer be shown',
+  provenanceRemovedFallback:
+    'The citations for this answer are no longer on record, so the answer cannot be shown. Ask the question again for an answer from the current material.',
   // FR-12: "Any partially related items found are offered, clearly labelled as
   // partial matches." These arrive on the ask reply as `partial_matches`: the items
   // its own permission-scoped, ranked candidates found, whatever they scored. They
@@ -424,12 +440,26 @@ export const TEXT = {
   // starting a new conversation, not deleting one. There is no delete route and
   // no rename route, so there is no control for either.
   newTopic: 'Start a new topic',
-  newTopicHint: 'Clears the thread on screen and begins a new conversation. Your previous conversations are kept.',
+  // **The promise is qualified rather than dropped, because it was not true as
+  // written** (Stage 4 item 1c). "Your previous conversations are kept" full stop
+  // was read by a user as "everything on this screen will still be here", and an
+  // answer's citations do not survive a reprocess or a re-index of the material
+  // they came from: `AnswerCitation.chunk` is `on_delete=CASCADE` (D-12). The
+  // thread, the questions and the answers that still have their sources are kept,
+  // which is what it now says.
+  newTopicHint:
+    'Clears the thread on screen and begins a new conversation. Your previous conversations are kept, though an answer whose sources have left the record can no longer be shown.',
   threadEmpty: 'Ask a question to start this conversation. Follow-up questions can refer back to it.',
   threadNew: 'New topic. Your first question will start a new conversation.',
   // A reopened thread keeps each statement and its citation number. It cannot
   // expand a citation, because no route returns the passages a past turn was
   // built from. Said plainly rather than left as a control that does nothing.
+  //
+  // **The second sentence is qualified for the reason `newTopicHint` is**: the
+  // statements are kept only while the citation rows behind them exist, and a
+  // reprocess or a re-index of the material destroys them (D-12's cascade). The
+  // qualification is unconditional copy, shown on every reopened thread, so it
+  // cannot become a signal about any particular turn.
   threadReopenedNote:
-    'Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number.',
+    "Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number for as long as that answer's sources are on record.",
 }

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { TEXT } from '../constants.js'
 import { formatDate } from '../utils/dates.js'
 import { sourceLinkFor, sourceTypeLabel } from '../utils/sources.js'
+import { TURN_STATE, turnStateOf } from '../utils/turns.js'
+import Notice from './Notice.jsx'
 import './Answer.css'
 
 /**
@@ -244,5 +246,80 @@ export function PartialMatches({ idPrefix, results }) {
         })}
       </ul>
     </section>
+  )
+}
+
+/**
+ * What one turn of a thread shows below its question: the answer, or one of the two
+ * states that are not an answer.
+ *
+ * **Three states, and the middle one is the security property** (Stage 4 item 1c).
+ * `src/utils/turns.js` carries the argument in full; the short form is:
+ *
+ * - `answered` — the statements, each with its citation number, and the Sources
+ *   panel beside them.
+ * - `noAnswer` — the corpus had nothing to answer from. **A turn re-scoped away
+ *   from this reader arrives here too and is indistinguishable from it**, because a
+ *   notice that something was removed is itself a disclosure that material exists
+ *   which this role may not read (CLAUDE.md §6, invariant 1). Nothing in this
+ *   branch may ever be made conditional on which of the two it is; the server does
+ *   not send the difference.
+ * - `provenanceRemoved` — the turn WAS answered and the record of what it was drawn
+ *   from no longer exists, because a reprocess or a re-index of the material
+ *   deleted its chunks and with them every citation of them (D-12's cascade). Its
+ *   own title and message, and **no statements**: a statement without its citation
+ *   is what invariant 6 forbids, and there is nothing here to grey out, hold behind
+ *   a disclosure or count.
+ *
+ * The provenance state is NOT given the no-answer copy, which says the question
+ * cannot be answered from the available knowledge base. That sentence is false of a
+ * turn whose material is still indexed, and a reader who believes it stops asking a
+ * question the system can answer.
+ *
+ * Rendered here rather than inline in the Ask screen so that the three states can
+ * be exercised on their own: this layer has no test runner, and a component that
+ * takes one turn and returns markup can be rendered from a script, which is how
+ * these three were hand-verified against bodies captured from the API.
+ *
+ * @param {object} props
+ * @param {object} props.turn one entry of the screen's `turns` list
+ */
+export function TurnBody({ turn }) {
+  const state = turnStateOf(turn)
+
+  if (state === TURN_STATE.answered) {
+    return (
+      <>
+        <AnswerBody
+          idPrefix={turn.key}
+          statements={turn.statements}
+          // A reopened turn carries no passages, so its citation numbers are plain
+          // text rather than controls that expand nothing.
+          sources={turn.expandable ? turn.sources : undefined}
+        />
+        <SourcesPanel idPrefix={turn.key} sources={turn.sources} />
+      </>
+    )
+  }
+
+  if (state === TURN_STATE.provenanceRemoved) {
+    return (
+      <Notice variant="info" title={TEXT.provenanceRemovedTitle}>
+        {turn.message}
+      </Notice>
+    )
+  }
+
+  return (
+    <>
+      {/* No answer. Stated plainly, as an outcome and not an error, with no answer
+          frame around it and no fragment in it. The two no-answer paths are
+          byte-identical in the reply and nothing here tries to tell them apart
+          (invariant 7), as nothing here can tell a re-scoped turn from either. */}
+      <Notice variant="info" title={TEXT.noAnswerTitle}>
+        {turn.message}
+      </Notice>
+      <PartialMatches idPrefix={turn.key} results={turn.partialMatches} />
+    </>
   )
 }

@@ -15,7 +15,7 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from apps.accounts.models import Role
-from apps.core.constants import NO_ANSWER_MESSAGE, ROLE_NAMES
+from apps.core.constants import NO_ANSWER_MESSAGE, PROVENANCE_REMOVED_MESSAGE, ROLE_NAMES
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document
 from apps.meetings.models import Meeting
@@ -542,6 +542,11 @@ class CitedStatementSerializer(serializers.Serializer):
     chunk_id = serializers.UUIDField(read_only=True)
 
 
+# The one place this key is spelled. A test, the API contract and the front end all name the
+# same string, and it is a field a body carries only where it is true (Stage 4 item 1c).
+PROVENANCE_REMOVED_FIELD = "provenance_removed"
+
+
 def permitted_citation_chunk_ids(turns, *, role_name) -> frozenset:
     """Which of these turns' cited chunks the reader's CURRENT role may still see.
 
@@ -601,6 +606,55 @@ class ConversationTurnSerializer(serializers.Serializer):
     was re-scoped, whether it hit no-answer path A or B when it was live, or whether it was
     ever answered at all.
 
+    ---
+
+    **THREE STATES, TWO RENDERINGS, AND WHY THE THIRD IS SEPARATED (Stage 4 item 1c).**
+
+    ``answered`` and ``message`` above conflated three distinct states into two renderings.
+    Everything argued above holds for the first two and is not weakened by the third:
+
+    1. ``turn.answered`` is False — never answered. The silent no-answer state. Unchanged.
+    2. ``turn.answered`` is True, citation **rows exist**, and none of them survives the
+       scope filter — re-scoped. **Byte-for-byte identical to state 1**, which is the
+       invariant-1 case argued at length above and the reason ``provenance_removed`` is
+       ABSENT from the body rather than present and false: a field appearing on a re-scoped
+       turn, whatever its value, is a new place for the notice invariant 1 forbids to grow,
+       and the exact-key-set assertions in ``apps/api/tests/test_fr11_thread_scope.py``
+       continue to hold a re-scoped turn to five keys.
+    3. ``turn.answered`` is True and there are **no citation rows at all** — the rows were
+       destroyed. ``AnswerCitation.chunk`` is ``on_delete=CASCADE`` (D-12), and both
+       ``reprocess_document`` and ``manage.py reindex`` delete a source's chunks and write
+       new ones with fresh UUIDs, so every citation of the old ones goes with them while the
+       passage itself still exists, word for word, under a new identifier. CLAUDE.md section
+       4 mandates a re-index on any provider change, so this is the documented happy path.
+       ``apps/api/tests/test_fr12_traceability_lost_on_reprocess.py`` pins the loss.
+
+    **THE DISCRIMINATOR IS WHETHER THE CITATION ROWS EXIST, NEVER WHETHER THEY SURVIVED
+    SCOPING, AND THE DIFFERENCE IS THE SECURITY PROPERTY.** State 3 says nothing whatever
+    about permissions: a maintenance operation deleted a record, the material is still
+    there, and this reader may well be entitled to every word of it. Disclosing "this
+    answer's provenance record is gone" therefore reveals nothing about restricted material,
+    where disclosing a re-scope would reveal exactly that. Someone will be tempted to
+    simplify ``not has_citation_rows`` into "no surviving citations", because in most bodies
+    the two read alike — **that collapses state 2 into state 3 and reopens the invariant-1
+    disclosure**, telling a demoted reader that something was taken out of their own thread.
+    The distinction is in the rows, so the predicate is on the rows.
+
+    **``answered AND no rows`` cannot happen at write time**, which is what makes the
+    discriminator sound rather than a guess. ``apps.retrieval.query_log`` writes the
+    ``QueryLog`` row and its ``AnswerCitation`` rows in one transaction, and says why: "a row
+    recorded as answered with no citation rows beneath it would be a traceability record that
+    traces to nothing". So the state is unreachable except by a later deletion.
+
+    **What state 3 renders.** No statements — invariant 6 stands, and a statement without its
+    citation is exactly what it forbids. But **not** NO_ANSWER_MESSAGE, which says the
+    question cannot be answered from the available knowledge base: that is untrue of a turn
+    that was answered from material still in the corpus, and a false statement about the
+    corpus is the interface lying to the user rather than protecting them.
+    ``PROVENANCE_REMOVED_MESSAGE`` says what happened to the record, and
+    ``provenance_removed`` is the boolean the client branches on so it never has to parse
+    prose. No count of anything removed, in either state.
+
     **Surviving statements are renumbered from FIRST_POSITION**, for the same reason: a turn
     rendered as "[1] ... [3] ..." announces that [2] was taken out. Where nothing is dropped
     the renumbering is the identity, so an ordinary thread read is byte-for-byte what it was.
@@ -621,6 +675,19 @@ class ConversationTurnSerializer(serializers.Serializer):
     asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
     message = serializers.SerializerMethodField()
     statements = serializers.SerializerMethodField()
+    # Present only where it is true; see ``to_representation`` for why, and state 2 in the
+    # class docstring for why that is not tidiness.
+    provenance_removed = serializers.SerializerMethodField()
+
+    def has_citation_rows(self, turn):
+        """Whether this turn has any ``AnswerCitation`` rows at all, before any scoping.
+
+        The whole of the state 2 / state 3 distinction, and deliberately not expressed in
+        terms of ``surviving_citations``: this asks whether the record EXISTS, that asks
+        whether this reader may see it, and conflating them is the disclosure the class
+        docstring describes. Reads the prefetched rows, so no query of its own.
+        """
+        return bool(turn.citations.all())
 
     def surviving_citations(self, turn):
         """This turn's citations the reader may still see, in the order they were numbered.
@@ -640,8 +707,39 @@ class ConversationTurnSerializer(serializers.Serializer):
         # conditions are one fact for the reader: an answer they can be shown.
         return bool(turn.answered) and bool(self.surviving_citations(turn))
 
+    def get_provenance_removed(self, turn):
+        """State 3, and nothing else: answered, and its citation rows no longer exist.
+
+        False for a re-scoped turn, whose rows are all still there and merely unreadable by
+        this role, and false for a turn that was never answered.
+        """
+        return bool(turn.answered) and not self.has_citation_rows(turn)
+
     def get_message(self, turn):
-        return None if self.get_answered(turn) else NO_ANSWER_MESSAGE
+        if self.get_answered(turn):
+            return None
+        if self.get_provenance_removed(turn):
+            # NO_ANSWER_MESSAGE here would tell the reader their question cannot be answered
+            # from the knowledge base, which is false: it was answered, and the material is
+            # still there under new identifiers.
+            return PROVENANCE_REMOVED_MESSAGE
+        return NO_ANSWER_MESSAGE
+
+    def to_representation(self, turn):
+        """The body, with ``provenance_removed`` omitted unless it is true.
+
+        **The omission is the state 2 guarantee, not neatness.** A re-scoped turn must be
+        indistinguishable from a never-answered one, and the cheapest way to guarantee that
+        for a new field is for the field not to be in the body at all: nothing to compare,
+        nothing for a future serializer to make conditional on scope, and the exact-key-set
+        assertions that already guard invariant 1 keep guarding it without being relaxed to
+        admit a key. The client branch is unaffected — an absent key and ``false`` are the
+        same test in JavaScript — and the message is the field a reader sees either way.
+        """
+        body = super().to_representation(turn)
+        if not body[PROVENANCE_REMOVED_FIELD]:
+            del body[PROVENANCE_REMOVED_FIELD]
+        return body
 
     def get_statements(self, turn):
         if not self.get_answered(turn):

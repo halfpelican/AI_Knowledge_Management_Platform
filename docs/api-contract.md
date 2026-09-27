@@ -635,6 +635,30 @@ is a second route past them — and the third because it records what was put in
 model, including passages nothing cited, which is traceability rather than something the
 reader was shown.
 
+**One turn in three states, and a sixth key on exactly one of them** (Stage 4 item 1c):
+
+| State | `answered` | `message` | `provenance_removed` |
+|---|---|---|---|
+| answered, and still readable by this reader | `true` | `null` | absent |
+| never answered, **or** answered and re-scoped away from this reader | `false` | `NO_ANSWER_MESSAGE` | absent |
+| answered, and its citation rows no longer exist | `false` | `PROVENANCE_REMOVED_MESSAGE` | `true` |
+
+The second row is two states in one rendering **on purpose**: a turn whose statements were
+drawn from material the reader's current role may no longer see is byte-for-byte a turn that
+was never answered, because a notice that something was removed is itself a disclosure that
+material exists which this role may not read (invariant 1). `provenance_removed` is therefore
+**absent unless it is true** — a key present and false on a re-scoped turn would be a new
+place for that notice to grow.
+
+The third state is not a permission state at all and says nothing about one.
+`AnswerCitation.chunk` is `on_delete=CASCADE` (D-12), and both
+`POST /api/documents/{id}/reprocess` and `manage.py reindex` delete a source's chunks and
+write new ones with fresh identifiers, so every citation of the old ones is destroyed while
+the passage still exists, word for word, under a new id. The turn carries no statements
+(invariant 6) and its own message, because `NO_ANSWER_MESSAGE` would tell the reader their
+question cannot be answered from the knowledge base, which is false of material that is still
+indexed. **No count of what was lost**, in either state.
+
 **Where a title comes from (D-43).** `Conversations.title` is a non-blank column and FR-13's
 interface never asks the user to name a topic before typing — it clears the thread and lets
 them start. So `title` is **optional on create**: supplied, it is used as sent; omitted or

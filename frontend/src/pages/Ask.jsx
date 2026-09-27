@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { askQuestion } from '../api/ask.js'
 import { ApiError } from '../api/client.js'
 import { createConversation, fetchConversation, listConversations } from '../api/conversations.js'
-import { AnswerBody, PartialMatches, SourcesPanel } from '../components/Answer.jsx'
+import { TurnBody } from '../components/Answer.jsx'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import TextAreaInput from '../components/TextAreaInput.jsx'
@@ -12,6 +12,7 @@ import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { liveTurnFrom, savedTurnFrom } from '../utils/turns.js'
 import { questionError } from '../utils/validation.js'
 import './Repository.css'
 import './Ask.css'
@@ -48,12 +49,20 @@ const FIELDS = ['question', 'conversation_id']
  * rather than on the button press is what keeps the list free of empty threads
  * nobody asked anything in.
  *
- * **Three states that are not each other**, and the screen keeps them apart
- * because a user who confuses them retries the wrong thing:
+ * **Four states that are not each other**, and the screen keeps them apart
+ * because a user who confuses them retries the wrong thing. The second was added
+ * at Stage 4 item 1c, by separating it from the first:
  *
  * - *No answer* (200, `answered: false`) — the corpus has nothing to answer from.
  *   A designed outcome, stated plainly, with no speculative answer and no empty
- *   answer frame pretending to be one.
+ *   answer frame pretending to be one. A turn the reader's current role may no
+ *   longer see renders as this state too, and deliberately cannot be told from it:
+ *   see `src/utils/turns.js`, which holds that argument and the one below.
+ * - *Sources no longer on record* (a stored turn carrying `provenance_removed`) —
+ *   the turn was answered and the record of what it was drawn from has been
+ *   destroyed by a reprocess or a re-index. No statements, and not the no-answer
+ *   copy either, because "this cannot be answered from the knowledge base" is
+ *   false of a question whose material is still indexed.
  * - *AI unavailable* (503) — the question could not be asked at all. NFR-19's
  *   notice, shown the moment the API answers, and the question is kept in the
  *   field because no `QueryLog` row was written and it can be asked again.
@@ -181,23 +190,14 @@ export default function Ask() {
       const reply = await askQuestion({ question: asked, conversationId: threadId ?? undefined })
       if (reply?.conversation?.conversation_id) setConversationId(reply.conversation.conversation_id)
 
-      const statements = reply?.statements ?? []
-      const sources = reply?.sources ?? []
-      const answered = Boolean(reply?.answered)
-      appendTurn({
-        question: asked,
-        answered,
-        // The server's fixed no-answer text. The fallback exists only so the state
-        // always says something plain; it is never used against a live reply.
-        message: reply?.message ?? TEXT.noAnswerFallback,
-        statements,
-        sources,
-        // FR-12's partially related items, straight off the reply: the key is present
-        // on every reply and populated only on a no-answer, so there is nothing to
-        // derive here and no second request to make (item 10a).
-        partialMatches: reply?.partial_matches ?? [],
-        expandable: true,
-      })
+      // The mapping lives in src/utils/turns.js, with the live turn and the stored
+      // turn beside each other: they are rendered by one branch below, so the two
+      // shapes have to carry the same keys and that is easiest to keep true in one
+      // place. A live turn can never be in the provenance-removed state — its
+      // citations were written in the same transaction as the answer.
+      const turn = liveTurnFrom(reply, { question: asked })
+      const { statements, sources, answered } = turn
+      appendTurn(turn)
       setQuestion('')
       setTouched(false)
       setAcknowledgement(answered ? TEXT.answerReady(statements.length, sources.length) : TEXT.noAnswerReady)
@@ -231,23 +231,11 @@ export default function Ask() {
     setAcknowledgement('')
     try {
       const thread = await fetchConversation(id)
-      const saved = (thread?.turns ?? []).map((turn, index) => ({
-        key: `saved-${id}-${index}`,
-        question: turn.question,
-        answered: Boolean(turn.answered),
-        message: turn.message ?? TEXT.noAnswerFallback,
-        statements: turn.statements ?? [],
-        // A stored turn has no sources and no passage text: nothing returns what a
-        // past turn was built from, so its citations keep their numbers and cannot
-        // expand. Said on the screen rather than left as a control doing nothing.
-        sources: [],
-        // And no partial matches: they were derived from the ranking of the turn that
-        // was live, and no route returns a past turn's candidates. Empty, not absent,
-        // so the same branch renders a stored turn and a live one.
-        partialMatches: [],
-        expandable: false,
-        askedAt: turn.asked_at,
-      }))
+      // src/utils/turns.js holds the mapping and the three states a stored turn can
+      // be in, including the one where the answer's citation records no longer exist.
+      const saved = (thread?.turns ?? []).map((turn, index) =>
+        savedTurnFrom(turn, { key: `saved-${id}-${index}` }),
+      )
       setConversationId(thread?.conversation_id ?? id)
       setTurns(saved)
       setReopened(true)
@@ -401,27 +389,10 @@ export default function Ask() {
                     ) : null}
                   </p>
 
-                  {turn.answered ? (
-                    <>
-                      <AnswerBody
-                        idPrefix={turn.key}
-                        statements={turn.statements}
-                        sources={turn.expandable ? turn.sources : undefined}
-                      />
-                      <SourcesPanel idPrefix={turn.key} sources={turn.sources} />
-                    </>
-                  ) : (
-                    <>
-                      {/* No answer. Stated plainly, as an outcome and not an error,
-                          with no answer frame around it and no fragment in it. The
-                          two no-answer paths are byte-identical in the reply and
-                          nothing here tries to tell them apart (invariant 7). */}
-                      <Notice variant="info" title={TEXT.noAnswerTitle}>
-                        {turn.message}
-                      </Notice>
-                      <PartialMatches idPrefix={turn.key} results={turn.partialMatches} />
-                    </>
-                  )}
+                  {/* The three states a turn can be in, and which of them may be
+                      told apart from which, live in src/components/Answer.jsx
+                      beside the answer presentation itself. */}
+                  <TurnBody turn={turn} />
                 </article>
               )
             })}
