@@ -111,7 +111,7 @@ Rules for this file:
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
 | D-58 | An unused conversation can outlive a session; closing it needs a contract addition | **Open** | 2026-09-27 |
 | D-59 | Most finishing-pass subjects omit the FR ID; the entry's first draft was an instance of the rule | Recorded | 2026-09-27 |
-| D-60 | Stage 4 fails §8 conditions 4 and 5; neither is closed by rewording, and both are recorded as failing | **Open** | 2026-09-28 |
+| D-60 | Stage 4 closes with §8 condition 4 declined and condition 5 failed; both recorded | Recorded · **4 declined, 5 failed** | 2026-09-28 |
 
 ---
 
@@ -2868,26 +2868,43 @@ rewriting them cannot make §8 pass, because condition 5 fails for a reason no r
 touches.
 
 
-## D-60 · Stage 4 fails §8 conditions 4 and 5, and both are recorded as failing rather than described as met
+## D-60 · Stage 4 closes with §8 condition 4 declined and condition 5 failed, both recorded rather than described as met
 
-**Status:** Open · **Date:** 2026-09-28 · **Concerns:** CLAUDE.md §8 conditions 4 and 5
-for FR-11, FR-12 and FR-13 · **Supersedes:** the closing paragraph of D-59's first draft
+**Status:** Recorded · condition 4 **declined**, condition 5 **failed** · **Date:**
+2026-09-28, corrected the same day · **Concerns:** CLAUDE.md §8 conditions 4 and 5 for
+FR-11, FR-12 and FR-13 · **Supersedes:** the closing paragraph of D-59's first draft
 
 CLAUDE.md §8 says a requirement is done when **all** five conditions hold, "not four of
-five". Two do not hold for this stage. They were pointed at each other, so the honest
-resolution was to do both or neither — to reword the subjects, run a pass that returns
-clean, and have §8 genuinely satisfied; or to do neither and record the failures with
-their evidence. Doing one and describing it as both is the outcome this entry exists to
-prevent.
+five". Conditions 4 and 5 do not hold for this stage, and they do not hold for different
+reasons: condition 5 failed on measurement, and condition 4 was declined. **This entry's
+first version framed the two as pointed at each other — do both or neither — and that
+framing was wrong.** They are independent in both directions. No commit subject changes
+what an audit finds, which is why rewording could not have made §8 *pass*; but equally no
+audit finding stopped the subjects being reworded, so condition 4 could have been *met*
+on its own. The first version let the first fact stand in for the second.
 
-**Condition 4 — "committed on its branch with the FR ID in the message" — fails.**
-D-59 names the nine subjects that omit it under §7 and the three messages that omit it
-entirely. Not fixed. The subjects *could* be rewritten: no commit in
-`9508442..e81c6e6` is an ancestor of `main`. But they are pushed, they are the content
-of **open PR #17**, and `5a4ed61` merges `main` into the branch on top of them, so a
-rewrite is a force-push to a shared ref that a reviewer may already be reading — a
-decision for the repository's owner. It was raised in D-59's first draft and is raised
-again here rather than taken quietly in either direction.
+**Condition 4 — "committed on its branch with the FR ID in the message" — DECLINED.**
+D-59 lists the subjects in `9508442..e81c6e6` that omit the FR ID under §7, and the
+messages that omit it entirely. Condition 4 was independently achievable while those
+commits were unpushed: rewording them was a local rebase, touching no shared ref, at no
+risk to anyone, and requiring nothing of condition 5. **It was declined.** The first
+version of this paragraph said only that condition 4 "fails", and called it "a decision
+for the repository's owner" as if the decision were still pending — from which a reader
+infers it could not be done. That is the same shape of defect the rule at the head of
+this file exists to prevent, in the entry recording that rule's own outcome, and it is
+corrected here rather than quietly rewritten.
+
+**It stays declined, and the reason is that the window has closed.** The commits in
+`9508442..e81c6e6` were pushed at 21:20:20 on 27 September and merged to `main` by PR
+#17 (`e71a0f9`) at 21:31:49 that evening. `403087f`, the commit carrying this entry's
+first version, is pushed and merged to `main` by PR #18 (`1220e96`). Rewording the
+subjects now would rewrite `main`'s history beneath merged pull requests — a force-push
+to the shared default branch — and an FR ID in a subject line is not worth that. The
+first version also called PR #17 **open** and said no commit in the range was an ancestor
+of `main`. Both were false when committed: `403087f` is dated 08:00:30 on 28 September,
+and #17 had merged at 21:31:49 the evening before. A claim about the state of a pull
+request is a claim about a mutable ref, which D-59 already names as the same failure mode
+as a count.
 
 **Condition 5 — "`requirements-auditor` has checked it against the FR text and reported
 no gaps" — fails, and this is why rewording would not have helped.** The two conditions
@@ -2922,8 +2939,9 @@ is a table of rows rather than a sentence with a total in it.
 **Consequence, stated plainly.** FR-11, FR-12 and FR-13 meet conditions 1, 2 and 3 —
 the behaviour, the dual-role tests at 19/19, and a failure path each. They do not meet
 conditions 4 and 5. By §8's own wording that means they are **not done**, and the M6
-gate list should carry them as such until an audit returns clean and the subject
-question is decided. What is demonstrable is unaffected: the pipeline, the permission
+gate list carries them that way: condition 4 is declined for `9508442..e81c6e6` and will
+not pass, and condition 5 stands failed unless a later audit returns clean. What is
+demonstrable is unaffected: the pipeline, the permission
 boundary and the assistant work, and every defect the five passes found was in prose
 describing the work, with the single exception of the shipped no-answer string, which is
 fixed at both sites with the bundle rebuilt.
