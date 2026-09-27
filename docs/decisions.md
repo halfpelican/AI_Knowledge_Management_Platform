@@ -2119,6 +2119,49 @@ history to match a role change would destroy the evidence while fixing the discl
 question text and the thread title stay, for the reason D-42 passes prior questions: they are
 the user's own words.
 
+> **QUALIFIED, 27 September 2026, and this entry is the fourth instance of the pattern in this
+> file's own header rule.** The sentence above is true of the re-scoping path it was written
+> about and false of the system. **Two shipped paths destroy `AnswerCitation` rows outright**,
+> because `AnswerCitation.chunk` is `on_delete=CASCADE`:
+>
+> | Path | Reachable by | Effect |
+> |---|---|---|
+> | `POST /api/documents/{id}/reprocess` | either role — it is gated on `contribute_content`, which D-30 gives to both | deletes the source's chunks, recreates them with fresh UUIDs, and every citation row naming the old ones dies with them |
+> | `manage.py reindex` | anyone with a shell; **CLAUDE.md §4 mandates it on any provider or embedding-model change** | the same, for every source in the corpus |
+>
+> Measured against the live database in a rolled-back transaction: citations 1 → 0, the
+> `QueryLog` row survives, `answered` is still `True`, `answer_text` survives, and
+> `retrieved_chunk_ids` is left naming rows that no longer exist.
+>
+> **What this entry covers:** a role narrowing, a source's scope narrowing, and a reader whose
+> permissions changed between writing a turn and reading it. Stored rows genuinely are
+> untouched on all three.
+>
+> **What it does not cover:** any operation that deletes a chunk row. Reprocess, re-index, and
+> FR-15's permissioned document deletion when it lands.
+>
+> **Why the original closure was as wide as its instance.** D-12 settled the cascade on
+> `AnswerCitations` by reasoning about exactly one case — FR-15's document deletion, where
+> "with the chunk gone the citation has nothing to cite" is a fair argument, because the
+> material really is gone. Reprocess and re-index delete chunks for material that **still
+> exists**: the same text, re-chunked, under new identifiers. Nothing in the repository
+> connected D-12's model-layer decision to FR-12's traceability clause or to the FR-13 route
+> that reads those rows, and Stage 1's own
+> `test_citation_cascades_when_its_chunk_is_deleted` asserted the deletion *as desirable*,
+> which is why three stages passed without anyone joining the two.
+>
+> **Consequences, recorded rather than fixed before M6.** FR-12's traceability clause — "the
+> question, the retrieved chunk identifiers, the answer and its verified citations are logged,
+> so that any answer can later be traced to the material that produced it" — is satisfied at
+> write time and not afterwards. The behaviour is pinned by a test at the FR level (item 1a)
+> rather than assumed. The rendering consequence is separated from the re-scoping case in item
+> 1c, because a turn whose provenance was destroyed by maintenance is not the same state as a
+> turn whose citations this reader may no longer see, and only the second must stay silent.
+>
+> Changing `on_delete` to `SET_NULL` with a nullable identifier snapshot would make the
+> original sentence true. That is a migration and a serializer decision, and it is not being
+> made before M6.
+
 **THE CLASS, which is the reason this entry exists as well as the instance.** Derived records
 do not carry visibility, and nothing re-derives it. Four instances, three found and one by
 inspection:
