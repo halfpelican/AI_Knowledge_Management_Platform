@@ -227,9 +227,10 @@ def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
         # "Processing failed. Please try again" against a document that did not index, and
         # a reprocess of an over-cap document fails identically every time because nothing
         # about the file has changed — and D-32's retry re-runs extraction and chunking in
-        # full before failing at the identical point. FR-08's retry affordance must be
-        # suppressed for this status; that is Stage 5 presentation work and is NOT done.
-        # Until it is, the row states the truth and the button still lies.
+        # full before failing at the identical point. FR-08's retry affordance is therefore
+        # suppressed for this status — DONE, 27 September 2026: canReprocess() refuses it and
+        # the row carries a sentence explaining the absent control instead of a button that
+        # cannot honour it (finishing-pass item 2).
         #
         # 422 either way: docs/api-contract.md already gives that code to "stored but could
         # not be indexed", and the message distinguishes this from the embedding failure.

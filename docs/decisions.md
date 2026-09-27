@@ -80,6 +80,7 @@ Rules for this file:
 | D-55 | `rejected_count` on QueryLog — numbering a column that shipped without one | Settled retroactively | 2026-09-27 |
 | D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
+| D-58 | An unused conversation can outlive a session; closing it needs a contract addition | **Open** | 2026-09-27 |
 
 ---
 
@@ -2485,9 +2486,19 @@ trigger is chunk count rather than bytes, so "large" is the user's word rather t
 - `docs/schema-v1.md` §3 and `apps/core/tests/test_schema.py` both carry the value, because that
   test transcribes that document. The migration had to be placed immediately after `0006` in the
   test's plan rather than at the end, which is where the executor plans it.
-- **REQUIRED FOLLOW-UP, Stage 5 presentation work: the front end must suppress FR-08's retry
-  affordance for this status.** Until it does, the row states the truth and the button still
-  lies. Recorded in `documents.py`, `constants.py` and `docs/schema-v1.md` so it cannot be lost.
+- ~~**REQUIRED FOLLOW-UP, Stage 5 presentation work: the front end must suppress FR-08's retry
+  affordance for this status.**~~ **DONE 27 September 2026**, in the Stage 4 finishing pass
+  rather than in Stage 5: `canReprocess()` refuses the status, and because `DocumentTable` only
+  rendered its status sentence for retryable rows, the rule was split into `canReprocess` and
+  `statusMessageFor` so the one row nobody can act on is not also the only row with no
+  explanation. The same defect existed a second time in the upload queue, where `failureFor`'s
+  422 branch marked every failure retryable and a first upload over the cap is a 422 carrying
+  this status.
+
+  It was recorded in `documents.py` and `docs/schema-v1.md`, both now corrected — and this
+  bullet said "`constants.py`" as a third, which was never true: that file carries the
+  reasoning and never carried the not-done note. A follow-up recorded in one place fewer than
+  claimed is the same defect as a closure wider than measured, in the other direction.
 - **The meetings asymmetry is deliberate and explicit.** An over-cap transcript keeps
   `Processing failed`: the proposal defines no meeting status column (D-28), and FR-09 offers no
   retry affordance to mislead. If FR-09 ever grows one, it needs the same treatment.
@@ -2729,3 +2740,46 @@ committed together under a subject naming only item 4, one commit after this ent
 was reset and split before being pushed. Recorded because a rule its own author breaks within the
 hour is evidence about the rule's difficulty, not only about the author: the pressure is always to
 batch documentation edits that touch one file.
+
+## D-58 · An unused conversation can outlive a session, and closing it needs a contract addition
+
+**Status:** Open — recorded, not resolved · **Date:** 2026-09-27 · **Comes due:** Stage 5 ·
+**Arises from:** the finishing pass's item 3
+
+`POST /api/ask` attaches a turn to a thread and **creates none**: an omitted `conversation_id`
+means `QueryLog.conversation` stays NULL and the reply's `conversation` is `null`. So the client
+must create the thread *before* asking, and a first question that fails — a 503 on NFR-19's own
+demonstration path, or a 400 the client pre-check missed — leaves a thread with nothing in it.
+
+**Create-then-ask is forced by the contract, and the obvious fix is worse than the defect.**
+Creating the thread only after a reply succeeds would make the first question a one-off that no
+thread can adopt: the thread would reopen without its own first question, and the prior questions
+a follow-up resolves against are read from that thread's `QueryLog` rows (D-42). That trades a
+cosmetic defect for an FR-13 one.
+
+**What item 3 fixed:** abandonment. A thread whose question failed is reused rather than
+abandoned, "start a new topic" keeps an unused thread instead of stranding it, a reply of either
+kind retires the reuse, and a 404 drops the id. One failed first question now costs **at most one**
+thread per session however many retries or topic clears follow, where each cycle previously cost
+another.
+
+**What is not fixed, and is not claimed to be:** a thread created for a question that failed, after
+which the user leaves, persists. Nothing under `frontend/` can remove it and nothing was invented
+to try.
+
+**The two ways to close it, neither chosen here.**
+
+1. **`has_turns`, or a turn count, on the `GET /api/conversations` list object.** A thread nobody
+   asked anything in is then omitted from the list. Cheapest: no new route, no new verb, no
+   departure from FR-13's CRUD line.
+2. **A Delete route.** FR-13's Database clause is Create, Read, Update, so this would be a verb the
+   requirement does not specify — and D-43 already argued against inventing FR-13 controls the
+   interface does not ask for.
+
+Option 1 is the likelier answer and it is still a contract addition, so it is raised rather than
+taken.
+
+**One thing deliberately not done.** Emptiness is *not* inferred from the `"New conversation"`
+title. D-43's own consequence is that a whitespace-only question leaves the placeholder standing,
+so a title test would be a heuristic on a display string — the class of thing this file has spent
+the stage removing.
