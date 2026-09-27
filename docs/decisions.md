@@ -120,6 +120,7 @@ Rules for this file:
 | D-59 | Most finishing-pass subjects omit the FR ID; the entry's first draft was an instance of the rule | Recorded | 2026-09-27 |
 | D-60 | Stage 4 closes with §8 condition 4 declined and condition 5 failed; both recorded | Recorded · **4 declined, 5 failed** | 2026-09-28 |
 | D-61 | The Stage 4 closing audit: INCOMPLETE, recorded verbatim; its findings are carried to Stage 5 unfixed | Recorded · **findings open against Stage 5** | 2026-09-28 |
+| D-62 | A front-end test runner lands; the interface is no longer accepted as untested; §8 condition 2 names pytest and the front-end suite | Settled by the user | 2026-09-28 |
 
 ---
 
@@ -648,7 +649,7 @@ authorisation decided only in React; no secret committed.
 
 ## D-25 · Stage 2 corrected against the proposal's FR text
 
-**Status:** Settled, one bullet amended by D-26 · **Date:** 2026-09-13 · **Supersedes:** parts of D-23 and D-24
+**Status:** Settled, one bullet amended by D-26, its front-end testing question closed by D-62 · **Date:** 2026-09-13 · **Supersedes:** parts of D-23 and D-24
 
 > One rule below is out of date: this entry says a failed attempt during an
 > active lock neither moves the counter nor extends the window. D-26 changes the
@@ -3165,3 +3166,102 @@ re-headed so its structure does not interleave with this file's.
 > 15. Deployment topology for the FLM-backed alpha is undecided; switching provider forces a re-index and triggers gap 5. **Gate risk (set-level, Stage 5 item 9)**
 >
 > **Stage 4 is INCOMPLETE:** the permission boundary holds, but none of FR-11, FR-12 or FR-13 meets §8, and gap 3 sits on the path the assessor will walk.
+
+## D-62 · A front-end test runner lands, and the interface stops being accepted as untested
+
+**Status:** Settled by the user · **Date:** 2026-09-28 · **Closes:** D-25's "Still open,
+for the team" (`docs/stage-4-clause-audit.md` cites it as "D-25, audit finding 8"),
+D-33's "Still open" bullet, and D-61's gap 9 · **Answers:** Stage 5 item 4 ·
+**Commits:** `ec6f39b` (runner and CI job), `7b4dc33` (tests), `9d04f3c` (`CLAUDE.md` §8)
+
+**The fork is decided.** Stage 5 item 4 offered two defensible outcomes: land a runner,
+or record that invariant 6 is verified at the API boundary only and accept the
+interface as untested. The runner landed. **The alternative is declined, not left
+open.**
+
+**What landed.**
+
+- Vitest 5.0.2, `@testing-library/react` 16.3.3 with its `@testing-library/dom` 10.4.2
+  peer, and jsdom 30.1.1, at the versions npm resolved against Vite 8.3.0 and React
+  19.3.0. Configured in `frontend/vite.config.js`. `npm test` runs `vitest run`.
+- A `frontend` job in `.github/workflows/ci.yml`, beside `backend`: Node 24, `npm ci`,
+  lint, build, test.
+- `frontend/tests/setup.js` stubs `fetch` and `XMLHttpRequest` before every test.
+  These are the only transports `src/api/client.js` uses. Every call that reaches
+  them is recorded, and the test fails in `afterEach`. Refusing the call is not
+  enough on its own: `request()` turns a transport failure into an ordinary
+  `ApiError`, so a refused call would otherwise show as a normal failure state and
+  the test would pass. This is the front-end version of `conftest.py`'s
+  `no_live_provider`.
+- Tests mock at `fetch` (`frontend/tests/fakeApi.js`), beneath the API client. The
+  client's own 503 message, `ApiError` and JSON handling therefore run as shipped.
+  They live in `frontend/tests/`, outside `src/`.
+
+**What the suite covers.** Each test was shown to fail against a mutation of
+`frontend/src` that broke its property. The mutations are listed in `7b4dc33`'s
+message.
+
+| Test | Defends |
+|---|---|
+| a rejected statement renders nothing at all | invariant 6: a reply given leaked `rejected_statements`, `rejected_count` and `no_answer_reason` renders byte-identically to the same reply without them |
+| the no-answer state renders `NO_ANSWER_MESSAGE`, identically on path A and path B | invariant 7 at the screen, and `TEXT.noAnswerFallback` agreeing with `apps/core/constants.py`, which the test reads rather than copies |
+| a re-scoped turn renders the no-answer state | invariant 1 on a reopened thread (D-48): not blank, not `provenanceRemovedTitle`, no wording about removal, withholding, restriction or permission |
+| a 503 renders the NFR-19 notice | the `alert` notice, the client's 503 text, `askNotRecorded`, and the question kept in the field |
+| an arriving answer is acknowledged visibly | usability finding 1: the `role="status"` text is on the page, with no `visually-hidden` class or `hidden` ancestor |
+| `canReprocess` is false for "Too large to index" | D-51's regression |
+| the withdrawn sentence is absent from `frontend/src` | D-60's shipped string, "Ask the question again for an answer from the current material." |
+
+**What it does not cover.** Per the rule at the head of this file, as a list. The suite
+tests the behaviours in the table above and nothing else. It is not coverage of
+`frontend/src`, and no coverage is measured or targeted.
+
+- **Any file under `frontend/src` that none of the tests above renders or imports.**
+  That takes in every file in `src/pages/` except `Ask.jsx`: `AccessDenied`,
+  `DocumentDetail`, `DocumentRepository`, `Home`, `Login`, `MeetingDetail`,
+  `Meetings`, `Register`, `RoleManagement`, `Search` and `Upload`. It also takes in the
+  `RequireAuth` and `RequireRole` guards, and every component the Ask screen does not
+  mount.
+- **FR-12 and FR-13 front-end clauses outside the table**, each graded "satisfied" or
+  "partial" by reading code in D-61: the search field on every page; results grouped
+  by type with a count; a citation expanding to its passage; the link to the source;
+  the Sources panel listing every item consulted with its date; partial matches
+  labelled as such; the two-character search minimum; the assistant reachable from
+  any page; the thread retained across follow-ups; previous conversations listed and
+  reopenable; the thread cleared for a new topic.
+- **A malformed `statements` entry.** The invariant 6 test covers fields a reply
+  should not carry. It does not cover a statement inside `statements` that has no
+  `chunk_id`, or one whose `chunk_id` is not among the passages in `sources`.
+  `Answer.jsx` renders that statement with a plain citation number. The server is
+  the only defence there.
+- **The provenance-removed state.** Nothing renders it. Nothing checks that
+  `TEXT.provenanceRemovedFallback` agrees with `PROVENANCE_REMOVED_MESSAGE`, although
+  the comment on that constant in `src/constants.js` names a runner as the thing
+  that would.
+- **The repository row's use of `canReprocess`.** The test calls the function. It
+  does not render a "Too large to index" row and check that no retry button
+  appears. `statusMessageFor`, and `canReprocess` for other statuses, are untested.
+- **Other withdrawn text.** The string check covers the D-60 sentence only, and
+  `frontend/src` only, not `frontend/dist`. D-27's earlier no-answer wording, "No
+  answer could be found in the material you have access to.", is not checked.
+- **Styling.** jsdom applies no stylesheet. The acknowledgement test would not catch
+  a CSS rule that hid the status line, and nothing checks contrast or focus
+  appearance. Those belong to Stage 5 item 7.
+- **Transports other than `fetch` and `XMLHttpRequest`.** `WebSocket`, `EventSource`
+  and `navigator.sendBeacon` are not stubbed. `src/` uses none of them.
+- **Roles.** The front-end tests run no session, so §8's dual-role requirement stays
+  with `pytest`, where the server enforces it.
+- **D-61's gaps 3 and 4** (the thread lost on navigation, reopened turns that cannot
+  expand). They are neither tested nor fixed.
+
+**The standard moves with the runner.** `CLAUDE.md` §8 condition 2 read "`pytest`
+passes". A front-end test could not satisfy that wording and it could not demand
+one, so the definition of done excluded the interface from Stage 2 until this item.
+`9d04f3c` rewrites the condition to require pytest and the front-end suite, and to
+test in the front-end suite any clause that only the interface can satisfy.
+**Under the amended wording, the FR-12 and FR-13 clauses listed above do not meet
+condition 2.** The amendment raises the bar. It does not reach back and pass
+anything. It sits beside D-60's record of conditions 4 and 5 and does not change it.
+
+**Verified locally only.** `npm run lint`, `npm run build` and `npm test` pass on Node
+24.16.0 on the development machine. The `frontend` CI job has not run on GitHub as of
+this entry, because nothing on this branch has been pushed.
