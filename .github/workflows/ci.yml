@@ -59,3 +59,38 @@ jobs:
 
       - name: Run the test suite
         run: pytest -q
+
+  # Stage 5 item 4 (closes D-25's open question on front-end testing). Lint, build
+  # and test the React application. No backend and no network: the suite stubs
+  # fetch and XMLHttpRequest and fails any test that reaches either
+  # (frontend/tests/setup.js), so this job needs no services.
+  frontend:
+    name: React on Node 24 — lint, build, test
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # jsdom's engines field requires Node ^22.22.2 or ^24.15.0; 24 matches the
+      # development machine.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install from the lockfile
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Run the test suite
+        run: npm test
