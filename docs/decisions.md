@@ -41,14 +41,21 @@ Rules for this file:
   | D-49 | which archive members the decompression bound covers |
   | D-48 | the sentence about rows the re-scope leaves untouched |
   | D-51 | how many follow-up paths the status could honour |
-  | `PROVENANCE_REMOVED_MESSAGE` | promised "an answer from the current material" on the two paths that leave no material |
+  | `PROVENANCE_REMOVED_MESSAGE` | promised "an answer from the current material" on the paths that leave no material — a failed reprocess and FR-15's deletion |
   | D-59 | "nothing in this branch's history names FR-11, FR-12 or FR-13", written from a reading of subject lines, in a commit whose own subject is `fix(FR-11/FR-12/FR-13)` |
-  | this rule, in `9508442..e81c6e6` | said "Four entries" for the eleven commits in which it was being enforced, then "Seven" in the commit that made it eight |
-  | this rule, until the fifth pass | "the last introduced by the very commit that corrected the one before it" — `116a422` introduced it and touches no decision entry; `4400b7b`, two commits later, corrected the previous one |
-  | this rule, until the fifth pass | "Four audits have each found one", set immediately beneath a list of seven |
-  | `apps/core/constants.py` | called this list's last entry "the sixth instance" while the same commit's subject called it "the seventh" |
+  | this rule, in `9508442..e81c6e6` | said "Four entries" in every commit of `9508442..52ff2b7`, then "Seven" in `e81c6e6`, the commit that introduced the D-59 instance it did not count |
+  | this rule, until `403087f` | "the last introduced by the very commit that corrected the one before it" — `116a422` introduced it and touches no decision entry; `4400b7b`, two commits later, corrected the previous one |
+  | this rule, until `403087f` | "Four audits have each found one", set immediately beneath a list of seven |
+  | `apps/core/constants.py` | called the `PROVENANCE_REMOVED_MESSAGE` instance "the sixth" while the same commit's subject called it "the seventh" |
   | `frontend/src/utils/documentStatus.js` | "Three statuses are refused it" over a list of two, in the commit that corrected the same docstring's "Two" |
   | `docs/stage-4-clause-audit.md` | "one row below the two that had just been corrected" — the re-audit corrected rows 9, 14, 22 and FR-11's Database row, none of them in that table |
+  | D-60, in `403087f` | "It returned six instances in that one commit" over a list of seven, then "All six are fixed" and "five of the six" — the last naming a subset it never identifies |
+  | D-60, in `403087f` | "Five passes have now run", "the four before it", "A sixth pass" — counts and ordinals over audit passes listed nowhere, falsified by the next pass to run |
+  | D-60, in `403087f` | "D-59 names the nine subjects … and the three messages", and "the two D-59 sentences above" — counts of lists held in another entry, and a position |
+  | this table, in `403087f` | rows keyed "until the fifth pass", and "this list's last entry" — ordinals and a position, in the table whose rule forbids them; the last was falsified by the next row added |
+  | this table, in `403087f` | "for the eleven commits in which it was being enforced … the commit that made it eight", and "the two paths that leave no material" — counts where a range, a hash and a list existed |
+  | D-59, in `403087f` | "The other nine name a requirement in the body", and D-57 "found three departures" — counts over sets listed elsewhere or not at all |
+  | `frontend/src/pages/Ask.jsx`, in `403087f` | "the four paths enumerated at" `apps/core/constants.py` — a count of a list held in another file |
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -2835,7 +2842,7 @@ for, and the two are not alternatives: an item number means nothing to a reader 
 the finishing-pass brief, and that brief is not in the repository.
 
 **§8 condition 4, the FR ID anywhere in the *message* — these three fail:** `72c26ed`,
-`96b4bbe`, `116a422`. The other nine name a requirement in the body.
+`96b4bbe`, `116a422`. Every other commit in the range names a requirement in the body.
 
 **This entry's first draft was itself an instance of the rule above, and it is
 corrected here rather than quietly rewritten.** It said *"the only FR IDs in any
@@ -2860,8 +2867,8 @@ branch "already had a merged pull request (#15)"; there are two, #15 (`39a183b`)
 is the same failure mode as a count — `origin/<branch>` is not a list of hashes.
 
 **What this entry covers:** the twelve commits in `9508442..e81c6e6`. **What it does
-not:** the twenty-three commits of PR #15, audited by D-57, which found three
-departures and named them; and the single commit of PR #16.
+not:** the commits of PR #15, audited by D-57, which names the departures it found;
+and the commit of PR #16.
 
 **The subjects were not rewritten.** D-60 records why, and the short reason is that
 rewriting them cannot make §8 pass, because condition 5 fails for a reason no rewrite
@@ -2908,15 +2915,15 @@ as a count.
 
 **Condition 5 — "`requirements-auditor` has checked it against the FR text and reported
 no gaps" — fails, and this is why rewording would not have helped.** The two conditions
-are independent: no commit subject affects what an audit finds. Five passes have now
-run. The fifth was deliberately bounded — scoped to the diff of `e81c6e6` alone, with a
-single stated pass condition, "does this commit introduce another instance of the
-coverage rule?" — because the four before it each found something real in what the
-previous one had written, which is a loop with no fixed point: the audit reads text, and
-every fix writes new text. A bounded pass can come back clean rather than merely come
-back. **It did not come back clean.** It returned six instances in that one commit, all
-verified independently before being accepted: the two D-59 sentences above; this file's
-rule saying "Seven"; its "the last introduced by the very commit that corrected the one
+are independent: no commit subject affects what an audit finds. The pass over
+`e81c6e6` was deliberately bounded — scoped to that commit's diff alone, with a single
+stated pass condition, "does this commit introduce another instance of the coverage
+rule?" — because unbounded passes had become a loop with no fixed point: the audit reads
+text, and every fix writes new text. A bounded pass can come back clean rather than
+merely come back. **It did not come back clean.** It returned these, in that one commit,
+all verified independently before being accepted: D-59's "the only FR IDs in any subject
+are FR-08 and FR-15" and "Nothing in this branch's history names FR-11, FR-12 or FR-13";
+this file's rule saying "Seven"; its "the last introduced by the very commit that corrected the one
 before it" (`116a422` introduced it and touches no decision entry, and `4400b7b`
 corrected the previous one two commits later); its "Four audits have each found one" set
 beneath a list of seven; `apps/core/constants.py` calling that entry "the sixth" while
@@ -2926,15 +2933,24 @@ docstring's "Two"; and `docs/stage-4-clause-audit.md` placing a correction "one 
 the two that had just been corrected" when the rows corrected were 9, 14, 22 and FR-11's
 Database row, none of them in that table.
 
-**What the fifth pass changes, and what it does not.** All six are fixed in the commit
-carrying this entry, and fixed *structurally* — by deleting the count or the positional
-reference and substituting a list, a range or a commit hash — because correcting the
-number is precisely what produced five of the six. That is the amendment the rule above
-now carries, and it is the only fix that ends the loop: prose that enumerates cannot be
-falsified by the next addition. **It does not make condition 5 pass.** No pass has
-reported no gaps, and the commit that fixes these six is itself unaudited. A sixth pass
-would read new text and could find a new instance; the difference is that the new text
-is a table of rows rather than a sentence with a total in it.
+**What the pass over `e81c6e6` changes, and what it does not.** Each of those is fixed
+in `403087f`, and fixed *structurally* — by deleting the count or the positional
+reference and substituting a list, a range or a commit hash — because a corrected number
+is still a number, and the next addition falsifies it. That is the amendment the rule
+above now carries: prose that enumerates cannot be falsified by the next addition.
+**It does not make condition 5 pass.** No pass has reported no gaps.
+
+**The pass over `403087f`, and where the loop stops.** `403087f` was then given the same
+bounded pass, with its condition stated in advance: does this commit introduce a further
+instance of a coverage claim that counts, enumerates or refers by position instead of
+listing? The expectation was a clean result, since that fix was structural rather than
+corrective. **It was not clean.** The table stayed free of totals, but two of its own row
+keys carried ordinals, and the prose written around it — this entry, D-59, `Ask.jsx` —
+counted sets it did not list. The findings are rows in the table at the head of this file,
+each keyed "in `403087f`", and they are fixed in the commit that adds those rows. **That
+fix is deliberately not audited.** Auditing the fix is the recursion the bound exists to
+end, so the loop stops here by decision, not at a demonstrated fixed point: the table
+closes the class structurally, and prose outside it is not yet shown to.
 
 **Consequence, stated plainly.** FR-11, FR-12 and FR-13 meet conditions 1, 2 and 3 —
 the behaviour, the dual-role tests at 19/19, and a failure path each. They do not meet
@@ -2942,6 +2958,6 @@ conditions 4 and 5. By §8's own wording that means they are **not done**, and t
 gate list carries them that way: condition 4 is declined for `9508442..e81c6e6` and will
 not pass, and condition 5 stands failed unless a later audit returns clean. What is
 demonstrable is unaffected: the pipeline, the permission
-boundary and the assistant work, and every defect the five passes found was in prose
-describing the work, with the single exception of the shipped no-answer string, which is
-fixed at both sites with the bundle rebuilt.
+boundary and the assistant work, and the defects the audit passes found were in prose
+describing the work, apart from the shipped no-answer string, which is fixed at both
+sites with the bundle rebuilt.

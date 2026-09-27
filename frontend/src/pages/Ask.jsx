@@ -98,7 +98,7 @@ const FIELDS = ['question', 'conversation_id']
  *   copy either, because "this cannot be answered from the knowledge base" is a
  *   claim about the corpus, and this state makes none: a re-index or a successful
  *   reprocess leaves the material indexed, while a failed reprocess and FR-15's
- *   deletion leave none of it. See the four paths enumerated at
+ *   deletion leave none of it. See the paths enumerated at
  *   `apps/core/constants.py`'s PROVENANCE_REMOVED_MESSAGE. The earlier wording here
  *   asserted the material was "still indexed", which is the claim
  *   `docs/api-contract.md` retired on 27 September and this file kept.
