@@ -202,9 +202,12 @@ NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowled
 #
 # The second sentence deliberately promises NOTHING about what asking again will return. An
 # earlier version said "for an answer from the current material", and that was false on two of
-# the FOUR paths that reach this state — the sixth instance of a coverage claim describing the
-# case that prompted it, found by the 27 September re-audit. (This comment said "three" over a
-# list of four until the fourth audit caught it: the same miscount, in the fix for the miscount.)
+# the FOUR paths that reach this state — an instance of the coverage rule in docs/decisions.md,
+# which that file's table NAMES rather than numbers. This comment called it "the sixth" while the
+# same commit's own subject called it "the seventh": an ordinal over a set the sentence does not
+# list is the defect itself, so the ordinal is gone and the table is the list. (It also said
+# "three" over a list of four until the fourth pass caught it: the same miscount, in the fix for
+# the miscount.)
 #
 # WHAT REACHES THIS STATE, all four paths, because two of them make any promise about the
 # corpus wrong:

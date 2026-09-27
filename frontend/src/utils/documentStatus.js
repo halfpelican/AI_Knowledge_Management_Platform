@@ -23,8 +23,14 @@ import { DOCUMENT_STATUS, TEXT } from '../constants.js'
  * Whether FR-08's "Processing failed. Please try again" action is offered for a
  * document in this status.
  *
- * Three statuses are refused it, for different reasons:
+ * The statuses refused it, and why each is refused:
  *
+ * - **"Processing"** — nothing has failed yet, so there is nothing to retry. It is set
+ *   inside the ingestion transaction, so a client normally never sees it; an unexpected
+ *   failure rolls the row back rather than leaving it here. Listed because
+ *   `canReprocess` refuses it and this docstring said "Three statuses" over two bullets
+ *   — the counting defect docs/decisions.md's table records, in the commit that
+ *   corrected the same sentence's "Two".
  * - **"Indexed"** — there is nothing to redo, and the server agrees: a reprocess
  *   of an indexed document is `409` (D-32).
  * - **"Too large to index"** — the document was refused *before* extraction was
