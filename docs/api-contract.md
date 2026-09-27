@@ -652,7 +652,8 @@ place for that notice to grow.
 
 The third state is not a permission state at all and says nothing about one.
 `AnswerCitation.chunk` is `on_delete=CASCADE` (D-12), and both
-`POST /api/documents/{id}/reprocess` and `manage.py reindex` delete a source's chunks and
+`POST /api/documents/{id}/reprocess`, `manage.py reindex`, and FR-15's deletion when it lands
+delete a source's chunks and
 write new ones with fresh identifiers, so every citation of the old ones is destroyed while
 the passage still exists, word for word, under a new id. The turn carries no statements
 (invariant 6) and its own message, because `NO_ANSWER_MESSAGE` would tell the reader their

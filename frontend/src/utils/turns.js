@@ -26,7 +26,7 @@ import { TEXT } from '../constants.js'
  *   The server does not tell this screen the difference and must not.
  * - `provenanceRemoved` — the turn WAS answered, and the record of what it was
  *   drawn from no longer exists. `AnswerCitation.chunk` is `on_delete=CASCADE`
- *   (D-12), and both FR-08's reprocess action and `manage.py reindex` delete a
+ *   (D-12), and FR-08's reprocess action, `manage.py reindex` and FR-15's deletion each delete a
  *   source's chunks and write new ones with fresh identifiers, so the citations
  *   of the old ones go with them while the passage itself still exists. The
  *   server sends `provenance_removed: true` on that turn and nothing else, and

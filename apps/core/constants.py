@@ -195,9 +195,30 @@ NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowled
 # indistinguishable from a never-answered one, which is invariant 1 and which
 # ``ConversationTurnSerializer`` keeps by discriminating on row existence. No count of
 # anything removed, for the same reason.
+# Shown for a turn that WAS answered and whose AnswerCitation rows no longer exist. It is a
+# second fixed text rather than a reuse of NO_ANSWER_MESSAGE, because that one says the question
+# cannot be answered from the available knowledge base, which is a claim about the corpus and is
+# not what happened here.
+#
+# The second sentence deliberately promises NOTHING about what asking again will return. An
+# earlier version said "for an answer from the current material", and that was false on two of
+# the three paths that reach this state — the sixth instance of a coverage claim describing the
+# case that prompted it, found by the 27 September re-audit.
+#
+# WHAT REACHES THIS STATE, all three paths, because two of them make any promise about the
+# corpus wrong:
+#   1. manage.py reindex — the material is re-chunked and still indexed. Asking again works.
+#   2. A SUCCESSFUL reprocess — same.
+#   3. A reprocess that FAILS — reprocess_document deletes ExtractedContent and every chunk
+#      before running the pipeline, and a decided failure is committed, so an FLM outage during
+#      the retry leaves the document with ZERO chunks and "Indexing failed". Asking again returns
+#      no-answer. This is reachable today, and it is reachable precisely when the retry button is
+#      most likely to be pressed.
+#   4. FR-15's permissioned deletion, Stage 5 — the material is gone for good. D-48's own
+#      not-covered list names it; nothing in item 1c's material carried it forward.
 PROVENANCE_REMOVED_MESSAGE = (
     "The citations for this answer are no longer on record, so the answer cannot be shown. "
-    "Ask the question again for an answer from the current material."
+    "You can ask the question again."
 )
 
 # --- Fixed vocabularies (docs/schema-v1.md section 3) --------------------------------

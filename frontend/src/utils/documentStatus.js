@@ -46,6 +46,10 @@ import { DOCUMENT_STATUS, TEXT } from '../constants.js'
  * known in advance, which is what "Too large to index" now is.
  */
 export function canReprocess(status) {
+  // Nothing has failed yet, so there is nothing to retry. Unreachable in practice, and listed
+  // so it cannot fall through to the retry wording and tell the user that a document still
+  // being processed had failed.
+  if (status === DOCUMENT_STATUS.processing) return false
   if (!status) return false
   if (status === DOCUMENT_STATUS.indexed) return false
   if (status === DOCUMENT_STATUS.tooLargeToIndex) return false
@@ -70,6 +74,7 @@ export function canReprocess(status) {
  * offers it.
  */
 export function statusMessageFor(status) {
+  if (status === DOCUMENT_STATUS.processing) return TEXT.documentProcessing
   if (status === DOCUMENT_STATUS.indexed) return null
   if (status === DOCUMENT_STATUS.extractionFailed) return TEXT.processingFailedExtraction
   if (status === DOCUMENT_STATUS.insufficientContent) return TEXT.processingFailedInsufficient

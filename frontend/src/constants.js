@@ -39,6 +39,13 @@ export function dashboardPathForRole(role) {
  */
 export const DOCUMENT_STATUS = {
   indexed: 'Indexed',
+  // Transient: set inside the ingestion transaction before extraction begins, so a client
+  // normally never sees it — an unexpected failure rolls the row back rather than leaving it
+  // here. Listed anyway, because the fall-through below protects the status TEXT and not the
+  // rule that goes with it, and this was the one of the server's seven values that was missing
+  // (found by the 27 September re-audit). Unlisted, it fell through to "Processing failed.
+  // Please try again.", so a row would have read "Processing — Processing failed."
+  processing: 'Processing',
   partiallyIndexed: 'Partially indexed',
   // The three the 422 paths record. Each gets its own retry wording (D-32),
   // because only one of them describes a failure a retry can actually recover.
@@ -245,6 +252,12 @@ export const TEXT = {
     'Indexing it again would repeat the same work and stop at the same point, which ' +
     'is why no retry is offered. A shorter document, or this one split into parts, ' +
     'can be indexed.',
+  // "Processing" is transient — set inside the ingestion transaction before extraction
+  // begins — so a client should never see it, and an unexpected failure rolls the row
+  // back rather than leaving it here. It has wording anyway because the status is now
+  // listed: nothing has failed, so it must not fall through to the retry sentence and
+  // tell the user that a document still being worked on had failed.
+  documentProcessing: 'This document is still being processed.',
   // Not a failure, so it does not claim to be one: the document is searchable and
   // some of its passages are not. Running ingestion again over the stored file is
   // worth offering, because a provider outage is the usual reason a chunk did not

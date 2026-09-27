@@ -22,7 +22,7 @@ mode this document exists to prevent.
 
 FR-14 and FR-15 remain. Stage 5 also carries what Stage 4 deferred, and that list is
 longer than the two requirements: the `/api/ask` throttle, PDF decompression bombs,
-FR-13's end-to-end measurement, D-40's demonstration mitigation, D-51's retry
+FR-13's end-to-end measurement, D-40's demonstration mitigation, the
 affordance, the front-end test decision, and every measurement currently fitted to a
 six-chunk corpus. None of those appeared in Stage 4's brief either, which is why they
 are written down here rather than discovered at the integration pass.
@@ -109,8 +109,8 @@ gaps in FR-12 during Stage 4, three of them after the code was believed finished
 5. Stage 4's deferred fixes: the throttle scope on /api/ask and the ingestion
    POSTs (deferred with its evidence — worst case is one request holding a worker
    ~900s); PDF decompression bombs, which D-50 left open because it closes the
-   OOXML path only; and D-51's retry affordance, which the front end still offers
-   for a status that can never succeed.
+   OOXML path only; and — done on 27 September, not carried forward — D-51's retry
+   affordance, which the front end withdrew in the Stage 4 finishing pass (item 2).
 
 6. Re-measurement, once Objective 02's corpus exists. Everything here is
    currently fitted to six chunks: RELEVANCE_THRESHOLD (D-37, provisional by its
