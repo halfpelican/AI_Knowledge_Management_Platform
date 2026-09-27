@@ -75,6 +75,8 @@ Rules for this file:
 | D-50 | An oversized archive member is a 413; the bomb class is closed for OOXML only | Settled by the user | 2026-09-26 |
 | D-51 | A seventh document status: "Too large to index" | Settled by the user | 2026-09-26 |
 | D-52 | FR-15's detail view shows metadata and a download link, not extracted content | Settled by the user | 2026-09-27 |
+| D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · **due with FR-15** | 2026-09-27 |
+| D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Open** | 2026-09-27 |
 
 ---
 
@@ -2541,3 +2543,76 @@ is warranted for a second presentation of material already shown.
 - **Whether the detail view should show extracted content after M6.** This is a
   decision about the gate, not about the product. Revisiting it means settling the
   de-overlap-or-store question above, which this decision deliberately leaves open.
+
+## D-53 · Fail closed on a source/chunk visibility disagreement, and the mechanism is one helper
+
+**Status:** Settled · **Date:** 2026-09-27 · **Comes due:** FR-15, Stage 5 item 1 ·
+**Closes:** a contradiction nobody decided
+
+Two modules resolve source rows for chunks that scoping already admitted, and they disagree:
+
+| Module | Behaviour | Its own argument |
+|---|---|---|
+| `apps/retrieval/search.py` | **fails closed** — a source whose chunks are stamped visible while the source is not simply does not appear | "the cheap direction to be wrong in is the one that returns less" |
+| `apps/api/answers.py` | **fails open** — no `visible_to_roles` predicate when resolving titles and dates | the chunk stamp already admitted the role, and "two filters that can disagree is worse than one that cannot" |
+
+Both are documented; they contradict each other; nobody decided which is right. Harmless while
+D-47's cascade holds — and `bulk_create(update_conflicts=True, update_fields=["visible_to_roles"])`
+is the hole D-47 pins as **open**, which is exactly the route FR-15's bulk visibility editing will
+take. When it does, the Sources panel and the partial-match list will name a source the source
+table says the reader may not see, while search hides it.
+
+**Decision: fail closed is authoritative.** Invariant 1's cost is asymmetric — returning less is a
+usability defect, returning more is a disclosure — and FR-11's clause is about what must never be
+disclosed rather than what must always appear.
+
+**But `answers.py`'s argument is also right, and the resolution is not "add a second predicate".**
+It is that there should be **one** predicate for source rows, in one place, as `scoped_chunks` is
+the one predicate for chunk rows. There is none: `visible_to_roles__contains=[...]` is written
+**eight times** by hand — `apps/api/views.py` ×5 (documents list, document detail, meetings list,
+meeting detail, document reprocess), `apps/retrieval/search.py` ×2, `apps/retrieval/scoping.py` ×1
+— and the five in `views.py` read the role off `request.user.role.role_name` rather than through
+`permission_scope`, which exists so that no caller has to remember to resolve it. Equivalent today
+because DRF loads the user per request; that is luck, not design.
+
+Invariant 2's stated purpose is that invariant 1 be "a predicate on the same table as the vector
+rather than a discipline someone has to remember". One layer up it **is** a discipline someone has
+to remember, eight times, and **FR-15 is the ninth caller.**
+
+**What is owed before FR-15 writes that ninth copy:** `scoped_documents()` and `scoped_meetings()`
+beside `scoped_chunks`, both failing closed; `answers.py` and the five `views.py` sites moved onto
+them; and **one test enumerating the routes that return source rows, asserting each carries the
+predicate** — because the dual-role matrix would credit a route that returned everything, so long
+as both roles got a 200 from it.
+
+**What this entry covers:** the direction to fail in, and where the predicate belongs. **What it
+does not:** the code. Nothing changes today, and the disagreement stays harmless until the
+`bulk_create` hole is reached.
+
+## D-54 · The NUL-byte rejection is fixed at the instance; the class reopens with FR-15
+
+**Status:** Open — recorded, not resolved · **Date:** 2026-09-27 · **Comes due:** FR-15,
+Stage 5 item 1
+
+`GET /api/search?q=<NUL>` raised `psycopg.DataError` out of an ORM `icontains` lookup, uncaught,
+answered **500 with an HTML body** — and under `DEBUG=True` that page carries the traceback, the
+frame locals and the requester's own session cookie. Item 12a closed it with a distinct exception
+raised in `search()` before any query runs.
+
+The fix is right, and its docstring's claim is **verified rather than asserted**: `q` is the only
+user-supplied string reaching the database without passing a DRF field, because
+`request.query_params` and `request.GET` appear in exactly one place in production code. DRF's
+`CharField` carries `ProhibitNullCharactersValidator`, which is why `POST /api/ask` answers a clean
+400 for the same byte.
+
+**What it covers:** `q` on `GET /api/search`. **What it does not cover:** every query parameter
+that does not exist yet.
+
+**FR-15 is "document repository and *filtered* browsing".** The moment it adds `?department=`,
+`?tag=`, `?status=` or a date range read off `query_params` into an ORM lookup, each reopens the
+identical class — and the fix will not carry forward, because it lives **inside `search()`** rather
+than at the request boundary.
+
+This is D-49's pattern once more: the payload moves and the class does not close. The remedy is a
+shared query-parameter reader, or a rule that every query parameter goes through a serializer
+field — decided **before** FR-15 writes its first filter rather than after.
