@@ -11,6 +11,7 @@ You own the React application. Read `CLAUDE.md` before your first edit in a sess
 
 ```
 frontend/src/     components, routes, API client, design tokens
+frontend/tests/   the front-end suite — Vitest, Testing Library, jsdom (D-62)
 ```
 
 Never put business logic here that the server needs to enforce. Hiding a button is a
@@ -23,7 +24,7 @@ usability measure; the server decides what a user may do.
 | Register / login / logout | FR-01, FR-02, FR-04 |
 | Role management (Administrator only) | FR-05 |
 | Document upload | FR-08 |
-| Document repository — list, filter, detail | FR-15 |
+| Document repository — list, browse, filter, detail (metadata, extracted content, download), delete | FR-15 |
 | Meeting transcript ingestion | FR-09 |
 | Search / Ask / Sources | FR-12 |
 | Conversational assistant | FR-13 |
@@ -61,16 +62,30 @@ navigation in the proposal review — they need real routes, not placeholders.
 - One API client module. Components do not call `fetch` directly.
 - Design tokens, not scattered literals.
 - Never display a raw stack trace or backend error string to the user.
-- Build against the API contract; if the contract is missing a field you need, ask
-  for it rather than inventing a response shape.
+- Build against `docs/api-contract.md`; if the contract is missing a field you need,
+  ask for it rather than inventing a response shape.
+- State a user expects to survive navigation — the active thread, a list's filters,
+  a selection — lives in the URL, not only in component state. D-61's gap 3 is what
+  happens otherwise: follow a link, press Back, and the work is gone.
+- Text that came from a document or a transcript is rendered as text, never as HTML.
+  It is untrusted input.
+- A tuned value belongs to `apps/core/constants.py`. Do not restate one in
+  `src/constants.js` unless a test fails when they drift, as the no-answer test
+  does for `NO_ANSWER_MESSAGE` (D-61's gap 13).
+- A clause only the interface can satisfy is tested in `frontend/tests/`, in the
+  same commit as the screen (`CLAUDE.md` §8 condition 2, D-62). Mock at `fetch`
+  through `tests/fakeApi.js`. `tests/setup.js` fails any test that reaches the
+  network; do not loosen it.
 
 ## Definition of done
 
 The screen matches its FR section including the error and empty states; it works at
-narrow widths; keyboard navigation reaches everything interactive; committed with
-the FR ID in the message.
+narrow widths; keyboard navigation reaches everything interactive; the clauses only
+the interface can satisfy have front-end tests, and `npm run lint`, `npm run build`
+and `npm test` pass; committed with the FR ID in the subject.
 
 ## How to report back
 
 State the screens and components built, which FR each serves, the states covered
-(including empty, error and no-answer), and anything you stubbed.
+(including empty, error and no-answer), the front-end tests added with the clause
+each one defends, and anything you stubbed.

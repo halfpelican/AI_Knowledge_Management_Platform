@@ -90,14 +90,22 @@ administrator: `apps/api/views.py:863` requires only `contribute_content`, and `
 blocks only documents already Indexed — so a partially indexed document with cited
 chunks can be reprocessed by an Employee. `manage.py reindex` does the same.
 
-It is likely to fire before the demo rather than after it: any provider switch is a
-mandated re-index (CLAUDE.md §4), and a re-index is also what D-40's mitigation forbids
-before the demo. So this interacts with 5.2 and with 8.8.
+It is likely to fire before the demo rather than after it: FR-15's deletion (Stage 5
+item 2) deletes chunks by design, and reprocess and reindex stay reachable.
 
-- Fix: a migration to `SET_NULL`, plus a stored `chunk_uuid` and a passage-text snapshot
-  on `AnswerCitation`, so the audit trail survives the chunk.
-- **Owner: Stage 5 item 1a** (28 September), which states that it lands before any
-  re-index — item 6's, a provider switch's, or the demonstration's.
+- Fix: a migration to `SET_NULL`, plus a stored `chunk_uuid` so the audit trail
+  survives the chunk. **No passage-text snapshot:** FR-15 promises deleted material is
+  not surfaced again, and a snapshot is that material outliving the delete.
+- **Owner: Stage 5 item 1a** (28 September), which lands before item 2's deletion and
+  before the demonstration threads are built.
+
+**Corrected 28 September.** This subsection first said the fix should store a
+passage-text snapshot, and that item 1a lands before "item 6's" re-index and "a
+provider switch's". Ingesting Objective 02's corpus adds chunks and deletes none, so
+item 6 is not a re-index; there is no budget for the `anthropic` provider, so no
+switch is coming; and a snapshot would put deleted text back on screen through item
+4b. The snapshot came from D-61's suggested fix and was copied here without being
+checked against FR-15's deletion clause.
 
 ### 2.4 An unused "New conversation" can outlive its session
 
@@ -145,11 +153,12 @@ Not a severity ranking — a list of what an assessor can see happen.
 1. **2.1**, the thread lost on a citation link. The audit's own words: "That is the exact
    flow an assessor will try."
 2. **Deployment topology, and why it is not an item-9 problem.** No deployment exists —
-   only a database `docker-compose.yml` — and FLM runs on one laptop's NPU. A deployed
-   alpha of FR-11/12/13 therefore means either that laptop is the host, or a switch to
-   `anthropic`. A switch is a full re-index, which triggers 2.3 and breaks D-40's rule of
-   no re-index before the demo. Deciding this at item 9, in the last week, makes 2.3
-   unfixable in time. Decide it now.
+   only a database `docker-compose.yml` — and FLM runs on one laptop's NPU. There is no
+   budget for the `anthropic` provider, so that laptop is the host; what is undecided
+   is how an assessor reaches it, which sets HTTPS, `ALLOWED_HOSTS` and
+   `CSRF_TRUSTED_ORIGINS`. Nothing about serving a production build exists either
+   (`M6-BUILD-PROMPT.md` item 9). Decide it now. *Corrected 28 September: this item
+   first offered a switch to `anthropic` as an option; on a zero budget it is not one.*
 3. **D-40, open and unidentified.** Answers change between identical runs near the
    threshold. Recorded 24 September, cause not established. The mitigation (rounding
    similarity before the threshold comparison) is itself a re-measure event.

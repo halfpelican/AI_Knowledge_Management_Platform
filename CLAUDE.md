@@ -28,7 +28,9 @@ scoping, security, NFR verification).
 
 | File | What it settles |
 |---|---|
-| `M6-BUILD-PROMPT.md` | The staged build plan, Stage 0 to Stage 5 |
+| `M6-BUILD-PROMPT.md` | The Stage 5 brief. Earlier stages' briefs are in its git history |
+| `docs/api-contract.md` | Every route and response shape. The front end builds against it |
+| `docs/stage-4-open-items.md` | What Stage 4 left open, each item naming the record that holds it |
 | `docs/schema-v1.md` | Table definitions, deferred tables, fixed vocabularies, schema gaps |
 | `docs/ai-provider.md` | The `AIService` contract, FLM configuration, structured-output strategy |
 | `docs/decisions.md` | Every settled decision, numbered, with rationale and date |
@@ -104,7 +106,9 @@ Two implementations, selected by the `AI_PROVIDER` environment variable:
 - `flm` — **the default for all development, testing and demonstration.**
   FastFlowLM, local, on the NPU. Free, offline, no key.
 - `anthropic` — Claude + Voyage. The documented production configuration. Kept
-  working so the proposal's §9.2 remains true, but not used day to day.
+  working so the proposal's §9.2 remains true, but not used day to day — and not
+  available to this project in practice, because there is no budget for it. The
+  alpha and the demonstration run on `flm`. Plan nothing around a provider switch.
 
 If you find yourself writing `import anthropic` or `from openai import OpenAI`
 anywhere outside `apps/ai/`, stop — that is the bug.
@@ -264,12 +268,15 @@ constants module.
 is "finished" — at each numbered step in the build plan. A stage that ends without a
 commit did not happen.
 
-- Branch per requirement: `feat/FR-08-document-ingestion`.
+- Branch per requirement: `feat/FR-08-document-ingestion`. Work that spans
+  requirements branches by its primary one (`fix/FR-12-citation-cascade`); a
+  stage- or item-numbered branch breaks this rule (D-61's gap 14).
 - Conventional commits, FR ID in the subject:
   `feat(FR-08): extract text from PDF, DOCX, XLSX and TXT`
 - Never commit `.env`, an API key, or a database dump.
 - Tests for a requirement land in the same commit as the requirement.
-- `main` stays runnable. If `pytest` fails on `main`, that is the only priority.
+- `main` stays runnable. If either suite fails on `main` — `pytest`, or `npm test`
+  in `frontend/` — that is the only priority.
 - Each stage merges to `main` by pull request before the next begins. A branch that
   CI has only ever seen in isolation has not been integrated, and teammates need a
   real base to branch from.
