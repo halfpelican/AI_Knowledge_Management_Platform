@@ -47,6 +47,8 @@ requesting user may see.
 
 **FR-15 document repository and filtered browsing.** Metadata, filtering,
 permissioned deletion. Browsing by tag or category without composing a search query.
+The detail view carries the extracted text (D-63) and a download link (Stage 5 item
+2a). `M6-BUILD-PROMPT.md` item 2 quotes every clause; build from that list.
 
 ## Standing rules
 
@@ -60,6 +62,19 @@ permissioned deletion. Browsing by tag or category without composing a search qu
 - Migrations are additive and reversible. Never edit a migration that has been
   pushed; add a new one.
 - Settings read from the environment. No credential, key or host is hard-coded.
+- A resource outside the caller's scope answers **404**, exactly like one that does
+  not exist (D-46). Resolve it through the scoped helper first, then check the
+  permission and answer 403. In the other order the status code tells the caller
+  whether something they cannot see exists.
+- `ContentChunk` and `ContentTag` point at their source by `source_type` and
+  `source_id`, with no foreign key (D-07). `document.delete()` removes the document
+  and its `ExtractedContent` and leaves its chunks embedded and retrievable. Delete
+  the chunks and tags in the same transaction.
+- Every query parameter goes through the mechanism D-54 settles at Stage 5 item 1,
+  never straight into an ORM lookup: a NUL byte in one is a 500 with a traceback
+  under `DEBUG=True`.
+- A route added or a response shape changed updates `docs/api-contract.md` in the
+  same commit.
 
 ## Definition of done
 
@@ -67,7 +82,8 @@ permissioned deletion. Browsing by tag or category without composing a search qu
 Employee session and an Administrator session — Objective 01 requires 100% coverage
 of protected endpoints from both roles, and that number is reported at the gate.
 Happy path and at least one failure path tested. Committed with the FR ID in the
-message.
+subject. This is your slice of `CLAUDE.md` §8, not all of it: a requirement with an
+interface half is not done until that half has its front-end tests.
 
 ## How to report back
 

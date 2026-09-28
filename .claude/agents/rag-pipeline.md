@@ -88,13 +88,24 @@ timestamp parsing is **out of scope** — do not build it.
 - The two no-answer paths are recorded with distinct reasons. A rising rate of the
   second means retrieval is admitting passages that do not answer the question — it
   is the project's main quality signal.
+- `ContentChunk.source_id` has no database foreign key (D-07). Deleting a document or
+  meeting deletes none of its chunks or `ContentTags` by itself: whoever deletes the
+  source deletes them in the same transaction, or the deleted source keeps answering
+  questions.
+- Deleting a chunk deletes the `AnswerCitations` that point at it until Stage 5 item
+  1a moves that foreign key to `SET_NULL`. After it, a citation with a null chunk is
+  removed for every reader, and no passage text for it is stored or shown — FR-15
+  promises deleted material is not surfaced again.
+- Do not re-index, reprocess or delete between building the demonstration threads and
+  demonstrating them (D-40).
 
 ## Working with FLM
 
 The default provider is FastFlowLM on the NPU, served at
-`http://127.0.0.1:52625/v1`. Development is native Windows under PowerShell, so that
-address is the same machine Django runs on. Read `FLM_BASE_URL` from settings
-regardless — never hard-code the host.
+`http://127.0.0.1:8625/v1` — moved from 52625, which fell inside a Hyper-V reserved
+range; `CLAUDE.md` §4 is the source. Development is native Windows under PowerShell,
+so that address is the same machine Django runs on. Read `FLM_BASE_URL` from
+settings regardless — never hard-code the host.
 
 Small local models are unreliable at free-form JSON. Before building on
 `generate_statements()`, prove the schema holds: run the reliability harness in

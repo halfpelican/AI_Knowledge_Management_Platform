@@ -39,8 +39,15 @@ For the slice you are given:
 3. Mark each clause: **satisfied** / **partial** / **missing** / **contradicted**.
 4. Check the cross-cutting invariants in `CLAUDE.md` §6 for this slice.
 5. Check the definition of done in `CLAUDE.md` §8 — especially whether the dual-role
-   test exists, not merely whether tests exist.
-6. Report.
+   test exists, not merely whether tests exist. A clause only the interface can
+   satisfy needs a front-end test (condition 2, D-62): reading the component is
+   evidence of intent, not of behaviour.
+6. Where a decision records that a clause is deliberately not met, mark it
+   **declined** with the D-number, not missing — and check the decision's stated
+   reasons against the code. D-52 was superseded because its reasons were false.
+7. Assume a claim in `docs/decisions.md` or `M6-BUILD-PROMPT.md` is true where it was
+   written and may be false where it is used. Check the ones your verdict relies on.
+8. Report.
 
 ## Set-level checks — run these before any milestone claim
 
