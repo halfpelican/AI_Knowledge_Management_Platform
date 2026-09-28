@@ -56,6 +56,7 @@ Rules for this file:
   | this table, in `403087f` | "for the eleven commits in which it was being enforced … the commit that made it eight", and "the two paths that leave no material" — counts where a range, a hash and a list existed |
   | D-59, in `403087f` | "The other nine name a requirement in the body", and D-57 "found three departures" — counts over sets listed elsewhere or not at all |
   | `frontend/src/pages/Ask.jsx`, in `403087f` | "the four paths enumerated at" `apps/core/constants.py` — a count of a list held in another file |
+  | D-52, and `M6-BUILD-PROMPT.md` item 2a | the download link "is built" and its storage path "depends on D-18" — the link was never built, and migration 0006 had closed the storage question on 21 September; and extracted text "is `ContentChunk.chunk_text`", while `ExtractedContent` held it whole |
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -110,7 +111,7 @@ Rules for this file:
 | D-49 | Stage 4 security review: what closed, what deferred, what stands conceded | Settled by the user | 2026-09-25 |
 | D-50 | An oversized archive member is a 413; the bomb class is closed for OOXML only | Settled by the user | 2026-09-26 |
 | D-51 | A seventh document status: "Too large to index" | Settled by the user | 2026-09-26 |
-| D-52 | FR-15's detail view shows metadata and a download link, not extracted content | Settled by the user | 2026-09-27 |
+| D-52 | FR-15's detail view shows metadata and a download link, not extracted content | **Superseded by D-63** | 2026-09-27 |
 | D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · **due with FR-15** | 2026-09-27 |
 | D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Open** | 2026-09-27 |
 | D-55 | `rejected_count` on QueryLog — numbering a column that shipped without one | Settled retroactively | 2026-09-27 |
@@ -121,6 +122,7 @@ Rules for this file:
 | D-60 | Stage 4 closes with §8 condition 4 declined and condition 5 failed; both recorded | Recorded · **4 declined, 5 failed** | 2026-09-28 |
 | D-61 | The Stage 4 closing audit: INCOMPLETE, recorded verbatim; its findings are carried to Stage 5 unfixed | Recorded · **findings open against Stage 5** | 2026-09-28 |
 | D-62 | A front-end test runner lands; the interface is no longer accepted as untested; §8 condition 2 names pytest and the front-end suite | Settled by the user | 2026-09-28 |
+| D-63 | FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false | Settled by the user | 2026-09-28 |
 
 ---
 
@@ -2550,6 +2552,11 @@ trigger is chunk count rather than bytes, so "large" is the user's word rather t
 **Status:** Settled by the user · **Date:** 2026-09-27 · **Closes:** what the document
 detail view built early in Stage 4 as D-46 is required to grow into
 
+> **Superseded on 28 September 2026 by D-63.** Its statements that extracted text
+> exists only as overlapping chunks, and that the download link was built, were false
+> when written. D-63 restores the extracted content. This entry is left as written so
+> the error stays visible, per the rule at the head of this file.
+
 **Decision.** FR-15 reads: "Selecting a document opens a detail view showing its
 metadata, extracted content, and a download link." The detail view shows **metadata
 and a download link**. It does not show extracted content.
@@ -3265,3 +3272,64 @@ anything. It sits beside D-60's record of conditions 4 and 5 and does not change
 **Verified locally only.** `npm run lint`, `npm run build` and `npm test` pass on Node
 24.16.0 on the development machine. The `frontend` CI job has not run on GitHub as of
 this entry, because nothing on this branch has been pushed.
+
+## D-63 · FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false
+
+**Status:** Settled by the user · **Date:** 2026-09-28 · **Supersedes:** D-52 ·
+**Concerns:** FR-15 · **Owner:** Stage 5 item 2
+
+**Decision.** The document detail view shows the whole of FR-15's clause — "its
+metadata, extracted content, and a download link". The extracted content is read from
+`ExtractedContent.extracted_text` and carried on the existing `GET /api/documents/{id}`
+response, because that route is already scoped to the caller's role and already
+answers 404 outside scope (D-46). It is never reassembled from chunks.
+
+**Why D-52 is superseded.** Its cost argument rested on statements that were false
+when it was written:
+
+- *"The stored form of extracted text is `ContentChunk.chunk_text`"*, so that showing
+  it would need de-overlapping on read, or a new column and a migration.
+  `ExtractedContent` has held each document's whole extracted text since Stage 3:
+  `apps/ingestion/documents.py:243` writes it at ingestion — "stored separately from
+  the original so that search and AI processing never require the document to be
+  parsed a second time" — and `manage.py reindex` re-embeds from it.
+  `docs/schema-v1.md` tags the table FR-15. Honouring the clause is a scoped read of a
+  table that already exists.
+- *"The download link, which is FR-15's third part and is built."* No download route
+  exists in `apps/api/urls.py` or `apps/api/views.py`; it is Stage 5 item 2a. The
+  same sentence's "its storage path depends on D-18" was stale as well:
+  `docs/schema-v1.md` records G7 closed on 21 September by
+  `documents 0006_schema_v2_storage_and_status`.
+
+D-52 was drafted from the chunk model without reading the ingestion path or the
+routes. Searching `apps/` for `ExtractedContent`, and `apps/api/` for a download
+route, shows each error above. The cut was settled on the
+cost D-52 stated. With the cost corrected, the user restored the clause.
+
+**What follows.**
+
+- Extracted text is a document's whole content. Reading it is exactly as sensitive as
+  downloading the file, so it travels only on the scoped route, and a test asserts
+  that an Employee asking for an Administrator-only document receives 404 and no text.
+- It is rendered as text, never as HTML. It is untrusted input.
+- A document with no `ExtractedContent` row shows a stated empty state. The view keys
+  on the row existing, not on the document's status: which statuses leave a row is a
+  fact of the ingestion path, and D-52 enumerated them by status without reading it.
+- FR-15's deletion removes the row through its `CASCADE` foreign key. The document's
+  chunks and tags have no foreign key and need application code (D-07); Stage 5
+  item 2 carries that.
+- The response shape changes, so `docs/api-contract.md` changes in the same commit.
+- The detail-view clause is audited on its evidence. D-52's instruction to mark it
+  declined no longer applies.
+
+**What this decision does not cover.**
+
+- **The download link.** Stage 5 item 2a builds it; nothing here does.
+- **Formatting fidelity.** Extracted text is plain text. A PDF's layout, a DOCX's
+  headings and an XLSX's cell grid are not reproduced, and nothing here promises
+  that they are.
+- **Meetings.** FR-15's detail clause is about documents. Nothing here changes the
+  meeting view.
+- **Length.** A long document yields long text. Whether the view truncates, pages or
+  collapses it is a presentation choice for item 2; it reads the text from the scoped
+  route and from nowhere else.
