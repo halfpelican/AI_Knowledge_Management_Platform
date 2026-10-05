@@ -455,6 +455,69 @@ def test_the_match_is_case_insensitive_in_both_directions(employee):
     assert "ANNUAL LEAVE IN CAPITALS." in [result.snippet for result in upper.documents.results]
 
 
+# --- Whitespace: a phrase is found whatever the line breaks between its words (D-71) -------
+#
+# Objective 02's D06 found this: "Willow Bridge escalation ladder" is in the PDF, but its
+# extracted text wraps as "escalation\nladder", chunk text keeps the line break (D-31), and a
+# plain substring test then never matches. Runs of whitespace are collapsed to one space on
+# both sides before matching.
+
+
+def test_a_phrase_that_wraps_a_line_in_the_source_is_found(employee):
+    make_document(
+        employee,
+        title="Customer Complaints Procedure",
+        roles=[EMPLOYEE_ROLE_NAME],
+        texts=["Complaints not resolved follow the Willow Bridge escalation\nladder: team leader first."],
+    )
+
+    results = search(query_text="escalation ladder", user=employee)
+
+    assert titles(results.documents) == ["Customer Complaints Procedure"]
+    # The snippet shows the phrase as one run of text, since it is a one-line preview.
+    assert "escalation ladder" in results.documents.results[0].snippet
+
+
+@pytest.mark.parametrize(
+    "stored, typed",
+    [
+        ("escalation\r\n  ladder", "escalation ladder"),  # CRLF and indentation in the source
+        ("escalation\tladder", "escalation ladder"),  # a tab, as XLSX cells are joined
+        ("escalation ladder", "escalation   ladder"),  # extra spaces in the query
+        ("escalation ladder", "escalation\nladder"),  # a line break in the query
+    ],
+    ids=["crlf-indent", "tab", "query-spaces", "query-newline"],
+)
+def test_any_run_of_whitespace_on_either_side_matches_one_space(employee, stored, typed):
+    make_document(
+        employee, title="Procedure", roles=[EMPLOYEE_ROLE_NAME], texts=[f"Follow the {stored} first."]
+    )
+    assert search(query_text=typed, user=employee).documents.count == 1
+
+
+def test_a_title_is_matched_the_same_way(employee):
+    make_document(employee, title="Remote  Work\nAgreement", roles=[EMPLOYEE_ROLE_NAME], texts=[])
+    assert search(query_text="remote work agreement", user=employee).documents.count == 1
+
+
+def test_collapsing_whitespace_does_not_cross_the_permission_boundary(employee, administrator):
+    """The same match, out of scope: still nothing for the Employee, by the same predicate."""
+    make_document(
+        administrator,
+        title="Board paper",
+        roles=[ADMINISTRATOR_ROLE_NAME],
+        texts=["The Willow Bridge escalation\nladder is restricted."],
+    )
+    assert search(query_text="escalation ladder", user=employee).total_count == 0
+    assert search(query_text="escalation ladder", user=administrator).total_count == 1
+
+
+def test_the_search_log_keeps_the_term_as_typed(employee):
+    """Collapsing is for matching only: FR-19's evidence records what was actually typed."""
+    search(query_text="escalation   ladder", user=employee)
+    assert SearchLog.objects.get().query_text == "escalation   ladder"
+
+
 def test_a_chunk_recorded_against_another_embedding_model_is_still_searchable(employee):
     """The risk R10 predicate belongs to vector comparison, and this path compares none.
 
