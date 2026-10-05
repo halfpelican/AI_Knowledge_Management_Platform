@@ -1,0 +1,38 @@
+Sofia: Thanks for joining the planning workshop. Our goal today is to agree what goes into the next release and what waits.
+
+Jamal: Engineering can commit to the search improvements and the new dashboard. The mobile redesign is too big for this cycle.
+
+Sofia: Understood. Product, are we comfortable deferring the mobile redesign?
+
+Aisha: Yes, as long as we still deliver the accessibility fixes. Customers have been asking for those for months.
+
+Jamal: Accessibility fixes are small. We can fit them in.
+
+Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.
+
+Sofia: Agreed. Let's fix the Tidewater feature freeze for the seventh of November.
+
+Jamal: That works for engineering, provided requirements are final by the end of this month.
+
+Aisha: I'll get sign-off on the requirements by the thirtieth.
+
+Wei: On testing, I'd like an extra tester for the last two weeks. Without one we risk missing regressions.
+
+Sofia: Let me check the budget. I'll confirm by Friday.
+
+Jamal: One more thing. The build pipeline is slow, around forty minutes. If we can speed it up, everyone benefits.
+
+Wei: I can look at caching dependencies. It might halve the time.
+
+Sofia: Great. Let's capture the actions and close. Thanks everyone.
+
+Sofia: Before we finish, let's confirm owners for each action.
+
+Jamal: Engineering owns the search improvements, the dashboard and the pipeline speed-up.
+
+Aisha: Product owns the requirements sign-off and the accessibility list.
+
+Wei: Quality owns the test plan and the request for the extra tester.
+
+Sofia: Great. I will write these up and send them today. Thanks everyone for a productive session.
+
