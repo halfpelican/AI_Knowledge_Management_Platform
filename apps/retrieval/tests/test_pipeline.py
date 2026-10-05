@@ -47,8 +47,8 @@ from apps.core.constants import (
 from apps.documents.models import ContentChunk, Document
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
 from apps.retrieval.scoping import UnscopedRequestError
+from apps.retrieval.tests.scopes import unreadable_scope
 
-ROLE_PAIR = (EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME)
 
 QUESTION = "How much annual leave do I get?"
 assert MINIMUM_QUESTION_LENGTH <= len(QUESTION) <= MAXIMUM_QUESTION_LENGTH
@@ -533,12 +533,12 @@ def test_an_out_of_scope_chunk_is_absent_where_a_permitted_passage_is_admitted(d
 @pytest.mark.django_db
 def test_the_pipeline_from_both_role_sessions(session_client, document, service):
     """The same assertions from an Employee session and an Administrator session
-    (CLAUDE.md section 8 item 2). The restricted chunk belongs to whichever role is
-    not asking, so each run hides a different row."""
+    (CLAUDE.md section 8 item 2). The restricted chunk is one the asking role may not read:
+    Administrator-only for an Employee and, since D-66, scoped to nobody for an
+    Administrator (``apps/retrieval/tests/scopes.py``), so each run still hides a row."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
     restricted = make_chunk(
-        document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest."
+        document, unreadable_scope(role_name), index=1, cosine=NEAREST, text="Restricted, nearest."
     )
     permitted = make_chunk(
         document, [role_name], index=2, cosine=ABOVE, text="Permitted, relevant."
@@ -558,10 +558,9 @@ def test_the_pipeline_from_both_role_sessions(session_client, document, service)
 
 @pytest.mark.django_db
 def test_path_a_from_both_role_sessions(session_client, document, service):
-    """Path A from both roles, where the only near passage belongs to the other one."""
+    """Path A from both roles, where the only near passage is one this role may not read."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
-    make_chunk(document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest.")
+    make_chunk(document, unreadable_scope(role_name), index=1, cosine=NEAREST, text="Restricted, nearest.")
 
     outcome = answer_question(question=QUESTION, user=session_client.user)
 
@@ -947,15 +946,14 @@ def test_path_b_from_both_role_sessions(session_client, document, service_with):
     """Path B from an Employee session and an Administrator session (section 8 item 2).
 
     The passage the model was given is the one this role may read; the statement it
-    returned cites the other role's chunk, which was never in the prompt and is therefore
-    rejected exactly as an invented identifier would be. The no-answer response is what
+    returned cites a chunk this role may not read, which was never in the prompt and is
+    therefore rejected exactly as an invented identifier would be. The no-answer response is what
     comes back, and it says nothing about the restricted chunk — not its identifier, not
     its text, not a count that would imply it.
     """
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
     restricted = make_chunk(
-        document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest."
+        document, unreadable_scope(role_name), index=1, cosine=NEAREST, text="Restricted, nearest."
     )
     permitted = make_chunk(document, [role_name], index=2, cosine=ABOVE, text="Permitted.")
     double = service_with(
@@ -1045,9 +1043,8 @@ def test_generation_is_reached_through_the_module_lookup_not_a_bound_import(docu
 def test_generation_and_verification_from_both_role_sessions(session_client, document, service):
     """Generation and verification over each role's own passages (section 8 item 2)."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
     restricted = make_chunk(
-        document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest."
+        document, unreadable_scope(role_name), index=1, cosine=NEAREST, text="Restricted, nearest."
     )
     permitted = make_chunk(document, [role_name], index=2, cosine=ABOVE, text="Permitted.")
 

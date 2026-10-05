@@ -125,6 +125,7 @@ Rules for this file:
 | D-63 | FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false | Settled by the user | 2026-09-28 |
 | D-64 | The M6 alpha is hosted on the NPU laptop and reached on that laptop, over loopback; it replaces the proposal's GCP deployment for the alpha only | Settled by the user · scoped to M6 | 2026-10-05 |
 | D-65 | Every query parameter passes a DRF serializer: ChoiceField for fixed vocabularies, shape-only for department and tag, an inclusive date range; the 400 is a convention | Settled by the user · settles D-54 | 2026-10-05 |
+| D-66 | Administrator generalises Employee in scope as well as in permissions: scope is overlap with EFFECTIVE_ROLES, in the item 1 helpers only | Settled by the user | 2026-10-05 |
 
 ---
 
@@ -3519,3 +3520,85 @@ sort and text filter as each lands.
   3's work, and they are tested there.
 
 **D-54's status changes from Open to Settled by this entry.** D-54 itself is left as written.
+
+## D-66 · Administrator generalises Employee in scope as well as in permissions
+
+**Status:** Settled by the user · **Date:** 2026-10-05 · **Stage:** 5, after item 1, in item
+1's helpers · **Concerns:** FR-11, and through it FR-12, FR-13, FR-14 and FR-15 ·
+**Supersedes:** the reading in `apps/retrieval/scoping.py` that membership of the reader's own
+role is the whole scope test
+
+**Decision.** A role reads every row whose `visible_to_roles` overlaps that role's
+**effective roles**, set by `EFFECTIVE_ROLES` in `apps/core/constants.py`:
+
+| Role | Effective roles |
+|---|---|
+| Employee | Employee |
+| Administrator | Administrator, Employee |
+
+`scoped_chunks`, `scoped_documents` and `scoped_meetings` test overlap
+(`visible_to_roles__overlap`) instead of membership of the single role name
+(`visible_to_roles__contains`). The change is in item 1's helpers and nowhere else, so every
+caller inherits it.
+
+**Why.** The proposal's role model makes Administrator a generalisation of Employee. Its
+use-case diagram draws `Employee <|-- Admin` with the note "each role adds capability to the
+one below", and `docs/schema-v1.md` says "Administrator generalises Employee". The build
+applied that to permissions (accounts 0003 and 0004, whose tests assert Administrator's
+permissions are a superset of Employee's) and not to scope. `apps/retrieval/scoping.py` said
+outright that "an Administrator does not implicitly see Employee-scoped content".
+
+That reading made an `["Employee"]` document invisible to every Administrator: absent from
+the repository list and 404 on detail. Under FR-15's scoped-first deletion, which is 404
+outside scope and 403 after that, no Administrator could ever delete it. The question came up
+when `manage_documents` was settled as Administrator-only, together with the requirement that
+no document be undeletable.
+
+**What does not change:**
+
+- **An Employee's scope, by construction.** Their effective roles are `Employee` alone, and
+  overlap with a one-element list is the membership test it replaces.
+  `test_an_employees_scope_is_exactly_the_content_marked_for_employees` asserts it for
+  documents, meetings and chunks.
+- **D-29.** D-29 settles what ingestion *writes* into `visible_to_roles` (both roles by
+  default, 400 for an empty list, 403 for a list excluding the uploader's role). This entry
+  settles how scope is *read*. D-29 stands as written.
+- **The stored arrays.** There is no data migration. Documents, meetings and chunks carry the
+  arrays they carried, so D-47's cascade and D-53's source/chunk agreement are untouched.
+- **FR-15's deletion order.** Scoped-first, as Stage 5 item 2 says: 404 outside scope, then
+  403 without `manage_documents`. Because an Administrator's scope now includes every
+  Employee-only document, the delete control works from the interface as well as the API.
+- **Meetings are still scoped by role, never by attendance** (D-16).
+
+**What this covers:** every read through `scoped_chunks`, `scoped_documents` and
+`scoped_meetings`. Today those are `POST /api/ask` (candidate set, Sources panel, partial
+matches), `GET /api/search`, the document list, detail and reprocess routes, the meeting list
+and detail routes, and the re-scope of a reopened thread (`permitted_citation_chunk_ids`).
+FR-14 and FR-15 inherit it as they land.
+
+**What it does not cover:**
+
+- **D-29's upload refusal.** An Administrator uploading with `visible_to_roles=["Employee"]`
+  is still refused 403, because the check compares the uploader's own role name with the list.
+  D-29's reason, "uploading into a scope you cannot read is how content is lost", no longer
+  holds for an Administrator under this entry, so that check is now stricter than its reason.
+  It is left as it is: this entry changes reads and not what ingestion accepts.
+- **A third role.** A role missing from `EFFECTIVE_ROLES` reads nothing, which fails closed.
+  Adding a role means adding its row here.
+- **A renamed role.** D-11's limitation stands, now in `EFFECTIVE_ROLES` as well as in the
+  stored arrays.
+- **Permissions.** FR-05 and FR-06 read `RolePermissions` and are unchanged.
+- **Records written before this change.** `QueryLog` and `AnswerCitation` rows record what
+  was answered under the old reading. A reopened thread is re-scoped on read, so an
+  Administrator reopening an old turn now sees anything Employee-only it cites. Nothing is
+  rewritten.
+
+**Consequences.**
+
+- `test_the_scope_is_symmetrical_no_role_generalisation` asserted the old reading and is
+  replaced by two tests, one per role, in `apps/retrieval/tests/test_scoping.py`. Every other
+  test that assumed an Administrator could not read Employee-only content is listed in the
+  commit that lands this entry, with what each now asserts.
+- FR-11 is still demonstrated by role, but in one direction only: Administrator-only material
+  withheld from an Employee. An Administrator now sees everything an Employee sees, and more.
+- `apps/retrieval/scoping.py` carries a dated note of the reading it replaced.

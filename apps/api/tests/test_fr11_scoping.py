@@ -80,6 +80,7 @@ from apps.core.constants import (
 from apps.documents.models import ContentChunk, Document
 from apps.meetings.models import Meeting, MeetingAttendee
 from apps.retrieval.models import Conversation, QueryLog
+from apps.retrieval.tests.scopes import unreadable_scope
 
 pytestmark = pytest.mark.django_db
 
@@ -812,16 +813,15 @@ def test_an_out_of_scope_document_is_indistinguishable_from_one_that_does_not_ex
     the rendered bytes and adds the assertion that the refusal carries no trace of the row
     it refused. A 403 here, or a differently-worded 404, would be an error message that
     distinguishes "not found" from "not permitted" — named in invariant 1.
+
+    The document is one the asking role may not read: Administrator-only for the Employee
+    and, since D-66 made Administrator generalise Employee, scoped to nobody for the
+    Administrator (``apps/retrieval/tests/scopes.py``).
     """
-    other_role = (
-        ADMINISTRATOR_ROLE_NAME
-        if session_client.role_name == EMPLOYEE_ROLE_NAME
-        else EMPLOYEE_ROLE_NAME
-    )
     theirs, _ = make_document(
-        employee if other_role == ADMINISTRATOR_ROLE_NAME else administrator,
+        administrator,
         title=RESTRICTED_DOCUMENT_TITLE,
-        roles=[other_role],
+        roles=unreadable_scope(session_client.role_name),
         text=RESTRICTED_DOCUMENT_TEXT,
         cosine=NEAREST,
         department=RESTRICTED_DOCUMENT_DEPARTMENT,
@@ -960,15 +960,14 @@ def test_an_attended_meetings_passage_is_not_a_retrieval_candidate_either(
 def test_an_out_of_scope_meeting_is_indistinguishable_from_one_that_does_not_exist(
     session_client, employee, administrator
 ):
-    """The meeting half of the 404 property, from both roles: same status, same bytes."""
-    other_role = (
-        ADMINISTRATOR_ROLE_NAME
-        if session_client.role_name == EMPLOYEE_ROLE_NAME
-        else EMPLOYEE_ROLE_NAME
-    )
+    """The meeting half of the 404 property, from both roles: same status, same bytes.
+
+    As for documents above: Administrator-only for the Employee, nobody's for the
+    Administrator (D-66).
+    """
     theirs, _ = make_meeting(
         title=RESTRICTED_MEETING_TITLE,
-        roles=[other_role],
+        roles=unreadable_scope(session_client.role_name),
         text=RESTRICTED_MEETING_TEXT,
         cosine=NEAREST,
     )

@@ -25,6 +25,7 @@ import pytest
 
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME
 from apps.documents.models import Document
+from apps.retrieval.tests.scopes import unreadable_scope
 
 pytestmark = pytest.mark.django_db
 
@@ -110,13 +111,11 @@ def test_an_unknown_id_is_not_found(session_client):
 def test_a_document_outside_the_callers_scope_is_not_found(session_client, employee):
     """404, not 403: a 403 would confirm the id names something real (CLAUDE.md invariant 1
     — the existence of out-of-scope material is not disclosed). Run from both roles, each
-    against a document scoped to the other, so neither role is the privileged case."""
-    other_role = (
-        ADMINISTRATOR_ROLE_NAME
-        if session_client.role_name == EMPLOYEE_ROLE_NAME
-        else EMPLOYEE_ROLE_NAME
+    against a document it may not read: Administrator-only for the Employee and, since D-66
+    made Administrator generalise Employee, scoped to nobody for the Administrator."""
+    document = make_document(
+        employee, title="Board remuneration", roles=unreadable_scope(session_client.role_name)
     )
-    document = make_document(employee, title="Board remuneration", roles=[other_role])
 
     response = detail(session_client.client, document.id)
 

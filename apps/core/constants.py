@@ -288,6 +288,19 @@ DEFAULT_MEETING_STATUS = MEETING_STATUS_VALUES[0]
 ROLE_NAMES = ("Employee", "Administrator")
 EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME = ROLE_NAMES
 
+# The role names whose content each role may read (FR-11, docs/decisions.md D-66).
+# Administrator generalises Employee in scope as well as in permissions — the proposal's
+# role model ("Employee <|-- Admin", each role adding capability to the one below) and
+# docs/schema-v1.md's "Administrator generalises Employee". apps/retrieval/scoping.py
+# admits a row when its visible_to_roles OVERLAPS these, so an Employee's scope is exactly
+# what membership of "Employee" gave before, and an Administrator also reads everything
+# marked for Employees. A role missing from this map reads nothing (scoping fails closed).
+# This settles how scope is READ; what ingestion WRITES into visible_to_roles is D-29's.
+EFFECTIVE_ROLES = {
+    EMPLOYEE_ROLE_NAME: (EMPLOYEE_ROLE_NAME,),
+    ADMINISTRATOR_ROLE_NAME: (ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME),
+}
+
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
 # role_permissions, seeded by accounts migrations 0003 and 0004; a test asserts the
 # constants and the seed agree.

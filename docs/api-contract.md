@@ -232,6 +232,14 @@ outside the caller's scope would be a leak to remove later rather than a feature
 (`CLAUDE.md` §6 invariant 1: not by a result count, a total, or an error message).
 FR-15's filtered browsing builds on this in Stage 5.
 
+**What "scoped to the caller's role" means everywhere in this file (D-66).** A document,
+meeting or chunk is in scope when its `visible_to_roles` overlaps the caller's *effective
+roles*: an Employee reads rows naming `Employee`, and an Administrator reads rows naming
+either role, because Administrator generalises Employee in scope as well as in
+permissions. So an Employee-only document is listed, found and readable for an
+Administrator, and an Administrator-only one is never any of those for an Employee. What
+an upload may *write* into `visible_to_roles` is unchanged (D-29).
+
 ### FR-09 — meeting transcripts
 
 | Method | Path | Auth | Success | Failures |

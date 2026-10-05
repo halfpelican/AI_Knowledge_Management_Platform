@@ -543,7 +543,12 @@ def test_a_follow_up_inherits_the_context_but_not_the_access(
     conversation = make_conversation(administrator)
 
     first_turn = answer_question(question=FIRST, user=administrator, conversation=conversation)
-    assert [passage.chunk_id for passage in first_turn.passages] == [str(restricted.id)]
+    # Since D-66 an Administrator also reads the Employee-only chunk, so turn one is given both,
+    # in rank order: the restricted one led the ranking.
+    assert [passage.chunk_id for passage in first_turn.passages] == [
+        str(restricted.id),
+        str(shared.id),
+    ]
 
     get_user_model().objects.filter(pk=administrator.pk).update(role=employee_role)
     assert administrator.role.role_name == ADMINISTRATOR_ROLE_NAME  # the copy is stale

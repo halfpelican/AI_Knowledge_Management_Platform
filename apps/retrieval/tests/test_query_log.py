@@ -44,8 +44,8 @@ from apps.documents.models import ContentChunk
 from apps.retrieval import query_log as query_log_module
 from apps.retrieval.models import AnswerCitation, QueryLog, SearchLog
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
+from apps.retrieval.tests.scopes import unreadable_scope
 
-ROLE_PAIR = (EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME)
 
 QUESTION = "How much annual leave do I get?"
 assert MINIMUM_QUESTION_LENGTH <= len(QUESTION) <= MAXIMUM_QUESTION_LENGTH
@@ -486,12 +486,12 @@ def test_a_statement_citing_an_out_of_scope_chunk_reaches_neither_a_citation_nor
 @pytest.mark.django_db
 def test_rows_are_written_from_both_role_sessions(session_client, document, service):
     """The same assertions from an Employee session and an Administrator session
-    (CLAUDE.md section 8 item 2). The restricted chunk belongs to whichever role is not
-    asking, so each run has a different row it must not name."""
+    (CLAUDE.md section 8 item 2). The restricted chunk is one the asking role may not
+    read — Administrator-only for an Employee, scoped to nobody for an Administrator since
+    D-66 — so each run has a row it must not name."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
     restricted = make_chunk(
-        document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest."
+        document, unreadable_scope(role_name), index=1, cosine=NEAREST, text="Restricted, nearest."
     )
     permitted = make_chunk(document, [role_name], index=2, cosine=ABOVE, text="Permitted.")
 
@@ -510,8 +510,7 @@ def test_rows_are_written_from_both_role_sessions(session_client, document, serv
 def test_path_a_rows_from_both_role_sessions(session_client, document, service):
     """Path A from both roles: a row is still written, with nothing in its array."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
-    make_chunk(document, [other_role], index=1, cosine=NEAREST, text="Restricted, nearest.")
+    make_chunk(document, unreadable_scope(role_name), index=1, cosine=NEAREST, text="Restricted, nearest.")
 
     answer_question(question=QUESTION, user=session_client.user)
 
