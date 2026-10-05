@@ -142,7 +142,7 @@ def log_turn(user, conversation, *, question, citations, answered=True):
     )
     for position, (text, chunk) in enumerate(citations, start=1):
         AnswerCitation.objects.create(
-            query=turn, chunk=chunk, statement_text=text, position=position
+            query=turn, chunk=chunk, chunk_uuid=chunk.id, statement_text=text, position=position
         )
     return turn
 

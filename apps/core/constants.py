@@ -177,28 +177,32 @@ AUTHENTICATION_THROTTLE_RATE = "20/min"
 # replace it with the proposal's text when the coordinator has it. Defined once.
 NO_ANSWER_MESSAGE = "This question cannot be answered from the available knowledge base."
 
-# What a STORED turn says when its citation rows no longer exist (Stage 4 item 1c).
+# What a STORED turn says when none of its citation rows still points at an existing chunk
+# (Stage 4 item 1c; the condition restated by D-67, Stage 5 item 1a).
 #
-# **Not NO_ANSWER_MESSAGE, because that text would be false.** ``AnswerCitation.chunk`` is
-# ``on_delete=CASCADE`` (D-12), and both ``reprocess_document`` and ``manage.py reindex``
-# delete a source's chunks and write new ones with fresh identifiers, so every citation of
-# the old ones is destroyed while the material itself still exists. A turn in that state was
-# answered, and nothing about the knowledge base has stopped being able to answer it — so
-# telling the reader their question "cannot be answered from the available knowledge base" is
-# the interface stating something untrue about the corpus.
-# ``apps/api/tests/test_fr12_traceability_lost_on_reprocess.py`` pins the loss itself.
+# **Not NO_ANSWER_MESSAGE, because that text would be false.** Both ``reprocess_document`` and
+# ``manage.py reindex`` delete a source's chunks and write new ones with fresh identifiers, so
+# every citation of the old ones loses its chunk while the material itself still exists. Until
+# D-67 ``AnswerCitation.chunk`` was ``on_delete=CASCADE`` (D-12) and those citation rows were
+# destroyed; since D-67 it is SET_NULL, the rows survive with ``chunk_id`` NULL and
+# ``chunk_uuid`` kept for FR-12's traceability record, and the serializer reads a NULL-chunk
+# row exactly as a destroyed one. A turn in that state was answered, and nothing about the
+# knowledge base has stopped being able to answer it — so telling the reader their question
+# "cannot be answered from the available knowledge base" is the interface stating something
+# untrue about the corpus. ``apps/api/tests/test_fr12_traceability_survives_reprocess.py``
+# records what happens to the rows.
 #
 # **What it may and may not say.** It says the answer's own sources are no longer on record.
 # It does not mention permissions, withholding or restriction in any form: this state says
-# nothing whatever about what the reader may see, and a re-scoped turn — a turn whose
-# citation rows DO exist but are no longer readable by this role — must stay
+# nothing whatever about what the reader may see, and a re-scoped turn — a turn with a
+# citation row whose chunk DOES exist but is no longer readable by this role — must stay
 # indistinguishable from a never-answered one, which is invariant 1 and which
-# ``ConversationTurnSerializer`` keeps by discriminating on row existence. No count of
-# anything removed, for the same reason.
-# Shown for a turn that WAS answered and whose AnswerCitation rows no longer exist. It is a
-# second fixed text rather than a reuse of NO_ANSWER_MESSAGE, because that one says the question
-# cannot be answered from the available knowledge base, which is a claim about the corpus and is
-# not what happened here.
+# ``ConversationTurnSerializer`` keeps by discriminating on whether a row still points at an
+# existing chunk, before any scoping. No count of anything removed, for the same reason.
+# Shown for a turn that WAS answered and none of whose AnswerCitation rows still points at a
+# chunk. It is a second fixed text rather than a reuse of NO_ANSWER_MESSAGE, because that one
+# says the question cannot be answered from the available knowledge base, which is a claim about
+# the corpus and is not what happened here.
 #
 # The second sentence deliberately promises NOTHING about what asking again will return. An
 # earlier version said "for an answer from the current material", and that was false on two of

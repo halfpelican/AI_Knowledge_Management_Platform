@@ -192,6 +192,9 @@ def test_an_answered_query_writes_one_row_carrying_the_whole_traceability_clause
 
     citation = row.citations.get()
     assert citation.chunk_id == chunk.id
+    # The same identifier again, in the column that outlives the chunk (D-67): chunk_id is
+    # set NULL when the chunk is deleted, and chunk_uuid is what still traces the statement.
+    assert citation.chunk_uuid == chunk.id
     assert citation.statement_text == "A grounded statement."
     assert citation.position == 1
 
@@ -355,6 +358,8 @@ def test_a_citation_row_per_verified_statement_in_the_order_they_were_verified(
         "Pro rata in the first year.",
     ]
     assert [citation.chunk_id for citation in citations] == [first.id, second.id]
+    # Each row's chunk_uuid is its own chunk_id, not the first statement's or the last one's.
+    assert [citation.chunk_uuid for citation in citations] == [first.id, second.id]
     # answer_text is the same statements in the same order, joined. The numbering a reader
     # sees is recoverable from position beside each chunk, which is why it is not stored in
     # the text (apps/retrieval/query_log.py).

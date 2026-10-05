@@ -8,7 +8,11 @@ at its lines 76, 165 and 185. It is the record behind two clauses of FR-12:
 - *Business logic (traceability)*: "the question, the retrieved chunk identifiers, the
   answer and its verified citations are logged, so that any answer can later be traced
   to the material that produced it." The question, the identifiers and the answer are
-  columns on ``QueryLog``; the verified citations are ``AnswerCitation`` rows.
+  columns on ``QueryLog``; the verified citations are ``AnswerCitation`` rows, each
+  naming its chunk in ``chunk_id``, the foreign key, and again in ``chunk_uuid``, the same
+  identifier kept when the chunk is later deleted and ``chunk_id`` is set NULL (D-67).
+  "Later" is the clause's own word, and before D-67 a reprocess or a re-index destroyed
+  the citation rows outright.
 - *Business logic (gap evidence)*: "every query is logged with its result count and
   answered status, providing the input to FR-19." ``answered`` is a column; the result
   count is derived, and the paragraph on it below is the argument for why.
@@ -265,19 +269,27 @@ def record_query(
         # ``chunk_id`` is set to the UUID directly rather than fetching the ContentChunk:
         # the row was read microseconds ago to build the passage, the foreign key
         # constraint still checks that it exists, and a second read would buy nothing.
-        AnswerCitation.objects.bulk_create(
-            [
+        #
+        # ``chunk_uuid`` is the SAME UUID, written beside it (D-67). ``chunk_id`` is set
+        # NULL when the chunk is later deleted — by a reprocess, ``manage.py reindex`` or
+        # FR-15's deletion — and ``chunk_uuid`` is what still names the chunk this
+        # statement was traced to. Written here explicitly rather than derived in a
+        # ``save()`` override, because ``bulk_create`` does not call ``save()``; a writer
+        # that omits it fails on the NOT NULL column instead of storing a citation that
+        # cannot be traced once its chunk is gone.
+        citations = []
+        for position, statement in enumerate(outcome.verified_statements, start=FIRST_POSITION):
+            cited = UUID(statement.chunk_id)
+            citations.append(
                 AnswerCitation(
                     query=row,
-                    chunk_id=UUID(statement.chunk_id),
+                    chunk_id=cited,
+                    chunk_uuid=cited,
                     statement_text=statement.text,
                     position=position,
                 )
-                for position, statement in enumerate(
-                    outcome.verified_statements, start=FIRST_POSITION
-                )
-            ]
-        )
+            )
+        AnswerCitation.objects.bulk_create(citations)
         if conversation is not None:
             # FR-13: a turn happened, so the thread moves to the top of the user's list.
             # ``last_updated_at`` is auto_now, so naming it in update_fields is the whole

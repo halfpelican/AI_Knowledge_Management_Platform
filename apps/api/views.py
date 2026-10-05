@@ -1077,12 +1077,15 @@ class ConversationDetailView(APIView):
     argument, including why the leak is the statement prose rather than the identifier; the
     request is passed into its context because the role is resolved from it per request.
 
-    **A third state, separated at item 1c: a turn whose citation ROWS no longer exist.** Not
-    a permission state — a reprocess or a re-index deleted them (D-12's cascade) while the
-    material stayed — so it carries ``provenance_removed`` and its own message instead of
-    claiming the question cannot be answered. The re-scoped state above stays silent and
-    stays indistinguishable from a never-answered turn; the discriminator is row existence,
-    and ``ConversationTurnSerializer`` argues why it must stay that way.
+    **A third state, separated at item 1c: a turn none of whose citation rows still points at
+    an existing chunk.** Not a permission state — a reprocess, a re-index or FR-15's deletion
+    removed the chunks it cited. Until D-67 the rows went with them (D-12's cascade); now they
+    survive with ``chunk_id`` NULL and are read as if they had gone. Such a turn carries
+    ``provenance_removed`` and its own message instead of claiming the question cannot be
+    answered. The re-scoped state above stays silent and stays indistinguishable from a
+    never-answered turn; the discriminator is whether a row still points at an existing chunk,
+    read before any scoping, and ``ConversationTurnSerializer`` argues why it must stay that
+    way.
     """
 
     def get(self, request, pk):

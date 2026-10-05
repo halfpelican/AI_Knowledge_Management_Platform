@@ -3,7 +3,8 @@
 
 Models only. The retrieval logic itself is built in Stage 4 (FR-11, FR-12, FR-13).
 Query and search logs are the project's main quality signal, so they survive
-deletions: a deleted conversation leaves its queries behind (D-12).
+deletions: a deleted conversation leaves its queries behind (D-12), and a deleted chunk
+leaves its citations behind with a NULL chunk and the identifier kept (D-67).
 """
 
 from django.conf import settings
@@ -108,12 +109,43 @@ class SearchLog(models.Model):
 
 
 class AnswerCitation(models.Model):
-    # Rows exist only for statements that survived verification (CLAUDE.md invariant 6).
+    """One verified statement of a logged answer and the chunk it cited (FR-12 traceability).
+
+    Rows exist only for statements that survived verification (CLAUDE.md invariant 6).
+
+    **``chunk`` is SET_NULL and ``chunk_uuid`` keeps the identifier (D-67, Stage 5 item 1a).**
+    Until retrieval 0003 the foreign key was CASCADE (D-12), so a reprocess, a
+    ``manage.py reindex`` or FR-15's deletion destroyed every citation of the chunks it
+    removed, and FR-12's traceability record with them. Now the row survives the chunk:
+    ``chunk_id`` becomes NULL, and ``chunk_uuid`` still names the chunk that was cited, so
+    the question, the identifiers and the verified citations can be traced after the
+    source is gone. ``record_query`` writes both columns with the same UUID.
+
+    **No passage text is stored here, and none may be.** FR-15 deletes a document's
+    extracted content and embeddings "so that deleted material cannot subsequently be
+    surfaced through search"; a snapshot of the passage would be that material surviving
+    the delete. ``chunk_uuid`` is an identifier and resolves to nothing once the chunk is
+    gone, which is the point.
+
+    **A row whose ``chunk_id`` is NULL is REMOVED for every reader**, which is to say it is
+    read exactly as a row the old CASCADE had deleted: its statement is not shown, its
+    identifier is not shown, and a turn left with no other row is rendered as if it had no
+    rows at all. The reopened-turn serializer (``apps/api/serializers.py``) is the reader
+    today; any later one — item 4b's passage expansion, the Sources panel on a reopened
+    turn, FR-14 — must treat it the same way. The statement text stays in the row, as the
+    record of what was answered, and is never rendered from it.
+    """
+
     id = uuid_primary_key("citation_id")
     query = models.ForeignKey(QueryLog, on_delete=models.CASCADE, related_name="citations")
+    # NULL once the chunk is deleted. NULL means "the chunk no longer exists", and nothing
+    # else: the database foreign key still refuses a chunk_id that names no row.
     chunk = models.ForeignKey(
-        "documents.ContentChunk", on_delete=models.CASCADE, related_name="citations"
+        "documents.ContentChunk", null=True, on_delete=models.SET_NULL, related_name="citations"
     )
+    # The cited chunk's identifier, written with chunk_id and kept when chunk_id is nulled.
+    # An identifier and never text: see the class docstring.
+    chunk_uuid = models.UUIDField()
     statement_text = models.TextField()
     position = models.PositiveIntegerField()  # order within the answer
 
