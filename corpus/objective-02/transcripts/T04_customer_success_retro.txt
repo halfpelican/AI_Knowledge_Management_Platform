@@ -1,0 +1,40 @@
+Nadia: This retrospective covers the last quarter. Let's talk about what went well, what didn't and what we change.
+
+Ollie: What went well: response times improved and our satisfaction score rose to eighty-six percent.
+
+Rania: What didn't go so well was onboarding. Several new customers waited more than two weeks for their first training session.
+
+Nadia: Why did that happen?
+
+Rania: We lost a trainer and did not backfill quickly. Bookings piled up.
+
+Ollie: We should also talk about renewals. The Marlin Point churn review showed that most cancelled accounts had not logged in for sixty days before cancelling.
+
+Nadia: That's a valuable signal. Could we contact customers before they reach sixty days of inactivity?
+
+Rania: Yes. We can build a simple report and have the team reach out at forty-five days.
+
+Ollie: I'll draft the script for those calls.
+
+Nadia: Good. What else should we change?
+
+Rania: Better handover from sales. Sometimes we do not know what was promised to the customer.
+
+Nadia: Let's create a one-page handover template and agree it with the sales team.
+
+Ollie: I'll set up a meeting with the sales lead this week.
+
+Nadia: Thanks. Actions recorded. Let's finish there.
+
+Nadia: Let's confirm the actions before we close.
+
+Rania: I will build the inactivity report and share it on Wednesday.
+
+Ollie: I will write the call script and the handover template draft.
+
+Nadia: And I will book the follow-up retrospective for the end of next quarter.
+
+Rania: One last thought: we should celebrate the improved satisfaction score with the team.
+
+Nadia: Agreed, I will arrange it. Thank you both.
+

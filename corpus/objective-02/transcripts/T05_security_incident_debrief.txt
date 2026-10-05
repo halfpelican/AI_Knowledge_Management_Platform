@@ -1,0 +1,40 @@
+Karim: Thanks for coming. This debrief covers last week's phishing exercise and what we learned.
+
+Beth: For the record, the Cobalt Reef phishing drill sent a simulated email to four hundred staff. Sixty-one clicked the link and twenty-three entered credentials on the fake page.
+
+Karim: That is better than last time, when nearly a hundred clicked. But twenty-three entering credentials is still too many.
+
+Beth: Reports to the service desk were also up. Ninety people reported the message, which is a strong result.
+
+Dmitri: The fastest report came within four minutes. If it had been a real attack, we could have blocked the sender before most people opened it.
+
+Karim: What did the people who clicked have in common?
+
+Beth: Mostly they were working on mobile devices. The sender address is harder to see on a small screen.
+
+Dmitri: We could add a banner to external emails that is visible on mobile.
+
+Karim: Good idea. Can you look at that?
+
+Dmitri: Yes. I'll test it and report back next week.
+
+Beth: We should also send a short reminder to everyone about how to report suspicious emails.
+
+Karim: Agreed. Please draft it and I'll approve. Any other points?
+
+Dmitri: Just that nobody was disciplined. We want people to feel safe reporting.
+
+Karim: Absolutely. That concludes the debrief. Thank you all.
+
+Karim: Let's confirm what we are doing next.
+
+Dmitri: I will test the external email banner on mobile and report next week.
+
+Beth: I will draft the reminder about reporting suspicious emails and send it to Karim for approval.
+
+Karim: And I will report the results to the executive team on Thursday.
+
+Beth: Should we schedule the next drill now?
+
+Karim: Yes, let's plan for the middle of next quarter. Thank you all.
+

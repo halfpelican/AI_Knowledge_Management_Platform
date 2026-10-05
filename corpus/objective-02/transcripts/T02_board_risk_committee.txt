@@ -1,0 +1,38 @@
+Chair: Welcome to the risk committee. We have four items today: the top risks register, cyber security, supplier concentration and the budget contingency.
+
+Ingrid: On the risks register, the top three remain unchanged: cyber security, loss of key staff and supplier failure. I would propose adding regulatory change as a fourth.
+
+Chair: Does anyone object? No. Then regulatory change is added. Ingrid, please assign an owner.
+
+Ingrid: I'll take it initially and pass it to the compliance manager once appointed.
+
+Omar: On cyber security, the penetration test found two medium findings. Both have been fixed and retested. The next test is scheduled for the first quarter.
+
+Chair: Thank you Omar. Are we confident staff awareness is improving?
+
+Omar: Phishing click rates have halved since the last drill. We plan another drill next quarter.
+
+Helen: On supplier concentration, three suppliers account for almost half of our spend. I recommend we develop alternatives for the two most critical services.
+
+Chair: That seems sensible. Helen, can you bring a plan to the next meeting?
+
+Helen: Yes. I'll include estimated costs and timelines.
+
+Ingrid: On the budget, the Fernwood contingency reserve currently stands at two million dollars. I recommend we keep it untouched until after the November forecast.
+
+Chair: Any discussion? The committee agrees. The Fernwood contingency reserve remains ring-fenced until the forecast is reviewed.
+
+Omar: Just to record, there were no reportable incidents this quarter.
+
+Chair: Thank you. That concludes the agenda. The next meeting is in three months.
+
+Helen: Before we close, can we confirm the date of the next audit committee?
+
+Chair: It is the second Tuesday of next month. Ingrid, please send the papers a week ahead.
+
+Ingrid: Yes, and I will include the updated risk register.
+
+Omar: I will also attach the summary of the security test so members can read it in advance.
+
+Chair: Thank you. Minutes will be circulated within three days for comment.
+
