@@ -123,6 +123,7 @@ Rules for this file:
 | D-61 | The Stage 4 closing audit: INCOMPLETE, recorded verbatim; its findings are carried to Stage 5 unfixed | Recorded · **findings open against Stage 5** | 2026-09-28 |
 | D-62 | A front-end test runner lands; the interface is no longer accepted as untested; §8 condition 2 names pytest and the front-end suite | Settled by the user | 2026-09-28 |
 | D-63 | FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false | Settled by the user | 2026-09-28 |
+| D-64 | The M6 alpha is hosted on the NPU laptop and reached on that laptop, over loopback; it replaces the proposal's GCP deployment for the alpha only | Settled by the user · scoped to M6 | 2026-10-05 |
 
 ---
 
@@ -3333,3 +3334,74 @@ cost D-52 stated. With the cost corrected, the user restored the clause.
 - **Length.** A long document yields long text. Whether the view truncates, pages or
   collapses it is a presentation choice for item 2; it reads the text from the scoped
   route and from nowhere else.
+
+## D-64 · The M6 alpha is hosted on the NPU laptop and reached on that laptop, over loopback
+
+**Status:** Settled by the user · **Date:** 2026-10-05 · **Scope:** the M6 alpha only ·
+**Answers:** `M6-BUILD-PROMPT.md`'s "decide how the alpha is hosted before item 3", and
+D-61's gap 15 · **Implemented by:** Stage 5 item 9, not by this entry
+
+**Decision.** The M6 alpha runs on the laptop whose NPU serves FLM, and an assessor uses it
+on that laptop: in person, or with its screen projected. The built SPA and `/api` are served
+from one origin on loopback (`http://127.0.0.1`), in production mode:
+
+- `DEBUG=False`;
+- the production build of the front end (`frontend/dist`), not the Vite development server;
+- Waitress as the WSGI server.
+
+**It replaces the proposal's deployment for the alpha, and only for the alpha.** The
+proposal's deployment section specifies a Google Cloud Compute Engine VM on Ubuntu 22.04,
+with Django under Gunicorn behind Nginx, and Nginx terminating TLS (NFR-03) and serving the
+compiled bundle. The alpha cannot run there, because FLM runs only on this laptop's NPU
+(D-35, D-36) and there is no budget for the `anthropic` provider, so no switch is coming.
+Gunicorn does not run on native Windows, and native Windows is the only place the NPU is
+visible (`docs/ai-provider.md` §3). Waitress does run there.
+
+**The settings stay environment-driven, with loopback defaults**, so that serving the same
+build over HTTPS later is a `.env` change and not a code change:
+
+| Setting | Default for this decision | Today |
+|---|---|---|
+| `ALLOWED_HOSTS` | `127.0.0.1,localhost` | already env-driven with this default (`config/settings.py`) |
+| `CSRF_TRUSTED_ORIGINS` | the loopback origin(s) | not set; item 9 adds it |
+| `SESSION_COOKIE_SECURE` | `False` | not set; item 9 adds it |
+| `CSRF_COOKIE_SECURE` | `False` | not set; item 9 adds it |
+
+**What this decision covers:**
+
+- how an assessor reaches the M6 alpha: on the laptop;
+- the server and mode it runs in: Waitress, `DEBUG=False`, the built SPA, and one origin, so
+  D-21's single origin is kept in the deployment as well as in development;
+- the defaults of `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `SESSION_COOKIE_SECURE` and
+  `CSRF_COOKIE_SECURE`, and the fact that each is read from the environment.
+
+**What it does not cover:**
+
+- **The M8 final deployment (27 November).** Where the delivered system is hosted for M8 is
+  a separate decision, to be taken later. Nothing here commits M8 to loopback, and nothing
+  here withdraws the proposal's GCP design for it.
+- **NFR-03, encryption in transit.** Its verification is "an SSL/TLS scan … against the
+  deployed application", and a loopback alpha serves no TLS, so there is nothing to scan.
+  The scan moves from NFR verification round 1 to round 2. The user named that as timeline
+  task 2.24. The task list is not in `proposal.txt` or anywhere in this repository, so this
+  entry cannot quote it.
+- **How one origin is achieved**: Django with a static-files layer and a catch-all for
+  client routes, or a reverse proxy in front of both. Item 9 decides that. Either way
+  `/api/` must keep answering its own JSON 404s.
+- **Throttling `/api/ask` and the ingestion POSTs.** That is item 5. D-49's 900-second
+  worst case argues against `manage.py runserver`, and Waitress answers that argument only
+  in part: one request can still hold one of its threads for that long.
+- **Open registration.** Item 9 notes that FR-01 is open to anyone with the address if the
+  alpha is reachable beyond the laptop. Under this decision it is not reachable beyond the
+  laptop, so the point does not arise. It returns with any later decision that exposes the
+  service, including a tunnel or a LAN address.
+
+**Consequences.**
+
+- D-61's gap 15, "deployment topology undecided", is answered as a decision. The
+  configuration is still unbuilt and belongs to item 9.
+- The demonstration needs no network, which matches D-35 and `docs/ai-provider.md` §7.
+- Exposing the alpha later means setting `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`,
+  `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` in `.env`, and putting something in front
+  that terminates TLS. That is a new
+  decision with the registration question attached, not an edit to this one.
