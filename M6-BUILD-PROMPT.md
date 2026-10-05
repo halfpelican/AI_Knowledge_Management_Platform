@@ -86,12 +86,28 @@ Rules for this session:
 **Target: Saturday 31 October · milestone M6 · FR-14, FR-15, and Stage 4's
 carry-forwards**
 
+> **Amended 5 October 2026, so the plan in the repository is the plan that ran.** Stage 5
+> was first written without the named agents that Stages 1 to 4 carried. The block below
+> now names them: a routing paragraph after the order, and an owner on each item. Item 9a,
+> a test-engineer step committed on its own before the audits, is new. Three questions this
+> brief left open were settled before item 3, as D-64 (hosting), D-65 (D-54's query
+> parameters) and D-66 (Administrator generalises Employee in scope). Each is noted where
+> the brief raises it. The owners of items 1a, 4a, 4b, 5, 6 and 8 were not named in the
+> amendment; they are assigned here from each agent file's stated scope.
+
 ```
 Stage 5: presentation, integration and the alpha. Milestone M6.
 
 Order: item 1, item 1a, then item 3 before item 2. The proposal's milestone M5
 (23 October) includes FR-14; FR-15 is due at M6. Item 1a precedes item 2 because
 FR-15's deletion destroys citations by design.
+
+Agents. Use django-backend for the FR-14 and FR-15 endpoints (items 2, 2a and 3) and
+the alpha deployment settings (item 9); react-frontend for their screens (items 2 and
+3) and the accessibility pass (item 7); then test-engineer (item 9a, committed on its
+own); then requirements-auditor (item 10) and security-reviewer (item 11). Anything
+already built is not redone: its owning agent reviews it against its agent file and
+fixes what it finds. Each item below names its agent.
 
 Before either requirement's first line of code, enumerate FR-14's and FR-15's clauses
 exhaustively and tick each against what exists — every MUST, every front-end line.
@@ -106,6 +122,11 @@ laptop: that laptop is the host. A provider switch is not an option, and nothing
 below should be planned around one. What remains open is how an assessor reaches the
 laptop — the same network, a tunnel, or the laptop itself — and that answer sets
 HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decision.
+DECIDED 5 October, D-64: the laptop itself, over loopback, in production mode
+(DEBUG=False, the built SPA, Waitress), with ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS and
+the Secure cookie flags env-driven and defaulting to the loopback values. Scoped to
+the M6 alpha; M8 hosting is a later decision, and NFR-03's TLS scan moves to NFR
+round 2.
 
 1. Shared scoping helpers: scoped_documents() and scoped_meetings(), alongside the
    existing chunk predicate. The FR-11 predicate is hand-written at each of these
@@ -127,7 +148,17 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    query-parameter reader and a serializer field for every parameter before either
    requirement writes its first filter.
 
-1a. AnswerCitation.chunk is on_delete=CASCADE (apps/retrieval/models.py:114-116), so
+   DONE 5 October, 1d06d0e, by the coordinating session directly rather than through
+   an agent: it spans rag-pipeline's apps/retrieval and django-backend's apps/api, and
+   the session held the context for both. D-54 is settled as D-65 (a DRF serializer
+   for every query parameter). Followed by D-66 in the same helpers and nowhere else:
+   Administrator generalises Employee in scope as well as in permissions, so that an
+   Employee-only document is in an Administrator's scope and FR-15's scoped-first
+   deletion can reach it.
+
+1a. rag-pipeline: the model, the migration, the citation write in query_log, and the
+   reopened-turn citation filter (FR-12's traceability clause).
+   AnswerCitation.chunk is on_delete=CASCADE (apps/retrieval/models.py:114-116), so
    deleting a chunk deletes the citations that point at it, and the FR-12 audit trail
    with them. D-61's gap 5, D-48, pinned by
    apps/api/tests/test_fr12_traceability_lost_on_reprocess.py. Chunks are deleted by
@@ -156,8 +187,8 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    either, the citations that matter are exposed to a delete, and no migration
    brings a deleted row back.
 
-2. FR-15 document repository and filtered browsing. The clause, to be ticked line
-   by line:
+2. FR-15 document repository and filtered browsing: django-backend for the endpoints,
+   react-frontend for the screens. The clause, to be ticked line by line:
    - a list view showing title, type, uploader, upload date and status, with
      sorting and a text filter;
    - browsing by Department, Project, Process or Topic without composing a query;
@@ -180,7 +211,9 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    returns nothing from /api/search, and a question only it answered takes no-answer
    path A. Resolve the document through the scoped helper first — 404 outside scope,
    D-46 — and check manage_documents second, 403. In the other order the status code
-   tells a user whether a document they cannot see exists.
+   tells a user whether a document they cannot see exists. manage_documents is
+   seeded Administrator-only by accounts 0005 (settled 5 October). D-66 puts every
+   Employee-only document in an Administrator's scope, so no document is undeletable.
 
    The values a filter offers, and the count against each, come from the documents
    the user may see — never from the Tags table. A tag or department that exists only
@@ -205,7 +238,8 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    rendered as text. Fewer filter dimensions is an acceptable cut; the requirement
    missing is not.
 
-2a. The document download route — FR-15's download link, and not built: D-52 said
+2a. django-backend. The document download route — FR-15's download link, and not
+   built: D-52 said
    it was, and it never existed. The storage is settled: Document.file_path has been a
    FileField under MEDIA_ROOT since documents 0006 (docs/schema-v1.md, G7, closed 21
    September), so this is a view, not a migration. It is another route through the
@@ -222,8 +256,8 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    level while a download can only consult the document's stamp — those agree only
    while the visibility cascade holds.
 
-3. FR-14 dashboard — taken before item 2 (see the order above). The clause, to be
-   ticked line by line:
+3. FR-14 dashboard — taken before item 2 (see the order above): django-backend for
+   the endpoint, react-frontend for the screen. The clause, to be ticked line by line:
    - the landing page after login, with panels for recent documents, recent
      meetings, total indexed items and recent questions asked;
    - each panel links through to its full view and shows a loading state;
@@ -269,7 +303,8 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    owns its behaviour, in the same commit as the code. Items 4a and 4b change
    behaviour rather than only adding evidence.
 
-4a. FR-13's "retaining the thread", with FR-12's citation link. D-61's gap 3: the one
+4a. react-frontend. FR-13's "retaining the thread", with FR-12's citation link.
+   D-61's gap 3: the one
    finding the closing audit recorded that existed nowhere in the repository, and the
    one on the path an assessor walks. frontend/src/pages/Ask.jsx:129-130 holds
    conversationId and turns in useState only, and the citation's own
@@ -282,7 +317,9 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    the same commit and in the front-end suite, because only the interface can satisfy
    the clause.
 
-4b. FR-12's citation expansion, source link and Sources panel on a REOPENED turn.
+4b. django-backend for the contract and the serializer, then react-frontend for the
+   reopened turn. FR-12's citation expansion, source link and Sources panel on a
+   REOPENED turn.
    D-61's gap 4. GET /api/conversations/{id} returns statements with no passages and
    no sources (apps/api/serializers.py:744-755), and frontend/src/utils/turns.js
    savedTurnFrom sets sources: [] and expandable: false. Live replies are correct;
@@ -296,7 +333,9 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    again. That case renders the provenance-removed state, which D-62 records as
    untested — test it here, in the front-end suite.
 
-5. Stage 4's deferred fixes: the throttle scope on /api/ask and the ingestion
+5. django-backend for the throttle and the orphaned conversations, rag-pipeline for
+   the PDF bomb. Stage 4's deferred fixes: the throttle scope on /api/ask and the
+   ingestion
    POSTs (deferred with its evidence — worst case is one request holding a worker
    ~900s); PDF decompression bombs, which D-50 left open because it closes the
    OOXML path only; orphaned empty conversations, which outlive the session that
@@ -304,11 +343,13 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    forward — D-51's retry affordance, which the front end withdrew in the Stage 4
    finishing pass (item 2).
 
-6. Re-measurement, once Objective 02's corpus exists. Everything here is
+6. rag-pipeline. Re-measurement, once Objective 02's corpus exists. Everything here
+   is
    currently fitted to six chunks: RELEVANCE_THRESHOLD (D-37, provisional by its
    own terms, and D-38's trigger has already fired), the partial-matches
    relevance floor, the three citation rates, p90, and FR-13 end to end — which
-   item 9a deliberately did not measure, because it held retrieval constant so
+   Stage 4's item 9a deliberately did not measure, because it held retrieval
+   constant so
    the history block's effect would be attributable. Do not re-measure before the
    corpus lands; doing it twice is the only way to get it wrong twice. Ingesting the
    corpus adds chunks and deletes none, so it is not a re-index and does not wait on
@@ -328,16 +369,19 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    requests, so a load test will read higher, not lower. The proposal fixes no
    concurrency: choose one, record it in the decision, and report p90 against it.
 
-7. Accessibility pass: contrast ratios documented, focus states, tab order, text
+7. react-frontend. Accessibility pass: contrast ratios documented, focus states,
+   tab order, text
    equivalents for non-text content, component sheet complete. docs/usability-
    findings.md records the findings from hand-testing Stage 3 — close them here.
    Note that jsdom applies no stylesheet, so nothing in item 4's suite catches a CSS
    rule that hides an element; the acknowledgement line is the known case.
 
-8. End-to-end integration pass across all twelve MUST-HAVEs. Both roles, real
+8. test-engineer, with the coordinating session for the live run. End-to-end
+   integration pass across all twelve MUST-HAVEs. Both roles, real
    files, the real corpus.
 
-9. Alpha deployment and a demonstration script that exercises all twelve in
+9. django-backend for the settings and the server, react-frontend for the production
+   build. Alpha deployment and a demonstration script that exercises all twelve in
    order. None of the deployment exists, and the development setup does not carry
    over:
    - D-21's single origin is the Vite development proxy. A production build
@@ -360,6 +404,17 @@ HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decisio
    runs; and DO NOT RE-INDEX, REPROCESS OR DELETE between building the
    demonstration threads and demonstrating them. Make the D-35 screen recording
    before any re-index, not after.
+
+9a. test-engineer: FR-14 and FR-15 leakage tests, a test step committed on its own,
+   before items 10 and 11. Not item 6, which stays re-measurement.
+   - An Employee's dashboard totals and browse-facet counts are identical with and
+     without Administrator-only documents in the database.
+   - After a delete, a question whose only answer lived in that document returns
+     no-answer, and none of its chunks remain.
+   - An unknown department and a restricted-only one return the same 204 on FR-15's
+     browse, and the same 200 payload on FR-14's dashboard, which lists no 204.
+   - An Administrator can delete a document visible only to Employees (D-66).
+   - The dual-role matrix stays at 100% with the new routes.
 
 10. requirements-auditor: full set-level audit against the M6 gate list. Not
    requirement by requirement — the SET. Every one of the twelve owned,
