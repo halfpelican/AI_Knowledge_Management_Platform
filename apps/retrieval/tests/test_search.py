@@ -306,24 +306,25 @@ def test_documents_and_meetings_are_separate_groups_with_their_own_counts(employ
 def test_a_meeting_is_scoped_by_role_and_not_by_attendance(employee, administrator):
     """D-16: MeetingAttendees is a participation record, not an access control.
 
-    The Employee did not attend and the Administrator did; neither fact is consulted. The
+    The Employee attended and the Administrator did not; neither fact is consulted. The
     role arrays alone decide, and they decide the opposite way round from attendance here,
     so an implementation that consulted attendance could not pass.
+
+    Until D-66 this was arranged the other way — an Employee-only meeting the Administrator
+    attended and was refused. An Administrator now reads Employee-only content, so the
+    meeting is Administrator-only instead and the attendee is the Employee who is refused.
     """
     from apps.meetings.models import MeetingAttendee
 
     meeting = make_meeting(
         title="Leave policy review",
-        roles=[EMPLOYEE_ROLE_NAME],
+        roles=[ADMINISTRATOR_ROLE_NAME],
         texts=["The annual leave rules were restated."],
     )
-    MeetingAttendee.objects.create(meeting=meeting, user=administrator)
+    MeetingAttendee.objects.create(meeting=meeting, user=employee)
 
-    assert search(query_text=TERM, user=employee).meetings.count == 1
-    assert (
-        search(query_text=TERM, user=administrator).meetings.count
-        == 0
-    )
+    assert search(query_text=TERM, user=employee).meetings.count == 0
+    assert search(query_text=TERM, user=administrator).meetings.count == 1
 
 
 def test_a_meeting_carries_no_department(employee):

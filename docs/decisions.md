@@ -112,8 +112,8 @@ Rules for this file:
 | D-50 | An oversized archive member is a 413; the bomb class is closed for OOXML only | Settled by the user | 2026-09-26 |
 | D-51 | A seventh document status: "Too large to index" | Settled by the user | 2026-09-26 |
 | D-52 | FR-15's detail view shows metadata and a download link, not extracted content | **Superseded by D-63** | 2026-09-27 |
-| D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · **due with FR-15** | 2026-09-27 |
-| D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Open** | 2026-09-27 |
+| D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · implemented 2026-10-05, Stage 5 item 1 | 2026-09-27 |
+| D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Settled by D-65** (2026-10-05) | 2026-09-27 |
 | D-55 | `rejected_count` on QueryLog — numbering a column that shipped without one | Settled retroactively | 2026-09-27 |
 | D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
@@ -123,6 +123,10 @@ Rules for this file:
 | D-61 | The Stage 4 closing audit: INCOMPLETE, recorded verbatim; its findings are carried to Stage 5 unfixed | Recorded · **findings open against Stage 5** | 2026-09-28 |
 | D-62 | A front-end test runner lands; the interface is no longer accepted as untested; §8 condition 2 names pytest and the front-end suite | Settled by the user | 2026-09-28 |
 | D-63 | FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false | Settled by the user | 2026-09-28 |
+| D-64 | The M6 alpha is hosted on the NPU laptop and reached on that laptop, over loopback; it replaces the proposal's GCP deployment for the alpha only | Settled by the user · scoped to M6 | 2026-10-05 |
+| D-65 | Every query parameter passes a DRF serializer: ChoiceField for fixed vocabularies, shape-only for department and tag, an inclusive date range; the 400 is a convention | Settled by the user · settles D-54 | 2026-10-05 |
+| D-66 | Administrator generalises Employee in scope as well as in permissions: scope is overlap with EFFECTIVE_ROLES, in the item 1 helpers only | Settled by the user | 2026-10-05 |
+| D-67 | `AnswerCitation.chunk` is SET_NULL and `chunk_uuid` keeps the cited identifier; no passage text is stored, and a NULL-chunk citation is removed for every reader | Settled by the user, in the Stage 5 brief, item 1a · supersedes D-12 for this column and D-48's "not before M6" · closes D-61's gap 5 | 2026-10-05 |
 
 ---
 
@@ -2650,10 +2654,59 @@ as both roles got a 200 from it.
 does not:** the code. Nothing changes today, and the disagreement stays harmless until the
 `bulk_create` hole is reached.
 
+> **Implemented on 5 October 2026, Stage 5 item 1.** `scoped_documents()` and
+> `scoped_meetings()` sit beside `scoped_chunks()` in `apps/retrieval/scoping.py`, and fail
+> closed. The predicate is now written only there. These callers moved onto the helpers:
+>
+> - `apps/api/views.py`: `DocumentsView.get`, `DocumentDetailView.get`, `MeetingsView.get`,
+>   `MeetingDetailView.get` and `DocumentReprocessView.post`. Each now resolves the role
+>   through `permission_scope` instead of reading `request.user.role.role_name`;
+> - `apps/retrieval/search.py`: the document and meeting querysets of `search()`;
+> - `apps/api/answers.py`: `_titles_and_dates`, which used to fail **open**. `reply_for`
+>   now takes the user and resolves the scope itself, as `search()` and
+>   `answer_question()` do, so no view passes it a role.
+>
+> `apps/api/tests/test_source_rows_fail_closed.py` is the test this entry asked for. It has
+> three parts: a scan that fails if the predicate is spelled outside the scoping module, or
+> if a request-serving module reads a source manager directly outside a named exception; a
+> table that every route in the URL conf must appear in, either as returning source rows
+> with a probe or as returning none with a reason; and a probe per source-returning route
+> against a source whose chunks are stamped wider than the source itself. Each probe has an
+> Administrator mirror. The `POST /api/ask` probe failed against the code before this
+> change, because the Sources panel named the source.
+>
+> **What the implementation covers:** the title, date and identifier of every Document and
+> Meeting row that a request-serving route returns, for the routes in the test's table.
+>
+> **What it does not cover:**
+>
+> - **The statements of a live answer.** In the disagreement state the chunk stamp admits the
+>   passage, so it is a retrieval candidate and is sent to the model, and a statement citing
+>   it survives verification. Failing closed on the source drops the item from `sources` and
+>   `partial_matches` and nothing more. The statement is then shown with a citation that has
+>   no passage to expand to. Stopping the passage from reaching the model would need the
+>   source predicate inside the candidate set, a join that D-17 exists to avoid. The defence
+>   for that case is still D-47's cascade.
+> - **A reopened turn.** `GET /api/conversations/{id}` re-scopes through `scoped_chunks` only
+>   (D-48), so in the disagreement state it shows the same statements the live reply did. It
+>   returns no source rows until Stage 5 item 4b, and the test's table says that route must
+>   move across with a probe when it does.
+> - **`bulk_create(update_conflicts=True)`**, D-47's pinned hole. Nothing here closes it.
+> - **Reads of `ExtractedContent`, `ContentTag`, `Tag`, `QueryLog` and `AnswerCitation`.**
+>   The scan watches `Document`, `Meeting` and `ContentChunk` managers only. FR-15 adds
+>   readers of the first three, and must scope them through a scoped document.
+> - **`apps/ingestion`**, including `manage.py reindex`. Neither is a route.
+> - **The D-29 checks on upload and transcript ingestion.** They still read
+>   `request.user.role.role_name`. They test whether the caller's own role is in the scope
+>   being written, and do not filter what is returned.
+
 ## D-54 · The NUL-byte rejection is fixed at the instance; the class reopens with FR-15
 
 **Status:** Open — recorded, not resolved · **Date:** 2026-09-27 · **Comes due:** FR-15,
 Stage 5 item 1
+
+> **Settled on 5 October 2026 by D-65**: every query parameter passes a DRF serializer.
+> This entry is left as written.
 
 `GET /api/search?q=<NUL>` raised `psycopg.DataError` out of an ORM `icontains` lookup, uncaught,
 answered **500 with an HTML body** — and under `DEBUG=True` that page carries the traceback, the
@@ -3333,3 +3386,348 @@ cost D-52 stated. With the cost corrected, the user restored the clause.
 - **Length.** A long document yields long text. Whether the view truncates, pages or
   collapses it is a presentation choice for item 2; it reads the text from the scoped
   route and from nowhere else.
+
+## D-64 · The M6 alpha is hosted on the NPU laptop and reached on that laptop, over loopback
+
+**Status:** Settled by the user · **Date:** 2026-10-05 · **Scope:** the M6 alpha only ·
+**Answers:** `M6-BUILD-PROMPT.md`'s "decide how the alpha is hosted before item 3", and
+D-61's gap 15 · **Implemented by:** Stage 5 item 9, not by this entry
+
+**Decision.** The M6 alpha runs on the laptop whose NPU serves FLM, and an assessor uses it
+on that laptop: in person, or with its screen projected. The built SPA and `/api` are served
+from one origin on loopback (`http://127.0.0.1`), in production mode:
+
+- `DEBUG=False`;
+- the production build of the front end (`frontend/dist`), not the Vite development server;
+- Waitress as the WSGI server.
+
+**It replaces the proposal's deployment for the alpha, and only for the alpha.** The
+proposal's deployment section specifies a Google Cloud Compute Engine VM on Ubuntu 22.04,
+with Django under Gunicorn behind Nginx, and Nginx terminating TLS (NFR-03) and serving the
+compiled bundle. The alpha cannot run there, because FLM runs only on this laptop's NPU
+(D-35, D-36) and there is no budget for the `anthropic` provider, so no switch is coming.
+Gunicorn does not run on native Windows, and native Windows is the only place the NPU is
+visible (`docs/ai-provider.md` §3). Waitress does run there.
+
+**The settings stay environment-driven, with loopback defaults**, so that serving the same
+build over HTTPS later is a `.env` change and not a code change:
+
+| Setting | Default for this decision | Today |
+|---|---|---|
+| `ALLOWED_HOSTS` | `127.0.0.1,localhost` | already env-driven with this default (`config/settings.py`) |
+| `CSRF_TRUSTED_ORIGINS` | the loopback origin(s) | not set; item 9 adds it |
+| `SESSION_COOKIE_SECURE` | `False` | not set; item 9 adds it |
+| `CSRF_COOKIE_SECURE` | `False` | not set; item 9 adds it |
+
+**What this decision covers:**
+
+- how an assessor reaches the M6 alpha: on the laptop;
+- the server and mode it runs in: Waitress, `DEBUG=False`, the built SPA, and one origin, so
+  D-21's single origin is kept in the deployment as well as in development;
+- the defaults of `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `SESSION_COOKIE_SECURE` and
+  `CSRF_COOKIE_SECURE`, and the fact that each is read from the environment.
+
+**What it does not cover:**
+
+- **The M8 final deployment (27 November).** Where the delivered system is hosted for M8 is
+  a separate decision, to be taken later. Nothing here commits M8 to loopback, and nothing
+  here withdraws the proposal's GCP design for it.
+- **NFR-03, encryption in transit.** Its verification is "an SSL/TLS scan … against the
+  deployed application", and a loopback alpha serves no TLS, so there is nothing to scan.
+  The scan moves from NFR verification round 1 to round 2. The user named that as timeline
+  task 2.24. The task list is not in `proposal.txt` or anywhere in this repository, so this
+  entry cannot quote it.
+- **How one origin is achieved**: Django with a static-files layer and a catch-all for
+  client routes, or a reverse proxy in front of both. Item 9 decides that. Either way
+  `/api/` must keep answering its own JSON 404s.
+- **Throttling `/api/ask` and the ingestion POSTs.** That is item 5. D-49's 900-second
+  worst case argues against `manage.py runserver`, and Waitress answers that argument only
+  in part: one request can still hold one of its threads for that long.
+- **Open registration.** Item 9 notes that FR-01 is open to anyone with the address if the
+  alpha is reachable beyond the laptop. Under this decision it is not reachable beyond the
+  laptop, so the point does not arise. It returns with any later decision that exposes the
+  service, including a tunnel or a LAN address.
+
+**Consequences.**
+
+- D-61's gap 15, "deployment topology undecided", is answered as a decision. The
+  configuration is still unbuilt and belongs to item 9.
+- The demonstration needs no network, which matches D-35 and `docs/ai-provider.md` §7.
+- Exposing the alpha later means setting `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`,
+  `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` in `.env`, and putting something in front
+  that terminates TLS. That is a new
+  decision with the registration question attached, not an edit to this one.
+
+## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
+
+**Status:** Settled by the user · **Date:** 2026-10-05 · **Settles:** D-54 · **Stage:** 5
+item 1 · **Concerns:** FR-14's and FR-15's filters, and every later route that reads a
+query parameter
+
+**Decision.** A view reads its query parameters by passing them to a DRF `Serializer`, as
+`SomeQuerySerializer(data=request.query_params)`, and uses only `validated_data`. No view
+reads `request.query_params` or `request.GET` into an ORM lookup itself. The NUL-byte class
+that D-54 left open is then closed at the request boundary for each new parameter rather than
+inside one function: DRF's `CharField` carries `ProhibitNullCharactersValidator`, and a NUL
+byte is not a valid date, UUID or choice either.
+
+**How each kind of parameter is declared:**
+
+| Parameter kind | Field | Validated against |
+|---|---|---|
+| A fixed vocabulary from `apps/core/constants.py`: `status`, `sort` | `ChoiceField` over the constant | the constant |
+| `department`, a tag name | `CharField` with a `max_length` constant | shape only |
+| a tag identifier | `UUIDField` | shape only |
+| a date range | `DateField` for `date_from` and for `date_to` | shape, plus the cross-field rule below |
+
+**`ChoiceField` only for fixed vocabularies, and never a lookup against the database.**
+Department and tag values are checked for shape and never checked for existence. An
+unknown department and a department used only on restricted content must give the same
+answer, which is FR-15's 204 for a filter combination with no accessible matches. A field
+that looked the value up would answer 400 for one and 204 for the other, and the status code
+would tell the caller whether restricted material carries that department. That is the
+existence oracle invariant 1 forbids, at the validation layer instead of the query.
+
+**Date ranges.** `validate()` rejects `date_from` later than `date_to`. The end date is
+inclusive, so `date_to` filters with `__date__lte`, and a range of one day returns that day's
+items.
+
+**The 400 is a convention, recorded as one.** Neither FR-14 nor FR-15 lists a 400 among its
+Responses. A malformed parameter is answered 400 in DRF's usual body, keyed on the parameter's
+own name, the same shape every other 400 in this API uses. The status code comes from this
+API's convention for a malformed request, and is not read out of either requirement.
+
+**Enforced by a test, not by this entry.**
+`apps/api/tests/test_query_parameters_pass_a_serializer.py` parses every production module
+under `apps/` and fails on any read of `.query_params` or `.GET` that is not the `data=`
+argument of a call to a `…Serializer`. The test is shown to fail on a direct read before it
+is trusted to pass.
+
+**What this covers:** every query parameter read by a view under `apps/`, from Stage 5 item 1
+onwards, including FR-14's date range and department and FR-15's department, tag, status,
+sort and text filter as each lands.
+
+**What it does not cover:**
+
+- **`q` on `GET /api/search`.** It is the one named exception to the test, at
+  `apps/api/views.py` `SearchView.get`. Stage 4 item 12a closed it inside
+  `apps/retrieval/search.py` with its own exception and message, and moving it onto a
+  serializer would replace a tested message with DRF's generic one for no gain in safety.
+- **Request bodies.** Those already pass serializers.
+- **Path parameters.** Django's `<uuid:pk>` converter refuses anything that is not a UUID
+  before a view runs.
+- **Headers and cookies.** No view reads one into an ORM lookup.
+- **What a filter does once it is valid.** Scoping, counts and the 204 are item 2's and item
+  3's work, and they are tested there.
+
+**D-54's status changes from Open to Settled by this entry.** D-54 itself is left as written.
+
+## D-66 · Administrator generalises Employee in scope as well as in permissions
+
+**Status:** Settled by the user · **Date:** 2026-10-05 · **Stage:** 5, after item 1, in item
+1's helpers · **Concerns:** FR-11, and through it FR-12, FR-13, FR-14 and FR-15 ·
+**Supersedes:** the reading in `apps/retrieval/scoping.py` that membership of the reader's own
+role is the whole scope test
+
+**Decision.** A role reads every row whose `visible_to_roles` overlaps that role's
+**effective roles**, set by `EFFECTIVE_ROLES` in `apps/core/constants.py`:
+
+| Role | Effective roles |
+|---|---|
+| Employee | Employee |
+| Administrator | Administrator, Employee |
+
+`scoped_chunks`, `scoped_documents` and `scoped_meetings` test overlap
+(`visible_to_roles__overlap`) instead of membership of the single role name
+(`visible_to_roles__contains`). The change is in item 1's helpers and nowhere else, so every
+caller inherits it.
+
+**Why.** The proposal's role model makes Administrator a generalisation of Employee. Its
+use-case diagram draws `Employee <|-- Admin` with the note "each role adds capability to the
+one below", and `docs/schema-v1.md` says "Administrator generalises Employee". The build
+applied that to permissions (accounts 0003 and 0004, whose tests assert Administrator's
+permissions are a superset of Employee's) and not to scope. `apps/retrieval/scoping.py` said
+outright that "an Administrator does not implicitly see Employee-scoped content".
+
+That reading made an `["Employee"]` document invisible to every Administrator: absent from
+the repository list and 404 on detail. Under FR-15's scoped-first deletion, which is 404
+outside scope and 403 after that, no Administrator could ever delete it. The question came up
+when `manage_documents` was settled as Administrator-only, together with the requirement that
+no document be undeletable.
+
+**What does not change:**
+
+- **An Employee's scope, by construction.** Their effective roles are `Employee` alone, and
+  overlap with a one-element list is the membership test it replaces.
+  `test_an_employees_scope_is_exactly_the_content_marked_for_employees` asserts it for
+  documents, meetings and chunks.
+- **D-29.** D-29 settles what ingestion *writes* into `visible_to_roles` (both roles by
+  default, 400 for an empty list, 403 for a list excluding the uploader's role). This entry
+  settles how scope is *read*. D-29 stands as written.
+- **The stored arrays.** There is no data migration. Documents, meetings and chunks carry the
+  arrays they carried, so D-47's cascade and D-53's source/chunk agreement are untouched.
+- **FR-15's deletion order.** Scoped-first, as Stage 5 item 2 says: 404 outside scope, then
+  403 without `manage_documents`. Because an Administrator's scope now includes every
+  Employee-only document, the delete control works from the interface as well as the API.
+- **Meetings are still scoped by role, never by attendance** (D-16).
+
+**What this covers:** every read through `scoped_chunks`, `scoped_documents` and
+`scoped_meetings`. Today those are `POST /api/ask` (candidate set, Sources panel, partial
+matches), `GET /api/search`, the document list, detail and reprocess routes, the meeting list
+and detail routes, and the re-scope of a reopened thread (`permitted_citation_chunk_ids`).
+FR-14 and FR-15 inherit it as they land.
+
+**What it does not cover:**
+
+- **D-29's upload refusal.** An Administrator uploading with `visible_to_roles=["Employee"]`
+  is still refused 403, because the check compares the uploader's own role name with the list.
+  D-29's reason, "uploading into a scope you cannot read is how content is lost", no longer
+  holds for an Administrator under this entry, so that check is now stricter than its reason.
+  It is left as it is: this entry changes reads and not what ingestion accepts.
+- **A third role.** A role missing from `EFFECTIVE_ROLES` reads nothing, which fails closed.
+  Adding a role means adding its row here.
+- **A renamed role.** D-11's limitation stands, now in `EFFECTIVE_ROLES` as well as in the
+  stored arrays.
+- **Permissions.** FR-05 and FR-06 read `RolePermissions` and are unchanged.
+- **Records written before this change.** `QueryLog` and `AnswerCitation` rows record what
+  was answered under the old reading. A reopened thread is re-scoped on read, so an
+  Administrator reopening an old turn now sees anything Employee-only it cites. Nothing is
+  rewritten.
+
+**Consequences.**
+
+- `test_the_scope_is_symmetrical_no_role_generalisation` asserted the old reading and is
+  replaced by two tests, one per role, in `apps/retrieval/tests/test_scoping.py`. Every other
+  test that assumed an Administrator could not read Employee-only content is listed in the
+  commit that lands this entry, with what each now asserts.
+- FR-11 is still demonstrated by role, but in one direction only: Administrator-only material
+  withheld from an Employee. An Administrator now sees everything an Employee sees, and more.
+- `apps/retrieval/scoping.py` carries a dated note of the reading it replaced.
+
+## D-67 · `AnswerCitation.chunk` is SET_NULL, `chunk_uuid` keeps the identifier, and no passage text is stored
+
+**Status:** Settled by the user, in the Stage 5 brief (`M6-BUILD-PROMPT.md` item 1a) · implemented
+2026-10-05 · **Date:** 2026-10-05 · **Stage:** 5 item 1a · **Concerns:** FR-12's traceability
+clause, and through it FR-13's reopened thread and FR-15's deletion · **Supersedes:** D-12's
+"`AnswerCitations` with its query or its chunk", for the chunk only; and D-48's 27 September
+qualification where it says the change "is not being made before M6" · **Closes:** D-61's
+gap 5
+
+**Decision.**
+
+- `AnswerCitation.chunk` is `ForeignKey("documents.ContentChunk", null=True,
+  on_delete=SET_NULL)`.
+- `AnswerCitation.chunk_uuid` is a NOT NULL `UUIDField` holding the identifier of the chunk
+  the statement cited. `record_query` writes it with the same UUID as `chunk_id`.
+- Retrieval migration `0003_answercitation_chunk_set_null` does both, and backfills
+  `chunk_uuid` from `chunk_id` on existing rows. It is reversible: the reverse deletes the
+  citation rows whose `chunk_id` is NULL, which 0002's cascade could never have left behind,
+  and touches no other row. The migration's docstring argues why.
+- **A citation whose `chunk_id` is NULL is REMOVED for every reader.** It is read exactly as a
+  row the cascade had deleted: its statement and its identifier are not shown, it takes no
+  citation number, and it does not count as a row when a reopened turn's state is decided.
+
+**Why.** FR-12's traceability clause says "the question, the retrieved chunk identifiers, the
+answer and its verified citations are logged, so that any answer can later be traced to the
+material that produced it." Under CASCADE that held at write time and not afterwards. These
+operations delete chunks, and each destroyed every citation of them:
+
+- `POST /api/documents/{id}/reprocess` (`reprocess_document`), which D-30 opens to every role
+  holding `contribute_content`;
+- `manage.py reindex`, which `CLAUDE.md` §4 mandates on any provider or embedding-model change;
+- FR-15's document deletion, from Stage 5 item 2.
+
+With SET_NULL the row survives the chunk. `chunk_id` goes NULL, because there is nothing left
+to point at, and `chunk_uuid` still names what was cited.
+
+**No passage-text snapshot.** D-61's audit proposed `chunk_uuid` plus a snapshot of the
+passage text. The snapshot is refused. FR-15 says deleting a document removes its extracted
+content, embeddings and tag links "so that deleted material cannot subsequently be surfaced
+through search", and a snapshot is that material surviving the delete. Item 4b will return
+passage text for reopened turns, so a snapshot would put deleted text back on screen.
+Traceability needs the identifier, not the text. The identifier names what was cited and
+resolves to nothing once the chunk is gone, and that is intended.
+
+**What a reader sees is unchanged, and is now produced on purpose.** Under CASCADE, removing
+the statement happened as a side effect of the row being deleted. It is now a rule in the
+serializer, and it is tested. `ConversationTurnSerializer`'s states, after this entry:
+
+| State | Was decided by | Is decided by |
+|---|---|---|
+| 1, never answered | `answered` false | unchanged |
+| 2, re-scoped: silent, identical to state 1 | answered, citation rows exist, none in the reader's scope | answered, some row still points at an existing chunk, none of those in the reader's scope |
+| 3, `provenance_removed` | answered, no citation rows | answered, no row points at an existing chunk |
+
+A turn holding a NULL-chunk row beside a row whose chunk exists but is out of scope is state 2,
+which is what the cascade produced when the NULL row would have been gone. The discriminator
+stays a fact about the record, read before any scoping. `permitted_citation_chunk_ids` skips
+NULL identifiers before its scope query, and `surviving_citations` excludes a NULL-chunk row by
+name, not by NULL happening to be absent from the permitted set.
+
+**What this covers:**
+
+- the writer: `record_query`, the only production code that creates `AnswerCitation` rows;
+- the chunk deletions that reach the column through `QuerySet.delete()`, and therefore through
+  Django's `on_delete`: `reprocess_document`, `manage.py reindex` for documents and for
+  meetings, and FR-15's deletion once item 2 deletes chunks the same way;
+- the readers that exist today: `permitted_citation_chunk_ids` and `ConversationTurnSerializer`
+  (`surviving_citations`, `has_live_citation_rows`, `get_provenance_removed`), behind
+  `GET /api/conversations/{id}`;
+- the tests:
+  `apps/api/tests/test_fr12_traceability_survives_reprocess.py` (renamed from
+  `test_fr12_traceability_lost_on_reprocess.py`, its docstring recording what it used to
+  pin), `apps/api/tests/test_null_chunk_citations_on_a_reopened_turn.py`,
+  `apps/retrieval/tests/test_migration_0003_citation_set_null.py`,
+  `apps/retrieval/tests/test_models.py::test_citation_survives_its_chunk_with_the_chunk_nulled_and_the_identifier_kept`
+  (formerly `test_citation_cascades_when_its_chunk_is_deleted`) and
+  `::test_chunk_uuid_is_required`, and the `chunk_uuid` assertions in
+  `apps/retrieval/tests/test_query_log.py`.
+
+**What it does not cover:**
+
+- **`QueryLog.retrieved_chunk_ids`** still names deleted chunks by identifier. It always did,
+  and it is an array with no foreign key, so nothing nulls it. It now agrees with `chunk_uuid`.
+  Before, it was the only trace left.
+- **Item 4b's passage expansion and Sources panel on a reopened turn**, which are not built.
+  They must treat a NULL chunk as removed: no passage text for it, from anywhere.
+- **FR-15's deletion** will produce NULL rows. Item 2 builds and tests that path. This entry
+  guarantees only that the rows it leaves are read as removed.
+- **`AnswerCitation.statement_text` and `QueryLog.answer_text`** still hold the prose of a
+  statement whose chunk was deleted. They are the record of what was answered (FR-19) and no
+  reader renders them for a NULL-chunk row. Item 3 shows a user's recent questions only, and
+  any new reader of either column must apply the same rule.
+- **A chunk deleted outside Django's `on_delete`**: raw SQL, or `QuerySet._raw_delete`.
+  `SET_NULL` is emulated by Django, and the database foreign key has no `ON DELETE` action, so
+  such a delete fails on the deferred constraint at commit instead of leaving a dangling
+  identifier. No shipped path deletes chunks that way.
+- **Equality of `chunk_uuid` and `chunk_id` at write time** is not enforced by the database.
+  `record_query` is the only production writer and `test_query_log.py` asserts the equality.
+  A `CHECK (chunk_id IS NULL OR chunk_id = chunk_uuid)` would make it a database guarantee
+  and was not added.
+- **Resolving `chunk_uuid` to the chunk that replaced it** after a re-index. No route does
+  that, and a re-index need not reproduce the old chunk boundaries.
+- **D-61's gap 11** is unchanged. State 3 is shown whatever the reader's scope, so a demoted
+  reader can still tell that a source now outside their scope was reprocessed, re-indexed or
+  deleted. This entry reproduces the old rendering exactly, gap included.
+- **`PROVENANCE_REMOVED_MESSAGE`** is unchanged. Its first clause, "The citations for this
+  answer are no longer on record", is now looser than it was, because the citation rows are on
+  record and the chunks they cited are not. The copy and the response shape are not this
+  item's. Recorded so the next change to the copy can take it up.
+- **The migration's reverse** is lossy for the NULL-chunk rows it deletes. Their `chunk_uuid`
+  was the only record of what they cited.
+- **Front-end comments** still describe the cascade in `frontend/src/constants.js`,
+  `frontend/src/utils/turns.js` and `frontend/src/components/Answer.jsx`. The response shape is
+  unchanged, so behaviour is unaffected. The wording is react-frontend's to correct.
+- **`docs/stage-4-open-items.md` §2.3 and `docs/stage-4-clause-audit.md` row 22** still
+  describe the gap as open. They are records as at their dates, and the open-items index says
+  its holders win where they disagree with it.
+
+**Consequences.**
+
+- D-12 stands for every other foreign key it set, including `AnswerCitation.query`, which still
+  cascades with its query.
+- D-48's original sentence, that the stored rows are untouched, is now true of a chunk
+  deletion as well as of a re-scope. It is made true with an identifier and no text, rather
+  than with the "nullable identifier snapshot" its qualification described.
+- Item 2's FR-15 deletion can delete chunks without destroying the FR-12 record. The brief put
+  this item before item 2 for that reason.

@@ -189,14 +189,28 @@ identical reply exists to hide.
 | Field | Type | Notes |
 |---|---|---|
 | `citation_id` | UUID PK | |
-| `query_id` | UUID FK → QueryLog | |
-| `chunk_id` | UUID FK → ContentChunks | |
+| `query_id` | UUID FK → QueryLog | cascade delete with its query |
+| `chunk_id` | UUID FK → ContentChunks, nullable | **set NULL** when the chunk is deleted — D-67 |
+| `chunk_uuid` | UUID | **post-v1** — the cited chunk's identifier, kept when `chunk_id` is set NULL — D-67 |
 | `statement_text` | text | the statement this citation supports |
 | `position` | integer | order within the answer |
 
 Rows are written only for statements that **survived** verification. A rejected
 statement is not stored, consistent with there being no state in which an uncited
 statement exists.
+
+`chunk_id` was NOT NULL with cascade delete until 5 October 2026 (D-12), so a reprocess,
+`manage.py reindex` or FR-15's deletion destroyed every citation of the chunks it
+removed, and FR-12's traceability record with them. Retrieval migration `0003` makes it
+nullable and `SET NULL`, and adds `chunk_uuid`, written with the same identifier by
+`record_query` and backfilled from `chunk_id` for existing rows. A citation now outlives
+its chunk.
+
+**No passage text is stored, deliberately.** FR-15 removes a deleted document's content
+"so that deleted material cannot subsequently be surfaced through search"; a snapshot
+would be that material surviving the delete. **A row whose `chunk_id` is NULL is removed
+for every reader**: its statement and identifier are not shown, exactly as when the
+cascade deleted the row.
 
 ### Tags — FR-10, FR-15
 

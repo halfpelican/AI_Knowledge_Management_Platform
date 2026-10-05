@@ -9,12 +9,15 @@ from django.conf import settings
 
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
-from apps.documents.models import ContentChunk
+from apps.documents.models import ContentChunk, Document
+from apps.meetings.models import Meeting
 from apps.retrieval.scoping import (
     UnscopedRequestError,
     candidate_chunks,
     permission_scope,
     scoped_chunks,
+    scoped_documents,
+    scoped_meetings,
 )
 
 pytestmark = pytest.mark.django_db
@@ -53,14 +56,28 @@ def make_chunk(
 
 @pytest.fixture
 def one_chunk_per_scope(document):
-    """Three chunks: Employee-only, Administrator-only, and both."""
+    """A chunk per scope: Employee-only, Administrator-only, both, and nobody.
+
+    The ``nobody`` row (``[]``) is what keeps an Administrator's scope tested for an
+    exclusion since D-66: an Administrator reads both roles' content, so the empty array is
+    the one scope left that it may not read (``apps/retrieval/tests/scopes.py``).
+    """
     return {
         "employee_only": make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, text="Employee only."),
         "administrator_only": make_chunk(
             document, [ADMINISTRATOR_ROLE_NAME], index=2, text="Administrator only."
         ),
         "both": make_chunk(document, list(ROLE_PAIR), index=3, text="Everybody."),
+        "nobody": make_chunk(document, [], index=4, text="Nobody."),
     }
+
+
+# What each role reads of ``one_chunk_per_scope`` under D-66, written out as the premise rather
+# than derived from EFFECTIVE_ROLES, so a wrong mapping fails here instead of moving with it.
+READABLE_KEYS = {
+    EMPLOYEE_ROLE_NAME: {"employee_only", "both"},
+    ADMINISTRATOR_ROLE_NAME: {"employee_only", "administrator_only", "both"},
+}
 
 
 def test_an_administrator_only_chunk_is_absent_from_an_employees_scope(one_chunk_per_scope):
@@ -75,15 +92,69 @@ def test_an_administrator_only_chunk_is_absent_from_an_employees_scope(one_chunk
     assert restricted.chunk_text not in [chunk.chunk_text for chunk in employee_scope]
 
 
-def test_the_scope_is_symmetrical_no_role_generalisation(one_chunk_per_scope):
-    """An Administrator does not inherit Employee-only content, nor the reverse.
+def _one_source_per_scope(uploader):
+    """A document and a meeting per scope, each with one chunk stamped as its source is.
 
-    Membership of visible_to_roles is the whole test (D-11, D-29). If a
-    generalisation rule is ever added for FR-05 permissions, it must not reach here.
+    ``nobody`` (``[]``) is the row both roles are refused, so a scope that returned every
+    row would fail the tests below from either side.
     """
-    administrator_scope = list(scoped_chunks(role_name=ADMINISTRATOR_ROLE_NAME))
-    assert one_chunk_per_scope["employee_only"] not in administrator_scope
-    assert one_chunk_per_scope["administrator_only"] in administrator_scope
+    scopes = {
+        "employee_only": [EMPLOYEE_ROLE_NAME],
+        "administrator_only": [ADMINISTRATOR_ROLE_NAME],
+        "both": list(ROLE_PAIR),
+        "nobody": [],
+    }
+    rows = {}
+    for key, roles in scopes.items():
+        document = Document.objects.create(
+            title=f"Document {key}", file_type="pdf", uploaded_by=uploader, visible_to_roles=roles
+        )
+        meeting = Meeting.objects.create(
+            title=f"Meeting {key}",
+            meeting_date="2026-09-01",
+            transcript_text="A transcript.",
+            visible_to_roles=roles,
+        )
+        chunk = make_chunk(document, roles, index=10, text=f"Chunk {key}.")
+        rows[key] = (document, meeting, chunk)
+    return rows
+
+
+def test_an_employees_scope_is_exactly_the_content_marked_for_employees(employee):
+    """D-66 changes nothing for an Employee, by construction: their effective roles are
+    ``Employee`` alone, so overlap is the membership test it replaced. This was test
+    ``test_the_scope_is_symmetrical_no_role_generalisation``'s Employee half, and it holds
+    unchanged — no Administrator-only or nobody's document, meeting or chunk, and every
+    other one."""
+    rows = _one_source_per_scope(employee)
+    expected = {"employee_only", "both"}
+
+    assert set(scoped_documents(role_name=EMPLOYEE_ROLE_NAME)) == {rows[k][0] for k in expected}
+    assert set(scoped_meetings(role_name=EMPLOYEE_ROLE_NAME)) == {rows[k][1] for k in expected}
+    assert set(scoped_chunks(role_name=EMPLOYEE_ROLE_NAME)) == {rows[k][2] for k in expected}
+
+
+def test_an_administrators_scope_includes_every_employee_only_document_meeting_and_chunk(
+    employee,
+):
+    """D-66: Administrator generalises Employee in scope as well as in permissions.
+
+    Replaces ``test_the_scope_is_symmetrical_no_role_generalisation``, which asserted the
+    opposite for chunks. Under that reading an Employee-only document was invisible to every
+    Administrator, and FR-15's scoped-first deletion could never reach it.
+    """
+    rows = _one_source_per_scope(employee)
+    document, meeting, chunk = rows["employee_only"]
+
+    assert document in scoped_documents(role_name=ADMINISTRATOR_ROLE_NAME)
+    assert meeting in scoped_meetings(role_name=ADMINISTRATOR_ROLE_NAME)
+    assert chunk in scoped_chunks(role_name=ADMINISTRATOR_ROLE_NAME)
+    # Exactly every role's content and nothing more: the nobody row is still refused, so a
+    # scope that returned every row fails here as well as one that returned too little.
+    expected = {"employee_only", "administrator_only", "both"}
+    assert set(scoped_documents(role_name=ADMINISTRATOR_ROLE_NAME)) == {rows[k][0] for k in expected}
+    assert set(scoped_meetings(role_name=ADMINISTRATOR_ROLE_NAME)) == {rows[k][1] for k in expected}
+    assert set(scoped_chunks(role_name=ADMINISTRATOR_ROLE_NAME)) == {rows[k][2] for k in expected}
 
 
 @pytest.mark.parametrize("role_name", ROLE_PAIR)
@@ -105,9 +176,15 @@ def test_the_predicate_is_in_the_sql_not_applied_afterwards(role_name):
 
 @pytest.mark.parametrize("role_name", ROLE_PAIR)
 def test_the_count_excludes_out_of_scope_chunks(one_chunk_per_scope, role_name):
-    """The result-count clause of invariant 1: a total may not disclose volume."""
-    assert ContentChunk.objects.count() == 3  # what the store holds
-    assert scoped_chunks(role_name=role_name).count() == 2  # what this role may count
+    """The result-count clause of invariant 1: a total may not disclose volume.
+
+    Each role is counted over fewer rows than the store holds — the Employee without the
+    Administrator-only and nobody rows, the Administrator without the nobody row (D-66).
+    """
+    assert ContentChunk.objects.count() == len(one_chunk_per_scope)  # what the store holds
+    # What this role may count.
+    assert scoped_chunks(role_name=role_name).count() == len(READABLE_KEYS[role_name])
+    assert scoped_chunks(role_name=role_name).count() < ContentChunk.objects.count()
 
 
 def test_a_chunk_visible_to_both_roles_is_returned_for_both(one_chunk_per_scope):
@@ -156,18 +233,38 @@ def test_permission_scope_rereads_the_role_from_the_user_row(employee, administr
 
 
 def test_permission_scope_of_a_changed_role_changes_the_candidate_set(
-    employee, administrator_role, one_chunk_per_scope
+    administrator, employee_role, administrator_role, one_chunk_per_scope
 ):
-    """The re-read is not cosmetic: the scope it returns drives the queryset."""
+    """The re-read is not cosmetic: the scope it returns drives the queryset.
+
+    Demotion first, because it is the direction that withholds: an Administrator demoted to
+    Employee loses the Administrator-only chunk on the next read, with the in-memory user
+    left stale. Then promotion back, which under D-66 restores the Administrator-only chunk
+    and KEEPS the Employee-only one — before D-66 this test asserted that a promotion lost it.
+    """
     from django.contrib.auth import get_user_model
 
-    before = list(scoped_chunks(role_name=permission_scope(employee)))
-    assert one_chunk_per_scope["employee_only"] in before
+    users = get_user_model().objects.filter(pk=administrator.pk)
 
-    get_user_model().objects.filter(pk=employee.pk).update(role=administrator_role)
-    after = list(scoped_chunks(role_name=permission_scope(employee)))
-    assert one_chunk_per_scope["administrator_only"] in after
-    assert one_chunk_per_scope["employee_only"] not in after
+    def scope():
+        return list(scoped_chunks(role_name=permission_scope(administrator)))
+
+    as_administrator = scope()
+    assert one_chunk_per_scope["administrator_only"] in as_administrator
+    assert one_chunk_per_scope["employee_only"] in as_administrator
+
+    users.update(role=employee_role)
+    demoted = scope()
+    assert one_chunk_per_scope["administrator_only"] not in demoted
+    assert one_chunk_per_scope["employee_only"] in demoted
+
+    users.update(role=administrator_role)
+    promoted = scope()
+    assert one_chunk_per_scope["administrator_only"] in promoted
+    assert one_chunk_per_scope["employee_only"] in promoted
+    # And the nobody row stays out in every role the user passed through.
+    for visible in (as_administrator, demoted, promoted):
+        assert one_chunk_per_scope["nobody"] not in visible
 
 
 def test_permission_scope_refuses_a_request_with_no_authenticated_user():
@@ -190,21 +287,19 @@ def test_permission_scope_refuses_a_user_row_that_no_longer_exists(employee):
 
 def test_scoping_from_both_role_sessions(session_client, one_chunk_per_scope):
     """The same test run from an Employee session and an Administrator session
-    (CLAUDE.md section 8 item 2): each sees its own chunk and the shared one, and
-    neither sees the other's."""
+    (CLAUDE.md section 8 item 2). The Employee sees its own chunk and the shared one, and
+    not the Administrator's; the Administrator sees all three, because D-66 makes it
+    generalise Employee in scope. Each role is still refused a row: the Administrator-only
+    one for the Employee, and the nobody row for both."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
-    mine = {
-        EMPLOYEE_ROLE_NAME: "employee_only",
-        ADMINISTRATOR_ROLE_NAME: "administrator_only",
-    }
 
     assert permission_scope(session_client.user) == role_name
     visible = list(scoped_chunks(role_name=permission_scope(session_client.user)))
-    assert one_chunk_per_scope[mine[role_name]] in visible
-    assert one_chunk_per_scope["both"] in visible
-    assert one_chunk_per_scope[mine[other_role]] not in visible
-    assert len(visible) == scoped_chunks(role_name=role_name).count() == 2
+    assert set(visible) == {one_chunk_per_scope[key] for key in READABLE_KEYS[role_name]}
+    for key in set(one_chunk_per_scope) - READABLE_KEYS[role_name]:
+        assert one_chunk_per_scope[key] not in visible
+    assert one_chunk_per_scope["nobody"] not in visible
+    assert len(visible) == scoped_chunks(role_name=role_name).count()
 
 
 # --- The second predicate: the embedding-model match (risk R10) ------------------------
@@ -212,12 +307,15 @@ def test_scoping_from_both_role_sessions(session_client, one_chunk_per_scope):
 
 @pytest.fixture
 def one_chunk_per_combination(document):
-    """Four chunks over both predicates, so exactly one is a candidate for an Employee.
+    """Chunks over both predicates, so exactly one is a candidate for an Employee.
 
     In scope or not, embedded by the query's model or not. The FR-11 role filter and
-    the risk R10 model filter are independent, and a chunk has to pass both.
+    the risk R10 model filter are independent, and a chunk has to pass both. "In scope"
+    and "out of scope" are named from the Employee's side. ``nobody_same_model`` is the row
+    an Administrator is still refused since D-66: comparable, and scoped to no role.
     """
     return {
+        "nobody_same_model": make_chunk(document, [], index=5, text="Nobody's, comparable."),
         "in_scope_same_model": make_chunk(
             document, [EMPLOYEE_ROLE_NAME], index=1, text="In scope, comparable."
         ),
@@ -264,15 +362,32 @@ def test_both_predicates_must_pass(one_chunk_per_combination):
     """Four chunks, one candidate. Failing either predicate is enough to be excluded."""
     candidates = list(candidate_chunks(role_name=EMPLOYEE_ROLE_NAME, embedding_model=STUB_EMBEDDING_MODEL))
     assert candidates == [one_chunk_per_combination["in_scope_same_model"]]
-    for key in ("in_scope_other_model", "out_of_scope_same_model", "out_of_scope_other_model"):
+    for key in (
+        "in_scope_other_model",
+        "out_of_scope_same_model",
+        "out_of_scope_other_model",
+        "nobody_same_model",
+    ):
         assert one_chunk_per_combination[key] not in candidates
+
+
+# Each role's candidates from ``one_chunk_per_combination``: the comparable rows it may read.
+# Under D-66 the Administrator reads the Employee's row as well as its own.
+CANDIDATE_KEYS = {
+    EMPLOYEE_ROLE_NAME: {"in_scope_same_model"},
+    ADMINISTRATOR_ROLE_NAME: {"in_scope_same_model", "out_of_scope_same_model"},
+}
 
 
 @pytest.mark.parametrize("role_name", ROLE_PAIR)
 def test_the_candidate_count_excludes_both_kinds_of_exclusion(one_chunk_per_combination, role_name):
-    """A count is computed after both filters, so it discloses neither kind of row."""
-    assert ContentChunk.objects.count() == 4  # what the store holds
-    assert candidate_chunks(role_name=role_name, embedding_model=STUB_EMBEDDING_MODEL).count() == 1
+    """A count is computed after both filters, so it discloses neither kind of row: the
+    other-model rows for both roles, the Administrator-only row for the Employee, and the
+    nobody row for both."""
+    assert ContentChunk.objects.count() == len(one_chunk_per_combination)  # the store
+    assert candidate_chunks(role_name=role_name, embedding_model=STUB_EMBEDDING_MODEL).count() == len(
+        CANDIDATE_KEYS[role_name]
+    )
 
 
 @pytest.mark.parametrize("role_name", ROLE_PAIR)
@@ -305,16 +420,52 @@ def test_a_corpus_indexed_by_a_model_the_provider_no_longer_serves_yields_nothin
 
 
 def test_candidates_from_both_role_sessions(session_client, one_chunk_per_combination):
-    """Both predicates, from an Employee session and an Administrator session."""
+    """Both predicates, from an Employee session and an Administrator session. Each role's
+    candidates are exactly its comparable readable rows; neither is given an other-model
+    row or the nobody row."""
     role_name = session_client.role_name
-    mine = {
-        EMPLOYEE_ROLE_NAME: "in_scope_same_model",
-        ADMINISTRATOR_ROLE_NAME: "out_of_scope_same_model",
-    }
     candidates = list(
         candidate_chunks(
             role_name=permission_scope(session_client.user),
             embedding_model=STUB_EMBEDDING_MODEL,
         )
     )
-    assert candidates == [one_chunk_per_combination[mine[role_name]]]
+    assert set(candidates) == {one_chunk_per_combination[key] for key in CANDIDATE_KEYS[role_name]}
+    assert len(candidates) == len(CANDIDATE_KEYS[role_name])
+    assert one_chunk_per_combination["nobody_same_model"] not in candidates
+
+
+# --- The source predicates: scoped_documents and scoped_meetings (D-53) -------------------
+#
+# The same rule as scoped_chunks, applied to the Document and Meeting rows themselves: the
+# source's own visible_to_roles overlapping the role's effective roles (D-66), as a condition
+# on the query, failing closed. D-53 moved every hand-written copy of it onto these helpers.
+
+
+SOURCE_HELPERS = [scoped_documents, scoped_meetings]
+
+
+@pytest.mark.parametrize("helper", SOURCE_HELPERS, ids=lambda helper: helper.__name__)
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_the_source_predicate_is_in_the_sql_not_applied_afterwards(helper, role_name):
+    sql = str(helper(role_name=role_name).query)
+    assert "visible_to_roles" in sql
+    assert role_name in sql
+    assert "WHERE" in sql.upper()
+
+
+@pytest.mark.parametrize("helper", SOURCE_HELPERS, ids=lambda helper: helper.__name__)
+def test_an_unknown_role_name_is_given_no_source(employee, helper):
+    """Failure path: fails closed, as scoped_chunks does — nothing rather than everything."""
+    _one_source_per_scope(employee)
+    assert helper(role_name="Auditor").count() == 0
+
+
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_a_source_scoped_to_nobody_is_given_to_nobody(employee, role_name):
+    Document.objects.create(title="Nobody's", file_type="pdf", uploaded_by=employee, visible_to_roles=[])
+    Meeting.objects.create(
+        title="Nobody's", meeting_date="2026-09-01", transcript_text="A transcript.", visible_to_roles=[]
+    )
+    assert scoped_documents(role_name=role_name).count() == 0
+    assert scoped_meetings(role_name=role_name).count() == 0

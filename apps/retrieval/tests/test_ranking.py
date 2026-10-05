@@ -45,8 +45,8 @@ from apps.retrieval.ranking import (
     truncate_to_context,
 )
 from apps.retrieval.scoping import candidate_chunks, permission_scope
+from apps.retrieval.tests.scopes import unreadable_scope
 
-ROLE_PAIR = (EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME)
 
 
 # --- Vector helpers --------------------------------------------------------------------
@@ -331,7 +331,7 @@ def test_nothing_clearing_the_threshold_returns_an_empty_list():
 # --- End to end: candidate_chunks -> rank -> admit, with a restricted top scorer -------
 
 
-def build_corpus(document, *, role_name, other_role):
+def build_corpus(document, *, role_name, restricted_roles):
     """Three chunks this role may read, and one it may not that outscores all of them.
 
     The restricted chunk is at cosine 0.99 — the nearest thing in the store to the
@@ -343,7 +343,7 @@ def build_corpus(document, *, role_name, other_role):
         "middle": make_chunk(document, [role_name], index=2, cosine=0.40, text="Also permitted."),
         "too_far": make_chunk(document, [role_name], index=3, cosine=0.10, text="Too far away."),
         "restricted": make_chunk(
-            document, [other_role], index=4, cosine=0.99, text="Restricted, and nearest."
+            document, restricted_roles, index=4, cosine=0.99, text="Restricted, and nearest."
         ),
     }
 
@@ -357,7 +357,7 @@ def test_end_to_end_a_restricted_chunk_that_would_have_scored_highest_is_absent(
     nothing between them to hide a mistake.
     """
     corpus = build_corpus(
-        document, role_name=EMPLOYEE_ROLE_NAME, other_role=ADMINISTRATOR_ROLE_NAME
+        document, role_name=EMPLOYEE_ROLE_NAME, restricted_roles=[ADMINISTRATOR_ROLE_NAME]
     )
     restricted = corpus["restricted"]
 
@@ -392,11 +392,13 @@ def test_end_to_end_a_restricted_chunk_that_would_have_scored_highest_is_absent(
 @pytest.mark.django_db
 def test_end_to_end_from_both_role_sessions(session_client, document):
     """The same assertion from an Employee session and an Administrator session
-    (CLAUDE.md section 8 item 2). The restricted chunk is whichever role is not
-    asking, so each run hides a different row and neither role is privileged."""
+    (CLAUDE.md section 8 item 2). The restricted chunk is one the asking role may not
+    read: Administrator-only for an Employee and, since D-66 made Administrator generalise
+    Employee, scoped to nobody for an Administrator. Each run still hides a row."""
     role_name = session_client.role_name
-    other_role = next(name for name in ROLE_PAIR if name != role_name)
-    corpus = build_corpus(document, role_name=role_name, other_role=other_role)
+    corpus = build_corpus(
+        document, role_name=role_name, restricted_roles=unreadable_scope(role_name)
+    )
     restricted = corpus["restricted"]
 
     candidates = candidate_chunks(

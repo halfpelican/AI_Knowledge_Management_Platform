@@ -232,6 +232,14 @@ outside the caller's scope would be a leak to remove later rather than a feature
 (`CLAUDE.md` §6 invariant 1: not by a result count, a total, or an error message).
 FR-15's filtered browsing builds on this in Stage 5.
 
+**What "scoped to the caller's role" means everywhere in this file (D-66).** A document,
+meeting or chunk is in scope when its `visible_to_roles` overlaps the caller's *effective
+roles*: an Employee reads rows naming `Employee`, and an Administrator reads rows naming
+either role, because Administrator generalises Employee in scope as well as in
+permissions. So an Employee-only document is listed, found and readable for an
+Administrator, and an Administrator-only one is never any of those for an Employee. What
+an upload may *write* into `visible_to_roles` is unchanged (D-29).
+
 ### FR-09 — meeting transcripts
 
 | Method | Path | Auth | Success | Failures |
@@ -535,7 +543,11 @@ string with "[1]" spliced into it cannot be re-checked against anything afterwar
 lists every item consulted with its date, allowing the user to judge how current the
 underlying material is", which is section 7.10 step 11's
 `resolveSourceDetails(suppliedPassageIds)`. A panel listing only the items a surviving
-statement happened to cite would misdescribe what the answer was drawn from. Each entry
+statement happened to cite would misdescribe what the answer was drawn from. An item whose
+own source row the caller's role may not read is omitted from `sources` and from
+`partial_matches`, even where its chunk was admitted (D-53: fail closed). The visibility
+cascade keeps the two in agreement on every shipped write path, so this changes no reply
+in normal use. The shape is unchanged. Each entry
 carries the passages of that item that were supplied, because FR-12 also requires that
 "each citation expands to display the source passage and links to the source document or
 meeting" and no endpoint in this API returns a chunk — so the passage travels with the
@@ -641,7 +653,7 @@ reader was shown.
 |---|---|---|---|
 | answered, and still readable by this reader | `true` | `null` | absent |
 | never answered, **or** answered and re-scoped away from this reader | `false` | `NO_ANSWER_MESSAGE` | absent |
-| answered, and its citation rows no longer exist | `false` | `PROVENANCE_REMOVED_MESSAGE` | `true` |
+| answered, and none of its citation rows still points at an existing chunk | `false` | `PROVENANCE_REMOVED_MESSAGE` | `true` |
 
 The second row is two states in one rendering **on purpose**: a turn whose statements were
 drawn from material the reader's current role may no longer see is byte-for-byte a turn that
@@ -651,16 +663,24 @@ material exists which this role may not read (invariant 1). `provenance_removed`
 place for that notice to grow.
 
 The third state is not a permission state at all and says nothing about one.
-`AnswerCitation.chunk` is `on_delete=CASCADE` (D-12), and `POST /api/documents/{id}/reprocess`,
-`manage.py reindex` and FR-15's deletion when it lands **each** delete a source's chunks, so
-every citation of the old ones is destroyed. A re-index and a successful reprocess write new
-ones with fresh identifiers, so the passage still exists word for word under a new id; **a
+`POST /api/documents/{id}/reprocess`, `manage.py reindex` and FR-15's deletion when it lands
+**each** delete a source's chunks. Since D-67 `AnswerCitation.chunk` is `on_delete=SET_NULL`,
+so every citation of the deleted chunks survives as a record with `chunk_id` NULL and
+`chunk_uuid` naming what it cited, for FR-12's traceability clause. **A citation whose chunk
+is NULL is removed for every reader**: its statement and identifier never appear in a body,
+and it does not count as a row when the state is decided. A turn none of whose rows still
+points at an existing chunk is this third state, which is what a turn whose rows had been
+destroyed was until D-67, when the foreign key cascaded (D-12). A turn with a NULL-chunk row
+beside a row whose chunk exists but is out of the reader's scope is the **second** state,
+silent, decided by the row whose chunk exists. A re-index and a successful reprocess write new chunks
+with fresh identifiers, so the passage still exists word for word under a new id; **a
 reprocess that fails leaves none at all**, because it deletes the chunks before running the
 pipeline and a decided failure commits, and FR-15's deletion removes the material for good. The turn carries no statements
 (invariant 6) and its own message, because `NO_ANSWER_MESSAGE` would tell the reader their
 question cannot be answered from the knowledge base, which asserts a corpus state that is false on a failed
 reprocess and on FR-15's deletion. Its own message promises nothing about the corpus for that
-reason. **No count of what was lost**, in either state.
+reason. **No count of what was lost**, in either state. The response shape did not change
+with D-67: no field carries `chunk_uuid`, and no passage text is stored to return.
 
 **Where a title comes from (D-43).** `Conversations.title` is a non-blank column and FR-13's
 interface never asks the user to name a topic before typing — it clears the thread and lets

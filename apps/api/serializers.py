@@ -534,7 +534,10 @@ class CitedStatementSerializer(serializers.Serializer):
     statement, so a reopened thread and the turn as first answered are the same shape.
 
     Rows exist only for statements that survived verification, so a thread read back from
-    the server can no more show an uncited statement than the original reply could.
+    the server can no more show an uncited statement than the original reply could. Only
+    rows whose chunk still exists and is in the reader's scope reach this serializer
+    (``ConversationTurnSerializer.surviving_citations``), so ``chunk_id`` is never null here
+    and ``chunk_uuid`` is never rendered (D-67).
     """
 
     position = serializers.IntegerField(read_only=True)
@@ -557,8 +560,18 @@ def permitted_citation_chunk_ids(turns, *, role_name) -> frozenset:
     exactly as much as those two are. A chunk that has been deleted, or whose stamp is now an
     empty array, is absent from the result for the same reason a restricted one is: this asks
     the store what is readable and takes the answer, rather than deciding anything itself.
+
+    **A citation whose chunk was deleted has ``chunk_id`` NULL (D-67) and is skipped here**,
+    before the query, so NULL is never an identifier that could be "permitted". Its
+    ``chunk_uuid`` is not consulted either: that names a chunk that no longer exists, and
+    asking the store about it could only ever return nothing.
     """
-    cited = {citation.chunk_id for turn in turns for citation in turn.citations.all()}
+    cited = {
+        citation.chunk_id
+        for turn in turns
+        for citation in turn.citations.all()
+        if citation.chunk_id is not None
+    }
     if not cited:
         return frozenset()
     return frozenset(
@@ -614,43 +627,55 @@ class ConversationTurnSerializer(serializers.Serializer):
     Everything argued above holds for the first two and is not weakened by the third:
 
     1. ``turn.answered`` is False — never answered. The silent no-answer state. Unchanged.
-    2. ``turn.answered`` is True, citation **rows exist**, and none of them survives the
-       scope filter — re-scoped. **Byte-for-byte identical to state 1**, which is the
-       invariant-1 case argued at length above and the reason ``provenance_removed`` is
-       ABSENT from the body rather than present and false: a field appearing on a re-scoped
-       turn, whatever its value, is a new place for the notice invariant 1 forbids to grow,
-       and the exact-key-set assertions in ``apps/api/tests/test_fr11_thread_scope.py``
-       continue to hold a re-scoped turn to five keys.
-    3. ``turn.answered`` is True and there are **no citation rows at all** — the rows were
-       destroyed. ``AnswerCitation.chunk`` is ``on_delete=CASCADE`` (D-12), and both
-       ``reprocess_document`` and ``manage.py reindex`` delete a source's chunks and write
-       new ones with fresh UUIDs, so every citation of the old ones goes with them while the
-       passage itself still exists, word for word, under a new identifier. CLAUDE.md section
-       4 mandates a re-index on any provider change, so this is the documented happy path.
-       ``apps/api/tests/test_fr12_traceability_lost_on_reprocess.py`` pins the loss.
+    2. ``turn.answered`` is True, at least one citation row **still points at a chunk that
+       exists**, and none of those survives the scope filter — re-scoped. **Byte-for-byte
+       identical to state 1**, which is the invariant-1 case argued at length above and the
+       reason ``provenance_removed`` is ABSENT from the body rather than present and false: a
+       field appearing on a re-scoped turn, whatever its value, is a new place for the notice
+       invariant 1 forbids to grow, and the exact-key-set assertions in
+       ``apps/api/tests/test_fr11_thread_scope.py`` continue to hold a re-scoped turn to five
+       keys. A turn with some rows whose chunk is gone and some whose chunk exists but is out
+       of scope is THIS state, not state 3: the rows whose chunk exists decide it.
+    3. ``turn.answered`` is True and **no citation row points at a chunk that still exists**
+       — the chunks it cited were deleted. ``reprocess_document`` and ``manage.py reindex``
+       delete a source's chunks and write new ones with fresh UUIDs, and FR-15's deletion
+       removes them for good. Until D-67 (Stage 5 item 1a) ``AnswerCitation.chunk`` was
+       CASCADE and the citation rows went with the chunks; now it is SET_NULL, so the rows
+       survive with ``chunk_id`` NULL and ``chunk_uuid`` naming what was cited, for FR-12's
+       traceability record. **A NULL-chunk row is read here exactly as a row the cascade had
+       deleted**: it is not a citation of anything this reader can be shown, so it neither
+       renders nor counts towards state 2. That reproduces the rendering the cascade
+       produced, now on purpose. ``apps/api/tests/
+       test_fr12_traceability_survives_reprocess.py`` is the row-level record.
 
-    **THE DISCRIMINATOR IS WHETHER THE CITATION ROWS EXIST, NEVER WHETHER THEY SURVIVED
-    SCOPING, AND THE DIFFERENCE IS THE SECURITY PROPERTY.** State 3 says nothing whatever
-    about permissions: a maintenance operation deleted a record, the material is still
-    there, and this reader may well be entitled to every word of it. Disclosing "this
-    answer's provenance record is gone" therefore reveals nothing about restricted material,
-    where disclosing a re-scope would reveal exactly that. Someone will be tempted to
-    simplify ``not has_citation_rows`` into "no surviving citations", because in most bodies
-    the two read alike — **that collapses state 2 into state 3 and reopens the invariant-1
-    disclosure**, telling a demoted reader that something was taken out of their own thread.
-    The distinction is in the rows, so the predicate is on the rows.
+    **THE DISCRIMINATOR IS WHETHER ANY CITATION ROW STILL POINTS AT AN EXISTING CHUNK, NEVER
+    WHETHER ONE SURVIVED SCOPING, AND THE DIFFERENCE IS THE SECURITY PROPERTY.** It is a fact
+    about the record — did a delete reach the chunks this turn cited — and not about the
+    reader. State 3 says nothing whatever about permissions: an operation deleted the
+    material the record pointed at, and this reader may well have been entitled to every word
+    of it. Disclosing "this answer's provenance is gone" therefore reveals nothing about what
+    the reader may see, where disclosing a re-scope would reveal exactly that. Someone will be
+    tempted to simplify ``not has_live_citation_rows`` into "no surviving citations", because
+    in most bodies the two read alike — **that collapses state 2 into state 3 and reopens the
+    invariant-1 disclosure**, telling a demoted reader that something was taken out of their
+    own thread. The distinction is in the rows and the chunks they point at, read before any
+    scope is applied, so the predicate is on those.
 
-    **``answered AND no rows`` cannot happen at write time**, which is what makes the
-    discriminator sound rather than a guess. ``apps.retrieval.query_log`` writes the
-    ``QueryLog`` row and its ``AnswerCitation`` rows in one transaction, and says why: "a row
-    recorded as answered with no citation rows beneath it would be a traceability record that
-    traces to nothing". So the state is unreachable except by a later deletion.
+    **``answered AND no row pointing at an existing chunk`` cannot happen at write time**,
+    which is what makes the discriminator sound rather than a guess.
+    ``apps.retrieval.query_log`` writes the ``QueryLog`` row and its ``AnswerCitation`` rows in
+    one transaction, every one with ``chunk_id`` set, and the database foreign key refuses an
+    identifier that names no chunk. It says why: "a row recorded as answered with no citation
+    rows beneath it would be a traceability record that traces to nothing". So the state is
+    unreachable except by a later deletion of the chunks, which leaves NULL behind, or of the
+    rows themselves.
 
     **What state 3 renders.** No statements — invariant 6 stands, and a statement without its
-    citation is exactly what it forbids. But **not** NO_ANSWER_MESSAGE, which says the
-    question cannot be answered from the available knowledge base: that is untrue of a turn
-    that was answered from material still in the corpus, and a false statement about the
-    corpus is the interface lying to the user rather than protecting them.
+    citation is exactly what it forbids; a NULL-chunk row's ``statement_text`` is never read
+    into a body. But **not** NO_ANSWER_MESSAGE, which says the question cannot be answered
+    from the available knowledge base: that is untrue of a turn that was answered from
+    material a re-index left in the corpus, and a false statement about the corpus is the
+    interface lying to the user rather than protecting them.
     ``PROVENANCE_REMOVED_MESSAGE`` says what happened to the record, and
     ``provenance_removed`` is the boolean the client branches on so it never has to parse
     prose. No count of anything removed, in either state.
@@ -679,15 +704,19 @@ class ConversationTurnSerializer(serializers.Serializer):
     # class docstring for why that is not tidiness.
     provenance_removed = serializers.SerializerMethodField()
 
-    def has_citation_rows(self, turn):
-        """Whether this turn has any ``AnswerCitation`` rows at all, before any scoping.
+    def has_live_citation_rows(self, turn):
+        """Whether any of this turn's ``AnswerCitation`` rows still points at a chunk, before
+        any scoping.
 
         The whole of the state 2 / state 3 distinction, and deliberately not expressed in
-        terms of ``surviving_citations``: this asks whether the record EXISTS, that asks
-        whether this reader may see it, and conflating them is the disclosure the class
-        docstring describes. Reads the prefetched rows, so no query of its own.
+        terms of ``surviving_citations``: this asks whether the record still points at
+        material that EXISTS, that asks whether this reader may see it, and conflating them
+        is the disclosure the class docstring describes. A row whose ``chunk_id`` is NULL
+        (D-67) does not count, which is what makes it behave as the row CASCADE used to
+        delete. ``chunk_id`` not NULL means the chunk exists: the database foreign key
+        refuses any other value. Reads the prefetched rows, so no query of its own.
         """
-        return bool(turn.citations.all())
+        return any(citation.chunk_id is not None for citation in turn.citations.all())
 
     def surviving_citations(self, turn):
         """This turn's citations the reader may still see, in the order they were numbered.
@@ -697,10 +726,19 @@ class ConversationTurnSerializer(serializers.Serializer):
         available defaults are wrong: permitting everything is precisely the leak, and
         permitting nothing would render every thread in the system as no-answer and look
         like a retrieval problem for as long as it took someone to find.
+
+        A row whose chunk was deleted (``chunk_id`` NULL, D-67) is never returned, whatever
+        ``permitted_chunk_ids`` holds: it is excluded by name rather than by NULL happening
+        not to be in a set, so a later change to how that set is built cannot let one
+        through. Its statement is not shown and does not take a number.
         """
         permitted = self.context["permitted_chunk_ids"]
         citations = sorted(turn.citations.all(), key=lambda citation: citation.position)
-        return [citation for citation in citations if citation.chunk_id in permitted]
+        return [
+            citation
+            for citation in citations
+            if citation.chunk_id is not None and citation.chunk_id in permitted
+        ]
 
     def get_answered(self, turn):
         # Answered when it was answered AND something it said is still readable. The two
@@ -708,20 +746,23 @@ class ConversationTurnSerializer(serializers.Serializer):
         return bool(turn.answered) and bool(self.surviving_citations(turn))
 
     def get_provenance_removed(self, turn):
-        """State 3, and nothing else: answered, and its citation rows no longer exist.
+        """State 3, and nothing else: answered, and no citation row of it still points at a
+        chunk that exists.
 
-        False for a re-scoped turn, whose rows are all still there and merely unreadable by
-        this role, and false for a turn that was never answered.
+        False for a re-scoped turn, at least one of whose rows still points at an existing
+        chunk that is merely unreadable by this role — including a turn where the other rows'
+        chunks were deleted — and false for a turn that was never answered.
         """
-        return bool(turn.answered) and not self.has_citation_rows(turn)
+        return bool(turn.answered) and not self.has_live_citation_rows(turn)
 
     def get_message(self, turn):
         if self.get_answered(turn):
             return None
         if self.get_provenance_removed(turn):
             # NO_ANSWER_MESSAGE here would tell the reader their question cannot be answered
-            # from the knowledge base, which is false: it was answered, and the material is
-            # still there under new identifiers.
+            # from the knowledge base, which is a claim about the corpus: it was answered, and
+            # what is gone is the chunks it cited. See PROVENANCE_REMOVED_MESSAGE for the
+            # paths that reach this state and why the message promises nothing about them.
             return PROVENANCE_REMOVED_MESSAGE
         return NO_ANSWER_MESSAGE
 

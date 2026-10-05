@@ -46,9 +46,9 @@ from apps.ingestion.errors import ExtractionError, OversizedArchiveContentError
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
-from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
+from apps.retrieval.scoping import permission_scope, scoped_documents, scoped_meetings
 from apps.retrieval.search import (
     SearchQueryContainsNullCharacter,
     SearchQueryTooShort,
@@ -472,8 +472,9 @@ class DocumentsView(APIView):
     synchronous, as FR-08 states, with the interface displaying progress.
 
     **GET.** The list FR-08's front end reads the "Indexed" status from, scoped by
-    ``visible_to_roles`` from the first day it exists. FR-11 is Stage 4 work and this
-    is not that filter, but a list disclosing documents outside the caller's scope
+    ``visible_to_roles`` from the first day it exists, and since Stage 5 item 1 through
+    ``scoped_documents``, the one place that predicate is written (D-53). FR-11 is Stage 4
+    work and this is not that filter, but a list disclosing documents outside the caller's scope
     would be a leak to remove later rather than a feature, and CLAUDE.md invariant 1
     is explicit that the existence of out-of-scope material must not be disclosed
     "by a result count, a total, or an error message". FR-15's filtered browsing
@@ -497,8 +498,8 @@ class DocumentsView(APIView):
 
     def get(self, request):
         documents = (
-            Document.objects.select_related("uploaded_by")
-            .filter(visible_to_roles__contains=[request.user.role.role_name])
+            scoped_documents(role_name=permission_scope(request.user))
+            .select_related("uploaded_by")
             .order_by("-uploaded_at", "pk")
         )
         return Response(DocumentSerializer(documents, many=True).data)
@@ -632,7 +633,7 @@ class DocumentDetailView(APIView):
     document one's role may see is not a privileged action, and adding a permission class
     here would make a citation unfollowable for the role it was generated for.
 
-    **Scoped by ``visible_to_roles``, and out of scope is 404 — never 403.** A 403
+    **Scoped through ``scoped_documents`` (D-53), and out of scope is 404 — never 403.** A 403
     distinguishes "exists but you may not see it" from "does not exist", which is the
     disclosure CLAUDE.md invariant 1 forbids by name; D-33's treatment of the upload 409 as
     an existence oracle is the precedent, and ``GET /api/meetings/{id}`` is the sibling that
@@ -648,8 +649,8 @@ class DocumentDetailView(APIView):
 
     def get(self, request, pk):
         document = get_object_or_404(
-            Document.objects.select_related("uploaded_by").filter(
-                visible_to_roles__contains=[request.user.role.role_name]
+            scoped_documents(role_name=permission_scope(request.user)).select_related(
+                "uploaded_by"
             ),
             pk=pk,
         )
@@ -747,8 +748,8 @@ class MeetingsView(APIView):
 
     def get(self, request):
         meetings = (
-            Meeting.objects.prefetch_related("attendees__user")
-            .filter(visible_to_roles__contains=[request.user.role.role_name])
+            scoped_meetings(role_name=permission_scope(request.user))
+            .prefetch_related("attendees__user")
             .order_by("-meeting_date", "-created_at", "pk")
         )
         return Response(MeetingListSerializer(meetings, many=True).data)
@@ -832,15 +833,15 @@ class MeetingDetailView(APIView):
     """``GET /api/meetings/{id}`` — FR-09: "once processed, the stored transcript is
     then viewable in full".
 
-    Scoped by ``visible_to_roles``, and a meeting outside the caller's scope is 404,
+    Scoped through ``scoped_meetings`` (D-53), and a meeting outside the caller's scope is 404,
     not 403: CLAUDE.md invariant 1 requires that its existence not be disclosed, and
     a 403 would confirm the id names something real.
     """
 
     def get(self, request, pk):
         meeting = get_object_or_404(
-            Meeting.objects.prefetch_related("attendees__user").filter(
-                visible_to_roles__contains=[request.user.role.role_name]
+            scoped_meetings(role_name=permission_scope(request.user)).prefetch_related(
+                "attendees__user"
             ),
             pk=pk,
         )
@@ -864,8 +865,7 @@ class DocumentReprocessView(APIView):
 
     def post(self, request, pk):
         document = get_object_or_404(
-            Document.objects.filter(visible_to_roles__contains=[request.user.role.role_name]),
-            pk=pk,
+            scoped_documents(role_name=permission_scope(request.user)), pk=pk
         )
         if document.status == DOCUMENT_INDEXED:
             # Re-indexing healthy content is FR-15's business, not a retry's.
@@ -988,7 +988,9 @@ class AskView(APIView):
         # statement survived verification". Not being answerable from the corpus is a fact
         # about the corpus, not a client error.
         return Response(
-            AnswerSerializer(reply_for(outcome=outcome, conversation=conversation)).data
+            AnswerSerializer(
+                reply_for(outcome=outcome, conversation=conversation, user=request.user)
+            ).data
         )
 
     @staticmethod
@@ -1075,12 +1077,15 @@ class ConversationDetailView(APIView):
     argument, including why the leak is the statement prose rather than the identifier; the
     request is passed into its context because the role is resolved from it per request.
 
-    **A third state, separated at item 1c: a turn whose citation ROWS no longer exist.** Not
-    a permission state — a reprocess or a re-index deleted them (D-12's cascade) while the
-    material stayed — so it carries ``provenance_removed`` and its own message instead of
-    claiming the question cannot be answered. The re-scoped state above stays silent and
-    stays indistinguishable from a never-answered turn; the discriminator is row existence,
-    and ``ConversationTurnSerializer`` argues why it must stay that way.
+    **A third state, separated at item 1c: a turn none of whose citation rows still points at
+    an existing chunk.** Not a permission state — a reprocess, a re-index or FR-15's deletion
+    removed the chunks it cited. Until D-67 the rows went with them (D-12's cascade); now they
+    survive with ``chunk_id`` NULL and are read as if they had gone. Such a turn carries
+    ``provenance_removed`` and its own message instead of claiming the question cannot be
+    answered. The re-scoped state above stays silent and stays indistinguishable from a
+    never-answered turn; the discriminator is whether a row still points at an existing chunk,
+    read before any scoping, and ``ConversationTurnSerializer`` argues why it must stay that
+    way.
     """
 
     def get(self, request, pk):

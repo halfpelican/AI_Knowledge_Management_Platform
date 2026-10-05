@@ -30,11 +30,19 @@ The permission array lives on the chunk row itself, stamped from the owning Docu
 or Meeting at ingestion (D-17), so visibility is never worked out here by joining to
 the source. Meetings are scoped by role exactly as documents are, never by
 attendance, and ``MeetingAttendees`` is a participation record that this module does
-not consult (D-16). The array holds role names (D-11) and membership in it is the
-whole test: an Administrator does not implicitly see Employee-scoped content, nor an
-Employee Administrator-scoped content. Role generalisation is a question about
-permissions (FR-05), not about ``visible_to_roles``, where the default at ingestion
-is both roles (D-29).
+not consult (D-16). The array holds role names (D-11). A row is in a role's scope when
+its array OVERLAPS that role's effective roles, ``EFFECTIVE_ROLES`` in
+apps/core/constants.py (D-66): Administrator generalises Employee in scope as well as in
+permissions, so an Administrator reads everything marked for Employees, while an Employee's
+effective roles are only ``Employee`` and their scope is exactly what membership of
+``Employee`` gave before. An Employee never reads Administrator-only content. What
+ingestion writes into the array, both roles by default, is D-29's and is not changed here.
+
+**Until 5 October 2026 this paragraph said the opposite**: that membership of the reader's
+own role was the whole test and an Administrator did not see Employee-only content. That was a
+reading this build adopted, and the proposal's role model — Administrator generalising
+Employee — supports the other one. It also made an Employee-only document invisible, and so
+undeletable under FR-15, to every Administrator. D-66 records the change.
 
 The candidate set is built from two predicates, both of them here and both of them
 conditions on the query: the role scope above, and the embedding-model match in
@@ -55,7 +63,9 @@ re-index event).
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
 
-from apps.documents.models import ContentChunk
+from apps.core.constants import EFFECTIVE_ROLES
+from apps.documents.models import ContentChunk, Document
+from apps.meetings.models import Meeting
 
 
 class UnscopedRequestError(RuntimeError):
@@ -96,6 +106,26 @@ def permission_scope(user) -> str:
     return role_name
 
 
+def effective_roles(role_name: str) -> tuple[str, ...]:
+    """The role names whose content ``role_name`` may read (D-66); empty for an unknown role."""
+    return EFFECTIVE_ROLES.get(role_name, ())
+
+
+def _in_scope(model, role_name: str) -> QuerySet:
+    """``model``'s rows whose ``visible_to_roles`` overlaps this role's effective roles.
+
+    The one place the FR-11 predicate is written, for chunks and sources alike (D-53). The
+    overlap is a condition on the query, so an excluded row is never fetched. A role with no
+    effective roles — one missing from ``EFFECTIVE_ROLES``, or renamed (D-11's stated
+    limitation) — is given an empty queryset explicitly rather than a predicate that happens
+    to match nothing: this fails closed, returning nothing rather than everything.
+    """
+    roles = list(effective_roles(role_name))
+    if not roles:
+        return model.objects.none()
+    return model.objects.filter(visible_to_roles__overlap=roles)
+
+
 def scoped_chunks(*, role_name: str) -> QuerySet[ContentChunk]:
     """Every chunk this role may see, as a queryset — the FR-11 candidate set.
 
@@ -104,12 +134,39 @@ def scoped_chunks(*, role_name: str) -> QuerySet[ContentChunk]:
     what survives; nothing downstream may widen it, and nothing downstream should
     need to re-check visibility, because no row outside the scope was ever read.
 
-    A role name that matches no row in any ``visible_to_roles`` array — an unknown
-    role, or a renamed one (D-11's stated limitation) — yields an empty queryset.
-    That is deliberate: this function fails closed, returning nothing rather than
-    everything.
+    An unknown or renamed role yields an empty queryset, and so does a chunk whose array
+    is empty: this function fails closed, returning nothing rather than everything.
     """
-    return ContentChunk.objects.filter(visible_to_roles__contains=[role_name])
+    return _in_scope(ContentChunk, role_name)
+
+
+def scoped_documents(*, role_name: str) -> QuerySet[Document]:
+    """Every document this role may see: the same rule as ``scoped_chunks``, on the source row.
+
+    For every route that returns a document's own row, its title, date or identifier: the
+    repository list, the detail view, reprocess, the keyword search's document group, and
+    the answer path's Sources panel and partial matches (D-53). The document's own
+    ``visible_to_roles`` must overlap the role's effective roles (D-66), as a condition on
+    the query, so an out-of-scope row is never fetched, and an unknown role or an empty array
+    yields nothing.
+
+    **This fails closed where a source and its chunks disagree.** D-47's cascade keeps the two
+    arrays equal through every ORM write path except ``bulk_create(update_conflicts=True)``
+    and raw SQL. Where they do disagree, a caller that starts here returns less than the chunk
+    stamp would admit, never more. D-53 decided that direction: returning less is a usability
+    defect, and returning more is a disclosure.
+    """
+    return _in_scope(Document, role_name)
+
+
+def scoped_meetings(*, role_name: str) -> QuerySet[Meeting]:
+    """Every meeting this role may see, by role and never by attendance (D-16).
+
+    ``scoped_documents`` for meetings, failing closed in the same way. ``MeetingAttendees``
+    is not consulted: it is a participation record for FR-20, and a second scoping mechanism
+    would be a second code path through the one filter that matters most (invariant 3).
+    """
+    return _in_scope(Meeting, role_name)
 
 
 def candidate_chunks(*, role_name: str, embedding_model: str) -> QuerySet[ContentChunk]:
