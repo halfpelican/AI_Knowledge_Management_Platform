@@ -55,7 +55,8 @@ re-index event).
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
 
-from apps.documents.models import ContentChunk
+from apps.documents.models import ContentChunk, Document
+from apps.meetings.models import Meeting
 
 
 class UnscopedRequestError(RuntimeError):
@@ -110,6 +111,34 @@ def scoped_chunks(*, role_name: str) -> QuerySet[ContentChunk]:
     everything.
     """
     return ContentChunk.objects.filter(visible_to_roles__contains=[role_name])
+
+
+def scoped_documents(*, role_name: str) -> QuerySet[Document]:
+    """Every document this role may see: the same rule as ``scoped_chunks``, on the source row.
+
+    For every route that returns a document's own row, its title, date or identifier: the
+    repository list, the detail view, reprocess, the keyword search's document group, and
+    the answer path's Sources panel and partial matches (D-53). Membership of ``role_name``
+    in the document's own ``visible_to_roles`` is a condition on the query, so an
+    out-of-scope row is never fetched, and an unknown role or an empty array yields nothing.
+
+    **This fails closed where a source and its chunks disagree.** D-47's cascade keeps the two
+    arrays equal through every ORM write path except ``bulk_create(update_conflicts=True)``
+    and raw SQL. Where they do disagree, a caller that starts here returns less than the chunk
+    stamp would admit, never more. D-53 decided that direction: returning less is a usability
+    defect, and returning more is a disclosure.
+    """
+    return Document.objects.filter(visible_to_roles__contains=[role_name])
+
+
+def scoped_meetings(*, role_name: str) -> QuerySet[Meeting]:
+    """Every meeting this role may see, by role and never by attendance (D-16).
+
+    ``scoped_documents`` for meetings, failing closed in the same way. ``MeetingAttendees``
+    is not consulted: it is a participation record for FR-20, and a second scoping mechanism
+    would be a second code path through the one filter that matters most (invariant 3).
+    """
+    return Meeting.objects.filter(visible_to_roles__contains=[role_name])
 
 
 def candidate_chunks(*, role_name: str, embedding_model: str) -> QuerySet[ContentChunk]:

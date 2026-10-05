@@ -39,9 +39,14 @@ The role scope is then a condition on the query in every one of the three querys
 so out-of-scope rows are never fetched:
 
 - chunk text is searched through ``scoping.scoped_chunks``, the same function the ranked
-  path uses — there is deliberately no second role predicate in this file to be got wrong;
-- ``Documents`` and ``Meetings`` are searched for title matches under their own
-  ``visible_to_roles``, which is the same array D-17 stamps onto the chunks.
+  path uses;
+- ``Documents`` and ``Meetings`` are read through ``scoping.scoped_documents`` and
+  ``scoping.scoped_meetings``, which test the source's own ``visible_to_roles``, the array
+  D-17 stamps onto the chunks.
+
+There is deliberately no role predicate written in this file to be got wrong: all three are
+the scoping module's, and D-53 put the source predicates there so that this module and the
+answer path's Sources panel could not keep two copies that disagree.
 
 **The counts are the likeliest count-disclosure in this system, and they are derived.**
 Invariant 1 forbids disclosing restricted material "by a result count, a total, or an error
@@ -78,9 +83,9 @@ rendering of "this item is called what you searched for", not a claim that the p
 matches.
 
 **Fails closed on a disagreement between a chunk and its source.** The metadata query is
-``Q(id__in=<sources with a matching visible chunk>) | Q(title__icontains=...)`` under the
-source's own role predicate, so a source whose chunks are stamped visible while the source
-itself is not simply does not appear. D-17's re-stamp cascade means the two cannot
+``Q(id__in=<sources with a matching visible chunk>) | Q(title__icontains=...)`` narrowing
+``scoped_documents`` or ``scoped_meetings``, so a source whose chunks are stamped visible
+while the source itself is not simply does not appear. D-17's re-stamp cascade means the two cannot
 disagree; if they ever do, the cheap direction to be wrong in is the one that returns less.
 
 **The embedding-model predicate is deliberately NOT applied here.** ``candidate_chunks``
@@ -107,10 +112,13 @@ from datetime import date, datetime
 from django.db.models import Q
 
 from apps.core.constants import MINIMUM_SEARCH_LENGTH, SOURCE_TYPES
-from apps.documents.models import Document
-from apps.meetings.models import Meeting
 from apps.retrieval.models import SearchLog
-from apps.retrieval.scoping import permission_scope, scoped_chunks
+from apps.retrieval.scoping import (
+    permission_scope,
+    scoped_chunks,
+    scoped_documents,
+    scoped_meetings,
+)
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
@@ -451,20 +459,17 @@ def search(*, query_text: str, user) -> SearchResults:
         for source_type in SOURCE_TYPES
     }
 
-    # Both querysets carry the role predicate as a condition on the query, so neither the
-    # body-match branch nor the title branch can fetch a row outside the scope.
+    # Both querysets start from the scoping module's source predicate, a condition on the
+    # query, so neither the body-match branch nor the title branch can fetch a row outside
+    # the scope.
     documents = (
-        Document.objects.filter(
-            Q(visible_to_roles__contains=[role_name]),
-            Q(id__in=matched_ids[DOCUMENT_SOURCE_TYPE]) | Q(title__icontains=query_text),
-        )
+        scoped_documents(role_name=role_name)
+        .filter(Q(id__in=matched_ids[DOCUMENT_SOURCE_TYPE]) | Q(title__icontains=query_text))
         .order_by("-uploaded_at", "pk")
     )
     meetings = (
-        Meeting.objects.filter(
-            Q(visible_to_roles__contains=[role_name]),
-            Q(id__in=matched_ids[MEETING_SOURCE_TYPE]) | Q(title__icontains=query_text),
-        )
+        scoped_meetings(role_name=role_name)
+        .filter(Q(id__in=matched_ids[MEETING_SOURCE_TYPE]) | Q(title__icontains=query_text))
         .order_by("-meeting_date", "-created_at", "pk")
     )
 

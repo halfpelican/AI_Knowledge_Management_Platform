@@ -99,7 +99,14 @@ def test_the_headline_no_answer_becomes_an_answer_when_the_role_predicate_is_dro
 
     assert body["answered"] is True
     assert body["result_count"] == 2  # the two Administrator-only chunks above the floor
-    assert fr11.RESTRICTED_DOCUMENT_TITLE in {source["title"] for source in body["sources"]}
+    # Answered FROM the restricted material: every cited chunk is one the Employee may not see.
+    cited = {statement["chunk_id"] for statement in body["statements"]}
+    assert cited and cited <= only_restricted_answers.restricted_chunk_ids
+    # The title is the one thing that no longer leaks, and that is D-53 rather than FR-11's
+    # chunk predicate. Since Stage 5 item 1 the Sources panel reads source rows through
+    # ``scoped_documents``, which tests the source's own row, so a leaking candidate set loses
+    # the title at that second layer. Until item 1 this line asserted the title WAS there.
+    assert fr11.RESTRICTED_DOCUMENT_TITLE not in {source["title"] for source in body["sources"]}
 
 
 def test_the_byte_identical_property_fails_when_the_role_predicate_is_dropped(

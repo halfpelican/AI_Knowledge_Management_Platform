@@ -25,14 +25,32 @@ It is not in tension with invariant 6, which is about uncited *statements*: a ti
 date are not a factual claim about the organisation, and every item here is inside the
 asking role's scope by construction.
 
-**Why there is no permission predicate in this module.** Every passage reached it through
-``candidate_chunks``, whose query carries both FR-11 predicates, so the chunk's stamped
-``visible_to_roles`` already admitted this role (invariant 1, and invariant 2 for why the
-stamp is on the chunk). Re-deriving the scope here would be a second filter in a second
-place, and the one thing worse than one permission filter is two that can disagree.
-Changing a source's visibility re-stamps its chunks in the same transaction (D-17), so
-the chunk is the authoritative record of what this role may read, and the source row is
-consulted only for a title and a date.
+**The source rows are read through the scoping module, and fail closed (D-53).** Every
+passage reached this module through ``candidate_chunks``, whose query carries both FR-11
+predicates, so the chunk's stamped ``visible_to_roles`` already admitted this role
+(invariant 1, and invariant 2 for why the stamp is on the chunk). Until Stage 5 item 1 this
+module therefore read the source row with no predicate at all, on the argument that a second
+filter in a second place could only disagree with the first. That argument was half right,
+and D-53 kept the half that was: there must not be two *copies* of the predicate. The source
+row is now read through ``scoping.scoped_documents`` and ``scoping.scoped_meetings``, the one
+place the source predicate is written, and the keyword search reads it through the same
+helpers. While D-47's cascade holds, the chunk and the source agree and nothing changes.
+Where they disagree, which ``bulk_create(update_conflicts=True)`` or raw SQL can cause, the
+source is dropped from the panel exactly as a source row that has gone is dropped. That is
+the direction D-53 settled: returning less is a usability defect, and returning more is a
+disclosure.
+
+**What failing closed here does not reach.** The passage was a retrieval candidate under its
+chunk stamp, so the model was sent it, and a statement citing it survives verification.
+Dropping its source removes the item from ``sources`` and ``partial_matches``, and that
+statement is left with a citation that has no passage to expand to. D-53's implementation
+note records why the boundary sits here.
+
+**The scope is resolved from the user, as ``search`` and ``answer_question`` resolve it.**
+``reply_for`` takes the user, not a role, so no view can hand it one user's identity with
+another's role. The role is read afresh for this call. If it changed after the pipeline read
+it, the result is the intersection of the two reads: a narrower role drops sources, and a
+wider one cannot add any, because only passages the pipeline admitted are resolved.
 
 **FR-12's partial matches are resolved here too, and only their titles and dates are.**
 ``resolve_partial_matches`` is the third thing this module does, added at item 10a for the
@@ -46,11 +64,12 @@ snippet, because there is no field for one and because a fragment of source text
 message that has just said the question cannot be answered reads as a partial answer, which
 is invariant 6 by a side door. It adds no permission predicate, for the reason given below.
 
-**A passage whose source row has gone is dropped from the panel**, not rendered with a
-blank title. Nothing in the M6 build deletes a Document or a Meeting — FR-15's
-permissioned deletion is Stage 5 — so this is unreachable today; when it is reachable, an
-entry with no title and no date is not something the panel can render or link to, and a
-placeholder would be inventing text about material that no longer exists.
+**A passage whose source row has gone, or is outside the reader's scope, is dropped from
+the panel**, not rendered with a blank title. Nothing in the M6 build deletes a Document or a
+Meeting yet — FR-15's permissioned deletion is Stage 5 item 2 — so the first case is
+unreachable today. In both cases an entry with no title and no date is not something the
+panel can render or link to, and a placeholder would be inventing text about material that no
+longer exists or may not be read.
 """
 
 from dataclasses import dataclass, fields
@@ -58,11 +77,10 @@ from datetime import date, datetime
 from uuid import UUID
 
 from apps.core.constants import SOURCE_TYPES
-from apps.documents.models import Document
-from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation
 from apps.retrieval.pipeline import RetrievalOutcome
 from apps.retrieval.query_log import FIRST_POSITION
+from apps.retrieval.scoping import permission_scope, scoped_documents, scoped_meetings
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
@@ -191,12 +209,13 @@ def number_statements(statements) -> tuple[NumberedStatement, ...]:
     )
 
 
-def resolve_sources(passages) -> tuple[ConsultedSource, ...]:
+def resolve_sources(passages, *, user) -> tuple[ConsultedSource, ...]:
     """7.10's ``resolveSourceDetails(suppliedPassageIds)``: title and date per item.
 
     Grouped by item in first-appearance order, which is rank order, so the panel's first
-    entry is the item the best-scoring passage came from. Two queries whatever the number
-    of passages, and no query at all for the empty list a no-answer outcome carries.
+    entry is the item the best-scoring passage came from. Three queries at most whatever the
+    number of passages (the reader's role, then one per source type), and no query at all
+    for the empty list a no-answer outcome carries.
     """
     grouped: dict[tuple[str, UUID], list[ConsultedPassage]] = {}
     for passage in passages:
@@ -205,12 +224,12 @@ def resolve_sources(passages) -> tuple[ConsultedSource, ...]:
             ConsultedPassage(chunk_id=passage.chunk_id, text=passage.chunk_text)
         )
 
-    titles_and_dates = _titles_and_dates(grouped)
+    titles_and_dates = _titles_and_dates(grouped, user=user)
     resolved = []
     for (source_type, source_id), items in grouped.items():
         details = titles_and_dates.get((source_type, source_id))
         if details is None:
-            continue  # the source row has gone; see the module docstring
+            continue  # the source row has gone, or is out of scope; see the module docstring
         title, source_date = details
         resolved.append(
             ConsultedSource(
@@ -224,31 +243,31 @@ def resolve_sources(passages) -> tuple[ConsultedSource, ...]:
     return tuple(resolved)
 
 
-def resolve_partial_matches(matches) -> tuple[PartialMatchSource, ...]:
+def resolve_partial_matches(matches, *, user) -> tuple[PartialMatchSource, ...]:
     """A title and a date for each partially related item the pipeline offered.
 
     Rank order, preserved exactly as it arrived: ``partial_matches`` deduplicated the ranked
     list by source and capped it, and re-sorting here would either invent an order or undo
     that one. Nothing is added to the list and nothing is removed from it except an item
-    whose source row has gone, which is dropped rather than rendered with a blank title —
-    the same rule ``resolve_sources`` follows, and unreachable for the same reason (nothing
-    in the M6 build deletes a Document or a Meeting).
+    whose source row has gone or is outside the reader's scope, which is dropped rather than
+    rendered with a blank title — the same rule ``resolve_sources`` follows.
 
-    **No permission predicate, and no snippet.** Every identity here came off a chunk that
-    ``scoping.candidate_chunks`` admitted for the asking role, so the scope has already been
-    applied on the table that carries the vector (invariant 1, D-17); a second filter here
-    could only disagree with the first. And a snippet has nowhere to go: see
-    ``PartialMatchSource``.
+    **The scoping module's source predicate, and no snippet.** Every identity here came off
+    a chunk that ``scoping.candidate_chunks`` admitted for the asking role. The source row is
+    read through the same helpers the keyword search uses, so the two agree and a
+    disagreement fails closed (D-53). The pipeline offers these identically on both no-answer
+    paths, and this function resolves them identically, so the field still cannot tell the
+    paths apart. A snippet has nowhere to go: see ``PartialMatchSource``.
 
-    Two queries at most, and none at all for the empty tuple an answered reply carries.
+    Three queries at most, and none at all for the empty tuple an answered reply carries.
     """
     keys = [(match.source_type, match.source_id) for match in matches]
-    titles_and_dates = _titles_and_dates(keys)
+    titles_and_dates = _titles_and_dates(keys, user=user)
     offered = []
     for source_type, source_id in keys:
         details = titles_and_dates.get((source_type, source_id))
         if details is None:
-            continue  # the source row has gone; see the docstring
+            continue  # the source row has gone, or is out of scope; see the docstring
         title, source_date = details
         offered.append(
             PartialMatchSource(
@@ -258,12 +277,20 @@ def resolve_partial_matches(matches) -> tuple[PartialMatchSource, ...]:
     return tuple(offered)
 
 
-def _titles_and_dates(keys) -> dict:
-    """One query per source type, over the ``(source_type, source_id)`` keys given.
+def _titles_and_dates(keys, *, user) -> dict:
+    """One query per source type, over the ``(source_type, source_id)`` keys given, in scope.
 
     Any iterable of those pairs will do, which is why both callers can use it: the grouped
     dict of consulted passages iterates as its keys, and the partial matches pass a list.
+
+    The reader's scope is resolved only when there is a row to look up, so the empty list a
+    no-answer outcome carries still costs no query. Both no-answer paths reach this with the
+    same arguments, so they make the same queries.
     """
+    keys = list(keys)
+    if not keys:
+        return {}
+    role_name = permission_scope(user)
 
     def ids_for(source_type):
         return [source_id for (kind, source_id) in keys if kind == source_type]
@@ -271,17 +298,24 @@ def _titles_and_dates(keys) -> dict:
     details = {}
     document_ids = ids_for(DOCUMENT_SOURCE_TYPE)
     if document_ids:
-        for row in Document.objects.filter(pk__in=document_ids).only("id", "title", "uploaded_at"):
+        rows = scoped_documents(role_name=role_name).filter(pk__in=document_ids)
+        for row in rows.only("id", "title", "uploaded_at"):
             details[(DOCUMENT_SOURCE_TYPE, row.id)] = (row.title, row.uploaded_at)
     meeting_ids = ids_for(MEETING_SOURCE_TYPE)
     if meeting_ids:
-        for row in Meeting.objects.filter(pk__in=meeting_ids).only("id", "title", "meeting_date"):
+        rows = scoped_meetings(role_name=role_name).filter(pk__in=meeting_ids)
+        for row in rows.only("id", "title", "meeting_date"):
             details[(MEETING_SOURCE_TYPE, row.id)] = (row.title, row.meeting_date)
     return details
 
 
-def reply_for(*, outcome: RetrievalOutcome, conversation: Conversation | None) -> AnswerReply:
-    """The reply for one turn, from the outcome the pipeline returned.
+def reply_for(
+    *, outcome: RetrievalOutcome, conversation: Conversation | None, user
+) -> AnswerReply:
+    """The reply for one turn, from the outcome the pipeline returned, for ``user`` to read.
+
+    ``user`` is the asker, and the source rows are resolved in their scope (D-53): see the
+    module docstring.
 
     The one place the outcome becomes a reply, so the fields that do not cross can be
     pointed at: of ``RetrievalOutcome``'s eight fields this reads six, and
@@ -292,11 +326,11 @@ def reply_for(*, outcome: RetrievalOutcome, conversation: Conversation | None) -
         answered=outcome.answered,
         result_count=outcome.result_count,
         statements=number_statements(outcome.verified_statements),
-        sources=resolve_sources(outcome.passages),
+        sources=resolve_sources(outcome.passages, user=user),
         # Resolved, never re-derived: the pipeline decided which items these are, once, for
         # both no-answer paths. An answered outcome carries none, so this is an empty tuple
         # and no query runs.
-        partial_matches=resolve_partial_matches(outcome.partial_matches),
+        partial_matches=resolve_partial_matches(outcome.partial_matches, user=user),
         message=outcome.message,
         conversation=conversation,
     )

@@ -9,12 +9,15 @@ from django.conf import settings
 
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
-from apps.documents.models import ContentChunk
+from apps.documents.models import ContentChunk, Document
+from apps.meetings.models import Meeting
 from apps.retrieval.scoping import (
     UnscopedRequestError,
     candidate_chunks,
     permission_scope,
     scoped_chunks,
+    scoped_documents,
+    scoped_meetings,
 )
 
 pytestmark = pytest.mark.django_db
@@ -318,3 +321,77 @@ def test_candidates_from_both_role_sessions(session_client, one_chunk_per_combin
         )
     )
     assert candidates == [one_chunk_per_combination[mine[role_name]]]
+
+
+# --- The source predicates: scoped_documents and scoped_meetings (D-53) -------------------
+#
+# The same rule as scoped_chunks, applied to the Document and Meeting rows themselves:
+# membership of the role name in the source's own visible_to_roles, as a condition on the
+# query, failing closed. D-53 moved every hand-written copy of it onto these two helpers.
+
+
+def _source_per_scope(employee):
+    """One document and one meeting per scope: Employee-only, Administrator-only, both."""
+    scopes = {
+        "employee_only": [EMPLOYEE_ROLE_NAME],
+        "administrator_only": [ADMINISTRATOR_ROLE_NAME],
+        "both": list(ROLE_PAIR),
+    }
+    documents = {
+        key: Document.objects.create(
+            title=f"Document {key}", file_type="pdf", uploaded_by=employee, visible_to_roles=roles
+        )
+        for key, roles in scopes.items()
+    }
+    meetings = {
+        key: Meeting.objects.create(
+            title=f"Meeting {key}",
+            meeting_date="2026-09-01",
+            transcript_text="A transcript.",
+            visible_to_roles=roles,
+        )
+        for key, roles in scopes.items()
+    }
+    return documents, meetings
+
+
+SOURCE_HELPERS = [scoped_documents, scoped_meetings]
+
+
+@pytest.mark.parametrize("helper", SOURCE_HELPERS, ids=lambda helper: helper.__name__)
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_the_source_predicate_is_in_the_sql_not_applied_afterwards(helper, role_name):
+    sql = str(helper(role_name=role_name).query)
+    assert "visible_to_roles" in sql
+    assert role_name in sql
+    assert "WHERE" in sql.upper()
+
+
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_each_role_is_given_the_sources_it_is_named_on_and_no_others(employee, role_name):
+    """Membership is the whole test, as for chunks: no role generalises another here."""
+    documents, meetings = _source_per_scope(employee)
+    own = "employee_only" if role_name == EMPLOYEE_ROLE_NAME else "administrator_only"
+    other = "administrator_only" if role_name == EMPLOYEE_ROLE_NAME else "employee_only"
+
+    assert set(scoped_documents(role_name=role_name)) == {documents[own], documents["both"]}
+    assert set(scoped_meetings(role_name=role_name)) == {meetings[own], meetings["both"]}
+    assert documents[other] not in scoped_documents(role_name=role_name)
+    assert meetings[other] not in scoped_meetings(role_name=role_name)
+
+
+@pytest.mark.parametrize("helper", SOURCE_HELPERS, ids=lambda helper: helper.__name__)
+def test_an_unknown_role_name_is_given_no_source(employee, helper):
+    """Failure path: fails closed, as scoped_chunks does — nothing rather than everything."""
+    _source_per_scope(employee)
+    assert helper(role_name="Auditor").count() == 0
+
+
+@pytest.mark.parametrize("role_name", ROLE_PAIR)
+def test_a_source_scoped_to_nobody_is_given_to_nobody(employee, role_name):
+    Document.objects.create(title="Nobody's", file_type="pdf", uploaded_by=employee, visible_to_roles=[])
+    Meeting.objects.create(
+        title="Nobody's", meeting_date="2026-09-01", transcript_text="A transcript.", visible_to_roles=[]
+    )
+    assert scoped_documents(role_name=role_name).count() == 0
+    assert scoped_meetings(role_name=role_name).count() == 0

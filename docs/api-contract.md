@@ -535,7 +535,11 @@ string with "[1]" spliced into it cannot be re-checked against anything afterwar
 lists every item consulted with its date, allowing the user to judge how current the
 underlying material is", which is section 7.10 step 11's
 `resolveSourceDetails(suppliedPassageIds)`. A panel listing only the items a surviving
-statement happened to cite would misdescribe what the answer was drawn from. Each entry
+statement happened to cite would misdescribe what the answer was drawn from. An item whose
+own source row the caller's role may not read is omitted from `sources` and from
+`partial_matches`, even where its chunk was admitted (D-53: fail closed). The visibility
+cascade keeps the two in agreement on every shipped write path, so this changes no reply
+in normal use. The shape is unchanged. Each entry
 carries the passages of that item that were supplied, because FR-12 also requires that
 "each citation expands to display the source passage and links to the source document or
 meeting" and no endpoint in this API returns a chunk — so the passage travels with the

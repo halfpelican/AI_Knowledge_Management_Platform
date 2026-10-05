@@ -112,8 +112,8 @@ Rules for this file:
 | D-50 | An oversized archive member is a 413; the bomb class is closed for OOXML only | Settled by the user | 2026-09-26 |
 | D-51 | A seventh document status: "Too large to index" | Settled by the user | 2026-09-26 |
 | D-52 | FR-15's detail view shows metadata and a download link, not extracted content | **Superseded by D-63** | 2026-09-27 |
-| D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · **due with FR-15** | 2026-09-27 |
-| D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Open** | 2026-09-27 |
+| D-53 | Fail closed on a source/chunk visibility disagreement; one helper, not two predicates | Settled · implemented 2026-10-05, Stage 5 item 1 | 2026-09-27 |
+| D-54 | The NUL-byte rejection is fixed at the instance; the class reopens with FR-15 | **Settled by D-65** (2026-10-05) | 2026-09-27 |
 | D-55 | `rejected_count` on QueryLog — numbering a column that shipped without one | Settled retroactively | 2026-09-27 |
 | D-56 | Partial matches are a reply field derived before the threshold | Settled retroactively · **one gap open**: no relevance floor | 2026-09-27 |
 | D-57 | Three Stage 4 commit-discipline departures | Recorded | 2026-09-27 |
@@ -124,6 +124,7 @@ Rules for this file:
 | D-62 | A front-end test runner lands; the interface is no longer accepted as untested; §8 condition 2 names pytest and the front-end suite | Settled by the user | 2026-09-28 |
 | D-63 | FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false | Settled by the user | 2026-09-28 |
 | D-64 | The M6 alpha is hosted on the NPU laptop and reached on that laptop, over loopback; it replaces the proposal's GCP deployment for the alpha only | Settled by the user · scoped to M6 | 2026-10-05 |
+| D-65 | Every query parameter passes a DRF serializer: ChoiceField for fixed vocabularies, shape-only for department and tag, an inclusive date range; the 400 is a convention | Settled by the user · settles D-54 | 2026-10-05 |
 
 ---
 
@@ -2651,10 +2652,59 @@ as both roles got a 200 from it.
 does not:** the code. Nothing changes today, and the disagreement stays harmless until the
 `bulk_create` hole is reached.
 
+> **Implemented on 5 October 2026, Stage 5 item 1.** `scoped_documents()` and
+> `scoped_meetings()` sit beside `scoped_chunks()` in `apps/retrieval/scoping.py`, and fail
+> closed. The predicate is now written only there. These callers moved onto the helpers:
+>
+> - `apps/api/views.py`: `DocumentsView.get`, `DocumentDetailView.get`, `MeetingsView.get`,
+>   `MeetingDetailView.get` and `DocumentReprocessView.post`. Each now resolves the role
+>   through `permission_scope` instead of reading `request.user.role.role_name`;
+> - `apps/retrieval/search.py`: the document and meeting querysets of `search()`;
+> - `apps/api/answers.py`: `_titles_and_dates`, which used to fail **open**. `reply_for`
+>   now takes the user and resolves the scope itself, as `search()` and
+>   `answer_question()` do, so no view passes it a role.
+>
+> `apps/api/tests/test_source_rows_fail_closed.py` is the test this entry asked for. It has
+> three parts: a scan that fails if the predicate is spelled outside the scoping module, or
+> if a request-serving module reads a source manager directly outside a named exception; a
+> table that every route in the URL conf must appear in, either as returning source rows
+> with a probe or as returning none with a reason; and a probe per source-returning route
+> against a source whose chunks are stamped wider than the source itself. Each probe has an
+> Administrator mirror. The `POST /api/ask` probe failed against the code before this
+> change, because the Sources panel named the source.
+>
+> **What the implementation covers:** the title, date and identifier of every Document and
+> Meeting row that a request-serving route returns, for the routes in the test's table.
+>
+> **What it does not cover:**
+>
+> - **The statements of a live answer.** In the disagreement state the chunk stamp admits the
+>   passage, so it is a retrieval candidate and is sent to the model, and a statement citing
+>   it survives verification. Failing closed on the source drops the item from `sources` and
+>   `partial_matches` and nothing more. The statement is then shown with a citation that has
+>   no passage to expand to. Stopping the passage from reaching the model would need the
+>   source predicate inside the candidate set, a join that D-17 exists to avoid. The defence
+>   for that case is still D-47's cascade.
+> - **A reopened turn.** `GET /api/conversations/{id}` re-scopes through `scoped_chunks` only
+>   (D-48), so in the disagreement state it shows the same statements the live reply did. It
+>   returns no source rows until Stage 5 item 4b, and the test's table says that route must
+>   move across with a probe when it does.
+> - **`bulk_create(update_conflicts=True)`**, D-47's pinned hole. Nothing here closes it.
+> - **Reads of `ExtractedContent`, `ContentTag`, `Tag`, `QueryLog` and `AnswerCitation`.**
+>   The scan watches `Document`, `Meeting` and `ContentChunk` managers only. FR-15 adds
+>   readers of the first three, and must scope them through a scoped document.
+> - **`apps/ingestion`**, including `manage.py reindex`. Neither is a route.
+> - **The D-29 checks on upload and transcript ingestion.** They still read
+>   `request.user.role.role_name`. They test whether the caller's own role is in the scope
+>   being written, and do not filter what is returned.
+
 ## D-54 · The NUL-byte rejection is fixed at the instance; the class reopens with FR-15
 
 **Status:** Open — recorded, not resolved · **Date:** 2026-09-27 · **Comes due:** FR-15,
 Stage 5 item 1
+
+> **Settled on 5 October 2026 by D-65**: every query parameter passes a DRF serializer.
+> This entry is left as written.
 
 `GET /api/search?q=<NUL>` raised `psycopg.DataError` out of an ORM `icontains` lookup, uncaught,
 answered **500 with an HTML body** — and under `DEBUG=True` that page carries the traceback, the
@@ -3405,3 +3455,67 @@ build over HTTPS later is a `.env` change and not a code change:
   `SESSION_COOKIE_SECURE` and `CSRF_COOKIE_SECURE` in `.env`, and putting something in front
   that terminates TLS. That is a new
   decision with the registration question attached, not an edit to this one.
+
+## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
+
+**Status:** Settled by the user · **Date:** 2026-10-05 · **Settles:** D-54 · **Stage:** 5
+item 1 · **Concerns:** FR-14's and FR-15's filters, and every later route that reads a
+query parameter
+
+**Decision.** A view reads its query parameters by passing them to a DRF `Serializer`, as
+`SomeQuerySerializer(data=request.query_params)`, and uses only `validated_data`. No view
+reads `request.query_params` or `request.GET` into an ORM lookup itself. The NUL-byte class
+that D-54 left open is then closed at the request boundary for each new parameter rather than
+inside one function: DRF's `CharField` carries `ProhibitNullCharactersValidator`, and a NUL
+byte is not a valid date, UUID or choice either.
+
+**How each kind of parameter is declared:**
+
+| Parameter kind | Field | Validated against |
+|---|---|---|
+| A fixed vocabulary from `apps/core/constants.py`: `status`, `sort` | `ChoiceField` over the constant | the constant |
+| `department`, a tag name | `CharField` with a `max_length` constant | shape only |
+| a tag identifier | `UUIDField` | shape only |
+| a date range | `DateField` for `date_from` and for `date_to` | shape, plus the cross-field rule below |
+
+**`ChoiceField` only for fixed vocabularies, and never a lookup against the database.**
+Department and tag values are checked for shape and never checked for existence. An
+unknown department and a department used only on restricted content must give the same
+answer, which is FR-15's 204 for a filter combination with no accessible matches. A field
+that looked the value up would answer 400 for one and 204 for the other, and the status code
+would tell the caller whether restricted material carries that department. That is the
+existence oracle invariant 1 forbids, at the validation layer instead of the query.
+
+**Date ranges.** `validate()` rejects `date_from` later than `date_to`. The end date is
+inclusive, so `date_to` filters with `__date__lte`, and a range of one day returns that day's
+items.
+
+**The 400 is a convention, recorded as one.** Neither FR-14 nor FR-15 lists a 400 among its
+Responses. A malformed parameter is answered 400 in DRF's usual body, keyed on the parameter's
+own name, the same shape every other 400 in this API uses. The status code comes from this
+API's convention for a malformed request, and is not read out of either requirement.
+
+**Enforced by a test, not by this entry.**
+`apps/api/tests/test_query_parameters_pass_a_serializer.py` parses every production module
+under `apps/` and fails on any read of `.query_params` or `.GET` that is not the `data=`
+argument of a call to a `…Serializer`. The test is shown to fail on a direct read before it
+is trusted to pass.
+
+**What this covers:** every query parameter read by a view under `apps/`, from Stage 5 item 1
+onwards, including FR-14's date range and department and FR-15's department, tag, status,
+sort and text filter as each lands.
+
+**What it does not cover:**
+
+- **`q` on `GET /api/search`.** It is the one named exception to the test, at
+  `apps/api/views.py` `SearchView.get`. Stage 4 item 12a closed it inside
+  `apps/retrieval/search.py` with its own exception and message, and moving it onto a
+  serializer would replace a tested message with DRF's generic one for no gain in safety.
+- **Request bodies.** Those already pass serializers.
+- **Path parameters.** Django's `<uuid:pk>` converter refuses anything that is not a UUID
+  before a view runs.
+- **Headers and cookies.** No view reads one into an ORM lookup.
+- **What a filter does once it is valid.** Scoping, counts and the 204 are item 2's and item
+  3's work, and they are tested there.
+
+**D-54's status changes from Open to Settled by this entry.** D-54 itself is left as written.
