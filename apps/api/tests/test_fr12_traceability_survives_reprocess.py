@@ -1,56 +1,55 @@
-"""FR-12's traceability clause holds at write time and not after a reprocess or a re-index.
+"""FR-12's traceability clause holds after a reprocess and after a re-index (D-67).
 
     The question, the retrieved chunk identifiers, the answer and its verified citations
     are logged, so that any answer can later be traced to the material that produced it.
 
-**That clause is satisfied when the row is written and falsified by two ordinary
-operations afterwards.** ``AnswerCitation.chunk`` is ``on_delete=CASCADE``, and both
-``reprocess_document`` (FR-08's "Please try again", reachable at
-``POST /api/documents/{id}/reprocess`` and gated on ``contribute_content``, which D-30 gives
-BOTH roles) and ``manage.py reindex`` delete a source's chunks and write new ones with fresh
-UUIDs. Every ``AnswerCitation`` row citing the old chunks is deleted with them. The
-``QueryLog`` row survives, still saying ``answered = True``, still carrying its
-``answer_text`` and still carrying ``retrieved_chunk_ids`` — which now name no row in
-``content_chunks`` at all. The answer can no longer be traced to the material that produced
-it, and nothing in the record says so.
+**What this file used to pin, recorded rather than quietly replaced.** Until Stage 5 item 1a
+this was ``test_fr12_traceability_lost_on_reprocess.py``, and it asserted the LOSS:
+``AnswerCitation.chunk`` was ``on_delete=CASCADE`` (D-12), and both ``reprocess_document``
+(FR-08's "Please try again", reachable at ``POST /api/documents/{id}/reprocess`` and gated on
+``contribute_content``, which D-30 gives BOTH roles) and ``manage.py reindex`` delete a
+source's chunks and write new ones with fresh UUIDs. Every ``AnswerCitation`` row citing the
+old chunks was deleted with them, while the ``QueryLog`` row survived still saying
+``answered = True``, still carrying its ``answer_text``, and still carrying
+``retrieved_chunk_ids`` that named no row at all. It asserted a citation count of 0 on
+purpose, modelled on ``apps/core/tests/test_visibility_cascade.py::
+test_bulk_create_upsert_is_a_known_hole_and_does_not_cascade``, so that a fix would fail it and
+the failure would be the notification. D-48's 27 September qualification and D-61's gap 5
+are the records of that finding.
 
-**D-12 settled the cascade, and it settled it about a different case.** Its reasoning is
-FR-15's permissioned document deletion: "with the chunk gone the citation has nothing to
-cite", and a citation row must not block deleting a document. That is true where the
-material is genuinely gone. **Neither path here deletes material.** A reprocess re-extracts
-and re-chunks the same stored original; a re-index re-embeds the same
-``ExtractedContent.extracted_text``. The passage the answer was drawn from still exists,
-word for word — it simply has a new identifier, and the citation that pointed at the old one
-was destroyed rather than moved. CLAUDE.md section 4 mandates a full re-index on any provider
-or embedding-model change, so this is the documented happy path and not an edge case.
+**The fix, and the notification it produced.** Retrieval migration 0003 makes the foreign key
+``on_delete=SET_NULL`` and adds ``chunk_uuid``, which ``record_query`` writes with the same
+UUID as ``chunk_id`` (D-67). Before this file was rewritten, its old text was run against the
+changed code, and every one of its tests failed at the citation count, ``assert 1 == 0``: the
+row it expected to be gone was still there. The tests below assert what now happens instead.
+The citation rows survive with ``chunk`` NULL and ``chunk_uuid`` equal to the identifier they
+cited. The ``QueryLog`` row is untouched, column for column. So an answer can still be traced
+to the identifiers of the material that produced it after that material's chunks are gone.
 
-**NO SCHEMA CHANGE IS BEING MADE BEFORE M6, and none is proposed here.** This file asserts
-what the system actually does, so that it is asserted rather than assumed. The model-level
-test ``apps/retrieval/tests/test_models.py::test_citation_cascades_when_its_chunk_is_deleted``
-has asserted the same cascade since Stage 1 **as desirable behaviour** — which is precisely
-why nobody connected it to FR-12's traceability clause. These tests are written at the FR
-level, through the API, so the finding is recorded where the requirement lives. They are
-modelled on ``apps/core/tests/test_visibility_cascade.py::
-test_bulk_create_upsert_is_a_known_hole_and_does_not_cascade``: a test whose name says the
-behaviour is known, asserting the current behaviour deliberately, so that a later fix fails
-here and that failure is the notification.
+**D-12's reasoning about FR-15 still stands for the material, and it no longer reaches the
+record.** "With the chunk gone the citation has nothing to cite" is true of what a reader may
+be shown, and the reopened-turn serializer reads a NULL-chunk row as if it had been deleted
+(``apps/api/tests/test_null_chunk_citations_on_a_reopened_turn.py``). It is not true of the
+audit trail, which is what FR-12's traceability clause is about.
 
-**These assertions are about the DESTRUCTION OF THE ROWS and not about how a thread
-renders.** The rendering is separated in Stage 4 item 1c — a turn whose citation rows are
-gone stops claiming the question could not be answered — and this file must keep passing
-across that change, so nothing here reads a serialized turn.
+**These assertions are about the ROWS and not about how a thread renders.** Rendering is
+asserted in ``test_provenance_removed_turn.py`` and
+``test_null_chunk_citations_on_a_reopened_turn.py``, so nothing here reads a serialized turn.
 
 **What this file does not cover.**
 
-- **FR-15's document deletion**, where the material really is gone and D-12's reasoning
-  applies unchanged. That path is Stage 5 and is not the finding.
-- **A meeting.** ``reindex`` rebuilds meeting chunks the same way and the cascade is the same
-  column, so the same loss follows; only the document paths are exercised here.
+- **FR-15's document deletion.** It is not built (Stage 5 item 2). It deletes chunks through
+  the same foreign key, so the same SET_NULL applies; item 2 tests its own path.
+- **A meeting.** ``reindex`` rebuilds meeting chunks the same way, through the same foreign
+  key, so the same survival follows; only the document paths are exercised here.
 - **An ``Indexed`` document reached through the reprocess route.** The view answers 409 for
   that status, so the reachable route to the endpoint is a document that did not fully index
   — "Partially indexed" below. ``manage.py reindex`` has no such guard and reaches an
   ``Indexed`` document, which is the second test.
-- **Whether anything should be done about it.** Not a decision this file makes.
+- **Resolving ``chunk_uuid`` to the new chunk.** Nothing does, and nothing should: a re-index
+  is not guaranteed to reproduce the same chunk boundaries, so "the chunk that replaced it"
+  is not a fact the record holds. The identifier traces the answer to what it cited, at the
+  time it cited it.
 """
 
 from collections import Counter
@@ -160,6 +159,11 @@ def chunk_ids_for(doc_id):
     )
 
 
+def columns_of(row):
+    """Every column of a row, by attribute name, so "untouched" means every one of them."""
+    return {field.attname: getattr(row, field.attname) for field in type(row)._meta.fields}
+
+
 def upload_and_ask(client, monkeypatch, *, fail_a_chunk):
     """An answered turn, cited, over a document uploaded through the API.
 
@@ -185,32 +189,47 @@ def upload_and_ask(client, monkeypatch, *, fail_a_chunk):
 
     turn = QueryLog.objects.get()
     assert turn.answered is True
-    assert AnswerCitation.objects.filter(query=turn).count() == 1
-    # The traceability record as written: every identifier it names exists.
+    [citation] = AnswerCitation.objects.filter(query=turn)
+    # The traceability record as written: every identifier it names exists, and the
+    # citation names its chunk in both columns, with one value (record_query, D-67).
     assert turn.retrieved_chunk_ids
     assert ContentChunk.objects.filter(id__in=turn.retrieved_chunk_ids).count() == len(
         turn.retrieved_chunk_ids
     )
-    return doc_id, turn
+    assert citation.chunk_id is not None
+    assert citation.chunk_uuid == citation.chunk_id
+    assert str(citation.chunk_id) == statement["chunk_id"]
+    return doc_id, turn, citation
 
 
-def assert_the_record_survives_without_its_citations(turn, *, doc_id, chunk_ids_before):
-    """The finding, asserted as the behaviour it currently is.
+def assert_the_citations_survive_their_chunks(turn, citation, *, doc_id, chunk_ids_before):
+    """What D-67 changes, asserted on the rows.
 
-    Four properties, and the pairing is the point: the citations are gone, the log row is
-    not, the log row still says it was answered, and the identifiers it kept name nothing.
-    The material itself is still here under new identifiers, which is what separates this
-    from FR-15's deletion and from D-12's reasoning.
+    The citation row is the same row: same primary key, same statement, same position. Its
+    ``chunk_id`` is NULL because the chunk is gone, and its ``chunk_uuid`` is still the
+    identifier it cited, which is also one of the identifiers on the ``QueryLog`` row. The
+    ``QueryLog`` row is identical in every column. The material itself is still in the
+    corpus under new identifiers, which is what separates a reprocess or a re-index from
+    FR-15's deletion.
     """
-    assert AnswerCitation.objects.filter(query=turn).count() == 0
+    [after] = AnswerCitation.objects.filter(query=turn)
+    assert after.pk == citation.pk
+    assert after.chunk_id is None  # the chunk was deleted, and the foreign key says so
+    assert after.chunk_uuid == citation.chunk_id  # the identifier it cited is kept
+    assert after.statement_text == citation.statement_text
+    assert after.position == citation.position
 
-    surviving = QueryLog.objects.get(pk=turn.pk)
-    assert surviving.answered is True  # still claims an answer
-    assert surviving.answer_text == turn.answer_text  # still carries the prose
-    assert surviving.retrieved_chunk_ids == turn.retrieved_chunk_ids  # unchanged, and dangling
+    # The QueryLog row is untouched, every column of it.
+    assert columns_of(QueryLog.objects.get(pk=turn.pk)) == columns_of(turn)
 
-    # "so that any answer can later be traced to the material that produced it": it cannot.
-    assert ContentChunk.objects.filter(id__in=surviving.retrieved_chunk_ids).count() == 0
+    # "so that any answer can later be traced to the material that produced it": the
+    # citation and the log row still agree about which identifier that was, and the
+    # identifier is one the source carried before the operation.
+    assert after.chunk_uuid in turn.retrieved_chunk_ids
+    assert after.chunk_uuid in chunk_ids_before
+    # It names a chunk that no longer exists, which is why chunk_id is NULL: the record
+    # traces to an identifier, and the identifier resolves to nothing.
+    assert not ContentChunk.objects.filter(id=after.chunk_uuid).exists()
 
     # And the material was never deleted. New rows, new identifiers, same passages.
     chunk_ids_after = chunk_ids_for(doc_id)
@@ -219,7 +238,7 @@ def assert_the_record_survives_without_its_citations(turn, *, doc_id, chunk_ids_
     assert Document.objects.filter(pk=doc_id).exists()
 
 
-def test_a_reprocess_destroys_the_citations_of_every_answer_drawn_from_the_document(
+def test_a_reprocess_keeps_the_citations_of_every_answer_drawn_from_the_document(
     session_client, monkeypatch
 ):
     """``POST /api/documents/{id}/reprocess``, from an Employee session and an Administrator
@@ -227,11 +246,11 @@ def test_a_reprocess_destroys_the_citations_of_every_answer_drawn_from_the_docum
 
     The sequence is one a user performs on purpose: a document did not fully index, somebody
     asked a question it answered, and somebody then pressed FR-08's "Please try again". The
-    retry succeeds, which is D-32's real recovery case, and it takes the provenance of the
-    earlier answer with it.
+    retry succeeds, which is D-32's real recovery case. Before D-67 it took the provenance of
+    the earlier answer with it; now the provenance stays.
     """
     client = session_client.client
-    doc_id, turn = upload_and_ask(client, monkeypatch, fail_a_chunk=True)
+    doc_id, turn, citation = upload_and_ask(client, monkeypatch, fail_a_chunk=True)
     chunk_ids_before = chunk_ids_for(doc_id)
 
     # The provider has recovered, so this reprocess indexes every chunk.
@@ -240,28 +259,27 @@ def test_a_reprocess_destroys_the_citations_of_every_answer_drawn_from_the_docum
 
     assert reprocessed.status_code == 201
     assert reprocessed.data["status"] == DOCUMENT_INDEXED
-    assert_the_record_survives_without_its_citations(
-        turn, doc_id=doc_id, chunk_ids_before=chunk_ids_before
+    assert_the_citations_survive_their_chunks(
+        turn, citation, doc_id=doc_id, chunk_ids_before=chunk_ids_before
     )
 
 
-def test_a_re_index_destroys_them_too_and_it_is_the_documented_happy_path(
+def test_a_re_index_keeps_them_too_and_it_is_the_documented_happy_path(
     employee_client, monkeypatch
 ):
     """``manage.py reindex`` — CLAUDE.md section 4: switching provider or embedding model is
     a full re-index event, and this command is how that switch is a supported operation.
 
-    So the loss is not reached only by a retry on a document that failed. An entirely healthy
-    ``Indexed`` document, re-indexed exactly as the documentation instructs, loses the
-    provenance of every answer ever drawn from it. The reprocess route refuses an ``Indexed``
-    document; this one does not, which is why both are asserted.
+    An entirely healthy ``Indexed`` document, re-indexed exactly as the documentation
+    instructs, used to lose the provenance of every answer ever drawn from it. The reprocess
+    route refuses an ``Indexed`` document; this one does not, which is why both are asserted.
     """
-    doc_id, turn = upload_and_ask(employee_client, monkeypatch, fail_a_chunk=False)
+    doc_id, turn, citation = upload_and_ask(employee_client, monkeypatch, fail_a_chunk=False)
     chunk_ids_before = chunk_ids_for(doc_id)
 
     call_command("reindex")
 
     assert Document.objects.get(pk=doc_id).status == DOCUMENT_INDEXED
-    assert_the_record_survives_without_its_citations(
-        turn, doc_id=doc_id, chunk_ids_before=chunk_ids_before
+    assert_the_citations_survive_their_chunks(
+        turn, citation, doc_id=doc_id, chunk_ids_before=chunk_ids_before
     )

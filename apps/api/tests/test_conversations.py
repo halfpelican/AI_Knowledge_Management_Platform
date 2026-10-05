@@ -247,7 +247,8 @@ def build_thread(user, chunk):
     )
     for position, text in enumerate(STATEMENT_TEXTS, start=1):
         AnswerCitation.objects.create(
-            query=answered, chunk=chunk, statement_text=text, position=position
+            query=answered, chunk=chunk, chunk_uuid=chunk.id, statement_text=text,
+            position=position,
         )
     unanswered = QueryLog.objects.create(
         user=user,

@@ -62,7 +62,10 @@ SCHEMA_V1 = {
     ),
     "answer_citations": (
         ("citation_id",),
-        {"citation_id", "query_id", "chunk_id", "statement_text", "position"},
+        {"citation_id", "query_id", "chunk_id", "statement_text", "position",
+         # Post-v1, Stage 5 item 1a (D-67): chunk_id became nullable SET NULL, and this
+         # keeps the cited identifier when the chunk is deleted (docs/schema-v1.md §1).
+         "chunk_uuid"},
     ),
     "tags": (("tag_id",), {"tag_id", "tag_name", "dimension", "active"}),
     "content_tags": (
@@ -193,6 +196,10 @@ SECTION_5_PLAN = [
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),
+    # Stage 5 item 1a (D-67): AnswerCitation.chunk to SET NULL, and chunk_uuid backfilled.
+    # Placed where the executor plans it, immediately after retrieval 0002, the rule D-51
+    # records for documents 0007.
+    ("retrieval", "0003_answercitation_chunk_set_null"),
 ]
 
 

@@ -1,27 +1,31 @@
-"""A stored turn whose citation rows were destroyed stops claiming the question is
+"""A stored turn whose cited chunks were deleted stops claiming the question is
 unanswerable — and a RE-SCOPED turn still says nothing at all (Stage 4 item 1c).
 
 ``ConversationTurnSerializer`` rendered three states as two. The two that must stay
 indistinguishable still are; the third is separated here:
 
 1. ``answered`` False — never answered. The silent no-answer state. **Unchanged.**
-2. ``answered`` True, citation **rows exist**, none survives the reader's scope — re-scoped.
-   **Byte-for-byte state 1**, which is ``apps/api/tests/test_fr11_thread_scope.py``'s whole
-   subject and invariant 1's requirement: a notice that something was taken out is itself a
-   disclosure that material exists which this role may not read.
-3. ``answered`` True and **no citation rows at all** — ``AnswerCitation.chunk`` is
-   ``on_delete=CASCADE`` (D-12) and both ``reprocess_document`` and ``manage.py reindex``
-   delete a source's chunks and write new ones with fresh UUIDs, so the citations of the old
-   ones are destroyed while the passage still exists, word for word, under a new identifier.
-   ``apps/api/tests/test_fr12_traceability_lost_on_reprocess.py`` pins that loss at the row
-   level; this file is about what the reader is then told.
+2. ``answered`` True, a citation row **still points at an existing chunk**, and none survives
+   the reader's scope — re-scoped. **Byte-for-byte state 1**, which is
+   ``apps/api/tests/test_fr11_thread_scope.py``'s whole subject and invariant 1's requirement:
+   a notice that something was taken out is itself a disclosure that material exists which
+   this role may not read.
+3. ``answered`` True and **no citation row points at a chunk that still exists** — both
+   ``reprocess_document`` and ``manage.py reindex`` delete a source's chunks and write new
+   ones with fresh UUIDs, while the passage still exists, word for word, under a new
+   identifier. Until D-67 (Stage 5 item 1a) ``AnswerCitation.chunk`` was
+   ``on_delete=CASCADE`` (D-12) and the citation rows were destroyed with the chunks; since
+   D-67 it is SET_NULL, the rows survive with ``chunk_id`` NULL, and the serializer reads such
+   a row exactly as a destroyed one. ``apps/api/tests/test_fr12_traceability_survives_reprocess.py``
+   asserts what happens to the rows; this file is about what the reader is then told.
 
 **Why separating 3 is safe, which is the argument the whole file rests on.** State 3 says
-nothing whatever about permissions. The discriminator is whether the citation ROWS exist, not
-whether they survived scoping: a maintenance operation deleted a record, the material is
-still there, and this reader may well be entitled to every word of it. Saying "this answer's
-sources are no longer on record" therefore discloses nothing about restricted content, where
-saying a turn was re-scoped would disclose exactly that.
+nothing whatever about permissions. The discriminator is whether any citation row still points
+at an existing chunk, read before any scoping, not whether one survived scoping: an operation
+deleted the chunks the record pointed at, and on a re-index the material is still there and
+this reader may well be entitled to every word of it. Saying "this answer's sources are no
+longer on record" therefore discloses nothing about restricted content, where saying a turn
+was re-scoped would disclose exactly that.
 
 **What state 3 must not say, and what it must not stay silent about.** No statements —
 invariant 6 stands, and a statement without its citation is what it forbids. But not
@@ -32,16 +36,19 @@ lie, and a user who acts on it stops asking a question the system can answer.
 
 **The pairing test is what holds the two apart.** States 2 and 3 are asserted in one body, on
 one thread, read by one reader — because either half alone would still pass if a refactor
-simplified ``not has_citation_rows`` into "no surviving citations", which is the simplification
-that collapses 2 into 3 and reopens the invariant-1 disclosure.
+simplified ``not has_live_citation_rows`` into "no surviving citations", which is the
+simplification that collapses 2 into 3 and reopens the invariant-1 disclosure.
 
 **How each state is reached here, and why not always by the shipped route.** The
 end-to-end test drives ``manage.py reindex``, the real path CLAUDE.md section 4 mandates on
 any provider change — the cheaper of the two, since it rebuilds from
-``ExtractedContent.extracted_text`` and needs no uploaded file. The pairing test cannot use
-it: a re-index rebuilds EVERY source, so it would destroy both turns' citations and leave no
-state 2 to compare against. There, the rows are deleted directly, which is precisely what the
-database cascade does to them.
+``ExtractedContent.extracted_text`` and needs no uploaded file. Since D-67 it leaves the
+citation row in place with ``chunk_id`` NULL. The pairing test cannot use it: a re-index
+rebuilds EVERY source, so it would take both turns' chunks and leave no state 2 to compare
+against. There, the rows are deleted directly, which is what the cascade did before D-67. A
+turn with no rows at all still renders state 3 after D-67, which this keeps asserted;
+``test_null_chunk_citations_on_a_reopened_turn.py`` makes the same pairing with the chunk
+deleted and the row left NULL, the way SET_NULL now produces it.
 
 **What this file does not cover.**
 
@@ -51,7 +58,8 @@ database cascade does to them.
 - **The live ``POST /api/ask`` reply**, which cannot be in state 3: its citation rows are
   written in the same transaction as the answer (``apps/retrieval/query_log.py``), so there
   is no window in which the reply could be rendered without them.
-- **Whether the rows should have been destroyed at all.** No schema change is made here.
+- **Whether the rows should be destroyed at all.** D-67 decided they should not;
+  ``test_fr12_traceability_survives_reprocess.py`` asserts that they are not.
 """
 
 import pytest
@@ -154,7 +162,7 @@ def log_turn(user, conversation, *, question, citations, answered=True):
     )
     for position, (text, chunk) in enumerate(citations, start=1):
         AnswerCitation.objects.create(
-            query=turn, chunk=chunk, statement_text=text, position=position
+            query=turn, chunk=chunk, chunk_uuid=chunk.id, statement_text=text, position=position
         )
     return turn
 
@@ -174,12 +182,14 @@ def order_after(earlier, later):
 # --- State 3, reached by the path CLAUDE.md section 4 mandates ------------------------------
 
 
-def test_a_turn_whose_citation_rows_were_destroyed_says_so_instead_of_no_answer(
+def test_a_turn_whose_cited_chunks_were_deleted_says_so_instead_of_no_answer(
     session_client,
 ):
     """``manage.py reindex``, then reopen the thread — from an Employee session and an
     Administrator session, because either role's threads are affected by one operator's
-    re-index and neither is told anything the other is not.
+    re-index and neither is told anything the other is not. (Named
+    ``..._whose_citation_rows_were_destroyed_...`` until D-67: the re-index used to delete the
+    row, and now leaves it with ``chunk_id`` NULL. The rendering asserted is the same.)
 
     The reader is told the answer's sources are no longer on record. They are NOT told the
     question cannot be answered from the knowledge base, which is what the turn said before
@@ -322,14 +332,16 @@ def test_a_re_scoped_turn_and_a_provenance_removed_turn_are_told_apart_in_one_th
 
     Turn one cites a chunk that STILL EXISTS and is now out of the reader's scope; turn two's
     citation rows are GONE. Either assertion alone would still pass under the refactor worth
-    fearing — ``not has_citation_rows`` simplified to "no surviving citations" — which would
-    label turn one as provenance-removed and tell a demoted reader that something had been
-    taken out of their own thread. Both in one test, so the collapse fails.
+    fearing — ``not has_live_citation_rows`` simplified to "no surviving citations" — which
+    would label turn one as provenance-removed and tell a demoted reader that something had
+    been taken out of their own thread. Both in one test, so the collapse fails.
 
     The rows are deleted here rather than re-indexed away, because a re-index rebuilds every
     source and would leave no turn in state 2 to compare against. Deleting them is what the
-    ``on_delete=CASCADE`` does; ``test_fr12_traceability_lost_on_reprocess.py`` is where the
-    two shipped routes that trigger it are exercised.
+    ``on_delete=CASCADE`` did before D-67; since D-67 a deleted chunk leaves the row with
+    ``chunk_id`` NULL instead, and ``test_null_chunk_citations_on_a_reopened_turn.py`` makes
+    this same pairing that way. ``test_fr12_traceability_survives_reprocess.py`` is where the
+    two shipped routes that delete chunks are exercised.
     """
     _, restricted_chunk = make_indexed_document(
         administrator,
@@ -354,7 +366,8 @@ def test_a_re_scoped_turn_and_a_provenance_removed_turn_are_told_apart_in_one_th
         citations=[(STATEMENT, shared_chunk)],
     )
     order_after(re_scoped, destroyed)
-    # Exactly what the database cascade does when the chunk is deleted and rewritten.
+    # What the cascade did, before D-67, when the chunk was deleted and rewritten. A turn
+    # with no rows at all must still render state 3.
     AnswerCitation.objects.filter(query=destroyed).delete()
     get_user_model().objects.filter(pk=administrator.pk).update(role=employee_role)
 
