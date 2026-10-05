@@ -1,0 +1,42 @@
+Priya: Good morning everyone. Let's go round the table, starting with the infrastructure team.
+
+Marcus: The database migration is on track. The main risk is still the Opal Junction cutover, which we have scheduled for the last weekend of the month. We need a full rollback plan agreed by Wednesday.
+
+Priya: Agreed. Can you circulate the rollback plan to the change advisory board before then?
+
+Marcus: Yes, I'll send it by end of day tomorrow. We also need a named person on call for the whole weekend.
+
+Lena: I can take Saturday. I would like someone else to cover Sunday because I have a family commitment.
+
+Tomas: I'll take Sunday. I'd like to run a dry run on Thursday night so I know the steps.
+
+Priya: Good. Thursday night dry run, Tomas to lead, Lena to observe. Now, support tickets. Lena, how are we tracking?
+
+Lena: We closed two hundred and ten tickets last week and opened one hundred and ninety. The backlog is falling. The biggest category is password resets.
+
+Marcus: That's a good sign. We could reduce those further by promoting the self-service page.
+
+Priya: Let's add that to the intranet news this week. Lena, can you draft a short notice?
+
+Lena: Yes, I'll have a draft to you tomorrow.
+
+Tomas: One more item. The monitoring alerts on the file servers have been noisy. I'd like to tune the thresholds so we only get paged for real problems.
+
+Priya: Approved. Please document what you change and share it with the team so nobody is surprised.
+
+Marcus: Also, a reminder that the quarterly access review is due at the end of the month. Managers need to confirm who still needs what.
+
+Priya: Thanks Marcus. Anything else? No? Then let's finish there. Next standup is same time next week.
+
+Priya: Before we close, does anyone have a blocker I can help remove?
+
+Tomas: I need access to the staging environment logs. My request has been pending for three days.
+
+Priya: I'll chase that today and copy you in.
+
+Lena: Also a new starter joins on Monday and needs a laptop and account.
+
+Marcus: The laptop is imaged and the account will be created on Sunday night.
+
+Priya: Perfect. Thanks all, see you next week.
+
