@@ -147,3 +147,72 @@ are in `frontend/tests/dashboard.test.jsx`.
   affected. Not changed here.
 - **`/admin` carries no role guard.** An Employee who types it sees their own scoped dashboard
   (D-70's clarification).
+
+---
+
+## FR-15 — Document Repository and Filtered Browsing (MUST)
+
+The clauses, quoted from the proposal (`proposal.txt`, FR-15). The download link is Stage 5
+item 2a and is enumerated here because the clause is FR-15's; item 2a ticks it.
+
+### Before item 2 — 6 October 2026, at `c98735d`
+
+#### Front-End
+
+| # | Clause | State | What exists |
+|---|---|---|---|
+| 1 | A list view of documents showing title, type, uploader, upload date, and status | ⚠️ | `DocumentRepository.jsx` lists title, type, status, upload date, department and visible-to from `GET /api/documents`. The response carries `uploaded_by`, but **the table does not show the uploader** |
+| 2 | …with sorting | ❌ | The order is fixed: newest first |
+| 3 | …and text filtering | ❌ | — |
+| 4 | A browse mode allowing navigation by Department, Project, Process or Topic without composing a query | ❌ | `Tag` and `ContentTag` exist (documents 0003, with dimensions `Department`, `Project`, `Process`, `Topic`), but **the development database holds no tags**: nothing writes them until FR-10 (Objective 05, 13 November). `Documents.department` is a column (D-09) |
+| 5 | Filters combine | ❌ | — |
+| 6 | …with item counts shown against each available value | ❌ | — |
+| 7 | Selecting a document opens a detail view showing its metadata | ⚠️ | `DocumentDetail.jsx` at `/documents/:docId` (D-46) shows type, status, uploaded, department, visible to and uploaded by. The list's titles do not link to it |
+| 8 | …extracted content | ❌ | Not returned. D-63 restores it, read from `ExtractedContent.extracted_text` |
+| 9 | …and a download link | ❌ | No download route exists. Item 2a |
+| 10 | Deletion requires confirmation | ❌ | No deletion |
+| 11 | …and is available only to users holding the appropriate permission | ❌ | `manage_documents` is not seeded. Settled on 5 October: accounts 0005, Administrator only. D-66 puts every Employee-only document in an Administrator's scope, so none is undeletable |
+
+#### Server-End
+
+| # | Clause | State | What exists |
+|---|---|---|---|
+| 12 | Handles retrieval, filtering, and deletion of document records | ⚠️ | Retrieval only: the list and detail routes |
+| 13 | Executes filtered queries against ContentTags returning matching items with counts per remaining filter value | ❌ | — |
+| 14 | Validation: the requesting user must hold manage_documents to delete | ❌ | — |
+| 15 | Validation: a document ID must resolve to an existing record | ✅ | `GET /api/documents/{id}` answers 404 for an unknown id and for one outside the caller's scope, by one query (D-46) |
+| 16 | The list is filtered to documents the user's role permits, by the same rule as FR-11 | ✅ | `scoped_documents()`, item 1 and D-66 |
+| 17 | Counts are computed after that filter, so a count never discloses inaccessible content | ❌ | No counts exist. D-65 governs how filter values are read: shape only, never looked up |
+| 18 | Deleting a document also removes its extracted content, embeddings and tag links, so that deleted material cannot subsequently be surfaced through search | ❌ | `ExtractedContent` cascades by FK. **`ContentChunk` and `ContentTag` have no FK (D-07), so `document.delete()` alone leaves the chunks embedded, stamped and retrievable.** `AnswerCitation.chunk` is `SET_NULL` since D-67, so deleting chunks no longer destroys citations |
+| 19 | Responses: 200 OK with the document list or detail | ✅ | Both routes |
+| 20 | 204 No Content for a filter combination with no accessible matches | ❌ | No filters exist |
+| 21 | 403 Forbidden without permission | ❌ | No deletion |
+| 22 | 404 Not Found for an unknown document | ✅ | Clause 15 |
+
+#### Database
+
+| Clause | State | What exists |
+|---|---|---|
+| Documents (Read, Delete) | ⚠️ | Read only |
+| ExtractedContent, ContentChunks, ContentTags (Delete, cascade) | ❌ | Clause 18 |
+| Tags (Read) | ❌ | Nothing reads them |
+| Meetings (Read) | ❓ | Named in the CRUD line with no clause that uses it: FR-15's views and filters are about documents. Recorded rather than guessed at |
+
+#### Readings the brief settles
+
+- **The values a filter offers, and their counts, come from the documents the caller may see,
+  never from the `Tag` table.** A tag or department used only on restricted documents would
+  otherwise disclose them by being offered (invariant 1).
+- **Delete is scoped-first.** Resolve through `scoped_documents()` (404 outside scope, D-46),
+  then check `manage_documents` (403). The other order would tell a caller whether a document
+  they cannot see exists.
+- **Deletion removes the chunks (by `source_type` and `source_id`), the `ContentTag` rows and
+  the document in one transaction (invariant 9).** The stored file is removed in
+  `transaction.on_commit`, so a rolled-back delete keeps it.
+- **Extracted content is read from `ExtractedContent` through the same scoped lookup as the
+  detail view, never reassembled from chunks, and rendered as text, never HTML.** A document
+  with no `ExtractedContent` row shows a stated empty state, keyed on the row existing.
+- **Filter state lives in the URL query string**, so Back from a detail view lands on the same
+  filters.
+- **Browse needs tags on the demonstration corpus, seeded with `applied_by="user"`**, and that is
+  recorded as a decision.
