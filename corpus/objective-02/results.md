@@ -5,6 +5,13 @@ Run started 2026-10-06T09:49:46+11:00 against `http://127.0.0.1:8000`, by `scrip
 which includes extraction, chunking and embedding on the NPU. The chunk count is the one
 check made outside the API: a read-only ORM count after the run.
 
+`manifest.json` in this folder is the only manifest the script reads. The team's
+`Objective02_Manifest.xlsx` was the source it was transcribed from, and is not read.
+
+**The search columns were re-run on 2026-10-06T10:06:35+11:00** with `--search-only`, against the
+manifest's current phrases, after D-71 made keyword search collapse whitespace. Every
+other column is from the ingestion run above. Nothing was uploaded a second time.
+
 | ID | Kind | Scope | HTTP | Status | Seconds | Pages | Chunks | Admin finds | Employee finds | Result |
 |---|---|---|---|---|---|---|---|---|---|---|
 | D01 | document | Employee, Administrator | 201 | Indexed | 1.1 | 1 | 1 | yes | yes | PASS |

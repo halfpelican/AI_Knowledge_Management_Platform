@@ -379,12 +379,16 @@ that returns nothing twice a day is a knowledge gap, which is FR-19's evidence.
 screen cannot disagree. A `400` writes no row at all: a query too short to run was not a
 search, and counting it would put noise into that evidence.
 
-**The term is stored and matched exactly as typed**, with no stripping and no sanitiser.
-It reaches the database only as a bound parameter of an ORM lookup, and `%` or `_` in a
-term match those characters rather than acting as wildcards. One consequence stated
-rather than hidden: a two-character query of whitespace is long enough and matches
-almost everything the caller may already list — odd-looking, but every row it can reach
-is in scope.
+**The term is stored exactly as typed, and matched with whitespace collapsed (D-71).**
+There is no sanitiser. The term reaches the database only as a bound parameter of an ORM
+lookup, and `%` or `_` in a term match those characters rather than acting as wildcards.
+The two-character minimum is measured on the term as typed. For matching, every run of
+whitespace (spaces, tabs, line breaks) is collapsed to one space in the term and in the
+stored text and title alike. So `escalation ladder` finds a passage that wraps as
+`escalation⏎ladder`, and each snippet is shown with its whitespace collapsed. One
+consequence, stated rather than hidden: a two-character query of whitespace is long enough
+and lists everything the caller may already list. That is odd-looking, but every row it can
+reach is in scope.
 
 ### FR-12 — the answer path, which is also FR-13's turn
 

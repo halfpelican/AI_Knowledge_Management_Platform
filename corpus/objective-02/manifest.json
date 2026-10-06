@@ -1,6 +1,6 @@
 {
   "objective": "Objective 02 — ingestion verification (proposal section 2, due 2 October)",
-  "source": "Titles, files, meeting dates, phrases and expected statuses are transcribed from the team's Objective02_Manifest.xlsx, which sat untracked beside the corpus when this file was built (6 October 2026) and is not in the repository. visible_to_roles, department and uploader are added here, and D06's phrase is shortened (see its phrase_note). This file is the one the script reads.",
+  "source": "Titles, files, meeting dates, phrases and expected statuses are transcribed from the team's Objective02_Manifest.xlsx, which sat untracked beside the corpus when this file was built (6 October 2026) and is not in the repository. visible_to_roles, department and uploader are added here. This file is the only manifest the script reads.",
   "criteria": [
     "Every valid item reaches Indexed and returns its own content when searched for its phrase.",
     "Every invalid item is refused with its documented error rather than partly ingested.",
@@ -150,9 +150,9 @@
       ],
       "department": "Operations",
       "uploader": "Employee",
-      "phrase": "Willow Bridge escalation",
+      "phrase": "Willow Bridge escalation ladder",
       "rule": "Valid PDF upload (FR-08)",
-      "phrase_note": "The team manifest's phrase \"Willow Bridge escalation ladder\" spans a line break in the extracted text, and keyword search does not match across one.",
+      "phrase_note": "The team manifest's phrase, restored after D-71. It wraps a line in the PDF's extracted text (\"escalation\nladder\"); until D-71 keyword search could not match across a line break, and the first run searched for \"Willow Bridge escalation\" instead.",
       "expected": {
         "http_status": 201,
         "document_status": "Indexed",
