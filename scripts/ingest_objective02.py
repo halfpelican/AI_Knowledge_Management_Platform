@@ -34,7 +34,14 @@ Usage, with the server and FLM running (``manage.py runserver`` and ``flm serve`
 
 It refuses to run if any manifest title is already in the repository or the meetings list, so
 a second run cannot mix duplicates and 409s into the evidence. Results are written beside the
-manifest, as ``results.json`` and ``results.md``.
+manifest, as ``results.json`` and ``results.md``. ``manifest.json`` is the only manifest this
+script reads; a spreadsheet beside it is not consulted.
+
+``--search-only`` re-runs the phrase searches of an earlier run, without uploading anything:
+re-uploading would only be refused 409 for every document. It reads the identifiers the earlier
+run recorded in ``results.json``, searches each valid item's CURRENT manifest phrase from both
+sessions, re-judges every item, and rewrites the results. Every ingestion outcome (status, time,
+pages, chunks) is kept from the earlier run, and the results say which run each column comes from.
 """
 
 from __future__ import annotations
@@ -300,10 +307,12 @@ def judge(item, outcome):
     return misses
 
 
-def write_results(manifest, outcomes, started_at, base_url):
+def write_results(manifest, outcomes, started_at, base_url, searches_rerun=None):
     results = {
         "run_started": started_at,
+        "searches_rerun": searches_rerun,
         "base_url": base_url,
+        "manifest": "corpus/objective-02/manifest.json — the only manifest the script reads",
         "criteria": manifest["criteria"],
         "items": outcomes,
         "missed": [o["id"] for o in outcomes if o["misses"]],
@@ -319,6 +328,18 @@ def write_results(manifest, outcomes, started_at, base_url):
         "which includes extraction, chunking and embedding on the NPU. The chunk count is the one",
         "check made outside the API: a read-only ORM count after the run.",
         "",
+        "`manifest.json` in this folder is the only manifest the script reads. The team's",
+        "`Objective02_Manifest.xlsx` was the source it was transcribed from, and is not read.",
+        "",
+    ]
+    if searches_rerun:
+        lines += [
+            f"**The search columns were re-run on {searches_rerun}** with `--search-only`, against the",
+            "manifest's current phrases, after D-71 made keyword search collapse whitespace. Every",
+            "other column is from the ingestion run above. Nothing was uploaded a second time.",
+            "",
+        ]
+    lines += [
         "| ID | Kind | Scope | HTTP | Status | Seconds | Pages | Chunks | Admin finds | Employee finds | Result |",
         "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
@@ -364,6 +385,8 @@ def main():
     parser.add_argument("--base-url", default=os.environ.get("KMP_BASE_URL", "http://127.0.0.1:8000"))
     parser.add_argument("--max-upload-bytes", type=int, default=50 * 1024 * 1024,
                         help="MAX_UPLOAD_BYTES (apps/core/constants.py); the generated I02 exceeds it")
+    parser.add_argument("--search-only", action="store_true",
+                        help="re-run the phrase searches of the run in results.json; upload nothing")
     args = parser.parse_args()
 
     credentials = {
@@ -380,6 +403,9 @@ def main():
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     items = manifest["items"]
+
+    if args.search_only:
+        return search_only(manifest, items, sessions, args.base_url)
 
     # Refuse to mix a second run into the evidence.
     admin = sessions["Administrator"]
@@ -431,6 +457,31 @@ def main():
     missed, slow = write_results(manifest, outcomes, started_at, args.base_url)
     print(f"\nMissed: {[o['id'] for o in missed] or 'none'}; over the bound: {slow or 'none'}")
     print(f"Wrote {CORPUS / 'results.json'} and {CORPUS / 'results.md'}")
+    return 1 if missed or slow else 0
+
+
+def search_only(manifest, items, sessions, base_url):
+    previous = json.loads((CORPUS / "results.json").read_text(encoding="utf-8"))
+    by_id = {outcome["id"]: outcome for outcome in previous["items"]}
+    missing = [item["id"] for item in items if item["id"] not in by_id]
+    if missing:
+        sys.exit(f"results.json has no outcome for {missing}; run the full ingestion first.")
+    rerun_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    outcomes = []
+    for item in items:
+        outcome = dict(by_id[item["id"]])
+        outcome["search"] = {}
+        if item.get("phrase") and outcome.get("source_id"):
+            for role, session in sessions.items():
+                outcome["search"][role] = search_finds(
+                    session, item["phrase"], outcome["source_id"], item["title"]
+                )
+        outcome["misses"] = judge(item, outcome)
+        outcomes.append(outcome)
+        print(f"{item['id']}: {item.get('phrase')!r} -> "
+              f"{ {role: s.get('found') for role, s in outcome['search'].items()} }", flush=True)
+    missed, slow = write_results(manifest, outcomes, previous["run_started"], base_url, rerun_at)
+    print(f"\nMissed: {[o['id'] for o in missed] or 'none'}; over the bound: {slow or 'none'}")
     return 1 if missed or slow else 0
 
 

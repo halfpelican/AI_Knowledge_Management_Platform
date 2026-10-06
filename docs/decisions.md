@@ -127,6 +127,7 @@ Rules for this file:
 | D-65 | Every query parameter passes a DRF serializer: ChoiceField for fixed vocabularies, shape-only for department and tag, an inclusive date range; the 400 is a convention | Settled by the user · settles D-54 | 2026-10-05 |
 | D-66 | Administrator generalises Employee in scope as well as in permissions: scope is overlap with EFFECTIVE_ROLES, in the item 1 helpers only | Settled by the user | 2026-10-05 |
 | D-67 | `AnswerCitation.chunk` is SET_NULL and `chunk_uuid` keeps the cited identifier; no passage text is stored, and a NULL-chunk citation is removed for every reader | Settled by the user, in the Stage 5 brief, item 1a · supersedes D-12 for this column and D-48's "not before M6" · closes D-61's gap 5 | 2026-10-05 |
+| D-71 | FR-12 keyword search collapses whitespace on both sides before matching, so a phrase that wraps a line is found | Settled by the user | 2026-10-06 |
 
 ---
 
@@ -3731,3 +3732,49 @@ name, not by NULL happening to be absent from the permitted set.
   than with the "nullable identifier snapshot" its qualification described.
 - Item 2's FR-15 deletion can delete chunks without destroying the FR-12 record. The brief put
   this item before item 2 for that reason.
+
+## D-71 · FR-12 keyword search collapses whitespace on both sides before matching
+
+**Status:** Settled by the user · **Date:** 2026-10-06 · **Concerns:** FR-12's keyword search
+(`GET /api/search`) · **Found by:** Objective 02, item D06
+
+**The defect.** Keyword search matched `chunk_text` with a plain case-insensitive substring
+test, and chunk text keeps the extracted text's line breaks verbatim (D-31). So any phrase that
+wrapped a line in the source could never be found. Objective 02's D06 showed it: "Willow Bridge
+escalation ladder" is in the PDF, and its extracted text reads "escalation\nladder". The user
+ruled this an FR-12 defect rather than a quirk of the corpus.
+
+**Decision.** For matching, every run of whitespace is collapsed to one space on both sides:
+
+- in the stored text, inside the query, with `REGEXP_REPLACE(chunk_text, '\s+', ' ', 'g')`,
+  and the same for the source's title;
+- in the term, with Python's `" ".join(term.split())`.
+
+The term is still logged in `SearchLog` and echoed in the reply exactly as typed, and the
+two-character minimum is still measured on it. A snippet is windowed over the collapsed text,
+so a match that wrapped a line is shown as one run.
+
+**What this covers:** both branches of `GET /api/search`, the chunk-text match and the title
+match, for documents and meetings.
+
+**What it does not cover:**
+
+- **The answer path.** `POST /api/ask` ranks by embedding similarity and has no substring test.
+- **Non-breaking and other Unicode spaces.** Postgres's `\s` and Python's `str.split()` agree on
+  spaces, tabs, line breaks and carriage returns. They are not guaranteed to agree on every
+  Unicode space, so a phrase separated by one may still not match.
+- **Hyphenation across a line.** A word split as "escal-\nation" stays split.
+- **Speed.** The collapse runs per row, inside the query, and no index serves it. At this corpus
+  size that is immaterial; it is noted for scale.
+- **Whitespace-only queries.** One of two or more characters still passes the length rule, and
+  now collapses to the empty term, which lists everything in scope. Before this change the same
+  query matched almost everything. Neither is a disclosure.
+
+**Evidence.**
+
+- `apps/retrieval/tests/test_search.py` covers the D06 shape ("escalation ladder" against
+  "escalation\nladder"), CRLF with indentation, a tab, extra spaces and a line break in the
+  query, a title, the permission boundary, and the term logged as typed. The new tests were run
+  before the fix, and all of them except the logging test failed.
+- Objective 02's D06 phrase is restored to the team's original and re-searched in
+  `corpus/objective-02/results.*`.
