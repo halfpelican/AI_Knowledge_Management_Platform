@@ -93,3 +93,57 @@ The readings above are recorded as D-68 (recent questions) and D-69 (KnowledgeGa
   gives each the dashboard.
 - **NFR-10**: "The main dashboard … must fully load within 2 seconds under normal network
   conditions." Not tested by item 3. One endpoint (clause 11) is what makes it achievable.
+
+### After item 3 — 6 October 2026, on `feat/FR-14-dashboard`
+
+Built by the django-backend agent (`GET /api/dashboard`) and the react-frontend agent (the
+screen), working in parallel against the contract, and reviewed and committed by the
+coordinating session. Backend tests are in `apps/api/tests/test_dashboard.py`; front-end tests
+are in `frontend/tests/dashboard.test.jsx`.
+
+#### Front-End
+
+| # | Clause | State | Evidence |
+|---|---|---|---|
+| 1 | Landing page shown after login | ✅ | `/dashboard` and `/admin` both render `Dashboard`, and a signed-in `/` redirects to the role's path. Front end: `renders the dashboard at $path for an $user.role` (Employee and Administrator, both routes and `/`) |
+| 2 | Recent documents panel | ✅ | Up to `DASHBOARD_RECENT_ITEMS`, newest first. Backend: `test_the_recent_lists_are_capped_and_newest_first_and_the_figures_are_not` |
+| 3 | Recent meetings panel | ✅ | The same test, for meetings |
+| 4 | Total indexed items | ✅ | Status `Indexed` only, split by type with the sum (D-70). Backend: `test_indexed_totals_count_only_status_indexed_split_by_type`. Front end: `shows the documents figure, the meetings figure and their sum, each as the server sent it` |
+| 5 | Recent questions asked | ✅ | The caller's own rows, question only (D-68). Backend: `test_recent_questions_are_only_the_callers_own`, `test_recent_questions_carry_the_question_only`. Front end: `renders the question and when it was asked, and nothing that looks like an answer` |
+| 6 | Each panel links through to its full view | ✅ | Front end: `links each panel heading, each figure and each item to the module that owns it`. A recent question links to `/ask`, not to its thread, until item 4a |
+| 7 | Panels display a loading state while data is retrieved | ✅ | One request for the page, and `role="status"` text in every panel. Front end: `shows every panel loading until the one request answers, then its content`, `shows the loading state again when a filter is applied, not the previous reply` |
+| 8 | Filterable by date range | ✅ | Each type by its own date, inclusive, timestamps by Melbourne date (D-70). Backend: `test_the_date_range_is_inclusive_at_both_ends`, `test_a_timestamp_is_compared_by_its_melbourne_date_not_its_utc_date`, `test_meetings_filter_on_meeting_date_not_on_when_they_were_recorded`, `test_questions_filter_on_answered_at_and_an_unanswered_one_is_still_listed`. Front end: `shows the active range and department the server applied`, `refuses a start date after the end date before sending anything` |
+| 9 | …and by team/department | ✅ | Department narrows documents only, and the screen says so (D-70). Backend: `test_department_narrows_documents_and_their_figure_only`. Front end: `states next to the department control that it applies to documents only`. Filter state lives in the URL: `restores the filters and re-sends the same request after following a panel link and pressing Back` |
+| 10 | Content restricted to items the user's role permits | ✅ | Server-side only, so the screen filters nothing. Backend: `test_administrator_only_rows_are_absent_for_an_employee_and_present_for_the_administrator`, `test_an_employee_only_row_is_in_the_administrators_payload`, `test_a_row_the_callers_role_may_not_read_is_absent_from_every_panel`, and `apps/api/tests/test_source_rows_fail_closed.py`'s `api/dashboard GET` probe, with its Administrator mirror |
+
+#### Server-End
+
+| # | Clause | State | Evidence |
+|---|---|---|---|
+| 11 | One endpoint aggregates counts and recent items in one request | ✅ | `DashboardView`. Front end: the landing tests assert exactly one dashboard request per page load |
+| 12 | A valid session is required | ✅ | Backend: `test_an_anonymous_request_is_401`. The dual-role matrix covers `/api/dashboard` from both roles |
+| 13 | Role and department filter the aggregation | ✅ | Role through `scoped_documents` and `scoped_meetings` (D-53, D-66); department per row 9. Query parameters pass `DashboardQuerySerializer` (D-65). Backend: `test_a_malformed_parameter_is_400_keyed_on_its_name`, `test_a_reversed_range_names_the_rule_under_the_end_date`, `test_an_empty_parameter_is_not_applied`, `test_the_boundary_values_are_accepted` |
+| 14 | Counts computed after permission filtering, so a total never reveals inaccessible content | ✅ | Every count is `.count()` over the scoped, filtered querysets. Backend: `test_an_employees_payload_is_byte_identical_with_and_without_restricted_rows` (four filter shapes), `test_departments_never_offers_one_found_only_on_restricted_documents`, `test_an_unknown_and_a_restricted_only_department_give_the_same_payload` |
+| 15 | 200 with a summary JSON payload | ✅ | Backend: `test_the_payload_has_exactly_the_contracts_keys`, `test_an_empty_dashboard_is_200_with_empty_lists_and_zero_counts` |
+| 16 | 401 where the session is invalid | ✅ | Row 12 |
+
+#### Database
+
+| Clause | State | Evidence |
+|---|---|---|
+| Documents, Meetings, QueryLog (Read) | ✅ | `DashboardView` |
+| ContentChunks (Read) | 🔧 | Deliberately not read: atomic ingestion makes a source's status reflect its chunks (D-70) |
+| KnowledgeGaps (Read) | 🔧 | Deferred with FR-19 (D-69) |
+
+#### Not covered by item 3
+
+- **NFR-10's two-second load** is not measured.
+- **A recent question's link to its own thread** waits on item 4a's `/ask?c=<id>`.
+- **`useApiResource`.** The front-end agent built its own request hook, because the shared one
+  keeps showing the previous reply while a new one loads. That defect also affects `Search` today,
+  and it is not fixed here.
+- **`formatDate`** reads a date-only string as UTC midnight, so a host west of UTC would show
+  meeting and filter dates a day early. The alpha host is Melbourne (D-64), so the alpha is not
+  affected. Not changed here.
+- **`/admin` carries no role guard.** An Employee who types it sees their own scoped dashboard
+  (D-70's clarification).

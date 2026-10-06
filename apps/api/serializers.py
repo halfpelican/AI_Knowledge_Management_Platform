@@ -847,3 +847,79 @@ class ConversationDetailSerializer(ConversationSerializer):
                 ),
             },
         ).data
+
+
+# --- FR-14 dashboard ----------------------------------------------------------------------
+
+# The one cross-field rule D-65 sets for a date range. Keyed on ``date_to`` in the 400 body: the
+# end date is the one checked against the start, and the dashboard screen's own copy of this
+# check (frontend/src/pages/Dashboard.jsx) shows its message under the same control, so the
+# two agree about where the error is.
+DATE_RANGE_REVERSED_MESSAGE = "The end date must be on or after the start date."
+
+
+class DashboardQuerySerializer(serializers.Serializer):
+    """``GET /api/dashboard``'s query parameters, read only through this (D-65).
+
+    The view hands it ``request.query_params`` as ``data=`` and uses ``validated_data`` alone,
+    so a NUL byte or an over-long value is a 400 at the boundary and never reaches an ORM
+    lookup: ``CharField`` carries ``ProhibitNullCharactersValidator``, and a NUL byte is not a
+    valid date.
+
+    **Every parameter is optional, and an empty value is the same as an absent one**
+    (docs/api-contract.md). Each field defaults to ``None``, which the view reads as "not
+    applied". For the two dates DRF already does this with form-style input: ``date_from=``
+    on a field that is not required is treated as omitted, so it takes the default rather
+    than failing as a malformed date. ``department`` allows a blank value, after trimming,
+    and ``validate_department`` turns it into ``None``, so ``department=`` and
+    ``department=%20`` narrow nothing.
+
+    **``department`` is validated for shape and never looked up** (D-65, D-70). A field that
+    checked the value against the documents table would answer differently for a department
+    that does not exist and one used only on documents the caller cannot see, and the
+    difference would disclose the restricted ones. Both reach the query and match nothing the
+    caller may see.
+
+    **The date range is inclusive at both ends** (D-65). The view compares a timestamp by its
+    date in ``TIME_ZONE`` (Australia/Melbourne) with ``__date__gte`` / ``__date__lte``, and
+    ``meeting_date``, already a date, directly (D-70).
+    """
+
+    date_from = serializers.DateField(required=False, default=None)
+    date_to = serializers.DateField(required=False, default=None)
+    department = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, default=None, allow_blank=True
+    )
+
+    def validate_department(self, value):
+        # ``None`` when absent, ``""`` when sent empty or blank: neither narrows anything.
+        return value or None
+
+    def validate(self, attrs):
+        date_from, date_to = attrs.get("date_from"), attrs.get("date_to")
+        if date_from is not None and date_to is not None and date_from > date_to:
+            raise serializers.ValidationError({"date_to": [DATE_RANGE_REVERSED_MESSAGE]})
+        return attrs
+
+
+class RecentQuestionSerializer(serializers.Serializer):
+    """One of the caller's own recent questions on the dashboard: the question only (D-68).
+
+    Three fields and no more. ``answer_text`` was generated under the role the asker held at
+    the time, from passages that may since have left their scope (D-48's instance 3);
+    ``answered`` has to be re-derived from surviving citations rather than trusted (D-48's
+    instance 7); ``no_answer_reason`` and ``rejected_count`` are record-only (D-55, and
+    ``QueryLog``'s docstring). None of them is declared here, and the view reads the three
+    columns below with ``.values()``, so the others are never selected from the database at
+    all.
+
+    ``asked_at`` is ``QueryLog.answered_at``, which is written when the question is logged
+    whether or not it was answered (D-70), and is named for what it means to the person who
+    asked. Rendered by DRF's own ``DateTimeField``, so it carries the same Melbourne offset as
+    a document's ``uploaded_at``.
+    """
+
+    question = serializers.CharField(read_only=True)
+    asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
+    # Null for a one-off question with no thread (D-68).
+    conversation_id = serializers.UUIDField(read_only=True, allow_null=True)

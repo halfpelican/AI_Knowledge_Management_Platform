@@ -6,6 +6,7 @@ import { contrastRatio } from '../utils/contrast.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
 import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
 import Button from './Button.jsx'
+import DashboardPanel from './DashboardPanel.jsx'
 import Dialog from './Dialog.jsx'
 import FileDropZone from './FileDropZone.jsx'
 import NotPermitted from './NotPermitted.jsx'
@@ -80,9 +81,10 @@ const BUILT = [
   { name: 'Meeting transcripts (FR-09)', paths: ['/meetings'] },
   { name: 'Keyword search, grouped by type (FR-12)', paths: ['/search'] },
   { name: 'Ask, citations and Sources, with the conversation thread (FR-12, FR-13)', paths: ['/ask'] },
+  { name: 'Dashboard (FR-14), the landing page for each role', paths: ['/dashboard', '/admin'] },
 ]
 
-const UPCOMING = ['Filtered browsing (FR-15)', 'Dashboard (FR-14)']
+const UPCOMING = ['Filtered browsing (FR-15)']
 
 /* Fixtures for the FR-12 sections below. Invented text, so the sheet shows the
    components without a running AI provider or a corpus; the shapes are the
@@ -597,6 +599,55 @@ export default function ComponentSheet() {
           {TEXT.noAnswerFallback}
         </Notice>
         <PartialMatches idPrefix="sheet-no-answer" results={SAMPLE_PARTIAL_MATCHES} />
+      </section>
+
+      <section aria-labelledby="sheet-dashboard-panel">
+        <h2 id="sheet-dashboard-panel">Dashboard panel (FR-14)</h2>
+        <p>
+          A labelled region whose heading links to the module that owns it. While the dashboard&rsquo;s one
+          request is in flight each panel says so in words, in a status region, rather than with a spinner alone;
+          an empty panel is an ordinary state and says nothing about material outside the reader&rsquo;s scope.
+          The indexed total is split by type, with each figure linking to its own module, because the department
+          filter narrows only the documents figure (D-70).
+        </p>
+        <div className="sheet__panels">
+          <DashboardPanel
+            headingId="sheet-dashboard-loading"
+            heading={TEXT.dashboardDocumentsHeading}
+            to="/documents"
+            loading
+            loadingText={TEXT.dashboardLoadingDocuments}
+          />
+          <DashboardPanel
+            headingId="sheet-dashboard-empty"
+            heading={TEXT.dashboardMeetingsHeading}
+            to="/meetings"
+            loadingText={TEXT.dashboardLoadingMeetings}
+            empty
+            emptyText={TEXT.dashboardNoMeetings}
+          />
+          <DashboardPanel
+            headingId="sheet-dashboard-totals"
+            heading={TEXT.dashboardTotalsHeading}
+            loadingText={TEXT.dashboardLoadingTotals}
+          >
+            <dl className="dashboard-totals">
+              <div className="dashboard-totals__item">
+                <dt>{TEXT.dashboardTotalsDocuments}</dt>
+                <dd>4</dd>
+              </div>
+              <div className="dashboard-totals__item">
+                <dt>{TEXT.dashboardTotalsMeetings}</dt>
+                <dd>2</dd>
+              </div>
+              <div className="dashboard-totals__item">
+                <dt>{TEXT.dashboardTotalsSum}</dt>
+                <dd>6</dd>
+              </div>
+            </dl>
+            <p className="dashboard-panel__note">{TEXT.dashboardTotalsHint}</p>
+          </DashboardPanel>
+        </div>
       </section>
 
       <section aria-labelledby="sheet-built">

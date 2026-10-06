@@ -3878,3 +3878,17 @@ department behaviour of each panel, and the two landing routes.
 - **A link from a recent question to its own thread.** That needs item 4a's `/ask?c=<id>`. Until
   then the panel links to `/ask`.
 - **Meetings' department.** Not modelled, and not invented here.
+
+> **Clarified on 6 October 2026, when item 3 was built.** None of these changes the decision.
+> Each makes its wording match what was built.
+>
+> - "The identical 200 payload" for an unknown department and a restricted-only one means
+>   identical **apart from `filters.department`**, which echoes the value sent. The echo is the
+>   caller's own input, so it discloses nothing.
+> - A reversed range (`date_from` later than `date_to`) is a 400 keyed on **`date_to`**, the
+>   field the screen marks. This is the same convention as D-65's other 400s.
+> - `department` is trimmed of surrounding spaces, so a value of spaces only means "not
+>   applied", as an empty one does.
+> - `/admin` is not restricted to Administrators. Typed by an Employee, it shows that
+>   Employee's own scoped dashboard, because both landing routes render the same screen. No
+>   administrative function lives there.
