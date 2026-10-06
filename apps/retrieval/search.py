@@ -109,7 +109,7 @@ in ``apps/ai/generation.py``, which stayed local for the same reason earlier in 
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from django.db.models import Q
+from django.db.models import F, Func, Q, TextField, Value
 
 from apps.core.constants import MINIMUM_SEARCH_LENGTH, SOURCE_TYPES
 from apps.retrieval.models import SearchLog
@@ -143,6 +143,39 @@ SNIPPET_ELLIPSIS = "..."
 # module refuses. Named rather than written as a literal in the check below, because
 # "\x00" in a condition reads as a typo and this one is deliberate.
 NULL_CHARACTER = "\x00"
+
+# D-71. A run of whitespace in Postgres's regular-expression dialect, and the one space it
+# collapses to. Matching compares the term and the stored text with every such run reduced to
+# one space on both sides, so a phrase is found whatever line breaks, tabs or indentation sit
+# between its words in the source. Objective 02 found the need: D06's phrase wraps a line in the
+# PDF's extracted text, and chunk text keeps that line break (D-31).
+WHITESPACE_RUN = r"\s+"
+
+
+def collapse_whitespace(text: str) -> str:
+    """``text`` with every run of whitespace reduced to one space, and none at either end.
+
+    Python's ``str.split()`` with no argument, so the query is collapsed by the same rule the
+    database applies to the stored text through ``_collapsed`` below. Applied to the term
+    before matching and to a snippet's text before windowing it; never to what is logged.
+    """
+    return " ".join(text.split())
+
+
+def _collapsed(field_name: str) -> Func:
+    """``field_name`` with each whitespace run replaced by one space, inside the query.
+
+    ``REGEXP_REPLACE(field, '\\s+', ' ', 'g')``: the database does the collapsing, so the
+    filter stays a condition on the query and no row is read only to be discarded.
+    """
+    return Func(
+        F(field_name),
+        Value(WHITESPACE_RUN),
+        Value(" "),
+        Value("g"),
+        function="REGEXP_REPLACE",
+        output_field=TextField(),
+    )
 
 
 class SearchQueryContainsNullCharacter(ValueError):
@@ -307,7 +340,8 @@ def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, s
     """
     matches = (
         scoped_chunks(role_name=role_name)
-        .filter(chunk_text__icontains=query_text)
+        .annotate(collapsed_text=_collapsed("chunk_text"))
+        .filter(collapsed_text__icontains=query_text)
         .order_by("source_type", "source_id", "chunk_index")
         .values_list("source_type", "source_id", "chunk_text")
     )
@@ -315,7 +349,9 @@ def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, s
     for source_type, source_id, chunk_text in matches:
         key = (source_type, str(source_id))
         if key not in snippets:  # first matching chunk wins; see the docstring
-            snippets[key] = snippet_for(chunk_text, query_text)
+            # Windowed over the collapsed text, so a match that wraps a line in the source
+            # is found by ``snippet_for`` and shown as one run (D-71).
+            snippets[key] = snippet_for(collapse_whitespace(chunk_text), query_text)
     return snippets
 
 
@@ -336,7 +372,7 @@ def _opening_snippet(*, source_type: str, source_id: str, role_name: str) -> str
     )
     if not first:
         return ""
-    return snippet_for(first, "")
+    return snippet_for(collapse_whitespace(first), "")
 
 
 def _group(
@@ -400,15 +436,21 @@ def search(*, query_text: str, user) -> SearchResults:
     not computed from relevance is the "low-relevance result presented as an answer" FR-12
     rejects on the other path.
 
-    **The query is measured as given.** No stripping and no sanitiser, exactly as
-    ``answer_question`` treats a question and for the same reasons (see the pipeline's step-1
-    notes): the term goes to the database only as a bound parameter of an ORM lookup, and it
-    is stored verbatim in ``SearchLog`` so that FR-19's evidence shows what people actually
-    typed. One consequence, stated rather than hidden: a two-character query of whitespace
-    is long enough, and substring-matches almost everything the role may already list
-    through ``GET /api/documents``. That is odd-looking, not a disclosure — every row it
-    could reach is in scope — and the alternative is a stripping rule no requirement asks
-    for.
+    **The query is measured and logged as given, and matched with whitespace collapsed
+    (D-71).** No sanitiser, exactly as ``answer_question`` treats a question and for the same
+    reasons (see the pipeline's step-1 notes): the term goes to the database only as a bound
+    parameter of an ORM lookup, and it is stored verbatim in ``SearchLog`` so that FR-19's
+    evidence shows what people actually typed. The length rule is applied to that raw term.
+    For MATCHING only, every run of whitespace is collapsed to one space on both sides — in
+    the term by ``collapse_whitespace`` and in the stored chunk text and title by
+    ``REGEXP_REPLACE`` — so a phrase is found whatever line breaks sit between its words in the
+    source. Before D-71 a phrase that wrapped a line in a PDF could never be found, which is
+    what Objective 02's D06 showed. One consequence, stated rather than hidden: a
+    two-character query of whitespace is long enough and collapses to the empty term, which
+    every row contains, so it lists everything the role may already list through
+    ``GET /api/documents`` and ``GET /api/meetings``. That is odd-looking, not a disclosure —
+    every row it can reach is in scope — and before D-71 the same query matched almost
+    everything anyway.
 
     **One ``SearchLog`` row per search, whatever it found** — including a search that found
     nothing, which is exactly the row FR-19 wants, since a term that returns nothing twice a
@@ -451,7 +493,10 @@ def search(*, query_text: str, user) -> SearchResults:
         )
 
     role_name = permission_scope(user)
-    snippets = _snippets_by_source(role_name=role_name, query_text=query_text)
+    # D-71: matched with whitespace runs collapsed on both sides. ``query_text`` itself is kept
+    # as typed for the SearchLog row and the reply's ``query``.
+    term = collapse_whitespace(query_text)
+    snippets = _snippets_by_source(role_name=role_name, query_text=term)
     matched_ids = {
         source_type: [
             source_id for (chunk_source_type, source_id) in snippets if chunk_source_type == source_type
@@ -464,12 +509,14 @@ def search(*, query_text: str, user) -> SearchResults:
     # the scope.
     documents = (
         scoped_documents(role_name=role_name)
-        .filter(Q(id__in=matched_ids[DOCUMENT_SOURCE_TYPE]) | Q(title__icontains=query_text))
+        .annotate(collapsed_title=_collapsed("title"))
+        .filter(Q(id__in=matched_ids[DOCUMENT_SOURCE_TYPE]) | Q(collapsed_title__icontains=term))
         .order_by("-uploaded_at", "pk")
     )
     meetings = (
         scoped_meetings(role_name=role_name)
-        .filter(Q(id__in=matched_ids[MEETING_SOURCE_TYPE]) | Q(title__icontains=query_text))
+        .annotate(collapsed_title=_collapsed("title"))
+        .filter(Q(id__in=matched_ids[MEETING_SOURCE_TYPE]) | Q(collapsed_title__icontains=term))
         .order_by("-meeting_date", "-created_at", "pk")
     )
 

@@ -130,6 +130,7 @@ Rules for this file:
 | D-68 | FR-14's recent questions are the requester's own QueryLog rows, and the question only | Settled by the user, in the Stage 5 brief, item 3 | 2026-10-06 |
 | D-69 | FR-14's KnowledgeGaps read is deferred with FR-19 (NIT3004, Objective 06) | Settled by the user, in the Stage 5 brief, item 3 | 2026-10-06 |
 | D-70 | FR-14: department narrows documents only, labelled; the indexed total counts "Indexed" by type; each type filters on its own date | Settled by the user | 2026-10-06 |
+| D-71 | FR-12 keyword search collapses whitespace on both sides before matching, so a phrase that wraps a line is found | Settled by the user | 2026-10-06 |
 
 ---
 
@@ -3892,3 +3893,49 @@ department behaviour of each panel, and the two landing routes.
 > - `/admin` is not restricted to Administrators. Typed by an Employee, it shows that
 >   Employee's own scoped dashboard, because both landing routes render the same screen. No
 >   administrative function lives there.
+
+## D-71 · FR-12 keyword search collapses whitespace on both sides before matching
+
+**Status:** Settled by the user · **Date:** 2026-10-06 · **Concerns:** FR-12's keyword search
+(`GET /api/search`) · **Found by:** Objective 02, item D06
+
+**The defect.** Keyword search matched `chunk_text` with a plain case-insensitive substring
+test, and chunk text keeps the extracted text's line breaks verbatim (D-31). So any phrase that
+wrapped a line in the source could never be found. Objective 02's D06 showed it: "Willow Bridge
+escalation ladder" is in the PDF, and its extracted text reads "escalation\nladder". The user
+ruled this an FR-12 defect rather than a quirk of the corpus.
+
+**Decision.** For matching, every run of whitespace is collapsed to one space on both sides:
+
+- in the stored text, inside the query, with `REGEXP_REPLACE(chunk_text, '\s+', ' ', 'g')`,
+  and the same for the source's title;
+- in the term, with Python's `" ".join(term.split())`.
+
+The term is still logged in `SearchLog` and echoed in the reply exactly as typed, and the
+two-character minimum is still measured on it. A snippet is windowed over the collapsed text,
+so a match that wrapped a line is shown as one run.
+
+**What this covers:** both branches of `GET /api/search`, the chunk-text match and the title
+match, for documents and meetings.
+
+**What it does not cover:**
+
+- **The answer path.** `POST /api/ask` ranks by embedding similarity and has no substring test.
+- **Non-breaking and other Unicode spaces.** Postgres's `\s` and Python's `str.split()` agree on
+  spaces, tabs, line breaks and carriage returns. They are not guaranteed to agree on every
+  Unicode space, so a phrase separated by one may still not match.
+- **Hyphenation across a line.** A word split as "escal-\nation" stays split.
+- **Speed.** The collapse runs per row, inside the query, and no index serves it. At this corpus
+  size that is immaterial; it is noted for scale.
+- **Whitespace-only queries.** One of two or more characters still passes the length rule, and
+  now collapses to the empty term, which lists everything in scope. Before this change the same
+  query matched almost everything. Neither is a disclosure.
+
+**Evidence.**
+
+- `apps/retrieval/tests/test_search.py` covers the D06 shape ("escalation ladder" against
+  "escalation\nladder"), CRLF with indentation, a tab, extra spaces and a line break in the
+  query, a title, the permission boundary, and the term logged as typed. The new tests were run
+  before the fix, and all of them except the logging test failed.
+- Objective 02's D06 phrase is restored to the team's original and re-searched in
+  `corpus/objective-02/results.*`.

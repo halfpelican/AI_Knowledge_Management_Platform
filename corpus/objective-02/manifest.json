@@ -1,0 +1,800 @@
+{
+  "objective": "Objective 02 — ingestion verification (proposal section 2, due 2 October)",
+  "source": "Titles, files, meeting dates, phrases and expected statuses are transcribed from the team's Objective02_Manifest.xlsx, which sat untracked beside the corpus when this file was built (6 October 2026) and is not in the repository. visible_to_roles, department and uploader are added here. This file is the only manifest the script reads.",
+  "criteria": [
+    "Every valid item reaches Indexed and returns its own content when searched for its phrase.",
+    "Every invalid item is refused with its documented error rather than partly ingested.",
+    "A document of twenty pages or fewer finishes processing within sixty seconds."
+  ],
+  "items": [
+    {
+      "id": "D01",
+      "kind": "document",
+      "file": "documents/D01_leave_policy_2026.pdf",
+      "title": "Employee Leave Policy 2026",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Human Resources",
+      "uploader": "Employee",
+      "phrase": "Harbour Light leave accrual",
+      "rule": "Valid PDF upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D02",
+      "kind": "document",
+      "file": "documents/D02_it_acceptable_use.pdf",
+      "title": "IT Acceptable Use Policy",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Information Technology",
+      "uploader": "Employee",
+      "phrase": "Copper Finch device standard",
+      "rule": "Valid PDF upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D03",
+      "kind": "document",
+      "file": "documents/D03_health_safety_induction.pdf",
+      "title": "Health and Safety Induction Guide",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Operations",
+      "uploader": "Employee",
+      "phrase": "Amber Corridor evacuation route",
+      "rule": "Valid PDF upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D04",
+      "kind": "document",
+      "file": "documents/D04_records_management_handbook.pdf",
+      "title": "Records Management Handbook",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Legal and Compliance",
+      "uploader": "Employee",
+      "phrase": "Juniper Ledger retention schedule",
+      "rule": "Large document: 60-second processing bound",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "26 pages, about 8,400 words. Time this one. Secondary phrase 'Sable Orchard recovery tier' is on page 23."
+    },
+    {
+      "id": "D05",
+      "kind": "document",
+      "file": "documents/D05_procurement_guidelines.pdf",
+      "title": "Procurement Guidelines",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Finance",
+      "uploader": "Employee",
+      "phrase": "Slate Meridian tender threshold",
+      "rule": "Valid PDF upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D06",
+      "kind": "document",
+      "file": "documents/D06_complaints_procedure.pdf",
+      "title": "Customer Complaints Procedure",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Operations",
+      "uploader": "Employee",
+      "phrase": "Willow Bridge escalation ladder",
+      "rule": "Valid PDF upload (FR-08)",
+      "phrase_note": "The team manifest's phrase, restored after D-71. It wraps a line in the PDF's extracted text (\"escalation\nladder\"); until D-71 keyword search could not match across a line break, and the first run searched for \"Willow Bridge escalation\" instead.",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D07",
+      "kind": "document",
+      "file": "documents/D07_remote_work_agreement.docx",
+      "title": "Remote Work Agreement Template",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Human Resources",
+      "uploader": "Employee",
+      "phrase": "Blue Heron remote arrangement",
+      "rule": "Valid DOCX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D08",
+      "kind": "document",
+      "file": "documents/D08_onboarding_checklist.docx",
+      "title": "Onboarding Checklist for New Starters",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Human Resources",
+      "uploader": "Employee",
+      "phrase": "Saffron Trail buddy program",
+      "rule": "Valid DOCX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D09",
+      "kind": "document",
+      "file": "documents/D09_project_atlas_kickoff.docx",
+      "title": "Project Atlas Kickoff Brief",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "department": "Projects",
+      "uploader": "Administrator",
+      "phrase": "Quartz Harbour milestone gate",
+      "rule": "Valid DOCX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Administrator"
+        ],
+        "hidden_from": [
+          "Employee"
+        ]
+      }
+    },
+    {
+      "id": "D10",
+      "kind": "document",
+      "file": "documents/D10_expense_claims_guide.docx",
+      "title": "Expense Claims Guide",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Finance",
+      "uploader": "Employee",
+      "phrase": "Olive Summit reimbursement cap",
+      "rule": "Valid DOCX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D11",
+      "kind": "document",
+      "file": "documents/D11_data_privacy_notice.docx",
+      "title": "Data Privacy Notice",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Legal and Compliance",
+      "uploader": "Employee",
+      "phrase": "Cedar Vault consent register",
+      "rule": "Valid DOCX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D12",
+      "kind": "document",
+      "file": "documents/D12_vendor_register_2026.xlsx",
+      "title": "Vendor Register 2026",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Finance",
+      "uploader": "Employee",
+      "phrase": "Lantern Grove Supplies",
+      "rule": "Valid XLSX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "Phrase is on the first sheet ('Summary')."
+    },
+    {
+      "id": "D13",
+      "kind": "document",
+      "file": "documents/D13_training_schedule_q4.xlsx",
+      "title": "Training Schedule Q4",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Human Resources",
+      "uploader": "Employee",
+      "phrase": "Pebble Creek workshop series",
+      "rule": "Valid XLSX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "Phrase is on the first sheet ('Summary')."
+    },
+    {
+      "id": "D14",
+      "kind": "document",
+      "file": "documents/D14_asset_inventory_melbourne.xlsx",
+      "title": "Asset Inventory Melbourne Office",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Information Technology",
+      "uploader": "Employee",
+      "phrase": "Tin Sparrow laptop batch",
+      "rule": "Valid XLSX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "Phrase is on the first sheet ('Summary')."
+    },
+    {
+      "id": "D15",
+      "kind": "document",
+      "file": "documents/D15_project_budget_fy27.xlsx",
+      "title": "Project Budget Tracker FY27",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "department": "Projects",
+      "uploader": "Administrator",
+      "phrase": "Maple Quay contingency line",
+      "rule": "Valid XLSX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Administrator"
+        ],
+        "hidden_from": [
+          "Employee"
+        ]
+      },
+      "note": "Phrase is on the first sheet ('Summary')."
+    },
+    {
+      "id": "D16",
+      "kind": "document",
+      "file": "documents/D16_team_skills_matrix.xlsx",
+      "title": "Team Roster and Skills Matrix",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "department": "Human Resources",
+      "uploader": "Administrator",
+      "phrase": "Ember Field skills audit",
+      "rule": "Valid XLSX upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Administrator"
+        ],
+        "hidden_from": [
+          "Employee"
+        ]
+      },
+      "note": "Phrase is on the first sheet ('Summary')."
+    },
+    {
+      "id": "D17",
+      "kind": "document",
+      "file": "documents/D17_meeting_room_rules.txt",
+      "title": "Meeting Room Booking Rules",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Operations",
+      "uploader": "Employee",
+      "phrase": "Granite Pier booking etiquette",
+      "rule": "Valid TXT upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D18",
+      "kind": "document",
+      "file": "documents/D18_helpdesk_faq.txt",
+      "title": "IT Helpdesk Frequently Asked Questions",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Information Technology",
+      "uploader": "Employee",
+      "phrase": "Nickel Bay password reset window",
+      "rule": "Valid TXT upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D19",
+      "kind": "document",
+      "file": "documents/D19_fleet_vehicle_notes.txt",
+      "title": "Fleet Vehicle Usage Notes",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Operations",
+      "uploader": "Employee",
+      "phrase": "Coral Ridge logbook rule",
+      "rule": "Valid TXT upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "D20",
+      "kind": "document",
+      "file": "documents/D20_office_relocation_notice.txt",
+      "title": "Office Relocation Announcement",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "Operations",
+      "uploader": "Employee",
+      "phrase": "Driftwood Lane move weekend",
+      "rule": "Valid TXT upload (FR-08)",
+      "expected": {
+        "http_status": 201,
+        "document_status": "Indexed",
+        "meeting_status": null,
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      }
+    },
+    {
+      "id": "T01",
+      "kind": "transcript",
+      "file": "transcripts/T01_weekly_ops_standup.txt",
+      "title": "Weekly Operations Standup",
+      "meeting_date": "2026-09-14",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": "Opal Junction cutover",
+      "rule": "Valid pasted transcript (FR-09)",
+      "expected": {
+        "http_status": 201,
+        "document_status": null,
+        "meeting_status": "Indexed",
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "Paste the file contents into the text box with the title and date shown. Speaker labels are kept as written."
+    },
+    {
+      "id": "T02",
+      "kind": "transcript",
+      "file": "transcripts/T02_board_risk_committee.txt",
+      "title": "Board Risk Committee Meeting",
+      "meeting_date": "2026-09-08",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Administrator",
+      "phrase": "Fernwood contingency reserve",
+      "rule": "Valid pasted transcript (FR-09)",
+      "expected": {
+        "http_status": 201,
+        "document_status": null,
+        "meeting_status": "Indexed",
+        "searchable": true,
+        "found_by": [
+          "Administrator"
+        ],
+        "hidden_from": [
+          "Employee"
+        ]
+      },
+      "note": "Paste the file contents into the text box with the title and date shown. Speaker labels are kept as written."
+    },
+    {
+      "id": "T03",
+      "kind": "transcript",
+      "file": "transcripts/T03_product_planning_workshop.txt",
+      "title": "Product Planning Workshop",
+      "meeting_date": "2026-09-16",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": "Tidewater feature freeze",
+      "rule": "Valid pasted transcript (FR-09)",
+      "expected": {
+        "http_status": 201,
+        "document_status": null,
+        "meeting_status": "Indexed",
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "Paste the file contents into the text box with the title and date shown. Speaker labels are kept as written."
+    },
+    {
+      "id": "T04",
+      "kind": "transcript",
+      "file": "transcripts/T04_customer_success_retro.txt",
+      "title": "Customer Success Retrospective",
+      "meeting_date": "2026-09-21",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": "Marlin Point churn review",
+      "rule": "Valid pasted transcript (FR-09)",
+      "expected": {
+        "http_status": 201,
+        "document_status": null,
+        "meeting_status": "Indexed",
+        "searchable": true,
+        "found_by": [
+          "Employee",
+          "Administrator"
+        ],
+        "hidden_from": []
+      },
+      "note": "Paste the file contents into the text box with the title and date shown. Speaker labels are kept as written."
+    },
+    {
+      "id": "T05",
+      "kind": "transcript",
+      "file": "transcripts/T05_security_incident_debrief.txt",
+      "title": "Security Incident Debrief",
+      "meeting_date": "2026-09-23",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Administrator",
+      "phrase": "Cobalt Reef phishing drill",
+      "rule": "Valid pasted transcript (FR-09)",
+      "expected": {
+        "http_status": 201,
+        "document_status": null,
+        "meeting_status": "Indexed",
+        "searchable": true,
+        "found_by": [
+          "Administrator"
+        ],
+        "hidden_from": [
+          "Employee"
+        ]
+      },
+      "note": "Paste the file contents into the text box with the title and date shown. Speaker labels are kept as written."
+    },
+    {
+      "id": "I01",
+      "kind": "invalid",
+      "file": "invalid/I01_annual_report_2026.pdf",
+      "title": "Annual Report 2026",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": null,
+      "rule": "File type is decided by signature, not extension (FR-08)",
+      "expected": {
+        "http_status": 415,
+        "document_status": null,
+        "searchable": false
+      },
+      "note": "A real PNG image named .pdf."
+    },
+    {
+      "id": "I02",
+      "kind": "invalid",
+      "file": "invalid/I02_oversized_board_pack.pdf",
+      "title": "Oversized Board Pack",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": null,
+      "rule": "Maximum file size 50 MB (FR-08)",
+      "expected": {
+        "http_status": 413,
+        "document_status": null,
+        "searchable": false
+      },
+      "generated_at_run_time": true,
+      "note": "Not committed: the script writes a PDF-signed file over 50 MB to a temp directory."
+    },
+    {
+      "id": "I03",
+      "kind": "invalid",
+      "file": "invalid/I03_scanned_invoice_no_text.pdf",
+      "title": "Scanned Invoice",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": null,
+      "rule": "No text can be extracted (FR-08, D-32)",
+      "expected": {
+        "http_status": 422,
+        "document_status": "Extraction failed",
+        "searchable": false
+      },
+      "note": "Valid PDF with drawn shapes only, like a scan with no OCR text. Reprocessing fails the same way."
+    },
+    {
+      "id": "I04",
+      "kind": "invalid",
+      "file": "invalid/I04_near_empty_note.txt",
+      "title": "Near Empty Note",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": null,
+      "rule": "Content below MINIMUM_CONTENT_LENGTH is not embedded (FR-08)",
+      "expected": {
+        "http_status": 422,
+        "document_status": "Insufficient content",
+        "searchable": false
+      },
+      "note": "One word of text."
+    },
+    {
+      "id": "I05",
+      "kind": "invalid",
+      "file": "invalid/I05_corrupt_contract.pdf",
+      "title": "Corrupt Contract",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": null,
+      "rule": "Unreadable file (FR-08)",
+      "expected": {
+        "http_status": 422,
+        "document_status": "Extraction failed",
+        "searchable": false
+      },
+      "note": "A PDF header followed by random bytes. The contract does not say whether a header check lets it through, so the result is a prediction, not a certainty."
+    },
+    {
+      "id": "B01",
+      "kind": "invalid",
+      "file": "invalid/B01_duplicate_of_D03_renamed.pdf",
+      "title": "Health and Safety Induction (copy)",
+      "meeting_date": null,
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "department": "",
+      "uploader": "Employee",
+      "phrase": null,
+      "rule": "Duplicate content is refused by hash, not filename (FR-08)",
+      "expected": {
+        "http_status": 409,
+        "document_status": null,
+        "searchable": false
+      },
+      "note": "Byte-identical copy of D03; the script uploads it after D03."
+    }
+  ]
+}

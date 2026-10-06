@@ -1,0 +1,1035 @@
+{
+  "run_started": "2026-10-06T09:49:46+11:00",
+  "searches_rerun": "2026-10-06T10:06:35+11:00",
+  "base_url": "http://127.0.0.1:8000",
+  "manifest": "corpus/objective-02/manifest.json — the only manifest the script reads",
+  "criteria": [
+    "Every valid item reaches Indexed and returns its own content when searched for its phrase.",
+    "Every invalid item is refused with its documented error rather than partly ingested.",
+    "A document of twenty pages or fewer finishes processing within sixty seconds."
+  ],
+  "items": [
+    {
+      "id": "D01",
+      "kind": "document",
+      "title": "Employee Leave Policy 2026",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.06,
+      "transport_note": null,
+      "source_id": "0a8be467-18a8-4af8-9bbe-7f710b1cc3b7",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": 1,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D02",
+      "kind": "document",
+      "title": "IT Acceptable Use Policy",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.87,
+      "transport_note": null,
+      "source_id": "72db90da-84e0-4df9-8a2a-6329a4f4b5c0",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": 1,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D03",
+      "kind": "document",
+      "title": "Health and Safety Induction Guide",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.02,
+      "transport_note": null,
+      "source_id": "d3f1eee0-2ce9-497e-91bd-2b20e07490dc",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": 1,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D04",
+      "kind": "document",
+      "title": "Records Management Handbook",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 21.8,
+      "transport_note": null,
+      "source_id": "9e2b7e39-4812-4e7a-a96e-b9feb5540ee4",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": 26,
+      "chunks": 19,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D05",
+      "kind": "document",
+      "title": "Procurement Guidelines",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.96,
+      "transport_note": null,
+      "source_id": "ea311e6c-8aff-4e59-bbf0-5961e4f049a0",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": 1,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D06",
+      "kind": "document",
+      "title": "Customer Complaints Procedure",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.96,
+      "transport_note": null,
+      "source_id": "053c89af-36b7-42c5-874f-84f2b1896ef4",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": 1,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D07",
+      "kind": "document",
+      "title": "Remote Work Agreement Template",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.04,
+      "transport_note": null,
+      "source_id": "5f189cbb-02cc-414c-bfba-fe6c39fdf006",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D08",
+      "kind": "document",
+      "title": "Onboarding Checklist for New Starters",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.98,
+      "transport_note": null,
+      "source_id": "59bd1b92-3100-4013-b3ae-66a46dabe84a",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D09",
+      "kind": "document",
+      "title": "Project Atlas Kickoff Brief",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "uploader": "Administrator",
+      "http_status": 201,
+      "seconds": 0.95,
+      "transport_note": null,
+      "source_id": "4eba93f5-1644-4063-a580-66cd97ffcb93",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": false,
+          "total_count": 0,
+          "other_results": [],
+          "trace_in_bytes": false
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D10",
+      "kind": "document",
+      "title": "Expense Claims Guide",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.87,
+      "transport_note": null,
+      "source_id": "61c3742d-4634-4d82-99b6-a9ca8fa7a9d8",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D11",
+      "kind": "document",
+      "title": "Data Privacy Notice",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.89,
+      "transport_note": null,
+      "source_id": "c348f588-6dd3-4bd7-ab79-a86d1e19914a",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D12",
+      "kind": "document",
+      "title": "Vendor Register 2026",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.18,
+      "transport_note": null,
+      "source_id": "a029233d-2997-47ed-a9b0-3c5773038269",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D13",
+      "kind": "document",
+      "title": "Training Schedule Q4",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.15,
+      "transport_note": null,
+      "source_id": "6eb983d1-a725-4563-8b9d-9c4f6f440349",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D14",
+      "kind": "document",
+      "title": "Asset Inventory Melbourne Office",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.17,
+      "transport_note": null,
+      "source_id": "708b7bbe-144e-4816-be84-901000685d93",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D15",
+      "kind": "document",
+      "title": "Project Budget Tracker FY27",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "uploader": "Administrator",
+      "http_status": 201,
+      "seconds": 1.13,
+      "transport_note": null,
+      "source_id": "a98e8c68-a443-4a78-b046-ad4087a1e53f",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": false,
+          "total_count": 0,
+          "other_results": [],
+          "trace_in_bytes": false
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D16",
+      "kind": "document",
+      "title": "Team Roster and Skills Matrix",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "uploader": "Administrator",
+      "http_status": 201,
+      "seconds": 0.98,
+      "transport_note": null,
+      "source_id": "022c16b1-9087-42c0-937c-7e3f8334dc4b",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": false,
+          "total_count": 0,
+          "other_results": [],
+          "trace_in_bytes": false
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D17",
+      "kind": "document",
+      "title": "Meeting Room Booking Rules",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.91,
+      "transport_note": null,
+      "source_id": "57afdad2-4dba-4950-ac40-25f51eeda5df",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D18",
+      "kind": "document",
+      "title": "IT Helpdesk Frequently Asked Questions",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.93,
+      "transport_note": null,
+      "source_id": "4aedf4e4-c6ac-4583-9131-826b318b3f0a",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D19",
+      "kind": "document",
+      "title": "Fleet Vehicle Usage Notes",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.91,
+      "transport_note": null,
+      "source_id": "ed8385ab-4e42-419c-bc48-79aaf0498bdc",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "D20",
+      "kind": "document",
+      "title": "Office Relocation Announcement",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.89,
+      "transport_note": null,
+      "source_id": "78b03fc2-d679-4caa-83a6-eca5677cc3c8",
+      "document_status": "Indexed",
+      "meeting_status": null,
+      "detail": null,
+      "pages": null,
+      "chunks": 1,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "T01",
+      "kind": "transcript",
+      "title": "Weekly Operations Standup",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 1.14,
+      "transport_note": null,
+      "source_id": "1be8d8ca-f421-4ccd-8448-3c8eeded85ce",
+      "document_status": null,
+      "meeting_status": "Indexed",
+      "detail": null,
+      "pages": null,
+      "chunks": null,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "T02",
+      "kind": "transcript",
+      "title": "Board Risk Committee Meeting",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "uploader": "Administrator",
+      "http_status": 201,
+      "seconds": 0.87,
+      "transport_note": null,
+      "source_id": "61a265d2-7d8e-4609-8606-0cfd8e18b7b9",
+      "document_status": null,
+      "meeting_status": "Indexed",
+      "detail": null,
+      "pages": null,
+      "chunks": null,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": false,
+          "total_count": 0,
+          "other_results": [],
+          "trace_in_bytes": false
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "T03",
+      "kind": "transcript",
+      "title": "Product Planning Workshop",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.87,
+      "transport_note": null,
+      "source_id": "2d2f2c0b-de07-4f71-8eea-d5d8eb06dde0",
+      "document_status": null,
+      "meeting_status": "Indexed",
+      "detail": null,
+      "pages": null,
+      "chunks": null,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "T04",
+      "kind": "transcript",
+      "title": "Customer Success Retrospective",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 201,
+      "seconds": 0.83,
+      "transport_note": null,
+      "source_id": "a2979ec5-152c-47ed-8c18-8790539249d5",
+      "document_status": null,
+      "meeting_status": "Indexed",
+      "detail": null,
+      "pages": null,
+      "chunks": null,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "T05",
+      "kind": "transcript",
+      "title": "Security Incident Debrief",
+      "visible_to_roles": [
+        "Administrator"
+      ],
+      "uploader": "Administrator",
+      "http_status": 201,
+      "seconds": 0.85,
+      "transport_note": null,
+      "source_id": "77715258-397f-4db8-a74a-29c1c4a1345a",
+      "document_status": null,
+      "meeting_status": "Indexed",
+      "detail": null,
+      "pages": null,
+      "chunks": null,
+      "search": {
+        "Administrator": {
+          "status": 200,
+          "found": true,
+          "total_count": 1,
+          "other_results": [],
+          "trace_in_bytes": true
+        },
+        "Employee": {
+          "status": 200,
+          "found": false,
+          "total_count": 0,
+          "other_results": [],
+          "trace_in_bytes": false
+        }
+      },
+      "misses": []
+    },
+    {
+      "id": "I01",
+      "kind": "invalid",
+      "title": "Annual Report 2026",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 415,
+      "seconds": 0.05,
+      "transport_note": null,
+      "source_id": null,
+      "document_status": null,
+      "meeting_status": null,
+      "detail": "File type not supported. Accepted formats: PDF, DOCX, XLSX, TXT.",
+      "pages": null,
+      "chunks": null,
+      "search": {},
+      "misses": []
+    },
+    {
+      "id": "I02",
+      "kind": "invalid",
+      "title": "Oversized Board Pack",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 413,
+      "seconds": 0.12,
+      "transport_note": null,
+      "source_id": null,
+      "document_status": null,
+      "meeting_status": null,
+      "detail": "File exceeds the maximum permitted size of 50 MB.",
+      "pages": null,
+      "chunks": null,
+      "search": {},
+      "misses": []
+    },
+    {
+      "id": "I03",
+      "kind": "invalid",
+      "title": "Scanned Invoice",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 422,
+      "seconds": 0.05,
+      "transport_note": null,
+      "source_id": "a760a80b-827e-44f5-ab37-095cc71717d3",
+      "document_status": "Extraction failed",
+      "meeting_status": null,
+      "detail": "The document was stored, but no readable text could be extracted from it.",
+      "pages": 1,
+      "chunks": 0,
+      "search": {},
+      "misses": []
+    },
+    {
+      "id": "I04",
+      "kind": "invalid",
+      "title": "Near Empty Note",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 422,
+      "seconds": 0.04,
+      "transport_note": null,
+      "source_id": "4d7160d7-436e-4d95-9a06-d296e7a3fd48",
+      "document_status": "Insufficient content",
+      "meeting_status": null,
+      "detail": "The document was stored but contains too little text to index.",
+      "pages": null,
+      "chunks": 0,
+      "search": {},
+      "misses": []
+    },
+    {
+      "id": "I05",
+      "kind": "invalid",
+      "title": "Corrupt Contract",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 422,
+      "seconds": 0.05,
+      "transport_note": null,
+      "source_id": "33773e43-b9f7-4b98-bb75-ab66c7536ae4",
+      "document_status": "Extraction failed",
+      "meeting_status": null,
+      "detail": "The document was stored, but no readable text could be extracted from it.",
+      "pages": null,
+      "chunks": 0,
+      "search": {},
+      "misses": []
+    },
+    {
+      "id": "B01",
+      "kind": "invalid",
+      "title": "Health and Safety Induction (copy)",
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "uploader": "Employee",
+      "http_status": 409,
+      "seconds": 0.05,
+      "transport_note": null,
+      "source_id": null,
+      "document_status": null,
+      "meeting_status": null,
+      "detail": "A duplicate document already exists.",
+      "pages": 1,
+      "chunks": null,
+      "search": {},
+      "misses": []
+    }
+  ],
+  "missed": []
+}
