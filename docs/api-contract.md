@@ -718,3 +718,63 @@ holds" — and it is structural rather than remembered: `answer_question` reads 
 the user row on each call and the conversation carries no scope for a follow-up to inherit.
 A test demotes and promotes across two turns of one thread, on one session cookie with no
 re-login, and asserts the second turn's answer changed with the role.
+
+## Stage 5 — FR-14, FR-15
+
+### FR-14 — dashboard
+
+One endpoint aggregates every panel, in one request (FR-14's Server-End clause). Decisions:
+D-68 (recent questions), D-69 (KnowledgeGaps deferred), D-70 (filters and totals), D-65 (how
+the query parameters are read), D-66 (what "scoped to the caller's role" means).
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/dashboard?date_from=&date_to=&department=` | session | `200` the summary object below, including when every list is empty and every count is 0 | `400 {"<parameter>": ["..."]}` a date that is not `YYYY-MM-DD`, `date_from` later than `date_to` (keyed on `date_to`), or a department that is not a string up to 255 characters (*convention*: FR-14 lists no 400; D-65); `401` no valid session |
+
+All three parameters are optional, and an empty value for any of them (`date_from=`, `date_to=`, `department=`) is the same as leaving it out. `department` is trimmed of surrounding spaces first, so a department of spaces only is empty too.
+
+```json
+{
+  "filters": {"date_from": "2026-09-01", "date_to": "2026-09-30", "department": "Finance"},
+  "departments": ["Finance", "Human Resources", "Operations"],
+  "indexed_totals": {"documents": 4, "meetings": 2, "total": 6},
+  "recent_documents": [document object, ...],
+  "recent_meetings": [meeting object without transcript_text, ...],
+  "recent_questions": [
+    {"question": "How is annual leave accrued?", "asked_at": "2026-09-14T10:02:11+10:00",
+     "conversation_id": "uuid or null"}
+  ]
+}
+```
+
+- **`filters`** echoes the filters the server applied, after validation, with `null` for any
+  not applied. The screen shows the active range from it (D-70).
+- **`departments`** lists the distinct non-blank `department` values of the documents in the
+  caller's scope, sorted, and is not narrowed by the active filters. It never lists a
+  department found only on documents the caller cannot see (invariant 1).
+- **`indexed_totals`** counts documents with status `Indexed` and meetings with status
+  `Indexed`, in scope and after the filters, and `total` is their sum. `ContentChunks` is not
+  read (D-70).
+- **`recent_documents`** holds up to `DASHBOARD_RECENT_ITEMS` (5) documents in scope, newest
+  `uploaded_at` first, in any status. They are the same document object `GET /api/documents`
+  returns.
+- **`recent_meetings`** holds up to 5 meetings in scope, newest `meeting_date` first. They are
+  the same object `GET /api/meetings` returns.
+- **`recent_questions`** holds up to 5 of the **caller's own** `QueryLog` rows, newest
+  `answered_at` first: the question as asked, when, and its conversation if any. There is no
+  answer text, no `answered` flag and no reason field (D-68).
+
+**What each filter narrows (D-70):**
+
+| | `date_from` / `date_to` (inclusive) | `department` |
+|---|---|---|
+| `recent_documents`, `indexed_totals.documents` | `uploaded_at`, by its Melbourne date | yes |
+| `recent_meetings`, `indexed_totals.meetings` | `meeting_date` | **no** |
+| `recent_questions` | `answered_at`, by its Melbourne date | **no** |
+
+**No count discloses anything out of scope.** Every number and list is computed over the rows
+`scoped_documents` and `scoped_meetings` return, or over the caller's own `QueryLog` rows, and
+never over a wider set filtered afterwards (FR-14's "counts are computed after permission
+filtering"; invariant 1). A `department` the caller cannot see and one that does not exist
+return the identical payload apart from `filters.department`, which echoes the value sent: the
+value is validated for shape and never looked up (D-65).
