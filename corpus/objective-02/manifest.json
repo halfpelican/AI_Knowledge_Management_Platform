@@ -31,6 +31,14 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Topic": [
+          "people"
+        ]
       }
     },
     {
@@ -57,6 +65,17 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Process": [
+          "service desk"
+        ],
+        "Topic": [
+          "technology"
+        ]
       }
     },
     {
@@ -83,6 +102,14 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "safety"
+        ]
       }
     },
     {
@@ -110,7 +137,15 @@
         ],
         "hidden_from": []
       },
-      "note": "26 pages, about 8,400 words. Time this one. Secondary phrase 'Sable Orchard recovery tier' is on page 23."
+      "note": "26 pages, about 8,400 words. Time this one. Secondary phrase 'Sable Orchard recovery tier' is on page 23.",
+      "tags": {
+        "Process": [
+          "records management"
+        ],
+        "Topic": [
+          "compliance"
+        ]
+      }
     },
     {
       "id": "D05",
@@ -136,6 +171,17 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "supplier review"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
       }
     },
     {
@@ -163,6 +209,14 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Process": [
+          "records management"
+        ],
+        "Topic": [
+          "compliance"
+        ]
       }
     },
     {
@@ -189,6 +243,15 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Topic": [
+          "people",
+          "workplace"
+        ]
       }
     },
     {
@@ -215,6 +278,14 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "people"
+        ]
       }
     },
     {
@@ -240,6 +311,11 @@
         ],
         "hidden_from": [
           "Employee"
+        ]
+      },
+      "tags": {
+        "Project": [
+          "atlas"
         ]
       }
     },
@@ -267,6 +343,17 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "supplier review"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
       }
     },
     {
@@ -293,6 +380,17 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "policy refresh"
+        ],
+        "Process": [
+          "records management"
+        ],
+        "Topic": [
+          "compliance"
+        ]
       }
     },
     {
@@ -320,7 +418,18 @@
         ],
         "hidden_from": []
       },
-      "note": "Phrase is on the first sheet ('Summary')."
+      "note": "Phrase is on the first sheet ('Summary').",
+      "tags": {
+        "Project": [
+          "supplier review"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
+      }
     },
     {
       "id": "D13",
@@ -347,7 +456,15 @@
         ],
         "hidden_from": []
       },
-      "note": "Phrase is on the first sheet ('Summary')."
+      "note": "Phrase is on the first sheet ('Summary').",
+      "tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "people"
+        ]
+      }
     },
     {
       "id": "D14",
@@ -374,7 +491,18 @@
         ],
         "hidden_from": []
       },
-      "note": "Phrase is on the first sheet ('Summary')."
+      "note": "Phrase is on the first sheet ('Summary').",
+      "tags": {
+        "Project": [
+          "office move"
+        ],
+        "Process": [
+          "service desk"
+        ],
+        "Topic": [
+          "technology"
+        ]
+      }
     },
     {
       "id": "D15",
@@ -401,7 +529,18 @@
           "Employee"
         ]
       },
-      "note": "Phrase is on the first sheet ('Summary')."
+      "note": "Phrase is on the first sheet ('Summary').",
+      "tags": {
+        "Project": [
+          "atlas"
+        ],
+        "Process": [
+          "purchasing"
+        ],
+        "Topic": [
+          "finance"
+        ]
+      }
     },
     {
       "id": "D16",
@@ -428,7 +567,15 @@
           "Employee"
         ]
       },
-      "note": "Phrase is on the first sheet ('Summary')."
+      "note": "Phrase is on the first sheet ('Summary').",
+      "tags": {
+        "Process": [
+          "onboarding"
+        ],
+        "Topic": [
+          "people"
+        ]
+      }
     },
     {
       "id": "D17",
@@ -454,6 +601,15 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "office move"
+        ],
+        "Topic": [
+          "safety",
+          "workplace"
+        ]
       }
     },
     {
@@ -480,6 +636,14 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Process": [
+          "service desk"
+        ],
+        "Topic": [
+          "technology"
+        ]
       }
     },
     {
@@ -506,6 +670,12 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Topic": [
+          "safety",
+          "workplace"
+        ]
       }
     },
     {
@@ -532,6 +702,14 @@
           "Administrator"
         ],
         "hidden_from": []
+      },
+      "tags": {
+        "Project": [
+          "office move"
+        ],
+        "Topic": [
+          "workplace"
+        ]
       }
     },
     {
@@ -796,5 +974,35 @@
       },
       "note": "Byte-identical copy of D03; the script uploads it after D03."
     }
-  ]
+  ],
+  "tagging": {
+    "decision": "D-74. Written by scripts/seed_objective02_tags.py with applied_by=\"user\" and confirmed=True. Documents only; no Department tags (D-72: Department is the documents.department column).",
+    "restricted_only_value": {
+      "dimension": "Project",
+      "value": "atlas",
+      "on": [
+        "D09",
+        "D15"
+      ],
+      "why": "Both are Administrator-only, so an Employee must never be offered this value."
+    },
+    "narrowing_example": {
+      "filters": {
+        "topic": "people",
+        "process": "onboarding"
+      },
+      "employee_sees": [
+        "D08",
+        "D13"
+      ],
+      "why": "Two filters combining: topic 'people' alone gives an Employee D01, D07, D08 and D13."
+    },
+    "no_match_example": {
+      "filters": {
+        "project": "supplier review",
+        "topic": "safety"
+      },
+      "why": "Both values are offered to an Employee and no document carries both: the 204 empty state."
+    }
+  }
 }
