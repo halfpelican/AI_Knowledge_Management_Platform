@@ -29,12 +29,14 @@ from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
+    DASHBOARD_RECENT_ITEMS,
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
     DOCUMENT_INDEXED,
     MANAGE_ROLES_PERMISSION,
     MAX_UPLOAD_BYTES,
+    MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
     ROLE_NAMES,
 )
@@ -46,7 +48,7 @@ from apps.ingestion.errors import ExtractionError, OversizedArchiveContentError
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
-from apps.retrieval.models import Conversation
+from apps.retrieval.models import Conversation, QueryLog
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
 from apps.retrieval.scoping import permission_scope, scoped_documents, scoped_meetings
 from apps.retrieval.search import (
@@ -63,6 +65,7 @@ from .serializers import (
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationSerializer,
+    DashboardQuerySerializer,
     DirectoryEntrySerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
@@ -70,6 +73,7 @@ from .serializers import (
     MeetingIngestSerializer,
     MeetingListSerializer,
     MeetingSerializer,
+    RecentQuestionSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
@@ -1094,4 +1098,115 @@ class ConversationDetailView(APIView):
         )
         return Response(
             ConversationDetailSerializer(conversation, context={"request": request}).data
+        )
+
+
+# --- FR-14 dashboard ----------------------------------------------------------------------
+
+
+class DashboardView(APIView):
+    """``GET /api/dashboard`` — FR-14: every panel's counts and recent items in one request.
+
+    FR-14's Server-End clause asks for "a single endpoint [that] aggregates counts and recent
+    items across the content tables in one request rather than issuing separate calls per
+    panel". This is that endpoint, and docs/api-contract.md (Stage 5, FR-14) is its shape.
+
+    **A session and nothing more.** ``IsAuthenticated`` is the global default (invariant 4),
+    which gives FR-14's "401 Unauthorised where the session is invalid". No permission code
+    is added: reading what one's role may see is not a privileged action, as on
+    ``GET /api/documents``.
+
+    **Every document and meeting row, and every number derived from them, starts from the
+    scoped helpers** (D-53): ``scoped_documents`` and ``scoped_meetings``, for the role
+    ``permission_scope`` re-reads from the users table on this request. The filters narrow
+    those querysets and the counts are ``.count()`` over them, so a total is taken after the
+    permission filter, never before it (FR-14's "counts are computed after permission
+    filtering, consistent with FR-11"; invariant 1). Scope is role scope with D-66's reading,
+    and meetings are scoped by role, never by attendance (D-16, invariant 3).
+
+    **Recent questions are the caller's own ``QueryLog`` rows, and the question only** (D-68).
+    Role scoping would show one user's questions to another, so these are filtered by owner,
+    not by role, and ``RecentQuestionSerializer`` says why the answer and its record-only
+    columns are left out.
+
+    **What each filter narrows** (D-70):
+
+    - ``date_from`` / ``date_to``, inclusive: documents by the Melbourne date of
+      ``uploaded_at``, meetings by ``meeting_date``, questions by the Melbourne date of
+      ``answered_at``. Each type's indexed figure is narrowed with its own panel.
+    - ``department``: documents and the documents figure only. Meetings and questions carry no
+      department, so it narrows neither, and the screen says so.
+
+    **``departments`` comes from the scoped documents, before any filter is applied** (D-70).
+    A department found only on documents the caller cannot see is never offered, and the list
+    does not change under the user as the filters do.
+
+    **``ContentChunks`` is not read** (D-70). Ingestion is atomic (invariant 9), so a source's
+    ``Indexed`` status already says its chunks exist.
+    """
+
+    def get(self, request):
+        query = DashboardQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
+        date_from = query.validated_data["date_from"]
+        date_to = query.validated_data["date_to"]
+        department = query.validated_data["department"]
+
+        # Resolved once, so every panel is scoped to the same role on this request.
+        role_name = permission_scope(request.user)
+        documents = scoped_documents(role_name=role_name)
+        meetings = scoped_meetings(role_name=role_name)
+        questions = QueryLog.objects.filter(user=request.user)
+
+        # The offered values, from the scoped documents and before any filter (D-70).
+        departments = list(
+            documents.exclude(department="")
+            .values_list("department", flat=True)
+            .distinct()
+            .order_by("department")
+        )
+
+        if date_from is not None:
+            documents = documents.filter(uploaded_at__date__gte=date_from)
+            meetings = meetings.filter(meeting_date__gte=date_from)
+            questions = questions.filter(answered_at__date__gte=date_from)
+        if date_to is not None:
+            documents = documents.filter(uploaded_at__date__lte=date_to)
+            meetings = meetings.filter(meeting_date__lte=date_to)
+            questions = questions.filter(answered_at__date__lte=date_to)
+        if department is not None:
+            # Documents only (D-70). An exact match on the stored value, which is what
+            # ``departments`` offers.
+            documents = documents.filter(department=department)
+
+        indexed_documents = documents.filter(status=DOCUMENT_INDEXED).count()
+        indexed_meetings = meetings.filter(status=MEETING_INDEXED).count()
+
+        recent_documents = documents.select_related("uploaded_by").order_by(
+            "-uploaded_at", "pk"
+        )[:DASHBOARD_RECENT_ITEMS]
+        # The ordering ``GET /api/meetings`` uses: newest met first, then newest recorded.
+        recent_meetings = meetings.prefetch_related("attendees__user").order_by(
+            "-meeting_date", "-created_at", "pk"
+        )[:DASHBOARD_RECENT_ITEMS]
+        # Three columns selected and no more, so the answer and the record-only columns are
+        # never read out of the database for this route (D-68).
+        recent_questions = questions.order_by("-answered_at", "pk").values(
+            "question", "answered_at", "conversation_id"
+        )[:DASHBOARD_RECENT_ITEMS]
+
+        return Response(
+            {
+                # The filters applied, after validation, with null for any not applied.
+                "filters": query.data,
+                "departments": departments,
+                "indexed_totals": {
+                    "documents": indexed_documents,
+                    "meetings": indexed_meetings,
+                    "total": indexed_documents + indexed_meetings,
+                },
+                "recent_documents": DocumentSerializer(recent_documents, many=True).data,
+                "recent_meetings": MeetingListSerializer(recent_meetings, many=True).data,
+                "recent_questions": RecentQuestionSerializer(recent_questions, many=True).data,
+            }
         )

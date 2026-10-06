@@ -1,0 +1,101 @@
+/* FR-14 dashboard panel, and the lists and figures inside one. Tokens only. */
+
+.dashboard-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0; /* lets a long title wrap instead of widening its grid column */
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.dashboard-panel__heading {
+  margin: 0 0 var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  font-size: var(--text-lg);
+}
+
+/* Loading, empty and unavailable: words, muted, and never coloured as an error. */
+.dashboard-panel__state {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.dashboard-panel__note {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Recent documents, meetings and questions. */
+.dashboard-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dashboard-list > li {
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.dashboard-list > li:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-list__title {
+  display: block;
+  margin: 0 0 var(--space-1);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+/* A recent question: the user's own words, as text, with no link of its own. */
+.dashboard-list__question {
+  margin: 0 0 var(--space-1);
+  word-break: break-word;
+}
+
+.dashboard-list__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.dashboard-list__meta > span {
+  white-space: nowrap;
+}
+
+/* Indexed totals: one figure per type and their sum (D-70). The figure is a
+   number in words' place, so its label always sits beside it in text. */
+.dashboard-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--layout-figure-min-width), 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.dashboard-totals__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+.dashboard-totals__item dt {
+  font-weight: var(--weight-medium);
+}
+
+.dashboard-totals__item dd {
+  margin: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
+}

@@ -127,6 +127,9 @@ Rules for this file:
 | D-65 | Every query parameter passes a DRF serializer: ChoiceField for fixed vocabularies, shape-only for department and tag, an inclusive date range; the 400 is a convention | Settled by the user · settles D-54 | 2026-10-05 |
 | D-66 | Administrator generalises Employee in scope as well as in permissions: scope is overlap with EFFECTIVE_ROLES, in the item 1 helpers only | Settled by the user | 2026-10-05 |
 | D-67 | `AnswerCitation.chunk` is SET_NULL and `chunk_uuid` keeps the cited identifier; no passage text is stored, and a NULL-chunk citation is removed for every reader | Settled by the user, in the Stage 5 brief, item 1a · supersedes D-12 for this column and D-48's "not before M6" · closes D-61's gap 5 | 2026-10-05 |
+| D-68 | FR-14's recent questions are the requester's own QueryLog rows, and the question only | Settled by the user, in the Stage 5 brief, item 3 | 2026-10-06 |
+| D-69 | FR-14's KnowledgeGaps read is deferred with FR-19 (NIT3004, Objective 06) | Settled by the user, in the Stage 5 brief, item 3 | 2026-10-06 |
+| D-70 | FR-14: department narrows documents only, labelled; the indexed total counts "Indexed" by type; each type filters on its own date | Settled by the user | 2026-10-06 |
 | D-71 | FR-12 keyword search collapses whitespace on both sides before matching, so a phrase that wraps a line is found | Settled by the user | 2026-10-06 |
 
 ---
@@ -3732,6 +3735,164 @@ name, not by NULL happening to be absent from the permitted set.
   than with the "nullable identifier snapshot" its qualification described.
 - Item 2's FR-15 deletion can delete chunks without destroying the FR-12 record. The brief put
   this item before item 2 for that reason.
+
+## D-68 · FR-14's recent questions are the requester's own, and the question only
+
+**Status:** Settled by the user, in the Stage 5 brief (`M6-BUILD-PROMPT.md` item 3) ·
+**Date:** 2026-10-06 · **Concerns:** FR-14's "recent questions asked" panel
+
+**Decision.** The recent-questions panel shows the requesting user's **own** `QueryLog` rows,
+newest first, and for each one only the question as asked, when it was asked, and the
+conversation it belongs to, if any. It returns no answer text, no `answered` flag, no
+`no_answer_reason`, no `rejected_count` and no `retrieved_chunk_ids`.
+
+**Why the owner, and not the role.** FR-14 says content is "restricted to items the user's role
+permits them to see". For documents, meetings and totals that is role scoping (D-16, D-66). A
+question is not content the organisation holds, though. It is something a person typed, and role
+scoping would show one Employee every other Employee's questions. That is a disclosure FR-14
+does not ask for and no clause anywhere licenses.
+
+**Why the question only.** `QueryLog` is a derived record, and D-48 named its columns among the
+fields that carry a permission scope nobody re-derives:
+
+- `answer_text` was generated under the role the asker held at the time, from passages that may
+  since have left their scope (D-48's instance 3). Shown on a dashboard, it is an answer nobody
+  re-scoped.
+- `answered` must be re-derived from the surviving citations, not trusted (D-48's instance 7,
+  which `ConversationTurnSerializer` does). A dashboard panel is not the place to re-derive it.
+- `no_answer_reason` and `rejected_count` are record-only (D-55, `QueryLog`'s docstring).
+
+The question text itself is the user's own words, which is the reason D-42 passes prior
+questions and D-48 keeps them on a reopened thread.
+
+**What this covers:** the `recent_questions` field of `GET /api/dashboard`.
+
+**What it does not cover:**
+
+- **An Administrator's view of everyone's questions.** That is FR-19's knowledge-gap log, COULD
+  tier and NIT3004 (D-69). Nothing here builds it.
+- **Whether a recent question was answered.** A user who wants that reopens the thread on
+  `/ask`, where it is re-derived per turn.
+- **One-off questions with no thread.** They are listed like any other, with
+  `conversation_id` null, and their panel link goes to `/ask` rather than to a thread.
+
+## D-69 · FR-14's KnowledgeGaps read is deferred with FR-19
+
+**Status:** Settled by the user, in the Stage 5 brief (`M6-BUILD-PROMPT.md` item 3) ·
+**Date:** 2026-10-06 · **Concerns:** FR-14's Database clause
+
+**Decision.** FR-14's Database clause lists `KnowledgeGaps (Read)`. The dashboard does not read
+it, because the table does not exist. `docs/schema-v1.md` §2 defers `KnowledgeGaps` to NIT3004
+with FR-19 (Knowledge Gap Log, COULD), whose verification is Objective 06, due 13 November. That
+section's rule is "add these in migration v2 when their requirement is built. Do not create empty
+tables now for work that may be descoped."
+
+**Why it is recorded now.** The brief requires this to be a decision before the
+requirements-auditor finds it as a gap. A clause the build deliberately does not meet, with a
+reason, is a deviation; the same clause unrecorded is a defect.
+
+**What this covers:** the `KnowledgeGaps (Read)` entry of FR-14's CRUD line.
+
+**What it does not cover:**
+
+- **FR-19 itself**, or any gap panel. When FR-19 lands, a dashboard panel reading its table is
+  FR-14 work to revisit, scoped as FR-19 then specifies.
+- **The evidence FR-19 will read.** `QueryLog` and `SearchLog` already record every question and
+  search with its result count (FR-12's gap-evidence clause), so nothing is lost by deferring.
+
+## D-70 · FR-14's filters and totals: department narrows documents, the total counts "Indexed" by type, each type filters on its own date
+
+**Status:** Settled by the user · **Date:** 2026-10-06 · **Concerns:** FR-14's Front-End
+filter clause, Server-End validation clause and the "total indexed items" panel ·
+**Builds on:** D-65 (how the parameters are read), D-66 (what scope means)
+
+**"Team/department" means department.** Nothing in the schema models a team: `Users` has no team
+column and `Documents.department` is the only organisational unit (D-09). The filter is
+`department`.
+
+**Department narrows documents only, and the screen says so.** Only documents carry a department.
+Meetings have none (`apps/retrieval/search.py`'s `SearchResult` docstring argues why it is not
+invented), and a user's questions have none. With a department set:
+
+- the recent-documents panel and the **documents** figure of the indexed total are narrowed;
+- the recent-meetings panel, the **meetings** figure and the recent-questions panel are not, and
+  the screen states that the department filter applies to documents.
+
+The indexed total is shown **split by type** (documents N, meetings M, and the sum), so the
+department visibly narrows only the documents figure, rather than moving a single number in a way
+the reader cannot account for.
+
+**The indexed total counts status "Indexed" only.** Documents whose status is `Indexed`, plus
+meetings whose status is `Indexed`, within the caller's scope and the active filters. A
+`Partially indexed` document is not counted.
+
+**Why FR-14 does not read `ContentChunks`, despite its CRUD line.** Ingestion is atomic
+(CLAUDE.md invariant 9, NFR-21). A document or meeting reaches `Indexed` in the same transaction
+that writes its chunks, so a source's status already tells you whether its chunks exist.
+Counting chunks to answer "how many items are indexed" would be a second, slower route to the
+same fact. The CRUD line is satisfied by the status and recorded as deliberately not read.
+
+**Each type filters on its own date, and the total is narrowed by the same range:**
+
+| Panel or figure | Date compared |
+|---|---|
+| recent documents; documents in the total | `Documents.uploaded_at` |
+| recent meetings; meetings in the total | `Meetings.meeting_date` |
+| recent questions | `QueryLog.answered_at` |
+
+- `answered_at` is set on every `QueryLog` row, unanswered ones included, so no question drops out
+  of a range for not having been answered.
+- Timestamps compare by their **Melbourne date**: `TIME_ZONE` is `Australia/Melbourne` and D-65's
+  inclusive range is applied with `__date__gte` and `__date__lte`. `meeting_date` is already a
+  date and compares directly.
+- A transcript added this week for an older meeting falls in the older meeting's range. That is
+  accepted, so that the meetings panel and the meetings figure always agree with each other.
+- The screen shows the active range.
+
+**Offered values, and why they cannot disclose anything.** The department filter offers the
+distinct non-blank departments of the documents in the caller's scope, never the departments of
+every document. A department used only on restricted documents would otherwise disclose them by
+being offered at all (invariant 1). The offered list is not narrowed by the active filters, so
+the control does not change under the user. A department the caller cannot see, or one that does
+not exist, gives the identical 200 payload: D-65 validates its shape and never looks it up.
+
+**Landing, links and size.**
+
+- Both FR-02 destinations render the dashboard: `/dashboard` for an Employee and `/admin` for an
+  Administrator. The brief requires the dashboard whichever role signs in first.
+- Each panel links to its module's own view, which is the proposal's "each panel is a route into
+  the module that owns it":
+  - recent documents and the documents figure → `/documents`;
+  - recent meetings and the meetings figure → `/meetings`;
+  - recent questions → `/ask`.
+- Each recent panel shows up to `DASHBOARD_RECENT_ITEMS` items (5), a presentation constant
+  chosen by the build and not tuned.
+
+**What this covers:** `GET /api/dashboard`'s parameters, its `indexed_totals`, the date and
+department behaviour of each panel, and the two landing routes.
+
+**What it does not cover:**
+
+- **NFR-10's two-second load.** One endpoint is what makes it achievable. Nothing here measures it.
+- **FR-15's filters**, which item 2 settles for the repository and must keep consistent with this
+  entry for department.
+- **A link from a recent question to its own thread.** That needs item 4a's `/ask?c=<id>`. Until
+  then the panel links to `/ask`.
+- **Meetings' department.** Not modelled, and not invented here.
+
+> **Clarified on 6 October 2026, when item 3 was built.** None of these changes the decision.
+> Each makes its wording match what was built.
+>
+> - "The identical 200 payload" for an unknown department and a restricted-only one means
+>   identical **apart from `filters.department`**, which echoes the value sent. The echo is the
+>   caller's own input, so it discloses nothing.
+> - A reversed range (`date_from` later than `date_to`) is a 400 keyed on **`date_to`**, the
+>   field the screen marks. This is the same convention as D-65's other 400s.
+> - `department` is trimmed of surrounding spaces, so a value of spaces only means "not
+>   applied", as an empty one does.
+> - `/admin` is not restricted to Administrators. Typed by an Employee, it shows that
+>   Employee's own scoped dashboard, because both landing routes render the same screen. No
+>   administrative function lives there.
 
 ## D-71 · FR-12 keyword search collapses whitespace on both sides before matching
 

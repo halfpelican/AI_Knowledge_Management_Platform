@@ -17,8 +17,16 @@ import { join } from 'node:path'
 import { refuseFetch } from './setup.js'
 
 /**
- * @param {Record<string, {status?: number, body?: unknown} | (() => {status?: number, body?: unknown})>} routes
- * @returns {{method: string, path: string, body: unknown}[]} every request answered, in order
+ * Routes are matched on method and path; the query string is not part of the key,
+ * and is recorded on each answered request as `search` (`""` when there is none),
+ * so a test can assert what a screen asked for as well as where.
+ *
+ * A route given as a function is called with the request's `URL` and may return a
+ * promise, which is how a test answers from the query string or holds a response
+ * back to observe a loading state.
+ *
+ * @param {Record<string, {status?: number, body?: unknown} | ((url: URL) => {status?: number, body?: unknown} | Promise<{status?: number, body?: unknown}>)>} routes
+ * @returns {{method: string, path: string, search: string, body: unknown}[]} every request answered, in order
  */
 export function serveApi(routes) {
   const answered = []
@@ -29,8 +37,13 @@ export function serveApi(routes) {
       const method = (init.method ?? 'GET').toUpperCase()
       const route = routes[`${method} ${url.pathname}`]
       if (!route) return refuseFetch(input)
-      answered.push({ method, path: url.pathname, body: init.body ? JSON.parse(init.body) : undefined })
-      const { status = 200, body = null } = typeof route === 'function' ? route() : route
+      answered.push({
+        method,
+        path: url.pathname,
+        search: url.search,
+        body: init.body ? JSON.parse(init.body) : undefined,
+      })
+      const { status = 200, body = null } = typeof route === 'function' ? await route(url) : route
       return new Response(body === null ? '' : JSON.stringify(body), {
         status,
         headers: { 'Content-Type': 'application/json' },

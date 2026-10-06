@@ -366,6 +366,9 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/search", "GET"): _searches,
     # The Sources panel and the partial matches: the route D-53 found failing open.
     ("api/ask", "POST"): _asks,
+    # FR-14: recent documents and meetings, and the offered departments, which would carry the
+    # disagreeing document's "Board office" if they were read from anything but the scoped rows.
+    ("api/dashboard", "GET"): _lists("/api/dashboard"),
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {

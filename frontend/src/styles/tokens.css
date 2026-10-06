@@ -93,6 +93,10 @@
      the range WCAG 2.1 SC 1.4.8 asks of a block of text. */
   --measure-text: 68ch;
   --layout-card-min-width: 12rem;
+  /* FR-14's dashboard: the narrowest a panel gets before the grid drops a column,
+     and the narrowest one of the indexed-total figures gets before they stack. */
+  --layout-panel-min-width: 20rem;
+  --layout-figure-min-width: 7rem;
   --layout-field-max-width: 28rem;
   --opacity-disabled: 0.55;
 

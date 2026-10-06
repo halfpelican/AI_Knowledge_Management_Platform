@@ -92,6 +92,14 @@ MAXIMUM_CONVERSATION_TURNS = 3
 # term is not a question.
 MINIMUM_SEARCH_LENGTH = 2
 
+# --- Dashboard (FR-14) ----------------------------------------------------------------
+# How many items each of the dashboard's recent panels shows: recent documents, recent
+# meetings and the caller's own recent questions (docs/decisions.md D-70). A presentation
+# constant chosen by the build, not a tuned value: the dashboard orients the user and each
+# panel links through to its module's full view, so five shows what is new without the
+# panel becoming the list it links to.
+DASHBOARD_RECENT_ITEMS = 5
+
 # --- Ingestion (FR-08, FR-09) -------------------------------------------------------
 # Extracted text shorter than this is marked "Insufficient content" and is not
 # embedded: a fragment produces an unreliable vector that matches unpredictably and

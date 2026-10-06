@@ -10,18 +10,23 @@ export const ROLES = {
  * FR-02: "On success, user is redirected to a role-specific dashboard (e.g.,
  * Administrator -> Admin Console; Employee -> Knowledge Dashboard)."
  *
- * The dashboards themselves are FR-14 and arrive in Stage 5. These routes exist
- * now so the redirect is genuinely role-specific today; Stage 5 replaces what they
- * render, not where they live. See docs/decisions.md D-25.
+ * Both render FR-14's dashboard (Stage 5 item 3, D-70): the routes were made in
+ * Stage 2 so the redirect was role-specific from the start (D-25), and FR-14
+ * replaced what they render rather than where they live. The content is the same
+ * on both, because the server scopes every panel to the caller's role.
  */
 export const DASHBOARD_PATHS = {
   [ROLES.administrator]: '/admin',
   [ROLES.employee]: '/dashboard',
 }
 
-/** Where a signed-in user belongs. Falls back to the shared placeholder. */
+/**
+ * Where a signed-in user belongs. A role this table does not name still gets the
+ * dashboard: `/dashboard` asks only for a session, and the home route redirects a
+ * signed-in user here, so a fallback of `/` would send it back to itself.
+ */
 export function dashboardPathForRole(role) {
-  return DASHBOARD_PATHS[role] ?? '/'
+  return DASHBOARD_PATHS[role] ?? DASHBOARD_PATHS[ROLES.employee]
 }
 
 /**
@@ -510,4 +515,75 @@ export const TEXT = {
   // cannot become a signal about any particular turn.
   threadReopenedNote:
     "Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number for as long as that answer's sources are on record.",
+
+  /* ---- Home, for a visitor who is not signed in ------------------------- */
+  // A signed-in user never sees this: the home route sends them to their dashboard.
+  homeHeading: 'Welcome',
+  homeIntro:
+    'Search and ask questions of your organisation’s documents and meeting transcripts. Every answer cites the material it came from.',
+
+  /* ---- FR-14 dashboard --------------------------------------------------- */
+  // FR-14: the platform's entry point after login. "It exists to orient the user
+  // rather than to hold functionality of its own: each panel is a route into the
+  // module that owns it."
+  dashboardHeading: 'Dashboard',
+  dashboardIntro: 'What is new in the material you can see. Each panel heading opens its full view.',
+  dashboardFiltersLabel: 'Dashboard filters',
+  dashboardDateRange: 'Date range',
+  // D-70: each type filters on its own date. Said here because "the last month"
+  // means something different for each panel, and a reader cannot see that.
+  dashboardDateRangeHint:
+    'Documents by the date they were uploaded, meetings by the date they were held, and your questions by the date you asked them. Both dates are included.',
+  dashboardDateFrom: 'From',
+  dashboardDateTo: 'To',
+  dashboardDepartment: 'Department',
+  dashboardAllDepartments: 'All departments',
+  // D-70: only documents carry a department, so the filter narrows the recent
+  // documents and the documents figure and nothing else, and the screen says so
+  // next to the control rather than leaving the other panels to look ignored.
+  dashboardDepartmentHint:
+    'Applies to documents only. Meetings and questions have no department, so it does not narrow them.',
+  dashboardApplyFilters: 'Apply filters',
+  dashboardClearFilters: 'Clear filters',
+  // Refused before the request is sent. The server refuses the same range with a
+  // 400 under `date_to` in the same words, so whichever side refuses it, the user
+  // reads one sentence in one place.
+  dashboardRangeInverted: 'The end date must be on or after the start date.',
+  // The 400 whose message is already under the control it concerns.
+  dashboardCheckFilters: 'Check the highlighted filter and try again.',
+  // The active filters, read from the reply's `filters` — what the server applied,
+  // not what the form holds (D-70: "the screen shows the active range").
+  dashboardActiveDates: 'Dates shown:',
+  dashboardActiveDepartment: 'Department:',
+  dashboardAllDates: 'All dates',
+  dashboardRangeBetween: (from, to) => `${from} to ${to}`,
+  dashboardRangeFrom: (from) => `From ${from}`,
+  dashboardRangeUntil: (to) => `Up to ${to}`,
+  dashboardDepartmentApplied: (department) => `${department} (documents only)`,
+  dashboardLoadFailed: 'Could not load the dashboard',
+  // A panel's state when the one request failed. Plain text: the failure itself
+  // is announced once, above the panels, rather than four times.
+  dashboardPanelUnavailable: 'Not available. See the message above the panels.',
+  dashboardDocumentsHeading: 'Recent documents',
+  dashboardMeetingsHeading: 'Recent meetings',
+  dashboardTotalsHeading: 'Indexed items',
+  // D-68: the caller's own questions, and the question only.
+  dashboardQuestionsHeading: 'Your recent questions',
+  dashboardLoadingDocuments: 'Loading recent documents…',
+  dashboardLoadingMeetings: 'Loading recent meetings…',
+  dashboardLoadingTotals: 'Loading indexed totals…',
+  dashboardLoadingQuestions: 'Loading your recent questions…',
+  // Empty is an ordinary state, and it says nothing about material outside the
+  // caller's scope: the screen is not told of any (CLAUDE.md §6, invariant 1).
+  dashboardNoDocuments: 'No documents to show.',
+  dashboardNoMeetings: 'No meeting transcripts to show.',
+  dashboardNoQuestions: 'No questions to show. Questions you ask appear here.',
+  dashboardTotalsDocuments: 'Documents',
+  dashboardTotalsMeetings: 'Meetings',
+  dashboardTotalsSum: 'Total',
+  // D-70: the total counts status "Indexed" only, by type, after the filters.
+  dashboardTotalsHint: 'Documents and meetings whose status is Indexed, within the active filters.',
+  dashboardUploaded: 'Uploaded',
+  dashboardHeld: 'Held',
+  dashboardAsked: 'Asked',
 }

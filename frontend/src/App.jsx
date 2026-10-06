@@ -8,9 +8,10 @@ import Button from './components/Button.jsx'
 import ComponentSheet from './components/ComponentSheet.jsx'
 import Notice from './components/Notice.jsx'
 import SearchField from './components/SearchField.jsx'
-import { APP_TITLE, ROLES, TEXT } from './constants.js'
+import { APP_TITLE, dashboardPathForRole, ROLES, TEXT } from './constants.js'
 import AccessDenied from './pages/AccessDenied.jsx'
 import Ask from './pages/Ask.jsx'
+import Dashboard from './pages/Dashboard.jsx'
 import DocumentDetail from './pages/DocumentDetail.jsx'
 import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
@@ -48,8 +49,11 @@ function PrimaryNav({ onLogoutError }) {
 
   return (
     <nav className="app-nav" aria-label="Primary">
-      <NavLink to="/" end>
-        Home
+      {/* FR-14: a signed-in user's home is their dashboard, so the first link goes
+          there and says so. `end`, so an Administrator's /admin link is not also
+          marked current on /admin/roles. */}
+      <NavLink to={user ? dashboardPathForRole(user.role) : '/'} end>
+        {user ? TEXT.dashboardHeading : 'Home'}
       </NavLink>
       {/* FR-08, FR-09 and FR-15: every signed-in user may reach all three, so
           there is no role test here. They are shown only while signed in
@@ -153,11 +157,11 @@ export default function App() {
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
           <Route path="components" element={<ComponentSheet />} />
-          {/* FR-02 redirects to a role-specific dashboard. FR-14 replaces what
-              these render in Stage 5; they exist now so the redirect is real. */}
+          {/* FR-02 redirects to a role-specific dashboard, and both destinations
+              render FR-14's (D-70): whichever role signs in first lands on it. */}
           <Route element={<RequireAuth />}>
-            <Route path="dashboard" element={<Home />} />
-            <Route path="admin" element={<Home />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="admin" element={<Dashboard />} />
             {/* Stage 3: FR-08 upload and the repository list, FR-09 transcript
                 ingestion and the full stored transcript. */}
             <Route path="upload" element={<Upload />} />

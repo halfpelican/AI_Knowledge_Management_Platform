@@ -48,4 +48,6 @@ urlpatterns = [
     path("conversations", views.ConversationsView.as_view(), name="conversation-list"),
     path("conversations/<uuid:pk>", views.ConversationDetailView.as_view(),
          name="conversation-detail"),
+    # Stage 5 item 3: FR-14's one aggregating endpoint, every dashboard panel in one request.
+    path("dashboard", views.DashboardView.as_view(), name="dashboard"),
 ] + router.urls
