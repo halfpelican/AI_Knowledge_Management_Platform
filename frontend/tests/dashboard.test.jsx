@@ -8,7 +8,7 @@
  * them, and the screen filters nothing itself.
  */
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
@@ -138,7 +138,11 @@ const probe = { location: null, back: null }
 function HistoryProbe() {
   const location = useLocation()
   const navigate = useNavigate()
-  useEffect(() => {
+  // A layout effect, not a passive one: it runs inside the commit that rendered this
+  // location, before a `findBy…` waiting on that commit can resolve. A passive effect
+  // runs a task later, so an assertion straight after `findBy…` could read the old
+  // location — about one run in fifteen on CI.
+  useLayoutEffect(() => {
     probe.location = location
     probe.back = () => navigate(-1)
   })

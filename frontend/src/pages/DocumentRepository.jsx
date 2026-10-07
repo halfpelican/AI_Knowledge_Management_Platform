@@ -334,6 +334,12 @@ export default function DocumentRepository() {
   // to the sort heading that was pressed, or to the results heading when the
   // control that had focus was removed with the old reply — a filter's Remove
   // button, "Clear filters", or a value the new reply no longer offers.
+  //
+  // Kept with the address it was set for, and spent only on the reply to that
+  // address. The effect below can still be pending from the previous reply when
+  // the click lands, and React runs it before handling the click's update; keyed
+  // on `loading` alone, it spent the target on the old table, which the new
+  // request then unmounted, and focus was left on the body.
   const pendingFocus = useRef(null)
 
   const activeFilters = BROWSE_FILTER_KEYS.filter((key) => applied[key]).map((key) => ({
@@ -350,10 +356,10 @@ export default function DocumentRepository() {
   }, [deletedTitle])
 
   useEffect(() => {
-    if (loading || !pendingFocus.current) return
-    const target = pendingFocus.current
+    const pending = pendingFocus.current
+    if (loading || !pending || pending.query !== query) return
     pendingFocus.current = null
-    if (target === 'sort') {
+    if (pending.target === 'sort') {
       const button = tableRef.current?.querySelector('th[aria-sort] button')
       if (button) {
         button.focus()
@@ -362,7 +368,7 @@ export default function DocumentRepository() {
     }
     const active = document.activeElement
     if (!active || active === document.body) resultsHeadingRef.current?.focus()
-  }, [loading])
+  }, [loading, query])
 
   /**
    * Writes a change to the address, which is what re-sends the request. A change
@@ -372,7 +378,7 @@ export default function DocumentRepository() {
   function update(changes, focusTarget = 'results') {
     const next = paramsFromState({ ...applied, ...changes })
     if (next.toString() === query) return
-    pendingFocus.current = focusTarget
+    pendingFocus.current = { target: focusTarget, query: next.toString() }
     setNotice(null)
     setParams(next)
   }

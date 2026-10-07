@@ -10,7 +10,7 @@
  * here stands in for them, and the screen filters nothing itself.
  */
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { TEXT } from '../src/constants.js'
@@ -88,7 +88,11 @@ const probe = { location: null, back: null }
 function HistoryProbe() {
   const location = useLocation()
   const navigate = useNavigate()
-  useEffect(() => {
+  // A layout effect, not a passive one: it runs inside the commit that rendered this
+  // location, before a `findBy…` waiting on that commit can resolve. A passive effect
+  // runs a task later, so an assertion straight after `findBy…` could read the old
+  // location — about one run in fifteen on CI.
+  useLayoutEffect(() => {
     probe.location = location
     probe.back = () => navigate(-1)
   })
@@ -197,8 +201,10 @@ describe('FR-15: sorting', () => {
     await screen.findByRole('link', { name: LEAVE.title })
     expect(columnHeader(TEXT.repositoryColumnTitle).getAttribute('aria-sort')).toBe('ascending')
     expect(columnHeader(TEXT.repositoryColumnUploaded).getAttribute('aria-sort')).toBeNull()
-    // Focus comes back to the heading that was pressed once the list re-renders.
-    expect(document.activeElement).toBe(sortButton(TEXT.repositoryColumnTitle))
+    // Focus comes back to the heading that was pressed once the list re-renders. The
+    // screen moves it in a passive effect, which runs after the commit `findBy…` waited
+    // on, so this waits for it; it still fails if focus never arrives.
+    await waitFor(() => expect(document.activeElement).toBe(sortButton(TEXT.repositoryColumnTitle)))
 
     press(sortButton(TEXT.repositoryColumnTitle))
     await waitFor(() => expect(probe.location.search).toBe('?sort=-title'))
@@ -369,8 +375,11 @@ describe('D-72: the 204, a filter combination with no accessible matches', () =>
     const browse = screen.getByRole('region', { name: TEXT.repositoryBrowseHeading })
     expect(browse.textContent).not.toContain('Human Resources')
     expect(browse.textContent).toContain(TEXT.repositoryBrowseNoMatch)
-    // The pressed button went with the facets, so focus is put somewhere deliberate.
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: TEXT.repositoryResultsHeading }))
+    // The pressed button went with the facets, so focus is put somewhere deliberate. A
+    // passive effect does it, after the commit `findByText` waited on, as in the sort test.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('heading', { name: TEXT.repositoryResultsHeading })),
+    )
   })
 })
 
@@ -549,7 +558,9 @@ describe('FR-15 deletion: offered only with manage_documents, and only after con
     ])
     expect(probe.location.pathname).toBe('/documents')
     expect(probe.location.search).toBe('?department=Finance')
-    expect(browseQueries(answered)).toEqual(['?department=Finance', '?department=Finance'])
+    // The notice renders on the repository's first commit; its request is sent by an
+    // effect after that commit, so the count is waited for rather than read at once.
+    await waitFor(() => expect(browseQueries(answered)).toEqual(['?department=Finance', '?department=Finance']))
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
