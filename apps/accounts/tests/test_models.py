@@ -56,11 +56,16 @@ def test_deleting_a_role_in_use_is_protected(employee):
 
 # --- Permissions and RolePermissions -----------------------------------------------
 
+# A code no migration seeds, for the model tests below. They used "manage_documents" until
+# accounts 0005 seeded it (D-73), when creating it again became the very IntegrityError the
+# first test asserts for a duplicate.
+UNSEEDED_PERMISSION = "example_unseeded_permission"
+
 
 def test_permission_name_is_unique():
-    Permission.objects.create(permission_name="manage_documents")
+    Permission.objects.create(permission_name=UNSEEDED_PERMISSION)
     with pytest.raises(IntegrityError), transaction.atomic():
-        Permission.objects.create(permission_name="manage_documents")
+        Permission.objects.create(permission_name=UNSEEDED_PERMISSION)
 
 
 def test_role_permission_pair_is_the_primary_key(employee_role):
@@ -71,7 +76,7 @@ def test_role_permission_pair_is_the_primary_key(employee_role):
 
 
 def test_permissions_are_held_against_roles_through_role_permissions(employee_role, administrator_role):
-    permission = Permission.objects.create(permission_name="manage_documents")
+    permission = Permission.objects.create(permission_name=UNSEEDED_PERMISSION)
     administrator_role.permissions.add(permission)
 
     # Alongside whatever migration 0003 seeded (tested in test_permissions_seed).

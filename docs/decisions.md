@@ -3998,6 +3998,29 @@ query it shares with `GET /api/documents`.
   but no clause uses it.
 - **The `Department` tag dimension.** It stays in the vocabulary for FR-10 and is not read here.
 
+> **Corrected and clarified on 7 October 2026, when item 2 was built.**
+>
+> - **Correction.** The decision says `GET /api/documents` stays "for the FR-08 upload flow and its
+>   existing consumers". The upload flow never called it: `Upload.jsx` imports only
+>   `uploadDocument` and `reprocessDocument`. Its one front-end caller was the repository screen,
+>   which now reads browse, and `listDocuments` is gone from `frontend/src/api/documents.js`. The
+>   route stays as FR-08's contracted list, used by its own tests and by nothing else. The wording
+>   came from the question put to the user and was not checked against the code when it was
+>   recorded; the react-frontend agent found it.
+> - **Sort.** `title` sorts case-insensitively, `uploaded_by` sorts by the uploader's email,
+>   `status` sorts alphabetically rather than in vocabulary order, and the primary key breaks
+>   ties.
+> - **Echoes.** `q` is echoed trimmed but not collapsed. Tag values are echoed in their normalised
+>   form, so `filters` shows what was matched.
+> - **Counts.** A facet count is the number of documents carrying the value; a document tagged
+>   twice with one value counts once.
+> - **`Tag.active` is not consulted.** A deactivated tag that is still linked to a document is
+>   filtered on and offered like any other. Nothing deactivates tags before FR-10.
+> - **A repeated parameter** takes its last value, which is DRF's behaviour. This is not tested.
+> - **The screen** compares a facet value exactly, so a hand-typed `project=Supplier Review`
+>   filters correctly (the server normalises it) and appears as an active filter, but its facet
+>   button does not show as pressed.
+
 ## D-73 · FR-15's deletion: `manage_documents` for Administrators, scoped-first, everything in one transaction
 
 **Status:** Settled by the user · **Date:** 2026-10-06 (the permission on 5 October) · **Stage:**
@@ -4047,6 +4070,26 @@ the detail response gains.
 - **Bulk deletion and visibility editing.** FR-15 asks for neither. D-47's
   `bulk_create(update_conflicts=True)` hole stays pinned, not closed.
 - **Deleting meetings.** FR-15 is about documents.
+
+> **Clarified on 7 October 2026, when item 2 was built.** None of these changes the decision.
+>
+> - **More than one `ExtractedContent` row:** the detail shows the newest by `extracted_at`, with
+>   the primary key breaking ties. This matches `manage.py reindex`, which reads the same row. No
+>   shipped path leaves more than one.
+> - **The document row is locked (`select_for_update`) before its chunks are deleted**, as
+>   reprocess and re-index lock it. A reprocess in flight would otherwise commit fresh chunks for
+>   a document that no longer exists. Pinned by the SQL order in a test, not by a concurrency
+>   test.
+> - **The file is removed with `on_commit(..., robust=True)`.** If removal fails after the rows
+>   are committed, Django logs it and the delete still answers 204, leaving an unserved file;
+>   `config/urls.py` serves nothing under `MEDIA_ROOT`. The empty `media/documents/<id>/`
+>   directory is also left behind.
+> - **`Tag` rows stay** when their last link is deleted. They are a vocabulary, and D-72's facets
+>   never offer a value no document carries.
+> - **The deletion function lives in `apps/documents/deletion.py`**, outside the request-serving
+>   packages the D-53 scan watches, as `apps/ingestion` is. Reads of `ContentTag` and
+>   `ExtractedContent` in `apps/api/repository.py` go through scoped documents, but the scan does
+>   not watch those models, so that is enforced by the tests rather than by the scan.
 
 ## D-74 · The demonstration corpus is tagged by a script, from the manifest, with `applied_by="user"`
 

@@ -57,7 +57,7 @@ from apps.core.constants import (
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
-from apps.documents.models import ContentChunk, Document
+from apps.documents.models import ContentChunk, ContentTag, Document, Tag
 from apps.meetings.models import Meeting
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
@@ -355,6 +355,22 @@ def _asks(client, case, monkeypatch):
     return case.disclosed_in(response)
 
 
+# A Project tag carried only by the disagreeing document. FR-15's facets would offer it if they
+# were read from the Tags table or from tag links not narrowed to the scoped documents (D-72).
+DOCUMENT_TAG = "succession register review"
+
+
+def _browses(client, case, monkeypatch):
+    tag, _ = Tag.objects.get_or_create(tag_name=DOCUMENT_TAG, dimension="Project")
+    ContentTag.objects.get_or_create(
+        tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=case.document.id,
+        defaults={"applied_by": "user", "confirmed": True},
+    )
+    response = client.get("/api/documents/browse")
+    assert response.status_code == 200  # no filter set, so never the 204
+    return case.disclosed_in(response) or DOCUMENT_TAG in response.content.decode()
+
+
 ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/documents", "GET"): _lists("/api/documents"),
     ("api/documents/<uuid:pk>", "GET"): _is_found(lambda case: f"/api/documents/{case.document.id}"),
@@ -369,6 +385,15 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     # FR-14: recent documents and meetings, and the offered departments, which would carry the
     # disagreeing document's "Board office" if they were read from anything but the scoped rows.
     ("api/dashboard", "GET"): _lists("/api/dashboard"),
+    # FR-15: the documents, the department facet ("Board office") and a tag facet (D-72).
+    ("api/documents/browse", "GET"): _browses,
+    # FR-15's delete returns no row, but its status code is one: 404 says nothing, while 403 or
+    # 204 confirms the id is real. Scope is resolved before the permission (D-73), so the
+    # Employee, who also lacks manage_documents, must get 404; the Administrator's mirror is the
+    # 204, and the document is then deleted.
+    ("api/documents/<uuid:pk>", "DELETE"): _is_found(
+        lambda case: f"/api/documents/{case.document.id}", method="delete"
+    ),
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {
@@ -438,3 +463,8 @@ def test_an_unknown_identifier_is_answered_exactly_as_the_withheld_one_is(employ
     assert employee_client.get(f"/api/documents/{disagreement.document.id}").content == (
         employee_client.get(f"/api/documents/{uuid.uuid4()}").content
     )
+    # FR-15's delete, the same: one 404 body, and the withheld document is still there.
+    withheld = employee_client.delete(f"/api/documents/{disagreement.document.id}")
+    assert withheld.status_code == 404
+    assert withheld.content == employee_client.delete(f"/api/documents/{uuid.uuid4()}").content
+    assert Document.objects.filter(pk=disagreement.document.id).exists()

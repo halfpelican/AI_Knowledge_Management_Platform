@@ -27,7 +27,12 @@ from rest_framework.test import APIClient, APIRequestFactory
 from apps.accounts.models import Permission, Role, RolePermission
 from apps.api.permissions import HasRolePermission
 from apps.api.tests.dual_role_matrix import enumerate_endpoints
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, MANAGE_ROLES_PERMISSION
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    EMPLOYEE_ROLE_NAME,
+    MANAGE_DOCUMENTS_PERMISSION,
+    MANAGE_ROLES_PERMISSION,
+)
 from conftest import PASSWORD
 
 User = get_user_model()
@@ -47,13 +52,20 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "search",  # Stage 4: FR-12 keyword search (D-41)
                     "ask",  # Stage 4: FR-12's answer path, FR-13's turn
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
-                    "dashboard"}  # Stage 5 item 3: FR-14
+                    "dashboard",  # Stage 5 item 3: FR-14
+                    "document-browse"}  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
 # rather than declared on the class, so reading permission_classes cannot see it.
 # apps/api/tests/test_document_upload.py proves that 403 directly.
+# document-detail is absent for a stronger reason: its DELETE checks manage_documents
+# INSIDE the method, after resolving the document through the caller's scope, because a
+# permission class runs first and would answer 403 for a document the caller cannot see
+# (D-73). apps/api/tests/test_document_delete.py proves the 403 and the 404 before it.
 PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE_ROLES_PERMISSION}
+# Codes checked inside a view rather than declared on it, so the seed test below covers them.
+IN_VIEW_PERMISSION_CODES = {MANAGE_DOCUMENTS_PERMISSION}  # DocumentDetailView.delete (D-73)
 
 USERS = reverse("user-list")
 ROLES = reverse("role-list")
@@ -298,4 +310,6 @@ def test_every_permission_code_in_use_is_seeded():
     # A route can only name a code that exists in the permissions table.
     seeded = set(Permission.objects.values_list("permission_name", flat=True))
     assert set(PERMISSIONED_ROUTES.values()) <= seeded
+    assert IN_VIEW_PERMISSION_CODES <= seeded
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_ROLES_PERMISSION).exists()
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_DOCUMENTS_PERMISSION).exists()

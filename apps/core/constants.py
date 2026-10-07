@@ -100,6 +100,21 @@ MINIMUM_SEARCH_LENGTH = 2
 # panel becoming the list it links to.
 DASHBOARD_RECENT_ITEMS = 5
 
+# --- Document repository (FR-15) -------------------------------------------------------
+# The columns FR-15's list view may be sorted by (docs/decisions.md D-72): its title, type,
+# uploader, upload date and status, which are the five things FR-15 says the list shows. Each
+# is accepted bare for ascending or with DESCENDING_SORT_PREFIX for descending, and the whole
+# set is a fixed vocabulary read through a ChoiceField, never a column name taken from the
+# request (D-65). ``uploaded_by`` sorts by the uploader's address, the value the list displays.
+DOCUMENT_SORT_KEYS = ("title", "file_type", "uploaded_by", "uploaded_at", "status")
+DESCENDING_SORT_PREFIX = "-"
+DOCUMENT_SORT_VALUES = DOCUMENT_SORT_KEYS + tuple(
+    f"{DESCENDING_SORT_PREFIX}{key}" for key in DOCUMENT_SORT_KEYS
+)
+# Newest first: the order GET /api/documents has always returned, so the browse route's
+# default and the plain list agree (D-72).
+DEFAULT_DOCUMENT_SORT = f"{DESCENDING_SORT_PREFIX}uploaded_at"
+
 # --- Ingestion (FR-08, FR-09) -------------------------------------------------------
 # Extracted text shorter than this is marked "Insufficient content" and is not
 # embedded: a fragment produces an unreliable vector that matches unpredictably and
@@ -283,6 +298,12 @@ DOCUMENT_STATUS_VALUES = ("Processing", "Extraction failed", "Insufficient conte
 MEETING_STATUS_VALUES  = ("Received", "Indexed", "Processing failed")
 (MEETING_RECEIVED, MEETING_INDEXED, MEETING_PROCESSING_FAILED) = MEETING_STATUS_VALUES
 CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
+(DEPARTMENT_DIMENSION, PROJECT_DIMENSION, PROCESS_DIMENSION,
+ TOPIC_DIMENSION) = CLASSIFICATION_DIMENSIONS
+# The tag dimensions FR-15's browse and detail view read from ContentTags. Department is
+# not among them: it is the documents.department column, the source FR-14's filter uses,
+# and no Department tags are seeded (docs/decisions.md D-72, D-74).
+REPOSITORY_TAG_DIMENSIONS = (PROJECT_DIMENSION, PROCESS_DIMENSION, TOPIC_DIMENSION)
 SOURCE_TYPES = ("document", "meeting")
 NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESHOLD
                      "no_statement_verified")   # retrieved, but verification stripped all
@@ -314,7 +335,7 @@ EFFECTIVE_ROLES = {
 }
 
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
-# role_permissions, seeded by accounts migrations 0003 and 0004; a test asserts the
+# role_permissions, seeded by accounts migrations 0003, 0004 and 0005; a test asserts the
 # constants and the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
@@ -324,6 +345,11 @@ MANAGE_ROLES_PERMISSION = "manage_roles"
 # enforcement point the clause requires, not a demonstrable restriction. The
 # proposal's knowledgeArea argument is dropped — schema v1 models no knowledge area.
 CONTRIBUTE_CONTENT_PERMISSION = "contribute_content"
+# FR-15 Server-End Validation: "the requesting user must hold manage_documents to delete".
+# Held by Administrator only, seeded by accounts migration 0005 (docs/decisions.md D-73).
+# There is no ownership rule: deletion is a role permission, and D-66 puts every
+# Employee-only document in an Administrator's scope, so no document is undeletable.
+MANAGE_DOCUMENTS_PERMISSION = "manage_documents"
 
 # Provenance of a ContentTags row (FR-10, FR-15).
 TAG_APPLIED_BY_VALUES = ("ai", "user")

@@ -5,6 +5,7 @@ import { SOURCE_TYPE, TEXT } from '../constants.js'
 import { contrastRatio } from '../utils/contrast.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
 import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
+import { ActiveFilterList, FacetGroup, SortHeader } from './Browse.jsx'
 import Button from './Button.jsx'
 import DashboardPanel from './DashboardPanel.jsx'
 import Dialog from './Dialog.jsx'
@@ -68,6 +69,8 @@ const CONTRAST_PAIRS = [
   { label: 'Success text on success surface', fg: '--color-success', bg: '--color-success-surface', minimum: 4.5 },
   { label: 'Warning text on warning surface', fg: '--color-warning', bg: '--color-warning-surface', minimum: 4.5 },
   { label: 'Control border on surface (non-text)', fg: '--color-border-strong', bg: '--color-surface', minimum: 3 },
+  // FR-15's browse values sit in a panel on the alt surface.
+  { label: 'Control border on alt surface (non-text)', fg: '--color-border-strong', bg: '--color-surface-alt', minimum: 3 },
   { label: 'Focus ring on surface (non-text)', fg: '--color-focus', bg: '--color-surface', minimum: 3 },
 ]
 
@@ -77,14 +80,27 @@ const BUILT = [
   { name: 'Role management (FR-05, Administrator only)', paths: ['/admin/roles'] },
   { name: 'Access Denied (FR-06, where a guarded route redirects)', paths: ['/403'] },
   { name: 'Document upload (FR-08)', paths: ['/upload'] },
-  { name: 'Document repository (FR-08; FR-15 adds filtered browsing in Stage 5)', paths: ['/documents'] },
   { name: 'Meeting transcripts (FR-09)', paths: ['/meetings'] },
   { name: 'Keyword search, grouped by type (FR-12)', paths: ['/search'] },
   { name: 'Ask, citations and Sources, with the conversation thread (FR-12, FR-13)', paths: ['/ask'] },
   { name: 'Dashboard (FR-14), the landing page for each role', paths: ['/dashboard', '/admin'] },
+  {
+    name: 'Document repository with filtered browsing, and the document detail view with deletion (FR-15; FR-08’s retry on its rows)',
+    paths: ['/documents', '/documents/:docId'],
+  },
 ]
 
-const UPCOMING = ['Filtered browsing (FR-15)']
+// FR-15's detail clause names a download link. Its route is Stage 5 item 2a and
+// is not built, so the detail view renders nothing for it yet.
+const UPCOMING = ['Document download link (FR-15, Stage 5 item 2a)']
+
+/* Fixtures for the FR-15 section below: one dimension's values as the browse
+   reply carries them, already scoped and counted by the server (D-72). */
+const SAMPLE_FACET_VALUES = [
+  { value: 'Finance', count: 3 },
+  { value: 'Human Resources', count: 2 },
+  { value: 'Operations', count: 1 },
+]
 
 /* Fixtures for the FR-12 sections below. Invented text, so the sheet shows the
    components without a running AI provider or a corpus; the shapes are the
@@ -188,6 +204,13 @@ export default function ComponentSheet() {
   const [demoPassword, setDemoPassword] = useState('')
   const [dialogOpen, setDialogOpen] = useState(false)
   const demoRequirementsId = useId()
+  // FR-15's browse controls, working against local state here; the repository
+  // keeps the same values in the address instead.
+  const [demoDepartment, setDemoDepartment] = useState('Finance')
+  const [demoSort, setDemoSort] = useState('title')
+  const demoFilters = demoDepartment
+    ? [{ key: 'department', name: TEXT.repositoryFilterNameDepartment, value: demoDepartment }]
+    : []
 
   return (
     <div className="sheet">
@@ -647,6 +670,63 @@ export default function ComponentSheet() {
             </dl>
             <p className="dashboard-panel__note">{TEXT.dashboardTotalsHint}</p>
           </DashboardPanel>
+        </div>
+      </section>
+
+      <section aria-labelledby="sheet-browse">
+        <h2 id="sheet-browse">Filtered browsing (FR-15)</h2>
+        <p>
+          A browse dimension is a group of toggle buttons, one per value with the server&rsquo;s count beside it.
+          The chosen value is filled and ticked, not only coloured, and <code>aria-pressed</code> announces it;
+          choosing it again removes it. The count is shown as a number and given its noun for assistive
+          technology, so a value reads &ldquo;Finance 3 documents&rdquo;. The values and counts come from the
+          documents the reader may see, and a reply with nothing in it (the 204) carries none, so none are shown
+          from an earlier reply (D-72).
+        </p>
+        <div className="demo-stack">
+          <FacetGroup
+            heading={TEXT.repositoryFilterNameDepartment}
+            values={SAMPLE_FACET_VALUES}
+            selected={demoDepartment}
+            onChoose={setDemoDepartment}
+          />
+        </div>
+        <p>
+          The active filters are read from the address, never from a reply, so they are there on the 204 as well.
+          Each has its own Remove button, named for the filter it removes, and &ldquo;Clear filters&rdquo; removes
+          them all and keeps the sort, which is not a filter.
+        </p>
+        <ActiveFilterList
+          filters={demoFilters}
+          onRemove={() => setDemoDepartment('')}
+          onClear={() => setDemoDepartment('')}
+        />
+        <p>
+          A sortable column heading is a button inside the <code>th</code>, which carries{' '}
+          <code>aria-sort</code> for the column in force. The direction is in words for a screen reader and in an
+          arrow on screen. The first press sorts ascending, and a press on the column in force reverses it.
+        </p>
+        <div className="table-scroll" role="region" aria-labelledby="sheet-browse" tabIndex={0}>
+          <table className="contrast-table">
+            <caption className="visually-hidden">Example of sortable column headings</caption>
+            <thead>
+              <tr>
+                <SortHeader label={TEXT.repositoryColumnTitle} field="title" sort={demoSort} onSort={setDemoSort} />
+                <SortHeader
+                  label={TEXT.repositoryColumnUploaded}
+                  field="uploaded_at"
+                  sort={demoSort}
+                  onSort={setDemoSort}
+                />
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Leave policy 2026</td>
+                <td>21 Sept 2026</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

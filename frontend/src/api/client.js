@@ -4,7 +4,7 @@
  * This is the only place in the frontend that calls `fetch` or constructs an
  * `XMLHttpRequest`. Components and hooks import the endpoint helpers
  * (src/api/auth.js, src/api/users.js, src/api/documents.js, src/api/meetings.js)
- * or `get`, `post`, `patch`, `request` and `upload` from here; they never talk to
+ * or `get`, `post`, `patch`, `del`, `request` and `upload` from here; they never talk to
  * the network themselves.
  *
  * Authentication is Django's session cookie (D-21). The cookie is HttpOnly, so
@@ -193,6 +193,14 @@ export function post(path, body, options = {}) {
 
 export function patch(path, body, options = {}) {
   return request(path, { ...options, method: 'PATCH', body })
+}
+
+/**
+ * DELETE. Named `del` because `delete` is a reserved word. It sends no body, and
+ * a 204 resolves to null, as every empty response does.
+ */
+export function del(path, options = {}) {
+  return request(path, { ...options, method: 'DELETE' })
 }
 
 /* ---- Upload ------------------------------------------------------------- */

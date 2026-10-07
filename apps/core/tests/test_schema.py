@@ -176,6 +176,9 @@ SECTION_5_PLAN = [
     ("accounts", "0002_seed_roles"),
     ("accounts", "0003_seed_permissions"),
     ("accounts", "0004_seed_contribute_content"),  # D-30: FR-08's contribute permission
+    # Stage 5 item 2 (D-73): FR-15's delete permission, Administrator only. Placed where the
+    # executor plans it, immediately after accounts 0004, the rule D-51 records.
+    ("accounts", "0005_seed_manage_documents"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     ("documents", "0002_content_chunks"),

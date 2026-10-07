@@ -15,13 +15,22 @@ from rest_framework import serializers
 from django.utils import timezone
 
 from apps.accounts.models import Role
-from apps.core.constants import NO_ANSWER_MESSAGE, PROVENANCE_REMOVED_MESSAGE, ROLE_NAMES
+from apps.core.constants import (
+    DEFAULT_DOCUMENT_SORT,
+    DOCUMENT_SORT_VALUES,
+    DOCUMENT_STATUS_VALUES,
+    NO_ANSWER_MESSAGE,
+    PROVENANCE_REMOVED_MESSAGE,
+    ROLE_NAMES,
+)
 from apps.core.models import NAME_MAX_LENGTH
-from apps.documents.models import Document
+from apps.documents.models import Document, normalise_tag_name
 from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
+
+from .repository import extracted_text_of, tags_of
 
 User = get_user_model()
 
@@ -158,6 +167,48 @@ class DocumentSerializer(serializers.ModelSerializer):
         fields = ("doc_id", "title", "file_type", "status", "uploaded_at", "department",
                   "visible_to_roles", "file_size_bytes", "uploaded_by")
         read_only_fields = fields
+
+
+class DocumentDetailSerializer(DocumentSerializer):
+    """``GET /api/documents/{id}``: the document object plus FR-15's three detail fields.
+
+    FR-15's detail view shows "its metadata, extracted content, and a download link" (D-63,
+    D-73). The download link is Stage 5 item 2a and is not here. The three fields:
+
+    - ``extracted_text``: ``ExtractedContent.extracted_text`` of the document the view resolved
+      through ``scoped_documents``, never reassembled from chunks, and ``None`` where the
+      document has no row ("Extraction failed", "Insufficient content", "Too large to index").
+      The client keys its empty state on ``None``, not on the status (D-63). It is a document's
+      whole content and is exactly as sensitive as the file, which is why it travels only on
+      this scoped route.
+    - ``tags``: the document's tag names per Project, Process and Topic. Department is the
+      ``department`` field already in the object (D-72).
+    - ``can_delete``: whether the caller's role holds ``manage_documents``, supplied by the view
+      in the context and resolved the way every permission is (``apps/api/permissions.py``). A
+      hint for showing the delete control; ``DELETE`` checks the permission itself whatever the
+      screen did (invariant 4). Read from the context with no default, so a caller that forgets
+      to decide it raises rather than rendering a guess.
+
+    The list routes keep ``DocumentSerializer``: a list of fifty documents should not carry
+    fifty documents' whole text, as ``MeetingListSerializer`` leaves out the transcript.
+    """
+
+    extracted_text = serializers.SerializerMethodField()
+    tags = serializers.SerializerMethodField()
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta(DocumentSerializer.Meta):
+        fields = DocumentSerializer.Meta.fields + ("extracted_text", "tags", "can_delete")
+        read_only_fields = fields
+
+    def get_extracted_text(self, document):
+        return extracted_text_of(document)
+
+    def get_tags(self, document):
+        return tags_of(document)
+
+    def get_can_delete(self, document):
+        return self.context["can_delete"]
 
 
 class DocumentUploadSerializer(serializers.Serializer):
@@ -923,3 +974,92 @@ class RecentQuestionSerializer(serializers.Serializer):
     asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
     # Null for a one-off question with no thread (D-68).
     conversation_id = serializers.UUIDField(read_only=True, allow_null=True)
+
+
+# --- FR-15 document repository ------------------------------------------------------------
+
+
+class _TrimmedChoiceField(serializers.ChoiceField):
+    """A ``ChoiceField`` that trims surrounding spaces before matching the vocabulary.
+
+    docs/api-contract.md says every browse parameter "is trimmed of surrounding spaces first",
+    and DRF trims a ``CharField`` but not a ``ChoiceField``. Without this, ``status=%20`` would be
+    400 where ``department=%20`` means "not applied". The vocabulary itself is still the only
+    thing accepted: a value is matched exactly, case included, after the trim.
+    """
+
+    def to_internal_value(self, data):
+        if isinstance(data, str):
+            data = data.strip()
+        return super().to_internal_value(data)
+
+
+def _optional_text():
+    """A free-text browse parameter: optional, blank allowed, trimmed, at most 255 characters.
+
+    Shape only (D-65). ``CharField`` carries ``ProhibitNullCharactersValidator``, so a NUL byte is
+    a 400 here and never reaches an ORM lookup.
+    """
+    return serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, default=None, allow_blank=True
+    )
+
+
+class DocumentBrowseQuerySerializer(serializers.Serializer):
+    """``GET /api/documents/browse``'s query parameters, read only through this (D-65).
+
+    **Every parameter is optional, and an empty or blank value is the same as an absent one**
+    (docs/api-contract.md): each filter validates to ``None`` when not applied, and ``sort`` to
+    ``DEFAULT_DOCUMENT_SORT``. ``data`` echoes those applied values back as the reply's
+    ``filters``, as FR-14's serializer does.
+
+    - ``status`` and ``sort`` are fixed vocabularies from ``apps/core/constants.py``, read through
+      a ``ChoiceField``: anything else, a NUL byte included, is a 400 keyed on the parameter.
+    - ``q`` and ``department`` are checked for shape only and kept as sent, trimmed. ``q`` is
+      matched with whitespace collapsed (D-71), which is a property of the match rather than of
+      the value, so it is echoed uncollapsed.
+    - ``project``, ``process`` and ``topic`` are tag names, normalised exactly as ``Tag.save``
+      normalises them (``normalise_tag_name``: lower case, single spaces), so ``Supplier  Review``
+      finds the tag stored as ``supplier review``. They are echoed normalised, because that is the
+      value applied.
+
+    **No value is ever looked up.** A department or tag that does not exist and one used only on
+    documents the caller cannot see must give the same answer, FR-15's 204; a field that checked
+    for existence would answer 400 for one and 204 for the other, and the difference would
+    disclose the restricted one (D-65). 400 for a malformed parameter is this API's convention,
+    not one of FR-15's codes.
+    """
+
+    q = _optional_text()
+    status = _TrimmedChoiceField(
+        choices=DOCUMENT_STATUS_VALUES, required=False, default=None, allow_blank=True
+    )
+    department = _optional_text()
+    project = _optional_text()
+    process = _optional_text()
+    topic = _optional_text()
+    sort = _TrimmedChoiceField(
+        choices=DOCUMENT_SORT_VALUES, required=False, default=DEFAULT_DOCUMENT_SORT,
+        allow_blank=True,
+    )
+
+    def validate_q(self, value):
+        return value or None
+
+    def validate_status(self, value):
+        return value or None
+
+    def validate_department(self, value):
+        return value or None
+
+    def validate_project(self, value):
+        return normalise_tag_name(value) if value else None
+
+    def validate_process(self, value):
+        return normalise_tag_name(value) if value else None
+
+    def validate_topic(self, value):
+        return normalise_tag_name(value) if value else None
+
+    def validate_sort(self, value):
+        return value or DEFAULT_DOCUMENT_SORT

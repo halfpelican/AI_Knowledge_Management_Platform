@@ -355,7 +355,15 @@ describe('D-61 gap 3: the filters live in the address', () => {
     const answered = serveApi({
       'GET /api/auth/me': { body: EMPLOYEE },
       'GET /api/dashboard': echoingDashboard,
-      'GET /api/documents': { body: [] },
+      // The repository the panel links to reads FR-15's browse route (D-72): the
+      // contract's unfiltered 200 with nothing in it.
+      'GET /api/documents/browse': {
+        body: {
+          filters: { q: null, status: null, department: null, project: null, process: null, topic: null, sort: '-uploaded_at' },
+          facets: { department: [], project: [], process: [], topic: [] },
+          documents: [],
+        },
+      },
     })
     const probe = renderApp('/dashboard')
     await screen.findByText(DOCUMENT.title)

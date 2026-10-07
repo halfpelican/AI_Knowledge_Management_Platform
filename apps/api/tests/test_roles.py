@@ -30,6 +30,7 @@ from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
+    MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     ROLE_NAMES,
 )
@@ -76,10 +77,12 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
     assert all(set(role) == {"role_id", "name", "description", "permissions"} for role in body)
     assert all(role["description"] for role in body)
     by_name = {role["name"]: role for role in body}
-    # Both roles contribute content (D-30); manage_roles is Administrator's alone.
+    # Both roles contribute content (D-30); manage_roles and, since accounts 0005,
+    # manage_documents are Administrator's alone (D-73). Listed by name.
     assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == [CONTRIBUTE_CONTENT_PERMISSION]
     assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [
         CONTRIBUTE_CONTENT_PERMISSION,
+        MANAGE_DOCUMENTS_PERMISSION,
         MANAGE_ROLES_PERMISSION,
     ]
 

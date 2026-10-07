@@ -44,7 +44,11 @@ export function serveApi(routes) {
         body: init.body ? JSON.parse(init.body) : undefined,
       })
       const { status = 200, body = null } = typeof route === 'function' ? await route(url) : route
-      return new Response(body === null ? '' : JSON.stringify(body), {
+      // No body is a null body, not an empty string: the Fetch spec refuses any
+      // body at all on a 204, so `new Response('', {status: 204})` throws, and the
+      // client would have reported FR-15's 204 as an unreachable server. Read as
+      // text, a null body is "" exactly as the empty string was.
+      return new Response(body === null ? null : JSON.stringify(body), {
         status,
         headers: { 'Content-Type': 'application/json' },
       })
