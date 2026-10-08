@@ -34,6 +34,7 @@ from apps.core.constants import (
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
     DOCUMENT_INDEXED,
+    MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MAX_UPLOAD_BYTES,
     MEETING_INDEXED,
@@ -41,6 +42,7 @@ from apps.core.constants import (
     ROLE_NAMES,
 )
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.deletion import delete_document
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
@@ -59,6 +61,7 @@ from apps.retrieval.search import (
 
 from .answers import reply_for
 from .permissions import HasRolePermission
+from .repository import RepositoryFilters, browse, repository_documents
 from .serializers import (
     AnswerSerializer,
     AskSerializer,
@@ -67,6 +70,8 @@ from .serializers import (
     ConversationSerializer,
     DashboardQuerySerializer,
     DirectoryEntrySerializer,
+    DocumentBrowseQuerySerializer,
+    DocumentDetailSerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
     LoginSerializer,
@@ -179,6 +184,11 @@ NEW_CONVERSATION_TITLE = "New conversation"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
+# FR-15's deletion (D-73). Deliberately NOT a permission_classes entry on any view: DRF runs
+# those in initial(), before the method, which would answer 403 for a document outside the
+# caller's scope and so confirm that it exists. DocumentDetailView.delete resolves the scope
+# first and consults this second.
+CanManageDocuments = HasRolePermission.for_code(MANAGE_DOCUMENTS_PERMISSION)
 
 
 def not_found(request, exception=None):
@@ -481,8 +491,9 @@ class DocumentsView(APIView):
     work and this is not that filter, but a list disclosing documents outside the caller's scope
     would be a leak to remove later rather than a feature, and CLAUDE.md invariant 1
     is explicit that the existence of out-of-scope material must not be disclosed
-    "by a result count, a total, or an error message". FR-15's filtered browsing
-    builds on this in Stage 5.
+    "by a result count, a total, or an error message". Since Stage 5 item 2 the list is
+    built by ``repository_documents``, the one query FR-15's browse route also builds on
+    (D-72), and its body is unchanged: a bare list, newest first.
     """
 
     permission_classes = [IsAuthenticated]
@@ -501,11 +512,8 @@ class DocumentsView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
-        documents = (
-            scoped_documents(role_name=permission_scope(request.user))
-            .select_related("uploaded_by")
-            .order_by("-uploaded_at", "pk")
-        )
+        # The one list query browse also builds on (D-72): no filters, newest first.
+        documents = repository_documents(role_name=permission_scope(request.user))
         return Response(DocumentSerializer(documents, many=True).data)
 
     def post(self, request):
@@ -649,16 +657,106 @@ class DocumentDetailView(APIView):
     leaves them out for every endpoint: a path inside MEDIA_ROOT is of no use to a client
     and an invitation to construct one, and echoing a content hash would let a caller probe
     whether a document they cannot see has been uploaded.
+
+    **FR-15 (Stage 5 item 2) adds three fields** to the body, ``extracted_text``, ``tags`` and
+    ``can_delete`` (``DocumentDetailSerializer``; D-63, D-73), and the ``DELETE`` method below.
     """
 
-    def get(self, request, pk):
-        document = get_object_or_404(
+    def _scoped_document(self, request, pk):
+        """The document, if the caller's scope holds it; 404 otherwise, unknown or not (D-46)."""
+        return get_object_or_404(
             scoped_documents(role_name=permission_scope(request.user)).select_related(
                 "uploaded_by"
             ),
             pk=pk,
         )
-        return Response(DocumentSerializer(document).data)
+
+    def _may_delete(self, request) -> bool:
+        """Whether the caller's role holds ``manage_documents``, read from ``role_permissions``
+        on this request as every permission is (``apps/api/permissions.py``, D-14, D-21)."""
+        return CanManageDocuments().has_permission(request, self)
+
+    def get(self, request, pk):
+        document = self._scoped_document(request, pk)
+        return Response(
+            DocumentDetailSerializer(
+                document, context={"can_delete": self._may_delete(request)}
+            ).data
+        )
+
+    def delete(self, request, pk):
+        """``DELETE /api/documents/{id}``: FR-15's permissioned deletion (D-73).
+
+        **Scope first, permission second, and the order is the security property.** The
+        document is resolved through ``scoped_documents`` exactly as ``get`` resolves it, so an
+        unknown id and one outside the caller's scope are both 404, by one query (D-46). Only a
+        document the caller may see reaches the permission check, which answers 403 for a role
+        without ``manage_documents``. In the other order an Employee could tell an
+        Administrator-only document from a non-existent one by the code: 403 for the first, 404
+        for the second. That is why the check is here and not in ``permission_classes``, which
+        DRF runs before this method.
+
+        **Then everything goes in one transaction** (``apps/documents/deletion.py``): the chunks
+        and tag links by source, which have no foreign key (D-07), and the document with its
+        extracted content. The stored file is removed when that transaction commits. 204 with no
+        body is a convention: FR-15 names no success code for a delete.
+        """
+        document = self._scoped_document(request, pk)
+        if not self._may_delete(request):
+            self.permission_denied(request, message=CanManageDocuments.message)
+        delete_document(document)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DocumentBrowseView(APIView):
+    """``GET /api/documents/browse`` — FR-15's list view, filters, sort and facets (D-72).
+
+    FR-15 asks for "a list view of documents showing title, type, uploader, upload date, and
+    status, with sorting and text filtering", and "a browse mode allowing navigation by
+    Department, Project, Process or Topic without composing a query", where "filters combine,
+    with item counts shown against each available value". One request returns the applied
+    filters, the facets and the documents.
+
+    **A session and nothing more**, as ``GET /api/documents``: reading what one's role may see
+    is not a privileged action. ``IsAuthenticated`` is the global default (invariant 4).
+
+    **The documents come from the same query as ``GET /api/documents``**
+    (``repository_documents``, D-72), starting from ``scoped_documents`` (D-53), and every facet
+    count is taken over those scoped rows. A value found only on documents the caller cannot see
+    is never offered, and a count never includes one (FR-15: "counts are computed after that
+    filter, so a count never discloses inaccessible content"; invariant 1).
+
+    **Parameters pass ``DocumentBrowseQuerySerializer``** (D-65), so a NUL byte, an over-long
+    value or a status or sort outside its vocabulary is a 400 keyed on the parameter, and a
+    department or tag is never looked up.
+
+    **204 only when a filter is set and nothing matches** (FR-15's "204 No Content for a filter
+    combination with no accessible matches"). An unknown value and a value used only on
+    restricted documents both match nothing the caller may see, so both are the same 204 with no
+    body. ``sort`` alone is not a filter, and an unfiltered empty repository is 200 with empty
+    lists, because there is no filter combination to fail (D-72).
+    """
+
+    def get(self, request):
+        query = DocumentBrowseQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
+        applied = query.validated_data
+        filters = RepositoryFilters(
+            **{name: value for name, value in applied.items() if name != "sort"}
+        )
+        result = browse(
+            role_name=permission_scope(request.user), filters=filters, sort=applied["sort"]
+        )
+        if result is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {
+                # The filters applied, after validation, with null for any not applied.
+                "filters": query.data,
+                "facets": result.facets,
+                "documents": DocumentSerializer(result.documents, many=True).data,
+            }
+        )
 
 
 # --- FR-12 keyword search ----------------------------------------------------------------

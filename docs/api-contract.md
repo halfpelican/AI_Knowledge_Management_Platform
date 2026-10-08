@@ -112,7 +112,7 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or every chunk failed to embed |
 | POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
-| GET | `/api/documents/{id}` | session | `200` document object | `401`; `404` no such document, or one outside the caller's scope |
+| GET | `/api/documents/{id}` | session | `200` document object, with the detail fields Stage 5 adds (`extracted_text`, `tags`, `can_delete`; see Stage 5 — FR-15) | `401`; `404` no such document, or one outside the caller's scope |
 
 The document object:
 
@@ -778,3 +778,83 @@ never over a wider set filtered afterwards (FR-14's "counts are computed after p
 filtering"; invariant 1). A `department` the caller cannot see and one that does not exist
 return the identical payload apart from `filters.department`, which echoes the value sent: the
 value is validated for shape and never looked up (D-65).
+
+### FR-15 — document repository
+
+The repository screen reads `GET /api/documents/browse`. `GET /api/documents` is unchanged: it
+stays as FR-08's contracted list, although after Stage 5 item 2 no screen calls it (D-72's
+dated note). Both routes build their documents through one scoped query function (D-72). Decisions: D-72 (browse), D-73 (deletion and the detail fields), D-74 (the
+demonstration tags), D-65 (how parameters are read), D-66 (what scope means), D-63 (extracted
+content). The download route is Stage 5 item 2a, and this section does not define it.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/documents/browse?q=&status=&department=&project=&process=&topic=&sort=` | session | `200` the browse object below; also `200` when no filter is set and nothing is in scope | `204` no body: at least one filter is set and no document in the caller's scope matches (FR-15); `400 {"<parameter>": ["..."]}` a `status` or `sort` outside its vocabulary, a NUL byte, or a value over 255 characters (*convention*, D-65); `401` |
+| GET | `/api/documents/{id}` | session | `200` the document object **with** `extracted_text`, `tags` and `can_delete` (below) | `401`; `404` no such document, or one outside the caller's scope |
+| DELETE | `/api/documents/{id}` | session + `manage_documents` | `204` no body. The document, its extracted content, its chunks and its tag links are deleted in one transaction; the stored file is removed when that transaction commits (*convention*: FR-15 names no success code for a delete) | `401`; `404` no such document, or one outside the caller's scope, checked **before** the permission; `403` the document is in scope and the role lacks `manage_documents` |
+
+**Parameters.** All are optional, and an empty value is the same as leaving it out. A value is
+trimmed of surrounding spaces first.
+
+| Parameter | Meaning |
+|---|---|
+| `q` | Text filter: the title contains it, case-insensitively, with runs of whitespace collapsed on both sides (D-71) |
+| `status` | One of the document statuses in `docs/schema-v1.md` §3 |
+| `department` | Exact match on the document's `department` column (D-72) |
+| `project`, `process`, `topic` | A tag name in that dimension, matched after the same normalisation `Tags` applies: lower case, single spaces |
+| `sort` | `title`, `file_type`, `uploaded_by`, `uploaded_at` or `status`, each optionally prefixed `-` for descending. The default is `-uploaded_at`, newest first, and the primary key breaks ties. `title` sorts case-insensitively, `uploaded_by` by the uploader's address (the value the document object carries), and `status` alphabetically |
+
+`q`, `status`, `department`, `project`, `process` and `topic` are filters, and they combine with
+AND. `sort` is not a filter: it never causes a 204.
+
+```json
+{
+  "filters": {"q": null, "status": null, "department": "Finance", "project": null,
+              "process": "purchasing", "topic": null, "sort": "-uploaded_at"},
+  "facets": {
+    "department": [{"value": "Finance", "count": 3}, {"value": "Operations", "count": 1}],
+    "project":    [{"value": "supplier review", "count": 3}],
+    "process":    [{"value": "purchasing", "count": 3}],
+    "topic":      [{"value": "finance", "count": 3}]
+  },
+  "documents": [document object, ...]
+}
+```
+
+- **`filters`** echoes what the server applied after validation, with `null` for any filter not
+  applied. `sort` is always present. Tag names are echoed normalised; `q` is echoed trimmed and
+  otherwise as sent, because collapsing its whitespace is part of the match, not of the value.
+- **`facets`** gives, for each dimension, the values found on documents in the caller's scope
+  that match **every active filter except that dimension's own**, each with its count (the number
+  of those documents carrying the value), sorted by value, with zero counts omitted (D-72). The values are read from the scoped documents and their
+  tag links, never from the `Tags` table, so a value used only on documents the caller cannot see
+  is never offered.
+- **`documents`** is the document object `GET /api/documents` returns, filtered and sorted, with
+  no paging.
+
+**The detail object adds three fields** to the document object (D-63, D-73):
+
+```json
+{
+  "...document object...": "...",
+  "extracted_text": "Employees may request annual leave...",
+  "tags": {"project": ["policy refresh"], "process": [], "topic": ["people"]},
+  "can_delete": false
+}
+```
+
+- **`extracted_text`** is `ExtractedContent.extracted_text`, read through the same scoped lookup,
+  never reassembled from chunks. It is `null` when the document has no `ExtractedContent` row,
+  for example "Extraction failed" or "Insufficient content". The client keys its empty state on
+  `null`, not on the status. It is plain text and is rendered as text, never as HTML.
+- **`tags`** lists the document's tag names in each of the three tag dimensions, sorted, each
+  once, with every dimension present. Department is the `department` field (D-72).
+- **`can_delete`** says whether the caller's role holds `manage_documents`. It is a hint for
+  showing the delete control. The server checks the permission on every `DELETE` whatever the
+  screen did (invariant 4).
+
+**After a delete,** a phrase that was in the document is found by neither `GET /api/search` nor
+`POST /api/ask`, because its chunks are gone (FR-15: "so that deleted material cannot
+subsequently be surfaced through search"). Answers that cited it keep their `QueryLog` and
+`AnswerCitation` rows, with the citation's chunk null (D-67), and a reopened turn renders them as
+D-67 describes.

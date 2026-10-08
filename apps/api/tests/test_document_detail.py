@@ -72,13 +72,17 @@ def test_a_document_in_scope_is_returned(session_client, employee):
 
 def test_the_body_is_the_object_the_repository_list_returns(session_client, employee):
     """One document object, not a second shape. FR-15 (Stage 5) reads this endpoint for its
-    detail screen, so the field set has to be the list's or the two would drift apart."""
+    detail screen, so the field set has to be the list's or the two would drift apart.
+
+    Since Stage 5 item 2 the detail carries FR-15's three detail fields as well (D-63, D-73),
+    and nothing else differs: ``test_document_detail_fields.py`` asserts the exact key set."""
     document = make_document(employee)
 
     listed = session_client.client.get(DOCUMENTS_URL).json()
     detailed = detail(session_client.client, document.id).json()
 
-    assert [detailed] == listed
+    detail_fields = {"extracted_text", "tags", "can_delete"}
+    assert [{key: value for key, value in detailed.items() if key not in detail_fields}] == listed
 
 
 def test_the_body_carries_no_file_path_and_no_content_hash(session_client, employee):

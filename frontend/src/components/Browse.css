@@ -1,0 +1,136 @@
+/* FR-15 browsing controls: facet groups, the active filters and the sortable
+   column heading. Tokens only. */
+
+/* ---- Facet group -------------------------------------------------------- */
+
+.facet-group {
+  min-width: 0; /* lets a long value wrap instead of widening its grid column */
+}
+
+.facet-group__heading {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-base);
+}
+
+.facet-group__empty {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.facet-group__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A value and its count. The secondary button's boundary, so the control is
+   visible against the page (3:1, SC 1.4.11), at the touch-target height. */
+.facet {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-min-height);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-full);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.facet:hover {
+  background-color: var(--color-surface-alt);
+}
+
+/* The chosen value: filled, heavier, and ticked, so the state is not carried by
+   colour alone (SC 1.4.1). */
+.facet[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: var(--color-primary-text);
+  font-weight: var(--weight-semibold);
+}
+
+.facet[aria-pressed='true']:hover {
+  border-color: var(--color-primary-hover);
+  background-color: var(--color-primary-hover);
+}
+
+.facet__value {
+  word-break: break-word;
+}
+
+.facet__count {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* ---- Active filters ----------------------------------------------------- */
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.active-filters__heading {
+  margin: 0;
+  font-size: var(--text-base);
+}
+
+.active-filters__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.active-filters__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.active-filters__value {
+  font-weight: var(--weight-semibold);
+  word-break: break-word;
+}
+
+/* ---- Sortable column heading -------------------------------------------- */
+
+/* The heading's own text, as a control: no button chrome, the full cell to aim
+   at, and the focus ring from base.css. */
+.sort-header__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-min-height);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.sort-header__button:hover {
+  color: var(--color-primary-hover);
+}
+
+.sort-header__arrow {
+  font-size: var(--text-sm);
+  text-decoration: none;
+}

@@ -8,7 +8,7 @@
  * them, and the screen filters nothing itself.
  */
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
@@ -138,7 +138,11 @@ const probe = { location: null, back: null }
 function HistoryProbe() {
   const location = useLocation()
   const navigate = useNavigate()
-  useEffect(() => {
+  // A layout effect, not a passive one: it runs inside the commit that rendered this
+  // location, before a `findBy…` waiting on that commit can resolve. A passive effect
+  // runs a task later, so an assertion straight after `findBy…` could read the old
+  // location — about one run in fifteen on CI.
+  useLayoutEffect(() => {
     probe.location = location
     probe.back = () => navigate(-1)
   })
@@ -355,7 +359,15 @@ describe('D-61 gap 3: the filters live in the address', () => {
     const answered = serveApi({
       'GET /api/auth/me': { body: EMPLOYEE },
       'GET /api/dashboard': echoingDashboard,
-      'GET /api/documents': { body: [] },
+      // The repository the panel links to reads FR-15's browse route (D-72): the
+      // contract's unfiltered 200 with nothing in it.
+      'GET /api/documents/browse': {
+        body: {
+          filters: { q: null, status: null, department: null, project: null, process: null, topic: null, sort: '-uploaded_at' },
+          facets: { department: [], project: [], process: [], topic: [] },
+          documents: [],
+        },
+      },
     })
     const probe = renderApp('/dashboard')
     await screen.findByText(DOCUMENT.title)

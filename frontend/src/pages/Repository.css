@@ -49,9 +49,18 @@
   font-weight: var(--weight-regular);
 }
 
-/* The retry action. Kept on one line so the button does not wrap mid-label. */
+/* The retry action, under the status it acts on (usability finding 6), so a
+   narrow screen does not scroll it out of view with a column of its own. Kept on
+   one line so the button does not wrap mid-label. */
 .data-table__action {
+  display: block;
+  margin-top: var(--space-2);
   white-space: nowrap;
+}
+
+/* An uploader is an email address: allowed to break rather than widen the table. */
+.data-table__uploader {
+  word-break: break-word;
 }
 
 .data-table__meta {
@@ -85,6 +94,92 @@
   /* Keeps the line breaks, wraps the long lines. */
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* FR-15: a document's extracted text, which is plain text. Untrusted input,
+   rendered as a text child; the line breaks it carries are kept here by CSS and
+   never by turning them into markup. It scrolls rather than stretching the page,
+   because a document's whole text can be long (D-63). */
+.extracted-text {
+  max-height: 60vh;
+  max-width: var(--measure-text);
+  padding: var(--space-4);
+  overflow: auto;
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+  line-height: var(--leading-normal);
+  /* Keeps the line breaks, wraps the long lines. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* What the extracted text is and is not: muted, and wrapping like prose. */
+.document-detail__note {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.document-detail__actions {
+  margin: 0 0 var(--space-5);
+}
+
+/* ---- FR-15 repository: filter, browse, results --------------------------- */
+
+.repository-page__intro {
+  max-width: var(--measure-text);
+}
+
+.repository-filter {
+  max-width: var(--layout-field-max-width);
+}
+
+/* The browse values, in a panel of their own. The four groups sit side by side
+   where there is room and stack where there is not; `min()` keeps a group from
+   forcing sideways scrolling on a screen narrower than its minimum. */
+.repository-browse {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+.repository-browse > h2 {
+  font-size: var(--text-lg);
+}
+
+.repository-browse__hint {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.repository-browse__state {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.repository-browse__groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--layout-card-min-width)), 1fr));
+  gap: var(--space-4);
+}
+
+.repository-results > h2 {
+  font-size: var(--text-lg);
+}
+
+/* "Showing n documents", or "Loading". Muted, and never an error colour. */
+.repository-results__status {
+  color: var(--color-text-muted);
+}
+
+/* Empty takes no room, and stays in the accessibility tree: a live region that
+   was display: none is not reliably announced when it fills. */
+.repository-results__status:empty {
+  margin: 0;
 }
 
 /* Key/value list for a record's metadata. */

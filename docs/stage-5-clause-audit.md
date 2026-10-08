@@ -147,3 +147,135 @@ are in `frontend/tests/dashboard.test.jsx`.
   affected. Not changed here.
 - **`/admin` carries no role guard.** An Employee who types it sees their own scoped dashboard
   (D-70's clarification).
+
+---
+
+## FR-15 — Document Repository and Filtered Browsing (MUST)
+
+The clauses, quoted from the proposal (`proposal.txt`, FR-15). The download link is Stage 5
+item 2a and is enumerated here because the clause is FR-15's; item 2a ticks it.
+
+### Before item 2 — 6 October 2026, at `c98735d`
+
+#### Front-End
+
+| # | Clause | State | What exists |
+|---|---|---|---|
+| 1 | A list view of documents showing title, type, uploader, upload date, and status | ⚠️ | `DocumentRepository.jsx` lists title, type, status, upload date, department and visible-to from `GET /api/documents`. The response carries `uploaded_by`, but **the table does not show the uploader** |
+| 2 | …with sorting | ❌ | The order is fixed: newest first |
+| 3 | …and text filtering | ❌ | — |
+| 4 | A browse mode allowing navigation by Department, Project, Process or Topic without composing a query | ❌ | `Tag` and `ContentTag` exist (documents 0003, with dimensions `Department`, `Project`, `Process`, `Topic`), but **the development database holds no tags**: nothing writes them until FR-10 (Objective 05, 13 November). `Documents.department` is a column (D-09) |
+| 5 | Filters combine | ❌ | — |
+| 6 | …with item counts shown against each available value | ❌ | — |
+| 7 | Selecting a document opens a detail view showing its metadata | ⚠️ | `DocumentDetail.jsx` at `/documents/:docId` (D-46) shows type, status, uploaded, department, visible to and uploaded by. The list's titles do not link to it |
+| 8 | …extracted content | ❌ | Not returned. D-63 restores it, read from `ExtractedContent.extracted_text` |
+| 9 | …and a download link | ❌ | No download route exists. Item 2a |
+| 10 | Deletion requires confirmation | ❌ | No deletion |
+| 11 | …and is available only to users holding the appropriate permission | ❌ | `manage_documents` is not seeded. Settled on 5 October: accounts 0005, Administrator only. D-66 puts every Employee-only document in an Administrator's scope, so none is undeletable |
+
+#### Server-End
+
+| # | Clause | State | What exists |
+|---|---|---|---|
+| 12 | Handles retrieval, filtering, and deletion of document records | ⚠️ | Retrieval only: the list and detail routes |
+| 13 | Executes filtered queries against ContentTags returning matching items with counts per remaining filter value | ❌ | — |
+| 14 | Validation: the requesting user must hold manage_documents to delete | ❌ | — |
+| 15 | Validation: a document ID must resolve to an existing record | ✅ | `GET /api/documents/{id}` answers 404 for an unknown id and for one outside the caller's scope, by one query (D-46) |
+| 16 | The list is filtered to documents the user's role permits, by the same rule as FR-11 | ✅ | `scoped_documents()`, item 1 and D-66 |
+| 17 | Counts are computed after that filter, so a count never discloses inaccessible content | ❌ | No counts exist. D-65 governs how filter values are read: shape only, never looked up |
+| 18 | Deleting a document also removes its extracted content, embeddings and tag links, so that deleted material cannot subsequently be surfaced through search | ❌ | `ExtractedContent` cascades by FK. **`ContentChunk` and `ContentTag` have no FK (D-07), so `document.delete()` alone leaves the chunks embedded, stamped and retrievable.** `AnswerCitation.chunk` is `SET_NULL` since D-67, so deleting chunks no longer destroys citations |
+| 19 | Responses: 200 OK with the document list or detail | ✅ | Both routes |
+| 20 | 204 No Content for a filter combination with no accessible matches | ❌ | No filters exist |
+| 21 | 403 Forbidden without permission | ❌ | No deletion |
+| 22 | 404 Not Found for an unknown document | ✅ | Clause 15 |
+
+#### Database
+
+| Clause | State | What exists |
+|---|---|---|
+| Documents (Read, Delete) | ⚠️ | Read only |
+| ExtractedContent, ContentChunks, ContentTags (Delete, cascade) | ❌ | Clause 18 |
+| Tags (Read) | ❌ | Nothing reads them |
+| Meetings (Read) | ❓ | Named in the CRUD line with no clause that uses it: FR-15's views and filters are about documents. Recorded rather than guessed at |
+
+#### Readings the brief settles
+
+- **The values a filter offers, and their counts, come from the documents the caller may see,
+  never from the `Tag` table.** A tag or department used only on restricted documents would
+  otherwise disclose them by being offered (invariant 1).
+- **Delete is scoped-first.** Resolve through `scoped_documents()` (404 outside scope, D-46),
+  then check `manage_documents` (403). The other order would tell a caller whether a document
+  they cannot see exists.
+- **Deletion removes the chunks (by `source_type` and `source_id`), the `ContentTag` rows and
+  the document in one transaction (invariant 9).** The stored file is removed in
+  `transaction.on_commit`, so a rolled-back delete keeps it.
+- **Extracted content is read from `ExtractedContent` through the same scoped lookup as the
+  detail view, never reassembled from chunks, and rendered as text, never HTML.** A document
+  with no `ExtractedContent` row shows a stated empty state, keyed on the row existing.
+- **Filter state lives in the URL query string**, so Back from a detail view lands on the same
+  filters.
+- **Browse needs tags on the demonstration corpus, seeded with `applied_by="user"`**, and that is
+  recorded as a decision.
+
+### After item 2 — 7 October 2026, on `feat/FR-15-document-repository`
+
+Built by the django-backend agent (browse, the detail fields, deletion, `accounts 0005`) and the
+react-frontend agent (the repository and detail screens), in parallel against the contract. The
+coordinating session reviewed both diffs and committed them. The first attempt of both agents
+stopped on a usage limit; the backend wrote nothing, and the frontend's two partial API edits were
+reviewed and kept. Backend tests are in `apps/api/tests/test_document_browse.py`,
+`test_document_detail_fields.py`, `test_document_delete.py`, `apps/documents/tests/test_deletion.py`
+and `apps/accounts/tests/test_manage_documents_seed.py`. Front-end tests are in
+`frontend/tests/documentRepository.test.jsx`.
+
+#### Front-End
+
+| # | Clause | State | Evidence |
+|---|---|---|---|
+| 1 | A list view showing title, type, uploader, upload date, and status | ✅ | The repository reads `GET /api/documents/browse`. Front end: `shows each column FR-15 names, including the uploader, and links each title to its detail view` |
+| 2 | …with sorting | ✅ | Five sort keys, both directions, newest first by default (D-72). Backend: `test_every_sort_key_in_both_directions`, `test_the_default_sort_is_newest_first`, `test_the_primary_key_breaks_a_tie_in_either_direction`. Front end: `sorts from the column headings, writing the sort to the address and the request` |
+| 3 | …and text filtering | ✅ | Title, with D-71's whitespace collapsing. Backend: `test_the_text_filter_matches_a_title_that_wraps_a_line`, `test_the_text_filter_treats_like_wildcards_as_characters`. Front end: `writes the title filter to the address and the request when it is submitted` |
+| 4 | Browse by Department, Project, Process or Topic without composing a query | ✅ 🔧 | Each dimension lists its values with counts. Department comes from the documents column, not ContentTags, a deliberate departure (D-72). The demonstration corpus is tagged by D-74's script. Front end: `lists each dimension with the counts the server sent, and choosing values updates the address and the request` |
+| 5 | Filters combine | ✅ | AND across dimensions (D-72). Backend: `test_filters_combine_with_and` |
+| 6 | …with item counts shown against each available value | ✅ | Each dimension's counts exclude its own filter and apply every other. Backend: `test_each_dimensions_counts_exclude_its_own_filter_and_apply_every_other`, `test_the_text_and_status_filters_narrow_every_facet`, `test_a_document_linked_to_the_same_tag_twice_is_counted_once` |
+| 7 | Selecting a document opens a detail view showing its metadata | ✅ | Titles link to `/documents/:docId`; metadata and tags by dimension. Front end: `shows the metadata and the tags by dimension`. Filters survive the round trip: `lands on the same address, the same controls and the same request after opening a document and going Back` |
+| 8 | …extracted content | ✅ | From `ExtractedContent`, never reassembled from chunks; rendered as text; an empty state keyed on `null` (D-63, D-73). Backend: `test_extracted_text_is_the_rows_text_not_the_chunks`, `test_extracted_text_is_null_when_the_document_has_no_row`. Front end: `shows markup in the extracted text as the characters it is, and creates no element from it`, `shows the stated empty state when extracted_text is null, keyed on the null and not on the status` |
+| 9 | …and a download link | ❌ | Stage 5 item 2a. The detail view marks where it goes and renders nothing |
+| 10 | Deletion requires confirmation | ✅ | Front end: `asks for confirmation before sending anything, and Cancel sends no DELETE`, `sends exactly one DELETE on confirm, then returns to the repository at the filters the user came from` |
+| 11 | …and is available only to users holding the appropriate permission | ✅ | The control shows only when `can_delete` is true; the server checks on every delete. Backend: `test_can_delete_is_true_for_an_administrator_and_false_for_an_employee`, `test_can_delete_follows_the_roles_permission_not_the_role_name`. Front end: `offers no delete control when can_delete is false`, `says so when the server refuses the delete with a 403, and withdraws the control` |
+
+#### Server-End
+
+| # | Clause | State | Evidence |
+|---|---|---|---|
+| 12 | Handles retrieval, filtering, and deletion of document records | ✅ | `apps/api/repository.py` (one scoped query for the list and browse), `DocumentBrowseView`, `DocumentDetailView.delete`, `apps/documents/deletion.py`. Backend: `test_get_api_documents_is_still_a_bare_list_built_by_the_same_query` |
+| 13 | Filtered queries against ContentTags, with counts per remaining filter value | ✅ 🔧 | Project, Process and Topic query `ContentTag` rows restricted to the scoped, filtered documents; Department is the column (D-72). Values never come from `Tag` alone. Backend: `test_a_tag_value_used_only_on_restricted_documents_is_never_offered` |
+| 14 | The user must hold manage_documents to delete | ✅ | `accounts 0005`, Administrator only (D-73). Backend: `test_an_employee_gets_403_on_a_document_in_scope_and_nothing_is_deleted`, `test_an_administrator_without_the_permission_gets_403`, and the seed tests in `test_manage_documents_seed.py` |
+| 15 | A document ID must resolve to an existing record | ✅ | Backend: `test_unknown_and_out_of_scope_are_both_404_and_never_403`, checked before the permission |
+| 16 | The list is filtered to documents the role permits, as in FR-11 | ✅ | Backend: `test_administrator_only_documents_are_absent_for_an_employee_and_present_for_the_administrator`, `test_an_employee_only_document_is_in_the_administrators_browse` (D-66), `test_a_document_the_callers_role_may_not_read_is_absent_from_documents_and_facets`, `test_a_role_change_takes_effect_on_the_next_request`, and the `api/documents/browse GET` probe in `test_source_rows_fail_closed.py` |
+| 17 | Counts computed after that filter, so a count never discloses inaccessible content | ✅ | Backend: `test_an_employees_browse_payload_is_byte_identical_with_and_without_restricted_documents_and_tags` (seven filter shapes), `test_an_unknown_and_a_restricted_only_value_give_the_same_204` |
+| 18 | Deleting a document removes its extracted content, embeddings and tag links, so deleted material cannot be surfaced through search | ✅ | One transaction, the file on commit (D-73). Backend: `test_an_administrator_deletes_a_document_and_everything_derived_from_it`, `test_after_a_delete_search_finds_nothing_and_a_question_only_it_answered_takes_path_a`, `test_a_citation_of_a_deleted_chunk_survives_with_its_chunk_null` (D-67), and `test_deletion.py`'s rollback, file-on-commit and lock tests |
+| 19 | 200 with the document list or detail | ✅ | Backend: `test_the_payload_has_exactly_the_contracts_keys`, `test_an_unfiltered_empty_repository_is_200_with_empty_lists`, `test_the_detail_is_the_list_object_plus_exactly_the_three_detail_fields` |
+| 20 | 204 for a filter combination with no accessible matches | ✅ | Only when a filter is set; `sort` alone never (D-72). Backend: `test_a_filter_that_matches_nothing_is_204_with_no_body`, `test_sort_alone_is_never_204`, `test_a_filter_on_an_empty_repository_is_204`. Front end: `on a filtered address opened directly, shows the empty state, the filters from the address and Clear filters, and assumes no facets`, `drops the facets an earlier reply carried when a later one is a 204` |
+| 21 | 403 without permission | ✅ | Row 14 |
+| 22 | 404 for an unknown document | ✅ | Row 15. Front end: `shows a 404 as not found, never which kind, with a way back to the repository` |
+
+#### Database
+
+| Clause | State | Evidence |
+|---|---|---|
+| Documents (Read, Delete) | ✅ | Rows 12 and 18 |
+| ExtractedContent, ContentChunks, ContentTags (Delete, cascade) | ✅ | Row 18. `ExtractedContent` goes by its foreign key; the chunks and tag links go by source in the same transaction (D-07) |
+| Tags (Read) | ✅ | Through `ContentTag`, for the facets and the detail's tags; never offered on its own |
+| Meetings (Read) | ❓ | Still no clause uses it. Recorded, not interpreted |
+
+#### Not covered by item 2
+
+- **The download link and route.** Item 2a.
+- **Paging.** Browse returns every match. Fine at the corpus size, not at scale.
+- **Hand-typed tag values in a URL** filter correctly but do not show their facet button as pressed
+  (D-72's note).
+- **Reads of `ContentTag` and `ExtractedContent`** go through scoped documents, as the tests
+  assert, but the D-53 scan does not watch those models.
+- **No browser check.** The screens are tested in jsdom only. Narrow widths and keyboard order are
+  item 7's.

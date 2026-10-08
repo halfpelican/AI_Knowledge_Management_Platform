@@ -162,14 +162,14 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="admin" element={<Dashboard />} />
-            {/* Stage 3: FR-08 upload and the repository list, FR-09 transcript
-                ingestion and the full stored transcript. */}
+            {/* FR-08 upload; FR-15's repository, with its filters and sort in
+                the query string; FR-09 transcript ingestion and the full stored
+                transcript. */}
             <Route path="upload" element={<Upload />} />
             <Route path="documents" element={<DocumentRepository />} />
-            {/* Stage 4 item 10b: where a document citation lands, so FR-12's
-                "links to the source document or meeting" reaches the document
-                itself (D-46). Minimal by intent — FR-15's document presentation
-                is Stage 5 and builds on the same endpoint. */}
+            {/* FR-15's detail view — metadata, extracted content, and deletion
+                for a role that may delete — and where a document citation lands
+                (FR-12, D-46). */}
             <Route path="documents/:docId" element={<DocumentDetail />} />
             <Route path="meetings" element={<Meetings />} />
             <Route path="meetings/:meetingId" element={<MeetingDetail />} />

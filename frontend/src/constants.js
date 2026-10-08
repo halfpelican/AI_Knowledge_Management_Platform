@@ -282,9 +282,79 @@ export const TEXT = {
   statusAnnouncement: (name, message) => `${name}: ${message}`,
 
   /* ---- FR-08 / FR-15 document repository -------------------------------- */
+  repositoryHeading: 'Documents',
+  repositoryIntro:
+    'Every document you are permitted to see. Browse by department, project, process or topic, filter by title, and sort by title, type, uploader, upload date or status.',
+  repositoryUploadLink: 'Upload a document',
+  repositoryResultsHeading: 'Results',
   loadingDocuments: 'Loading documents…',
-  noDocuments: 'No documents have been uploaded yet.',
+  // The unfiltered 200 with an empty list. It does not say "nothing has been
+  // uploaded": an Employee is told the same whether nothing exists or nothing is
+  // theirs to see, because the screen is not told which (CLAUDE.md §6, invariant 1).
+  noDocuments: 'There are no documents to show yet.',
   documentsLoadFailed: 'Could not load documents',
+  // FR-15's text filter: the title contains it (D-71's whitespace rule is the
+  // server's). Applied on submit, so typing does not add a history entry per key.
+  repositoryFilterLabel: 'Filter by title',
+  repositoryFilterHint: 'Shows documents whose title contains these words.',
+  repositoryFilterSubmit: 'Filter',
+  repositoryFilterFormLabel: 'Filter documents by title',
+  // FR-15's browse mode: "navigation by Department, Project, Process or Topic
+  // without composing a query". The counts are the server's, computed over the
+  // caller's scope after every other active filter (D-72), so each says how many
+  // documents choosing that value would show.
+  repositoryBrowseHeading: 'Browse',
+  repositoryBrowseHint:
+    'Choose a value to narrow the list, and choose it again to remove it. The number beside each value is how many documents choosing it would show.',
+  repositoryLoadingFacets: 'Loading the values to browse by…',
+  // A 204 carries no facets, and the screen does not borrow an earlier reply's
+  // (D-72), so it says why the values are missing rather than showing stale ones.
+  repositoryBrowseNoMatch: 'There are no values to browse by while nothing matches. Remove a filter to see them again.',
+  repositoryBrowseUnavailable: 'The values to browse by are not available. See the message below.',
+  repositoryFacetEmpty: 'None in the documents shown.',
+  // The noun for the count beside a value; the number itself is on screen.
+  repositoryFacetCount: (count) => (count === 1 ? '1 document' : `${count} documents`),
+  // The names a filter is shown under, by its parameter (docs/api-contract.md).
+  // `status` has no control on this screen; a status in the address is still
+  // applied by the server, so it is shown and can be removed like the others.
+  repositoryFilterNameQ: 'Title contains',
+  repositoryFilterNameStatus: 'Status',
+  repositoryFilterNameDepartment: 'Department',
+  repositoryFilterNameProject: 'Project',
+  repositoryFilterNameProcess: 'Process',
+  repositoryFilterNameTopic: 'Topic',
+  // Not a filter (D-72), so never in the active filters; named only when a 400
+  // refuses one.
+  repositoryFilterNameSort: 'Sort order',
+  repositoryActiveFilters: 'Active filters',
+  repositoryRemoveFilter: 'Remove',
+  // The accessible name of each Remove button, so a column of "Remove" names the
+  // filter it removes (WCAG 2.1 SC 2.4.6), and starts with the visible word
+  // (SC 2.5.3).
+  repositoryRemoveFilterLabel: (name, value) => `Remove filter ${name}: ${value}`,
+  repositoryClearFilters: 'Clear filters',
+  // FR-15's 204: a filter combination with no accessible matches. An ordinary
+  // state, not an error, and it says nothing about material outside the caller's
+  // scope (invariant 1).
+  repositoryNoMatchTitle: 'No documents match these filters',
+  repositoryNoMatch: 'Remove a filter, or clear them all, to see more documents.',
+  repositoryResultCount: (count) => (count === 1 ? 'Showing 1 document.' : `Showing ${count} documents.`),
+  // A 400 on a filter or the sort. Only the address can produce one, since every
+  // control writes a value the server accepts.
+  repositoryCheckFilters: 'One of the filters or the sort order could not be applied.',
+  repositoryShowAll: 'Show all documents',
+  // The column headings, which are also the sort controls (FR-15: "with sorting").
+  repositoryColumnTitle: 'Title',
+  repositoryColumnType: 'Type',
+  repositoryColumnUploader: 'Uploaded by',
+  repositoryColumnUploaded: 'Uploaded',
+  repositoryColumnStatus: 'Status',
+  repositoryColumnDepartment: 'Department',
+  repositorySortedAscending: 'sorted ascending',
+  repositorySortedDescending: 'sorted descending',
+  repositoryTableCaption: 'Documents in the knowledge base. Every column heading but Department is a button that sorts by that column.',
+  // Shown on the list a successful delete returns to.
+  repositoryDeleted: (title) => `“${title}” was deleted.`,
   // FR-08's retry, reachable from the list rather than only from the queue that
   // uploaded the file: a document left at a failed status has a route back after
   // the tab is closed. A column of buttons all named "Try again" names nothing to
@@ -298,16 +368,50 @@ export const TEXT = {
   // One message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
   documentNotFound: 'That document could not be found. The list has been reloaded.',
   documentReprocessNotPermitted: 'You do not have permission to process documents.',
-  // The document screen a citation links to (D-46). A document outside the
-  // caller's scope answers 404, exactly as an id that names nothing does, so this
-  // message covers both and distinguishes neither (CLAUDE.md §6, invariant 1).
+  // FR-15's detail view, which is also the screen a citation links to (D-46). A
+  // document outside the caller's scope answers 404, exactly as an id that names
+  // nothing does, so this message covers both and distinguishes neither
+  // (CLAUDE.md §6, invariant 1).
   loadingDocument: 'Loading the document…',
   documentLoadFailed: 'Could not load the document',
   documentRecordNotFound: 'That document could not be found.',
-  // FR-15 (Stage 5) owns document presentation: filtered browsing, the metadata
-  // panel and permissioned deletion. This screen is the citation's destination
-  // and says so rather than looking like an unfinished version of that one.
-  documentDetailScope: 'The record for this document. Its text is read through search and the assistant.',
+  documentNotFoundTitle: 'Not found',
+  documentBackToList: 'Back to documents',
+  documentFieldType: 'Type',
+  documentFieldUploader: 'Uploaded by',
+  documentFieldUploaded: 'Uploaded',
+  documentFieldStatus: 'Status',
+  documentFieldDepartment: 'Department',
+  documentFieldVisibleTo: 'Visible to',
+  documentFieldProject: 'Project',
+  documentFieldProcess: 'Process',
+  documentFieldTopic: 'Topic',
+  documentNotRecorded: 'Not recorded',
+  documentNoTags: 'None recorded',
+  // D-63: the extracted content, read from the document's stored extracted text
+  // and never reassembled from passages. It is plain text, so the note says what
+  // a reader will not get (D-63, "formatting fidelity").
+  documentExtractedHeading: 'Extracted content',
+  documentExtractedNote:
+    'The text read from the file when it was indexed, shown as plain text. Layout, headings and table structure are not reproduced.',
+  // `extracted_text` is null: the document has no extracted content. Keyed on
+  // the null and not on the status, because which statuses leave text behind is a
+  // fact of the ingestion path (D-63).
+  documentExtractedEmpty: 'No text was extracted from this document, so there is nothing to show here.',
+  // FR-15's deletion: "requires confirmation and is available only to users
+  // holding the appropriate permission". The control shows only when the detail
+  // says `can_delete`; the server checks the permission on every delete
+  // whatever this screen showed (CLAUDE.md §6, invariant 4).
+  documentDelete: 'Delete document',
+  documentDeleteConfirm: (title) => `Delete “${title}”?`,
+  // What FR-15 promises a delete does, and what D-67 does to answers that cited
+  // it. Nothing more: there is no undo, and the dialogue says so.
+  documentDeleteBody:
+    'The document, its extracted text and its search index entries are removed, so it will no longer be found by search or used to answer questions. Earlier answers that cited it will no longer show it as a source. This cannot be undone.',
+  documentDeleting: 'Deleting…',
+  documentDeleteCancel: 'Cancel',
+  documentDeleteFailed: 'Could not delete the document',
+  documentDeleteNotPermitted: 'You do not have permission to delete documents.',
 
   /* ---- FR-09 meeting transcripts ---------------------------------------- */
   loadingMeetings: 'Loading meetings…',

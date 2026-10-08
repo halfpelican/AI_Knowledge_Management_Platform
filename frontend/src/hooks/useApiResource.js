@@ -8,7 +8,7 @@ import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.
  * The loader is called with `{ signal }` and is expected to be one of the
  * endpoint helpers in src/api — the components using this never call the client
  * themselves. It must be **stable**: either a module-level function, as
- * `listDocuments` is, or one wrapped in `useCallback` with whatever it closes
+ * `listMeetings` is, or one wrapped in `useCallback` with whatever it closes
  * over in its dependencies, as a detail route's id is. The loader is the
  * effect's only dependency besides the retry counter, so a changed id re-reads
  * and an unchanged one does not, without a ref holding a value one render stale.

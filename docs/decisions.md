@@ -131,6 +131,9 @@ Rules for this file:
 | D-69 | FR-14's KnowledgeGaps read is deferred with FR-19 (NIT3004, Objective 06) | Settled by the user, in the Stage 5 brief, item 3 | 2026-10-06 |
 | D-70 | FR-14: department narrows documents only, labelled; the indexed total counts "Indexed" by type; each type filters on its own date | Settled by the user | 2026-10-06 |
 | D-71 | FR-12 keyword search collapses whitespace on both sides before matching, so a phrase that wraps a line is found | Settled by the user | 2026-10-06 |
+| D-72 | FR-15 browse: a separate endpoint sharing the list's scoped query; Department from the column, a deliberate departure; 204 only when a filter matches nothing | Settled by the user | 2026-10-06 |
+| D-73 | FR-15 deletion: manage_documents for Administrators (accounts 0005), scoped-first 404 then 403, chunks, tags and document in one transaction, file on commit, 204 | Settled by the user | 2026-10-06 |
+| D-74 | The demonstration corpus is tagged from the manifest by an idempotent script, applied_by="user", against kmp | Settled by the user | 2026-10-06 |
 
 ---
 
@@ -3939,3 +3942,193 @@ match, for documents and meetings.
   before the fix, and all of them except the logging test failed.
 - Objective 02's D06 phrase is restored to the team's original and re-searched in
   `corpus/objective-02/results.*`.
+
+## D-72 · FR-15's browse: a separate endpoint, Department from the column, and 204 only for a filter that matches nothing
+
+**Status:** Settled by the user · **Date:** 2026-10-06 · **Stage:** 5 item 2 · **Concerns:** FR-15's
+list, browse, filter and count clauses · **Builds on:** D-09, D-53, D-65, D-66, D-70
+
+**A separate browse endpoint, sharing one query with the list.** The repository screen reads
+`GET /api/documents/browse`, which returns `{filters, facets, documents}` in one request.
+`GET /api/documents` stays a bare list for the FR-08 upload flow and its existing consumers. Both
+routes build their documents through **one scoped query function**, and browse adds the filters,
+the sort and the facets to it. That way the two cannot drift, and the set-level audit does not
+find the list implemented twice.
+
+**Department comes from `Documents.department`, not from `ContentTags`. This is a deliberate
+departure from FR-15's server clause**, which says browse "executes filtered queries against
+ContentTags". The column (D-09) is the source FR-14's department filter uses (D-70), so the
+dashboard and the repository cannot disagree about which department a document belongs to.
+Project, Process and Topic query `ContentTags`, as the clause says, and no `Department` tags are
+seeded. When FR-10 lands, the department it assigns should write this column, so there stays one
+source.
+
+**Filters and counts:**
+
+- Filters combine with AND across dimensions, one value per dimension.
+- The text filter matches the title, case-insensitively, with D-71's whitespace collapsing.
+- `status` and `sort` are fixed vocabularies read through `ChoiceField`. Department and tag
+  values are checked for shape only, never looked up (D-65).
+- `sort` takes title, type, uploader, upload date or status, in either direction. The default is
+  newest first.
+- Each dimension's values and counts are computed over the documents in the caller's scope that
+  match **every active filter except that dimension's own**. That is FR-15's "counts per remaining
+  filter value": the alternatives in the dimension being browsed stay visible, and each count
+  says how many documents choosing that value would leave.
+- Values come from the scoped documents and never from the `Tag` table. A tag or department used
+  only on restricted documents is not offered (invariant 1).
+
+**When it is 204.** Only when at least one filter is set — the text filter, `status`,
+`department`, `project`, `process` or `topic` — and nothing in scope matches. `sort` on its own is
+not a filter. An unfiltered, empty repository is **200** with an empty list, because there is no
+filter combination to fail.
+
+A 204 has no body, so **the screen must not rely on the last facets it received**. A filtered URL
+opened fresh, by Back after a delete or from a bookmark, has none. On a 204 the screen shows the
+empty state, the active filters read from the URL, and a "Clear filters" action. The front-end
+test for the 204 opens a filtered URL directly.
+
+**What this covers:** `GET /api/documents/browse`, its parameters, facets, sort and 204, and the
+query it shares with `GET /api/documents`.
+
+**What it does not cover:**
+
+- **Multiple values within one dimension.** Not offered.
+- **Browsing meetings.** FR-15 is the document repository. Its CRUD line names `Meetings (Read)`,
+  but no clause uses it.
+- **The `Department` tag dimension.** It stays in the vocabulary for FR-10 and is not read here.
+
+> **Corrected and clarified on 7 October 2026, when item 2 was built.**
+>
+> - **Correction.** The decision says `GET /api/documents` stays "for the FR-08 upload flow and its
+>   existing consumers". The upload flow never called it: `Upload.jsx` imports only
+>   `uploadDocument` and `reprocessDocument`. Its one front-end caller was the repository screen,
+>   which now reads browse, and `listDocuments` is gone from `frontend/src/api/documents.js`. The
+>   route stays as FR-08's contracted list, used by its own tests and by nothing else. The wording
+>   came from the question put to the user and was not checked against the code when it was
+>   recorded; the react-frontend agent found it.
+> - **Sort.** `title` sorts case-insensitively, `uploaded_by` sorts by the uploader's email,
+>   `status` sorts alphabetically rather than in vocabulary order, and the primary key breaks
+>   ties.
+> - **Echoes.** `q` is echoed trimmed but not collapsed. Tag values are echoed in their normalised
+>   form, so `filters` shows what was matched.
+> - **Counts.** A facet count is the number of documents carrying the value; a document tagged
+>   twice with one value counts once.
+> - **`Tag.active` is not consulted.** A deactivated tag that is still linked to a document is
+>   filtered on and offered like any other. Nothing deactivates tags before FR-10.
+> - **A repeated parameter** takes its last value, which is DRF's behaviour. This is not tested.
+> - **The screen** compares a facet value exactly, so a hand-typed `project=Supplier Review`
+>   filters correctly (the server normalises it) and appears as an active filter, but its facet
+>   button does not show as pressed.
+
+## D-73 · FR-15's deletion: `manage_documents` for Administrators, scoped-first, everything in one transaction
+
+**Status:** Settled by the user · **Date:** 2026-10-06 (the permission on 5 October) · **Stage:**
+5 item 2 · **Concerns:** FR-15's deletion clauses and its 403 and 404 · **Builds on:** D-07, D-46,
+D-66, D-67
+
+**The permission.** `manage_documents` is seeded by migration `accounts 0005`, the way 0003 seeds
+`manage_roles`, and held by Administrator only. There is no ownership rule: FR-15 makes deletion
+a role permission. Because D-66 puts every Employee-only document in an Administrator's scope, no
+document can become undeletable. A test asserts that an Administrator can delete a document whose
+`visible_to_roles` is `["Employee"]`.
+
+**`DELETE /api/documents/{id}`:**
+
+1. The document is resolved through `scoped_documents()`. Unknown or out of scope is **404**,
+   from one query, as on the detail route (D-46).
+2. Then `manage_documents` is checked. Without it the answer is **403**. In the other order, the
+   status code would tell a caller whether a document they cannot see exists.
+3. In **one transaction** (invariant 9): the document's `ContentChunk` rows (by `source_type` and
+   `source_id`, since they have no foreign key, D-07), its `ContentTag` rows, and the document.
+   `ExtractedContent` goes with the document by its foreign key. `AnswerCitation.chunk` is
+   `SET_NULL` (D-67), so the FR-12 record of what was answered survives without its text.
+4. The stored file is removed in `transaction.on_commit`, so a rolled-back delete keeps it.
+5. **204 No Content.** FR-15 names no success code for a delete, so this is a convention.
+
+**What FR-15 promises, and the tests that hold it to that:** after a delete, a phrase known to be
+in the document returns nothing from `/api/search`, and a question only it answered takes
+no-answer path A.
+
+**The screen's delete control.** The detail response carries a server-computed `can_delete`
+boolean: whether the caller holds `manage_documents`. The control shows only when it is true, and
+asks for confirmation. This is usability; the server checks the permission on every delete
+whatever the screen showed (invariant 4).
+
+**Detail view.** It also carries `extracted_text`, read from `ExtractedContent` through the same
+scoped lookup (D-63). It is `null` when the document has no `ExtractedContent` row, and the
+screen shows a stated empty state keyed on that `null`, not on the status. The text is returned
+whole and rendered as text, never as HTML. The detail also carries the document's tags by
+dimension.
+
+**What this covers:** `DELETE /api/documents/{id}`, the `manage_documents` seed, and the fields
+the detail response gains.
+
+**What it does not cover:**
+
+- **The download link and route.** That is Stage 5 item 2a.
+- **Bulk deletion and visibility editing.** FR-15 asks for neither. D-47's
+  `bulk_create(update_conflicts=True)` hole stays pinned, not closed.
+- **Deleting meetings.** FR-15 is about documents.
+
+> **Clarified on 7 October 2026, when item 2 was built.** None of these changes the decision.
+>
+> - **More than one `ExtractedContent` row:** the detail shows the newest by `extracted_at`, with
+>   the primary key breaking ties. This matches `manage.py reindex`, which reads the same row. No
+>   shipped path leaves more than one.
+> - **The document row is locked (`select_for_update`) before its chunks are deleted**, as
+>   reprocess and re-index lock it. A reprocess in flight would otherwise commit fresh chunks for
+>   a document that no longer exists. Pinned by the SQL order in a test, not by a concurrency
+>   test.
+> - **The file is removed with `on_commit(..., robust=True)`.** If removal fails after the rows
+>   are committed, Django logs it and the delete still answers 204, leaving an unserved file;
+>   `config/urls.py` serves nothing under `MEDIA_ROOT`. The empty `media/documents/<id>/`
+>   directory is also left behind.
+> - **`Tag` rows stay** when their last link is deleted. They are a vocabulary, and D-72's facets
+>   never offer a value no document carries.
+> - **The deletion function lives in `apps/documents/deletion.py`**, outside the request-serving
+>   packages the D-53 scan watches, as `apps/ingestion` is. Reads of `ContentTag` and
+>   `ExtractedContent` in `apps/api/repository.py` go through scoped documents, but the scan does
+>   not watch those models, so that is enforced by the tests rather than by the scan.
+
+## D-74 · The demonstration corpus is tagged by a script, from the manifest, with `applied_by="user"`
+
+**Status:** Settled by the user · **Date:** 2026-10-06 · **Stage:** 5 item 2 · **Concerns:**
+FR-15's browse, which shows nothing without tags · **Owner of real tagging:** FR-10 (Objective 05,
+13 November)
+
+**Decision.** Nothing writes `ContentTags` until FR-10's AI classification. To make browse
+demonstrable now:
+
+- `corpus/objective-02/manifest.json` gives each document Project, Process and Topic tags.
+- `scripts/seed_objective02_tags.py` writes `Tag` and `ContentTag` rows through the ORM, with
+  `applied_by="user"` and `confirmed=True`, finding each document by its manifest title.
+
+There is no tagging API route: tagging is FR-10's surface, and building part of it early is work
+the proposal places elsewhere.
+
+**The script:**
+
+- **Idempotent.** Re-running it adds nothing.
+- **Run against `kmp`**, the database the alpha runs on and the one holding the corpus, not a
+  worktree's test database.
+- Writes no `Department` tags (D-72).
+
+**The values are shaped for the demonstration:**
+
+- Each dimension has a few values, each shared across several documents, so the counts mean
+  something and two filters can be shown narrowing the list.
+- One Project value is used only on Administrator-only documents. An Employee is never offered it,
+  which demonstrates that facets disclose nothing.
+- At least one combination of filters an Employee can choose matches nothing, which demonstrates
+  the 204 empty state.
+
+**What this covers:** tags on the Objective 02 documents in the development database.
+
+**What it does not cover:**
+
+- **Meetings.** FR-15 browses documents only.
+- **Anything FR-10 will do.** AI-applied tags, confidence, confirmation workflows and tag
+  administration are FR-10's.
+- **A fresh database.** The seed needs the corpus ingested first (`scripts/ingest_objective02.py`)
+  and does nothing for documents that are not there.

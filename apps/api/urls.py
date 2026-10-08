@@ -27,12 +27,16 @@ urlpatterns = [
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
+    # Stage 5 item 2: FR-15's list view, filters, sort and facets in one request (D-72).
+    # Before the <uuid:pk> route below; "browse" is not a UUID, so they cannot collide.
+    path("documents/browse", views.DocumentBrowseView.as_view(), name="document-browse"),
     # Before the <uuid:pk> route below for the reading habit's sake; "reprocess" is not a
     # UUID so the two cannot collide either way.
     path("documents/<uuid:pk>/reprocess", views.DocumentReprocessView.as_view(),
          name="document-reprocess"),  # FR-08 "Please try again" (D-32)
     # Stage 4 item 10b: the route a document citation links to, so FR-12's "links to the
     # source document or meeting" reaches the document rather than the repository (D-46).
+    # Stage 5 item 2 adds FR-15's detail fields to its GET, and the DELETE method (D-73).
     path("documents/<uuid:pk>", views.DocumentDetailView.as_view(), name="document-detail"),
     # Stage 3: FR-09
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
