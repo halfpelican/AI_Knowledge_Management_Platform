@@ -16,7 +16,10 @@ authorisation errors are `401 {"detail": "..."}` for no valid session and
 `403 {"detail": "..."}` for a session whose role lacks the permission (`CLAUDE.md` §6
 invariant 4). Validation errors are `400 {"field": ["message"], ...}` in DRF's shape.
 Error messages never disclose whether an email address is registered, except the
-409 on registration, which FR-01 specifies.
+409 on registration, which FR-01 specifies. Every response under `/api/`, whatever its status,
+carries `Cache-Control: max-age=0, no-cache, no-store, must-revalidate, private` and an
+`Expires` header (D-76). The one route that answers with something other than JSON is FR-15's
+download, which returns the stored original (D-75).
 
 The user object, wherever a user is returned:
 
@@ -785,12 +788,13 @@ The repository screen reads `GET /api/documents/browse`. `GET /api/documents` is
 stays as FR-08's contracted list, although after Stage 5 item 2 no screen calls it (D-72's
 dated note). Both routes build their documents through one scoped query function (D-72). Decisions: D-72 (browse), D-73 (deletion and the detail fields), D-74 (the
 demonstration tags), D-65 (how parameters are read), D-66 (what scope means), D-63 (extracted
-content). The download route is Stage 5 item 2a, and this section does not define it.
+content), D-75 (the download, Stage 5 item 2a).
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
 | GET | `/api/documents/browse?q=&status=&department=&project=&process=&topic=&sort=` | session | `200` the browse object below; also `200` when no filter is set and nothing is in scope | `204` no body: at least one filter is set and no document in the caller's scope matches (FR-15); `400 {"<parameter>": ["..."]}` a `status` or `sort` outside its vocabulary, a NUL byte, or a value over 255 characters (*convention*, D-65); `401` |
 | GET | `/api/documents/{id}` | session | `200` the document object **with** `extracted_text`, `tags` and `can_delete` (below) | `401`; `404` no such document, or one outside the caller's scope |
+| GET | `/api/documents/{id}/download` | session | `200` the stored original as an attachment (below) | `401`; `404` no such document, one outside the caller's scope, or one whose original is not stored or is missing from disk, with the **same body** in every case |
 | DELETE | `/api/documents/{id}` | session + `manage_documents` | `204` no body. The document, its extracted content, its chunks and its tag links are deleted in one transaction; the stored file is removed when that transaction commits (*convention*: FR-15 names no success code for a delete) | `401`; `404` no such document, or one outside the caller's scope, checked **before** the permission; `403` the document is in scope and the role lacks `manage_documents` |
 
 **Parameters.** All are optional, and an empty value is the same as leaving it out. A value is
@@ -858,3 +862,25 @@ AND. `sort` is not a filter: it never causes a 204.
 subsequently be surfaced through search"). Answers that cited it keep their `QueryLog` and
 `AnswerCitation` rows, with the citation's chunk null (D-67), and a reopened turn renders them as
 D-67 describes.
+
+**The download** (D-75) returns the stored original's bytes, not JSON, for a document in any
+status. The client links to this route, never to a `/media/` path, which nothing serves.
+
+- **`Content-Type`** comes from the format the file's signature proved at upload, never from its
+  name: `application/pdf`; `application/vnd.openxmlformats-officedocument.wordprocessingml.document`;
+  `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`; or
+  `text/plain; charset=utf-8`. The response also carries `X-Content-Type-Options: nosniff`.
+- **`Content-Disposition`** is `attachment` with the stored original filename, its last extension
+  corrected to the signature's. The comparison ignores case, and an extension is added when there
+  is none.
+
+  | Uploaded as | Proven format | Downloads as |
+  |---|---|---|
+  | `Report.PDF` | pdf | `Report.PDF` |
+  | `Q3_budget.vbs` | txt | `Q3_budget.txt` |
+  | `invoice.html` | txt | `invoice.txt` |
+  | `report.pdf.exe` | txt | `report.pdf.txt` |
+  | `minutes` | docx | `minutes.docx` |
+- **A 404 body** is `{"detail": "No Document matches the given query."}` for an unknown id, an id
+  outside the caller's scope and a document with no file alike. A missing file is logged on the
+  server and not described to the client.
