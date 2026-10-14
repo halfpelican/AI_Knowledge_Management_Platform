@@ -157,6 +157,21 @@ ZIP_SIGNATURE = b"PK\x03\x04"
 FORMAT_SIGNATURES = {"pdf": PDF_SIGNATURE, "zip-container": ZIP_SIGNATURE}
 WORD_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 EXCEL_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PDF_CONTENT_TYPE = "application/pdf"
+# The signature admits a file as TXT only when its sample decodes as UTF-8, so the charset is
+# stated rather than left for the browser to guess.
+TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
+
+# The Content-Type FR-15's download serves a stored original with, keyed by the format
+# read_file_signature proved from its bytes at upload (Documents.file_type), never by its name
+# (docs/decisions.md D-75: D-15's principle applied on the way out). One entry per accepted
+# format; apps/core/tests/test_constants.py asserts the keys are exactly ACCEPTED_FORMATS.
+DOWNLOAD_CONTENT_TYPES = {
+    "pdf": PDF_CONTENT_TYPE,
+    "docx": WORD_CONTENT_TYPE,
+    "xlsx": EXCEL_CONTENT_TYPE,
+    "txt": TEXT_CONTENT_TYPE,
+}
 
 # --- Password complexity (FR-01) -----------------------------------------------------
 # FR-01 Server-End, Validation rules: "Password must meet complexity rules (min 8

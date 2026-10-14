@@ -1,9 +1,9 @@
 /**
- * Document endpoints (FR-08 upload and retry, FR-15 browse, detail and delete),
- * per docs/api-contract.md. Thin wrappers over the one API client; no fetch and
- * no XMLHttpRequest here.
+ * Document endpoints (FR-08 upload and retry, FR-15 browse, detail, download and
+ * delete), per docs/api-contract.md. Thin wrappers over the one API client; no
+ * fetch and no XMLHttpRequest here.
  */
-import { del, get, post, upload } from './client.js'
+import { apiUrl, del, get, post, upload } from './client.js'
 
 /*
  * There is no wrapper for `GET /api/documents`, the bare list. The repository
@@ -108,6 +108,25 @@ export function deleteDocument(docId, options = {}) {
  */
 export function fetchDocument(docId, options = {}) {
   return get(`/documents/${encodeURIComponent(docId)}`, options)
+}
+
+/**
+ * The address of `GET /api/documents/{id}/download` — FR-15's download link
+ * (D-75). An address and not a request: the detail view puts it on a plain
+ * `<a download>`, and the browser follows it with the session cookie, as it does
+ * for any same-origin link (D-21). Nothing here reads the bytes.
+ *
+ * Any signed-in user, scoped exactly as `fetchDocument` is, for a document in any
+ * status. 200 is the stored original as an attachment, typed and named by the
+ * format its signature proved at upload; 404, with one body, for an unknown id,
+ * one outside the caller's scope and one whose file is not stored, so the route
+ * never says which (CLAUDE.md §6, invariant 1); 401 for no session.
+ *
+ * This route is the only address a document is downloaded from. Nothing serves
+ * `/media/`, and the document object carries no stored path to build one from.
+ */
+export function documentDownloadUrl(docId) {
+  return apiUrl(`/documents/${encodeURIComponent(docId)}/download`)
 }
 
 /**

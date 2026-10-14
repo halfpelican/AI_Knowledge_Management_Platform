@@ -279,3 +279,41 @@ and `apps/accounts/tests/test_manage_documents_seed.py`. Front-end tests are in
   assert, but the D-53 scan does not watch those models.
 - **No browser check.** The screens are tested in jsdom only. Narrow widths and keyboard order are
   item 7's.
+
+### After item 2a — 14 October 2026, on `feat/FR-15-document-download`
+
+Built by the django-backend agent (the route, the error file, the never-cache middleware) and the
+react-frontend agent (the link), in parallel against D-75, D-76 and the contract, which were
+committed first. The coordinating session reviewed both and committed them. The backend agent was
+stopped by a usage limit while deliberate break (a) was applied. The coordinating session found
+the break still in place, restored it, and resumed the agent, which confirmed the file matched its
+snapshot byte for byte.
+
+Only FR-15's ninth clause changes. Every other row of the item 2 table above stands.
+
+| # | Clause | State | Evidence |
+|---|---|---|---|
+| 9 | …and a download link | ✅ | `GET /api/documents/{id}/download` (D-75), linked from the detail view as `<a href download>`, on every document in every status. **Backend** (`apps/api/tests/test_document_download.py`, every test from both roles): `test_each_format_downloads_as_the_stored_original_byte_for_byte`, `test_a_download_is_named_and_typed_by_its_signature_not_by_its_uploaded_name` (`Q3_budget.vbs` and `invoice.html` uploaded through the real API download as `.txt`), `test_an_administrator_only_document_is_an_employees_unknown_id_and_the_administrators_file`, `test_unknown_and_out_of_scope_are_one_404_from_both_roles`, `test_a_document_downloads_in_every_status`, `test_the_stored_file_is_not_served_at_its_media_url`, the three missing-file tests, and the `Accept` tests. Also the `api/documents/<uuid:pk>/download GET` probe in `test_source_rows_fail_closed.py`. **Front end** (`documentRepository.test.jsx`): `links to exactly the download route for this document, with an empty download attribute`, one test per status, `puts no /media/ address anywhere on the detail view`, `is left to the browser: a click is not intercepted and sends nothing through the API client` |
+
+The server-end clauses this route also answers to:
+
+| Clause | State | Evidence |
+|---|---|---|
+| 15. A document ID must resolve to an existing record | ✅ | A blank or missing file is the same 404, with the same body, logged to `logs/errors.log` (D-75). An out-of-scope document logs nothing at ERROR even when its file is missing |
+| 16. Filtered to documents the role permits, as in FR-11 | ✅ | Through `scoped_document_or_404`, which the detail view and the delete share. A download can consult only the document's stamp; it agrees with chunk-level retrieval while the cascade holds (D-75) |
+| 22. 404 for an unknown document | ✅ | `test_unknown_and_out_of_scope_are_one_404_from_both_roles` |
+
+Beside the clause, from D-76: every `/api/` response is marked never-cache, tested across
+`enumerate_endpoints()` for anonymous, Employee and Administrator sessions, including 401, 403,
+404 and CSRF refusals (`apps/api/tests/test_never_cache.py`). The error file is tested in
+`apps/core/tests/test_logging_config.py`.
+
+#### Not covered by item 2a
+
+- **No real-browser check.** jsdom cannot download, so how Chrome, Firefox and Safari present a
+  failed download (a 401 or 404 on a `download` link) is unverified. Some may save the JSON body as
+  a file. Worth one manual check in item 8's live run.
+- **A cross-origin API base.** Browsers ignore `download` on a cross-origin address, so a failure
+  would replace the tab with JSON. D-21 keeps the API same-origin.
+- **Reprocess's HTML 500 on a missing file, and the `SuspiciousFileOperation` 400**, are item 5's
+  (D-75's notes).

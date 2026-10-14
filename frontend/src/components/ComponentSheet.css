@@ -111,13 +111,6 @@
   max-width: var(--layout-field-max-width);
 }
 
-.upcoming {
-  margin-bottom: var(--space-2);
-  color: var(--color-text-muted);
-  font-size: var(--text-base);
-  font-weight: var(--weight-medium);
-}
-
 /* The dashboard panels, laid out as the dashboard lays them out. */
 .sheet__panels {
   display: grid;

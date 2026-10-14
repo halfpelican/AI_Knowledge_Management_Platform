@@ -85,14 +85,10 @@ const BUILT = [
   { name: 'Ask, citations and Sources, with the conversation thread (FR-12, FR-13)', paths: ['/ask'] },
   { name: 'Dashboard (FR-14), the landing page for each role', paths: ['/dashboard', '/admin'] },
   {
-    name: 'Document repository with filtered browsing, and the document detail view with deletion (FR-15; FR-08’s retry on its rows)',
+    name: 'Document repository with filtered browsing, and the document detail view with its download link and deletion (FR-15; FR-08’s retry on its rows)',
     paths: ['/documents', '/documents/:docId'],
   },
 ]
-
-// FR-15's detail clause names a download link. Its route is Stage 5 item 2a and
-// is not built, so the detail view renders nothing for it yet.
-const UPCOMING = ['Document download link (FR-15, Stage 5 item 2a)']
 
 /* Fixtures for the FR-15 section below: one dimension's values as the browse
    reply carries them, already scoped and counted by the server (D-72). */
@@ -378,6 +374,17 @@ export default function ComponentSheet() {
           The loading variant draws the spinner FR-02 asks for and sets <code>aria-busy</code>. The spinner is
           decorative; the label changes with it and is the text equivalent.
         </p>
+        <p>
+          A link that sits among buttons keeps its link role and takes the secondary button&apos;s look, so a row
+          of actions reads as one set. FR-15&apos;s download link on the document detail view is one: following it
+          is the browser&apos;s job, not the page&apos;s, so it is an <code>&lt;a&gt;</code> and not a button. Its
+          hover keeps the button&apos;s text colour.
+        </p>
+        <div className="demo-row">
+          <a className="btn btn--secondary" href="#sheet-button">
+            Link styled as a secondary button
+          </a>
+        </div>
       </section>
 
       <section aria-labelledby="sheet-text-input">
@@ -745,16 +752,6 @@ export default function ComponentSheet() {
             </li>
           ))}
         </ul>
-      </section>
-
-      <section aria-labelledby="sheet-upcoming">
-        <h2 id="sheet-upcoming">Still to come</h2>
-        <p>Components for the M6 screens. None is implemented yet.</p>
-        {UPCOMING.map((name) => (
-          <h3 key={name} className="upcoming">
-            {name}
-          </h3>
-        ))}
       </section>
     </div>
   )

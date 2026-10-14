@@ -4227,6 +4227,44 @@ sets no `handler500`. That was found by reading the code, not by running it.
 - **Logging who downloaded what.** No requirement asks for it.
 - **Files on disk with no row.** Nothing cleans them up.
 
+> **Corrected and clarified on 14 October 2026, when item 2a was built.**
+>
+> - **Correction.** The type table says the signature admits "only valid UTF-8". It admits a file
+>   whose first 8 KB decode as UTF-8: `_text_format` reads no further. A text file with invalid
+>   bytes later is accepted as txt and served as `text/plain; charset=utf-8`. With `nosniff` and an
+>   attachment response, nothing renders it, so the label is wrong but harmless. The django-backend
+>   agent found this.
+> - **`Accept` is not consulted on this route.** DRF negotiates before the view runs, and the API's
+>   only renderer is JSON, so `Accept: application/pdf` was answered 406. A browser's navigation
+>   header ends in `*/*` and was never refused, but a script or download manager naming the type
+>   was. The view uses DRF's documented `IgnoreClientContentNegotiation`
+>   (`apps/api/negotiation.py`), so its 401 and 404 are still JSON. Every other route negotiates
+>   as before. The contract says so.
+> - **"Logs nothing" means nothing at ERROR.** Django's `django.request` logs a WARNING
+>   `Not Found: <path>` for every 404. An out-of-scope document's WARNING is identical to an
+>   unknown id's, and it is below the error file's level. The test asserts exactly that.
+> - **The 404 message is restated as a constant**, `DOCUMENT_NOT_FOUND_MESSAGE`, built as Django 5.2
+>   builds it. The tests compare against real out-of-scope responses, so a Django rewording fails
+>   them rather than going unnoticed.
+> - **An unknown `file_type` would be a 500** (`DOWNLOAD_CONTENT_TYPES[...]`). It is unreachable
+>   through the vocabulary, and a test pins the map's keys to `ACCEPTED_FORMATS`. There is no
+>   fallback type.
+> - **What counts as an extension** is `os.path.splitext`'s rule on the stored name's last
+>   component: `.profile` as txt becomes `.profile.txt`, and `notes.` becomes `notes.txt`. A
+>   genuine PDF named `notes.txt` downloads as `notes.pdf`.
+> - **The missing-file log line** names the document id and the stored name. The `OSError` case
+>   carries its traceback, so the filesystem path appears in the server's log and never in the
+>   response.
+> - **The error file's format** is `%(asctime)s %(levelname)s %(name)s %(message)s`, UTF-8,
+>   created on the first ERROR. `ERROR_LOG_PATH` is env-driven and, like `AUDIT_LOG_PATH`, not
+>   in `.env.example`.
+> - **Tests never write the real log files.** `conftest.py`'s autouse `log_files` fixture points
+>   both at temporary paths. It also re-attaches pytest's own root handlers after `dictConfig`,
+>   because a configuration with a `root` entry removes them.
+> - **Found, and outside this item:** a `file_path` naming a path outside `MEDIA_ROOT`, which
+>   only a script could write, raises `SuspiciousFileOperation` rather than `OSError`, and gets
+>   Django's 400 rather than the 404. Left with item 5's missing-file work.
+
 ## D-76 · Every `/api/` response is marked never-cache, by one middleware
 
 **Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Concerns:** every
@@ -4257,3 +4295,13 @@ responses for this header (WSTG-ATHN-06), so item 11 would raise it anyway.
 
 - **Responses outside `/api/`.** Item 9 decides how the SPA is served and cached.
 - **The copy a user saves.** See above.
+
+> **Clarified on 14 October 2026, when item 2a was built.**
+>
+> - **Matched on `request.path_info`, not `request.path`.** `path_info` is what the URL conf
+>   resolves. Under a script-prefix deployment, `request.path` would carry the prefix, match
+>   nothing, and leave the API silently uncached. The two are identical today.
+> - **First in `MIDDLEWARE`**, the outermost layer, so it also marks responses another middleware
+>   returns early: CSRF's 403 and the URL resolver's 404 through `handler404`. Both are tested.
+> - **Not covered: `GET /api` without its slash.** `CommonMiddleware` answers it with a 301 to
+>   `/api/`. That redirect isn't under `/api/`, so it isn't marked, and it carries no content.

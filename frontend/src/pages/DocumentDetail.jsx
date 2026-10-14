@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
-import { deleteDocument, fetchDocument } from '../api/documents.js'
+import { deleteDocument, documentDownloadUrl, fetchDocument } from '../api/documents.js'
 import Button from '../components/Button.jsx'
 import Dialog from '../components/Dialog.jsx'
 import Notice from '../components/Notice.jsx'
@@ -49,6 +49,17 @@ function tagsIn(tags, dimension) {
  * into markup. Its empty state is keyed on `extracted_text` being null — the
  * document has no extracted content — and not on the status, because which
  * statuses leave text behind is a fact of the ingestion path (D-63).
+ *
+ * **The download link is a plain `<a download>` to the scoped download route**
+ * (D-75), never to a `/media/` path, which nothing serves. It sends no request
+ * through the API client: the browser follows it with the session cookie, as it
+ * does any same-origin link (D-21). The `download` attribute, which browsers
+ * honour only on a same-origin address, keeps a failure — an expired session's
+ * 401, a document deleted or narrowed out of scope since this view loaded — in
+ * the browser's downloads instead of navigating the tab to raw JSON. It is
+ * offered on every document whatever its status and whatever `can_delete` says,
+ * because the original is stored whether or not it was indexed, and reading it
+ * needs nothing beyond scope.
  *
  * **The delete control is shown only when the detail says `can_delete`**, and it
  * asks for confirmation before sending anything. That is usability; the server
@@ -187,17 +198,21 @@ export default function DocumentDetail() {
         })}
       </dl>
 
-      {/* The document's actions. Stage 5 item 2a adds FR-15's download link here,
-          first in this row, pointing at the scoped download route and never at
-          the stored file's path. Nothing is rendered for it until that route
-          exists. */}
-      {canDelete ? (
-        <div className="repository-page__actions document-detail__actions">
+      {/* The document's actions. FR-15's download link comes first and is always
+          there: it points at the scoped download route and never at the stored
+          file's path (D-75). It is a link, because following it is the browser's
+          job, and it takes the secondary button's look so the row reads as one set
+          of actions. The delete control follows it when the detail allows. */}
+      <div className="repository-page__actions document-detail__actions">
+        <a className="btn btn--secondary" href={documentDownloadUrl(record.doc_id)} download>
+          {TEXT.documentDownload}
+        </a>
+        {canDelete ? (
           <Button variant="secondary" onClick={() => setConfirming(true)}>
             {TEXT.documentDelete}
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
       <h2 id="extracted-content-heading">{TEXT.documentExtractedHeading}</h2>
       {hasText ? (

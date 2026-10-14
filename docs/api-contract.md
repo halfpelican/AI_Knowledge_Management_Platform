@@ -884,3 +884,7 @@ status. The client links to this route, never to a `/media/` path, which nothing
 - **A 404 body** is `{"detail": "No Document matches the given query."}` for an unknown id, an id
   outside the caller's scope and a document with no file alike. A missing file is logged on the
   server and not described to the client.
+- **`Accept` is not consulted** on this route, so it never answers 406. Every other route
+  negotiates as usual and answers 406 to an `Accept` that excludes JSON; here that would refuse
+  `Accept: application/pdf` before the view ran. The route's 401 and 404 are JSON whatever the
+  client asked for.

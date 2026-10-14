@@ -398,6 +398,11 @@ export const TEXT = {
   // the null and not on the status, because which statuses leave text behind is a
   // fact of the ingestion path (D-63).
   documentExtractedEmpty: 'No text was extracted from this document, so there is nothing to show here.',
+  // FR-15's "download link" (D-75). It is the link's whole accessible name, so it
+  // says what arrives: the file as it was uploaded, and not the extracted text
+  // shown on the same screen. Offered on every document whatever its status,
+  // because the original is stored whether or not it was indexed.
+  documentDownload: 'Download the original file',
   // FR-15's deletion: "requires confirmation and is available only to users
   // holding the appropriate permission". The control shows only when the detail
   // says `can_delete`; the server checks the permission on every delete

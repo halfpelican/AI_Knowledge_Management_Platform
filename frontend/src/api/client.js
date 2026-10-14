@@ -5,7 +5,9 @@
  * `XMLHttpRequest`. Components and hooks import the endpoint helpers
  * (src/api/auth.js, src/api/users.js, src/api/documents.js, src/api/meetings.js)
  * or `get`, `post`, `patch`, `del`, `request` and `upload` from here; they never talk to
- * the network themselves.
+ * the network themselves. `apiUrl` builds an address under the API base without
+ * requesting it, for the one route the browser follows itself as a plain link:
+ * FR-15's download (D-75).
  *
  * Authentication is Django's session cookie (D-21). The cookie is HttpOnly, so
  * this module never sees, stores or forwards a credential: every request is
@@ -73,6 +75,17 @@ export class ApiError extends Error {
 export function messageForStatus(status) {
   if (status === NETWORK_ERROR_STATUS) return MESSAGES.network
   return MESSAGES[status] ?? MESSAGES.default
+}
+
+/**
+ * The address of an API path, for example `/documents` -> `/api/documents`. Every
+ * request below is sent to the address this builds, and a link to an API route
+ * uses it too, so the two cannot come to disagree about the base.
+ *
+ * @param {string} path Path relative to the API base, with or without its leading slash.
+ */
+export function apiUrl(path) {
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
 }
 
 /* ---- Session expiry notification ---------------------------------------- */
@@ -157,7 +170,7 @@ export async function request(path, { method = 'GET', body, signal } = {}) {
     if (csrfToken) headers[CSRF_HEADER_NAME] = csrfToken
   }
 
-  const url = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+  const url = apiUrl(path)
 
   let response
   try {
@@ -247,7 +260,7 @@ export function del(path, options = {}) {
  * @throws {ApiError} For any non-2xx response or network failure.
  */
 export function upload(path, formData, { method = 'POST', onProgress, signal } = {}) {
-  const url = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+  const url = apiUrl(path)
   const upperMethod = method.toUpperCase()
 
   return new Promise((resolve, reject) => {
