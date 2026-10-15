@@ -4305,3 +4305,134 @@ responses for this header (WSTG-ATHN-06), so item 11 would raise it anyway.
 >   returns early: CSRF's 403 and the URL resolver's 404 through `handler404`. Both are tested.
 > - **Not covered: `GET /api` without its slash.** `CommonMiddleware` answers it with a 301 to
 >   `/api/`. That redirect isn't under `/api/`, so it isn't marked, and it carries no content.
+
+## D-77 · FR-13's active thread lives in the address, and switching threads adds a history entry
+
+**Status:** Settled by the user · **Date:** 2026-10-15 · **Stage:** 5 item 4a · **Closes:** D-61's
+gap 3, FR-13's "retaining the thread" with FR-12's citation link (`docs/stage-4-open-items.md`
+§2.1)
+
+**Decision.** The address is the only source of truth for the active thread. `/ask?c=<id>` names
+it, and `/ask` with no `c` means there is none.
+
+1. **Reading.** An effect keyed on `c` calls `fetchConversation`, on mount and whenever `c`
+   changes: Back, Forward, a link. It has a cleanup flag, so a slow read for thread Y can't land
+   after Back to thread X. It reads only when `c` differs from the thread on screen, so the
+   screen's own writes never trigger a re-read that would overwrite a live turn. The turns always
+   come from the server and are never restored from the browser. A read is re-scoped (D-48), so a
+   source deleted in the meantime is not shown again (FR-15).
+2. **Push on a switch.** Reopening a thread from the list and "Start a new topic" navigate, adding
+   a history entry, so Back returns to the previous thread.
+   - Start a new topic writes whatever `threadAfterNewTopic` returns: `/ask`, or `/ask?c=<id>`
+     when it reuses an empty thread.
+   - Reopening the thread already on screen writes nothing. So does Start a new topic when the
+     thread on screen is already empty. Neither adds a duplicate entry.
+3. **Replace on create.** `/ask` becomes `/ask?c=<id>` as soon as `createConversation` returns,
+   before the answer, because `handleSubmit` already has the id then. Any `q` from Search's
+   `/ask?q=` link is dropped at the same time. Back from a new thread never lands on an empty
+   `/ask`.
+4. **A reply for a thread the address no longer names is dropped.** Back and Forward can't be
+   disabled the way the list is while asking, and an answer can take minutes (D-49). A reply is
+   applied only if `c`, read through a ref, still names the thread it was asked in. Otherwise it
+   is dropped: the server has it, and the next read of that thread shows it. Today `handleSubmit`
+   appends the turn and calls `setConversationId` unconditionally. One question stays in flight at
+   a time, as now.
+5. **A `c` that answers 404 is replaced.** That covers an unknown id, another user's thread and an
+   id that isn't a UUID, which get one answer (invariant 1). The address becomes `/ask`, so Back
+   never returns to the dead address. Today's "conversation not found" notice is shown and is still
+   showing after the replace.
+6. **The tab title stays a static "Ask"**, never the thread's title. With push, every thread
+   visited stays in the Back button's history list, where anyone at the machine can read it.
+
+**Why push.** The dashboard's filters already add an entry per change (D-70). An assessor who
+follows a citation, or opens an older thread, expects Back to return to the conversation they
+left.
+
+**No route or response shape changes**, so `docs/api-contract.md` doesn't change.
+
+**Tested** in `frontend/tests/`, through `MemoryRouter` with a probe that exposes the location and
+`navigate(-1)`:
+
+- the first question replaces the entry rather than pushing one;
+- following a citation link and pressing Back re-reads X;
+- reopening Y and pressing Back re-reads X;
+- a reply for X that resolves after Back to Y appears neither in Y nor in the address;
+- a `c` that answers 404 ends at `/ask` with the notice still showing, and Back skips it;
+- reopening the thread already open adds no entry.
+
+**What this decision does not cover.**
+
+- **A re-read thread's citations stay inert until item 4b.** After Back from a citation, the
+  thread returns with each statement and its number, but with no expansion, no source link and no
+  Sources panel (D-61's gap 4). The screen's existing note says so.
+- **Partial matches on a re-read turn.** No route returns a past turn's candidates, so a no-answer
+  turn's partial matches are gone after Back. Reopening from the list behaves the same way today.
+- **Where the reader was.** Back lands at the top of the screen, not at the citation followed.
+- **The draft in the question field** does not survive leaving the screen.
+- **D-70's recent-questions link.** Item 4a unblocks it as a follow-up (`Dashboard.jsx:364`).
+  Each recent question already carries `conversation_id` (D-68), so the link is front-end work
+  only. No Stage 5 item names it yet.
+- **D-58 is narrowed, not closed.** An empty thread now survives a reload and a return, because
+  the address names it. One the user leaves for good still persists.
+
+> **Clarified on 15 October 2026, when item 4a was built.** None of this changes the decision. It
+> records what D-77 left to the implementation.
+>
+> **Set by the coordinating session's brief:**
+>
+> - **Focus.** A read the address asks for on its own (mount, Back, Forward, a link) moves no
+>   focus, as no page load does. A click in the list still focuses the thread's last turn once
+>   that thread's read lands. The pending focus carries the thread it was set for, so another
+>   read cannot spend it.
+> - **While a thread is read,** Ask and Start a new topic are disabled, as the list already was.
+>   Nothing is asked into or cleared from a thread that is not yet on screen. `opening` starts
+>   true when the address names a thread, so this holds from the first render.
+> - **A dropped reply still updates the bookkeeping.** `unusedThreadAfterTurn` and
+>   `unusedThreadAfterFailure` are applied, and a successful reply re-reads the list. It adds no
+>   turn, no acknowledgement and no focus, writes no address, and leaves the field alone. A
+>   failure for a thread the address no longer names is dropped the same way, so a 404 for X
+>   never clears Y.
+> - **Every navigation after an await is guarded:** the screen must still be mounted and the
+>   address must still name what it named. React Router's `navigate` works after unmount, so
+>   without the guard a citation followed while a question was in flight could be undone.
+> - **Rule 3 covers a reused empty thread** as well as a created one. Before the ask, if the
+>   address doesn't name the thread being asked in, it is replaced with it.
+> - **When the address comes to name no thread** (the nav's Ask link, or Back to `/ask`), the
+>   turns, notice, field error and acknowledgement are cleared. The draft is kept.
+> - **Start a new topic** still acknowledges and moves focus to the field, even when it writes
+>   nothing. "Already empty" means no turns on screen and no read in flight.
+>
+> **Chosen by the react-frontend agent:**
+>
+> - **The address ref is updated at the moment of the screen's own writes**, and on commit for
+>   Back, Forward and links. React Router commits a navigation as a transition, so without the
+>   first update the existing 503 test dropped its own failure.
+>   - **Not covered:** a reply or read 404 landing between a Back and its commit, one render
+>     wide, is judged against the old address. Closing that would need React Router's
+>     `UNSAFE_` navigation context.
+> - **A read failure other than 404** (a 500, or no network) keeps the thread that was on screen,
+>   under `conversationLoadFailed` and the client's fixed message. Until the user chooses again,
+>   the address names the thread that failed while the screen shows the one before it, so here
+>   the two disagree. Choosing that thread in the list reads it again without adding an entry.
+>   Before this item, a failed reopen showed `askRejected`, which is untrue of a read.
+> - **Choosing the thread already open** writes and reads nothing, and focuses its last turn,
+>   which is where a read would have put focus. The focus move is not tested.
+> - **If the address moves or the screen unmounts while the thread is being created,** the
+>   question is still sent and its reply is dropped. Not sending it would leave a permanent empty
+>   thread (D-58).
+> - **A 404 on the ask itself** is handled like a read's: the screen is cleared, the list re-read
+>   and the address replaced with `/ask`, behind the same guard.
+> - **The reply's `conversation.conversation_id` no longer sets the thread on screen.** The id the
+>   address names is the one shown, so the address and the screen agree exactly.
+>
+> **What the deliberate breaks found.** Fifteen breaks were run against
+> `askThread.test.jsx` and `ask.test.jsx`, each restored and checked by hash.
+>
+> - **Removing the check that stops a click on the open thread** failed no test. The click falls
+>   through to the branch for an address that already names it, which writes nothing either. The
+>   guard is redundant except for the immediate focus move. Removing both checks fails "adds no
+>   entry and sends no read when the thread already open is chosen again".
+> - **Removing the "already empty" guard** at first failed no test, because the test used an
+>   empty `/ask`, where the address check also stops the write. A test for the case where the
+>   guard is the only defence was added: an empty thread the address names, after a reload. The
+>   unchanged break fails it.
