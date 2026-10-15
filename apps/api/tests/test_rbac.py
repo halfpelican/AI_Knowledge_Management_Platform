@@ -53,7 +53,8 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "ask",  # Stage 4: FR-12's answer path, FR-13's turn
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
                     "dashboard",  # Stage 5 item 3: FR-14
-                    "document-browse"}  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
+                    "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
+                    "document-download"}  # Stage 5 item 2a: FR-15's download link (D-75)
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method

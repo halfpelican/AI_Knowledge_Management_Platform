@@ -5,12 +5,14 @@ default, so only the views that set ``AllowAny`` are reachable anonymously.
 Routes that need more than a session add ``HasRolePermission`` (FR-06).
 """
 
+import logging
+
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.db import IntegrityError, transaction
 from django.db.models import Prefetch
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -30,6 +32,7 @@ from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
     DASHBOARD_RECENT_ITEMS,
+    DOWNLOAD_CONTENT_TYPES,
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
@@ -43,6 +46,7 @@ from apps.core.constants import (
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.deletion import delete_document
+from apps.documents.downloads import download_filename
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
@@ -60,6 +64,7 @@ from apps.retrieval.search import (
 )
 
 from .answers import reply_for
+from .negotiation import IgnoreClientContentNegotiation
 from .permissions import HasRolePermission
 from .repository import RepositoryFilters, browse, repository_documents
 from .serializers import (
@@ -87,6 +92,10 @@ from .serializers import (
 )
 
 User = get_user_model()
+
+# The download's missing-file errors (D-75). Propagates to the root logger, whose ERROR
+# handler writes logs/errors.log (apps/core/logging_config.py).
+logger = logging.getLogger(__name__)
 
 # One message for an unknown address and a wrong password (D-02): login must not
 # disclose whether an address is registered.
@@ -164,6 +173,16 @@ UNKNOWN_ATTENDEE_MESSAGE = "One or more of those attendees is not a registered u
 # document that is already indexed is FR-15's business, not a retry's.
 ALREADY_INDEXED_MESSAGE = "This document is already indexed."
 NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
+# FR-15's download answers a document whose original is not stored, or is gone from disk, with
+# exactly the 404 body its scoped lookup gives an unknown id or one outside the caller's scope
+# (D-75), so the client cannot tell the three apart. That body is get_object_or_404's own
+# message, which DRF passes through, so it is restated here word for word: a bare Http404() or
+# NotFound() would answer "Not found." and give the missing file away. A Django release that
+# rewords its message fails apps/api/tests/test_document_download.py, which compares this body
+# with a real out-of-scope response rather than with this string. Not NO_STORED_ORIGINAL_MESSAGE:
+# a GET for bytes that are not there is "not found", while reprocess is an action that cannot
+# proceed, and says so with a 422.
+DOCUMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Document._meta.object_name
 # FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
 # restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
 # exception (D-41).
@@ -631,6 +650,22 @@ class DocumentsView(APIView):
         return Response(body, status=outcome.http_status)
 
 
+def scoped_document_or_404(request, pk):
+    """The document, if the caller's scope holds it; 404 otherwise, unknown or not (D-46).
+
+    The one lookup behind every route that names a document by id and returns it or acts on it:
+    the detail view, its delete and the download (D-75). One scoped query and
+    ``get_object_or_404``, so an unknown id and one outside the caller's scope are the same
+    query with the same answer and there is no branch that could tell them apart.
+    """
+    return get_object_or_404(
+        scoped_documents(role_name=permission_scope(request.user)).select_related(
+            "uploaded_by"
+        ),
+        pk=pk,
+    )
+
+
 class DocumentDetailView(APIView):
     """``GET /api/documents/{id}`` — the route FR-12's citation clause links to (D-46).
 
@@ -662,22 +697,13 @@ class DocumentDetailView(APIView):
     ``can_delete`` (``DocumentDetailSerializer``; D-63, D-73), and the ``DELETE`` method below.
     """
 
-    def _scoped_document(self, request, pk):
-        """The document, if the caller's scope holds it; 404 otherwise, unknown or not (D-46)."""
-        return get_object_or_404(
-            scoped_documents(role_name=permission_scope(request.user)).select_related(
-                "uploaded_by"
-            ),
-            pk=pk,
-        )
-
     def _may_delete(self, request) -> bool:
         """Whether the caller's role holds ``manage_documents``, read from ``role_permissions``
         on this request as every permission is (``apps/api/permissions.py``, D-14, D-21)."""
         return CanManageDocuments().has_permission(request, self)
 
     def get(self, request, pk):
-        document = self._scoped_document(request, pk)
+        document = scoped_document_or_404(request, pk)
         return Response(
             DocumentDetailSerializer(
                 document, context={"can_delete": self._may_delete(request)}
@@ -701,11 +727,83 @@ class DocumentDetailView(APIView):
         extracted content. The stored file is removed when that transaction commits. 204 with no
         body is a convention: FR-15 names no success code for a delete.
         """
-        document = self._scoped_document(request, pk)
+        document = scoped_document_or_404(request, pk)
         if not self._may_delete(request):
             self.permission_denied(request, message=CanManageDocuments.message)
         delete_document(document)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class DocumentDownloadView(APIView):
+    """``GET /api/documents/{id}/download`` — FR-15's download link (D-75).
+
+    The first route that returns a document's ORIGINAL BYTES rather than anything derived from
+    them. The detail screen's link points here, never at ``file_path.url``: that is
+    ``/media/<path>``, and ``config/urls.py`` serves nothing outside ``/api/``, deliberately —
+    ``static(MEDIA_URL)`` would serve every document to anyone who had its path.
+
+    **Scope first, then the file, and the order is the security property.** The document is
+    resolved by ``scoped_document_or_404``, the lookup the detail view uses, so an unknown id and
+    one outside the caller's scope are both 404, never 403 (D-46). Only a document the caller
+    may see reaches the file checks below, so an out-of-scope document gets the plain 404 and
+    logs nothing, even when its file is missing too. A session and nothing more: FR-15 names no
+    permission for the link, and every status downloads, because the original is stored
+    whether or not it was indexed (D-52's note).
+
+    **Retrieval scopes chunks; this can only scope the document.** Retrieval reads
+    ``ContentChunk.visible_to_roles``, and a download can consult only
+    ``Document.visible_to_roles``, because the original is one file. The two agree only while
+    the visibility cascade holds (invariant 2, D-17, D-47), and D-53's probe for this route
+    seeds a disagreement to show it fails closed.
+
+    **A missing original is the same 404, logged.** ``file_path`` blank, or the file gone from
+    disk (a delete committing between the lookup and the open, or a hand edit), answers with the
+    body the lookup gives an unknown id, word for word, so the client cannot tell the cases
+    apart; the cause goes to the error log (D-75), not to the client. The blank case is checked
+    before opening because opening a blank ``FieldFile`` raises ``ValueError``, not ``OSError``.
+    The file is opened before the response is built, so a failure is a 404, not a 500 halfway
+    through a stream.
+
+    **Typed and named by the signature, never by the name** (D-15's principle on the way out).
+    The ``Content-Type`` comes from ``file_type``, which ``read_file_signature`` proved from the
+    bytes at upload, and ``SecurityMiddleware``'s ``X-Content-Type-Options: nosniff`` makes the
+    browser hold to it. The filename is the stored one with its last extension corrected to that
+    format (``download_filename``), so text uploaded as ``invoice.html`` downloads as
+    ``invoice.txt``. ``FileResponse`` writes ``Content-Disposition``; nothing here builds it.
+
+    **The request's ``Accept`` header is not consulted.** DRF would otherwise answer
+    ``Accept: application/pdf`` with 406 before this method ran, because the API's only
+    renderer is JSON (``IgnoreClientContentNegotiation`` says why).
+    """
+
+    content_negotiation_class = IgnoreClientContentNegotiation
+
+    def get(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        stored_name = document.file_path.name
+        if not document.file_path:
+            logger.error(
+                "Document %s has no stored original to download (stored name %r).",
+                document.pk,
+                stored_name,
+            )
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        try:
+            handle = document.file_path.open("rb")
+        except OSError:
+            logger.error(
+                "The stored original of document %s is missing or unreadable (stored name %r).",
+                document.pk,
+                stored_name,
+                exc_info=True,
+            )
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        return FileResponse(
+            handle,
+            as_attachment=True,
+            filename=download_filename(stored_name, document.file_type),
+            content_type=DOWNLOAD_CONTENT_TYPES[document.file_type],
+        )
 
 
 class DocumentBrowseView(APIView):

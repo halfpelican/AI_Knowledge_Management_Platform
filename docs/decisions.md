@@ -134,6 +134,8 @@ Rules for this file:
 | D-72 | FR-15 browse: a separate endpoint sharing the list's scoped query; Department from the column, a deliberate departure; 204 only when a filter matches nothing | Settled by the user | 2026-10-06 |
 | D-73 | FR-15 deletion: manage_documents for Administrators (accounts 0005), scoped-first 404 then 403, chunks, tags and document in one transaction, file on commit, 204 | Settled by the user | 2026-10-06 |
 | D-74 | The demonstration corpus is tagged from the manifest by an idempotent script, applied_by="user", against kmp | Settled by the user | 2026-10-06 |
+| D-75 | FR-15 download: a scoped route returning the original as an attachment, typed by its signature and named with the signature's extension; a missing file is the same 404; errors.log | Settled by the user | 2026-10-13 |
+| D-76 | Every /api/ response is marked never-cache by one middleware (add_never_cache_headers); nothing outside /api/ | Settled by the user | 2026-10-13 |
 
 ---
 
@@ -2567,6 +2569,8 @@ detail view built early in Stage 4 as D-46 is required to grow into
 > exists only as overlapping chunks, and that the download link was built, were false
 > when written. D-63 restores the extracted content. This entry is left as written so
 > the error stays visible, per the rule at the head of this file.
+>
+> **The download link was built on 13 October 2026, by Stage 5 item 2a (D-75).**
 
 **Decision.** FR-15 reads: "Selecting a document opens a detail view showing its
 metadata, extracted content, and a download link." The detail view shows **metadata
@@ -4091,6 +4095,15 @@ the detail response gains.
 >   `ExtractedContent` in `apps/api/repository.py` go through scoped documents, but the scan does
 >   not watch those models, so that is enforced by the tests rather than by the scan.
 
+> **Clarified on 13 October 2026, by item 2a (D-75).**
+>
+> - **"Django logs it" was untrue with `DEBUG=False` until D-75.** `LOGGING` configured only the
+>   audit logger, so the failed removal's log record had nowhere to go. D-75's ERROR-level root
+>   handler writes it to `logs/errors.log`.
+> - **When the removal fails.** On Windows, a download keeps the file open, and a delete that
+>   commits while it is open is exactly when the removal fails. The row is gone and the file
+>   stays. D-75's route resolves rows, so it never serves that file.
+
 ## D-74 · The demonstration corpus is tagged by a script, from the manifest, with `applied_by="user"`
 
 **Status:** Settled by the user · **Date:** 2026-10-06 · **Stage:** 5 item 2 · **Concerns:**
@@ -4132,3 +4145,163 @@ the proposal places elsewhere.
   administration are FR-10's.
 - **A fresh database.** The seed needs the corpus ingested first (`scripts/ingest_objective02.py`)
   and does nothing for documents that are not there.
+
+## D-75 · FR-15's download: a scoped view returning the original as an attachment, typed and named by its signature
+
+**Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Closes:** FR-15's
+download link, which D-52 said was built and which never existed (D-52's superseded note)
+
+**Decision.**
+
+- **The route.** `GET /api/documents/{id}/download`. The detail view's link points at it, never at
+  `file_path.url`: that is `/media/<path>` with the original filename in it, and `config/urls.py`
+  serves nothing outside `/api/`. `static(MEDIA_URL)` is not added. It would serve every document
+  to anyone who has its path.
+- **Scope.** The document is resolved through `scoped_documents` (item 1's helper), exactly as the
+  detail view resolves it. Unknown and out of scope are both 404 (D-46's precedent), never 403. No
+  permission is needed beyond scope, because FR-15 names none for the link. Every status
+  downloads: as D-52 noted, the stored original exists whether or not it was indexed.
+- **The response.** `FileResponse(handle, as_attachment=True, filename=...)`, not a hand-built
+  `Content-Disposition`. The content type comes from `file_type`, which `read_file_signature` set
+  from the bytes at upload. This is D-15's principle applied on the way out:
+
+  | `file_type` | `Content-Type` |
+  |---|---|
+  | pdf | `application/pdf` |
+  | docx | `WORD_CONTENT_TYPE` |
+  | xlsx | `EXCEL_CONTENT_TYPE` |
+  | txt | `text/plain; charset=utf-8` (the signature admits only valid UTF-8) |
+
+  `X-Content-Type-Options: nosniff`, which `SecurityMiddleware` already sets, is what makes that
+  type binding. Its tests assert it on this response.
+- **The filename** is the stored original filename with its extension corrected to the signature's.
+  Extensions are compared case-insensitively, so `Report.PDF` stays as it is. Only the last
+  extension is replaced, so `report.pdf.exe` becomes `report.pdf.txt`. One is added when the name
+  has none.
+
+  The reason is security. The server never reads the extension; `ACCEPTED_EXTENSIONS` only gates
+  the upload control. So an API upload of UTF-8 text named `Q3_budget.vbs` or `invoice.html` is
+  accepted as txt and stored under that name. Served unchanged, it would download as something a
+  colleague could run. Corrected, it downloads as `Q3_budget.txt` and `invoice.txt`, and both cases
+  are tested.
+- **A document with no file.** The route answers 404 with the same body as out of scope, and the
+  detail view shows the link on every document.
+  - The scoped lookup runs first, then the file checks. An out-of-scope document gets the plain
+    404 and logs nothing, even when its file is also missing.
+  - `if not document.file_path` is checked before opening, because opening a blank `FieldFile`
+    raises `ValueError`, not `OSError`.
+  - The file is then opened inside `try/except OSError` before the `FileResponse` is built. A
+    delete that commits between the lookup and the open answers 404, not 500.
+  - The body is the same on purpose. DRF passes `get_object_or_404`'s message through, so this
+    route's out-of-scope body is `{"detail": "No Document matches the given query."}`. A bare
+    `Http404()` or `NotFound()` would give `{"detail": "Not found."}` and tell the two apart. The
+    missing-file 404s raise the lookup's message. Tests compare against a real out-of-scope
+    response, not a hard-coded string.
+  - A missing file is logged at ERROR with the document id and the stored name.
+- **Why 404 here and 422 for reprocess** (`NO_STORED_ORIGINAL_MESSAGE`). A GET for bytes that are
+  not there is "not found". Reprocess is an action that cannot proceed.
+- **A file with no row.** If D-73's on-commit removal fails, the file stays with no row. This route
+  resolves rows, so it never reaches that file.
+- **The error log.** `LOGGING` configured only the audit logger. With `DEBUG=False`, Django's own
+  errors were dropped: its console handler needs `DEBUG`, and `mail_admins` has no `ADMINS`. An
+  app logger reached stderr only through Python's last-resort handler, with no time or level. An
+  ERROR-level root handler in `apps/core/logging_config.py` now writes `logs/errors.log` beside
+  `audit.log`, tested the way the audit file is.
+
+**Two scopes that agree only while the cascade holds.** Retrieval scopes at the chunk level, on
+`ContentChunk.visible_to_roles`. A download can consult only the document's stamp,
+`Document.visible_to_roles`, because the original is one file. The two agree only while the
+visibility cascade holds: invariant 2, D-17 and D-47's `VisibilityCascadeMixin`. The D-53 probe for
+this route seeds that disagreement, as it does for the others.
+
+**Found while settling this, for item 5.** Reprocess answers Django's HTML 500 when the file is
+missing from disk: `reprocess_document` opens it with no `OSError` handling, and `config/urls.py`
+sets no `handler500`. That was found by reading the code, not by running it.
+
+**What this decision does not cover.**
+
+- **Inline viewing or a preview.** The response is an attachment only.
+- **Meeting transcripts.** FR-09 stores a transcript as text, and no requirement asks to download
+  it.
+- **Range requests, `ETag` and `Last-Modified`.** None are set.
+- **Logging who downloaded what.** No requirement asks for it.
+- **Files on disk with no row.** Nothing cleans them up.
+
+> **Corrected and clarified on 14 October 2026, when item 2a was built.**
+>
+> - **Correction.** The type table says the signature admits "only valid UTF-8". It admits a file
+>   whose first 8 KB decode as UTF-8: `_text_format` reads no further. A text file with invalid
+>   bytes later is accepted as txt and served as `text/plain; charset=utf-8`. With `nosniff` and an
+>   attachment response, nothing renders it, so the label is wrong but harmless. The django-backend
+>   agent found this.
+> - **`Accept` is not consulted on this route.** DRF negotiates before the view runs, and the API's
+>   only renderer is JSON, so `Accept: application/pdf` was answered 406. A browser's navigation
+>   header ends in `*/*` and was never refused, but a script or download manager naming the type
+>   was. The view uses DRF's documented `IgnoreClientContentNegotiation`
+>   (`apps/api/negotiation.py`), so its 401 and 404 are still JSON. Every other route negotiates
+>   as before. The contract says so.
+> - **"Logs nothing" means nothing at ERROR.** Django's `django.request` logs a WARNING
+>   `Not Found: <path>` for every 404. An out-of-scope document's WARNING is identical to an
+>   unknown id's, and it is below the error file's level. The test asserts exactly that.
+> - **The 404 message is restated as a constant**, `DOCUMENT_NOT_FOUND_MESSAGE`, built as Django 5.2
+>   builds it. The tests compare against real out-of-scope responses, so a Django rewording fails
+>   them rather than going unnoticed.
+> - **An unknown `file_type` would be a 500** (`DOWNLOAD_CONTENT_TYPES[...]`). It is unreachable
+>   through the vocabulary, and a test pins the map's keys to `ACCEPTED_FORMATS`. There is no
+>   fallback type.
+> - **What counts as an extension** is `os.path.splitext`'s rule on the stored name's last
+>   component: `.profile` as txt becomes `.profile.txt`, and `notes.` becomes `notes.txt`. A
+>   genuine PDF named `notes.txt` downloads as `notes.pdf`.
+> - **The missing-file log line** names the document id and the stored name. The `OSError` case
+>   carries its traceback, so the filesystem path appears in the server's log and never in the
+>   response.
+> - **The error file's format** is `%(asctime)s %(levelname)s %(name)s %(message)s`, UTF-8,
+>   created on the first ERROR. `ERROR_LOG_PATH` is env-driven and, like `AUDIT_LOG_PATH`, not
+>   in `.env.example`.
+> - **Tests never write the real log files.** `conftest.py`'s autouse `log_files` fixture points
+>   both at temporary paths. It also re-attaches pytest's own root handlers after `dictConfig`,
+>   because a configuration with a `root` entry removes them.
+> - **Found, and outside this item:** a `file_path` naming a path outside `MEDIA_ROOT`, which
+>   only a script could write, raises `SuspiciousFileOperation` rather than `OSError`, and gets
+>   Django's 400 rather than the 404. Left with item 5's missing-file work.
+
+## D-76 · Every `/api/` response is marked never-cache, by one middleware
+
+**Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Concerns:** every
+route that returns scoped content (FR-11, FR-12, FR-13, FR-15)
+
+**Decision.** One small middleware applies Django's `add_never_cache_headers` to every response
+under `/api/`, including 401s, 403s and 404s. That sets `Cache-Control: max-age=0, no-cache,
+no-store, must-revalidate, private` and an `Expires` header. It uses Django's function rather than
+a hand-built header string, for the same reason D-75 uses `FileResponse` rather than a hand-built
+`Content-Disposition`. Nothing outside `/api/` is touched, so the SPA's pages and assets stay
+cacheable once item 9 serves them.
+
+**Why the whole API, not the download alone.** `GET /api/documents/{id}` already returns the whole
+document as `extracted_text` (D-73). The ask and search routes return text drawn from documents.
+None of them carried cache headers before this.
+
+**What it buys.** Without the header, a browser would not normally reuse a download after a role
+change anyway: the responses have no freshness or validator headers, no `Last-Modified` and no
+`ETag`. What `no-store` buys is no copy in the browser's disk cache on a shared machine, and none in
+a proxy that item 9 or M8 may put in front (D-64 leaves both open). It cannot remove the copy the
+user saves to Downloads; that is what a download is. OWASP's testing guide checks sensitive
+responses for this header (WSTG-ATHN-06), so item 11 would raise it anyway.
+
+**Tested** the way `test_rbac.py` walks `enumerate_endpoints()`: every `/api/` route answers with
+`no-store`, including its 403s and 404s.
+
+**What this decision does not cover.**
+
+- **Responses outside `/api/`.** Item 9 decides how the SPA is served and cached.
+- **The copy a user saves.** See above.
+
+> **Clarified on 14 October 2026, when item 2a was built.**
+>
+> - **Matched on `request.path_info`, not `request.path`.** `path_info` is what the URL conf
+>   resolves. Under a script-prefix deployment, `request.path` would carry the prefix, match
+>   nothing, and leave the API silently uncached. The two are identical today.
+> - **First in `MIDDLEWARE`**, the outermost layer, so it also marks responses another middleware
+>   returns early: CSRF's 403 and the URL resolver's 404 through `handler404`. Both are tested.
+> - **Not covered: `GET /api` without its slash.** `CommonMiddleware` answers it with a 301 to
+>   `/api/`. That redirect isn't under `/api/`, so it isn't marked, and it carries no content.

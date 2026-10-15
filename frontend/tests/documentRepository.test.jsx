@@ -4,6 +4,10 @@
  * `DELETE /api/documents/{id}` (docs/api-contract.md, "Stage 5 — FR-14, FR-15 /
  * FR-15 — document repository").
  *
+ * `GET /api/documents/{id}/download` is deliberately never faked. The screen links
+ * to it and never requests it (D-75), so a request for it would reach
+ * tests/setup.js's refusal and fail the test.
+ *
  * Each test defends one clause only the interface can satisfy — what the screen
  * shows, withholds or offers. Scoping, the counts, the 204 rule itself, the
  * scoped-first 404 and the 403 are the server's and are tested in pytest; nothing
@@ -13,7 +17,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { useLayoutEffect } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { TEXT } from '../src/constants.js'
+import { documentDownloadUrl } from '../src/api/documents.js'
+import { DOCUMENT_STATUS, TEXT } from '../src/constants.js'
 import DocumentDetail from '../src/pages/DocumentDetail.jsx'
 import DocumentRepository from '../src/pages/DocumentRepository.jsx'
 import { formatDate } from '../src/utils/dates.js'
@@ -577,9 +582,109 @@ describe('FR-15 deletion: offered only with manage_documents, and only after con
     expect(alert.textContent).toContain(TEXT.documentDeleteNotPermitted)
     expect(screen.queryByRole('button', { name: TEXT.documentDelete })).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
-    // Still on the record, which the 403 did not remove.
+    // Still on the record, which the 403 did not remove, and the download link, which
+    // needs no permission beyond scope (D-75), went nowhere with the delete control.
     expect(screen.getByRole('heading', { level: 1, name: LEAVE.title })).toBeTruthy()
+    expect(screen.getByRole('link', { name: TEXT.documentDownload })).toBeTruthy()
     expect(deletes(answered)).toHaveLength(1)
+  })
+})
+
+/* ---- The download link (D-75) -------------------------------------------- */
+
+/** The detail view's download link, by its accessible name. */
+function downloadLink() {
+  return screen.getByRole('link', { name: TEXT.documentDownload })
+}
+
+describe('FR-15 detail view: a download link to the scoped download route (D-75)', () => {
+  it('links to exactly the download route for this document, with an empty download attribute', async () => {
+    await renderDetail(detailOf(LEAVE))
+
+    const link = downloadLink()
+    // Exactly the route, so not a `/media/` path and not anything built from a
+    // stored file name: the document object carries none.
+    expect(link.getAttribute('href')).toBe(`/api/documents/${LEAVE.doc_id}/download`)
+    // Present, so a failed download stays in the browser's downloads rather than
+    // replacing the app with JSON. Empty, so the file is named by the server's
+    // Content-Disposition, whose extension D-75 corrects to the proven format; a
+    // name given here, such as the title, would be a second name the server never
+    // checked.
+    expect(link.hasAttribute('download')).toBe(true)
+    expect(link.getAttribute('download')).toBe('')
+    // A real link, so the keyboard reaches it.
+    link.focus()
+    expect(document.activeElement).toBe(link)
+  })
+
+  it('encodes the id into its path segment, so an id cannot address another route', () => {
+    expect(documentDownloadUrl('a/b?c#d')).toBe('/api/documents/a%2Fb%3Fc%23d/download')
+  })
+
+  // Every status, failures included: the original is stored whether or not it was
+  // indexed (D-52, D-75). `extracted_text` is null and `can_delete` false, which is
+  // the least a detail can carry, and neither takes the link away.
+  it.each(Object.values(DOCUMENT_STATUS))(
+    'is offered on a document whose status is "%s", with no extracted text, to a caller who cannot delete',
+    async (status) => {
+      await renderDetail(detailOf(SUPPLIERS, { status, extracted_text: null, can_delete: false }))
+
+      expect(screen.getByText(TEXT.documentExtractedEmpty)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: TEXT.documentDelete })).toBeNull()
+      expect(downloadLink().getAttribute('href')).toBe(`/api/documents/${SUPPLIERS.doc_id}/download`)
+    },
+  )
+
+  it('comes first in the actions row, before the delete control when the caller may delete', async () => {
+    await renderDetail(detailOf(LEAVE, { can_delete: true }))
+
+    const link = downloadLink()
+    const control = screen.getByRole('button', { name: TEXT.documentDelete })
+    expect(control.parentElement).toBe(link.parentElement)
+    expect(link.parentElement.firstElementChild).toBe(link)
+  })
+
+  it('puts no /media/ address anywhere on the detail view', async () => {
+    await renderDetail(detailOf(LEAVE, { can_delete: true }))
+
+    const addresses = Array.from(document.querySelectorAll('[href], [src]'), (element) =>
+      element.getAttribute('href') ?? element.getAttribute('src'),
+    )
+    // The back link and the download link at least, so the check below is not
+    // vacuous.
+    expect(addresses.length).toBeGreaterThanOrEqual(2)
+    expect(addresses.filter((address) => address.includes('/media'))).toEqual([])
+    expect(document.body.innerHTML).not.toContain('/media/')
+  })
+
+  it('is left to the browser: a click is not intercepted and sends nothing through the API client', async () => {
+    const { answered, probe } = await renderDetail(detailOf(LEAVE))
+    const requestsBefore = answered.length
+    const fetchesBefore = globalThis.fetch.mock.calls.length
+
+    // On the window, so it sees the click last, after React's handlers at the root.
+    // It records whether the app cancelled the browser's own handling of the link,
+    // then cancels it itself, because jsdom can neither navigate nor download.
+    const cancelledByApp = []
+    function observe(event) {
+      cancelledByApp.push(event.defaultPrevented)
+      event.preventDefault()
+    }
+    window.addEventListener('click', observe)
+    try {
+      fireEvent.click(downloadLink())
+      // Lets anything a handler or an effect started run before counting.
+      await act(async () => {})
+    } finally {
+      window.removeEventListener('click', observe)
+    }
+
+    expect(cancelledByApp).toEqual([false])
+    expect(globalThis.fetch.mock.calls.length).toBe(fetchesBefore)
+    expect(answered).toHaveLength(requestsBefore)
+    // Still on the record: following the link is not a route change in the app.
+    expect(probe.location.pathname).toBe(`/documents/${LEAVE.doc_id}`)
+    expect(screen.getByRole('heading', { level: 1, name: LEAVE.title })).toBeTruthy()
   })
 })
 

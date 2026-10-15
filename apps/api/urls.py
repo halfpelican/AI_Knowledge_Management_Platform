@@ -34,6 +34,9 @@ urlpatterns = [
     # UUID so the two cannot collide either way.
     path("documents/<uuid:pk>/reprocess", views.DocumentReprocessView.as_view(),
          name="document-reprocess"),  # FR-08 "Please try again" (D-32)
+    # Stage 5 item 2a: FR-15's download link, the stored original as an attachment (D-75).
+    path("documents/<uuid:pk>/download", views.DocumentDownloadView.as_view(),
+         name="document-download"),
     # Stage 4 item 10b: the route a document citation links to, so FR-12's "links to the
     # source document or meeting" reaches the document rather than the repository (D-46).
     # Stage 5 item 2 adds FR-15's detail fields to its GET, and the DELETE method (D-73).
