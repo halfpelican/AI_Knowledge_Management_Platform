@@ -4305,3 +4305,72 @@ responses for this header (WSTG-ATHN-06), so item 11 would raise it anyway.
 >   returns early: CSRF's 403 and the URL resolver's 404 through `handler404`. Both are tested.
 > - **Not covered: `GET /api` without its slash.** `CommonMiddleware` answers it with a 301 to
 >   `/api/`. That redirect isn't under `/api/`, so it isn't marked, and it carries no content.
+
+## D-77 · FR-13's active thread lives in the address, and switching threads adds a history entry
+
+**Status:** Settled by the user · **Date:** 2026-10-15 · **Stage:** 5 item 4a · **Closes:** D-61's
+gap 3, FR-13's "retaining the thread" with FR-12's citation link (`docs/stage-4-open-items.md`
+§2.1)
+
+**Decision.** The address is the only source of truth for the active thread. `/ask?c=<id>` names
+it, and `/ask` with no `c` means there is none.
+
+1. **Reading.** An effect keyed on `c` calls `fetchConversation`, on mount and whenever `c`
+   changes: Back, Forward, a link. It has a cleanup flag, so a slow read for thread Y can't land
+   after Back to thread X. It reads only when `c` differs from the thread on screen, so the
+   screen's own writes never trigger a re-read that would overwrite a live turn. The turns always
+   come from the server and are never restored from the browser. A read is re-scoped (D-48), so a
+   source deleted in the meantime is not shown again (FR-15).
+2. **Push on a switch.** Reopening a thread from the list and "Start a new topic" navigate, adding
+   a history entry, so Back returns to the previous thread.
+   - Start a new topic writes whatever `threadAfterNewTopic` returns: `/ask`, or `/ask?c=<id>`
+     when it reuses an empty thread.
+   - Reopening the thread already on screen writes nothing. So does Start a new topic when the
+     thread on screen is already empty. Neither adds a duplicate entry.
+3. **Replace on create.** `/ask` becomes `/ask?c=<id>` as soon as `createConversation` returns,
+   before the answer, because `handleSubmit` already has the id then. Any `q` from Search's
+   `/ask?q=` link is dropped at the same time. Back from a new thread never lands on an empty
+   `/ask`.
+4. **A reply for a thread the address no longer names is dropped.** Back and Forward can't be
+   disabled the way the list is while asking, and an answer can take minutes (D-49). A reply is
+   applied only if `c`, read through a ref, still names the thread it was asked in. Otherwise it
+   is dropped: the server has it, and the next read of that thread shows it. Today `handleSubmit`
+   appends the turn and calls `setConversationId` unconditionally. One question stays in flight at
+   a time, as now.
+5. **A `c` that answers 404 is replaced.** That covers an unknown id, another user's thread and an
+   id that isn't a UUID, which get one answer (invariant 1). The address becomes `/ask`, so Back
+   never returns to the dead address. Today's "conversation not found" notice is shown and is still
+   showing after the replace.
+6. **The tab title stays a static "Ask"**, never the thread's title. With push, every thread
+   visited stays in the Back button's history list, where anyone at the machine can read it.
+
+**Why push.** The dashboard's filters already add an entry per change (D-70). An assessor who
+follows a citation, or opens an older thread, expects Back to return to the conversation they
+left.
+
+**No route or response shape changes**, so `docs/api-contract.md` doesn't change.
+
+**Tested** in `frontend/tests/`, through `MemoryRouter` with a probe that exposes the location and
+`navigate(-1)`:
+
+- the first question replaces the entry rather than pushing one;
+- following a citation link and pressing Back re-reads X;
+- reopening Y and pressing Back re-reads X;
+- a reply for X that resolves after Back to Y appears neither in Y nor in the address;
+- a `c` that answers 404 ends at `/ask` with the notice still showing, and Back skips it;
+- reopening the thread already open adds no entry.
+
+**What this decision does not cover.**
+
+- **A re-read thread's citations stay inert until item 4b.** After Back from a citation, the
+  thread returns with each statement and its number, but with no expansion, no source link and no
+  Sources panel (D-61's gap 4). The screen's existing note says so.
+- **Partial matches on a re-read turn.** No route returns a past turn's candidates, so a no-answer
+  turn's partial matches are gone after Back. Reopening from the list behaves the same way today.
+- **Where the reader was.** Back lands at the top of the screen, not at the citation followed.
+- **The draft in the question field** does not survive leaving the screen.
+- **D-70's recent-questions link.** Item 4a unblocks it as a follow-up (`Dashboard.jsx:364`).
+  Each recent question already carries `conversation_id` (D-68), so the link is front-end work
+  only. No Stage 5 item names it yet.
+- **D-58 is narrowed, not closed.** An empty thread now survives a reload and a return, because
+  the address names it. One the user leaves for good still persists.
