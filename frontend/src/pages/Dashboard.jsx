@@ -360,9 +360,11 @@ function IndexedTotals({ totals }) {
 /**
  * D-68: the caller's own questions, and for each only the question as asked and
  * when. Nothing that looks like an answer: no answer text, no answered or
- * unanswered marker, no reason. A question links nowhere of its own — a link to
- * its thread needs `/ask?c=<id>`, which Ask does not read yet (D-70) — so the
- * panel's heading is the route to `/ask`.
+ * unanswered marker, no reason. A question links nowhere of its own, so the
+ * panel's heading is the route to `/ask`. Ask now reads `/ask?c=<id>` (D-77) and
+ * each question already carries its `conversation_id`, null for a one-off (D-68),
+ * so a link from a question to its thread is front-end work only: a follow-up to
+ * D-70 that no Stage 5 item names yet.
  */
 function RecentQuestions({ questions }) {
   return (

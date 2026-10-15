@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { askQuestion } from '../api/ask.js'
-import { ApiError } from '../api/client.js'
+import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { createConversation, fetchConversation, listConversations } from '../api/conversations.js'
 import { TurnBody } from '../components/Answer.jsx'
 import Button from '../components/Button.jsx'
@@ -12,6 +12,7 @@ import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { addressForThread, questionInSearch, searchForThread, threadInSearch } from '../utils/threadAddress.js'
 import {
   threadAfterNewTopic,
   threadForNextQuestion,
@@ -48,6 +49,21 @@ const FIELDS = ['question', 'conversation_id']
  * here. The old thread stays in the list and its `QueryLog` rows stay as FR-19
  * evidence (D-12).
  *
+ * **The active thread lives in the address, and only there** (D-77, which closes
+ * D-61's gap 3). `/ask?c=<id>` names it and `/ask` names none, so following a
+ * citation's source link in the same tab and pressing Back returns to the
+ * conversation that was left. The thread the address names is read from the
+ * server on mount and whenever the address changes, never restored from anything
+ * the browser kept, and only when it is not already the thread on screen, so the
+ * screen's own writes never re-read over a live turn. Opening a thread from the
+ * list and "Start a new topic" add a history entry; the thread a first question
+ * creates replaces the entry it was asked from, before the answer arrives; an
+ * address that answers 404 is replaced with `/ask`; and a reply for a thread the
+ * address no longer names is not shown, because the server has it and the next
+ * read of that thread shows it. The tab title stays "Ask", never a thread's title.
+ * What D-77 left to the implementation — where focus goes, what is disabled while a
+ * thread is read, what a dropped reply still does — is a dated note on D-77.
+ *
  * **A thread is created lazily, on the first question, and reused until a question
  * has actually landed in it.** FR-13's interface never asks the user to name a
  * topic before typing, so `POST /api/conversations` is sent with no title: the
@@ -78,10 +94,13 @@ const FIELDS = ['question', 'conversation_id']
  *   happened, and re-reading would move a "New conversation" to the top of it.
  * - **The residue, stated rather than implied.** One created thread can still
  *   outlive the session that made it: its first ask failed and the user left
- *   without asking again. Nothing under `frontend/` can remove it. Closing it needs
- *   something the contract does not have — a turn count or `has_turns` on
- *   `GET /api/conversations`, so a thread nobody asked anything in can be left out
- *   of the list, or a Delete FR-13 does not specify. Neither is invented here.
+ *   without asking again. Since D-77 the address names it, so a reload or a return
+ *   to that address goes back into it; one the user leaves for good stays behind
+ *   (D-58 is narrowed, not closed). Nothing under `frontend/` can remove it.
+ *   Closing it needs something the contract does not have — a turn count or
+ *   `has_turns` on `GET /api/conversations`, so a thread nobody asked anything in
+ *   can be left out of the list, or a Delete FR-13 does not specify. Neither is
+ *   invented here.
  *
  * **Four states that are not each other**, and the screen keeps them apart
  * because a user who confuses them retries the wrong thing. The second was added
@@ -114,30 +133,54 @@ const FIELDS = ['question', 'conversation_id']
  * invents an affordance for one.
  */
 export default function Ask() {
+  // Static, and never the thread's title (D-77): every thread visited stays in the
+  // Back button's history list, where anyone at the machine can read it.
   useDocumentTitle('Ask')
-  const [params] = useSearchParams()
+  const location = useLocation()
+  const navigate = useNavigate()
+  // The active thread as the address names it, and the only record of it (D-77).
+  // Null when the address names none.
+  const addressThread = threadInSearch(location.search)
   // Arriving from the search screen's "Ask this as a question" link. Prefilled
   // and never submitted for the user: the question is theirs to send.
-  const [question, setQuestion] = useState(params.get('q') ?? '')
+  const [question, setQuestion] = useState(() => questionInSearch(location.search))
   const [touched, setTouched] = useState(false)
   const [fieldError, setFieldError] = useState(null)
   const [failure, setFailure] = useState(null)
   const [asking, setAsking] = useState(false)
   const [acknowledgement, setAcknowledgement] = useState('')
 
-  // The active thread. Null means the next question starts a new conversation.
-  const [conversationId, setConversationId] = useState(null)
+  // The thread on screen: the one whose turns are shown and the one the next
+  // question is a turn of. It follows the address, one read behind it. Null means
+  // the next question starts a new conversation.
+  const [shownThreadId, setShownThreadId] = useState(null)
   const [turns, setTurns] = useState([])
   const [reopened, setReopened] = useState(false)
-  const [opening, setOpening] = useState(false)
+  // The thread the address names is being read. True from the first render when
+  // the address names one, so nothing is offered for a thread not yet on screen.
+  const [opening, setOpening] = useState(() => addressThread !== null)
+  // Bumped to read the thread the address names again, after its read failed.
+  const [readAttempt, setReadAttempt] = useState(0)
 
   const conversations = useApiResource(listConversations)
+  const reloadConversations = conversations.reload
   const turnCounter = useRef(0)
   const lastTurnRef = useRef(null)
   const questionRef = useRef(null)
-  // A ref rather than state: it is a one-shot instruction to the effect below and
-  // nothing renders from it, so it must not cause a render of its own.
-  const pendingTurnFocus = useRef(false)
+  /**
+   * A one-shot instruction to the focus effect below, as `{thread}`, or null. A ref
+   * rather than state: nothing renders from it, so it must not cause a render of
+   * its own.
+   *
+   * It carries the thread it was set for and is spent only on that thread's turns
+   * (D-77, rule a), the pattern src/pages/DocumentRepository.jsx uses for the same
+   * reason: a read for another thread that lands first must not take it, and an
+   * address naming another thread drops it, so a later Back or Forward to the
+   * thread it named cannot move focus. Only a click in the list and an arriving
+   * answer set it. A read the address asks for on its own — mount, Back, Forward,
+   * a link — moves no focus, as no page load does.
+   */
+  const pendingTurnFocus = useRef(null)
   /**
    * The id of a thread this screen created that no turn has landed in yet, or
    * null. Also a ref rather than state: nothing renders from it, and it has to be
@@ -149,18 +192,81 @@ export default function Ask() {
    * empty thread behind is to go back into the first one.
    */
   const unusedThreadRef = useRef(null)
+  /**
+   * The thread on screen, the thread the address names, and whether the screen is
+   * still mounted, as refs: a submit reads them after an await, where state would
+   * be the value its own render closed over (D-77, rules 4 and d).
+   *
+   * The address is the one last committed, except that the screen's own writes
+   * are recorded the moment they are made (`writeAddress`). The router commits a
+   * navigation as a transition, and a reply can land before it does. A Back or
+   * Forward is learned only when it commits, which leaves a window of one render
+   * in which a reply is judged against the address before it.
+   */
+  const shownThreadRef = useRef(null)
+  const addressRef = useRef({ thread: addressThread, search: location.search })
+  const mountedRef = useRef(false)
+
+  useLayoutEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  // Keyed on the location object, so a render that does not navigate leaves a
+  // write recorded by `writeAddress` in place until that navigation commits.
+  useLayoutEffect(() => {
+    addressRef.current = { thread: threadInSearch(location.search), search: location.search }
+  }, [location])
+
+  /** Puts `threadId` on screen, in the ref that async work compares against as well. */
+  const showThread = useCallback((threadId) => {
+    shownThreadRef.current = threadId
+    setShownThreadId(threadId)
+  }, [])
+
+  /** Writes `threadId` to the address: a new history entry unless `replace` is asked for. */
+  const writeAddress = useCallback(
+    (threadId, { replace = false } = {}) => {
+      navigate(addressForThread(threadId), { replace })
+      addressRef.current = { thread: threadId, search: searchForThread(threadId) }
+    },
+    [navigate],
+  )
+
+  /**
+   * A 404 for the thread on screen or the one the address names. It is the answer
+   * both for a thread that is not there and for one that is not this caller's, and
+   * the screen distinguishes neither (CLAUDE.md §6, invariant 1). The thread is
+   * cleared so the next question starts a new one, the list is re-read, and the
+   * address is replaced with `/ask` so Back never returns to it (D-77, rule 5).
+   *
+   * The thread on screen is cleared before the address is, so the read effect finds
+   * nothing left to clear when the address names none, and the notice stays.
+   */
+  const forgetMissingThread = useCallback(() => {
+    showThread(null)
+    setTurns([])
+    setReopened(false)
+    reloadConversations()
+    setFailure({ variant: 'error', title: TEXT.conversationLoadFailed, text: TEXT.conversationNotFound })
+    if (addressRef.current.search !== searchForThread(null)) writeAddress(null, { replace: true })
+  }, [showThread, reloadConversations, writeAddress])
 
   /**
    * Where the visible acknowledgement is completed for a keyboard and screen
    * reader user: the reply is scrolled to and focused, so the next tab stop is the
-   * answer's own citations rather than something above the fold.
+   * answer's own citations rather than something above the fold. A thread opened
+   * from the list is focused the same way, at its last turn.
    *
    * It runs after the turn it focuses has rendered, which is why `turns` is the
-   * dependency.
+   * dependency, and only for the thread the focus was asked for.
    */
   useEffect(() => {
-    if (!pendingTurnFocus.current) return
-    pendingTurnFocus.current = false
+    const pending = pendingTurnFocus.current
+    if (!pending || pending.thread !== shownThreadRef.current) return
+    pendingTurnFocus.current = null
     const node = lastTurnRef.current
     if (!node) return
     node.focus()
@@ -168,6 +274,92 @@ export default function Ask() {
     // without needing to ask about one.
     node.scrollIntoView({ block: 'nearest' })
   }, [turns])
+
+  /**
+   * FR-13's "retaining the thread" (D-77, rule 1): the thread the address names is
+   * read from the server on mount and whenever the address changes — Back,
+   * Forward, a link, the list — and its turns always come from that read, never
+   * from anything the browser kept. The read is re-scoped on the server (D-48), so
+   * a source deleted since is not shown again.
+   */
+  useEffect(() => {
+    // A focus asked for by a click belongs to the thread it was asked for.
+    if (pendingTurnFocus.current && pendingTurnFocus.current.thread !== addressThread) {
+      pendingTurnFocus.current = null
+    }
+
+    // Only a thread that is not already on screen is read. The screen puts a thread
+    // on screen before it writes it to the address, so its own writes — a created
+    // thread, a new topic — never re-read over a live turn. This is also Back to
+    // the thread a read still in flight was leaving: that read is cancelled below.
+    if (addressThread === shownThreadRef.current) {
+      setOpening(false)
+      return undefined
+    }
+
+    // The address names no thread, through the navigation's Ask link or Back to
+    // `/ask`: the screen shows an empty one. The draft in the field is kept.
+    if (addressThread === null) {
+      // The address is the external system this effect keeps the screen in step
+      // with (D-77), so clearing the screen when it names no thread is that
+      // synchronisation rather than state that could be derived in render.
+      // oxlint-disable-next-line react/set-state-in-effect
+      showThread(null)
+      setTurns([])
+      setReopened(false)
+      setFailure(null)
+      setFieldError(null)
+      setTouched(false)
+      setAcknowledgement('')
+      setOpening(false)
+      return undefined
+    }
+
+    // Cancelled when the address moves on or the screen unmounts, so a slow read for
+    // one thread cannot land over the thread the address has gone back to.
+    let cancelled = false
+    const controller = new AbortController()
+    setOpening(true)
+    setFailure(null)
+    setAcknowledgement('')
+    fetchConversation(addressThread, { signal: controller.signal }).then(
+      (thread) => {
+        if (cancelled) return
+        // src/utils/turns.js holds the mapping and the three states a stored turn
+        // can be in, including the one where the answer's citation records no
+        // longer exist.
+        const saved = (thread?.turns ?? []).map((turn, index) =>
+          savedTurnFrom(turn, { key: `saved-${addressThread}-${index}` }),
+        )
+        // The id the address names rather than the one the body carries, so the
+        // address and the screen agree character for character.
+        showThread(addressThread)
+        setTurns(saved)
+        setReopened(true)
+        turnCounter.current = 0
+        setOpening(false)
+      },
+      (error) => {
+        if (cancelled) return
+        setOpening(false)
+        if (error instanceof ApiError && error.status === 404) {
+          forgetMissingThread()
+          return
+        }
+        // The screen keeps what it was showing, under a notice. Choosing the
+        // thread again from the list reads it again.
+        setFailure({
+          variant: 'error',
+          title: TEXT.conversationLoadFailed,
+          text: error instanceof ApiError ? error.message : messageForStatus(NETWORK_ERROR_STATUS),
+        })
+      },
+    )
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [addressThread, readAttempt, showThread, forgetMissingThread])
 
   const refusal = questionError(question)
   const shownFieldError = fieldError ?? (touched && refusal ? refusal : null)
@@ -191,14 +383,9 @@ export default function Ask() {
       return
     }
     if (error.status === 404) {
-      // The thread is not there, or is not this caller's — one answer for both, and
-      // the screen distinguishes neither (CLAUDE.md §6, invariant 1). The thread is
-      // cleared so the next question starts a new one.
-      setConversationId(null)
-      setTurns([])
-      setReopened(false)
-      conversations.reload()
-      setFailure({ variant: 'error', title: TEXT.conversationLoadFailed, text: TEXT.conversationNotFound })
+      // The thread asked in is not there, or is not this caller's: handled as a read
+      // of it would be, address included.
+      forgetMissingThread()
       return
     }
     const extracted = extractFieldErrors(error, FIELDS)
@@ -213,8 +400,23 @@ export default function Ask() {
     })
   }
 
+  /**
+   * True while the screen is mounted, the address names `address` and the screen
+   * shows `shown`. Everything a submit does after an await is conditional on it
+   * (D-77, rules 4 and d): react-router's navigate still works after the screen has
+   * unmounted, so without the first condition a citation followed while a question
+   * was in flight could be undone by a navigation back when the reply landed.
+   */
+  function isStill(address, shown) {
+    return mountedRef.current && addressRef.current.thread === address && shownThreadRef.current === shown
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
+    // One question at a time, and none into a thread not yet on screen. The submit
+    // button is disabled for both; this is the same rule for a submit that gets
+    // here anyway.
+    if (asking || opening) return
     setTouched(true)
     if (refusal) {
       setFieldError(refusal)
@@ -227,6 +429,12 @@ export default function Ask() {
     setAsking(true)
 
     const asked = question
+    // Where the question was asked from, for the check after the first await.
+    const askedFromAddress = addressRef.current.thread
+    const askedFromThread = shownThreadRef.current
+    // The thread the question is a turn of, once it is known.
+    let threadId = null
+    let threadKnown = false
     try {
       // Lazily create the thread, and before the ask rather than after it: `POST
       // /api/ask` attaches a turn to a thread and creates none, so a question sent
@@ -235,21 +443,43 @@ export default function Ask() {
       // 503 goes back into it instead of leaving a second empty one beside it.
       // The rules themselves are in src/utils/threads.js, with the argument for
       // each one and nothing React in any of them, so they can be run.
-      let threadId = threadForNextQuestion(conversationId, unusedThreadRef.current)
+      threadId = threadForNextQuestion(askedFromThread, unusedThreadRef.current)
       if (!threadId) {
         const created = await createConversation()
         threadId = created?.conversation_id ?? null
         // Recorded before the ask, so it is still known if the ask throws.
         unusedThreadRef.current = threadId
       }
-      if (threadId) setConversationId(threadId)
+      threadKnown = true
+
+      // The address names the thread the question is asked in before the answer
+      // arrives (D-77, rule 3): a created thread, or an empty one reused. Replaced
+      // rather than pushed, so Back from it never lands on an empty `/ask`, and
+      // written as `?c=` alone, which drops a `q` the search screen's link brought.
+      // Only while nothing has moved since the submit began: if the address has, the
+      // question is still sent and its reply is dropped below.
+      if (isStill(askedFromAddress, askedFromThread)) {
+        if (threadId !== shownThreadRef.current) showThread(threadId)
+        if (threadId && addressRef.current.search !== searchForThread(threadId)) {
+          writeAddress(threadId, { replace: true })
+        }
+      }
 
       const reply = await askQuestion({ question: asked, conversationId: threadId ?? undefined })
       // The turn landed — answered or not, a `QueryLog` row exists and the thread
       // has been named from the question — so it is no longer an empty one to
       // return to.
       unusedThreadRef.current = unusedThreadAfterTurn(unusedThreadRef.current, threadId)
-      if (reply?.conversation?.conversation_id) setConversationId(reply.conversation.conversation_id)
+      // The thread's title and its last-updated time changed on the server, so the
+      // list is re-read rather than guessed at, whether or not the reply is shown.
+      reloadConversations()
+
+      // D-77, rule 4: a reply for a thread the address no longer names is dropped.
+      // Back and Forward cannot be disabled while asking, and an answer can take
+      // minutes (D-49). The server has the turn, and the next read of that thread
+      // shows it. Nothing else changes: no turn, no acknowledgement, no focus, no
+      // address, and the question stays in the field.
+      if (!isStill(threadId, threadId)) return
 
       // The mapping lives in src/utils/turns.js, with the live turn and the stored
       // turn beside each other: they are rendered by one branch below, so the two
@@ -262,19 +492,22 @@ export default function Ask() {
       setQuestion('')
       setTouched(false)
       setAcknowledgement(answered ? TEXT.answerReady(statements.length, sources.length) : TEXT.noAnswerReady)
-      pendingTurnFocus.current = true
-      // The thread's title and its last-updated time changed on the server, so the
-      // list is re-read rather than guessed at.
-      conversations.reload()
+      pendingTurnFocus.current = { thread: threadId }
     } catch (error) {
       // Kept for a 503 and a 400 — no turn was written, so the thread is still
       // empty and still where the next attempt belongs — and dropped for a 404.
-      // src/utils/threads.js carries the reasoning.
+      // src/utils/threads.js carries the reasoning. Applied whether or not the
+      // failure is shown, because it describes the thread, not the screen.
       unusedThreadRef.current = unusedThreadAfterFailure(
         unusedThreadRef.current,
         error instanceof ApiError ? error.status : null,
       )
-      handleFailure(error)
+      // A failure for a thread the address no longer names is dropped as its reply
+      // would be: a 404 for one thread must not clear another, or rewrite the
+      // address the reader has moved to. A create that failed has no thread, and is
+      // judged against where the question was asked from.
+      const shown = threadKnown ? isStill(threadId, threadId) : isStill(askedFromAddress, askedFromThread)
+      if (shown) handleFailure(error)
     } finally {
       setAsking(false)
     }
@@ -287,40 +520,55 @@ export default function Ask() {
    * clear: it already is a new topic, and starting another would leave it behind
    * empty and permanent. So this drops a thread that has turns and keeps one that
    * does not.
+   *
+   * The thread it leaves on screen is written to the address as a new history
+   * entry, so Back returns to the thread that was cleared (D-77, rule 2): `/ask`, or
+   * `/ask?c=<id>` when an empty thread is reused. When the screen already shows no
+   * turns it writes nothing, so pressing it again adds no entry. Either way the
+   * acknowledgement is given and focus goes to the field.
    */
   function handleNewTopic() {
-    setConversationId(threadAfterNewTopic(unusedThreadRef.current))
-    setTurns([])
-    setReopened(false)
     setFailure(null)
     setFieldError(null)
     setTouched(false)
     setAcknowledgement(TEXT.threadNew)
     questionRef.current?.focus()
+
+    if (turns.length === 0 && !opening) return
+    const next = threadAfterNewTopic(unusedThreadRef.current)
+    // On screen before it is in the address, so the read effect has nothing to read.
+    showThread(next)
+    setTurns([])
+    setReopened(false)
+    if (addressRef.current.search !== searchForThread(next)) writeAddress(next)
   }
 
-  /** FR-13: "previous conversations are listed and can be reopened." */
-  async function handleOpenConversation(id) {
-    setOpening(true)
-    setFailure(null)
-    setAcknowledgement('')
-    try {
-      const thread = await fetchConversation(id)
-      // src/utils/turns.js holds the mapping and the three states a stored turn can
-      // be in, including the one where the answer's citation records no longer exist.
-      const saved = (thread?.turns ?? []).map((turn, index) =>
-        savedTurnFrom(turn, { key: `saved-${id}-${index}` }),
-      )
-      setConversationId(thread?.conversation_id ?? id)
-      setTurns(saved)
-      setReopened(true)
-      turnCounter.current = 0
-      if (saved.length > 0) pendingTurnFocus.current = true
-    } catch (error) {
-      handleFailure(error)
-    } finally {
-      setOpening(false)
+  /**
+   * FR-13: "previous conversations are listed and can be reopened."
+   *
+   * Reopening writes the thread to the address as a new history entry, and the read
+   * effect above does the reading (D-77, rule 2). Focus goes to the thread's last
+   * turn once that thread's read lands.
+   */
+  function handleOpenConversation(id) {
+    if (id === shownThreadRef.current) {
+      // Already on screen: no history entry and no read. Focus goes where the read
+      // would have put it.
+      const node = lastTurnRef.current
+      if (node) {
+        node.focus()
+        node.scrollIntoView({ block: 'nearest' })
+      }
+      return
     }
+    pendingTurnFocus.current = { thread: id }
+    if (id === addressRef.current.thread) {
+      // The address already names it and the screen does not show it, because its
+      // read failed. Read it again, without a second entry for the same address.
+      setReadAttempt((attempt) => attempt + 1)
+      return
+    }
+    writeAddress(id)
   }
 
   const threads = conversations.data ?? []
@@ -345,7 +593,7 @@ export default function Ask() {
     conversationList = (
       <ul className="ask-threads__list">
         {threads.map((thread) => {
-          const current = thread.conversation_id === conversationId
+          const current = thread.conversation_id === shownThreadId
           return (
             <li key={thread.conversation_id}>
               <button
@@ -412,11 +660,13 @@ export default function Ask() {
               </p>
               <div className="repository-page__actions">
                 {/* Disabled until the question is askable — FR-01's pattern, applied
-                    to FR-12's bounds. The server enforces them regardless. */}
-                <Button type="submit" loading={asking} disabled={asking || refusal !== null}>
+                    to FR-12's bounds. The server enforces them regardless. Both are
+                    disabled while a thread is read, as the list is, so nothing is
+                    asked into or cleared from a thread not yet on screen. */}
+                <Button type="submit" loading={asking} disabled={asking || opening || refusal !== null}>
                   {asking ? TEXT.asking : TEXT.askSubmit}
                 </Button>
-                <Button variant="secondary" disabled={asking} onClick={handleNewTopic}>
+                <Button variant="secondary" disabled={asking || opening} onClick={handleNewTopic}>
                   {TEXT.newTopic}
                 </Button>
               </div>

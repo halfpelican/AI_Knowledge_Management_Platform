@@ -58,6 +58,24 @@ export function serveApi(routes) {
 }
 
 /**
+ * A route that answers only when the test says so, for what a screen does while a
+ * request is in flight and what it does with a reply that lands late.
+ *
+ * `route` goes in the `serveApi` table. Every request it receives waits on one
+ * promise, which `release` resolves with `{status, body}` as a plain route would
+ * give, and each waiting request is then answered with a response of its own.
+ *
+ * @returns {{route: () => Promise<{status?: number, body?: unknown}>, release: (response: {status?: number, body?: unknown}) => void}}
+ */
+export function heldResponse() {
+  let release
+  const answer = new Promise((resolve) => {
+    release = resolve
+  })
+  return { route: () => answer, release: (response) => release(response) }
+}
+
+/**
  * The server's fixed no-answer text, read from the one place it is defined
  * (apps/core/constants.py, D-27) rather than copied into the test, so the test
  * cannot agree with a front-end copy that has drifted from the server's.

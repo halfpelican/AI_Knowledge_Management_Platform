@@ -4374,3 +4374,65 @@ left.
   only. No Stage 5 item names it yet.
 - **D-58 is narrowed, not closed.** An empty thread now survives a reload and a return, because
   the address names it. One the user leaves for good still persists.
+
+> **Clarified on 15 October 2026, when item 4a was built.** None of this changes the decision. It
+> records what D-77 left to the implementation.
+>
+> **Set by the coordinating session's brief:**
+>
+> - **Focus.** A read the address asks for on its own (mount, Back, Forward, a link) moves no
+>   focus, as no page load does. A click in the list still focuses the thread's last turn once
+>   that thread's read lands. The pending focus carries the thread it was set for, so another
+>   read cannot spend it.
+> - **While a thread is read,** Ask and Start a new topic are disabled, as the list already was.
+>   Nothing is asked into or cleared from a thread that is not yet on screen. `opening` starts
+>   true when the address names a thread, so this holds from the first render.
+> - **A dropped reply still updates the bookkeeping.** `unusedThreadAfterTurn` and
+>   `unusedThreadAfterFailure` are applied, and a successful reply re-reads the list. It adds no
+>   turn, no acknowledgement and no focus, writes no address, and leaves the field alone. A
+>   failure for a thread the address no longer names is dropped the same way, so a 404 for X
+>   never clears Y.
+> - **Every navigation after an await is guarded:** the screen must still be mounted and the
+>   address must still name what it named. React Router's `navigate` works after unmount, so
+>   without the guard a citation followed while a question was in flight could be undone.
+> - **Rule 3 covers a reused empty thread** as well as a created one. Before the ask, if the
+>   address doesn't name the thread being asked in, it is replaced with it.
+> - **When the address comes to name no thread** (the nav's Ask link, or Back to `/ask`), the
+>   turns, notice, field error and acknowledgement are cleared. The draft is kept.
+> - **Start a new topic** still acknowledges and moves focus to the field, even when it writes
+>   nothing. "Already empty" means no turns on screen and no read in flight.
+>
+> **Chosen by the react-frontend agent:**
+>
+> - **The address ref is updated at the moment of the screen's own writes**, and on commit for
+>   Back, Forward and links. React Router commits a navigation as a transition, so without the
+>   first update the existing 503 test dropped its own failure.
+>   - **Not covered:** a reply or read 404 landing between a Back and its commit, one render
+>     wide, is judged against the old address. Closing that would need React Router's
+>     `UNSAFE_` navigation context.
+> - **A read failure other than 404** (a 500, or no network) keeps the thread that was on screen,
+>   under `conversationLoadFailed` and the client's fixed message. Until the user chooses again,
+>   the address names the thread that failed while the screen shows the one before it, so here
+>   the two disagree. Choosing that thread in the list reads it again without adding an entry.
+>   Before this item, a failed reopen showed `askRejected`, which is untrue of a read.
+> - **Choosing the thread already open** writes and reads nothing, and focuses its last turn,
+>   which is where a read would have put focus. The focus move is not tested.
+> - **If the address moves or the screen unmounts while the thread is being created,** the
+>   question is still sent and its reply is dropped. Not sending it would leave a permanent empty
+>   thread (D-58).
+> - **A 404 on the ask itself** is handled like a read's: the screen is cleared, the list re-read
+>   and the address replaced with `/ask`, behind the same guard.
+> - **The reply's `conversation.conversation_id` no longer sets the thread on screen.** The id the
+>   address names is the one shown, so the address and the screen agree exactly.
+>
+> **What the deliberate breaks found.** Fifteen breaks were run against
+> `askThread.test.jsx` and `ask.test.jsx`, each restored and checked by hash.
+>
+> - **Removing the check that stops a click on the open thread** failed no test. The click falls
+>   through to the branch for an address that already names it, which writes nothing either. The
+>   guard is redundant except for the immediate focus move. Removing both checks fails "adds no
+>   entry and sends no read when the thread already open is chosen again".
+> - **Removing the "already empty" guard** at first failed no test, because the test used an
+>   empty `/ask`, where the address check also stops the write. A test for the case where the
+>   guard is the only defence was added: an empty thread the address names, after a reload. The
+>   unchanged break fails it.

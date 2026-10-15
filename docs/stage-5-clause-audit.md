@@ -317,3 +317,45 @@ Beside the clause, from D-76: every `/api/` response is marked never-cache, test
   would replace the tab with JSON. D-21 keeps the API same-origin.
 - **Reprocess's HTML 500 on a missing file, and the `SuspiciousFileOperation` 400**, are item 5's
   (D-75's notes).
+
+---
+
+## Carried from Stage 4: FR-13's thread and FR-12's citation link
+
+Stage 4's closing audit (D-61) found that the active thread was lost on any navigation, including
+a citation's own same-tab link (its gap 3). Item 4a owns that gap. The clauses are quoted from
+`docs/stage-4-clause-audit.md`, whose rows stand as written. Only the rows item 4a changes are
+shown here.
+
+### After item 4a — 15 October 2026, on `fix/FR-13-retain-thread`
+
+Built by the react-frontend agent against D-77, which was committed first. The coordinating
+session reviewed it and committed it. The agent stalled once while running its deliberate breaks.
+Before resuming it, the coordinating session found no break applied: `Ask.jsx` matched the agent's
+backup, and every break's original text was present exactly once.
+
+| Requirement | Clause | Stage 4 | After 4a | Evidence |
+|---|---|---|---|---|
+| FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ | ⚠️ | **The thread now survives navigation, Back and a reload**, because the address names it (D-77). **Still ⚠️ for D-42:** prior answers are never passed, so a follow-up that refers into the previous answer does not resolve. That was conceded at Stage 4 and item 4a does not change it. Front end (`askThread.test.jsx`): `re-reads the thread from the server and shows its turn`, `shows the turns of the thread named in the address on mount, and marks it current`, `sends no read for a thread the screen itself has just written to the address, so its live turn stays`, `names the created thread in the address before the answer, dropping q, and replaces the entry rather than pushing one` |
+| FR-13 | Previous conversations listed and reopenable; the active thread can be cleared to begin a new topic | ⚠️ | ⚠️ | **Reopening and clearing now add a history entry**, so Back returns to the thread before. **Still ⚠️ for D-61's gap 4:** a reopened thread's citations can't expand and it has no Sources panel, which is item 4b's. Front end: `re-reads X when Back leaves a thread reopened from the list`, `adds no entry and sends no read when the thread already open is chosen again`, `adds an entry for Start a new topic, so Back returns to the thread it cleared`, `writes nothing for Start a new topic when the screen shows no turns, and still acknowledges it`, `writes nothing for Start a new topic on an empty thread the address names, so it is not left behind`, `ends at /ask with the notice still showing, and Back skips the dead address` |
+| FR-12 | 5. …and links to the source document or meeting | ✅ | ✅ | **Following the link no longer loses the thread.** Back re-reads it from the server. The thread comes back with its statements and citation numbers, which stay inert until item 4b. Front end: `re-reads the thread from the server and shows its turn`, `stays on a citation followed while the next question was in flight` |
+
+Guards D-77 requires, each with a test that a deliberate break failed: a slow read can't land after
+Back (`does not let a slow read for Y replace X after Back to X`), a reply for a thread the address
+no longer names is dropped (`shows a reply for X that lands after Back to Y neither in Y nor in the
+address`), and the tab title stays "Ask" (`keeps the tab title "Ask" when the thread changes`).
+
+#### Not covered by item 4a
+
+- **A re-read thread's citations stay inert** until item 4b (D-61's gap 4).
+- **Partial matches on a re-read turn.** No route returns a past turn's candidates.
+- **Where the reader was.** Back lands at the top of the screen, not at the citation followed.
+- **The draft question** doesn't survive leaving the screen.
+- **A read failure other than 404** leaves the screen on the previous thread while the address
+  names the one that failed (D-77's note).
+- **A reply or read 404 landing in the one render between a Back and its commit** is judged
+  against the old address (D-77's note).
+- **The dashboard's recent questions** still link to `/ask`, not to their threads. That is a
+  front-end follow-up to D-70 that no Stage 5 item names.
+- **No real-browser check.** The tests run in jsdom through `MemoryRouter`. Following a citation
+  and pressing Back in a real browser is worth one manual check in item 8's live run.
