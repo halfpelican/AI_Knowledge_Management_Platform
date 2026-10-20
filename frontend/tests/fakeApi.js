@@ -76,16 +76,26 @@ export function heldResponse() {
 }
 
 /**
- * The server's fixed no-answer text, read from the one place it is defined
+ * A fixed text of the server's, read from the one place it is defined
  * (apps/core/constants.py, D-27) rather than copied into the test, so the test
  * cannot agree with a front-end copy that has drifted from the server's.
+ *
+ * Written on one line, or as adjacent literals in parentheses, which Python joins.
+ * Neither form uses an escape in that file, and anything else fails loudly here.
  */
-export const NO_ANSWER_MESSAGE = (() => {
+function serverText(name) {
   const source = readFileSync(join(import.meta.dirname, '..', '..', 'apps', 'core', 'constants.py'), 'utf8')
-  const match = source.match(/^NO_ANSWER_MESSAGE = "(.+)"$/m)
-  if (!match) throw new Error('NO_ANSWER_MESSAGE not found in apps/core/constants.py')
-  return match[1]
-})()
+  const match = source.match(new RegExp(`^${name} = (?:"(.+)"|\\(((?:\\s*"[^"\\r\\n]*")+)\\s*\\))\\s*$`, 'm'))
+  if (!match) throw new Error(`${name} not found in apps/core/constants.py`)
+  if (match[1] !== undefined) return match[1]
+  return [...match[2].matchAll(/"([^"\r\n]*)"/g)].map((literal) => literal[1]).join('')
+}
+
+/** What a reply and a stored turn say when nothing could be answered. */
+export const NO_ANSWER_MESSAGE = serverText('NO_ANSWER_MESSAGE')
+
+/** What a stored turn says when none of its citations still points at a chunk. */
+export const PROVENANCE_REMOVED_MESSAGE = serverText('PROVENANCE_REMOVED_MESSAGE')
 
 export const CONVERSATION = {
   conversation_id: '6f1c2a54-0000-4000-8000-000000000001',
@@ -127,5 +137,37 @@ export function answeredReply() {
     result_count: 1,
     partial_matches: [],
     conversation: CONVERSATION,
+  }
+}
+
+/** When every stored turn in these fixtures was asked. */
+const ASKED_AT = '2026-10-01T09:00:00Z'
+
+/**
+ * A stored turn that renders as answered, as `GET /api/conversations/{id}` returns
+ * it: its statements, each with its `chunk_id`, and since D-78 the `sources` it
+ * consulted, in the live reply's shape. No `partial_matches`, which no turn carries.
+ *
+ * @param {{question: string, statements: object[], sources: object[]}} turn
+ */
+export function storedAnsweredTurn({ question, statements, sources }) {
+  return { question, answered: true, asked_at: ASKED_AT, message: null, statements, sources }
+}
+
+/**
+ * A stored turn none of whose citations still points at a chunk (D-67): its own
+ * message, no statements, `sources: []`, and the one key present only on this state.
+ *
+ * @param {{question: string}} turn
+ */
+export function storedProvenanceRemovedTurn({ question }) {
+  return {
+    question,
+    answered: false,
+    asked_at: ASKED_AT,
+    message: PROVENANCE_REMOVED_MESSAGE,
+    statements: [],
+    sources: [],
+    provenance_removed: true,
   }
 }

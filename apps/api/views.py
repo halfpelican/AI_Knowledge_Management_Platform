@@ -1263,8 +1263,10 @@ class ConversationDetailView(APIView):
 
     A reopened thread renders from the server, so the questions and the cited statements a
     user sees after signing in on another machine are the ones that were logged rather than
-    whatever a browser still held. The turns carry no ``no_answer_reason`` and no
-    ``rejected_count``: see ``ConversationTurnSerializer``.
+    whatever a browser still held. Since D-78 an answered turn also carries the sources it
+    consulted, in the live reply's shape, rebuilt from the chunks on every read. The turns
+    carry no ``no_answer_reason`` and no ``rejected_count``: see
+    ``ConversationTurnSerializer``.
 
     Another user's thread is 404, as on ``POST /api/ask`` and for the same reason.
 

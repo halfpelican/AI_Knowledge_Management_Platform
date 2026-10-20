@@ -574,7 +574,8 @@ export const TEXT = {
   // FR-15's deletion removes the material for good, so "ask again for an answer from
   // the current material" — which this string said until the 27 September audit found
   // it shipping in the bundle — is false on two of the four paths that reach the state.
-  // Nothing enforces that these two copies agree; a front-end test runner would.
+  // tests/askReopened.test.jsx fails when the two copies drift, as tests/ask.test.jsx
+  // does for NO_ANSWER_MESSAGE (D-61's gap 13).
   provenanceRemovedFallback:
     'The citations for this answer are no longer on record, so the answer cannot be shown. You can ask the question again.',
   // FR-12: "Any partially related items found are offered, clearly labelled as
@@ -613,17 +614,6 @@ export const TEXT = {
     'Clears the thread on screen and begins a new conversation. Your previous conversations are kept, though an answer whose sources have left the record can no longer be shown.',
   threadEmpty: 'Ask a question to start this conversation. Follow-up questions can refer back to it.',
   threadNew: 'New topic. Your first question will start a new conversation.',
-  // A reopened thread keeps each statement and its citation number. It cannot
-  // expand a citation, because no route returns the passages a past turn was
-  // built from. Said plainly rather than left as a control that does nothing.
-  //
-  // **The second sentence is qualified for the reason `newTopicHint` is**: the
-  // statements are kept only while the citation rows behind them exist, and a
-  // reprocess or a re-index of the material destroys them (D-12's cascade). The
-  // qualification is unconditional copy, shown on every reopened thread, so it
-  // cannot become a signal about any particular turn.
-  threadReopenedNote:
-    "Source passages are shown with a live answer. A reopened conversation keeps each statement and its citation number for as long as that answer's sources are on record.",
 
   /* ---- Home, for a visitor who is not signed in ------------------------- */
   // A signed-in user never sees this: the home route sends them to their dashboard.

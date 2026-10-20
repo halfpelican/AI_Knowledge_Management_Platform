@@ -106,7 +106,15 @@ describe('FR-12 no-answer state', () => {
     // never answered — no provenance_removed key, no count. The screen must show
     // the no-answer state: not blank, and not a notice that anything was removed,
     // since that notice would disclose that restricted material exists (invariant 1).
-    const rescoped = { question: QUESTION, answered: false, asked_at: '2026-09-20T10:00:00Z', message: NO_ANSWER_MESSAGE, statements: [] }
+    // Its `sources` is `[]`, as a never-answered turn's is (D-78).
+    const rescoped = {
+      question: QUESTION,
+      answered: false,
+      asked_at: '2026-09-20T10:00:00Z',
+      message: NO_ANSWER_MESSAGE,
+      statements: [],
+      sources: [],
+    }
     const thread = { ...CONVERSATION, title: QUESTION, turns: [rescoped] }
     serveApi({
       'GET /api/conversations': { body: [{ ...CONVERSATION, title: QUESTION }] },

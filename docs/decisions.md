@@ -4436,3 +4436,127 @@ left.
 >   empty `/ask`, where the address check also stops the write. A test for the case where the
 >   guard is the only defence was added: an empty thread the address names, after a reload. The
 >   unchanged break fails it.
+
+## D-78 · A reopened turn carries every source it consulted, re-scoped on read from one result
+
+**Status:** Settled by the user · **Date:** 2026-10-20 · **Stage:** 5 item 4b · **Closes:** D-61's
+gap 4: FR-12's citation expansion, source link and Sources panel on a reopened turn
+(`docs/stage-4-open-items.md` §2.2)
+
+**Decision.** `GET /api/conversations/{id}` gives every turn a `sources` key in the live reply's
+shape (D-44): one entry per item consulted, in rank order, each with its title, its date and its
+passages (`chunk_id` and text). A citation on a reopened turn then expands to its passage and links
+to its source, and the turn has a Sources panel, as it did when it was live.
+
+1. **Read only for a turn that renders as answered.**
+   - `retrieved_chunk_ids` is read only for turns stored as answered. A turn stored as unanswered
+     never has it read: `answered` plus `len(retrieved_chunk_ids)` tells the two no-answer paths
+     apart (`apps/retrieval/query_log.py`, D-48's item 6).
+   - Sources are built only for a turn that renders as answered. A never-answered turn, a
+     re-scoped one and a provenance-removed one all carry `sources: []`. A re-scoped turn stays
+     byte for byte a never-answered one.
+   - Every turn carries the key, so the two states change together. `TURN_FIELDS` in
+     `apps/api/tests/test_fr11_thread_scope.py` gains `sources` for both at once.
+2. **One `scoped_chunks` query for the whole thread.** It covers the cited ids plus the retrieved
+   ids of turns stored as answered. The surviving citations and the panel are both derived from
+   that one result, so a citation can never expand to a passage the panel doesn't list.
+3. **The entries are built by `answers.resolve_sources`**, fed the scoped chunks in logged order.
+   Grouping, rank order and the fail-closed title and date read (D-53) are the live reply's own
+   code, not a copy.
+4. **A consulted chunk that is now restricted, deleted or re-indexed drops the same way**, with no
+   count and no marker. There is no snapshot to fall back on, since D-67 stores no passage text,
+   and that keeps FR-15's promise that deleted material is not surfaced again.
+
+**Why consulted, not cited.**
+
+- FR-12's clause says the Sources panel "lists every item consulted". D-44 settled that and
+  rejected narrowing it to cited items as a misdescription of the retrieval.
+- Since D-77, Back re-reads the thread. A cited-only panel would visibly shrink on the citation
+  round trip.
+- The brief's "from the same `permitted_citation_chunk_ids` result" is read as the re-scoping
+  requirement: re-scoped on read, from one result. It is not read as a narrowing.
+
+**A correction this makes.** `ConversationTurnSerializer`'s docstring, and the contract, said
+`retrieved_chunk_ids` "is not part of what the user was shown". Since D-44 it is, on an answered
+turn: it is exactly the list the live Sources panel was built from. It is still not a field of a
+turn.
+
+**The front end.** `savedTurnFrom` carries the turn's `sources`, so its citations expand. The
+reopened-thread note goes, because nothing on screen is left for it to be true of. The
+provenance-removed state, untested since D-62, gets its front-end test here, as the brief asks.
+
+**`docs/api-contract.md`** is updated in the same commit as this decision.
+
+**Tested**, in `pytest` from both roles:
+
+- a reopened turn's `sources` equal the live reply's `sources` for the same turn;
+- an uncited consulted passage is present;
+- after the reader's role narrows, an out-of-scope consulted source is absent, with nothing
+  marking it;
+- a path-B turn reopens identical to a path-A one;
+- a consulted but uncited document deleted under D-73 is gone from the panel.
+
+And in the front-end suite: a reopened turn's citation expands to its passage and links to its
+source; its Sources panel is shown; and the provenance-removed state shows its own title and
+message and no statements.
+
+**What this decision does not cover.**
+
+- **Partial matches on a reopened no-answer turn.** Nothing records them, so none are returned.
+- **A source dropped by D-53's fail-closed read** leaves its citation with nothing to expand to, as
+  on the live reply.
+- **The cost of a thread read.** It is now one scope query per thread plus `resolve_sources`'
+  reads. It is not measured.
+
+> **Clarified on 20 October 2026, when item 4b was built.** None of this changes the decision. It
+> records what D-78 left to the implementation, what the deliberate breaks found, and two contract
+> sentences corrected in the same commit.
+>
+> **Chosen by the django-backend agent:**
+>
+> - **The panel lists only `retrieved_chunk_ids`.** It never adds a cited id the turn didn't log
+>   as consulted. On rows `record_query` writes, the cited ids are a subset of the retrieved ones,
+>   because verification checks against that same list.
+> - **`permitted_citation_chunk_ids` became `readable_thread_chunks`**, which returns the scoped
+>   rows rather than their ids. The context key is now `readable_chunks`. `consulted_chunk_ids(turn)`
+>   is the one place the "only if stored as answered" rule is written. The query fetches four
+>   columns and never the embedding.
+> - **`resolve_sources` runs once per answered turn**, unchanged, so the role is re-read for each.
+>   Batching across turns would have meant changing the live path.
+>   - **Measured:** a thread with three answered turns and one unanswered turn went from 11 queries
+>     to 20. The chunk query is still exactly one, and a test asserts that.
+> - **"Never read" is asserted at the SQL level.** A path-B turn's id appears in no query. A
+>   control assertion, that an answered turn's uncited consulted id does appear, makes sure the
+>   test can't pass vacuously.
+> - **Role narrowing is tested from an Administrator session only**, since only that role can be
+>   narrowed. Its dual-role counterpart narrows the source instead.
+> - **The live-equals-reopened test uses a restated `ControlledService`**, the `test_ask.py`
+>   pattern, so rank order is fixed. The autouse stub's seeded random vectors would make it
+>   unpredictable.
+>
+> **Chosen by the react-frontend agent:**
+>
+> - **`expandable` is removed** rather than left always true. `savedTurnFrom` falls back to `[]`
+>   for a body with no `sources` key.
+> - **The front end does not filter `sources` on a turn that isn't answered.** The no-answer and
+>   provenance branches never render them. That is tested for the provenance branch, with a
+>   fixture that leaks a statement and a source, and not for the no-answer branch.
+> - **The note's text and style are deleted**, and its absence is tested by the thread section's
+>   structure. Any element later added between the heading and the turns will fail that test.
+> - **A test for D-53's plain-number fallback** was added, though not asked for.
+>
+> **What the deliberate breaks found.**
+>
+> - **Reading the retrieved ids of unanswered turns as well** changed no body: the rule that only
+>   a turn rendering as answered gets sources still returned `[]`. Only the SQL-level test failed.
+>   The two rules defend each other.
+> - **An unscoped chunk read for the panel** at first failed only the one-query test and the
+>   source-row scan. `resolve_sources`' scoped read of the source row hid the leak wherever a
+>   chunk and its source agree. `test_an_unstamped_consulted_passage_is_shown_to_nobody` was added,
+>   and the same break then failed it from both roles.
+>
+> **Two contract sentences, corrected in the same commit:**
+>
+> - The partial-matches section said a stored turn "returns no `sources`".
+> - "Every passage a statement cites is in the same list" now names D-53's exception, where a
+>   dropped source leaves its citation with nothing to expand to.

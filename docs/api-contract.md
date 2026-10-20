@@ -526,8 +526,10 @@ endpoints use.
   ones that did, would present unadmitted material as though it supported the answer. It is
   also `[]`, rather than absent, where the caller's scope holds nothing rankable at all.
 - **A stored turn carries none.** The conversation detail route returns no
-  `partial_matches` for a past turn, as it returns no `sources`: nothing records what a
-  turn's ranking found, and the field would have to be invented to be filled.
+  `partial_matches` for a past turn: nothing records what a turn's ranking found, and the
+  field would have to be invented to be filled. It does return `sources` since D-78, because
+  `retrieved_chunk_ids` records what was supplied to generation; nothing records the
+  candidates that fell below the threshold.
 
 This replaced a front-end heuristic. Until Stage 4 item 10a the screen built this list
 itself, from `GET /api/search` on one word plucked out of the question, because the search
@@ -642,25 +644,40 @@ The thread, on the detail route:
  "turns": [{"question": "How do I request annual leave?", "answered": true,
             "asked_at": "2026-09-24T09:25:00+10:00", "message": null,
             "statements": [{"position": 1, "text": "Your manager approves it.",
-                            "chunk_id": "uuid"}]}]}
+                            "chunk_id": "uuid-1"}],
+            "sources": [{"source_type": "document", "source_id": "uuid",
+                         "title": "Leave policy", "date": "2026-08-01T10:00:00+10:00",
+                         "passages": [{"chunk_id": "uuid-1", "text": "..."},
+                                      {"chunk_id": "uuid-2", "text": "..."}]}]}]}
 ```
 
 Turns are chronological and each answered turn's statements are in the order they were
 numbered in, so a reopened thread reads as it did when it was live. An unanswered turn
 carries `answered: false`, the same fixed `message` the live reply carried, and no
 statements. **A turn carries no `no_answer_reason`, no `rejected_count` and no
-`retrieved_chunk_ids`**: the first two for the reason the answer path gives — a thread read
-is a second route past them — and the third because it records what was put in front of the
-model, including passages nothing cited, which is traceability rather than something the
-reader was shown.
+`retrieved_chunk_ids`**. The first two are left out for the reason the answer path gives: a
+thread read is a second route past them. The third is not a field either, but an answered
+turn's `sources` is built from it (D-78). On an answered turn it is exactly the list the live
+Sources panel was built from (D-44), so the reader was shown it. On a turn stored as unanswered
+it is never read, because `answered` plus its length tells the two no-answer paths apart.
 
-**One turn in three states, and a sixth key on exactly one of them** (Stage 4 item 1c):
+**`sources` (D-78)** has the live reply's shape (D-44): every item consulted, in rank order, with
+its passages. It is rebuilt on every read from one `scoped_chunks` query over the whole thread.
+A consulted item that is now outside the reader's scope, deleted or re-indexed is absent, with
+no count and no marker. Passage text is read from the chunk itself, and nothing stores a copy
+(D-67), so deleted material is not surfaced again. Every passage a statement cites is in the
+same list, unless D-53's fail-closed read dropped its source, which leaves that citation with
+nothing to expand to, as on the live reply. A turn that does not render as answered, in the second or third state below, carries
+`sources: []`. A turn carries no `partial_matches`, because nothing records them.
 
-| State | `answered` | `message` | `provenance_removed` |
-|---|---|---|---|
-| answered, and still readable by this reader | `true` | `null` | absent |
-| never answered, **or** answered and re-scoped away from this reader | `false` | `NO_ANSWER_MESSAGE` | absent |
-| answered, and none of its citation rows still points at an existing chunk | `false` | `PROVENANCE_REMOVED_MESSAGE` | `true` |
+**One turn in three states, and a seventh key on exactly one of them** (Stage 4 item 1c;
+`sources` since D-78):
+
+| State | `answered` | `message` | `sources` | `provenance_removed` |
+|---|---|---|---|---|
+| answered, and still readable by this reader | `true` | `null` | the consulted items still readable | absent |
+| never answered, **or** answered and re-scoped away from this reader | `false` | `NO_ANSWER_MESSAGE` | `[]` | absent |
+| answered, and none of its citation rows still points at an existing chunk | `false` | `PROVENANCE_REMOVED_MESSAGE` | `[]` | `true` |
 
 The second row is two states in one rendering **on purpose**: a turn whose statements were
 drawn from material the reader's current role may no longer see is byte-for-byte a turn that
@@ -687,7 +704,9 @@ pipeline and a decided failure commits, and FR-15's deletion removes the materia
 question cannot be answered from the knowledge base, which asserts a corpus state that is false on a failed
 reprocess and on FR-15's deletion. Its own message promises nothing about the corpus for that
 reason. **No count of what was lost**, in either state. The response shape did not change
-with D-67: no field carries `chunk_uuid`, and no passage text is stored to return.
+with D-67: no field carries `chunk_uuid`, and no passage text is stored to return. Since D-78 a
+turn carries passage text, read from the chunk itself, and a citation whose chunk is NULL has
+none to read.
 
 **Where a title comes from (D-43).** `Conversations.title` is a non-blank column and FR-13's
 interface never asks the user to name a topic before typing — it clears the thread and lets
