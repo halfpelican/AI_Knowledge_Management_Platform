@@ -4271,6 +4271,15 @@ sets no `handler500`. That was found by reading the code, not by running it.
 >   only a script could write, raises `SuspiciousFileOperation` rather than `OSError`, and gets
 >   Django's 400 rather than the 404. Left with item 5's missing-file work.
 
+> **Built on 21 October 2026, in Stage 5 item 5, as the notes above said it would be.**
+>
+> - **Reprocess, missing file.** Reprocess no longer answers Django's HTML 500 when the stored file
+>   is missing from disk. It answers the existing 422 with `NO_STORED_ORIGINAL_MESSAGE`, as a blank
+>   `file_path` already did, and logs at ERROR with the document id and the stored name.
+> - **A path outside the media folder.** A `file_path` there raises `SuspiciousFileOperation`
+>   rather than `OSError`. It is now treated as a missing file on both routes: the download's 404,
+>   with the out-of-scope body, and reprocess's 422.
+
 ## D-76 · Every `/api/` response is marked never-cache, by one middleware
 
 **Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Concerns:** every
@@ -4573,3 +4582,212 @@ message and no statements.
 > **A known limitation, added after review.** A reopened unanswered turn has no partial matches.
 > They were never logged, and re-deriving them would mean re-running retrieval against today's
 > corpus, which would offer items the turn never saw. The query cost above stands as recorded.
+
+## D-79 · Asks, ingestion and thread creation are throttled per user, and a user has at most one ask in flight
+
+**Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** the
+throttle D-49 deferred to item 5
+
+**Decision.**
+
+1. **Rate throttles, per user.** DRF's `ScopedRateThrottle`. Each rate lives in
+   `apps/core/constants.py` and is passed through `DEFAULT_THROTTLE_RATES`, as D-26 does for
+   `auth`.
+
+   | Scope | Routes | Rate |
+   |---|---|---|
+   | `ask` | `POST /api/ask` | `ASK_THROTTLE_RATE` = 10/min |
+   | `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, one scope shared by the three | `INGESTION_THROTTLE_RATE` = 60/hour |
+   | `conversation_create` | `POST /api/conversations` (D-80) | the ask rate, in its own scope |
+
+   Rejected uploads count too, so a full Objective 02 run, about 31 requests, fits once an hour.
+2. **One ask in flight per user.**
+   - **How it's held.** `cache.add` on the default cache, keyed by the user and carrying a token.
+     That is atomic because Waitress runs one process (D-64) and no `CACHES` is set, so it is the
+     same per-process `LocMemCache` the auth throttle already uses. A multi-process server would
+     need a shared cache.
+   - **Its timeout** is derived from `GENERATION_TIMEOUT_SECONDS × MAXIMUM_GENERATION_ATTEMPTS`
+     plus a margin, not a new literal. It is released in `finally`, and only if the token still
+     matches.
+   - **When it's taken.** After validation and the conversation check, right before the
+     pipeline. A 400 or a 404 never holds it, and a rejected ask writes no `QueryLog` row.
+3. **Two kinds of 429, told apart.**
+   - **In flight:** `{"detail": ASK_IN_FLIGHT_MESSAGE, "code": "ask_in_flight"}`. The Ask screen
+     says the previous question is still being answered.
+   - **Rate:** DRF's 429 with its `Retry-After` header. The screens use `Retry-After`.
+   - The client's only 429 text today is login's "Please wait a minute" (`client.js:52`). It is
+     wrong for an answer that can run 15 minutes and for an hourly upload limit, so each kind
+     gets its own text.
+4. **`NUM_PROXIES = 0`** in `REST_FRAMEWORK`. Unset, DRF keys anonymous throttles on the
+   client-sent `X-Forwarded-For` header, so D-26's login throttle could be dodged by changing
+   that header on each request. If item 9 puts a reverse proxy in front, it makes this 1.
+
+**Why.** One ask can hold a worker for up to 900 s, and only the two auth endpoints were throttled
+(D-49). A rate limit bounds how many requests a user sends. The in-flight slot bounds what one
+user's asks can hold: one Waitress thread.
+
+**Tested:**
+
+- an ask while the slot is held gets 429 at once and writes nothing;
+- the slot frees after a 503 and after an exception;
+- the two 429s are told apart by `code`;
+- each scope answers 429 past its rate;
+- two different `X-Forwarded-For` values from one address share one login limit.
+
+**What this decision does not cover.**
+
+- **Many users at once.** The slot is per user. Enough users asking together can still hold every
+  Waitress thread. Nothing bounds the total.
+- **Ingestion's worker hold.** Ingestion is rate-limited only, and an upload still embeds
+  synchronously.
+- **A multi-process server, and restarts.** The counters and the slot live in one process's
+  memory, so a restart clears them, as D-26 says of the auth throttle.
+- **The question's embedding** runs inside the slot as well. The margin must cover it, and
+  whether that call has its own timeout is checked when it is built.
+
+## D-80 · The conversation list leaves out a thread nobody has asked anything in
+
+**Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
+and D-61's gap 12
+
+**Decision.** `GET /api/conversations` lists only the threads that have at least one `QueryLog`
+row.
+
+1. **The filter is an `Exists` subquery on `QueryLog`.** It is never on the "New conversation"
+   title, which D-58 rules out, and never on what a turn renders. A thread whose every turn is now
+   re-scoped, or whose only turn was a no-answer, still has rows and stays listed. Otherwise the
+   list would show that something was withheld.
+2. **`POST /api/conversations` is throttled per user**, in its own scope at the ask rate (D-79),
+   so creating a thread doesn't spend the ask budget. It was unthrottled, and once empty threads
+   are unlisted, nobody would see a script making them. The Ask screen creates at most one per
+   first question, and #30's scripts never call it.
+3. **Nothing is deleted.** FR-13's database clause is Create, Read, Update, and D-43 argued against
+   inventing a verb. An empty thread stays reachable by its address (D-77) and is reused there.
+
+**`docs/api-contract.md`** changes with this decision.
+
+**Tested:**
+
+- an empty thread is absent from the list, but `GET /api/conversations/{id}` still returns it;
+- it appears once its first turn lands, answered or not;
+- a thread whose turns are all re-scoped stays listed;
+- a thread still titled "New conversation" that has a turn is listed;
+- the create route answers 429 past its rate.
+
+On the screen: an empty active thread is not in the list, and after its first turn it appears,
+marked as current.
+
+**What this decision does not cover.** Empty threads still accumulate as rows, bounded by the
+create throttle. Nothing removes them.
+
+## D-81 · PDF extraction is bounded per stream and per document, and every PDF bound lands on "Too large to index"
+
+**Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Corrects:** D-50,
+which said PDF is open
+
+**What D-50 missed.** pypdf 6.19.0 already caps each decompressed stream at 75 MB and raises
+`LimitReachedError`. That does not bound one page. The user's measurements, with pypdf 6.19.0:
+
+- **One page, one stream.** A 10 MB stream of `q Q` operators, in a 10 KB file, took 17.6 s and
+  +671 MB, about 67 times the decoded size. At the default 75 MB that is roughly 5 GB for one page.
+- **Pages sharing one stream** each re-parse it.
+- **A form XObject is re-parsed on every `Do`**, and its content is not in the page's `/Contents`.
+  A 2.7 KB file whose page calls one 2 MB form three times took 6.7 s, while its page content was
+  a few bytes.
+
+**Decision.**
+
+1. **A lower per-stream cap.**
+   - Every `*_maximum_output_length` field is lowered with `pypdf.apply_configuration(...)`,
+     around both the `PdfReader` construction and the page loop. It is ContextVar-scoped, so
+     other Waitress threads are untouched. `overwrite_configuration` is not used.
+   - The value lives in `constants.py` with its reasoning, since the 3–38 KB corpus PDFs cannot
+     size it. About 10 MB keeps vector-heavy real pages and bounds one page near 700 MB. A 2 MB
+     cap failed the measured page in 0.01 s.
+2. **A page cap.** `MAXIMUM_PDF_PAGES` = 2000, checked with `len(reader.pages)` before any page is
+   parsed. That counts the real page tree, not the declared `/Count`. It sits well above the
+   roughly 820 pages the text ceiling allows.
+3. **An operator budget, counted across the whole document.**
+   - It is counted with `extract_text(visitor_operand_before=...)`, which also sees operators
+     inside forms and fires before each `Do`.
+   - pypdf swallows an exception raised inside a form (it logs "Impossible to decode
+     XFormObject"). So once the count is over budget, the counter keeps raising on every call,
+     and the next page-level operator propagates it.
+   - The value is set from a measurement on the laptop, in operators per second, for about 60 s
+     worst case. It is not set from the user's sandbox figure of 1.76 s per MB. With a 1.5M budget
+     the form file stopped after 4.6 s.
+   - The recorded worst case is the budget plus one parse at the per-stream cap.
+4. **A text ceiling.** Extraction stops once the whitespace-token count passes what
+   `chunk_count_for_tokens` would refuse, and returns the text read so far, so the existing check
+   in `documents.py` refuses it. That keeps one refusal path, not two.
+5. **Every PDF bound lands on "Too large to index"**, the per-stream cap included.
+   - `canReprocess` offers a retry on "Extraction failed", and a stream over the cap fails the
+     same way on every retry (D-51's argument).
+   - `pypdf.errors.LimitReachedError`, which is its own class and not a `PdfReadError`, is caught
+     before the broad `except`.
+   - Each limit has its own message, so the uploader knows whether splitting the file would help.
+6. **D-50 is corrected.** pypdf's limits now live in `pypdf.Configuration`, and the module
+   constants are deprecated.
+
+**Tested:**
+
+- **The bomb fixtures are real.** A crafted bomb page carries a `/Resources` font; without one,
+  pypdf returns "" without parsing, and the test proves nothing. A form carries its own
+  `/Resources`, for the same reason.
+- **The per-stream cap:** a capped page fails fast. A stream over the cap reaches "Too large to
+  index", which `canReprocess` refuses.
+- **The operator budget:** a form-repetition bomb is stopped by it, and so is a shared-stream
+  multi-page bomb.
+- **The page cap:** a page tree that declares fewer pages than it holds is refused by it.
+- **The text ceiling:** a document just under it indexes, and one just over gets "Too large to
+  index".
+- **The configuration itself.** A test reads the applied configuration during extraction, so a
+  pypdf upgrade that renames the fields fails loudly instead of quietly returning to 75 MB.
+
+**What this decision does not cover.**
+
+- **The residual.** One page is still bounded only by the lowered cap times about 67 in memory.
+  The worst case in time is the budget plus one parse at the cap.
+- **A hard bound.** A subprocess with `setrlimit` is the hard bound if M8 runs on Linux. On
+  Windows it would need Job objects.
+- **DOCX and XLSX.** D-50 covers them, and nothing changes for them.
+
+## D-82 · Item 5's branch carries the load tests, with one account per virtual user
+
+**Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Concerns:**
+NFR-08, NFR-09 and PR #30
+
+**Context.**
+
+- **Ownership.** Haseeb is leaving the project, so #30 is the user's now.
+- **The collision.** Its two k6 scripts each log in once in `setup()` and hand that one session to
+  every virtual user, so NFR-09's 20 VUs, and NFR-08's 5, would collide with D-79's limits.
+- **How it was merged.** #30 is merged into item 5's branch as it is, so his commits stay his. The
+  changes below are made on top of it, in item 5's PR. It was not merged to main directly,
+  because a changes-requested review blocks it.
+- **The run.** The user runs Objective 03 on 23 October against item 5's branch, then merges it.
+
+**Decision.**
+
+1. **One account per VU.** `setup()` logs in one account per VU, and each VU takes its own session
+   by VU number. Both scripts do this.
+2. **Paced logins.** Logins are at least 3 s apart. They all come from 127.0.0.1, and D-26 allows
+   20 a minute per address, so the 21st would get 429.
+3. **A baseline account.** NFR-09's baseline gets its own account, so its 50 uploads don't share
+   an hour's budget with a load-phase user.
+4. **Every account stays inside the limits.** VUs are sequential, which satisfies one in flight.
+   Each iteration lasts at least 6 s, so no account passes 10 asks a minute when no-answer replies
+   return quickly.
+5. **Any 429 makes the run INVALID** in the validity gate, rather than a latency pass or fail.
+6. **Test accounts.** A management command creates the test Employees on a local database. The
+   password is taken from the environment and is never stored in the repo.
+7. **Recording.** The results JSON records the commit SHA. The server is restarted before each run,
+   so the in-memory throttle counters start empty.
+
+**What this decision does not cover.**
+
+- **NFR-09's uploads.** Its iterations each upload as well as ask. At 60/hour an account can make
+  at most 60 uploads in the 10-minute load phase, which needs iterations of 10 s or more; a 6 s
+  floor would allow 100. The build checks this against rule 4 and raises it rather than changing
+  a rate. Rule 5 catches it either way.
+- **Running the tests.** Nothing here runs Objective 03. The user does, on 23 October.

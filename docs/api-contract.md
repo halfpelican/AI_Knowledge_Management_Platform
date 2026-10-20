@@ -112,8 +112,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or every chunk failed to embed |
-| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest and reprocess (D-79) |
+| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79) |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/documents/{id}` | session | `200` document object, with the detail fields Stage 5 adds (`extracted_text`, `tags`, `can_delete`; see Stage 5 — FR-15) | `401`; `404` no such document, or one outside the caller's scope |
 
@@ -247,7 +247,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role |
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text` | `401`; `404` no such meeting, or one outside the caller's scope |
 
@@ -408,7 +408,7 @@ query and `503 Service Unavailable where the AI service cannot be reached after 
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/ask` | session | `200` the answer: verified statements, each with its `chunk_id`, and the sources consulted; also `200` with `answered: false`, the fixed no-answer message and any partially related items found | `400 {"question": ["..."]}` no question was sent, or its length is outside `MINIMUM_QUESTION_LENGTH`–`MAXIMUM_QUESTION_LENGTH`; `400 {"conversation_id": ["..."]}` the id is not a UUID; `401`; `404` (*convention*) a well-formed `conversation_id` that is not this caller's; `503` the AI service could not be reached after `MAXIMUM_GENERATION_ATTEMPTS` |
+| POST | `/api/ask` | session | `200` the answer: verified statements, each with its `chunk_id`, and the sources consulted; also `200` with `answered: false`, the fixed no-answer message and any partially related items found | `400 {"question": ["..."]}` no question was sent, or its length is outside `MINIMUM_QUESTION_LENGTH`–`MAXIMUM_QUESTION_LENGTH`; `400 {"conversation_id": ["..."]}` the id is not a UUID; `401`; `404` (*convention*) a well-formed `conversation_id` that is not this caller's; `503` the AI service could not be reached after `MAXIMUM_GENERATION_ATTEMPTS`; `429` past `ASK_THROTTLE_RATE`, with DRF's body and `Retry-After`; `429 {"detail": "...", "code": "ask_in_flight"}` while this user's previous question is still being answered (D-79) |
 
 The request:
 
@@ -622,8 +622,8 @@ is *convention* and follows the rest of this contract.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| GET | `/api/conversations` | session | `200 [conversation object, ...]`, newest activity first, the caller's own only | `401` |
-| POST | `/api/conversations` | session | `201` conversation object | `400` a title over 255 characters; `401` |
+| GET | `/api/conversations` | session | `200 [conversation object, ...]`, newest activity first, the caller's own only, and only threads with at least one turn (D-80) | `401` |
+| POST | `/api/conversations` | session | `201` conversation object | `400` a title over 255 characters; `401`; `429` past the create rate (D-79, D-80) |
 | GET | `/api/conversations/{id}` | session | `200` conversation object **with** `turns` | `401`; `404` no such thread, or one that is not the caller's |
 
 The conversation object, which is also the `conversation` field of an `/api/ask` reply:
@@ -813,7 +813,7 @@ content), D-75 (the download, Stage 5 item 2a).
 |---|---|---|---|---|
 | GET | `/api/documents/browse?q=&status=&department=&project=&process=&topic=&sort=` | session | `200` the browse object below; also `200` when no filter is set and nothing is in scope | `204` no body: at least one filter is set and no document in the caller's scope matches (FR-15); `400 {"<parameter>": ["..."]}` a `status` or `sort` outside its vocabulary, a NUL byte, or a value over 255 characters (*convention*, D-65); `401` |
 | GET | `/api/documents/{id}` | session | `200` the document object **with** `extracted_text`, `tags` and `can_delete` (below) | `401`; `404` no such document, or one outside the caller's scope |
-| GET | `/api/documents/{id}/download` | session | `200` the stored original as an attachment (below) | `401`; `404` no such document, one outside the caller's scope, or one whose original is not stored or is missing from disk, with the **same body** in every case |
+| GET | `/api/documents/{id}/download` | session | `200` the stored original as an attachment (below) | `401`; `404` no such document, one outside the caller's scope, or one whose original is not stored or is missing from disk or outside the media folder, with the **same body** in every case |
 | DELETE | `/api/documents/{id}` | session + `manage_documents` | `204` no body. The document, its extracted content, its chunks and its tag links are deleted in one transaction; the stored file is removed when that transaction commits (*convention*: FR-15 names no success code for a delete) | `401`; `404` no such document, or one outside the caller's scope, checked **before** the permission; `403` the document is in scope and the role lacks `manage_documents` |
 
 **Parameters.** All are optional, and an empty value is the same as leaving it out. A value is
@@ -907,3 +907,37 @@ status. The client links to this route, never to a `/media/` path, which nothing
   negotiates as usual and answers 406 to an `Accept` that excludes JSON; here that would refuse
   `Accept: application/pdf` before the view ran. The route's 401 and 404 are JSON whatever the
   client asked for.
+
+## Stage 5 item 5 — throttles, the in-flight ask and empty threads
+
+**Rate limits (D-79)** are per user, through DRF's `ScopedRateThrottle`. Each rate is a constant in
+`apps/core/constants.py`.
+
+| Scope | Routes | Rate |
+|---|---|---|
+| `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26) | 20/min |
+| `ask` | `POST /api/ask` | 10/min |
+| `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, one shared budget | 60/hour |
+| `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
+
+A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
+available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
+body is validated, so a rejected request counts as well. `X-Forwarded-For` is not trusted
+(`NUM_PROXIES = 0`), so the `auth` limit is keyed on the connecting address.
+
+**One ask in flight per user (D-79).** While a user's question is being answered, another
+`POST /api/ask` from the same user answers at once:
+
+```json
+{"detail": "Your previous question is still being answered.", "code": "ask_in_flight"}
+```
+
+That 429 carries no `Retry-After`, because an answer can take up to 15 minutes. The client tells
+the two 429s apart by `code`, and does not parse `detail`. The check runs after validation and the
+conversation check, so a 400 or a 404 is returned as before, and a rejected ask writes no
+`QueryLog` row.
+
+**The conversation list leaves out empty threads (D-80).** `GET /api/conversations` returns only
+threads with at least one turn, answered or not. It never filters on the title, or on what a turn
+renders, so a thread whose every turn is re-scoped stays listed. An empty thread is not deleted:
+`GET /api/conversations/{id}` still returns it, and the Ask screen reuses it by its address (D-77).
