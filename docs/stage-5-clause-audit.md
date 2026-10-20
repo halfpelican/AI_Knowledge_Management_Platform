@@ -359,3 +359,47 @@ address`), and the tab title stays "Ask" (`keeps the tab title "Ask" when the th
   front-end follow-up to D-70 that no Stage 5 item names.
 - **No real-browser check.** The tests run in jsdom through `MemoryRouter`. Following a citation
   and pressing Back in a real browser is worth one manual check in item 8's live run.
+
+### After item 4b — 20 October 2026, on `fix/FR-12-reopened-citations`
+
+Built in parallel against D-78 and the contract, which were committed first. The django-backend
+agent built the server half and the react-frontend agent the screen. The coordinating session
+reviewed both and committed them. Item 4b closes D-61's gap 4. FR-12's citation rows were ✅ at
+Stage 4 for the live reply only; D-61 found all three inert on a reopened turn.
+
+| Requirement | Clause | Before 4b | After 4b | Evidence |
+|---|---|---|---|---|
+| FR-12 | 4. Each citation expands to display the source passage | ✅ live, inert reopened | ✅ | **Backend:** `test_a_reopened_turns_sources_are_the_live_replys_sources` (both roles; a reopened turn's `sources` equal the live reply's, byte for byte). **Front end:** `expands a reopened turn's citation to its passage and links to its document or meeting`, `re-reads the thread from the server and shows its turn, whose citation expands and links to its source` |
+| FR-12 | 5. …and links to the source document or meeting | ✅ live, none reopened | ✅ | The same two front-end tests assert the link by `href`, to a document and to a meeting |
+| FR-12 | The Sources panel lists every item consulted, with its date | ✅ live, none reopened | ✅ | **Consulted, not cited (D-78, D-44).** Backend: `test_an_uncited_consulted_passage_is_in_the_reopened_panel`, `test_a_consulted_but_uncited_document_deleted_is_gone_from_the_reopened_panel` (the real `DELETE`), `test_both_roles_lose_a_consulted_source_moved_out_of_their_scope`, `test_a_demoted_reader_loses_a_consulted_source_they_may_no_longer_see_without_a_trace`, `test_an_unstamped_consulted_passage_is_shown_to_nobody`. Front end: `shows a reopened turn its Sources panel, listing a consulted item no statement cited` |
+| FR-13 | Previous conversations listed and reopenable; the active thread can be cleared to begin a new topic | ⚠️ | ✅ | **A reopened turn renders as a live one.** Its citations expand and link, and it has its Sources panel. The note saying they couldn't is gone (`shows no note setting a reopened thread apart from a live one`). Reopening and clearing are item 4a's rows |
+
+**Invariant 1, on the reopen path.** The rule that keeps a re-scoped turn byte for byte a
+never-answered one now covers `sources` too:
+
+- `test_a_re_scoped_turn_renders_exactly_as_a_never_answered_one` was strengthened so that the
+  re-scoped turn consulted a passage the demoted reader can still read.
+- `test_a_path_b_turn_reopens_identical_to_a_path_a_turn` checks the two no-answer paths still
+  reopen identically, with the path-B row holding its supplied ids.
+- `test_a_turn_stored_unanswered_never_has_its_retrieved_ids_read` checks that a path-B turn's ids
+  appear in no SQL.
+- `test_one_chunk_query_serves_every_turns_citations_and_sources` checks there is one scope query
+  per thread.
+
+**The provenance-removed state**, which D-62 recorded as untested at the interface, now has its
+front-end test: `shows its own title and message, no statement, no Sources panel and not the
+no-answer copy`. Server side: `test_a_provenance_removed_turn_carries_no_sources_though_a_consulted_passage_is_readable`.
+
+FR-13's first row stays ⚠️ for D-42, as after item 4a. Item 4b does not change it.
+
+#### Not covered by item 4b
+
+- **Partial matches on a reopened no-answer turn.** Nothing records them.
+- **A source dropped by D-53's fail-closed read** leaves its citation as a plain number, as on the
+  live reply. This is tested: `keeps a citation's number as plain text where its passage did not
+  arrive`.
+- **The cost of a thread read.** A four-turn thread went from 11 queries to 20, and nothing sets a
+  budget for it.
+- **The front end doesn't filter `sources` on a no-answer turn.** It relies on the server sending
+  `[]`, which is tested server-side, and on that branch never rendering a panel, which is not
+  tested on the screen.

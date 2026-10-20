@@ -28,11 +28,14 @@ Chunks are deleted here with ``ContentChunk.objects.filter(source_type=..., sour
 .delete()``, the same call ``reprocess_document`` and ``manage.py reindex`` make, so the NULL is
 produced by the model's own ``on_delete`` rather than written by the test.
 
+**Item 4b's Sources panel reads a NULL-chunk row as removed too (D-78).** A reopened answered
+turn now carries the passages it consulted, read from the chunk rows themselves, so a deleted
+chunk has no passage to return and its item drops out of the panel; a provenance-removed turn
+carries no panel at all, even where a passage it consulted but did not cite is still readable.
+Both are asserted below.
+
 **What this file does not cover.**
 
-- **Item 4b's passage expansion and Sources panel on a reopened turn.** Not built. When it is,
-  it must read a NULL-chunk row as removed too; nothing here can test a reader that does not
-  exist.
 - **The front end.** The response shape is unchanged, so ``frontend/src/utils/turns.js`` sees
   the same states, in the same bodies, that it saw before D-67.
 - **The live ``POST /api/ask`` reply.** Its citation rows are written in the same transaction
@@ -49,7 +52,7 @@ from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.api.serializers import (
     PROVENANCE_REMOVED_FIELD,
     ConversationTurnSerializer,
-    permitted_citation_chunk_ids,
+    readable_thread_chunks,
 )
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
@@ -69,9 +72,9 @@ DOCUMENT_SOURCE_TYPE = SOURCE_TYPES[0]
 BOTH_ROLES = [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME]
 ADMINISTRATOR_ONLY = [ADMINISTRATOR_ROLE_NAME]
 
-# The five keys every turn has carried since item 11; ``provenance_removed`` is the sixth and
-# appears only in state 3.
-TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements"}
+# The keys every turn carries: five since item 11, and ``sources`` since D-78.
+# ``provenance_removed`` is the seventh and appears only in state 3.
+TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements", "sources"}
 
 QUESTION = "How much annual leave do I accrue each year?"
 SECOND_QUESTION = "And who signs those accruals off each year?"
@@ -112,15 +115,19 @@ def make_document_with_chunk(uploader, *, title, roles, text):
     return document, chunk
 
 
-def log_turn(user, conversation, *, question, citations, answered=True):
+def log_turn(user, conversation, *, question, citations, answered=True, consulted=None):
     """One logged turn with its citations, exactly as ``record_query`` writes them: one row per
-    statement, positions from 1, ``chunk_id`` and ``chunk_uuid`` the same identifier."""
+    statement, positions from 1, ``chunk_id`` and ``chunk_uuid`` the same identifier.
+
+    ``consulted`` is its ``retrieved_chunk_ids`` in rank order, every chunk supplied whether
+    cited or not; by default the cited chunks alone."""
+    consulted = [chunk for _, chunk in citations] if consulted is None else consulted
     turn = QueryLog.objects.create(
         user=user,
         conversation=conversation,
         question=question,
         answer_text=" ".join(text for text, _ in citations) if citations else None,
-        retrieved_chunk_ids=[chunk.id for _, chunk in citations],
+        retrieved_chunk_ids=[chunk.id for chunk in consulted],
         answered=answered,
         rejected_count=0 if answered else None,
     )
@@ -199,11 +206,51 @@ def test_a_turn_whose_only_citation_lost_its_chunk_renders_provenance_removed(se
     assert rendered[PROVENANCE_REMOVED_FIELD] is True
     assert rendered["answered"] is False
     assert rendered["statements"] == []
+    assert rendered["sources"] == []
     assert rendered["message"] == PROVENANCE_REMOVED_MESSAGE
     raw = response.content.decode()
     assert DELETED_STATEMENT not in raw
+    assert DELETED_PASSAGE not in raw
     assert cited not in raw
     assert NO_ANSWER_MESSAGE not in raw
+
+
+def test_a_provenance_removed_turn_carries_no_sources_though_a_consulted_passage_is_readable(
+    session_client,
+):
+    """D-78 item 1, from an Employee session and an Administrator session.
+
+    The turn cited one chunk, which is then deleted, and consulted a second it did not cite,
+    which is still in the corpus and readable by this reader. The turn is state 3 — no row
+    points at an existing chunk — and so carries ``sources: []``: a Sources panel is built only
+    for a turn that RENDERS as answered, and listing the survivor under a turn whose answer
+    cannot be shown would be a panel of nothing.
+    """
+    user = session_client.user
+    deleted_document, deleted_chunk = make_document_with_chunk(
+        user, title="Contractor terms", roles=BOTH_ROLES, text=DELETED_PASSAGE
+    )
+    _, consulted_chunk = make_document_with_chunk(
+        user, title="Employee handbook", roles=BOTH_ROLES, text=LIVE_PASSAGE
+    )
+    conversation = Conversation.objects.create(user=user, title=QUESTION)
+    log_turn(
+        user, conversation, question=QUESTION,
+        citations=[(DELETED_STATEMENT, deleted_chunk)],
+        consulted=[deleted_chunk, consulted_chunk],
+    )
+
+    delete_chunks_of(deleted_document)
+    response = session_client.client.get(detail_url(conversation.pk))
+
+    [rendered] = response.json()["turns"]
+    assert rendered[PROVENANCE_REMOVED_FIELD] is True
+    assert rendered["statements"] == []
+    assert rendered["sources"] == []
+    raw = response.content.decode()
+    assert str(consulted_chunk.id) not in raw
+    assert LIVE_PASSAGE not in raw
+    assert "Employee handbook" not in raw
 
 
 # --- One live permitted citation beside a NULL one -----------------------------------------
@@ -224,7 +271,7 @@ def test_a_null_citation_beside_a_live_one_shows_only_the_live_statement_numbere
     deleted_document, deleted_chunk = make_document_with_chunk(
         user, title="Contractor terms", roles=BOTH_ROLES, text=DELETED_PASSAGE
     )
-    _, live_chunk = make_document_with_chunk(
+    live_document, live_chunk = make_document_with_chunk(
         user, title="Employee handbook", roles=BOTH_ROLES, text=LIVE_PASSAGE
     )
     conversation = Conversation.objects.create(user=user, title=QUESTION)
@@ -247,8 +294,15 @@ def test_a_null_citation_beside_a_live_one_shows_only_the_live_statement_numbere
     assert rendered["statements"] == [
         {"position": 1, "text": LIVE_STATEMENT, "chunk_id": str(live_chunk.id)}
     ]
+    # The panel lists the live document alone: the deleted chunk has no passage to return,
+    # and nothing stands in for it (D-78 item 4).
+    assert [(source["source_id"], source["passages"]) for source in rendered["sources"]] == [
+        (str(live_document.id), [{"chunk_id": str(live_chunk.id), "text": LIVE_PASSAGE}])
+    ]
     raw = response.content.decode()
     assert DELETED_STATEMENT not in raw
+    assert DELETED_PASSAGE not in raw
+    assert "Contractor terms" not in raw
     assert deleted_id not in raw
     assert PROVENANCE_REMOVED_FIELD not in raw
     assert PROVENANCE_REMOVED_MESSAGE not in raw
@@ -296,14 +350,16 @@ def test_a_null_chunk_turn_and_a_re_scoped_turn_are_told_apart_in_one_thread(
     response = administrator_client.get(detail_url(conversation.pk))
 
     first, second = response.json()["turns"]
-    # State 2: silent, five keys, the fixed no-answer text.
+    # State 2: silent, six keys, the fixed no-answer text, no sources.
     assert set(first) == TURN_FIELDS
     assert first["answered"] is False
     assert first["message"] == NO_ANSWER_MESSAGE
-    # State 3: named, six keys, its own message.
+    assert first["sources"] == []
+    # State 3: named, seven keys, its own message, no sources.
     assert set(second) == TURN_FIELDS | {PROVENANCE_REMOVED_FIELD}
     assert second[PROVENANCE_REMOVED_FIELD] is True
     assert second["statements"] == []
+    assert second["sources"] == []
     assert second["message"] == PROVENANCE_REMOVED_MESSAGE
     raw = response.content.decode()
     assert RESTRICTED_STATEMENT not in raw
@@ -377,8 +433,10 @@ def test_a_null_citation_beside_a_live_out_of_scope_one_is_the_silent_state(
 
 
 def test_the_scope_query_never_asks_about_a_null_chunk(employee):
-    """``permitted_citation_chunk_ids`` returns the live permitted identifiers and nothing
-    else. A turn whose every row is NULL yields an empty set rather than a set holding None."""
+    """``readable_thread_chunks`` returns the live readable chunks and nothing else. A turn
+    whose every row is NULL yields an empty mapping rather than one keyed by None. (Until D-78
+    this was ``permitted_citation_chunk_ids``, returning identifiers only; the one scope result
+    now carries the rows, so the panel's passages come from the same query.)"""
     deleted_document, deleted_chunk = make_document_with_chunk(
         employee, title="Contractor terms", roles=BOTH_ROLES, text=DELETED_PASSAGE
     )
@@ -396,20 +454,22 @@ def test_the_scope_query_never_asks_about_a_null_chunk(employee):
     )
     delete_chunks_of(deleted_document)
 
-    assert permitted_citation_chunk_ids(
+    readable = readable_thread_chunks(
         [QueryLog.objects.get(pk=both.pk)], role_name=EMPLOYEE_ROLE_NAME
-    ) == frozenset({live_chunk.id})
-    assert permitted_citation_chunk_ids(
+    )
+    assert set(readable) == {live_chunk.id}
+    assert readable[live_chunk.id].chunk_text == LIVE_PASSAGE
+    assert readable_thread_chunks(
         [QueryLog.objects.get(pk=only_deleted.pk)], role_name=EMPLOYEE_ROLE_NAME
-    ) == frozenset()
+    ) == {}
 
 
 def test_surviving_citations_never_returns_a_null_chunk_row_whatever_it_is_handed(employee):
     """The exclusion is by name, not by NULL happening to be absent from the permitted set.
 
-    The context here is deliberately wrong — it "permits" None — which no caller in the tree
-    builds. A later change to how that set is assembled must not be able to let a NULL-chunk
-    statement through.
+    The context here is deliberately wrong — it holds a "readable" chunk under the key None —
+    which no caller in the tree builds. A later change to how that mapping is assembled must not
+    be able to let a NULL-chunk statement through.
     """
     deleted_document, deleted_chunk = make_document_with_chunk(
         employee, title="Contractor terms", roles=BOTH_ROLES, text=DELETED_PASSAGE
@@ -426,7 +486,7 @@ def test_surviving_citations_never_returns_a_null_chunk_row_whatever_it_is_hande
     turn = QueryLog.objects.prefetch_related("citations").get(pk=turn.pk)
 
     serializer = ConversationTurnSerializer(
-        context={"permitted_chunk_ids": frozenset({None, live_chunk.id})}
+        context={"readable_chunks": {None: live_chunk, live_chunk.id: live_chunk}}
     )
 
     surviving = serializer.surviving_citations(turn)

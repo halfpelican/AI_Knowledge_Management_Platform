@@ -526,8 +526,10 @@ endpoints use.
   ones that did, would present unadmitted material as though it supported the answer. It is
   also `[]`, rather than absent, where the caller's scope holds nothing rankable at all.
 - **A stored turn carries none.** The conversation detail route returns no
-  `partial_matches` for a past turn, as it returns no `sources`: nothing records what a
-  turn's ranking found, and the field would have to be invented to be filled.
+  `partial_matches` for a past turn: nothing records what a turn's ranking found, and the
+  field would have to be invented to be filled. It does return `sources` since D-78, because
+  `retrieved_chunk_ids` records what was supplied to generation; nothing records the
+  candidates that fell below the threshold.
 
 This replaced a front-end heuristic. Until Stage 4 item 10a the screen built this list
 itself, from `GET /api/search` on one word plucked out of the question, because the search
@@ -664,7 +666,8 @@ its passages. It is rebuilt on every read from one `scoped_chunks` query over th
 A consulted item that is now outside the reader's scope, deleted or re-indexed is absent, with
 no count and no marker. Passage text is read from the chunk itself, and nothing stores a copy
 (D-67), so deleted material is not surfaced again. Every passage a statement cites is in the
-same list. A turn that does not render as answered, in the second or third state below, carries
+same list, unless D-53's fail-closed read dropped its source, which leaves that citation with
+nothing to expand to, as on the live reply. A turn that does not render as answered, in the second or third state below, carries
 `sources: []`. A turn carries no `partial_matches`, because nothing records them.
 
 **One turn in three states, and a seventh key on exactly one of them** (Stage 4 item 1c;

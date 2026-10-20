@@ -382,6 +382,27 @@ def _asks(client, case, monkeypatch):
     return case.disclosed_in(response)
 
 
+def _reopens(client, case, monkeypatch):
+    """FR-13's reopened thread carries each answered turn's Sources panel since D-78, built by
+    the live reply's ``resolve_sources`` and so failing closed in the same place. The turn is
+    asked through the real route and then read back; only the read is probed."""
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: _CitingService())
+    created = client.post("/api/conversations", {}, format="json")
+    assert created.status_code == 201
+    conversation_id = created.json()["conversation_id"]
+    asked = client.post(
+        "/api/ask", {"question": QUESTION, "conversation_id": conversation_id}, format="json"
+    )
+    assert asked.status_code == 200
+    response = client.get(f"/api/conversations/{conversation_id}")
+    assert response.status_code == 200
+    # The premise: the chunk stamp admits this caller, so the turn renders as answered and its
+    # panel is built, rather than skipped as a re-scoped turn's would be.
+    [turn] = response.json()["turns"]
+    assert turn["answered"] is True
+    return case.disclosed_in(response)
+
+
 # A Project tag carried only by the disagreeing document. FR-15's facets would offer it if they
 # were read from the Tags table or from tag links not narrowed to the scoped documents (D-72).
 DOCUMENT_TAG = "succession register review"
@@ -409,6 +430,8 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/search", "GET"): _searches,
     # The Sources panel and the partial matches: the route D-53 found failing open.
     ("api/ask", "POST"): _asks,
+    # FR-13's reopened thread: the same Sources panel, rebuilt on every read (D-78).
+    ("api/conversations/<uuid:pk>", "GET"): _reopens,
     # FR-14: recent documents and meetings, and the offered departments, which would carry the
     # disagreeing document's "Board office" if they were read from anything but the scoped rows.
     ("api/dashboard", "GET"): _lists("/api/dashboard"),
@@ -446,11 +469,6 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ),
     ("api/conversations", "GET"): "The caller's own threads: titles they wrote or asked.",
     ("api/conversations", "POST"): "The new thread.",
-    ("api/conversations/<uuid:pk>", "GET"): (
-        "Questions and statements whose citations are re-scoped through scoped_chunks (D-48). "
-        "No source title, date or identifier is returned. Stage 5 item 4b adds them, and that "
-        "route must then move to ROUTES_RETURNING_SOURCE_ROWS with a probe."
-    ),
 }
 
 

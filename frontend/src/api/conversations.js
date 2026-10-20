@@ -43,18 +43,21 @@ export function createConversation({ title } = {}, options = {}) {
  * conversation renders from the server rather than from whatever the browser
  * still holds.
  *
- * Each turn is `{question, answered, asked_at, message, statements}`. A turn
- * carries no `sources` and no passage text: nothing stores the passages that were
- * supplied to a past turn in a form any reply exposes, so a reopened thread shows
- * each statement and its citation number and cannot expand one. It carries no
- * `no_answer_reason` and no `rejected_count` either — a thread read is a second
- * route past them and is closed for the same reason (invariant 1).
+ * Each turn is `{question, answered, asked_at, message, statements, sources}`.
+ * `sources` is the live reply's shape, every item consulted with its passages, so
+ * a reopened turn's citations expand and link and its Sources panel shows as a
+ * live turn's do (D-78). It is rebuilt and re-scoped on every read, and a turn
+ * that does not render as answered carries `[]`. A turn carries no
+ * `partial_matches`, because nothing records them, and no `no_answer_reason` and
+ * no `rejected_count` — a thread read is a second route past those two and is
+ * closed for the same reason (invariant 1).
  *
- * A sixth key, `provenance_removed: true`, appears on a turn that WAS answered and
- * whose citation records no longer exist — a reprocess or a re-index of the material
- * deleted them. **It is absent, never false**, so that a turn re-scoped away from
- * the reader stays byte-for-byte a turn that was never answered. `src/utils/turns.js`
- * maps the three states and carries the argument.
+ * A seventh key, `provenance_removed: true`, appears on a turn that WAS answered
+ * and none of whose citations still points at a chunk that exists — a reprocess,
+ * a re-index or FR-15's deletion removed the chunks (D-67). **It is absent, never
+ * false**, so that a turn re-scoped away from the reader stays byte-for-byte a
+ * turn that was never answered. `src/utils/turns.js` maps the three states and
+ * carries the argument.
  *
  * 200; 401; 404 both for an id that names nothing and for another user's thread,
  * which is what stops a caller enumerating threads one request at a time.

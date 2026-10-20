@@ -20,7 +20,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from
 import { describe, expect, it } from 'vitest'
 import { APP_TITLE, TEXT } from '../src/constants.js'
 import Ask from '../src/pages/Ask.jsx'
-import { CONVERSATION, answeredReply, heldResponse, serveApi } from './fakeApi.js'
+import { CONVERSATION, answeredReply, heldResponse, serveApi, storedAnsweredTurn } from './fakeApi.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
 
@@ -42,20 +42,35 @@ const NEW = CONVERSATION
 // Each thread's one stored statement, so a turn on screen can be told by its text.
 const X_STATEMENT = 'Full-time staff accrue four weeks of annual leave a year.'
 const Y_STATEMENT = 'A supplier review is signed off by the finance lead.'
-/** The statement of a live answer (`POST /api/ask`). */
+/** The statement of a live answer (`POST /api/ask`), and the passage its citation expands to. */
 const LIVE_STATEMENT = answeredReply().statements[0].text
+const LIVE_PASSAGE = answeredReply().sources[0].passages[0].text
+
+/**
+ * The source every stored turn here cites, and the passage it expands to. No live
+ * reply carries this passage, so an expanded citation tells a turn that came from a
+ * read from a turn that came from an answer.
+ */
+const STORED_SOURCE_ID = 'doc-stored'
+const STORED_PASSAGE = 'The passage a stored turn cites, as the thread read returns it.'
 
 const QUESTION = 'Does unused annual leave carry over?'
 
-/** One stored turn, as `GET /api/conversations/{id}` returns it: no passages. */
+/** One stored turn, as `GET /api/conversations/{id}` returns it: since D-78, with its passages. */
 function storedTurn(question, statement) {
-  return {
+  return storedAnsweredTurn({
     question,
-    answered: true,
-    asked_at: '2026-10-01T09:00:00Z',
-    message: null,
     statements: [{ position: 1, text: statement, chunk_id: 'chunk-stored' }],
-  }
+    sources: [
+      {
+        source_type: 'document',
+        source_id: STORED_SOURCE_ID,
+        title: 'Stored source',
+        date: '2026-08-01',
+        passages: [{ chunk_id: 'chunk-stored', text: STORED_PASSAGE }],
+      },
+    ],
+  })
 }
 
 /** A thread read with one stored turn, whose question is the thread's title. */
@@ -176,11 +191,16 @@ function ask(question) {
   fireEvent.click(screen.getByRole('button', { name: TEXT.askSubmit }))
 }
 
+/** Expands a citation and returns the panel it opened. */
+function expandCitation(marker) {
+  fireEvent.click(marker)
+  return document.getElementById(marker.getAttribute('aria-controls'))
+}
+
 /** Expands the live turn's first citation and follows its source link. */
 async function followCitation() {
   const [marker] = await screen.findAllByRole('button', { name: TEXT.citationToggleLabel(1) })
-  fireEvent.click(marker)
-  const panel = document.getElementById(marker.getAttribute('aria-controls'))
+  const panel = expandCitation(marker)
   fireEvent.click(within(panel).getByRole('link', { name: TEXT.viewDocument }))
 }
 
@@ -215,7 +235,8 @@ describe('D-77 rule 1: the thread the address names is read from the server', ()
         ...CREATE,
         'POST /api/ask': { body: answeredReply() },
         // Served, so that a read nobody should send renders rather than being
-        // refused: its stored turn has no passages and would replace the live one.
+        // refused: its stored turn cites a passage the live reply did not carry, and
+        // would replace the live one.
         [`GET /api/conversations/${NEW.conversation_id}`]: threadRead({ ...NEW, title: QUESTION }, LIVE_STATEMENT),
       }),
     )
@@ -228,8 +249,11 @@ describe('D-77 rule 1: the thread the address names is read from the server', ()
     await letLateWorkLand()
 
     expect(threadReads(answered, NEW)).toHaveLength(0)
-    // Still the live turn: its citation expands, which a stored turn's cannot.
-    expect(screen.getByRole('button', { name: TEXT.citationToggleLabel(1) })).toBeTruthy()
+    // Still the live turn: its citation expands to the live reply's passage, not to
+    // the one a read would have brought.
+    const panel = expandCitation(screen.getByRole('button', { name: TEXT.citationToggleLabel(1) }))
+    expect(within(panel).getByText(LIVE_PASSAGE)).toBeTruthy()
+    expect(within(panel).queryByText(STORED_PASSAGE)).toBeNull()
   })
 
   it('does not let a slow read for Y replace X after Back to X', async () => {
@@ -273,7 +297,7 @@ describe('D-77 rule 1: the thread the address names is read from the server', ()
 /* ---- Following a citation ------------------------------------------------ */
 
 describe("D-61's gap 3: a citation followed in the same tab, then Back", () => {
-  it('re-reads the thread from the server and shows its turn', async () => {
+  it('re-reads the thread from the server and shows its turn, whose citation expands and links to its source', async () => {
     const answered = serveApi(
       routes({
         ...CREATE,
@@ -296,10 +320,18 @@ describe("D-61's gap 3: a citation followed in the same tab, then Back", () => {
     expect(probe.location.pathname).toBe('/ask')
     expect(probe.location.search).toBe(`?c=${NEW.conversation_id}`)
     expect(await screen.findByText(LIVE_STATEMENT)).toBeTruthy()
-    // From the read, not from anything kept: a stored turn's citation does not
-    // expand yet (item 4b), and the screen says so.
-    expect(screen.queryByRole('button', { name: TEXT.citationToggleLabel(1) })).toBeNull()
-    expect(screen.getByText(TEXT.threadReopenedNote)).toBeTruthy()
+    // From the read, not from anything kept, and not inert (D-78): the citation
+    // expands to the passage the read carried, which the live reply did not, and
+    // links to that passage's source.
+    const marker = screen.getByRole('button', { name: TEXT.citationToggleLabel(1) })
+    expect(marker.getAttribute('aria-expanded')).toBe('false')
+    const panel = expandCitation(marker)
+    expect(marker.getAttribute('aria-expanded')).toBe('true')
+    expect(within(panel).getByText(STORED_PASSAGE)).toBeTruthy()
+    expect(within(panel).queryByText(LIVE_PASSAGE)).toBeNull()
+    expect(within(panel).getByRole('link', { name: TEXT.viewDocument }).getAttribute('href')).toBe(
+      `/documents/${STORED_SOURCE_ID}`,
+    )
   })
 })
 

@@ -5,12 +5,12 @@ import { TEXT } from '../constants.js'
  * turn as `GET /api/conversations/{id}` returns it to the object the Ask screen
  * renders.
  *
- * **Why this is a module and not four lines inside Ask.jsx.** This layer has no
- * test runner, and D-51's retry affordance shipped broken for exactly that
- * reason. A pure function with no React in it can be exercised from plain Node
- * against bodies captured from the Django suite, which is how the three states
- * below were hand-verified. Nothing here imports React, and nothing here
- * fetches.
+ * **Why this is a module and not four lines inside Ask.jsx.** This layer had no
+ * test runner until D-62, and D-51's retry affordance shipped broken for exactly
+ * that reason. A pure function with no React in it can be exercised from plain
+ * Node against bodies captured from the Django suite, which is how the three
+ * states below were first hand-verified; frontend/tests/ now renders each of
+ * them. Nothing here imports React, and nothing here fetches.
  *
  * **The three states are not each other**, and the screen keeps them apart
  * because a user who confuses them retries the wrong thing — or worse, stops
@@ -24,15 +24,14 @@ import { TEXT } from '../constants.js'
  *   all, because a notice that something was removed is itself a disclosure that
  *   material exists which this role may not read (CLAUDE.md §6, invariant 1).
  *   The server does not tell this screen the difference and must not.
- * - `provenanceRemoved` — the turn WAS answered, and the record of what it was
- *   drawn from no longer exists. `AnswerCitation.chunk` is `on_delete=CASCADE`
- *   (D-12), and FR-08's reprocess action, `manage.py reindex` and FR-15's deletion each delete a
- *   source's chunks and write new ones with fresh identifiers, so the citations
- *   of the old ones go with them while the passage itself still exists. The
- *   server sends `provenance_removed: true` on that turn and nothing else, and
- *   this screen shows no statements — invariant 6 — but it does NOT say the
- *   question cannot be answered from the knowledge base, because that is untrue
- *   and a user would act on it.
+ * - `provenanceRemoved` — the turn WAS answered, and none of its citations still
+ *   points at a chunk that exists. FR-08's reprocess action, `manage.py reindex`
+ *   and FR-15's deletion each delete a source's chunks, and since D-67 each
+ *   citation of them survives as a record whose chunk is NULL, which no reader is
+ *   shown. The server sends `provenance_removed: true` on that turn, with its own
+ *   message, no statements and `sources: []`, and this screen shows no statements —
+ *   invariant 6 — but it does NOT say the question cannot be answered from the
+ *   knowledge base, because that is untrue and a user would act on it.
  *
  * **The flag is present on a turn only when it is true**, which is the server's
  * guarantee that a re-scoped turn's body is byte-for-byte a never-answered one
@@ -66,14 +65,16 @@ export function turnStateOf(turn) {
 /**
  * One turn of a reopened thread, as the screen holds it.
  *
- * `sources` is empty and `expandable` is false because nothing returns what a
- * past turn was built from: a stored turn keeps each statement and its citation
- * number, and a citation cannot expand to its passage. Said on the screen rather
- * than left as a control that does nothing.
+ * `sources` is the turn's own, as the thread read sends it (D-78), in the shape a
+ * live reply's has. So a reopened turn's citations expand to their passages and
+ * link to their sources, and its Sources panel shows, by the same branch that
+ * renders a live turn. A turn that does not render as answered arrives with `[]`.
+ * The fallback is for a body that carries no key at all, and gives the plain
+ * citation number a live turn gets when a passage is missing.
  *
  * `partialMatches` is empty rather than absent, so the same branch renders a
  * stored turn and a live one. They were derived from the ranking of the turn that
- * was live and no route returns a past turn's candidates.
+ * was live, nothing records them, and no route returns them (D-77, D-78).
  *
  * @param {object} turn a turn object from `GET /api/conversations/{id}`
  * @param {{key: string}} options the React key the caller assigned
@@ -91,9 +92,8 @@ export function savedTurnFrom(turn, { key }) {
     // to match the state, or the fallback would reintroduce the false sentence.
     message: turn?.message ?? (provenanceRemoved ? TEXT.provenanceRemovedFallback : TEXT.noAnswerFallback),
     statements: turn?.statements ?? [],
-    sources: [],
+    sources: turn?.sources ?? [],
     partialMatches: [],
-    expandable: false,
     askedAt: turn?.asked_at,
   }
 }
@@ -120,6 +120,5 @@ export function liveTurnFrom(reply, { question }) {
     statements: reply?.statements ?? [],
     sources: reply?.sources ?? [],
     partialMatches: reply?.partial_matches ?? [],
-    expandable: true,
   }
 }

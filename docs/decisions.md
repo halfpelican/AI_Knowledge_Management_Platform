@@ -4507,3 +4507,56 @@ message and no statements.
   on the live reply.
 - **The cost of a thread read.** It is now one scope query per thread plus `resolve_sources`'
   reads. It is not measured.
+
+> **Clarified on 20 October 2026, when item 4b was built.** None of this changes the decision. It
+> records what D-78 left to the implementation, what the deliberate breaks found, and two contract
+> sentences corrected in the same commit.
+>
+> **Chosen by the django-backend agent:**
+>
+> - **The panel lists only `retrieved_chunk_ids`.** It never adds a cited id the turn didn't log
+>   as consulted. On rows `record_query` writes, the cited ids are a subset of the retrieved ones,
+>   because verification checks against that same list.
+> - **`permitted_citation_chunk_ids` became `readable_thread_chunks`**, which returns the scoped
+>   rows rather than their ids. The context key is now `readable_chunks`. `consulted_chunk_ids(turn)`
+>   is the one place the "only if stored as answered" rule is written. The query fetches four
+>   columns and never the embedding.
+> - **`resolve_sources` runs once per answered turn**, unchanged, so the role is re-read for each.
+>   Batching across turns would have meant changing the live path.
+>   - **Measured:** a thread with three answered turns and one unanswered turn went from 11 queries
+>     to 20. The chunk query is still exactly one, and a test asserts that.
+> - **"Never read" is asserted at the SQL level.** A path-B turn's id appears in no query. A
+>   control assertion, that an answered turn's uncited consulted id does appear, makes sure the
+>   test can't pass vacuously.
+> - **Role narrowing is tested from an Administrator session only**, since only that role can be
+>   narrowed. Its dual-role counterpart narrows the source instead.
+> - **The live-equals-reopened test uses a restated `ControlledService`**, the `test_ask.py`
+>   pattern, so rank order is fixed. The autouse stub's seeded random vectors would make it
+>   unpredictable.
+>
+> **Chosen by the react-frontend agent:**
+>
+> - **`expandable` is removed** rather than left always true. `savedTurnFrom` falls back to `[]`
+>   for a body with no `sources` key.
+> - **The front end does not filter `sources` on a turn that isn't answered.** The no-answer and
+>   provenance branches never render them. That is tested for the provenance branch, with a
+>   fixture that leaks a statement and a source, and not for the no-answer branch.
+> - **The note's text and style are deleted**, and its absence is tested by the thread section's
+>   structure. Any element later added between the heading and the turns will fail that test.
+> - **A test for D-53's plain-number fallback** was added, though not asked for.
+>
+> **What the deliberate breaks found.**
+>
+> - **Reading the retrieved ids of unanswered turns as well** changed no body: the rule that only
+>   a turn rendering as answered gets sources still returned `[]`. Only the SQL-level test failed.
+>   The two rules defend each other.
+> - **An unscoped chunk read for the panel** at first failed only the one-query test and the
+>   source-row scan. `resolve_sources`' scoped read of the source row hid the leak wherever a
+>   chunk and its source agree. `test_an_unstamped_consulted_passage_is_shown_to_nobody` was added,
+>   and the same break then failed it from both roles.
+>
+> **Two contract sentences, corrected in the same commit:**
+>
+> - The partial-matches section said a stored turn "returns no `sources`".
+> - "Every passage a statement cites is in the same list" now names D-53's exception, where a
+>   dropped source leaves its citation with nothing to expand to.

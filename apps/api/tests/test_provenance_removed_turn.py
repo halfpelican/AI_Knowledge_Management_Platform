@@ -82,6 +82,7 @@ from apps.core.constants import (
 )
 from apps.documents.models import ContentChunk, Document, ExtractedContent
 from apps.retrieval.models import AnswerCitation, Conversation, QueryLog
+from apps.retrieval.scoping import scoped_chunks
 
 pytestmark = pytest.mark.django_db
 
@@ -90,9 +91,10 @@ DOCUMENT_SOURCE_TYPE = SOURCE_TYPES[0]
 BOTH_ROLES = [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME]
 ADMINISTRATOR_ONLY = [ADMINISTRATOR_ROLE_NAME]
 
-# The five keys every turn has carried since item 11. ``provenance_removed`` is the sixth and
-# appears only in state 3, which is the guarantee asserted below rather than a convenience.
-TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements"}
+# The keys every turn carries: five since item 11, and ``sources`` since D-78, on every turn so
+# the states change together. ``provenance_removed`` is the seventh and appears only in state 3,
+# which is the guarantee asserted below rather than a convenience.
+TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements", "sources"}
 
 QUESTION = "How much annual leave do I accrue each year?"
 SECOND_QUESTION = "And who signs those accruals off each year?"
@@ -149,14 +151,19 @@ def make_indexed_document(uploader, *, title, roles, text):
     return document, make_chunk(source_id=document.id, roles=roles, text=text)
 
 
-def log_turn(user, conversation, *, question, citations, answered=True):
-    """One logged turn with its citations, exactly as ``record_query`` writes them."""
+def log_turn(user, conversation, *, question, citations, answered=True, consulted=None):
+    """One logged turn with its citations, exactly as ``record_query`` writes them.
+
+    ``consulted`` is its ``retrieved_chunk_ids`` in rank order, every chunk supplied whether
+    cited or not; by default the cited chunks alone.
+    """
+    consulted = [chunk for _, chunk in citations] if consulted is None else consulted
     turn = QueryLog.objects.create(
         user=user,
         conversation=conversation,
         question=question,
         answer_text=" ".join(text for text, _ in citations) if citations else None,
-        retrieved_chunk_ids=[chunk.id for _, chunk in citations],
+        retrieved_chunk_ids=[chunk.id for chunk in consulted],
         answered=answered,
         rejected_count=0 if answered else None,
     )
@@ -214,6 +221,7 @@ def test_a_turn_whose_cited_chunks_were_deleted_says_so_instead_of_no_answer(
     assert rendered[PROVENANCE_REMOVED_FIELD] is True
     assert rendered["answered"] is False  # nothing may be shown without its citation
     assert rendered["statements"] == []  # invariant 6
+    assert rendered["sources"] == []  # no panel under a turn that shows no answer (D-78)
     assert rendered["message"] == PROVENANCE_REMOVED_MESSAGE
     raw = response.content.decode()
     assert NO_ANSWER_MESSAGE not in raw  # the sentence that would have been the lie
@@ -271,6 +279,7 @@ def test_a_never_answered_turn_carries_no_new_field_and_the_same_message(employe
     assert set(rendered) == TURN_FIELDS
     assert rendered["answered"] is False
     assert rendered["message"] == NO_ANSWER_MESSAGE
+    assert rendered["sources"] == []
     assert PROVENANCE_REMOVED_FIELD not in response.content.decode()
 
 
@@ -285,12 +294,21 @@ def test_a_re_scoped_turn_renders_exactly_as_a_never_answered_one(
     they cannot share — so a new key, a changed message or a changed ``answered`` on either
     one fails here. The stronger form of the existing removal-vocabulary assertions: instead
     of listing words a notice might use, this asserts the two states are the same body.
+
+    **The re-scoped turn also consulted a passage the demoted reader may STILL read**, and
+    cited nothing from it (D-78). Its panel would not be empty if one were built, so this is
+    where a panel built for a turn stored as answered, rather than one that renders as
+    answered, shows: the re-scoped turn would list the handbook and the never-answered one
+    could not.
     """
     _, restricted_chunk = make_indexed_document(
         administrator,
         title="Board remuneration review",
         roles=ADMINISTRATOR_ONLY,
         text=RESTRICTED_PASSAGE_TEXT,
+    )
+    _, readable_chunk = make_indexed_document(
+        administrator, title="Employee handbook", roles=BOTH_ROLES, text=PASSAGE_TEXT
     )
     conversation = Conversation.objects.create(user=administrator, title=QUESTION)
     never_answered = log_turn(
@@ -301,9 +319,12 @@ def test_a_re_scoped_turn_renders_exactly_as_a_never_answered_one(
         conversation,
         question=SECOND_QUESTION,
         citations=[(RESTRICTED_STATEMENT, restricted_chunk)],
+        consulted=[restricted_chunk, readable_chunk],
     )
     order_after(never_answered, re_scoped)
     get_user_model().objects.filter(pk=administrator.pk).update(role=employee_role)
+    # The premise: the uncited consulted passage is still in the demoted reader's scope.
+    assert scoped_chunks(role_name=EMPLOYEE_ROLE_NAME).filter(id=readable_chunk.id).exists()
 
     response = administrator_client.get(detail_url(conversation.pk))
 
@@ -313,11 +334,14 @@ def test_a_re_scoped_turn_renders_exactly_as_a_never_answered_one(
         key: value for key, value in second.items() if key not in variable
     }
     assert second["message"] == NO_ANSWER_MESSAGE
+    assert second["sources"] == []
     raw = response.content.decode()
     assert PROVENANCE_REMOVED_FIELD not in raw
     assert PROVENANCE_REMOVED_MESSAGE not in raw
     assert RESTRICTED_STATEMENT not in raw
     assert str(restricted_chunk.id) not in raw
+    assert str(readable_chunk.id) not in raw
+    assert "Employee handbook" not in raw
     # The rows are all still there; only this reader may not see them (FR-19's evidence).
     assert AnswerCitation.objects.filter(query=re_scoped).count() == 1
 
@@ -374,15 +398,17 @@ def test_a_re_scoped_turn_and_a_provenance_removed_turn_are_told_apart_in_one_th
     body = administrator_client.get(detail_url(conversation.pk)).json()
 
     first, second = body["turns"]
-    # State 2: silent, five keys, the fixed no-answer text.
+    # State 2: silent, six keys, the fixed no-answer text, no sources.
     assert set(first) == TURN_FIELDS
     assert first["answered"] is False
     assert first["message"] == NO_ANSWER_MESSAGE
-    # State 3: named, six keys, its own message.
+    assert first["sources"] == []
+    # State 3: named, seven keys, its own message, no sources.
     assert set(second) == TURN_FIELDS | {PROVENANCE_REMOVED_FIELD}
     assert second[PROVENANCE_REMOVED_FIELD] is True
     assert second["answered"] is False
     assert second["statements"] == []
+    assert second["sources"] == []
     assert second["message"] == PROVENANCE_REMOVED_MESSAGE
 
 
@@ -390,10 +416,11 @@ def test_an_answered_turn_carries_neither_the_field_nor_the_message(session_clie
     """The negative control every absence above is paired with: an ordinary readable turn.
 
     From both roles, since this is the state the route serves most of the time and the one a
-    regression would be noticed in last.
+    regression would be noticed in last. It carries its Sources panel (D-78), so the empty
+    panels above are absences of something an answered turn has.
     """
     user = session_client.user
-    _, chunk = make_indexed_document(
+    document, chunk = make_indexed_document(
         user, title="Employee handbook", roles=BOTH_ROLES, text=PASSAGE_TEXT
     )
     conversation = Conversation.objects.create(user=user, title=QUESTION)
@@ -406,6 +433,9 @@ def test_an_answered_turn_carries_neither_the_field_nor_the_message(session_clie
     assert rendered["answered"] is True
     assert rendered["message"] is None
     assert [statement["text"] for statement in rendered["statements"]] == [STATEMENT]
+    assert [(source["source_id"], source["passages"]) for source in rendered["sources"]] == [
+        (str(document.id), [{"chunk_id": str(chunk.id), "text": PASSAGE_TEXT}])
+    ]
     raw = response.content.decode()
     assert PROVENANCE_REMOVED_FIELD not in raw
     assert PROVENANCE_REMOVED_MESSAGE not in raw

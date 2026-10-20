@@ -155,7 +155,6 @@ export default function Ask() {
   // the next question starts a new conversation.
   const [shownThreadId, setShownThreadId] = useState(null)
   const [turns, setTurns] = useState([])
-  const [reopened, setReopened] = useState(false)
   // The thread the address names is being read. True from the first render when
   // the address names one, so nothing is offered for a thread not yet on screen.
   const [opening, setOpening] = useState(() => addressThread !== null)
@@ -248,7 +247,6 @@ export default function Ask() {
   const forgetMissingThread = useCallback(() => {
     showThread(null)
     setTurns([])
-    setReopened(false)
     reloadConversations()
     setFailure({ variant: 'error', title: TEXT.conversationLoadFailed, text: TEXT.conversationNotFound })
     if (addressRef.current.search !== searchForThread(null)) writeAddress(null, { replace: true })
@@ -306,7 +304,6 @@ export default function Ask() {
       // oxlint-disable-next-line react/set-state-in-effect
       showThread(null)
       setTurns([])
-      setReopened(false)
       setFailure(null)
       setFieldError(null)
       setTouched(false)
@@ -326,8 +323,9 @@ export default function Ask() {
       (thread) => {
         if (cancelled) return
         // src/utils/turns.js holds the mapping and the three states a stored turn
-        // can be in, including the one where the answer's citation records no
-        // longer exist.
+        // can be in, including the one where the answer's citations no longer
+        // point at anything. A stored turn carries its consulted sources (D-78),
+        // so it renders by the same branch as a live one.
         const saved = (thread?.turns ?? []).map((turn, index) =>
           savedTurnFrom(turn, { key: `saved-${addressThread}-${index}` }),
         )
@@ -335,7 +333,6 @@ export default function Ask() {
         // address and the screen agree character for character.
         showThread(addressThread)
         setTurns(saved)
-        setReopened(true)
         turnCounter.current = 0
         setOpening(false)
       },
@@ -539,7 +536,6 @@ export default function Ask() {
     // On screen before it is in the address, so the read effect has nothing to read.
     showThread(next)
     setTurns([])
-    setReopened(false)
     if (addressRef.current.search !== searchForThread(next)) writeAddress(next)
   }
 
@@ -683,12 +679,8 @@ export default function Ask() {
           <section aria-labelledby="ask-thread-heading" className="ask-thread">
             <h2 id="ask-thread-heading">Conversation</h2>
             {opening ? <p role="status">{TEXT.loadingConversation}</p> : null}
-            {/* Shown only while a turn on screen actually came back from the server
-                without its passages. A live turn asked after reopening has them, so
-                the note disappears once every turn present can expand. */}
-            {reopened && turns.some((turn) => !turn.expandable) ? (
-              <p className="ask-thread__note">{TEXT.threadReopenedNote}</p>
-            ) : null}
+            {/* No note qualifies a reopened thread: its turns carry their passages
+                and their Sources panels as live turns do (D-78). */}
             {turns.length === 0 && !opening ? <p className="ask-thread__empty">{TEXT.threadEmpty}</p> : null}
 
             {turns.map((turn, index) => {
