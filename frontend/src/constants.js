@@ -523,11 +523,6 @@ export const TEXT = {
   // number (FR-12 "numbered inline citations").
   citationToggleLabel: (position) => `Source for statement ${position}`,
   citationPassageHeading: 'Source passage',
-  // Defensive only: the contract makes `sources` a superset of the cited chunks,
-  // so a citation whose passage is not in the reply should not occur. If one
-  // does, the number stays on the screen as plain text — the statement is cited,
-  // and inventing a passage or hiding the citation would both be worse.
-  citationPassageUnavailable: 'The source passage did not arrive with this answer.',
   sourcesHeading: 'Sources',
   // FR-12: "a 'Sources' panel lists every item consulted with its date, allowing
   // the user to judge how current the underlying material is". Consulted, which
@@ -555,17 +550,19 @@ export const TEXT = {
   // The server sends the fixed text; this is the copy used only if a reply
   // somehow carries none, so the state always says something plain.
   noAnswerFallback: 'This question cannot be answered from the available knowledge base.',
-  // A stored turn that WAS answered and whose citation records no longer exist —
-  // `provenance_removed` on the turn (Stage 4 item 1c). Not the no-answer copy
-  // above, which would tell the reader their question cannot be answered from the
-  // knowledge base: the material is still there, re-embedded under new
-  // identifiers, and a user who believed that sentence would stop asking a
-  // question the system can answer. No statements are shown, because a statement
-  // without its citation is what invariant 6 forbids.
+  // A stored turn that WAS answered and none of whose citations still points at a
+  // chunk — `provenance_removed` on the turn (Stage 4 item 1c, D-67). Not the
+  // no-answer copy above, which would tell the reader their question cannot be
+  // answered from the knowledge base. That is a claim about the corpus, and this
+  // state makes none: after a re-index or a successful reprocess the material is
+  // still indexed under new identifiers, and a user who believed the no-answer
+  // sentence would stop asking a question the system can answer; after a failed
+  // reprocess or FR-15's deletion the material is gone. No statements are shown,
+  // because a statement without its citation is what invariant 6 forbids.
   //
   // The wording says what happened to the RECORD. It says nothing about
-  // permissions, because this state has nothing to do with them — the material is
-  // readable and the answer's provenance is not. A turn the reader may no longer
+  // permissions, because this state has nothing to do with them: the chunks the
+  // answer cited are gone for every reader alike. A turn the reader may no longer
   // see renders as the silent no-answer state above and says nothing whatever
   // (invariant 1), which is why the two do not share copy.
   provenanceRemovedTitle: 'The sources for this answer can no longer be shown',
@@ -606,10 +603,10 @@ export const TEXT = {
   // **The promise is qualified rather than dropped, because it was not true as
   // written** (Stage 4 item 1c). "Your previous conversations are kept" full stop
   // was read by a user as "everything on this screen will still be here", and an
-  // answer's citations do not survive a reprocess or a re-index of the material
-  // they came from: `AnswerCitation.chunk` is `on_delete=CASCADE` (D-12). The
-  // thread, the questions and the answers that still have their sources are kept,
-  // which is what it now says.
+  // answer's citations do not survive a reprocess, a re-index or FR-15's deletion
+  // of the material they came from: since D-67 each survives only as a record
+  // whose chunk is NULL, which no reader is shown. The thread, the questions and
+  // the answers that still have their sources are kept, which is what it now says.
   newTopicHint:
     'Clears the thread on screen and begins a new conversation. Your previous conversations are kept, though an answer whose sources have left the record can no longer be shown.',
   threadEmpty: 'Ask a question to start this conversation. Follow-up questions can refer back to it.',

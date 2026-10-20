@@ -4560,3 +4560,7 @@ message and no statements.
 > - The partial-matches section said a stored turn "returns no `sources`".
 > - "Every passage a statement cites is in the same list" now names D-53's exception, where a
 >   dropped source leaves its citation with nothing to expand to.
+>
+> **A known limitation, added after review.** A reopened unanswered turn has no partial matches.
+> They were never logged, and re-deriving them would mean re-running retrieval against today's
+> corpus, which would offer items the turn never saw. The query cost above stands as recorded.

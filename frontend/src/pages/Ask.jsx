@@ -112,8 +112,9 @@ const FIELDS = ['question', 'conversation_id']
  *   longer see renders as this state too, and deliberately cannot be told from it:
  *   see `src/utils/turns.js`, which holds that argument and the one below.
  * - *Sources no longer on record* (a stored turn carrying `provenance_removed`) —
- *   the turn was answered and the record of what it was drawn from has been
- *   destroyed by a reprocess or a re-index. No statements, and not the no-answer
+ *   the turn was answered and none of its citations still points at a chunk: a
+ *   reprocess, a re-index or FR-15's deletion removed them, and since D-67 each
+ *   survives only as a record whose chunk is NULL. No statements, and not the no-answer
  *   copy either, because "this cannot be answered from the knowledge base" is a
  *   claim about the corpus, and this state makes none: a re-index or a successful
  *   reprocess leaves the material indexed, while a failed reprocess and FR-15's
