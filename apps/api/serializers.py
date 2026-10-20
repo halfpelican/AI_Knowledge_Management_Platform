@@ -5,7 +5,9 @@
 key set so a field cannot leak in later.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
+from uuid import UUID
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -30,6 +32,7 @@ from apps.retrieval.models import Conversation
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
 
+from .answers import resolve_sources
 from .repository import extracted_text_of, tags_of
 
 User = get_user_model()
@@ -601,49 +604,130 @@ class CitedStatementSerializer(serializers.Serializer):
 PROVENANCE_REMOVED_FIELD = "provenance_removed"
 
 
-def permitted_citation_chunk_ids(turns, *, role_name) -> frozenset:
-    """Which of these turns' cited chunks the reader's CURRENT role may still see.
+def consulted_chunk_ids(turn) -> list:
+    """The chunks a turn consulted, in rank order: its ``retrieved_chunk_ids``, if and only if
+    it was STORED as answered (D-78 item 1).
 
-    One query for the whole thread, and it is ``scoped_chunks`` — the same predicate the
-    answer path and the keyword search run, not a second implementation of it. Invariant 3's
-    reasoning is the argument: "a second scoping mechanism would mean two code paths through
-    the single filter that matters most", and a thread read is a route that returns material
-    exactly as much as those two are. A chunk that has been deleted, or whose stamp is now an
-    empty array, is absent from the result for the same reason a restricted one is: this asks
-    the store what is readable and takes the answer, rather than deciding anything itself.
+    On an answered row the column is exactly the list the live Sources panel was built from:
+    ``answer_question`` records the passages it supplied, in the order it supplied them, and
+    the live reply resolved the same passages in the same order (D-44). On a row stored as
+    unanswered it is never read, because there ``answered`` and ``len(retrieved_chunk_ids)``
+    are what tell no-answer path A from path B (``apps/retrieval/query_log.py``, D-48 item 6),
+    and nothing derived from it could reach a reopened no-answer turn without telling the two
+    apart. Not reading it is a stronger guarantee than reading it and rendering nothing: the
+    thread's scope query is never asked about those identifiers either.
+    """
+    if not turn.answered:
+        return []
+    return list(turn.retrieved_chunk_ids)
+
+
+def readable_thread_chunks(turns, *, role_name) -> dict:
+    """The chunks of this thread that the reader's CURRENT role may read, keyed by identifier.
+
+    The one ``scoped_chunks`` query of a thread read (D-78 item 2), over every cited chunk and
+    every consulted chunk of a turn stored as answered. Both the surviving citations and the
+    Sources panel are derived from this one result, so the two cannot be scoped differently:
+    a citation cannot survive on a chunk the panel was told is gone, or the reverse. It is the
+    same predicate the answer path and the keyword search run, not a second implementation of
+    it. Invariant 3's reasoning is the argument: "a second scoping mechanism would mean two
+    code paths through the single filter that matters most", and a thread read returns
+    material exactly as much as those two do.
+
+    **The passage text comes from these rows, and from nowhere else.** A chunk that has been
+    deleted, re-indexed under a fresh identifier, or restamped out of this role's scope is
+    absent from the result, in the same way and for the same reason: this asks the store what
+    is readable and takes the answer. There is no stored copy to fall back on (D-67), which is
+    what keeps FR-15's promise that deleted material is not surfaced again.
 
     **A citation whose chunk was deleted has ``chunk_id`` NULL (D-67) and is skipped here**,
-    before the query, so NULL is never an identifier that could be "permitted". Its
-    ``chunk_uuid`` is not consulted either: that names a chunk that no longer exists, and
-    asking the store about it could only ever return nothing.
+    before the query, so NULL is never an identifier that could be readable. Its
+    ``chunk_uuid`` is not consulted. The same identifier usually reaches the query anyway,
+    through the consulted list, and the store answers for it as it answers for any chunk that
+    no longer exists: with nothing.
+
+    Only the four columns a passage needs are fetched. The embedding is the largest column on
+    the row and has no use here.
     """
-    cited = {
+    wanted = {
         citation.chunk_id
         for turn in turns
         for citation in turn.citations.all()
         if citation.chunk_id is not None
     }
-    if not cited:
-        return frozenset()
-    return frozenset(
-        scoped_chunks(role_name=role_name).filter(id__in=cited).values_list("id", flat=True)
+    for turn in turns:
+        wanted.update(consulted_chunk_ids(turn))
+    if not wanted:
+        return {}
+    rows = (
+        scoped_chunks(role_name=role_name)
+        .filter(id__in=wanted)
+        .only("id", "source_type", "source_id", "chunk_text")
     )
+    return {row.id: row for row in rows}
+
+
+@dataclass(frozen=True)
+class ReopenedPassage:
+    """A consulted chunk read back for a reopened turn, in the shape ``resolve_sources`` reads.
+
+    ``resolve_sources`` is the live reply's own code (D-78 item 3) and reads four attributes of
+    each passage: ``source_type``, ``source_id``, ``chunk_id`` and ``chunk_text``. On the live
+    path a ``RankedPassage`` carries them; here a ``ContentChunk`` row does, under one different
+    name, so this adapter gives the row that shape rather than the function a second input.
+
+    ``chunk_id`` is ``str(chunk.id)``, the expression ``apps.retrieval.ranking.rank`` uses, so
+    a passage identifier renders as the same string on a reopened turn as on the live reply.
+    There is no score: nothing on a stored turn records one, and nothing renders one.
+    """
+
+    chunk_id: str
+    chunk_text: str
+    source_type: str
+    source_id: UUID
+
+    @classmethod
+    def of(cls, chunk) -> "ReopenedPassage":
+        return cls(
+            chunk_id=str(chunk.id),
+            chunk_text=chunk.chunk_text,
+            source_type=chunk.source_type,
+            source_id=chunk.source_id,
+        )
 
 
 class ConversationTurnSerializer(serializers.Serializer):
-    """One logged turn of a thread: the question, whether it was answered, its citations.
+    """One logged turn of a thread: the question, whether it was answered, its citations, and
+    the sources it consulted.
 
-    The object is a ``QueryLog`` row, and only four of its columns are read.
-    ``no_answer_reason`` and ``rejected_count`` are not among them, for the same reason
-    they are absent from the live reply: a reopened thread that showed which no-answer
-    path a turn took would disclose across two requests exactly what one request may not
-    (``QueryLog``'s docstring; invariant 1). ``retrieved_chunk_ids`` is not read either —
-    it is the traceability record of what was put in front of the model, including
-    passages nothing cited, and it is not part of what the user was shown.
+    The object is a ``QueryLog`` row and its citation rows. ``no_answer_reason`` and
+    ``rejected_count`` are never read, for the same reason they are absent from the live
+    reply: a reopened thread that showed which no-answer path a turn took would disclose
+    across two requests exactly what one request may not (``QueryLog``'s docstring;
+    invariant 1). **``retrieved_chunk_ids`` is read for a turn stored as answered, and for no
+    other (D-78).** On an answered turn it is part of what the user was shown: it is exactly
+    the list the live Sources panel was built from (D-44), every passage supplied to
+    generation, cited or not. On a turn stored as unanswered the reply showed nothing of it,
+    and its length is what separates no-answer path A from path B, so it is not read at all
+    (``consulted_chunk_ids``). It is never a field of a turn.
 
     ``message`` is derived rather than stored: a turn that was not answered was answered
     with NO_ANSWER_MESSAGE, the one fixed text both no-answer paths return, so
     re-rendering it from ``answered`` cannot leak which path was taken.
+
+    **``sources`` is the live reply's Sources panel, rebuilt (D-78).** Every item the turn
+    consulted, in rank order, each with its title, its date and the passages supplied from it,
+    so a reopened citation expands to its passage and links to its source as it did when the
+    turn was live. It is consulted rather than cited for the reason the live reply gives
+    (``apps.api.answers``): FR-12's panel "lists every item consulted", and since D-77 Back
+    re-reads the thread, so a cited-only panel would visibly shrink on the citation round trip.
+    The entries are built by ``answers.resolve_sources``, the live reply's own code, fed the
+    consulted chunks in logged order, so the grouping, the rank order and the fail-closed title
+    and date read (D-53) are not a copy that can drift. The passages are the chunk rows from the
+    thread's one scope query (``readable_thread_chunks``), which is also what the citations
+    survive against. Nothing is snapshotted: a consulted chunk that has since been restricted,
+    deleted or re-indexed is simply absent, with no count and no marker, as an out-of-scope
+    chunk is absent from retrieval.
 
     **A STORED ANSWER IS RE-SCOPED HERE, ON EVERY READ.** A turn is a derived record: its
     statements were generated from passages the asker's role admitted at the time, and the
@@ -662,13 +746,15 @@ class ConversationTurnSerializer(serializers.Serializer):
     greater one. This is why the statement is removed rather than merely unlinked.
 
     **A turn that loses every statement renders as the ordinary no-answer state** —
-    ``answered`` false, the fixed message, an empty list — which is the state item 7 already
-    built and the front end already renders. Not a blank turn, and emphatically not "content
-    withheld" and not a count of what was removed: a notice that something was removed is
-    itself a disclosure that material exists which this role may not read, which is the
-    disclosure invariant 1 forbids by name. Nothing here can tell the reader whether a turn
-    was re-scoped, whether it hit no-answer path A or B when it was live, or whether it was
-    ever answered at all.
+    ``answered`` false, the fixed message, no statements and no sources — which is the state
+    item 7 already built and the front end already renders. Its sources go with its
+    statements even where a passage it consulted is still readable: a no-answer turn listing
+    the items it consulted would be the re-scoped turn telling itself apart. Not a blank
+    turn, and emphatically not "content withheld" and not a count of what was removed: a
+    notice that something was removed is itself a disclosure that material exists which this
+    role may not read, which is the disclosure invariant 1 forbids by name. Nothing here can
+    tell the reader whether a turn was re-scoped, whether it hit no-answer path A or B when
+    it was live, or whether it was ever answered at all.
 
     ---
 
@@ -684,8 +770,9 @@ class ConversationTurnSerializer(serializers.Serializer):
        reason ``provenance_removed`` is ABSENT from the body rather than present and false: a
        field appearing on a re-scoped turn, whatever its value, is a new place for the notice
        invariant 1 forbids to grow, and the exact-key-set assertions in
-       ``apps/api/tests/test_fr11_thread_scope.py`` continue to hold a re-scoped turn to five
-       keys. A turn with some rows whose chunk is gone and some whose chunk exists but is out
+       ``apps/api/tests/test_fr11_thread_scope.py`` continue to hold a re-scoped turn to the
+       six keys a never-answered one has (five until D-78 added ``sources`` to both at once).
+       A turn with some rows whose chunk is gone and some whose chunk exists but is out
        of scope is THIS state, not state 3: the rows whose chunk exists decide it.
     3. ``turn.answered`` is True and **no citation row points at a chunk that still exists**
        — the chunks it cited were deleted. ``reprocess_document`` and ``manage.py reindex``
@@ -723,7 +810,9 @@ class ConversationTurnSerializer(serializers.Serializer):
 
     **What state 3 renders.** No statements — invariant 6 stands, and a statement without its
     citation is exactly what it forbids; a NULL-chunk row's ``statement_text`` is never read
-    into a body. But **not** NO_ANSWER_MESSAGE, which says the question cannot be answered
+    into a body. No sources either, even where a passage the turn consulted but did not cite
+    is still in the corpus: a panel under a turn with no answer is the panel of nothing. But
+    **not** NO_ANSWER_MESSAGE, which says the question cannot be answered
     from the available knowledge base: that is untrue of a turn that was answered from
     material a re-index left in the corpus, and a false statement about the corpus is the
     interface lying to the user rather than protecting them.
@@ -751,6 +840,8 @@ class ConversationTurnSerializer(serializers.Serializer):
     asked_at = serializers.DateTimeField(source="answered_at", read_only=True)
     message = serializers.SerializerMethodField()
     statements = serializers.SerializerMethodField()
+    # On every turn, so the answered and the no-answer bodies change together (D-78).
+    sources = serializers.SerializerMethodField()
     # Present only where it is true; see ``to_representation`` for why, and state 2 in the
     # class docstring for why that is not tidiness.
     provenance_removed = serializers.SerializerMethodField()
@@ -772,23 +863,25 @@ class ConversationTurnSerializer(serializers.Serializer):
     def surviving_citations(self, turn):
         """This turn's citations the reader may still see, in the order they were numbered.
 
-        ``permitted_chunk_ids`` is read from the context with no default, so a caller that
-        renders turns without supplying it raises rather than returning a body. Both
-        available defaults are wrong: permitting everything is precisely the leak, and
-        permitting nothing would render every thread in the system as no-answer and look
-        like a retrieval problem for as long as it took someone to find.
+        ``readable_chunks`` is the thread's one scope result (``readable_thread_chunks``),
+        read from the context with no default, so a caller that renders turns without
+        supplying it raises rather than returning a body. Both available defaults are wrong:
+        permitting everything is precisely the leak, and permitting nothing would render
+        every thread in the system as no-answer and look like a retrieval problem for as
+        long as it took someone to find. ``get_sources`` reads the same mapping, which is
+        what keeps a surviving citation and the panel it expands into from disagreeing.
 
         A row whose chunk was deleted (``chunk_id`` NULL, D-67) is never returned, whatever
-        ``permitted_chunk_ids`` holds: it is excluded by name rather than by NULL happening
-        not to be in a set, so a later change to how that set is built cannot let one
+        ``readable_chunks`` holds: it is excluded by name rather than by NULL happening
+        not to be a key, so a later change to how that mapping is built cannot let one
         through. Its statement is not shown and does not take a number.
         """
-        permitted = self.context["permitted_chunk_ids"]
+        readable = self.context["readable_chunks"]
         citations = sorted(turn.citations.all(), key=lambda citation: citation.position)
         return [
             citation
             for citation in citations
-            if citation.chunk_id is not None and citation.chunk_id in permitted
+            if citation.chunk_id is not None and citation.chunk_id in readable
         ]
 
     def get_answered(self, turn):
@@ -846,14 +939,43 @@ class ConversationTurnSerializer(serializers.Serializer):
             citation.position = position
         return CitedStatementSerializer(surviving, many=True).data
 
+    def get_sources(self, turn):
+        """FR-12's Sources panel for this turn, as the live reply built it (D-78).
+
+        Built only for a turn that RENDERS as answered, behind the same branch as
+        ``get_statements``. A never-answered turn, a re-scoped one and a provenance-removed one
+        carry ``[]``: the second must stay byte for byte the first, and a panel beside a turn
+        that shows no answer would be the difference.
+
+        The consulted chunks are taken from the thread's one scope result in the order the
+        turn logged them, which is rank order, and handed to ``resolve_sources`` — the live
+        reply's own grouping, ordering and fail-closed source read (D-53), resolved for the
+        reader of this request. A consulted chunk missing from the result is skipped without
+        a placeholder, so nothing in the body counts or marks what dropped.
+        """
+        if not self.get_answered(turn):
+            return []
+        readable = self.context["readable_chunks"]
+        consulted = [
+            ReopenedPassage.of(readable[chunk_id])
+            for chunk_id in consulted_chunk_ids(turn)
+            if chunk_id in readable
+        ]
+        sources = resolve_sources(consulted, user=self.context["request"].user)
+        return ConsultedSourceSerializer(sources, many=True).data
+
 
 class ConversationDetailSerializer(ConversationSerializer):
     """A thread and its turns, so FR-13's "previous conversations ... can be reopened"
     renders from the server rather than from whatever the browser still holds.
 
     The turns are read here rather than prefetched by the view, so the turn ordering and
-    the citation ordering live beside the fields that use them: two queries per read, at a
-    thread length bounded by how much one person types, plus one for the scope.
+    the citation ordering live beside the fields that use them. A read costs two queries for
+    the turns and their citations, one for the reader's role and one ``scoped_chunks`` query
+    for the whole thread, at a thread length bounded by how much one person types. Each turn
+    that renders as answered then costs what ``answers.resolve_sources`` costs on the live
+    reply: the role re-read and one query per source type it consulted, so three at most
+    (D-78). A thread with no answered turn makes no chunk query at all.
 
     **The reader's role is resolved here, from the request, not passed in by the view.**
     ``permission_scope`` re-reads it from the users table for this request (D-21 caches
@@ -892,10 +1014,9 @@ class ConversationDetailSerializer(ConversationSerializer):
             many=True,
             context={
                 **self.context,
-                # One scope query for the whole thread, not one per turn.
-                "permitted_chunk_ids": permitted_citation_chunk_ids(
-                    turns, role_name=role_name
-                ),
+                # One scope query for the whole thread, not one per turn, and the only one:
+                # the citations and the Sources panels are both derived from it (D-78).
+                "readable_chunks": readable_thread_chunks(turns, role_name=role_name),
             },
         ).data
 

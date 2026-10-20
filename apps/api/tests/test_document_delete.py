@@ -113,9 +113,12 @@ def tag(document, dimension, name):
     )
 
 
-def stored_document(uploader, *, title=TITLE, roles=None, text=PASSAGE, department="Operations"):
+def stored_document(
+    uploader, *, title=TITLE, roles=None, text=PASSAGE, department="Operations", cosine=ABOVE
+):
     """A document as ingestion leaves it: a stored file, its extracted text, a chunk stamped
-    from it (D-17) and, as D-74's seed leaves it, two tag links."""
+    from it (D-17) and, as D-74's seed leaves it, two tag links. ``cosine`` is the chunk's
+    score against QUERY, so two documents can be given a rank order."""
     roles = BOTH_ROLES if roles is None else roles
     document = Document.objects.create(
         title=title, file_type="txt", uploaded_by=uploader, department=department,
@@ -128,7 +131,7 @@ def stored_document(uploader, *, title=TITLE, roles=None, text=PASSAGE, departme
         source_id=document.id,
         chunk_index=0,
         chunk_text=text,
-        embedding=at_cosine(ABOVE),
+        embedding=at_cosine(cosine),
         embedding_model=STUB_EMBEDDING_MODEL,
         embedding_dimension=settings.EMBEDDING_DIMENSION,
         visible_to_roles=roles,
@@ -370,6 +373,58 @@ def test_a_citation_of_a_deleted_chunk_survives_with_its_chunk_null(
     reopened = employee_client.get(f"/api/conversations/{conversation.id}")
     [turn] = reopened.json()["turns"]
     assert turn["statements"] == []
+    assert turn["sources"] == []  # no passage outlives the delete, in the panel either (D-78)
     assert turn["provenance_removed"] is True
     assert turn["message"] == PROVENANCE_REMOVED_MESSAGE
     assert PHRASE.encode() not in reopened.content
+    assert TITLE.encode() not in reopened.content
+
+
+CONSULTED_TITLE = "Willow Bridge inspection calendar"
+CONSULTED_PASSAGE = "The Willow Bridge bearings are inspected every April by the structures team."
+
+
+def test_a_consulted_but_uncited_document_deleted_is_gone_from_the_reopened_panel(
+    session_client, administrator_client, employee, service, django_capture_on_commit_callbacks
+):
+    """D-78 item 4 through FR-15's real deletion (D-73), read from an Employee session and an
+    Administrator session.
+
+    The reader's turn cited one document and consulted a second it did not cite. An
+    Administrator deletes the second through ``DELETE /api/documents/{id}``. The reopened turn is
+    still answered, its statement is unchanged, and its panel lists the cited document alone:
+    the deleted one's title, identifiers and passage are nowhere in the body. FR-15's "deleted
+    material cannot subsequently be surfaced" holds on the reopen path because the passage is
+    read from the chunk and no copy of it was ever stored (D-67).
+    """
+    cited = stored_document(employee, cosine=0.90)
+    consulted = stored_document(
+        employee, title=CONSULTED_TITLE, text=CONSULTED_PASSAGE, department="Structures",
+        cosine=0.80,
+    )
+    consulted_chunk = ContentChunk.objects.get(
+        source_type=DOCUMENT_SOURCE_TYPE, source_id=consulted.id
+    )
+    conversation = Conversation.objects.create(user=session_client.user, title="Bridge faults")
+    live = session_client.client.post(
+        "/api/ask", {"question": QUESTION, "conversation_id": str(conversation.id)}, format="json"
+    ).json()
+    # The premise: both documents consulted, in rank order, and only the first cited.
+    assert [source["title"] for source in live["sources"]] == [TITLE, CONSULTED_TITLE]
+    assert str(consulted_chunk.id) not in {statement["chunk_id"] for statement in live["statements"]}
+    [before] = session_client.client.get(f"/api/conversations/{conversation.id}").json()["turns"]
+    assert before["sources"] == live["sources"]
+
+    with django_capture_on_commit_callbacks(execute=True):
+        assert delete(administrator_client, consulted.id).status_code == 204
+
+    reopened = session_client.client.get(f"/api/conversations/{conversation.id}")
+
+    assert reopened.status_code == 200
+    [turn] = reopened.json()["turns"]
+    assert turn["answered"] is True
+    assert turn["statements"] == before["statements"]
+    assert turn["sources"] == [before["sources"][0]]
+    assert turn["sources"][0]["source_id"] == str(cited.id)
+    for trace in (CONSULTED_TITLE, CONSULTED_PASSAGE, str(consulted.id), str(consulted_chunk.id)):
+        assert trace.encode() not in reopened.content, trace

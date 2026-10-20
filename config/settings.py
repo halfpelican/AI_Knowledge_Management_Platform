@@ -18,7 +18,7 @@ from apps.core.constants import (
     PASSWORD_MINIMUM_LENGTH,
     SESSION_INACTIVITY_MINUTES,
 )
-from apps.core.logging_config import audit_logging
+from apps.core.logging_config import platform_logging
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -51,6 +51,11 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Every /api/ response is marked never-cache (D-76). First, so it is the outermost
+    # layer and sees every response, including one another middleware returns early.
+    "config.middleware.NeverCacheApiMiddleware",
+    # Also sets X-Content-Type-Options: nosniff, which is what binds a download to the
+    # Content-Type its signature chose (D-75).
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -165,7 +170,16 @@ REST_FRAMEWORK = {
 AUDIT_LOG_PATH = Path(env.str("AUDIT_LOG_PATH", default=str(BASE_DIR / "logs" / "audit.log")))
 AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-LOGGING = audit_logging(AUDIT_LOG_PATH)
+# --- Error log (docs/decisions.md D-75) ----------------------------------------------
+# Every record at ERROR or above that reaches the root logger, Django's own included, is
+# appended here. Without it an error with DEBUG=False went nowhere: Django's console
+# handler needs DEBUG and mail_admins has no ADMINS. Beside audit.log by default, and
+# gitignored with it (logs/).
+
+ERROR_LOG_PATH = Path(env.str("ERROR_LOG_PATH", default=str(BASE_DIR / "logs" / "errors.log")))
+ERROR_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+LOGGING = platform_logging(audit_path=AUDIT_LOG_PATH, error_path=ERROR_LOG_PATH)
 
 # --- Uploaded files (FR-08, docs/decisions.md D-05) ------------------------------
 # Originals are stored on the local filesystem, not in the database and not in cloud

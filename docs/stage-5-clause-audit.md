@@ -279,3 +279,127 @@ and `apps/accounts/tests/test_manage_documents_seed.py`. Front-end tests are in
   assert, but the D-53 scan does not watch those models.
 - **No browser check.** The screens are tested in jsdom only. Narrow widths and keyboard order are
   item 7's.
+
+### After item 2a — 14 October 2026, on `feat/FR-15-document-download`
+
+Built by the django-backend agent (the route, the error file, the never-cache middleware) and the
+react-frontend agent (the link), in parallel against D-75, D-76 and the contract, which were
+committed first. The coordinating session reviewed both and committed them. The backend agent was
+stopped by a usage limit while deliberate break (a) was applied. The coordinating session found
+the break still in place, restored it, and resumed the agent, which confirmed the file matched its
+snapshot byte for byte.
+
+Only FR-15's ninth clause changes. Every other row of the item 2 table above stands.
+
+| # | Clause | State | Evidence |
+|---|---|---|---|
+| 9 | …and a download link | ✅ | `GET /api/documents/{id}/download` (D-75), linked from the detail view as `<a href download>`, on every document in every status. **Backend** (`apps/api/tests/test_document_download.py`, every test from both roles): `test_each_format_downloads_as_the_stored_original_byte_for_byte`, `test_a_download_is_named_and_typed_by_its_signature_not_by_its_uploaded_name` (`Q3_budget.vbs` and `invoice.html` uploaded through the real API download as `.txt`), `test_an_administrator_only_document_is_an_employees_unknown_id_and_the_administrators_file`, `test_unknown_and_out_of_scope_are_one_404_from_both_roles`, `test_a_document_downloads_in_every_status`, `test_the_stored_file_is_not_served_at_its_media_url`, the three missing-file tests, and the `Accept` tests. Also the `api/documents/<uuid:pk>/download GET` probe in `test_source_rows_fail_closed.py`. **Front end** (`documentRepository.test.jsx`): `links to exactly the download route for this document, with an empty download attribute`, one test per status, `puts no /media/ address anywhere on the detail view`, `is left to the browser: a click is not intercepted and sends nothing through the API client` |
+
+The server-end clauses this route also answers to:
+
+| Clause | State | Evidence |
+|---|---|---|
+| 15. A document ID must resolve to an existing record | ✅ | A blank or missing file is the same 404, with the same body, logged to `logs/errors.log` (D-75). An out-of-scope document logs nothing at ERROR even when its file is missing |
+| 16. Filtered to documents the role permits, as in FR-11 | ✅ | Through `scoped_document_or_404`, which the detail view and the delete share. A download can consult only the document's stamp; it agrees with chunk-level retrieval while the cascade holds (D-75) |
+| 22. 404 for an unknown document | ✅ | `test_unknown_and_out_of_scope_are_one_404_from_both_roles` |
+
+Beside the clause, from D-76: every `/api/` response is marked never-cache, tested across
+`enumerate_endpoints()` for anonymous, Employee and Administrator sessions, including 401, 403,
+404 and CSRF refusals (`apps/api/tests/test_never_cache.py`). The error file is tested in
+`apps/core/tests/test_logging_config.py`.
+
+#### Not covered by item 2a
+
+- **No real-browser check.** jsdom cannot download, so how Chrome, Firefox and Safari present a
+  failed download (a 401 or 404 on a `download` link) is unverified. Some may save the JSON body as
+  a file. Worth one manual check in item 8's live run.
+- **A cross-origin API base.** Browsers ignore `download` on a cross-origin address, so a failure
+  would replace the tab with JSON. D-21 keeps the API same-origin.
+- **Reprocess's HTML 500 on a missing file, and the `SuspiciousFileOperation` 400**, are item 5's
+  (D-75's notes).
+
+---
+
+## Carried from Stage 4: FR-13's thread and FR-12's citation link
+
+Stage 4's closing audit (D-61) found that the active thread was lost on any navigation, including
+a citation's own same-tab link (its gap 3). Item 4a owns that gap. The clauses are quoted from
+`docs/stage-4-clause-audit.md`, whose rows stand as written. Only the rows item 4a changes are
+shown here.
+
+### After item 4a — 15 October 2026, on `fix/FR-13-retain-thread`
+
+Built by the react-frontend agent against D-77, which was committed first. The coordinating
+session reviewed it and committed it. The agent stalled once while running its deliberate breaks.
+Before resuming it, the coordinating session found no break applied: `Ask.jsx` matched the agent's
+backup, and every break's original text was present exactly once.
+
+| Requirement | Clause | Stage 4 | After 4a | Evidence |
+|---|---|---|---|---|
+| FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ | ⚠️ | **The thread now survives navigation, Back and a reload**, because the address names it (D-77). **Still ⚠️ for D-42:** prior answers are never passed, so a follow-up that refers into the previous answer does not resolve. That was conceded at Stage 4 and item 4a does not change it. Front end (`askThread.test.jsx`): `re-reads the thread from the server and shows its turn`, `shows the turns of the thread named in the address on mount, and marks it current`, `sends no read for a thread the screen itself has just written to the address, so its live turn stays`, `names the created thread in the address before the answer, dropping q, and replaces the entry rather than pushing one` |
+| FR-13 | Previous conversations listed and reopenable; the active thread can be cleared to begin a new topic | ⚠️ | ⚠️ | **Reopening and clearing now add a history entry**, so Back returns to the thread before. **Still ⚠️ for D-61's gap 4:** a reopened thread's citations can't expand and it has no Sources panel, which is item 4b's. Front end: `re-reads X when Back leaves a thread reopened from the list`, `adds no entry and sends no read when the thread already open is chosen again`, `adds an entry for Start a new topic, so Back returns to the thread it cleared`, `writes nothing for Start a new topic when the screen shows no turns, and still acknowledges it`, `writes nothing for Start a new topic on an empty thread the address names, so it is not left behind`, `ends at /ask with the notice still showing, and Back skips the dead address` |
+| FR-12 | 5. …and links to the source document or meeting | ✅ | ✅ | **Following the link no longer loses the thread.** Back re-reads it from the server. The thread comes back with its statements and citation numbers, which stay inert until item 4b. Front end: `re-reads the thread from the server and shows its turn`, `stays on a citation followed while the next question was in flight` |
+
+Guards D-77 requires, each with a test that a deliberate break failed: a slow read can't land after
+Back (`does not let a slow read for Y replace X after Back to X`), a reply for a thread the address
+no longer names is dropped (`shows a reply for X that lands after Back to Y neither in Y nor in the
+address`), and the tab title stays "Ask" (`keeps the tab title "Ask" when the thread changes`).
+
+#### Not covered by item 4a
+
+- **A re-read thread's citations stay inert** until item 4b (D-61's gap 4).
+- **Partial matches on a re-read turn.** No route returns a past turn's candidates.
+- **Where the reader was.** Back lands at the top of the screen, not at the citation followed.
+- **The draft question** doesn't survive leaving the screen.
+- **A read failure other than 404** leaves the screen on the previous thread while the address
+  names the one that failed (D-77's note).
+- **A reply or read 404 landing in the one render between a Back and its commit** is judged
+  against the old address (D-77's note).
+- **The dashboard's recent questions** still link to `/ask`, not to their threads. That is a
+  front-end follow-up to D-70 that no Stage 5 item names.
+- **No real-browser check.** The tests run in jsdom through `MemoryRouter`. Following a citation
+  and pressing Back in a real browser is worth one manual check in item 8's live run.
+
+### After item 4b — 20 October 2026, on `fix/FR-12-reopened-citations`
+
+Built in parallel against D-78 and the contract, which were committed first. The django-backend
+agent built the server half and the react-frontend agent the screen. The coordinating session
+reviewed both and committed them. Item 4b closes D-61's gap 4. FR-12's citation rows were ✅ at
+Stage 4 for the live reply only; D-61 found all three inert on a reopened turn.
+
+| Requirement | Clause | Before 4b | After 4b | Evidence |
+|---|---|---|---|---|
+| FR-12 | 4. Each citation expands to display the source passage | ✅ live, inert reopened | ✅ | **Backend:** `test_a_reopened_turns_sources_are_the_live_replys_sources` (both roles; a reopened turn's `sources` equal the live reply's, byte for byte). **Front end:** `expands a reopened turn's citation to its passage and links to its document or meeting`, `re-reads the thread from the server and shows its turn, whose citation expands and links to its source` |
+| FR-12 | 5. …and links to the source document or meeting | ✅ live, none reopened | ✅ | The same two front-end tests assert the link by `href`, to a document and to a meeting |
+| FR-12 | The Sources panel lists every item consulted, with its date | ✅ live, none reopened | ✅ | **Consulted, not cited (D-78, D-44).** Backend: `test_an_uncited_consulted_passage_is_in_the_reopened_panel`, `test_a_consulted_but_uncited_document_deleted_is_gone_from_the_reopened_panel` (the real `DELETE`), `test_both_roles_lose_a_consulted_source_moved_out_of_their_scope`, `test_a_demoted_reader_loses_a_consulted_source_they_may_no_longer_see_without_a_trace`, `test_an_unstamped_consulted_passage_is_shown_to_nobody`. Front end: `shows a reopened turn its Sources panel, listing a consulted item no statement cited` |
+| FR-13 | Previous conversations listed and reopenable; the active thread can be cleared to begin a new topic | ⚠️ | ✅ | **A reopened turn renders as a live one.** Its citations expand and link, and it has its Sources panel. The note saying they couldn't is gone (`shows no note setting a reopened thread apart from a live one`). Reopening and clearing are item 4a's rows |
+
+**Invariant 1, on the reopen path.** The rule that keeps a re-scoped turn byte for byte a
+never-answered one now covers `sources` too:
+
+- `test_a_re_scoped_turn_renders_exactly_as_a_never_answered_one` was strengthened so that the
+  re-scoped turn consulted a passage the demoted reader can still read.
+- `test_a_path_b_turn_reopens_identical_to_a_path_a_turn` checks the two no-answer paths still
+  reopen identically, with the path-B row holding its supplied ids.
+- `test_a_turn_stored_unanswered_never_has_its_retrieved_ids_read` checks that a path-B turn's ids
+  appear in no SQL.
+- `test_one_chunk_query_serves_every_turns_citations_and_sources` checks there is one scope query
+  per thread.
+
+**The provenance-removed state**, which D-62 recorded as untested at the interface, now has its
+front-end test: `shows its own title and message, no statement, no Sources panel and not the
+no-answer copy`. Server side: `test_a_provenance_removed_turn_carries_no_sources_though_a_consulted_passage_is_readable`.
+
+FR-13's first row stays ⚠️ for D-42, as after item 4a. Item 4b does not change it.
+
+#### Not covered by item 4b
+
+- **Partial matches on a reopened no-answer turn.** Nothing records them.
+- **A source dropped by D-53's fail-closed read** leaves its citation as a plain number, as on the
+  live reply. This is tested: `keeps a citation's number as plain text where its passage did not
+  arrive`.
+- **The cost of a thread read.** A four-turn thread went from 11 queries to 20, and nothing sets a
+  budget for it.
+- **The front end doesn't filter `sources` on a no-answer turn.** It relies on the server sending
+  `[]`, which is tested server-side, and on that branch never rendering a panel, which is not
+  tested on the screen.

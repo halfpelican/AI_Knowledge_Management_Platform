@@ -16,7 +16,10 @@ authorisation errors are `401 {"detail": "..."}` for no valid session and
 `403 {"detail": "..."}` for a session whose role lacks the permission (`CLAUDE.md` §6
 invariant 4). Validation errors are `400 {"field": ["message"], ...}` in DRF's shape.
 Error messages never disclose whether an email address is registered, except the
-409 on registration, which FR-01 specifies.
+409 on registration, which FR-01 specifies. Every response under `/api/`, whatever its status,
+carries `Cache-Control: max-age=0, no-cache, no-store, must-revalidate, private` and an
+`Expires` header (D-76). The one route that answers with something other than JSON is FR-15's
+download, which returns the stored original (D-75).
 
 The user object, wherever a user is returned:
 
@@ -523,8 +526,10 @@ endpoints use.
   ones that did, would present unadmitted material as though it supported the answer. It is
   also `[]`, rather than absent, where the caller's scope holds nothing rankable at all.
 - **A stored turn carries none.** The conversation detail route returns no
-  `partial_matches` for a past turn, as it returns no `sources`: nothing records what a
-  turn's ranking found, and the field would have to be invented to be filled.
+  `partial_matches` for a past turn: nothing records what a turn's ranking found, and the
+  field would have to be invented to be filled. It does return `sources` since D-78, because
+  `retrieved_chunk_ids` records what was supplied to generation; nothing records the
+  candidates that fell below the threshold.
 
 This replaced a front-end heuristic. Until Stage 4 item 10a the screen built this list
 itself, from `GET /api/search` on one word plucked out of the question, because the search
@@ -639,25 +644,40 @@ The thread, on the detail route:
  "turns": [{"question": "How do I request annual leave?", "answered": true,
             "asked_at": "2026-09-24T09:25:00+10:00", "message": null,
             "statements": [{"position": 1, "text": "Your manager approves it.",
-                            "chunk_id": "uuid"}]}]}
+                            "chunk_id": "uuid-1"}],
+            "sources": [{"source_type": "document", "source_id": "uuid",
+                         "title": "Leave policy", "date": "2026-08-01T10:00:00+10:00",
+                         "passages": [{"chunk_id": "uuid-1", "text": "..."},
+                                      {"chunk_id": "uuid-2", "text": "..."}]}]}]}
 ```
 
 Turns are chronological and each answered turn's statements are in the order they were
 numbered in, so a reopened thread reads as it did when it was live. An unanswered turn
 carries `answered: false`, the same fixed `message` the live reply carried, and no
 statements. **A turn carries no `no_answer_reason`, no `rejected_count` and no
-`retrieved_chunk_ids`**: the first two for the reason the answer path gives — a thread read
-is a second route past them — and the third because it records what was put in front of the
-model, including passages nothing cited, which is traceability rather than something the
-reader was shown.
+`retrieved_chunk_ids`**. The first two are left out for the reason the answer path gives: a
+thread read is a second route past them. The third is not a field either, but an answered
+turn's `sources` is built from it (D-78). On an answered turn it is exactly the list the live
+Sources panel was built from (D-44), so the reader was shown it. On a turn stored as unanswered
+it is never read, because `answered` plus its length tells the two no-answer paths apart.
 
-**One turn in three states, and a sixth key on exactly one of them** (Stage 4 item 1c):
+**`sources` (D-78)** has the live reply's shape (D-44): every item consulted, in rank order, with
+its passages. It is rebuilt on every read from one `scoped_chunks` query over the whole thread.
+A consulted item that is now outside the reader's scope, deleted or re-indexed is absent, with
+no count and no marker. Passage text is read from the chunk itself, and nothing stores a copy
+(D-67), so deleted material is not surfaced again. Every passage a statement cites is in the
+same list, unless D-53's fail-closed read dropped its source, which leaves that citation with
+nothing to expand to, as on the live reply. A turn that does not render as answered, in the second or third state below, carries
+`sources: []`. A turn carries no `partial_matches`, because nothing records them.
 
-| State | `answered` | `message` | `provenance_removed` |
-|---|---|---|---|
-| answered, and still readable by this reader | `true` | `null` | absent |
-| never answered, **or** answered and re-scoped away from this reader | `false` | `NO_ANSWER_MESSAGE` | absent |
-| answered, and none of its citation rows still points at an existing chunk | `false` | `PROVENANCE_REMOVED_MESSAGE` | `true` |
+**One turn in three states, and a seventh key on exactly one of them** (Stage 4 item 1c;
+`sources` since D-78):
+
+| State | `answered` | `message` | `sources` | `provenance_removed` |
+|---|---|---|---|---|
+| answered, and still readable by this reader | `true` | `null` | the consulted items still readable | absent |
+| never answered, **or** answered and re-scoped away from this reader | `false` | `NO_ANSWER_MESSAGE` | `[]` | absent |
+| answered, and none of its citation rows still points at an existing chunk | `false` | `PROVENANCE_REMOVED_MESSAGE` | `[]` | `true` |
 
 The second row is two states in one rendering **on purpose**: a turn whose statements were
 drawn from material the reader's current role may no longer see is byte-for-byte a turn that
@@ -684,7 +704,9 @@ pipeline and a decided failure commits, and FR-15's deletion removes the materia
 question cannot be answered from the knowledge base, which asserts a corpus state that is false on a failed
 reprocess and on FR-15's deletion. Its own message promises nothing about the corpus for that
 reason. **No count of what was lost**, in either state. The response shape did not change
-with D-67: no field carries `chunk_uuid`, and no passage text is stored to return.
+with D-67: no field carries `chunk_uuid`, and no passage text is stored to return. Since D-78 a
+turn carries passage text, read from the chunk itself, and a citation whose chunk is NULL has
+none to read.
 
 **Where a title comes from (D-43).** `Conversations.title` is a non-blank column and FR-13's
 interface never asks the user to name a topic before typing — it clears the thread and lets
@@ -785,12 +807,13 @@ The repository screen reads `GET /api/documents/browse`. `GET /api/documents` is
 stays as FR-08's contracted list, although after Stage 5 item 2 no screen calls it (D-72's
 dated note). Both routes build their documents through one scoped query function (D-72). Decisions: D-72 (browse), D-73 (deletion and the detail fields), D-74 (the
 demonstration tags), D-65 (how parameters are read), D-66 (what scope means), D-63 (extracted
-content). The download route is Stage 5 item 2a, and this section does not define it.
+content), D-75 (the download, Stage 5 item 2a).
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
 | GET | `/api/documents/browse?q=&status=&department=&project=&process=&topic=&sort=` | session | `200` the browse object below; also `200` when no filter is set and nothing is in scope | `204` no body: at least one filter is set and no document in the caller's scope matches (FR-15); `400 {"<parameter>": ["..."]}` a `status` or `sort` outside its vocabulary, a NUL byte, or a value over 255 characters (*convention*, D-65); `401` |
 | GET | `/api/documents/{id}` | session | `200` the document object **with** `extracted_text`, `tags` and `can_delete` (below) | `401`; `404` no such document, or one outside the caller's scope |
+| GET | `/api/documents/{id}/download` | session | `200` the stored original as an attachment (below) | `401`; `404` no such document, one outside the caller's scope, or one whose original is not stored or is missing from disk, with the **same body** in every case |
 | DELETE | `/api/documents/{id}` | session + `manage_documents` | `204` no body. The document, its extracted content, its chunks and its tag links are deleted in one transaction; the stored file is removed when that transaction commits (*convention*: FR-15 names no success code for a delete) | `401`; `404` no such document, or one outside the caller's scope, checked **before** the permission; `403` the document is in scope and the role lacks `manage_documents` |
 
 **Parameters.** All are optional, and an empty value is the same as leaving it out. A value is
@@ -858,3 +881,29 @@ AND. `sort` is not a filter: it never causes a 204.
 subsequently be surfaced through search"). Answers that cited it keep their `QueryLog` and
 `AnswerCitation` rows, with the citation's chunk null (D-67), and a reopened turn renders them as
 D-67 describes.
+
+**The download** (D-75) returns the stored original's bytes, not JSON, for a document in any
+status. The client links to this route, never to a `/media/` path, which nothing serves.
+
+- **`Content-Type`** comes from the format the file's signature proved at upload, never from its
+  name: `application/pdf`; `application/vnd.openxmlformats-officedocument.wordprocessingml.document`;
+  `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`; or
+  `text/plain; charset=utf-8`. The response also carries `X-Content-Type-Options: nosniff`.
+- **`Content-Disposition`** is `attachment` with the stored original filename, its last extension
+  corrected to the signature's. The comparison ignores case, and an extension is added when there
+  is none.
+
+  | Uploaded as | Proven format | Downloads as |
+  |---|---|---|
+  | `Report.PDF` | pdf | `Report.PDF` |
+  | `Q3_budget.vbs` | txt | `Q3_budget.txt` |
+  | `invoice.html` | txt | `invoice.txt` |
+  | `report.pdf.exe` | txt | `report.pdf.txt` |
+  | `minutes` | docx | `minutes.docx` |
+- **A 404 body** is `{"detail": "No Document matches the given query."}` for an unknown id, an id
+  outside the caller's scope and a document with no file alike. A missing file is logged on the
+  server and not described to the client.
+- **`Accept` is not consulted** on this route, so it never answers 406. Every other route
+  negotiates as usual and answers 406 to an `Accept` that excludes JSON; here that would refuse
+  `Accept: application/pdf` before the view ran. The route's 401 and 404 are JSON whatever the
+  client asked for.

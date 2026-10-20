@@ -71,11 +71,13 @@ function SourceLine({ source }) {
  * which is the text equivalent for a marker that would otherwise be read as a
  * bare bracket (WCAG 2.1 SC 1.1.1, SC 2.4.6).
  *
- * Where the passage did not travel with the statement — a reopened thread, where
- * no route returns what a past turn was built from — the number is plain text
- * rather than a control that expands nothing. The statement is still cited; what
- * is missing is the passage, and saying so is better than either inventing one or
- * dropping the citation number the reader was given.
+ * A live turn and a reopened one both carry their passages (D-78), so this
+ * expands on either. Where a cited passage is nonetheless absent — D-53's
+ * fail-closed read drops a source whose own row the reader may not read, on a
+ * live reply and on a reopened turn alike — the number is plain text rather than a
+ * control that expands nothing. The statement is still cited; what is missing is
+ * the passage, and saying so is better than either inventing one or dropping the
+ * citation number the reader was given.
  */
 function CitedStatement({ idPrefix, statement, found }) {
   const [open, setOpen] = useState(false)
@@ -141,7 +143,7 @@ function CitedStatement({ idPrefix, statement, found }) {
  * @param {string} props.idPrefix Unique per turn: ids must not collide across a thread.
  * @param {{position: number, text: string, chunk_id: string}[]} props.statements
  * @param {object[]} [props.sources] Consulted sources, whose nested passages are
- *   what a citation expands to. Absent for a reopened turn, which has none.
+ *   what a citation expands to. A live and a reopened turn both carry them (D-78).
  */
 export function AnswerBody({ idPrefix, statements, sources }) {
   const index = passageIndex(sources)
@@ -256,20 +258,21 @@ export function PartialMatches({ idPrefix, results }) {
  * **Three states, and the middle one is the security property** (Stage 4 item 1c).
  * `src/utils/turns.js` carries the argument in full; the short form is:
  *
- * - `answered` — the statements, each with its citation number, and the Sources
- *   panel beside them.
+ * - `answered` — the statements, each with its citation, and the Sources panel
+ *   beside them. The same on a live turn and a reopened one, which carries the
+ *   sources it consulted that the reader may still see (D-78).
  * - `noAnswer` — the corpus had nothing to answer from. **A turn re-scoped away
  *   from this reader arrives here too and is indistinguishable from it**, because a
  *   notice that something was removed is itself a disclosure that material exists
  *   which this role may not read (CLAUDE.md §6, invariant 1). Nothing in this
  *   branch may ever be made conditional on which of the two it is; the server does
  *   not send the difference.
- * - `provenanceRemoved` — the turn WAS answered and the record of what it was drawn
- *   from no longer exists, because a reprocess or a re-index of the material
- *   deleted its chunks and with them every citation of them (D-12's cascade). Its
- *   own title and message, and **no statements**: a statement without its citation
- *   is what invariant 6 forbids, and there is nothing here to grey out, hold behind
- *   a disclosure or count.
+ * - `provenanceRemoved` — the turn WAS answered and none of its citations still
+ *   points at a chunk that exists, because a reprocess, a re-index or FR-15's
+ *   deletion removed them (D-67). Its own title and message, and **no statements
+ *   and no Sources panel**: a statement without its citation is what invariant 6
+ *   forbids, and there is nothing here to grey out, hold behind a disclosure or
+ *   count.
  *
  * The provenance state is NOT given the no-answer copy, which says the question
  * cannot be answered from the available knowledge base. That sentence is false of a
@@ -277,9 +280,9 @@ export function PartialMatches({ idPrefix, results }) {
  * question the system can answer.
  *
  * Rendered here rather than inline in the Ask screen so that the three states can
- * be exercised on their own: this layer has no test runner, and a component that
- * takes one turn and returns markup can be rendered from a script, which is how
- * these three were hand-verified against bodies captured from the API.
+ * be exercised on their own. Before D-62 this layer had no test runner, and these
+ * three were hand-verified by rendering this component from a script against
+ * bodies captured from the API. Each is now rendered in frontend/tests/.
  *
  * @param {object} props
  * @param {object} props.turn one entry of the screen's `turns` list
@@ -290,13 +293,7 @@ export function TurnBody({ turn }) {
   if (state === TURN_STATE.answered) {
     return (
       <>
-        <AnswerBody
-          idPrefix={turn.key}
-          statements={turn.statements}
-          // A reopened turn carries no passages, so its citation numbers are plain
-          // text rather than controls that expand nothing.
-          sources={turn.expandable ? turn.sources : undefined}
-        />
+        <AnswerBody idPrefix={turn.key} statements={turn.statements} sources={turn.sources} />
         <SourcesPanel idPrefix={turn.key} sources={turn.sources} />
       </>
     )

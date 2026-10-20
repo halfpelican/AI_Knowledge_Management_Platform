@@ -19,9 +19,13 @@
   color: var(--color-primary-text);
 }
 
+/* Each hover restates its variant's text colour. A link given the button's look
+   (FR-15's download link) would otherwise take base.css's `a:hover` colour, which
+   outranks the variant's own on hover. */
 .btn--primary:hover:not(:disabled) {
   background-color: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
+  color: var(--color-primary-text);
 }
 
 .btn--secondary {
@@ -32,6 +36,7 @@
 
 .btn--secondary:hover:not(:disabled) {
   background-color: var(--color-surface-alt);
+  color: var(--color-text);
 }
 
 .btn:disabled {

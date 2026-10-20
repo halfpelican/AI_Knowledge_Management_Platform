@@ -46,6 +46,7 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.core.files.base import ContentFile
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, Statement, StatementList
@@ -344,6 +345,32 @@ def _is_found(url_of, method="get"):
     return probe
 
 
+def _store_an_original(document):
+    """Give the fixture's document a stored original, which it is created without.
+
+    Without one, the download's Administrator mirror would be the missing-file 404 and the
+    download probe would prove nothing. ``update_fields`` names only ``file_path``, so the save
+    re-stamps no chunk (D-47) and the disagreement stands; the probe asserts that it does.
+    """
+    if not document.file_path:
+        document.file_path.save("register.txt", ContentFile(DOCUMENT_TEXT.encode()), save=False)
+        document.save(update_fields=["file_path"])
+
+
+def _downloads(client, case, monkeypatch):
+    """FR-15's download (D-75) returns the original's bytes and can consult only the document's
+    own stamp, because the original is one file: exactly the case this fixture builds."""
+    _store_an_original(case.document)
+    # The premise, still: the Employee's chunk predicate admits this document's chunk.
+    assert scoped_chunks(role_name=EMPLOYEE_ROLE_NAME).filter(source_id=case.document.id).exists()
+    response = client.get(f"/api/documents/{case.document.id}/download")
+    if response.streaming:
+        # Read to the end, which closes the response and the stored file it holds open.
+        assert b"".join(response.streaming_content) == DOCUMENT_TEXT.encode()
+    # 404 is the only answer that says nothing; any other status confirms the id is real.
+    return response.status_code != 404
+
+
 def _searches(client, case, monkeypatch):
     return case.disclosed_in(client.get("/api/search", {"q": SEARCH_TERM}))
 
@@ -352,6 +379,27 @@ def _asks(client, case, monkeypatch):
     monkeypatch.setattr(apps.ai, "get_ai_service", lambda: _CitingService())
     response = client.post("/api/ask", {"question": QUESTION}, format="json")
     assert response.status_code == 200
+    return case.disclosed_in(response)
+
+
+def _reopens(client, case, monkeypatch):
+    """FR-13's reopened thread carries each answered turn's Sources panel since D-78, built by
+    the live reply's ``resolve_sources`` and so failing closed in the same place. The turn is
+    asked through the real route and then read back; only the read is probed."""
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: _CitingService())
+    created = client.post("/api/conversations", {}, format="json")
+    assert created.status_code == 201
+    conversation_id = created.json()["conversation_id"]
+    asked = client.post(
+        "/api/ask", {"question": QUESTION, "conversation_id": conversation_id}, format="json"
+    )
+    assert asked.status_code == 200
+    response = client.get(f"/api/conversations/{conversation_id}")
+    assert response.status_code == 200
+    # The premise: the chunk stamp admits this caller, so the turn renders as answered and its
+    # panel is built, rather than skipped as a re-scoped turn's would be.
+    [turn] = response.json()["turns"]
+    assert turn["answered"] is True
     return case.disclosed_in(response)
 
 
@@ -382,6 +430,8 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/search", "GET"): _searches,
     # The Sources panel and the partial matches: the route D-53 found failing open.
     ("api/ask", "POST"): _asks,
+    # FR-13's reopened thread: the same Sources panel, rebuilt on every read (D-78).
+    ("api/conversations/<uuid:pk>", "GET"): _reopens,
     # FR-14: recent documents and meetings, and the offered departments, which would carry the
     # disagreeing document's "Board office" if they were read from anything but the scoped rows.
     ("api/dashboard", "GET"): _lists("/api/dashboard"),
@@ -394,6 +444,8 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/documents/<uuid:pk>", "DELETE"): _is_found(
         lambda case: f"/api/documents/{case.document.id}", method="delete"
     ),
+    # FR-15's download (D-75): the stored original, scoped by the document's own stamp alone.
+    ("api/documents/<uuid:pk>/download", "GET"): _downloads,
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {
@@ -417,11 +469,6 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ),
     ("api/conversations", "GET"): "The caller's own threads: titles they wrote or asked.",
     ("api/conversations", "POST"): "The new thread.",
-    ("api/conversations/<uuid:pk>", "GET"): (
-        "Questions and statements whose citations are re-scoped through scoped_chunks (D-48). "
-        "No source title, date or identifier is returned. Stage 5 item 4b adds them, and that "
-        "route must then move to ROUTES_RETURNING_SOURCE_ROWS with a probe."
-    ),
 }
 
 
@@ -468,3 +515,10 @@ def test_an_unknown_identifier_is_answered_exactly_as_the_withheld_one_is(employ
     assert withheld.status_code == 404
     assert withheld.content == employee_client.delete(f"/api/documents/{uuid.uuid4()}").content
     assert Document.objects.filter(pk=disagreement.document.id).exists()
+    # FR-15's download (D-75), the same, with the withheld document's original really stored, so
+    # the 404 is the scope's and not the missing file's.
+    _store_an_original(disagreement.document)
+    withheld = employee_client.get(f"/api/documents/{disagreement.document.id}/download")
+    unknown = employee_client.get(f"/api/documents/{uuid.uuid4()}/download")
+    assert withheld.status_code == unknown.status_code == 404
+    assert withheld.content == unknown.content

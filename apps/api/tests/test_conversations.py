@@ -18,18 +18,31 @@ Three properties carry more than their line count:
   ``rejected_count`` are record-only, and a thread read is a second route past them. The
   assertion is against the raw rendered body, for the reason test_ask.py gives.
 
-The questions here go through ``POST /api/ask`` with the autouse stub and an empty corpus,
-so every turn is no-answer path A. That is deliberate: what is under test is where a
-thread's title comes from and what a thread read returns, neither of which depends on an
-answer having been produced.
+The questions in the create and list sections go through ``POST /api/ask`` with the autouse
+stub and an empty corpus, so every turn is no-answer path A. That is deliberate: what is
+under test there is where a thread's title comes from, which does not depend on an answer
+having been produced.
+
+**A reopened turn carries the sources it consulted (D-78).** The last section asks through
+the real ``POST /api/ask`` with a controlled double installed as the suite installs every
+provider double, then reopens the thread and compares. The reopened panel is the live
+panel, byte for byte: every item consulted, cited or not, in rank order, with its passages.
+A turn that renders unanswered carries none, and the two no-answer paths still reopen as one
+body even though only path B's row holds identifiers.
 """
 
+import json
 import uuid
-from datetime import timedelta
+from datetime import date, timedelta
+from math import sqrt
 
 import pytest
+from django.conf import settings
 from django.utils import timezone
 
+import apps.ai
+from apps.ai.base import EmbeddingResult, Statement, StatementList
+from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.api.answers import RECORD_ONLY_FIELDS
 from apps.api.views import NEW_CONVERSATION_TITLE
 from apps.core.constants import (
@@ -38,9 +51,14 @@ from apps.core.constants import (
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
     NO_ANSWER_MESSAGE,
+    NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
+    RELEVANCE_THRESHOLD,
+    SOURCE_TYPES,
 )
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.models import ContentChunk, Document
+from apps.meetings.models import Meeting
 from apps.retrieval.models import AnswerCitation, Conversation, QueryLog
 
 pytestmark = pytest.mark.django_db
@@ -53,6 +71,8 @@ SECOND_QUESTION = "And who signs it off for me?"
 assert MINIMUM_QUESTION_LENGTH <= len(QUESTION) <= MAXIMUM_QUESTION_LENGTH
 
 CONVERSATION_FIELDS = {"conversation_id", "title", "last_updated_at"}
+# Every turn carries ``sources`` since D-78, answered or not.
+TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements", "sources"}
 
 
 def detail_url(conversation_id):
@@ -275,7 +295,9 @@ def test_a_reopened_thread_carries_its_turns_with_their_verified_citations(
     """FR-13: "previous conversations are listed and can be reopened", from both roles.
 
     Chronological, with each answered turn's statements in the order they were numbered in,
-    so the reopened thread reads as it did when it was live.
+    so the reopened thread reads as it did when it was live. The answered turn carries its
+    Sources panel (D-78), its date the string ``GET /api/documents/{id}`` gives for the same
+    row; the unanswered one carries none.
     """
     conversation, _, _ = thread
 
@@ -285,17 +307,28 @@ def test_a_reopened_thread_carries_its_turns_with_their_verified_citations(
     body = response.json()
     assert set(body) == CONVERSATION_FIELDS | {"turns"}
     first, second = body["turns"]
-    assert set(first) == {"question", "answered", "asked_at", "message", "statements"}
+    assert set(first) == set(second) == TURN_FIELDS
     assert first["question"] == QUESTION
     assert first["answered"] is True
     assert first["message"] is None
     assert [statement["position"] for statement in first["statements"]] == [1, 2]
     assert [statement["text"] for statement in first["statements"]] == STATEMENT_TEXTS
     assert {statement["chunk_id"] for statement in first["statements"]} == {str(content_chunk.id)}
+    document_body = session_client.client.get(f"/api/documents/{content_chunk.source_id}").json()
+    assert first["sources"] == [
+        {
+            "source_type": SOURCE_TYPES[0],
+            "source_id": str(content_chunk.source_id),
+            "title": document_body["title"],
+            "date": document_body["uploaded_at"],
+            "passages": [{"chunk_id": str(content_chunk.id), "text": content_chunk.chunk_text}],
+        }
+    ]
     assert second["question"] == SECOND_QUESTION
     assert second["answered"] is False
     assert second["message"] == NO_ANSWER_MESSAGE
     assert second["statements"] == []
+    assert second["sources"] == []
 
 
 def test_a_reopened_thread_discloses_neither_the_reason_nor_the_rejected_count(
@@ -311,9 +344,11 @@ def test_a_reopened_thread_discloses_neither_the_reason_nor_the_rejected_count(
     for field in RECORD_ONLY_FIELDS:
         assert field not in raw
     assert NO_STATEMENT_VERIFIED not in raw
-    # Nor the identifiers of everything that was put in front of the model: that is the
-    # traceability record, not what the reader was shown.
+    # Nor the column of identifiers put in front of the model. An answered turn's consulted
+    # chunks are shown as its Sources panel, which is what the live reply showed (D-78); the
+    # unanswered turn's are never read, and the column itself is never a field.
     assert "retrieved_chunk_ids" not in raw
+    assert employee_client.get(detail_url(conversation.pk)).json()["turns"][1]["sources"] == []
 
 
 def test_an_empty_thread_reads_as_a_thread_with_no_turns(employee_client, employee):
@@ -369,3 +404,220 @@ def test_there_is_no_delete_route(employee_client, employee):
     assert employee_client.delete(detail_url(conversation.pk)).status_code == 405
     assert employee_client.delete(CONVERSATIONS_URL).status_code == 405
     assert Conversation.objects.filter(pk=conversation.pk).exists()
+
+
+# --- D-78: a reopened turn carries the sources it consulted, as the live reply did ---------------
+#
+# ``ControlledService`` is the double ``test_ask.py`` uses, restated here following this suite's
+# habit of a test stating its own premise: the query vector is fixed, so a chunk built at
+# ``at_cosine(v)`` scores exactly ``v`` and the rank order is known. It is installed through
+# ``apps.ai.get_ai_service``, exactly as the autouse stub is, so the turn takes the real pipeline,
+# the real ``record_query`` and the real reply.
+
+DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
+BOTH_ROLES = [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME]
+
+POLICY_TITLE = "Leave policy"
+POLICY_PASSAGE = "Staff accrue twenty days of annual leave a year."
+POLICY_SECOND_PASSAGE = "Leave requests go to your line manager for approval."
+PLANNING_TITLE = "Leave planning"
+PLANNING_PASSAGE = "The group agreed the leave embargo ends in March."
+SCHEDULE_TITLE = "Leave accrual schedule"
+SCHEDULE_PASSAGE = "Accrual is calculated monthly and credited on the first of the month."
+
+
+def _wide(*components) -> list[float]:
+    return list(components) + [0.0] * (settings.EMBEDDING_DIMENSION - len(components))
+
+
+QUERY = _wide(1.0)
+# Orthogonal to every chunk ``at_cosine`` builds, so the same corpus takes no-answer path A.
+ELSEWHERE = _wide(0.0, 0.0, 1.0)
+
+
+def at_cosine(value: float) -> list[float]:
+    """A unit vector whose cosine with QUERY is exactly ``value``."""
+    return _wide(value, sqrt(1.0 - value * value))
+
+
+class ControlledService:
+    """The query vector is ``vector``; the reply cites the first passage it was given, or, with
+    ``fabricate``, an identifier that was never supplied, which verification removes (path B)."""
+
+    def __init__(self, *, vector=None, fabricate=False):
+        self.vector = QUERY if vector is None else vector
+        self.fabricate = fabricate
+        self.generate_calls = []
+
+    def embed(self, texts):
+        return EmbeddingResult(
+            vectors=[list(self.vector)], model=STUB_EMBEDDING_MODEL,
+            dimension=settings.EMBEDDING_DIMENSION,
+        )
+
+    def generate_statements(self, question, passages):
+        self.generate_calls.append((question, list(passages)))
+        cited = str(uuid.uuid4()) if self.fabricate else passages[0].chunk_id
+        return StatementList(statements=[Statement(text=f"Grounded in: {question}", chunk_id=cited)])
+
+    def health(self):  # pragma: no cover - the answer path does not check provider health
+        raise AssertionError("not called")
+
+
+def install(monkeypatch, double):
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: double)
+    return double
+
+
+def consulted_chunk(*, source_type, source_id, text, cosine, index=0):
+    return ContentChunk.objects.create(
+        source_type=source_type,
+        source_id=source_id,
+        chunk_index=index,
+        chunk_text=text,
+        embedding=at_cosine(cosine),
+        embedding_model=STUB_EMBEDDING_MODEL,
+        embedding_dimension=settings.EMBEDDING_DIMENSION,
+        visible_to_roles=BOTH_ROLES,
+    )
+
+
+@pytest.fixture
+def consulted_corpus(employee):
+    """Three items, four passages, all above the threshold and readable by both roles.
+
+    Rank order is policy (0.95), planning (0.85), policy again (0.70), schedule (0.60), so the
+    live panel groups the policy's two passages under one entry, puts a meeting second, and the
+    double cites the policy's first passage alone: three of the four are consulted and uncited.
+    """
+    assert RELEVANCE_THRESHOLD < 0.60
+    policy = Document.objects.create(
+        title=POLICY_TITLE, file_type="pdf", uploaded_by=employee, visible_to_roles=BOTH_ROLES
+    )
+    planning = Meeting.objects.create(
+        title=PLANNING_TITLE, meeting_date=date(2026, 1, 5), transcript_text=PLANNING_PASSAGE,
+        visible_to_roles=BOTH_ROLES,
+    )
+    schedule = Document.objects.create(
+        title=SCHEDULE_TITLE, file_type="pdf", uploaded_by=employee, visible_to_roles=BOTH_ROLES
+    )
+    chunks = {
+        "policy": consulted_chunk(source_type=DOCUMENT_SOURCE_TYPE, source_id=policy.id,
+                                  text=POLICY_PASSAGE, cosine=0.95),
+        "planning": consulted_chunk(source_type=MEETING_SOURCE_TYPE, source_id=planning.id,
+                                    text=PLANNING_PASSAGE, cosine=0.85),
+        "policy_second": consulted_chunk(source_type=DOCUMENT_SOURCE_TYPE, source_id=policy.id,
+                                         text=POLICY_SECOND_PASSAGE, cosine=0.70, index=1),
+        "schedule": consulted_chunk(source_type=DOCUMENT_SOURCE_TYPE, source_id=schedule.id,
+                                    text=SCHEDULE_PASSAGE, cosine=0.60),
+    }
+    return {"policy": policy, "planning": planning, "schedule": schedule, "chunks": chunks}
+
+
+def asked_in_a_thread(client, user):
+    """One answered turn through ``POST /api/ask``, in a new thread, and its live reply."""
+    conversation = Conversation.objects.create(user=user, title="Leave")
+    live = ask_in(client, conversation.pk)
+    assert live.status_code == 200
+    assert live.json()["answered"] is True
+    return conversation, live.json()
+
+
+def test_a_reopened_turns_sources_are_the_live_replys_sources(
+    session_client, monkeypatch, consulted_corpus
+):
+    """D-78, from an Employee session and an Administrator session: ask, reopen, compare.
+
+    The reopened ``sources`` equal the live reply's byte for byte, key order included: the same
+    items in the same rank order, the same grouping of passages under their item, the same
+    date strings for a document and for a meeting, and the same passage identifiers. That is
+    what makes a reopened citation expand and link exactly as the live one did. The live
+    panel is asserted first to be the non-trivial one the corpus was built for, so the
+    equality is not met by two empty lists.
+    """
+    install(monkeypatch, ControlledService())
+    conversation, live = asked_in_a_thread(session_client.client, session_client.user)
+    assert [source["title"] for source in live["sources"]] == [
+        POLICY_TITLE, PLANNING_TITLE, SCHEDULE_TITLE
+    ]
+    assert [len(source["passages"]) for source in live["sources"]] == [2, 1, 1]
+
+    response = session_client.client.get(detail_url(conversation.pk))
+
+    assert response.status_code == 200
+    [turn] = response.json()["turns"]
+    assert json.dumps(turn["sources"]) == json.dumps(live["sources"])
+    assert turn["statements"] == live["statements"]
+    # And every citation expands to a passage the panel lists.
+    listed = {passage["chunk_id"] for source in turn["sources"] for passage in source["passages"]}
+    assert {statement["chunk_id"] for statement in turn["statements"]} <= listed
+
+
+def test_an_uncited_consulted_passage_is_in_the_reopened_panel(
+    session_client, monkeypatch, consulted_corpus
+):
+    """Consulted, not cited (D-78, D-44): the panel lists every item the answer was drawn from,
+    including the ones no surviving statement cites. From both roles.
+
+    The schedule's passage was supplied to generation and cited by nothing. It is in the
+    reopened panel with its text, under its own item, last in rank order.
+    """
+    install(monkeypatch, ControlledService())
+    conversation, _ = asked_in_a_thread(session_client.client, session_client.user)
+    schedule = consulted_corpus["schedule"]
+    schedule_chunk = consulted_corpus["chunks"]["schedule"]
+
+    [turn] = session_client.client.get(detail_url(conversation.pk)).json()["turns"]
+
+    cited = {statement["chunk_id"] for statement in turn["statements"]}
+    assert str(schedule_chunk.id) not in cited
+    assert turn["sources"][-1]["source_id"] == str(schedule.id)
+    assert turn["sources"][-1]["title"] == SCHEDULE_TITLE
+    assert turn["sources"][-1]["passages"] == [
+        {"chunk_id": str(schedule_chunk.id), "text": SCHEDULE_PASSAGE}
+    ]
+
+
+def test_a_path_b_turn_reopens_identical_to_a_path_a_turn(
+    session_client, monkeypatch, consulted_corpus
+):
+    """D-78 item 1, from both roles: two turns asked through the real route, one down each
+    no-answer path, reopen as the same body.
+
+    The premise is asserted on the rows: the path-B row holds the identifiers of the four
+    passages supplied to generation and the path-A row holds none, so a read that consulted
+    ``retrieved_chunk_ids`` on an unanswered turn would have something to tell them apart with.
+    The reopened turns are compared field by field except for the question and the timestamp
+    they cannot share, and none of the path-B identifiers appears anywhere in the body.
+
+    The turns are told apart by their question, not their position: two asks in one tick of
+    this platform's clock can share an ``answered_at``.
+    """
+    reader = session_client.user
+    conversation = Conversation.objects.create(user=reader, title="Leave")
+    install(monkeypatch, ControlledService(fabricate=True))
+    assert ask_in(session_client.client, conversation.pk, QUESTION).json()["answered"] is False
+    install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    assert ask_in(session_client.client, conversation.pk, SECOND_QUESTION).json()["answered"] is False
+
+    path_b = QueryLog.objects.get(conversation=conversation, question=QUESTION)
+    path_a = QueryLog.objects.get(conversation=conversation, question=SECOND_QUESTION)
+    assert path_b.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert path_a.no_answer_reason == NO_RELEVANT_PASSAGE
+    supplied = [chunk.id for chunk in consulted_corpus["chunks"].values()]
+    assert path_b.retrieved_chunk_ids == supplied  # the premise: identifiers present on B
+    assert path_a.retrieved_chunk_ids == []
+
+    response = session_client.client.get(detail_url(conversation.pk))
+
+    assert response.status_code == 200
+    turns = {turn["question"]: turn for turn in response.json()["turns"]}
+    variable = {"asked_at", "question"}
+    path_b_body = {key: value for key, value in turns[QUESTION].items() if key not in variable}
+    path_a_body = {key: value for key, value in turns[SECOND_QUESTION].items() if key not in variable}
+    assert path_b_body == path_a_body
+    assert set(turns[QUESTION]) == TURN_FIELDS
+    assert path_b_body["sources"] == []
+    raw = response.content.decode()
+    for identifier in supplied:
+        assert str(identifier) not in raw

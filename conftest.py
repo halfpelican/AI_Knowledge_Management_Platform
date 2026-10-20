@@ -46,7 +46,7 @@ import logging.config
 import apps.ai
 from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
-from apps.core.logging_config import audit_logging
+from apps.core.logging_config import ERROR_FILE_HANDLER, platform_logging
 
 # The suite's one password. It satisfies FR-01's complexity rules (min 8 characters,
 # an uppercase letter, a number and a special character) so that a test may register
@@ -90,18 +90,58 @@ def no_live_provider(monkeypatch):
         yield
 
 
+@dataclass
+class LogFiles:
+    """The two log files one test's logging writes."""
+
+    audit: Path
+    errors: Path
+
+
+def _configure_logging(config):
+    """``dictConfig(config)``, keeping the handlers pytest has attached to the root logger.
+
+    The platform's configuration names a root handler (D-75's error file), and a
+    non-incremental ``dictConfig`` with a ``root`` entry removes every handler the root
+    logger had. While a fixture runs, those include pytest's own: the capture handler for
+    the setup phase and the live-log and log-file handlers it attaches once per session.
+    Removing them would silently end ``--log-cli-level`` output after the first test.
+    """
+    root = logging.getLogger()
+    pytests_handlers = [handler for handler in root.handlers if handler.get_name() != ERROR_FILE_HANDLER]
+    logging.config.dictConfig(config)
+    for handler in pytests_handlers:
+        if handler not in root.handlers:
+            root.addHandler(handler)
+
+
 @pytest.fixture(autouse=True)
-def audit_file(tmp_path, settings):
-    """The FR-05 audit file for this test: AUDIT_LOG_PATH and LOGGING are overridden
-    to a temporary path and logging is reconfigured from them exactly as
-    config/settings.py builds it, so no test ever appends to logs/audit.log."""
+def log_files(tmp_path, settings):
+    """The FR-05 audit file and D-75's error file for this test: AUDIT_LOG_PATH,
+    ERROR_LOG_PATH and LOGGING are overridden to temporary paths and logging is
+    reconfigured from them exactly as config/settings.py builds it, so no test ever
+    appends to logs/audit.log or logs/errors.log."""
     original = settings.LOGGING
-    path = tmp_path / "audit.log"
-    settings.AUDIT_LOG_PATH = path
-    settings.LOGGING = audit_logging(path)
-    logging.config.dictConfig(settings.LOGGING)
-    yield path
-    logging.config.dictConfig(original)
+    audit_path = tmp_path / "audit.log"
+    error_path = tmp_path / "errors.log"
+    settings.AUDIT_LOG_PATH = audit_path
+    settings.ERROR_LOG_PATH = error_path
+    settings.LOGGING = platform_logging(audit_path=audit_path, error_path=error_path)
+    _configure_logging(settings.LOGGING)
+    yield LogFiles(audit=audit_path, errors=error_path)
+    _configure_logging(original)
+
+
+@pytest.fixture
+def audit_file(log_files):
+    """The FR-05 audit file this test's logging writes (see ``log_files``)."""
+    return log_files.audit
+
+
+@pytest.fixture
+def error_log_file(log_files):
+    """D-75's error file this test's logging writes (see ``log_files``)."""
+    return log_files.errors
 
 
 @pytest.fixture

@@ -81,6 +81,21 @@ def test_unaccepted_format_membership(extension):
     assert extension not in constants.ACCEPTED_FORMATS
 
 
+def test_every_accepted_format_has_exactly_the_download_content_type_d_75_names():
+    """FR-15's download types a file by the format its signature proved (D-75's table). A
+    format added to ACCEPTED_FORMATS without a type here would make its download a 500."""
+    assert constants.DOWNLOAD_CONTENT_TYPES == {
+        "pdf": "application/pdf",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "txt": "text/plain; charset=utf-8",
+    }
+    assert set(constants.DOWNLOAD_CONTENT_TYPES) == constants.ACCEPTED_FORMATS
+    # The two OOXML types are the ones the signature detector already reads the manifest for.
+    assert constants.DOWNLOAD_CONTENT_TYPES["docx"] == constants.WORD_CONTENT_TYPE
+    assert constants.DOWNLOAD_CONTENT_TYPES["xlsx"] == constants.EXCEL_CONTENT_TYPE
+
+
 def test_lockout_values():
     # FR-02 Business Logic: "five consecutive failures lock the account for 15
     # minutes". Enforcement is FR-02's, not FR-03's (D-25).

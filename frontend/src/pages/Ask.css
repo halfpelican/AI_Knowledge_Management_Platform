@@ -40,7 +40,6 @@
   font-weight: var(--weight-medium);
 }
 
-.ask-thread__note,
 .ask-thread__empty {
   max-width: var(--measure-text);
   color: var(--color-text-muted);
