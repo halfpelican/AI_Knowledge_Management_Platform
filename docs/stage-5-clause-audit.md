@@ -148,6 +148,13 @@ are in `frontend/tests/dashboard.test.jsx`.
 - **`/admin` carries no role guard.** An Employee who types it sees their own scoped dashboard
   (D-70's clarification).
 
+> **Closed on 20 October 2026, outside a numbered item:** a recent question's link to its own
+> thread. Row 6's "until item 4a" is answered. A question asked in a thread links to
+> `/ask?c=<id>`, and a one-off question stays plain text (D-70's note). Front end
+> (`dashboard.test.jsx`): `links a question with a conversation_id to exactly /ask?c=<that id>,
+> named by the question`, `renders a one-off question (conversation_id null) as plain text, with
+> no link`, `encodes a thread id the address could not carry as it is`.
+
 ---
 
 ## FR-15 — Document Repository and Filtered Browsing (MUST)

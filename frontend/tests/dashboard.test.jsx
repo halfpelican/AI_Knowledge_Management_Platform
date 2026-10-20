@@ -15,6 +15,7 @@ import App from '../src/App.jsx'
 import { dashboardPathForRole, ROLES, TEXT } from '../src/constants.js'
 import Dashboard from '../src/pages/Dashboard.jsx'
 import { formatDate } from '../src/utils/dates.js'
+import { threadInSearch } from '../src/utils/threadAddress.js'
 import { serveApi } from './fakeApi.js'
 
 const EMPLOYEE = {
@@ -55,10 +56,18 @@ const MEETING = {
   attendees: ['erin@example.com'],
 }
 
+/** A one-off question: asked with no thread, so `conversation_id` is null (D-68). */
 const QUESTION = {
   question: 'How is annual leave accrued?',
   asked_at: '2026-09-14T10:02:11+10:00',
   conversation_id: null,
+}
+
+/** A question asked in a thread, which the panel links to (D-77). */
+const THREADED_QUESTION = {
+  question: 'Who approves leave longer than two weeks?',
+  asked_at: '2026-09-15T09:30:00+10:00',
+  conversation_id: '6f1c2a54-0000-4000-8000-000000000002',
 }
 
 /** The contract's 200, with one of each item and totals that tell the three figures apart. */
@@ -520,5 +529,64 @@ describe('D-68: recent questions are the question only', () => {
     expect(clean).toContain(QUESTION.question)
     expect(clean).toContain(`datetime="${QUESTION.asked_at}"`)
     expect(clean).not.toMatch(/answer|cited|citation|source/i)
+  })
+})
+
+describe('FR-14 / D-77: a question asked in a thread links to that thread', () => {
+  /** The questions panel, once a payload carrying the given question rows has rendered. */
+  async function questionsPanelWith(rows) {
+    serveApi({ 'GET /api/dashboard': { body: dashboardPayload({ recent_questions: rows }) } })
+    renderDashboard()
+    await screen.findByText(DOCUMENT.title)
+    return panel(TEXT.dashboardQuestionsHeading)
+  }
+
+  /** Every link on a panel, as its href, in document order. */
+  function hrefs(region) {
+    return within(region)
+      .getAllByRole('link')
+      .map((link) => link.getAttribute('href'))
+  }
+
+  it('links a question with a conversation_id to exactly /ask?c=<that id>, named by the question', async () => {
+    const questions = await questionsPanelWith([THREADED_QUESTION])
+
+    // The accessible name is the question and nothing more: the asked date sits
+    // outside the link, as it does for a one-off.
+    const link = within(questions).getByRole('link', { name: THREADED_QUESTION.question })
+    expect(link.getAttribute('href')).toBe(`/ask?c=${THREADED_QUESTION.conversation_id}`)
+    // The rest of the panel is as it was: the heading still goes to /ask, and the
+    // date is still shown beside the question.
+    expect(hrefs(questions)).toEqual(['/ask', `/ask?c=${THREADED_QUESTION.conversation_id}`])
+    const asked = questions.querySelector(`time[datetime="${THREADED_QUESTION.asked_at}"]`)
+    expect(asked?.textContent).toBe(formatDate(THREADED_QUESTION.asked_at))
+    expect(asked?.closest('a')).toBeNull()
+  })
+
+  it('renders a one-off question (conversation_id null) as plain text, with no link', async () => {
+    const questions = await questionsPanelWith([THREADED_QUESTION, QUESTION])
+
+    expect(within(questions).queryByRole('link', { name: QUESTION.question })).toBeNull()
+    // As it rendered before any question linked: the question is its paragraph's
+    // only content, and nothing around it is a link.
+    const text = within(questions).getByText(QUESTION.question)
+    expect(text.tagName).toBe('P')
+    expect(text.children).toHaveLength(0)
+    expect(text.closest('a')).toBeNull()
+    // The heading and the threaded question are the panel's only links.
+    expect(hrefs(questions)).toEqual(['/ask', `/ask?c=${THREADED_QUESTION.conversation_id}`])
+  })
+
+  it('encodes a thread id the address could not carry as it is', async () => {
+    // The server sends UUIDs, but the screen treats an id as opaque
+    // (src/utils/threadAddress.js), so one holding a space, `&`, `=` and `#` must
+    // still name that thread and no other.
+    const id = 'a b&c=d#e'
+    const questions = await questionsPanelWith([{ ...THREADED_QUESTION, conversation_id: id }])
+
+    const href = within(questions).getByRole('link', { name: THREADED_QUESTION.question }).getAttribute('href')
+    expect(href).toBe('/ask?c=a+b%26c%3Dd%23e')
+    // And the Ask screen reads exactly that id back out of it (D-77).
+    expect(threadInSearch(href.slice(href.indexOf('?')))).toBe(id)
   })
 })

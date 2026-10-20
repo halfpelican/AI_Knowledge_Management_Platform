@@ -3901,6 +3901,12 @@ department behaviour of each panel, and the two landing routes.
 >   Employee's own scoped dashboard, because both landing routes render the same screen. No
 >   administrative function lives there.
 
+> **Built on 20 October 2026, outside a numbered item, at the user's request.** Each recent
+> question that carries a `conversation_id` links to its thread at `/ask?c=<id>` (D-77), and a
+> one-off question stays plain text. The payload already carried the id (D-68), so nothing on the
+> server changed. This closes the "link from a recent question to its own thread" bullet above.
+> Tested in `frontend/tests/dashboard.test.jsx`.
+
 ## D-71 · FR-12 keyword search collapses whitespace on both sides before matching
 
 **Status:** Settled by the user · **Date:** 2026-10-06 · **Concerns:** FR-12's keyword search
@@ -4436,6 +4442,9 @@ left.
 >   empty `/ask`, where the address check also stops the write. A test for the case where the
 >   guard is the only defence was added: an empty thread the address names, after a reload. The
 >   unchanged break fails it.
+
+> **The D-70 follow-up was built on 20 October 2026**, outside a numbered item: a recent question
+> with a thread links to `/ask?c=<id>`. See D-70's note.
 
 ## D-78 · A reopened turn carries every source it consulted, re-scoped on read from one result
 
