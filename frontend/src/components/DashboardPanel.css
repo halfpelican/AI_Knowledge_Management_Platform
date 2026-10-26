@@ -52,7 +52,8 @@
   word-break: break-word;
 }
 
-/* A recent question: the user's own words, as text, with no link of its own. */
+/* A recent question: the user's own words, as text. One asked in a thread is a
+   link to it, inside this paragraph, so it wraps and spaces as a one-off does. */
 .dashboard-list__question {
   margin: 0 0 var(--space-1);
   word-break: break-word;

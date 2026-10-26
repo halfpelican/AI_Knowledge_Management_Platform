@@ -11,6 +11,7 @@ import { TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { addressForThread } from '../utils/threadAddress.js'
 import './Dashboard.css'
 
 /* ---- Filters and the URL ------------------------------------------------- */
@@ -360,18 +361,26 @@ function IndexedTotals({ totals }) {
 /**
  * D-68: the caller's own questions, and for each only the question as asked and
  * when. Nothing that looks like an answer: no answer text, no answered or
- * unanswered marker, no reason. A question links nowhere of its own, so the
- * panel's heading is the route to `/ask`. Ask now reads `/ask?c=<id>` (D-77) and
- * each question already carries its `conversation_id`, null for a one-off (D-68),
- * so a link from a question to its thread is front-end work only: a follow-up to
- * D-70 that no Stage 5 item names yet.
+ * unanswered marker, no reason.
+ *
+ * A question asked in a thread links to that thread, at the address Ask reads
+ * (D-77), built by `addressForThread` rather than here. Every question on this
+ * panel is the caller's own (D-68), so every thread it links to is theirs. A
+ * one-off question has no thread (`conversation_id` null) and stays plain text;
+ * the panel's heading is its route to `/ask` (D-70).
  */
 function RecentQuestions({ questions }) {
   return (
     <ul className="dashboard-list">
       {questions.map((item, index) => (
         <li key={`${index}-${item.asked_at}`}>
-          <p className="dashboard-list__question">{item.question}</p>
+          <p className="dashboard-list__question">
+            {item.conversation_id ? (
+              <Link to={addressForThread(item.conversation_id)}>{item.question}</Link>
+            ) : (
+              item.question
+            )}
+          </p>
           <p className="dashboard-list__meta">
             <span>
               {TEXT.dashboardAsked} <time dateTime={item.asked_at}>{formatDate(item.asked_at)}</time>

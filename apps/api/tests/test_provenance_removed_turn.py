@@ -52,9 +52,9 @@ deleted and the row left NULL, the way SET_NULL now produces it.
 
 **What this file does not cover.**
 
-- **The front end.** ``frontend/src/`` has no test runner. ``frontend/src/utils/turns.js`` is
-  the pure mapping the screen branches on, hand-verified against bodies captured from this
-  suite; the JSX around it is verified by build, lint and reading.
+- **The front end.** That is the front-end suite's, since D-62:
+  ``frontend/tests/askReopened.test.jsx`` renders the provenance-removed state, and
+  ``frontend/tests/ask.test.jsx`` the re-scoped one.
 - **The live ``POST /api/ask`` reply**, which cannot be in state 3: its citation rows are
   written in the same transaction as the answer (``apps/retrieval/query_log.py``), so there
   is no window in which the reply could be rendered without them.

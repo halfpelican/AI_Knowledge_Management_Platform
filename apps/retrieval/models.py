@@ -130,9 +130,10 @@ class AnswerCitation(models.Model):
     **A row whose ``chunk_id`` is NULL is REMOVED for every reader**, which is to say it is
     read exactly as a row the old CASCADE had deleted: its statement is not shown, its
     identifier is not shown, and a turn left with no other row is rendered as if it had no
-    rows at all. The reopened-turn serializer (``apps/api/serializers.py``) is the reader
-    today; any later one — item 4b's passage expansion, the Sources panel on a reopened
-    turn, FR-14 — must treat it the same way. The statement text stays in the row, as the
+    rows at all. The reopened-turn serializer (``apps/api/serializers.py``) is the reader,
+    and since Stage 5 item 4b (D-78) it builds a reopened turn's passage expansion and
+    Sources panel under the same rule: a NULL-chunk row contributes nothing to either. Any
+    later reader must treat it the same way. The statement text stays in the row, as the
     record of what was answered, and is never rendered from it.
     """
 
