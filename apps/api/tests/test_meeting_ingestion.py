@@ -185,6 +185,59 @@ def test_a_transcript_archive_declaring_more_than_it_may_inflate_is_rejected(emp
     assert not Meeting.objects.exists()
 
 
+@pytest.mark.parametrize(
+    ("bound", "lowered_to", "content"),
+    [
+        # One stream decompressing past the per-stream cap: about 400 KB from a tiny file.
+        ("PDF_MAXIMUM_STREAM_BYTES", 4096, "stream"),
+        # 10,000 operators against a budget of 1,000.
+        ("PDF_MAXIMUM_OPERATORS", 1000, "operators"),
+    ],
+    ids=["stream-cap", "operator-budget"],
+)
+def test_a_pdf_transcript_over_an_extraction_bound_is_400_with_that_bounds_message(
+    session_client, monkeypatch, bound, lowered_to, content
+):
+    """D-81 through FR-09's file path, from both roles. Extraction raises
+    ``TooLargeToExtractError`` for each bound, a subclass of ``ExtractionError``, and the view
+    answers FR-09's 400 with that bound's own message, never the no-readable-text one, so the
+    uploader learns it met a size limit. Nothing is stored: no meeting and no chunk.
+
+    The bound is lowered for the test, as ``test_pdf_bomb_upload.py`` lowers it, so the bomb is
+    a few kilobytes; the builders are D-81's own (``apps/ingestion/tests/builders.py``).
+    """
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.api.views import NO_TEXT_IN_TRANSCRIPT_MESSAGE
+    from apps.ingestion import extraction
+    from apps.ingestion.tests.builders import pdf_pages, repeated_operators
+
+    monkeypatch.setattr(extraction, bound, lowered_to)
+    pairs = 100_000 if content == "stream" else 5_000
+    expected = {
+        "stream": extraction.PDF_STREAM_TOO_LARGE_MESSAGE,
+        "operators": extraction.PDF_TOO_MANY_OPERATORS_MESSAGE,
+    }[content]
+    bomb = SimpleUploadedFile(
+        "workshop.pdf", pdf_pages([repeated_operators(pairs)]), content_type="application/pdf"
+    )
+
+    response = session_client.client.post(
+        MEETINGS_URL,
+        {"title": "Policy workshop", "meeting_date": str(timezone.localdate()), "file": bomb},
+        format="multipart",
+    )
+
+    assert response.status_code == 400, response.data
+    assert response.json() == {"file": [expected]}
+    assert expected != NO_TEXT_IN_TRANSCRIPT_MESSAGE
+    # Nothing is stored on this route, so the message must not say anything was: it is the
+    # bound's limit sentence alone, without the documents route's "was stored" clause.
+    assert "stored" not in response.json()["file"][0].lower()
+    assert not Meeting.objects.exists()
+    assert not ContentChunk.objects.exists()
+
+
 # --- Validation: FR-09's own 400s -----------------------------------------------------
 
 

@@ -2,19 +2,21 @@
  * Which thread the next question belongs to, and what becomes of a thread nobody
  * has asked anything in.
  *
- * **Why this is a module and not four expressions inside Ask.jsx.** This layer has
- * no test runner (D-25), and the defect these rules exist to fix was found by
- * reading rather than by running anything. Nothing here imports React, holds
- * state or fetches, so the rules can be exercised from plain Node — the same
- * reason `src/utils/turns.js` is a module.
+ * **Why this is a module and not four expressions inside Ask.jsx.** The defect
+ * these rules exist to fix was found by reading rather than by running anything,
+ * when this layer had no test runner (D-25; it has had one since D-62). Nothing here
+ * imports React, holds state or fetches, so the rules can be exercised on their
+ * own — the same reason `src/utils/turns.js` is a module.
  *
  * **The constraint every rule below follows from.** `POST /api/conversations` has
  * no inverse: FR-13's CRUD line is `Conversations (Create, Read, Update)`, there is
- * no delete route, and inventing one would be inventing a requirement. A thread
- * that is created and never asked in is therefore permanent, and it sorts to the
- * top of FR-13's list because `last_updated_at` is `auto_now` on create. So the
- * only lever this layer has is to create fewer of them and to go back into the one
- * it already made.
+ * no delete route, and inventing one would be inventing a requirement (D-80 keeps
+ * it that way). A thread that is created and never asked in is therefore a
+ * permanent row. Since D-80 the list leaves it out, so it no longer sits at the top
+ * of FR-13's list as "New conversation"; it is still reachable by its address
+ * (D-77), and each one still spends the per-user create budget (D-79). So the lever
+ * this layer has is unchanged: create fewer of them, and go back into the one it
+ * already made.
  *
  * **And the thread cannot simply be created later.** `POST /api/ask` attaches a
  * turn to a thread that already exists; it creates none, and a question sent with
@@ -60,9 +62,17 @@ export function unusedThreadAfterTurn(unusedThreadId, askedThreadId) {
  * carried none, such as a dropped connection).
  *
  * Kept for every failure but one, because no turn was written: a 503 writes no
- * `QueryLog` row (NFR-19) and neither does a 400, so the thread is still empty and
- * still the right place for the next attempt — which, after a 503, is the same
- * question, since it stays in the field.
+ * `QueryLog` row (NFR-19), and neither does a 400 or either of D-79's 429s — the
+ * rate limit's, or the one that says this user's previous question is still being
+ * answered. So the thread is still empty and still the right place for the next
+ * attempt, which is the same question, since it stays in the field.
+ *
+ * A 429 on the create that precedes a first question (D-80's create throttle)
+ * comes here too, and created nothing. Nothing was recorded for it, so what is kept
+ * is what there was before the create was sent, which is null: the screen only
+ * creates when there is no unused thread to go back into
+ * (`threadForNextQuestion`). The next attempt creates again, and never names a
+ * thread that does not exist.
  *
  * A 404 is the exception. It is the answer both for a thread that does not exist
  * and for one that is not this caller's, and this screen may not tell those apart

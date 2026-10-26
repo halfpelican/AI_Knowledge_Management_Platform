@@ -21,6 +21,8 @@ import SelectInput from './SelectInput.jsx'
 import TextAreaInput from './TextAreaInput.jsx'
 import TextInput from './TextInput.jsx'
 import './ComponentSheet.css'
+// The upload queue's status styles, for the limited row shown under "Limits (D-79)".
+import '../pages/Upload.css'
 
 const COLOR_TOKENS = [
   '--color-surface',
@@ -629,6 +631,28 @@ export default function ComponentSheet() {
           {TEXT.noAnswerFallback}
         </Notice>
         <PartialMatches idPrefix="sheet-no-answer" results={SAMPLE_PARTIAL_MATCHES} />
+      </section>
+
+      <section aria-labelledby="sheet-limits">
+        <h2 id="sheet-limits">Limits (D-79)</h2>
+        <p>
+          The per-user limits on asking, creating a conversation and adding material. The question still being
+          answered is an information panel, not the 503&rsquo;s: nothing is unavailable, and it names no time,
+          because the server sends none. A rate limit says when the user can try again, rounded up from the
+          reply&rsquo;s <code>Retry-After</code>. The upload limit is the user&rsquo;s and not the file&rsquo;s,
+          so a file it held back keeps the neutral status a queued file has, never the danger colour of a refused
+          one. Every sentence here is the client&rsquo;s own; none is read from the reply.
+        </p>
+        <Notice variant="info" title={TEXT.askInFlightTitle}>
+          {TEXT.askInFlight}
+        </Notice>
+        <Notice variant="error" title={TEXT.askRateLimitedTitle}>
+          {TEXT.askRateLimited(TEXT.retryInSeconds(45))}
+        </Notice>
+        <p className="upload-row__status">
+          <span className="upload-status upload-status--limited">{TEXT.uploadLimitedStatus}</span>
+          <span className="upload-row__message">{TEXT.uploadLimitReached(TEXT.retryInMinutes(12))}</span>
+        </p>
       </section>
 
       <section aria-labelledby="sheet-dashboard-panel">

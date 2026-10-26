@@ -4271,7 +4271,9 @@ sets no `handler500`. That was found by reading the code, not by running it.
 >   only a script could write, raises `SuspiciousFileOperation` rather than `OSError`, and gets
 >   Django's 400 rather than the 404. Left with item 5's missing-file work.
 
-> **Built on 21 October 2026, in Stage 5 item 5, as the notes above said it would be.**
+> **Settled on 21 October 2026 and built on 26 October, in Stage 5 item 5, as the notes above
+> said it would be.** This note was first committed on 21 October as if already built; it is
+> corrected here.
 >
 > - **Reprocess, missing file.** Reprocess no longer answers Django's HTML 500 when the stored file
 >   is missing from disk. It answers the existing 422 with `NO_STORED_ORIGINAL_MESSAGE`, as a blank
@@ -4279,6 +4281,11 @@ sets no `handler500`. That was found by reading the code, not by running it.
 > - **A path outside the media folder.** A `file_path` there raises `SuspiciousFileOperation`
 >   rather than `OSError`. It is now treated as a missing file on both routes: the download's 404,
 >   with the out-of-scope body, and reprocess's 422.
+> - **The order of reprocess's checks** is 404 (scope), 409 (already indexed), 422 (blank
+>   path), then 422 (file can't be opened). So an indexed document with a missing file still
+>   answers 409. A blank path is now logged as well, as on the download.
+> - **Not covered:** a file removed between that check and the reprocess's own open still
+>   gives a 500, with the transaction rolled back.
 
 ## D-76 · Every `/api/` response is marked never-cache, by one middleware
 
@@ -4645,6 +4652,76 @@ user's asks can hold: one Waitress thread.
 - **The question's embedding** runs inside the slot as well. The margin must cover it, and
   whether that call has its own timeout is checked when it is built.
 
+> **Clarified on 26 October 2026, when item 5 was built.** None of this changes the decision. It
+> records one correction, what D-79 left to the implementation, and what the deliberate breaks
+> found.
+>
+> **A correction: one ask can hold a worker much longer than 900 s.**
+>
+> - **The cause.** The question's embedding call passes no timeout, so it inherits the openai
+>   SDK's default: connect 5 s, read 600 s. `MAXIMUM_EMBED_ATTEMPTS` makes three attempts, so the
+>   embedding alone can take about 1,815 s before generation's 900 s.
+> - **The slot's timeout follows from that.** It is 900 s plus `ASK_IN_FLIGHT_MARGIN_SECONDS`
+>   (3 × (5 + 600) + 60 = 1,875 s), which is 2,775 s, about 46 minutes.
+> - **A test pins it.** It compares the margin with both providers' real client timeouts, so an SDK
+>   upgrade that lengthens them fails the suite. These are httpx per-operation timeouts, not
+>   totals.
+> - **The contract's "up to 15 minutes"** is corrected in the same commit.
+> - **Not covered:** a timeout on the embed call itself, in `apps/ai/`. That is the cleaner fix,
+>   and it was not made.
+>
+> **Chosen by the django-backend agent:**
+>
+> - **Where the timeout is built.** `ASK_SLOT_TIMEOUT_SECONDS` is built in `apps/api/ask_slot.py`,
+>   because `constants.py` cannot import `apps.ai.generation`.
+> - **The slot itself.**
+>   - The key is `ask_in_flight_<user pk>`, and the token is a fresh `uuid4`.
+>   - Release is a get then a delete, which is not atomic. That window is not defended, given the
+>     46-minute timeout.
+>   - The slot is held through naming the thread and building the reply, not only through the
+>     pipeline.
+> - **The length check moved.** The 400 for a question of the wrong length is now raised before
+>   the slot is taken, by `check_question_length`, moved out of the pipeline's first step
+>   (`apps/retrieval/pipeline.py`). Without that, a too-short question sent while another was in
+>   flight would get 429, not 400. The message is unchanged.
+> - **Where the in-flight text lives.** `ASK_IN_FLIGHT_MESSAGE` and `ASK_IN_FLIGHT_CODE` sit in
+>   `views.py`, beside `ACCOUNT_LOCKED_MESSAGE` and its code.
+> - **What counts against a rate.** This follows DRF's order: a 401 or a 403 is not counted; a 400,
+>   404, 413 or 415 is; the in-flight 429 is counted against the ask rate.
+> - **A view's GET is not throttled.** `ThrottlePostOnlyMixin` throttles a view's POST only, so
+>   `GET /api/conversations` stays unlimited. A test walks every route and method and asserts the
+>   throttled set is exactly the seven POSTs.
+> - **No accidental 429s.** `conftest.py`'s autouse fixture already clears the cache around every
+>   test. A probe recorded every 429 the full suite received: 44, each in a test written to
+>   produce one.
+>
+> **Chosen by the react-frontend agent:**
+>
+> - **Login's text is kept by path.** Login and registration keep "Too many attempts. Please wait a
+>   minute and try again." Any other 429 a screen doesn't handle gets a general fallback.
+> - **What the client reads.** `code` is read from the error body, and `detail` never is.
+>   `Retry-After` is read only on a 429, and only as seconds, rounded up; an HTTP date reads as
+>   "later". `ASK_IN_FLIGHT_CODE` is copied into `src/api/ask.js` from the contract.
+> - **The upload queue stops at its first 429.** That file and every file still queued behind it
+>   show "Not uploaded", in neutral styling, with the limit message. Pressing Upload sends them
+>   again.
+> - **No re-read after a 429.** After a 429, neither the meetings form nor the repository list is
+>   re-read.
+> - **The wording**, with `{when}` given as "in N seconds" or "in N minutes", rounded up:
+>   - Ask, in flight: "Your previous question is still being answered".
+>   - Ask, past its rate: "Too many questions in a short time".
+>   - Uploads, reprocess and meetings: "The upload limit has been reached".
+>
+> **What the deliberate breaks found.**
+>
+> - **Server:** ten breaks, and each failed the tests its builder had predicted.
+> - **Screen:** thirteen breaks.
+>   - **The unused-thread record.** Dropping it on a 429 (`threads.js`) at first failed no test.
+>     Since D-77 the created thread is already the one on screen, so a plain retry goes back into
+>     it anyway.
+>   - **Where it does matter.** The record only matters when the user leaves the empty thread and
+>     then presses "Start a new topic". A test for that was added, and the break then failed it.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -4679,6 +4756,15 @@ marked as current.
 
 **What this decision does not cover.** Empty threads still accumulate as rows, bounded by the
 create throttle. Nothing removes them.
+
+> **Built on 26 October 2026, in item 5.**
+>
+> - **Three wrong filters were each tried as a deliberate break:** on the title, on
+>   `answered = True`, and on readable citations. Each failed the tests written for it.
+>   - The `answered` and citation filters also failed every list test whose threads held only
+>     no-answer turns, or no citations.
+> - **The contract's D-43 paragraph is corrected.** A thread with no turn is no longer listed, so
+>   the placeholder title shows only on a thread whose first question was nothing but whitespace.
 
 ## D-81 · PDF extraction is bounded per stream and per document, and every PDF bound lands on "Too large to index"
 
@@ -4752,6 +4838,98 @@ which said PDF is open
   Windows it would need Job objects.
 - **DOCX and XLSX.** D-50 covers them, and nothing changes for them.
 
+> **Clarified on 26–27 October 2026, when item 5 was built.** This adds one limit the user settled
+> during the build, records the measured values, and corrects the messages.
+>
+> **A seventh setting: a stored-size cap, settled by the user during the build.** The decoded-size
+> caps never see a stream stored without a filter, so an uncompressed content stream was bounded
+> only by pypdf's 75 MB declared-length default and the 50 MB upload ceiling.
+> `PDF_MAXIMUM_STORED_STREAM_BYTES` = 20 MB, its own constant, sets
+> `maximum_declared_stream_length` in the same `apply_configuration` call. It is kept separate
+> because stored size and decoded size are different limits.
+>
+> - **The user's measurements**, on pypdf 6.19.0 with the stored cap at 10 MB:
+>   - A 12 MB image drawn on a page did not fail the document. pypdf skipped it, logged
+>     "Impossible to decode XFormObject", and the page's text still came out.
+>   - A 12 MB embedded font program that the page's text uses did fail, with or without
+>     `/ToUnicode`. pypdf reads every font program a page uses but never decodes it, so only its
+>     stored size counts.
+>   - A PDF that embeds a whole CJK font, instead of a subset, can store more than 10 MB.
+> - **Why 20 MB.** It admits those fonts, and it still bounds an uncompressed content stream at
+>   about 1.3 GB, at the measured 67 times.
+> - **An over-cap image or form is skipped, not refused.** Only page content streams and font
+>   programs reach "Too large to index".
+>
+> **The values, measured on the laptop by the rag-pipeline agent** (pypdf 6.19.0, three runs per
+> shape, other suites running):
+>
+> | Content | Operators per second |
+> |---|---|
+> | `q Q` on one page | 250,570–480,564 |
+> | A form drawn five times | 208,913–301,245 |
+> | One stream shared by ten pages | 215,299–349,260 |
+> | Text lines (`BT`, `Tf`, `Td`, `Tj`, `ET`) | 31,979–72,114 |
+> | `cm` | 21,671–23,337 |
+>
+> - **`PDF_MAXIMUM_OPERATORS` = 1,300,000:** 60 s at the slowest rate. That is `cm`, which yields
+>   no text, so the text ceiling never stops it. D-81's 1.5M was the user's illustration.
+> - **One parse at the 10 MB per-stream cap** (`PDF_MAXIMUM_STREAM_BYTES` = 10,000,000) took
+>   14.9–15.7 s.
+> - **The worst case is about 75 s:** the 60 s budget plus one parse at the cap. pypdf parses a
+>   stream whole before the visitor sees its first operator, so the budget stops the next stream,
+>   not the current one. The 75 s is arithmetic from the two measurements, not a measured run.
+> - **Real documents sit far below the budget.** That is an estimate: no large real PDF was
+>   measured.
+> - **`MAXIMUM_PDF_PAGES` = 2000**, as settled.
+> - **The pypdf fields set** are `array_based_stream_maximum_output_length`,
+>   `jbig2_maximum_output_length`, `lzw_maximum_output_length`,
+>   `run_length_maximum_output_length` and `zlib_maximum_output_length`, which bound decoded size,
+>   and `maximum_declared_stream_length`, which bounds stored size. A renamed field makes
+>   `apply_configuration` raise, and a test reads the configuration during extraction.
+>
+> **The messages, corrected.** Each D-81 bound has its own sentence saying whether splitting the
+> file would help. The sentences first began "The document was stored, but …", and the meeting
+> route also sends them, although nothing is stored there.
+>
+> - **The sentence stands alone now.** `TooLargeToExtractError.limit_message` carries just the
+>   limit sentence.
+> - **On `POST /api/documents` and reprocess,** the 422 detail is "The document was stored but not
+>   indexed." followed by that sentence.
+> - **On `POST /api/meetings`, with a PDF file,** the 400 `{"file": [...]}` carries the sentence
+>   alone. Before this item, the route answered "No readable text could be extracted", which
+>   misstated a size refusal. A test asserts the meeting message does not say "stored".
+> - **The text ceiling keeps its own wording on both routes.** A meeting over it is stored, with
+>   its transcript cut at the ceiling, so "The transcript was stored, but …" is true there.
+>
+> **Chosen by the rag-pipeline agent:**
+>
+> - **A second check for the operator budget.** As well as the counter that keeps raising, a
+>   backstop check runs after each page.
+> - **`TooLargeToExtractError` subclasses `ExtractionError`,** so a caller that doesn't know the new
+>   class still never lets a bound escape as a 500.
+> - **The page that crosses the text ceiling is returned whole.**
+> - **pypdf's other `LimitReachedError`s get the per-stream message.** That covers page-tree depth
+>   and arrays of 10,000 or more elements.
+> - **The tests patch each bound down for speed.** The real values are used where it costs little:
+>   the 12 MB font, the uncompressed stream over 20 MB, and the shipped-values test.
+>
+> **What the deliberate breaks found.** Six breaks, each restored and checked by hash.
+>
+> - **Two at first failed no test.** The counter raising only once was saved by the after-page
+>   backstop. A missing text ceiling was saved by the chunk check in `documents.py`. Each got a test
+>   of its own, and each break then failed it.
+> - **The stored cap left at pypdf's default** fails the stored-limit tests. It does not fail the
+>   12 MB font test, by design: that test guards against a false refusal.
+>
+> **Not covered.**
+>
+> - **Encrypted PDFs.** For an encrypted PDF, pypdf counts pages from the declared `/Count`. This is
+>   untested.
+> - **A long PDF transcript is stored cut short.** On the meeting route, a PDF transcript over the
+>   text ceiling is refused by `meetings.py`'s chunk check, as before, with a 422. Since this item,
+>   though, the transcript it stores holds only the text read up to the ceiling, not the whole
+>   file. That takes a transcript of roughly 820 pages or more, and nothing tests it.
+
 ## D-82 · Item 5's branch carries the load tests, with one account per virtual user
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Concerns:**
@@ -4791,3 +4969,44 @@ NFR-08, NFR-09 and PR #30
   floor would allow 100. The build checks this against rule 4 and raises it rather than changing
   a rate. Rule 5 catches it either way.
 - **Running the tests.** Nothing here runs Objective 03. The user does, on 23 October.
+
+> **Clarified on 26 October 2026, when item 5 was built.** The rules stand. The test-engineer
+> agent made three of the paces stricter than D-82's minimums, all of which D-82 states as "at
+> least", for the reasons below.
+>
+> - **NFR-08's floor is 7 s, not 6 s.** DRF stamps a request when the view runs, and with 4
+>   Waitress threads for 5 users a request can wait in the queue first. At 6 s, 11 asks span exactly
+>   60 s, so one late stamp turns the 11th into a 429. A spacing of at least 60 / 9 = 6.67 s holds
+>   however late the stamp. In the simulation, 6 s gave 429s as soon as queue waits reached 50 ms;
+>   7 s gave none.
+> - **Logins are 3.5 s apart, not 3 s,** for the same reason: 60 / 19 = 3.16 s. This one was not
+>   tested separately.
+> - **NFR-09's floor is 10.5 s, not 10 s.** At 10 s an account makes exactly 60 uploads in the
+>   phase, which is the limit itself. At 10.5 s it makes at most 58. This is a precaution, not a
+>   demonstrated failure.
+> - **Each script refuses to start if a value falls below the bound it relies on.**
+>
+> **Other choices:**
+>
+> - **`setupTimeout`** is computed in code from each setup step's worst case.
+> - **`GIT_SHA` is required.** Without 7–40 hex digits the script refuses to start.
+> - **The baseline account is chosen by scenario,** not by VU number.
+> - **Every login must be an Employee.**
+> - **No silent PASS.** A run that measured nothing reports NO DATA, not PASS.
+> - **The 300 s ask timeout is kept.** It is shorter than the server's worst case.
+> - **The account command.** It refuses to run with `DEBUG` off unless `--i-know-this-is-local` is
+>   passed, and the alpha runs with `DEBUG=False` (D-64). It resets an existing account's password
+>   and lockout, and refuses outright if an existing account isn't an Employee.
+>
+> **Not covered.**
+>
+> - **k6 was never run.** It is not installed on the laptop. The scripts were run only in a Node
+>   simulation of k6's modules, so k6's own parser, its scheduler and its cookie handling are
+>   unverified.
+> - **The verdict is in the results JSON, not the exit code.** k6's exit code does not reflect the
+>   429 gate.
+> - **Cleanup.** One NFR-09 run leaves up to 1,210 TXT documents behind, in department
+>   `LoadTest`, uploaded by Employees. #30's review called that blocking, and nothing here cleans
+>   them up.
+> - **Objective 03 on 23 October** could not run against this branch: item 5 was not built until
+>   26 October.

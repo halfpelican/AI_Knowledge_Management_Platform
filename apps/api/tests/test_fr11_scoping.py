@@ -73,6 +73,7 @@ from apps.core.constants import (
     MINIMUM_QUESTION_LENGTH,
     NO_ANSWER_MESSAGE,
     NO_ANSWER_REASONS,
+    NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
@@ -1007,6 +1008,19 @@ THEIR_THREAD_TITLE = "Directors' leave loading"
 THEIR_ANSWER_TEXT = "Twice the ordinary rate."
 
 
+def log_a_turn_in(conversation):
+    """A logged no-answer turn, so the thread is one the list would show its owner (D-80)."""
+    return QueryLog.objects.create(
+        user=conversation.user,
+        conversation=conversation,
+        question=QUESTION,
+        answer_text=None,
+        retrieved_chunk_ids=[],
+        answered=False,
+        no_answer_reason=NO_RELEVANT_PASSAGE,
+    )
+
+
 def test_another_users_thread_is_404_and_appears_in_no_list(
     session_client, employee, administrator, content_chunk
 ):
@@ -1045,8 +1059,9 @@ def test_the_owner_of_the_thread_reads_it_at_the_same_url(
     employee_client, employee, administrator_client
 ):
     """The negative control: the id refused above is the id its owner reads, so the 404 is a
-    scope and not a broken route."""
+    scope and not a broken route. The thread has a turn, which is what lists it (D-80)."""
     theirs = Conversation.objects.create(user=employee, title=THEIR_THREAD_TITLE)
+    log_a_turn_in(theirs)
 
     assert conversation_detail(administrator_client, theirs.pk).status_code == 404
     owner_response = conversation_detail(employee_client, theirs.pk)
@@ -1065,9 +1080,11 @@ def test_a_thread_does_not_follow_its_owner_into_another_role(
 
     The Employee is promoted to Administrator, which widens their content scope — and their
     conversation scope does not widen with it, because a thread is owned rather than
-    classified. The two scoping rules are easy to conflate in one middleware.
+    classified. The two scoping rules are easy to conflate in one middleware. The thread has a
+    turn, so an empty list below is ownership and not D-80's rule for empty threads.
     """
     theirs = Conversation.objects.create(user=administrator, title=THEIR_THREAD_TITLE)
+    log_a_turn_in(theirs)
 
     get_user_model().objects.filter(pk=employee.pk).update(role=administrator_role)
 

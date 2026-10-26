@@ -23,12 +23,16 @@ stub and an empty corpus, so every turn is no-answer path A. That is deliberate:
 under test there is where a thread's title comes from, which does not depend on an answer
 having been produced.
 
-**A reopened turn carries the sources it consulted (D-78).** The last section asks through
+**A reopened turn carries the sources it consulted (D-78).** A later section asks through
 the real ``POST /api/ask`` with a controlled double installed as the suite installs every
 provider double, then reopens the thread and compares. The reopened panel is the live
 panel, byte for byte: every item consulted, cited or not, in rank order, with its passages.
 A turn that renders unanswered carries none, and the two no-answer paths still reopen as one
 body even though only path B's row holds identifiers.
+
+**The list leaves out a thread nobody has asked anything in (D-80).** The last section tests
+that, and the list tests above give each thread a turn (``log_a_turn``) so that what they
+assert is order and ownership. Creating a thread is throttled; ``test_throttles.py`` covers that.
 """
 
 import json
@@ -60,6 +64,7 @@ from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import ContentChunk, Document
 from apps.meetings.models import Meeting
 from apps.retrieval.models import AnswerCitation, Conversation, QueryLog
+from apps.retrieval.tests.scopes import unreadable_scope
 
 pytestmark = pytest.mark.django_db
 
@@ -82,6 +87,23 @@ def detail_url(conversation_id):
 def ask_in(client, conversation_id, question=QUESTION):
     return client.post(
         ASK_URL, {"question": question, "conversation_id": str(conversation_id)}, format="json"
+    )
+
+
+def log_a_turn(conversation, question=QUESTION):
+    """A no-answer path-A row against ``conversation``, written directly, as ``record_query``
+    writes one. The thread list leaves out a thread with no turn (D-80), so a test about the
+    list's order or ownership gives each thread a turn. Writing the row moves nothing:
+    ``last_updated_at`` is touched by the pipeline, not by the row."""
+    return QueryLog.objects.create(
+        user=conversation.user,
+        conversation=conversation,
+        question=question,
+        answer_text=None,
+        retrieved_chunk_ids=[],
+        answered=False,
+        no_answer_reason=NO_RELEVANT_PASSAGE,
+        rejected_count=None,
     )
 
 
@@ -178,12 +200,15 @@ def test_only_the_callers_own_threads_are_listed_newest_activity_first(
     used, which is the order a person scans them in.
 
     A thread belonging to the other role's user is absent, and its existence is disclosed
-    by nothing in the reply.
+    by nothing in the reply. Every thread has a turn, so ownership is the only reason one is
+    left out (D-80 leaves out a thread with none).
     """
     other = administrator if session_client.user == employee else employee
     older = Conversation.objects.create(user=session_client.user, title="Older thread")
     newer = Conversation.objects.create(user=session_client.user, title="Newer thread")
     theirs = Conversation.objects.create(user=other, title="Someone else's thread")
+    for conversation in (older, newer, theirs):
+        log_a_turn(conversation)
     # last_updated_at is auto_now, so a turn is what moves a thread up. Set it directly
     # here: this test is about the ordering, not about how it comes to be.
     Conversation.objects.filter(pk=older.pk).update(
@@ -203,6 +228,9 @@ def test_only_the_callers_own_threads_are_listed_newest_activity_first(
 def test_a_turn_moves_its_thread_to_the_top_of_the_list(employee_client, employee):
     first = Conversation.objects.create(user=employee, title="First")
     second = Conversation.objects.create(user=employee, title="Second")
+    # Each already has a turn, so both are listed before the one below (D-80).
+    log_a_turn(first, "An earlier question in First")
+    log_a_turn(second, "An earlier question in Second")
     # Order is what this test asserts, so the two rows must not tie on last_updated_at.
     # timezone.now() is ~15.6 ms granular on this platform — six consecutive calls can
     # return the identical microsecond — so two rows created back to back share the
@@ -621,3 +649,109 @@ def test_a_path_b_turn_reopens_identical_to_a_path_a_turn(
     raw = response.content.decode()
     for identifier in supplied:
         assert str(identifier) not in raw
+
+
+# --- D-80: the list leaves out a thread nobody has asked anything in ------------------------------
+#
+# ``GET /api/conversations`` lists a thread once it has a ``QueryLog`` row, through an ``Exists``
+# subquery. Never on the "New conversation" title, and never on what a turn renders. Each test below
+# is the case one of the wrong filters would get wrong: a titled empty thread (a filter on the
+# placeholder), a no-answer turn (a filter on answered rows), a re-scoped turn (a filter on readable
+# citations), and a placeholder-titled thread with a turn (a filter on the title the other way).
+
+
+def listed_ids(client):
+    return [entry["conversation_id"] for entry in client.get(CONVERSATIONS_URL).json()]
+
+
+def test_an_empty_thread_is_absent_from_the_list_but_its_address_still_reads_it(session_client):
+    """D-80, from both roles. One empty thread carries the placeholder and one the title its owner
+    typed, so a filter on the title would still list the second. Nothing is deleted (rule 3)."""
+    client = session_client.client
+    placeholder = client.post(CONVERSATIONS_URL, {}, format="json").json()
+    titled = client.post(CONVERSATIONS_URL, {"title": "Budget questions"}, format="json").json()
+    assert placeholder["title"] == NEW_CONVERSATION_TITLE  # the premise
+
+    listing = client.get(CONVERSATIONS_URL)
+
+    assert listing.status_code == 200
+    assert listing.json() == []
+    for created in (placeholder, titled):
+        response = client.get(detail_url(created["conversation_id"]))
+        assert response.status_code == 200
+        assert response.json()["title"] == created["title"]
+        assert response.json()["turns"] == []
+    assert Conversation.objects.filter(user=session_client.user).count() == 2
+
+
+def test_a_thread_is_listed_once_its_first_turn_lands_answered_or_not(
+    session_client, monkeypatch, consulted_corpus
+):
+    """D-80, from both roles: a thread appears with its first turn, whichever of the pipeline's
+    three exits that turn took. Compared as a set, because two turns in one tick of this
+    platform's clock can share a ``last_updated_at``."""
+    client = session_client.client
+    user = session_client.user
+    answered = Conversation.objects.create(user=user, title="Answered")
+    path_a = Conversation.objects.create(user=user, title="Nothing relevant")
+    path_b = Conversation.objects.create(user=user, title="Nothing verified")
+    assert listed_ids(client) == []
+
+    install(monkeypatch, ControlledService())
+    assert ask_in(client, answered.pk).json()["answered"] is True
+    assert listed_ids(client) == [str(answered.pk)]
+
+    install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    assert ask_in(client, path_a.pk).json()["answered"] is False
+    install(monkeypatch, ControlledService(fabricate=True))
+    assert ask_in(client, path_b.pk).json()["answered"] is False
+
+    assert set(listed_ids(client)) == {str(answered.pk), str(path_a.pk), str(path_b.pk)}
+    # The premise: the two unanswered turns took the two different no-answer paths.
+    assert QueryLog.objects.get(conversation=path_a).no_answer_reason == NO_RELEVANT_PASSAGE
+    assert QueryLog.objects.get(conversation=path_b).no_answer_reason == NO_STATEMENT_VERIFIED
+
+
+def test_a_thread_whose_every_turn_is_re_scoped_stays_listed(
+    session_client, monkeypatch, consulted_corpus
+):
+    """D-80 rule 1, from both roles. The thread's one turn was answered from sources the reader
+    can no longer read, so it reopens exactly as a never-answered turn. The thread stays listed,
+    under its title, so the list does not show that something was withheld.
+
+    Every consulted source is narrowed through the model, so the cascade re-stamps its chunks
+    (invariant 2), to a scope the reader's role does not read (D-66).
+    """
+    client = session_client.client
+    install(monkeypatch, ControlledService())
+    conversation, _ = asked_in_a_thread(client, session_client.user)
+    assert listed_ids(client) == [str(conversation.pk)]
+
+    for name in ("policy", "planning", "schedule"):
+        source = consulted_corpus[name]
+        source.visible_to_roles = unreadable_scope(session_client.role_name)
+        source.save()
+
+    [turn] = client.get(detail_url(conversation.pk)).json()["turns"]
+    # The premise: re-scoped to the never-answered state.
+    assert turn["answered"] is False
+    assert turn["statements"] == [] and turn["sources"] == []
+    assert turn["message"] == NO_ANSWER_MESSAGE
+    [listed] = client.get(CONVERSATIONS_URL).json()
+    assert listed["conversation_id"] == str(conversation.pk)
+    assert listed["title"] == "Leave"
+
+
+def test_a_thread_still_titled_new_conversation_with_a_turn_is_listed(session_client):
+    """D-80 rule 1, from both roles: the filter is never the placeholder title. A question of
+    nothing but whitespace is long enough to ask and leaves nothing to name the thread with
+    (D-43), so the thread keeps "New conversation" with a turn in it, and it is listed."""
+    client = session_client.client
+    created = client.post(CONVERSATIONS_URL, {}, format="json").json()
+    blank_question = " " * MINIMUM_QUESTION_LENGTH
+
+    assert ask_in(client, created["conversation_id"], blank_question).status_code == 200
+
+    [listed] = client.get(CONVERSATIONS_URL).json()
+    assert listed["conversation_id"] == created["conversation_id"]
+    assert listed["title"] == NEW_CONVERSATION_TITLE

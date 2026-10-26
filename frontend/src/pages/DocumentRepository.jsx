@@ -20,6 +20,7 @@ import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { canReprocess, statusMessageFor } from '../utils/documentStatus.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { whenToRetry } from '../utils/retryAfter.js'
 import './Repository.css'
 
 /** What each parameter is called on screen, in the active filters and in a 400. */
@@ -445,6 +446,15 @@ export default function DocumentRepository() {
         return
       case 403:
         setNotice({ title: TEXT.documentReprocessFailed, text: TEXT.documentReprocessNotPermitted })
+        return
+      case 429:
+        // D-79's ingestion limit, shared with upload and meeting ingestion. Nothing
+        // was re-run, so the row keeps its status and its retry, and the list is not
+        // re-read: nothing on the server changed.
+        setNotice({
+          title: TEXT.documentReprocessFailed,
+          text: TEXT.reprocessLimitReached(whenToRetry(caught.retryAfter)),
+        })
         return
       default:
         // Fixed, user-facing text from the API client. Never a backend string.

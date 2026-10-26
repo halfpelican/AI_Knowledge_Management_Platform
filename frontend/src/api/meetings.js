@@ -41,7 +41,9 @@ export function fetchMeeting(meetingId, options = {}) {
  * transcript below the minimum length, neither text nor file, both, an
  * unreadable file, or an attendee who is not a registered user; 403 the role
  * lacks `contribute_content`; 422 the transcript was stored but could not be
- * indexed (NFR-20: a failed AI step never discards the source).
+ * indexed (NFR-20: a failed AI step never discards the source); 429 past the
+ * per-user ingestion rate it shares with document upload and reprocess, with a
+ * `Retry-After` in seconds, which stores nothing (D-79).
  *
  * `attendees` is a list of user ids. They are a participation record and never
  * an access control (D-16, CLAUDE.md §6, invariant 3): scoping is

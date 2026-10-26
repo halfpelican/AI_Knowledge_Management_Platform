@@ -6,6 +6,13 @@
 import { post } from './client.js'
 
 /**
+ * The `code` D-79's in-flight 429 carries, `{"detail": "...", "code":
+ * "ask_in_flight"}`, which is how a screen tells it from the rate limit's 429 on
+ * the same route. `detail` is never parsed (docs/api-contract.md, "Stage 5 item 5").
+ */
+export const ASK_IN_FLIGHT_CODE = 'ask_in_flight'
+
+/**
  * `POST /api/ask` — a question, optionally as a turn of a thread.
  *
  * The reply has **the same key set on every exit**, so the interface branches on
@@ -29,6 +36,13 @@ import { post } from './client.js'
  * thread exists (invariant 1); 503 when the AI service could not be reached
  * after `MAXIMUM_GENERATION_ATTEMPTS`. A 503 writes no `QueryLog` row, so the
  * question can safely be asked again (NFR-19).
+ *
+ * Two 429s since D-79, neither of which writes a `QueryLog` row: past the per-user
+ * ask rate, DRF's body with a `Retry-After` in seconds (`error.retryAfter`); and
+ * while this user's previous question is still being answered, `code`
+ * `ask_in_flight` (`error.code`, ASK_IN_FLIGHT_CODE above) and no `Retry-After`.
+ * The in-flight check runs after validation and the conversation check, so a 400
+ * or a 404 is returned first.
  *
  * The question is sent exactly as typed, because that is what `QueryLog.question`
  * stores and what the length rule is applied to.

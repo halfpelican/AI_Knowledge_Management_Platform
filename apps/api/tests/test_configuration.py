@@ -169,11 +169,40 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
     assert statuses[2] == 429
 
 
-def test_the_authenticated_routes_are_not_throttled():
-    """Only the two anonymous endpoints carry the scope; a signed-in user browsing
-    the repository must not be rate limited by an auth throttle."""
-    from apps.api import views
+# Every throttled (route, method) and the scope it is counted in: D-26's two anonymous routes and
+# D-79's five per-user ones, as docs/api-contract.md's Stage 5 item 5 table lists them. Every
+# other route and method is unthrottled, the GET beside each throttled POST included, and a
+# signed-in user browsing the repository is never rate limited.
+THROTTLED_ROUTES = {
+    ("auth-register", "POST"): "auth",
+    ("auth-login", "POST"): "auth",
+    ("ask", "POST"): "ask",
+    ("document-list", "POST"): "ingestion",
+    ("meeting-list", "POST"): "ingestion",
+    ("document-reprocess", "POST"): "ingestion",
+    ("conversation-list", "POST"): "conversation_create",
+}
 
-    assert views.LoginView.throttle_scope == views.RegisterView.throttle_scope == "auth"
-    for view in (views.LogoutView, views.MeView, views.RoleListView, views.UserListView):
-        assert not getattr(view, "throttle_classes", [])
+
+def test_exactly_the_documented_routes_are_throttled():
+    """Walks every (route, method) under /api/ (the dual-role matrix's enumeration) and asks each
+    view, as DRF would on that request, which throttles apply. A route added later with a throttle
+    the contract does not list, or a GET throttled with its POST, fails here."""
+    from django.urls import resolve, reverse
+    from rest_framework.test import APIRequestFactory
+    from rest_framework.throttling import ScopedRateThrottle
+
+    from apps.api.tests.dual_role_matrix import enumerate_endpoints
+
+    factory = APIRequestFactory()
+    throttled = {}
+    for endpoint in enumerate_endpoints():
+        url = reverse(endpoint.name, kwargs=endpoint.reverse_kwargs)
+        view = resolve(url).func.view_class()
+        view.request = factory.generic(endpoint.method, url)
+        throttles = view.get_throttles()
+        if throttles:
+            assert [type(throttle) for throttle in throttles] == [ScopedRateThrottle], endpoint
+            throttled[(endpoint.name, endpoint.method)] = view.throttle_scope
+
+    assert throttled == THROTTLED_ROUTES

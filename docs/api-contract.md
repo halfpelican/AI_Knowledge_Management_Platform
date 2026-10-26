@@ -64,7 +64,9 @@ and keeps submit disabled until they all pass. Both derive from one policy so th
 cannot drift.
 
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
-per client address and answer `429` past the rate. No other route is throttled (D-26).
+per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
+and thread creation are limited per user as well; "Stage 5 item 5" below lists every throttled
+route (D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -247,7 +249,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79) |
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text` | `401`; `404` no such meeting, or one outside the caller's scope |
 
@@ -717,8 +719,9 @@ That replacement is the `Update` in FR-13's CRUD, alongside the `last_updated_at
 pipeline touches on every turn. Both conditions are required for the rename — the
 placeholder still standing and no turn logged yet — so a title the user chose is never
 overwritten and a thread in use is never renamed under them. What keeps the list legible is
-therefore the question itself, which is what the user would have typed as a name anyway;
-the placeholder is visible only in the gap between creating a thread and asking in it.
+therefore the question itself, which is what the user would have typed as a name anyway.
+Since D-80 a thread with no turn is not listed, so the list shows the placeholder only on a
+thread whose first question was nothing but whitespace, which leaves nothing to name it with.
 
 **There is no rename route and no delete route.** FR-13's CRUD has no Delete, and its
 interface has no rename control, so the two server-side updates above are the whole of
@@ -932,7 +935,7 @@ body is validated, so a rejected request counts as well. `X-Forwarded-For` is no
 {"detail": "Your previous question is still being answered.", "code": "ask_in_flight"}
 ```
 
-That 429 carries no `Retry-After`, because an answer can take up to 15 minutes. The client tells
+That 429 carries no `Retry-After`, because an answer can take a long time: about 46 minutes in the worst case, since the question's embedding has no timeout of its own (D-79's note). The client tells
 the two 429s apart by `code`, and does not parse `detail`. The check runs after validation and the
 conversation check, so a 400 or a 404 is returned as before, and a rejected ask writes no
 `QueryLog` row.
@@ -941,3 +944,15 @@ conversation check, so a 400 or a 404 is returned as before, and a rejected ask 
 threads with at least one turn, answered or not. It never filters on the title, or on what a turn
 renders, so a thread whose every turn is re-scoped stays listed. An empty thread is not deleted:
 `GET /api/conversations/{id}` still returns it, and the Ask screen reuses it by its address (D-77).
+
+**PDF extraction bounds (D-81).** A PDF that trips any of D-81's bounds is refused with that
+bound's own sentence, which says whether splitting the file would help. The bounds are the stored
+and decoded size of one stream, the page count, the drawing operators across the document, and
+the text ceiling.
+
+- **On `POST /api/documents` and reprocess** the answer is `422` with status "Too large to index".
+  The `detail` is "The document was stored but not indexed." followed by the sentence. The original
+  stays stored.
+- **On `POST /api/meetings`, with a PDF file,** the answer is `400 {"file": ["..."]}` with the
+  sentence alone. Nothing is stored.
+- **The text ceiling keeps its existing wording on both routes.**

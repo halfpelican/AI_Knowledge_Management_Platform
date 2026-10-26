@@ -19,8 +19,15 @@ recover an "Indexing failed" — a provider outage. The action is shown in every
 the clause names; only its wording stops promising what identical bytes cannot give.
 """
 
-import pytest
+import logging
+from pathlib import Path
 
+import pytest
+from django.conf import settings
+from django.core.exceptions import SuspiciousFileOperation
+from django.core.files.base import ContentFile
+
+from apps.api.views import NO_STORED_ORIGINAL_MESSAGE
 from apps.core.constants import (
     DOCUMENT_EXTRACTION_FAILED,
     DOCUMENT_INDEXED,
@@ -229,3 +236,120 @@ def test_reprocess_collides_when_an_indexed_copy_now_exists(
     assert response.status_code == 409
     # The failed document is untouched, not half-reprocessed.
     assert Document.objects.get(pk=failed_id).status == DOCUMENT_INDEXING_FAILED
+
+
+# --- No stored original: 422 NO_STORED_ORIGINAL_MESSAGE, in JSON, logged (D-75's note) ----------
+#
+# Each document below is built as a failed upload leaves one: a row, a stored original and a status
+# that offers the retry. It is built directly rather than uploaded so that what reaches the view is
+# exactly the state under test, whatever extraction would make of the bytes. Each also carries a
+# chunk from its earlier attempt, which reprocess_document deletes first thing: that chunk still
+# being there afterwards is the evidence the file was checked before reprocess_document ran.
+
+VIEW_LOGGER = "apps.api.views"
+STORED_TEXT = b"Harbour lease schedule. Rent is reviewed every second year in March.\n"
+
+
+def failed_document_with_an_original(uploader, *, name="harbour_lease.txt"):
+    document = Document.objects.create(
+        title="Harbour lease schedule",
+        file_type="txt",
+        uploaded_by=uploader,
+        visible_to_roles=["Employee", "Administrator"],
+        status=DOCUMENT_INDEXING_FAILED,
+    )
+    document.file_path.save(name, ContentFile(STORED_TEXT), save=True)
+    return document
+
+
+def earlier_attempts_chunk(document):
+    return ContentChunk.objects.create(
+        source_type=SOURCE_TYPES[0],
+        source_id=document.id,
+        chunk_index=0,
+        chunk_text="From the earlier attempt.",
+        embedding=[0.0] * settings.EMBEDDING_DIMENSION,
+        embedding_model="stub-embed",
+        embedding_dimension=settings.EMBEDDING_DIMENSION,
+        visible_to_roles=["Employee", "Administrator"],
+    )
+
+
+def assert_no_stored_original(response, document, chunk):
+    assert response.status_code == 422
+    assert response["Content-Type"] == "application/json"
+    assert response.json() == {"detail": NO_STORED_ORIGINAL_MESSAGE}
+    document.refresh_from_db()
+    assert document.status == DOCUMENT_INDEXING_FAILED  # nothing was attempted
+    assert ContentChunk.objects.filter(pk=chunk.pk).exists()
+
+
+def the_views_error(caplog):
+    [record] = [record for record in caplog.records if record.name == VIEW_LOGGER]
+    assert record.levelno == logging.ERROR
+    return record
+
+
+def test_reprocessing_a_document_whose_file_is_gone_from_disk_is_a_422_and_is_logged(
+    session_client, employee, caplog, error_log_file
+):
+    """Until D-75's note this was Django's HTML 500: reprocess_document opened the file with no
+    OSError handling. From both roles."""
+    document = failed_document_with_an_original(employee)
+    chunk = earlier_attempts_chunk(document)
+    Path(document.file_path.path).unlink()
+    caplog.clear()
+
+    response = reprocess(session_client.client, document.id)
+
+    assert_no_stored_original(response, document, chunk)
+    record = the_views_error(caplog)
+    assert str(document.id) in record.getMessage()
+    assert repr(document.file_path.name) in record.getMessage()
+    assert record.exc_info is not None and issubclass(record.exc_info[0], OSError)
+    logged = error_log_file.read_text(encoding="utf-8")
+    assert str(document.id) in logged and "FileNotFoundError" in logged
+
+
+def test_reprocessing_a_file_path_outside_the_media_folder_is_a_422_and_is_logged(
+    session_client, employee, media_root, caplog, error_log_file
+):
+    """A ``file_path`` naming a path outside MEDIA_ROOT, which only a script could write, raises
+    SuspiciousFileOperation rather than OSError. It is a missing original (D-75's note). The file
+    it names exists, so the refusal is the path and not the file's absence, and its bytes are not
+    extracted. From both roles."""
+    outside = media_root.parent / "outside.txt"
+    outside.write_bytes(STORED_TEXT)
+    document = failed_document_with_an_original(employee)
+    chunk = earlier_attempts_chunk(document)
+    Document.objects.filter(pk=document.pk).update(file_path="../outside.txt")
+    caplog.clear()
+
+    response = reprocess(session_client.client, document.id)
+
+    assert_no_stored_original(response, document, chunk)
+    assert not ExtractedContent.objects.filter(document=document).exists()
+    record = the_views_error(caplog)
+    assert str(document.id) in record.getMessage()
+    assert "'../outside.txt'" in record.getMessage()
+    assert record.exc_info is not None and issubclass(record.exc_info[0], SuspiciousFileOperation)
+    assert str(document.id) in error_log_file.read_text(encoding="utf-8")
+
+
+def test_reprocessing_a_document_with_no_stored_original_is_a_422_and_is_logged(
+    session_client, employee, caplog, error_log_file
+):
+    """A blank ``file_path``: no shipped path makes one, and a script can. From both roles."""
+    document = Document.objects.create(
+        title="Unfiled minutes", file_type="txt", uploaded_by=employee,
+        visible_to_roles=["Employee", "Administrator"], status=DOCUMENT_INDEXING_FAILED,
+    )
+    chunk = earlier_attempts_chunk(document)
+    caplog.clear()
+
+    response = reprocess(session_client.client, document.id)
+
+    assert_no_stored_original(response, document, chunk)
+    record = the_views_error(caplog)
+    assert str(document.id) in record.getMessage() and "stored name ''" in record.getMessage()
+    assert str(document.id) in error_log_file.read_text(encoding="utf-8")

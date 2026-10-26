@@ -1,8 +1,8 @@
 """Exceptions raised by the ingestion pipeline (FR-08, FR-09).
 
 One base class so a caller may catch everything ingestion raises in a single
-``except`` and answer the FR-08 status code, and three specific classes because the
-three failures mean different things to the operator:
+``except`` and answer the FR-08 status code, and four specific classes because the
+four failures mean different things to the operator:
 
 - ``UnsupportedFormatError`` — the pipeline was asked for a format it has no parser
   for. That is a configuration defect (a format reached ACCEPTED_FORMATS without a
@@ -11,12 +11,16 @@ three failures mean different things to the operator:
   could not read it. That is a bad upload: the document is marked
   "Extraction failed" (constants.DOCUMENT_EXTRACTION_FAILED) and the original is
   still kept (CLAUDE.md invariant 8).
+- ``TooLargeToExtractError`` — a subclass of ExtractionError: a readable PDF refused by
+  one of D-81's extraction bounds. Marked "Too large to index", not "Extraction failed",
+  because a retry fails at the same bound every time (D-51).
 - ``OversizedArchiveContentError`` — a DOCX or XLSX whose own table of contents
   declares more decompressed content than the detector will let a parser inflate.
   Raised during detection, before any parser runs, and answered with a size
   rejection rather than a format one (Stage 4 item 12b).
 
-Both carry a message only. No vendor exception type escapes ingestion, so nothing
+Each carries a message; ``TooLargeToExtractError`` also carries a ``limit_message`` safe to
+show the uploader. No vendor exception type escapes ingestion, so nothing
 downstream has to import pypdf, python-docx or openpyxl to handle a failure.
 """
 
@@ -31,6 +35,34 @@ class UnsupportedFormatError(IngestionError):
 
 class ExtractionError(IngestionError):
     """A parser failed on a file of its own declared format."""
+
+
+class TooLargeToExtractError(ExtractionError):
+    """A PDF crossed one of D-81's extraction bounds, so its text was not read.
+
+    Raised by ``extraction._extract_pdf`` for the per-stream caps on decoded and stored
+    size (pypdf's ``LimitReachedError``), the page cap and the operator budget. The text
+    ceiling does NOT raise this: it returns the text read so far and leaves the refusal to
+    the MAXIMUM_CHUNKS_PER_SOURCE check in ``documents.py``, so that bound has one refusal
+    path (D-81 item 4).
+
+    ``limit_message`` is the bound's LIMIT SENTENCE alone: fixed text, one per bound, saying
+    what the file met and whether splitting it would help, and saying nothing about what
+    happened to the file, because that differs by route. ``documents.py`` stores the
+    document and answers "Too large to index" rather than "Extraction failed" (D-81 item 5:
+    the file is a readable PDF, and a retry fails at the same bound every time, D-51's
+    argument), prefixing the sentence with the fact that the document was stored. The
+    meetings view (``MeetingsView._transcript_from``) has stored nothing, so it answers
+    FR-09's 400 with the sentence as it is. ``str(exception)`` is the diagnostic and stays
+    on the server.
+
+    **A subclass of ExtractionError on purpose.** A caller that catches ExtractionError and
+    does not know this class still handles it, rather than letting it escape as a 500.
+    """
+
+    def __init__(self, limit_message: str, diagnostic: str = ""):
+        super().__init__(diagnostic or limit_message)
+        self.limit_message = limit_message
 
 
 class OversizedArchiveContentError(IngestionError):

@@ -16,6 +16,7 @@ import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate, todayIsoDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { whenToRetry } from '../utils/retryAfter.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
 import { validateMeetingIngestion } from '../utils/validation.js'
 import { rolesForVisibility, VISIBILITY_EVERYONE, visibilityOptionsFor } from '../utils/visibility.js'
@@ -162,6 +163,13 @@ export default function Meetings() {
       // The role lacks `contribute_content`. The form never offers a scope
       // excluding the contributor's own role, so D-29's 403 is not reachable.
       setFormError(TEXT.meetingNotPermitted)
+      return
+    }
+    if (error.status === 429) {
+      // D-79's ingestion limit, shared with document upload and reprocess. It is
+      // checked before the body is validated, so nothing was stored: the form keeps what
+      // was entered, nothing is marked against a field, and the list is not re-read.
+      setFormError(TEXT.meetingLimitReached(whenToRetry(error.retryAfter)))
       return
     }
     const extracted = extractFieldErrors(error, FIELDS)

@@ -83,6 +83,10 @@
   color: var(--color-danger);
 }
 
+/* `--limited` (D-79's upload limit) has no rule of its own on purpose: it keeps the
+   neutral default that `--ready` has, because nothing is wrong with the file and it
+   is still queued. The danger colour would read as the file being refused. */
+
 .upload-row__message {
   color: var(--color-text-muted);
   font-size: var(--text-sm);
