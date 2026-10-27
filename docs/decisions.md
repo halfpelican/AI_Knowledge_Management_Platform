@@ -5010,3 +5010,99 @@ NFR-08, NFR-09 and PR #30
 >   them up.
 > - **Objective 03 on 23 October** could not run against this branch: item 5 was not built until
 >   26 October.
+
+## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Found:** FLM
+v1.0.9 installed on 15 October, with its embeddings noise again
+
+**What happened.** On 27 October, while item 6 was being planned, `C:\Program Files\flm\flm.exe`
+was found at **v1.0.9**, with the file dated 15 October. `scripts/check_flm.py` failed. The same
+input embedded twice in one request gave a cosine of 0.6046, against the 0.999 required. Chat still
+worked. So for twelve days every question embedded as noise against a good stored index, and
+retrieval could not have found the right passages. Nothing caught it: the suite runs on a stub
+provider, so CI cannot see FLM, and nothing ran `check_flm.py`.
+
+**Decision.**
+
+1. **The required version is v0.9.39.** From v1.0.4 onward, FLM's embeddings are non-deterministic
+   (upstream issue ROCm/FastFlowLM#732, still open). The version is recorded in `CLAUDE.md` §4,
+   `docs/ai-provider.md` §3 and the README's setup steps, not only in a session's memory.
+2. **The stored index was checked after the reinstall.** `check_flm.py` passes on v0.9.39. Chunks
+   sampled from each upload date in `kmp` were re-embedded exactly as ingestion embeds them and
+   compared with their stored vectors:
+   - 22 September: cosine 1.00000;
+   - 5 October: at least 0.99983.
+
+   Both are above 0.999. Nothing was embedded after 15 October, so nothing is re-indexed.
+3. **`check_flm.py` is a gate.** Item 6's measurement runs, the k6 runs and the alpha runbook
+   (item 9) call it first and stop on a non-zero exit. Every results file records the FLM version.
+4. **Newer FLM releases are evaluated after M8.** A version whose vectors differ means a full
+   re-index and a re-run of Objective 02's search checks.
+
+**What this decision does not cover.**
+
+- **What upgraded FLM on 15 October.** Nothing records whether it was a manual install or an
+  updater.
+- **An enforced pin.** Nothing stops an installer upgrading FLM again. The gate catches it; it
+  doesn't prevent it.
+- **CI** still cannot see FLM.
+
+## D-84 · Item 6 measures a fresh Objective 02 database, on a frozen thirty-question set, and Objective 03's p90 at five users
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
+Objective 03, FR-12, FR-13, NFR-08
+
+**Decision.**
+
+1. **The database: a fresh one holding exactly Objective 02's corpus**, ingested by
+   `scripts/ingest_objective02.py` on working FLM. `kmp` stays as it is.
+   - **The 6 October evidence is kept.** The script always writes
+     `corpus/objective-02/results.json` and `results.md`, so a second run would overwrite them. It
+     gains an output-directory option, and this run writes to a dated folder.
+   - **Its own paths.** The measurement server has its own `DATABASE_URL`, `MEDIA_ROOT`,
+     `AUDIT_LOG_PATH` and `ERROR_LOG_PATH`. Otherwise the corpus files and the load test's uploads
+     would land in `kmp`'s media folder. All four are already read from the environment.
+   - **A snapshot first.** Right after ingestion, before anything is measured, the database is
+     dumped and its media copied. The dump's hash is recorded with the commit SHA and the FLM
+     version.
+   - **Order of the runs.** The thirty questions run before the load test, or the dump is restored
+     first. NFR-09 uploads a kitchen-roster document every round, and those would become retrieval
+     candidates for the questions.
+   - **The demo database is a separate decision.** Whether the 1 November demo runs on `kmp` or on
+     the restored measurement database is not decided here.
+2. **The question set.**
+   - **Drafted by the rag-pipeline agent** from the corpus files and the manifest only, never from
+     the system's answers.
+   - **Worded the way a staff member would ask it**, not by copying the manifest's phrase. That
+     would only test word overlap.
+   - **The 64-set's proportions:** 22 ordinary, 4 scoped and 4 no-answer. They are spread across
+     all four formats and the five transcripts, and each has an expected answer and its source
+     item id.
+   - **Every scoped question is asked under both roles.** There are five Administrator-only items,
+     and a scoped question only shows scoping if the Administrator gets the answer and the
+     Employee gets the no-answer state.
+   - **Benjamin and Sagarika review and approve the set.** It is then committed, and frozen before
+     the first measured run. Any later change is recorded with its reason. The report says an agent
+     drafted the set and they reviewed it.
+3. **Objective 03's p90 is measured at five concurrent users.** That is NFR-08's script default and
+   a small-team load. 20 users is kept for NFR-09's degradation test. The choice is recorded here,
+   before the run, so it can't look picked for the result.
+   - **A miss is expected.** The single-user p90 is already 8.90 s, and one NPU answers one
+     question at a time, so five users queue.
+   - **What is reported:** the answered-only p90 against 4 s, with the all-replies p90, the
+     answered rate and the 8.90 s baseline beside it, plus the commit SHA, the FLM version and the
+     dump hash.
+   - **A miss is then recorded as a decision**, as the risk register says: a local-model baseline,
+     not a dropped NFR.
+   - **How it runs.** It is gated on `check_flm.py`, with the server restarted first. NFR-09 runs
+     separately afterwards. The user installs k6 and runs it.
+4. **What item 6 re-measures**, from the brief: `RELEVANCE_THRESHOLD` (D-37), the partial-matches
+   floor (D-56), the three citation rates, p90, and FR-13 end to end.
+
+**What this decision does not cover.**
+
+- **The demo database** for 1 November.
+- **The measured values.** A new threshold or a partial-matches floor is a later decision, made
+  from this measurement.
+- **The k6 runs themselves.** The user runs them.
