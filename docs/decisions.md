@@ -5106,3 +5106,82 @@ Objective 03, FR-12, FR-13, NFR-08
 - **The measured values.** A new threshold or a partial-matches floor is a later decision, made
   from this measurement.
 - **The k6 runs themselves.** The user runs them.
+
+## D-85 · The measured run is served by Waitress with 24 threads, the value the alpha will use
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6, pulling forward the
+slice of item 9 that the measurement needs · **Concerns:** Objective 03, NFR-08, NFR-09, D-64
+
+**Decision.**
+
+1. **Waitress is added now**, to `requirements.in`, with `requirements.txt` recompiled. It is pure
+   Python, so there are no compiled parts for CI or the laptop to trip on.
+2. **The measured run is served by**
+   `waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`, under
+   `DEBUG=False`. The thread count is set explicitly: Waitress defaults to 4, which NFR-08's five
+   users already exceed and NFR-09's twenty far exceed.
+3. **24 threads, chosen before the run.** That is NFR-09's stated 20 concurrent users plus 4 for
+   screens, logins and uploads. A load run then waits on the NPU rather than in Waitress, and the
+   app's other routes stay answerable while asks wait. FLM answers one question at a time, so
+   threads change where a request waits, not how fast it is answered.
+4. **Recorded beside every result:** the server, its version and the thread count.
+5. **Still item 9's:** serving the built SPA from one origin, `CSRF_TRUSTED_ORIGINS` and the cookie
+   flags. The load test calls only `/api/`.
+
+**What this decision does not cover.**
+
+- **Holding every thread.** With 24 threads, asks alone need 24 users asking at once to hold them
+  all. Ingestion, though, is rate-limited only (D-79), so one user firing uploads concurrently
+  could still hold them.
+  - No client of ours sends uploads concurrently. The Upload screen sends one at a time, and the
+    ingest script and the k6 virtual users are sequential.
+  - The in-flight slot is extended to the three ingestion routes if that is cheap. Otherwise the
+    gap is recorded here.
+
+## D-86 · FR-13 is measured end to end on frozen two-turn threads, built beside Objective 03 and never ahead of it
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
+FR-13, D-42, D-84 §4
+
+**Why it needs its own set.** The harness's `--with-history` mode holds retrieval constant on
+purpose: it embeds the bare question. So it does not measure FR-13 end to end. FR-13 really
+embeds the plain join of the earlier questions and the new one.
+
+**Decision.**
+
+1. **Objective 03 runs first.** FR-13 end to end is built alongside it, and never delays it.
+2. **A thread set.** About eight two-turn threads, drafted by the rag-pipeline agent from the corpus
+   files only, as the thirty were.
+   - **No follow-up can be answered cold.** Each one depends on the first turn, through a pronoun
+     or a dropped subject. A follow-up that already works cold proves nothing about history.
+   - **Two threads turn to Administrator-only material.** Each is run under both roles, so the
+     Employee's no-answer shows scoping, not a retrieval miss, and nothing may leak.
+   - **One thread changes topic.**
+   - **One thread's follow-up refers to something only in the previous answer.** Under D-42 it
+     should fail. Measuring that turns the deviation into evidence rather than an argument.
+3. **One frozen scoring rule.** It is frozen with the threads and is the same for all three ways
+   each follow-up is run: with history, asked cold, and spelled out in full.
+4. **What is reported per follow-up:**
+   - the answered rate;
+   - the expected source's rank;
+   - the expected-answer match;
+   - the split between no-answer paths A and B;
+   - the fabrication rate;
+   - first-attempt conformance;
+   - the out-of-scope count, which must be 0.
+5. **How it is run.** A harness `--threads` mode composes the retrieval string and the prompt with
+   the shipped code. `apps/retrieval/conversation.py` exposes a pure `compose(question,
+   prior_questions)`, and a test pins the two together. The harness writes nothing.
+6. **A small HTTP check.** Two or three threads go through `/api/conversations` and `/api/ask`,
+   to prove the history read from `QueryLog` is wired correctly. It runs after the harness and
+   before k6, with asks paced at least 7 s apart. It writes only `QueryLog` and `Conversation`
+   rows, which are not retrieval candidates.
+7. **Review and freeze.** Benjamin and Sagarika review the threads with the thirty, and both sets
+   freeze together.
+
+**What this decision does not cover.**
+
+- **Threads longer than two turns.** History is truncated at `MAXIMUM_CONVERSATION_TURNS`, and
+  that limit is not measured.
+- **Prior answers.** D-42 still passes prior questions only. The previous-answer thread measures
+  the cost of that; it does not change it.
