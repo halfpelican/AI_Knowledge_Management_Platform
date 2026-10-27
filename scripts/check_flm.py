@@ -7,36 +7,68 @@ runs on any Python with nothing installed.
 Usage, in PowerShell, with the server running in another window
 (``flm serve gemma3:4b --embed 1``)::
 
-    $env:FLM_BASE_URL = "http://127.0.0.1:52625/v1"   # optional, this is the default
-    python scripts/check_flm.py
+    $env:FLM_BASE_URL = "http://127.0.0.1:8625/v1"   # optional, this is the default
+    .venv\\Scripts\\python.exe scripts\\check_flm.py
 
-Exit code 0 when every check passes, 1 otherwise.
+Exit code 0 when every check passes, 1 otherwise. The FLM version is REPORTED and never
+changes the exit code (see "The FLM version" below).
 
 Environment variables (all optional; defaults match CLAUDE.md section 4):
 
-    FLM_BASE_URL     server base URL including /v1     default http://127.0.0.1:52625/v1
+    FLM_BASE_URL     server base URL including /v1     default http://127.0.0.1:8625/v1
     FLM_API_KEY      placeholder bearer token           default flm
     FLM_CHAT_MODEL   chat model tag                     default gemma3:4b
     FLM_EMBED_MODEL  embedding model tag                default embed-gemma
 
 Development is native Windows under PowerShell, so 127.0.0.1 is the machine the
 server runs on. There is deliberately no WSL host-IP handling here.
+
+The FLM version (D-83)
+----------------------
+FLM must be v0.9.39: from v1.0.4 its embeddings are noise (ROCm/FastFlowLM#732). The
+version is read two ways, because they can differ:
+
+- ``flm version``, the CLI on PATH: the installed binary, which ``flm serve`` starts.
+  If the CLI is not on PATH, that is said and the version is "unknown".
+- ``GET {FLM_BASE_URL}/version``, the server's own answer: the process actually serving.
+  A server started before an install keeps running the old binary.
+
+``flm_version()`` returns both, for the scripts that record them (the citation harness,
+the Objective 02 ingestion, the snapshot). Those scripts refuse a recorded run on any
+version but REQUIRED_FLM_VERSION, as ``tests/load/run.ps1`` does for k6. This script
+only reports it, and keeps its exit code about the three checks.
+
+``tests/load/run.ps1`` reads this script's output. It requires a line starting
+``RESULT: PASS`` and no line starting ``RESULT: FAIL``, and it takes the URL after
+``against`` on the pass line. Change those lines only together with it.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import os
+import re
+import shutil
+import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-import math
+from dataclasses import dataclass, field
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8625/v1"
 DEFAULT_API_KEY = "flm"
 DEFAULT_CHAT_MODEL = "gemma3:4b"
 DEFAULT_EMBED_MODEL = "embed-gemma"
+
+# D-83 decision 1. A different version is a decision and a full re-index first, not an
+# edit to this line. tests/load/run.ps1 holds the same value.
+REQUIRED_FLM_VERSION = "v0.9.39"
+UNKNOWN_VERSION = "unknown"
+FLM_VERSION_TIMEOUT_SECONDS = 30
+# The pattern tests/load/run.ps1 reads `flm version` with, so the two read the same value.
+VERSION_PATTERN = re.compile(r"\bv(\d+\.\d+\.\d+\S*)")
 
 # embed-gemma (embeddinggemma-300m) returns 768-dimensional vectors: docs/decisions.md D-03.
 EXPECTED_DIMENSION = 768
@@ -109,6 +141,127 @@ def call(
     if not isinstance(decoded, dict):
         raise CheckFailed(f"unexpected response from {url}: {body[:200]!r}")
     return decoded
+
+
+# --- The FLM version (D-83) ------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FlmVersion:
+    """What FLM says its version is, from the CLI and from the running server.
+
+    ``cli`` and ``server`` are ``vX.Y.Z`` or "unknown". ``notes`` says why either is
+    unknown, or that the two disagree. ``problems()`` is what a recorded run refuses on.
+    """
+
+    cli: str
+    cli_output: str | None
+    server: str
+    notes: tuple[str, ...] = field(default_factory=tuple)
+
+    def problems(self, required: str = REQUIRED_FLM_VERSION) -> list[str]:
+        """Reasons this FLM may not be used for a recorded measurement run (D-83)."""
+        found: list[str] = []
+        if self.cli == UNKNOWN_VERSION:
+            found.append("`flm version` gave no version, so it cannot be recorded")
+        elif self.cli != required:
+            found.append(f"`flm version` says {self.cli}; D-83 requires {required}")
+        if UNKNOWN_VERSION not in (self.cli, self.server) and self.server != self.cli:
+            found.append(
+                f"the running server says {self.server} and the CLI {self.cli}: "
+                "restart `flm serve`"
+            )
+        return found
+
+    def as_record(self) -> dict:
+        return {
+            "cli": self.cli,
+            "cli_output": self.cli_output,
+            "server": self.server,
+            "required": REQUIRED_FLM_VERSION,
+            "notes": list(self.notes),
+        }
+
+    def summary(self) -> str:
+        """One line for a console header."""
+        server = "not reported" if self.server == UNKNOWN_VERSION else self.server
+        return f"{self.cli} (flm version), server {server}"
+
+
+def _cli_version() -> tuple[str, str | None, str | None]:
+    """(version, raw output, note) from the `flm version` CLI."""
+    executable = shutil.which("flm")
+    if executable is None:
+        return UNKNOWN_VERSION, None, "the flm CLI is not on PATH"
+    try:
+        completed = subprocess.run(
+            [executable, "version"],
+            capture_output=True,
+            text=True,
+            timeout=FLM_VERSION_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return UNKNOWN_VERSION, None, f"`flm version` could not be run ({type(exc).__name__})"
+    output = " ".join((completed.stdout or "").split()) or None
+    if completed.returncode != 0:
+        return UNKNOWN_VERSION, output, f"`flm version` exited {completed.returncode}"
+    match = VERSION_PATTERN.search(output or "")
+    if match is None:
+        return UNKNOWN_VERSION, output, "no version in the output of `flm version`"
+    return "v" + match.group(1), output, None
+
+
+def _server_version(base_url: str, api_key: str) -> tuple[str, str | None]:
+    """(version, note) from the running server's GET /v1/version."""
+    try:
+        body = call(base_url, api_key, "/version", timeout=MODELS_TIMEOUT_SECONDS)
+    except CheckFailed as exc:
+        return UNKNOWN_VERSION, f"the server did not report a version ({exc})"
+    reported = str(body.get("version", "")).strip()
+    if not reported:
+        return UNKNOWN_VERSION, "the server's /version reply carries no version"
+    return (reported if reported.startswith("v") else "v" + reported), None
+
+
+def flm_version(base_url: str | None = None, api_key: str | None = None) -> FlmVersion:
+    """The FLM version, from the CLI and from the server at ``base_url``.
+
+    For other scripts to record. Never raises: anything unreadable is "unknown", with a
+    note saying why. ``base_url`` and ``api_key`` default to FLM_BASE_URL and FLM_API_KEY
+    from the environment, then to this script's defaults.
+    """
+    if base_url is None:
+        base_url, _ = read_env("FLM_BASE_URL", DEFAULT_BASE_URL)
+    if api_key is None:
+        api_key, _ = read_env("FLM_API_KEY", DEFAULT_API_KEY)
+    cli, cli_output, cli_note = _cli_version()
+    server, server_note = _server_version(base_url, api_key)
+    notes = [note for note in (cli_note, server_note) if note]
+    if UNKNOWN_VERSION not in (cli, server) and cli != server:
+        notes.append(f"the CLI says {cli} and the server says {server}")
+    return FlmVersion(cli=cli, cli_output=cli_output, server=server, notes=tuple(notes))
+
+
+def print_version(version: FlmVersion) -> None:
+    """The version lines. None of them starts with RESULT, which run.ps1 reads."""
+    print(f"  flm version     = {version.cli}  (required {REQUIRED_FLM_VERSION}, D-83)")
+    print(f"  server version  = {version.server}  (GET /v1/version)")
+    for note in version.notes:
+        print(f"  version note    : {note}")
+    if version.cli == UNKNOWN_VERSION:
+        print(
+            f"  WARNING: the version could not be confirmed as {REQUIRED_FLM_VERSION}. A recorded "
+            "measurement run refuses that (D-83 decision 1)."
+        )
+    elif version.cli != REQUIRED_FLM_VERSION:
+        print(
+            f"  WARNING: this is not FLM {REQUIRED_FLM_VERSION}. A recorded measurement "
+            "run refuses it (D-83 decision 1)."
+        )
+
+
+# --- The three checks --------------------------------------------------------------------
 
 
 def check_models(base_url: str, api_key: str, chat_model: str) -> str:
@@ -198,7 +351,7 @@ def check_embeddings(base_url: str, api_key: str, embed_model: str) -> str:
         raise CheckFailed(
             "embeddings are degenerate: a zero vector or identical vectors for different inputs"
         )
-        # EMBED_INPUTS[0] and [2] are the same string. An embedding is a pure function
+    # EMBED_INPUTS[0] and [2] are the same string. An embedding is a pure function
     # of its input: identical text must give an identical vector. FLM 1.0.4 to 1.0.6
     # returned uncorrelated noise here and this script passed anyway, because
     # "non-zero, and the two inputs differ" is something noise satisfies
@@ -234,22 +387,18 @@ def check_embeddings(base_url: str, api_key: str, embed_model: str) -> str:
             f"two unrelated inputs scored {unrelated:.4f} against {repeat_in_batch:.4f} for two "
             "identical ones. The vectors carry no information about their input."
         )
-    print("  sanity      : vectors are deterministic and discriminate between inputs")    
+    print("  sanity      : vectors are deterministic and discriminate between inputs")
     return f"{len(vectors)} vectors of {EXPECTED_DIMENSION} dimensions"
 
 
-def main() -> int:
-    base_url, base_url_source = read_env("FLM_BASE_URL", DEFAULT_BASE_URL)
-    api_key, _ = read_env("FLM_API_KEY", DEFAULT_API_KEY)
-    chat_model, chat_model_source = read_env("FLM_CHAT_MODEL", DEFAULT_CHAT_MODEL)
-    embed_model, embed_model_source = read_env("FLM_EMBED_MODEL", DEFAULT_EMBED_MODEL)
+def run_checks(
+    base_url: str, api_key: str, chat_model: str, embed_model: str
+) -> list[tuple[str, str, str]]:
+    """Run the three checks in order, printing each, and return (name, status, detail).
 
-    print("FLM connectivity check")
-    print(f"  FLM_BASE_URL    = {base_url}  ({base_url_source})")
-    print(f"  FLM_CHAT_MODEL  = {chat_model}  ({chat_model_source})")
-    print(f"  FLM_EMBED_MODEL = {embed_model}  ({embed_model_source})")
-    print(f"  python          = {sys.version.split()[0]}")
-
+    Status is PASS, FAIL or SKIP. Other scripts gate on ``checks_passed()`` of this
+    result (D-83 decision 3); ``main()`` is the same checks with the summary printed.
+    """
     checks = [
         ("GET /models", lambda: check_models(base_url, api_key, chat_model)),
         ("POST /chat/completions", lambda: check_chat(base_url, api_key, chat_model)),
@@ -276,8 +425,32 @@ def main() -> int:
         else:
             print("  PASS")
             results.append((name, "PASS", detail))
+    return results
+
+
+def checks_passed(results: list[tuple[str, str, str]]) -> bool:
+    """True only if there were checks and every one passed."""
+    return bool(results) and all(status == "PASS" for _, status, _ in results)
+
+
+def main() -> int:
+    base_url, base_url_source = read_env("FLM_BASE_URL", DEFAULT_BASE_URL)
+    api_key, _ = read_env("FLM_API_KEY", DEFAULT_API_KEY)
+    chat_model, chat_model_source = read_env("FLM_CHAT_MODEL", DEFAULT_CHAT_MODEL)
+    embed_model, embed_model_source = read_env("FLM_EMBED_MODEL", DEFAULT_EMBED_MODEL)
+
+    print("FLM connectivity check")
+    print(f"  FLM_BASE_URL    = {base_url}  ({base_url_source})")
+    print(f"  FLM_CHAT_MODEL  = {chat_model}  ({chat_model_source})")
+    print(f"  FLM_EMBED_MODEL = {embed_model}  ({embed_model_source})")
+    print(f"  python          = {sys.version.split()[0]}")
+    version = flm_version(base_url, api_key)
+    print_version(version)
+
+    results = run_checks(base_url, api_key, chat_model, embed_model)
 
     print("\nSummary")
+    print(f"  FLM version : {version.summary()}")
     for name, status, detail in results:
         print(f"  {status:<4}  {name:<24} {detail}")
 

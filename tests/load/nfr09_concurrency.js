@@ -5,11 +5,11 @@ import exec from 'k6/execution';
 import { check } from 'k6';
 import { Trend, Rate } from 'k6/metrics';
 import {
-  BASE_URL, GIT_SHA, EXPECTED_ROLE, ASK_LIMIT, INGESTION_LIMIT, LOGIN_SPACING_S,
+  BASE_URL, EXPECTED_ROLE, ASK_LIMIT, INGESTION_LIMIT, LOGIN_SPACING_S,
   requireThat, minimumSpacingSeconds, accountEmail, accountRange,
   loginAccounts, sessionForThisVu, warmUp, paceFrom, setupTimeoutSeconds,
   nextQuestion, ask, isValidReply, wasAnswered, validityProblems, throttleCounts,
-  recordResponse,
+  recordResponse, runRecord, runRecordLines,
 } from './common.js';
 
 const MAX_DEGRADATION = 0.25;
@@ -235,7 +235,7 @@ export function handleSummary(data) {
     },
     answered_percent: data.metrics.answered_rate
       ? Number((data.metrics.answered_rate.values.rate * 100).toFixed(1)) : null,
-    commit_sha: GIT_SHA || null,
+    ...runRecord(),
     role: EXPECTED_ROLE,
     role_checked_at_login: true,
     accounts: {
@@ -258,7 +258,7 @@ export function handleSummary(data) {
     `  questions: baseline ${fmt(askResult.baseline_p90_ms)} -> load ${fmt(askResult.load_p90_ms)} (${pct(askResult.degradation_percent)})\n` +
     `  uploads  : baseline ${fmt(uploadResult.baseline_p90_ms)} -> load ${fmt(uploadResult.load_p90_ms)} (${pct(uploadResult.degradation_percent)})\n` +
     `  samples (ask base/load, upload base/load): ${count('ask_baseline_ms')}/${count('ask_load_ms')}, ${count('upload_baseline_ms')}/${count('upload_load_ms')}\n` +
-    `  commit   : ${GIT_SHA || 'not recorded'}\n` +
+    runRecordLines((name) => `  ${name.padEnd(9)}: `) +
     `  run valid: ${valid}\n` +
     problems.map((p) => `    INVALID: ${p}\n`).join('') +
     `  verdict  : ${verdict}\n`;

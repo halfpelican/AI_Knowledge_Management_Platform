@@ -1,5 +1,6 @@
-// Shared helpers for the NFR-08 and NFR-09 load tests. How to run them, and why
-// the pacing numbers below are what they are: tests/load/README.md (D-82).
+// Shared helpers for the NFR-08 and NFR-09 load tests. How to run them (through
+// run.ps1, which gates on scripts/check_flm.py), and why the pacing numbers below
+// are what they are: tests/load/README.md (D-82, D-83, D-84).
 import http from 'k6/http';
 import exec from 'k6/execution';
 import { check, fail, sleep } from 'k6';
@@ -22,6 +23,25 @@ export const EXPECTED_ROLE = 'Employee';
 export const GIT_SHA = __ENV.GIT_SHA || '';
 const SHA_PATTERN = /^[0-9a-f]{7,40}$/i;
 
+// The FLM build the run measured (D-83 decision 3) and the hash of the database
+// snapshot it ran on (D-84 decisions 1 and 3), recorded in the results JSON for
+// the same reason as GIT_SHA. tests/load/run.ps1 reads the first from
+// `flm version` and takes the second as an argument. A run that bypasses it has
+// to type both, or it is refused here.
+export const FLM_VERSION = __ENV.FLM_VERSION || '';
+const FLM_VERSION_PATTERN = /^v\d+\.\d+\.\d+\S*$/;
+export const DB_DUMP_SHA256 = (__ENV.DB_DUMP_SHA256 || '').toLowerCase();
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+// Set only by run.ps1, and only after scripts/check_flm.py has passed (D-83
+// decision 3). A run without them still runs, and is recorded INVALID, because
+// nothing says the gate ran. They are a record, not a proof: anyone can type them.
+const FLM_CHECK_PASSED_AT = __ENV.FLM_CHECK_PASSED_AT || '';
+const FLM_CHECK_URL = __ENV.FLM_CHECK_URL || '';
+// 'none' or 'present': whether run.ps1 saw uncommitted changes to tracked files,
+// in which case GIT_SHA does not fully name what was run.
+const GIT_TRACKED_CHANGES = __ENV.GIT_TRACKED_CHANGES || '';
+
 // Init-time refusals: thrown here, they stop k6 before setup() sends anything.
 export function requireThat(condition, message) {
   if (!condition) {
@@ -37,7 +57,14 @@ requireThat(!__ENV.GIT_COMMIT || __ENV.GIT_SHA,
 requireThat(TEST_PASSWORD,
   'Set -e TEST_PASSWORD to the LOAD_TEST_PASSWORD the accounts were created with.');
 requireThat(SHA_PATTERN.test(GIT_SHA),
-  `Set -e GIT_SHA to the commit under test (git rev-parse HEAD); got "${GIT_SHA}".`);
+  `Set -e GIT_SHA to the commit under test (git rev-parse HEAD); got "${GIT_SHA}". ` +
+  'tests/load/run.ps1 sets it.');
+requireThat(FLM_VERSION_PATTERN.test(FLM_VERSION),
+  `Set -e FLM_VERSION to the version \`flm version\` prints, such as v0.9.39; got "${FLM_VERSION}". ` +
+  'tests/load/run.ps1 sets it, after scripts/check_flm.py passes (D-83).');
+requireThat(SHA256_PATTERN.test(DB_DUMP_SHA256),
+  'Set -e DB_DUMP_SHA256 to the SHA-256 of the database snapshot this run starts from, ' +
+  `64 hex digits (D-84); got "${DB_DUMP_SHA256}". tests/load/run.ps1 takes it as -DbDumpSha256.`);
 
 // --- The server's limits, copied from apps/core/constants.py ------------------
 // k6 cannot import Python, so these are copies. If a rate there changes, change
@@ -281,11 +308,46 @@ export function wasAnswered(res) {
   }
 }
 
+// --- What the run measured ---------------------------------------------------------
+// The commit, the FLM build, the gate's result and the database snapshot, for the
+// results JSON (D-82 rule 7, D-83 decision 3, D-84 decision 3). null where a value
+// was not given, so a missing one cannot read as recorded.
+export function runRecord() {
+  return {
+    commit_sha: GIT_SHA || null,
+    uncommitted_tracked_changes:
+      GIT_TRACKED_CHANGES === 'present' ? true : GIT_TRACKED_CHANGES === 'none' ? false : null,
+    flm_version: FLM_VERSION || null,
+    flm_check: FLM_CHECK_PASSED_AT
+      ? { result: 'PASS', script: 'scripts/check_flm.py', at: FLM_CHECK_PASSED_AT,
+          against: FLM_CHECK_URL || null, by: 'tests/load/run.ps1' }
+      : null,
+    db_dump_sha256: DB_DUMP_SHA256 || null,
+  };
+}
+
+// The same record, as summary lines. label is padded by the caller.
+export function runRecordLines(label) {
+  const r = runRecord();
+  const changes = r.uncommitted_tracked_changes === null ? 'not recorded'
+    : r.uncommitted_tracked_changes ? 'UNCOMMITTED CHANGES to tracked files'
+    : 'no uncommitted changes to tracked files';
+  const check = r.flm_check
+    ? `check_flm.py PASS at ${r.flm_check.at} against ${r.flm_check.against || 'an unreported URL'}`
+    : 'check_flm.py NOT RECORDED as run';
+  return (
+    `${label('commit')}${r.commit_sha || 'not recorded'} (${changes})\n` +
+    `${label('FLM')}${r.flm_version || 'not recorded'}; ${check}\n` +
+    `${label('DB snapshot SHA-256')}${r.db_dump_sha256 || 'not recorded'}\n`
+  );
+}
+
 // --- The validity gate -------------------------------------------------------------
-// A run counts only if this returns no problems. It reports three kinds, each in
-// its own words: any 429 (D-82 rule 5), a missing commit SHA (rule 7), and each
-// validity threshold not met. The latency limits are deliberately not in it: a
-// valid run that is too slow is a FAIL, not an invalid run.
+// A run counts only if this returns no problems. It reports each kind in its own
+// words: any 429 (D-82 rule 5), a missing commit SHA (rule 7), a missing FLM
+// version, snapshot hash or gate result (D-83 decision 3, D-84 decision 3), and
+// each validity threshold not met. The latency limits are deliberately not in it:
+// a valid run that is too slow is a FAIL, not an invalid run.
 //
 // thresholds: [[metricName, expression], ...] that must each have passed.
 export function validityProblems(data, thresholds) {
@@ -303,6 +365,18 @@ export function validityProblems(data, thresholds) {
   }
   if (!SHA_PATTERN.test(GIT_SHA)) {
     problems.push('no commit SHA was recorded (-e GIT_SHA)');
+  }
+  if (!FLM_VERSION_PATTERN.test(FLM_VERSION)) {
+    problems.push('no FLM version was recorded (-e FLM_VERSION)');
+  }
+  if (!SHA256_PATTERN.test(DB_DUMP_SHA256)) {
+    problems.push('no database snapshot hash was recorded (-e DB_DUMP_SHA256)');
+  }
+  if (!FLM_CHECK_PASSED_AT) {
+    problems.push(
+      'scripts/check_flm.py is not recorded as passing before this run, so nothing shows ' +
+      "FLM's embeddings were deterministic (D-83 decision 3). Run it through tests/load/run.ps1."
+    );
   }
   for (const [metric, expression] of thresholds) {
     const result = data.metrics[metric]?.thresholds?.[expression];

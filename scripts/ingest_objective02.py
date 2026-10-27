@@ -30,18 +30,39 @@ Usage, with the server and FLM running (``manage.py runserver`` and ``flm serve`
     $env:KMP_CORPUS_ADMIN_PASSWORD = "..."
     $env:KMP_CORPUS_EMPLOYEE_EMAIL = "..."   # an Employee account
     $env:KMP_CORPUS_EMPLOYEE_PASSWORD = "..."
-    .venv/Scripts/python.exe scripts/ingest_objective02.py [--base-url http://127.0.0.1:8000]
+    .venv/Scripts/python.exe scripts/ingest_objective02.py [--base-url http://127.0.0.1:8000] \
+        [--output-dir corpus/objective-02/runs/<date>]
+
+docs/measurement-runbook.md gives the commands for the item 6 run, with its own database.
 
 It refuses to run if any manifest title is already in the repository or the meetings list, so
-a second run cannot mix duplicates and 409s into the evidence. Results are written beside the
-manifest, as ``results.json`` and ``results.md``. ``manifest.json`` is the only manifest this
-script reads; a spreadsheet beside it is not consulted.
+a second run cannot mix duplicates and 409s into the evidence. ``manifest.json`` is the only
+manifest this script reads; a spreadsheet beside it is not consulted.
+
+**Where the results go.** ``results.json`` and ``results.md`` are written to ``--output-dir``,
+which defaults to this folder, beside the manifest. A full run refuses to start if that folder
+already holds a ``results.json``, so the 6 October evidence beside the manifest is never
+overwritten (D-84 decision 1): a new run writes to a dated folder of its own, for example
+``--output-dir corpus/objective-02/runs/2026-10-27``.
+
+**What a full run records, and what it checks first (D-83, D-84).** Before signing in, it runs
+scripts/check_flm.py's checks and refuses unless they pass and FLM is v0.9.39, because an
+ingestion on a noisy FLM stores noise as the index. It refuses if the database its own process
+reads is ``kmp``. The results carry the commit SHA, whether tracked files had uncommitted
+changes, the FLM version and the database NAME, never its URL.
+
+**The chunk count reads the database this process sees, which must be the server's.** The
+measurement server has its own ``DATABASE_URL`` (D-84), and a value set in the shell wins over
+``.env``, so set the same one in this shell. If a document the server created is not in this
+process's database, its chunk count is not read, and the item is marked as missed rather than
+passing with a count of nothing.
 
 ``--search-only`` re-runs the phrase searches of an earlier run, without uploading anything:
 re-uploading would only be refused 409 for every document. It reads the identifiers the earlier
-run recorded in ``results.json``, searches each valid item's CURRENT manifest phrase from both
-sessions, re-judges every item, and rewrites the results. Every ingestion outcome (status, time,
-pages, chunks) is kept from the earlier run, and the results say which run each column comes from.
+run recorded in ``results.json`` in ``--output-dir``, searches each valid item's CURRENT manifest
+phrase from both sessions, re-judges every item, and rewrites the results there. Every ingestion
+outcome (status, time, pages, chunks) is kept from the earlier run, and the results say which run
+each column comes from.
 """
 
 from __future__ import annotations
@@ -60,8 +81,16 @@ from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPTS_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+
+import check_flm  # noqa: E402  scripts/check_flm.py, the D-83 gate
+import measurement_record  # noqa: E402  scripts/measurement_record.py
+
 CORPUS = REPOSITORY_ROOT / "corpus" / "objective-02"
 MANIFEST = CORPUS / "manifest.json"
+REFUSED = 2  # exit code: refused before anything was uploaded
 
 # Objective 02's bound, and the page count it applies to.
 PROCESSING_BOUND_SECONDS = 60
@@ -256,17 +285,33 @@ def search_finds(session, phrase, source_id, title):
     }
 
 
-def chunk_counts(document_ids):
-    """Read-only, through the ORM: how many chunks each created document has."""
-    sys.path.insert(0, str(REPOSITORY_ROOT))
+def orm_database_name() -> str:
+    """The NAME of the database this process's ORM reads. Never the URL or a credential."""
+    if str(REPOSITORY_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPOSITORY_ROOT))
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     import django
 
     django.setup()
-    from apps.documents.models import ContentChunk
+    from django.conf import settings
 
+    return str(settings.DATABASES["default"].get("NAME", ""))
+
+
+def chunk_counts(document_ids):
+    """Read-only, through the ORM: how many chunks each created document has.
+
+    None for a document whose row is not in this process's database: the script is then
+    reading a different database from the server's, and a count of 0 would read as "nothing
+    was partly ingested" when nothing was looked at.
+    """
+    orm_database_name()  # sets Django up
+    from apps.documents.models import ContentChunk, Document
+
+    present = {str(pk) for pk in Document.objects.filter(id__in=document_ids).values_list("id", flat=True)}
     return {
-        doc_id: ContentChunk.objects.filter(source_id=doc_id).count() for doc_id in document_ids
+        doc_id: (ContentChunk.objects.filter(source_id=doc_id).count() if str(doc_id) in present else None)
+        for doc_id in document_ids
     }
 
 
@@ -287,6 +332,11 @@ def judge(item, outcome):
         misses.append("a record was created for an item that should have been refused outright")
     if item["kind"] == "invalid" and outcome.get("chunks"):
         misses.append(f"{outcome['chunks']} chunk(s) written for an invalid item: partly ingested")
+    if outcome.get("chunk_count_unread"):
+        misses.append(
+            "its record is not in the database this script reads, so its chunks were not counted: "
+            "set this shell's DATABASE_URL to the server's"
+        )
     for role in expected.get("found_by", []):
         search = outcome["search"].get(role, {})
         if not search.get("found"):
@@ -307,31 +357,43 @@ def judge(item, outcome):
     return misses
 
 
-def write_results(manifest, outcomes, started_at, base_url, searches_rerun=None):
+def write_results(manifest, outcomes, started_at, base_url, searches_rerun=None, *,
+                  output_dir=CORPUS, record=None):
     results = {
         "run_started": started_at,
         "searches_rerun": searches_rerun,
         "base_url": base_url,
+        "record": record,
         "manifest": "corpus/objective-02/manifest.json — the only manifest the script reads",
         "criteria": manifest["criteria"],
         "items": outcomes,
         "missed": [o["id"] for o in outcomes if o["misses"]],
     }
-    (CORPUS / "results.json").write_text(
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "results.json").write_text(
         json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
     )
     lines = [
         "# Objective 02 — ingestion results",
         "",
         f"Run started {started_at} against `{base_url}`, by `scripts/ingest_objective02.py`, from",
-        "`manifest.json`. Times are the wall-clock time of the synchronous upload or paste request,",
-        "which includes extraction, chunking and embedding on the NPU. The chunk count is the one",
-        "check made outside the API: a read-only ORM count after the run.",
+        "`corpus/objective-02/manifest.json`. Times are the wall-clock time of the synchronous upload",
+        "or paste request, which includes extraction, chunking and embedding on the NPU. The chunk",
+        "count is the one check made outside the API: a read-only ORM count after the run.",
         "",
-        "`manifest.json` in this folder is the only manifest the script reads. The team's",
+        "`corpus/objective-02/manifest.json` is the only manifest the script reads. The team's",
         "`Objective02_Manifest.xlsx` was the source it was transcribed from, and is not read.",
         "",
     ]
+    if record:
+        flm = record.get("flm_version") or {}
+        changes = " Tracked files had UNCOMMITTED changes." if record.get("uncommitted_tracked_changes") else ""
+        lines += [
+            f"Commit `{record.get('commit_sha')}`.{changes} FLM `{flm.get('cli')}` by `flm version`,",
+            f"`{flm.get('server')}` by the server. Database `{record.get('database')}`.",
+            "",
+        ]
     if searches_rerun:
         lines += [
             f"**The search columns were re-run on {searches_rerun}** with `--search-only`, against the",
@@ -376,8 +438,41 @@ def write_results(manifest, outcomes, started_at, base_url, searches_rerun=None)
     lines.append(
         f"Documents of {PAGE_BOUND} pages or fewer over {PROCESSING_BOUND_SECONDS}s: {', '.join(slow) or 'none'}."
     )
-    (CORPUS / "results.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
+    (output_dir / "results.md").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     return missed, slow
+
+
+def output_dir_problem(output_dir: Path) -> str | None:
+    """Why a full run may not write to ``output_dir``, or None. Never overwrites evidence."""
+    existing = Path(output_dir) / "results.json"
+    if existing.exists():
+        return (
+            f"{existing} already exists, and a run never overwrites earlier evidence (D-84). "
+            "Pass --output-dir with a new folder, e.g. corpus/objective-02/runs/<date>."
+        )
+    return None
+
+
+def gate_problems() -> tuple[list[str], dict]:
+    """check_flm.py's checks and the pinned version, before anything is uploaded (D-83).
+
+    Returns (reasons to refuse, the FLM version record). Reads FLM_BASE_URL from this
+    process's environment, as check_flm.py does, so set the server's value in this shell.
+    """
+    base_url, _ = check_flm.read_env("FLM_BASE_URL", check_flm.DEFAULT_BASE_URL)
+    api_key, _ = check_flm.read_env("FLM_API_KEY", check_flm.DEFAULT_API_KEY)
+    chat_model, _ = check_flm.read_env("FLM_CHAT_MODEL", check_flm.DEFAULT_CHAT_MODEL)
+    embed_model, _ = check_flm.read_env("FLM_EMBED_MODEL", check_flm.DEFAULT_EMBED_MODEL)
+    print(f"FLM gate: scripts/check_flm.py's checks against {base_url} (D-83)")
+    checks = check_flm.run_checks(base_url, api_key, chat_model, embed_model)
+    version = check_flm.flm_version(base_url, api_key)
+    problems = []
+    if not check_flm.checks_passed(checks):
+        failed = "; ".join(f"{name}: {status}" for name, status, _ in checks if status != "PASS")
+        problems.append(f"scripts/check_flm.py's checks did not pass ({failed})")
+    problems += version.problems()
+    print(f"\nFLM version: {version.summary()}")
+    return problems, version.as_record()
 
 
 def main():
@@ -387,7 +482,17 @@ def main():
                         help="MAX_UPLOAD_BYTES (apps/core/constants.py); the generated I02 exceeds it")
     parser.add_argument("--search-only", action="store_true",
                         help="re-run the phrase searches of the run in results.json; upload nothing")
+    parser.add_argument("--output-dir", type=Path, default=CORPUS,
+                        help="where results.json and results.md go (default: beside the manifest); "
+                             "a full run refuses a folder that already holds results.json")
     args = parser.parse_args()
+
+    # Cheap refusals first, before any credential is read or any request is sent.
+    if not args.search_only:
+        problem = output_dir_problem(args.output_dir)
+        if problem:
+            print(f"REFUSED: {problem}\nNothing was uploaded.")
+            return REFUSED
 
     credentials = {
         "Administrator": ("KMP_CORPUS_ADMIN_EMAIL", "KMP_CORPUS_ADMIN_PASSWORD"),
@@ -396,6 +501,27 @@ def main():
     missing = [name for pair in credentials.values() for name in pair if not os.environ.get(name)]
     if missing:
         sys.exit(f"Set {', '.join(missing)} (see the module docstring).")
+
+    record = None
+    if not args.search_only:
+        # The database this process reads, by NAME. Never kmp for a run of this script
+        # (D-84 decision 1), and named in the results so a reader can see which it was.
+        database = orm_database_name()
+        print(f"This process reads the database {database!r}; the server must write to the same one.")
+        try:
+            measurement_record.refuse_protected_database(database)
+        except measurement_record.RecordError as exc:
+            print(f"REFUSED: {exc}\nNothing was uploaded.")
+            return REFUSED
+        problems, flm = gate_problems()
+        try:
+            record = measurement_record.run_record(dump_sha256=None, database=database, flm=flm)
+        except measurement_record.RecordError as exc:
+            problems.append(f"the run cannot be recorded: {exc}")
+        if problems:
+            print("\n" + "\n".join(f"REFUSED: {p}" for p in problems) + "\nNothing was uploaded.")
+            return REFUSED
+
     sessions = {
         role: sign_in(args.base_url, os.environ[email], os.environ[password], role)
         for role, (email, password) in credentials.items()
@@ -405,7 +531,7 @@ def main():
     items = manifest["items"]
 
     if args.search_only:
-        return search_only(manifest, items, sessions, args.base_url)
+        return search_only(manifest, items, sessions, args.base_url, args.output_dir)
 
     # Refuse to mix a second run into the evidence.
     admin = sessions["Administrator"]
@@ -451,17 +577,23 @@ def main():
     for outcome in outcomes:
         if outcome["source_id"] in counts:
             outcome["chunks"] = counts[outcome["source_id"]]
+            outcome["chunk_count_unread"] = counts[outcome["source_id"]] is None
     for item, outcome in zip(items, outcomes):
         outcome["misses"] = judge(item, outcome)
+    if any(o.get("chunk_count_unread") for o in outcomes):
+        print("\nWARNING: documents the server created are not in this process's database. "
+              "Set DATABASE_URL in this shell to the server's.")
 
-    missed, slow = write_results(manifest, outcomes, started_at, args.base_url)
+    missed, slow = write_results(manifest, outcomes, started_at, args.base_url,
+                                 output_dir=args.output_dir, record=record)
     print(f"\nMissed: {[o['id'] for o in missed] or 'none'}; over the bound: {slow or 'none'}")
-    print(f"Wrote {CORPUS / 'results.json'} and {CORPUS / 'results.md'}")
+    print(f"Wrote {args.output_dir / 'results.json'} and {args.output_dir / 'results.md'}")
     return 1 if missed or slow else 0
 
 
-def search_only(manifest, items, sessions, base_url):
-    previous = json.loads((CORPUS / "results.json").read_text(encoding="utf-8"))
+def search_only(manifest, items, sessions, base_url, output_dir=CORPUS):
+    output_dir = Path(output_dir)
+    previous = json.loads((output_dir / "results.json").read_text(encoding="utf-8"))
     by_id = {outcome["id"]: outcome for outcome in previous["items"]}
     missing = [item["id"] for item in items if item["id"] not in by_id]
     if missing:
@@ -480,7 +612,8 @@ def search_only(manifest, items, sessions, base_url):
         outcomes.append(outcome)
         print(f"{item['id']}: {item.get('phrase')!r} -> "
               f"{ {role: s.get('found') for role, s in outcome['search'].items()} }", flush=True)
-    missed, slow = write_results(manifest, outcomes, previous["run_started"], base_url, rerun_at)
+    missed, slow = write_results(manifest, outcomes, previous["run_started"], base_url, rerun_at,
+                                 output_dir=output_dir, record=previous.get("record"))
     print(f"\nMissed: {[o['id'] for o in missed] or 'none'}; over the bound: {slow or 'none'}")
     return 1 if missed or slow else 0
 
