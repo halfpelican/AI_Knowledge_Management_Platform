@@ -199,6 +199,49 @@ export const TEXT = {
   roleChangeSelfDemotion:
     'You cannot remove your own Administrator role. Ask another Administrator to change it for you.',
 
+  /* ---- D-79's limits, on every screen that can meet one ------------------ */
+  // Login and registration keep the API client's own 429 text (D-26). These are
+  // the per-user limits D-79 added, kept together so every 429 the interface can
+  // show is read in one place. None of them restates a rate: the rates are the
+  // server's (apps/core/constants.py), and what a screen says is only when the
+  // limit lifts, from the reply's `Retry-After`.
+  //
+  // When, in words, from `Retry-After` rounded up (src/utils/retryAfter.js): whole
+  // seconds under a minute, whole minutes from there. "later" where the reply
+  // carried no usable `Retry-After`, so nothing is promised that was not sent.
+  retryInSeconds: (seconds) => (seconds === 1 ? 'in 1 second' : `in ${seconds} seconds`),
+  retryInMinutes: (minutes) => (minutes === 1 ? 'in 1 minute' : `in ${minutes} minutes`),
+  retryNow: 'now',
+  retryLater: 'later',
+  // The in-flight 429 (`code` "ask_in_flight"). Not NFR-19's notice: nothing is
+  // unavailable, the user's own previous question is still being answered — in
+  // another tab, or in this one before the screen was left and come back to, or
+  // reloaded (D-77). An information notice, not an alert,
+  // and it promises no time, because the reply carries none and an answer can take
+  // minutes. Nothing was recorded, and the question stays in the field.
+  askInFlightTitle: 'Your previous question is still being answered',
+  askInFlight:
+    'Only one question is answered at a time, and an answer can take several minutes. ' +
+    'This question was not recorded, so you can send it again once the previous one has been answered.',
+  // The rate 429 on POST /api/ask, and on the create that precedes a first question
+  // (POST /api/conversations, its own budget at the same rate, D-80). Either way
+  // nothing was recorded and the question stays in the field.
+  askRateLimitedTitle: 'Too many questions in a short time',
+  askRateLimited: (when) =>
+    `You have asked too many questions in a short time. You can ask again ${when}. ` +
+    'This question was not recorded, so you can send it again then.',
+  // The ingestion 429: one budget for document upload, meeting ingestion and
+  // reprocess. "The upload limit" names it alike on all three, so the one limit is
+  // recognisably one. The limit is the user's and not the file's, so nothing here
+  // says the file was wrong, and each says what became of the material.
+  uploadLimitedStatus: 'Not uploaded',
+  uploadLimitReached: (when) =>
+    `The upload limit has been reached, so this file was not stored. It stays in the queue, and you can upload again ${when}.`,
+  reprocessLimitReached: (when) =>
+    `The upload limit has been reached, so this document was not processed again. You can try again ${when}.`,
+  meetingLimitReached: (when) =>
+    `The upload limit has been reached, so this transcript was not stored. What you entered is still in the form, and you can add it ${when}.`,
+
   /* ---- Visibility, shared by FR-08 and FR-09 (D-29) --------------------- */
   // Omitting the field means both roles, so "Everyone" sends nothing at all. A
   // scope excluding the contributor's own role is refused by the server with a

@@ -8,13 +8,19 @@
  * permissive fake would have made up.
  *
  * Mocked at `fetch`, beneath src/api/client.js, so the client's own status
- * handling (the 503 message, the ApiError, the JSON parsing) is exercised as
- * shipped rather than replaced.
+ * handling (the 503 message, the ApiError, the JSON parsing, a 429's
+ * `Retry-After`) is exercised as shipped rather than replaced.
+ *
+ * `XMLHttpRequest` is answered from the same table, because src/api/client.js's
+ * `upload()` uses it: FR-08's per-file progress needs it, since `fetch` reports
+ * none, and FR-09's transcript file goes through the same helper. It is the same
+ * rule: a route the table names is answered, and any other is refused and recorded
+ * exactly as tests/setup.js's own stand-in records it, so the test fails.
  */
 import { vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { refuseFetch } from './setup.js'
+import { refuseFetch, refusedCalls } from './setup.js'
 
 /**
  * Routes are matched on method and path; the query string is not part of the key,
@@ -25,8 +31,15 @@ import { refuseFetch } from './setup.js'
  * promise, which is how a test answers from the query string or holds a response
  * back to observe a loading state.
  *
- * @param {Record<string, {status?: number, body?: unknown} | ((url: URL) => {status?: number, body?: unknown} | Promise<{status?: number, body?: unknown}>)>} routes
- * @returns {{method: string, path: string, search: string, body: unknown}[]} every request answered, in order
+ * A route may give `headers`, such as D-79's `Retry-After`, which are sent beside
+ * `Content-Type` on whichever transport asked.
+ *
+ * A request's `body` is recorded as the screen sent it: parsed JSON from `fetch`,
+ * and the `FormData` itself from `XMLHttpRequest`, so a test reads a field with
+ * `.get()`.
+ *
+ * @param {Record<string, {status?: number, body?: unknown, headers?: Record<string, string>} | ((url: URL) => {status?: number, body?: unknown, headers?: Record<string, string>} | Promise<{status?: number, body?: unknown, headers?: Record<string, string>}>)>} routes
+ * @returns {{method: string, path: string, search: string, body: unknown}[]} every request answered, in order, from both transports
  */
 export function serveApi(routes) {
   const answered = []
@@ -43,18 +56,110 @@ export function serveApi(routes) {
         search: url.search,
         body: init.body ? JSON.parse(init.body) : undefined,
       })
-      const { status = 200, body = null } = typeof route === 'function' ? await route(url) : route
+      const { status = 200, body = null, headers = {} } = typeof route === 'function' ? await route(url) : route
       // No body is a null body, not an empty string: the Fetch spec refuses any
       // body at all on a 204, so `new Response('', {status: 204})` throws, and the
       // client would have reported FR-15's 204 as an unreachable server. Read as
       // text, a null body is "" exactly as the empty string was.
       return new Response(body === null ? null : JSON.stringify(body), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...headers },
       })
     }),
   )
+  vi.stubGlobal('XMLHttpRequest', servedXMLHttpRequest(routes, answered))
   return answered
+}
+
+/**
+ * The part of `EventTarget` the client uses on an `XMLHttpRequest` and on its
+ * `upload`: listeners added and removed by type, and events fired at them.
+ */
+class Listeners {
+  constructor() {
+    this.byType = new Map()
+  }
+
+  addEventListener(type, listener) {
+    if (!this.byType.has(type)) this.byType.set(type, new Set())
+    this.byType.get(type).add(listener)
+  }
+
+  removeEventListener(type, listener) {
+    this.byType.get(type)?.delete(listener)
+  }
+
+  emit(type, event = {}) {
+    for (const listener of [...(this.byType.get(type) ?? [])]) listener({ type, ...event })
+  }
+}
+
+/**
+ * An `XMLHttpRequest` class answering from `routes`, with what src/api/client.js's
+ * `upload()` reads: `open`, `setRequestHeader`, `send`, `abort`, the `load`,
+ * `error`, `timeout` and `abort` events, `upload`'s `progress` and `load`, then
+ * `status`, `responseText` and `getResponseHeader`.
+ *
+ * Once sent, the whole body is reported transferred at once (one `progress` at
+ * 100%, then `upload`'s `load`), and the reply follows when the route answers, a
+ * task later at the earliest, so a screen's "uploading" and "processing" states
+ * both happen. A route that holds its answer (`heldResponse`) holds the reply.
+ */
+function servedXMLHttpRequest(routes, answered) {
+  return class ServedXMLHttpRequest extends Listeners {
+    constructor() {
+      super()
+      this.upload = new Listeners()
+      this.status = 0
+      this.responseText = ''
+      this.responseHeaders = new Map()
+      this.settled = false
+    }
+
+    open(method, url) {
+      this.method = method.toUpperCase()
+      this.url = new URL(url, 'http://localhost')
+      this.route = routes[`${this.method} ${this.url.pathname}`]
+      if (!this.route) {
+        // Refused as tests/setup.js's stand-in refuses: recorded, so the test fails
+        // in afterEach whatever it asserted, and thrown, as that one throws.
+        refusedCalls.push(`XMLHttpRequest ${method} ${url}`)
+        throw new TypeError(`The front-end suite has no network: XMLHttpRequest ${method} ${url}`)
+      }
+    }
+
+    setRequestHeader() {}
+
+    getResponseHeader(name) {
+      return this.responseHeaders.get(name.toLowerCase()) ?? null
+    }
+
+    abort() {
+      if (this.settled) return
+      this.settled = true
+      this.emit('abort')
+    }
+
+    send(body) {
+      answered.push({ method: this.method, path: this.url.pathname, search: this.url.search, body })
+      const { route, url } = this
+      setTimeout(async () => {
+        if (this.settled) return
+        this.upload.emit('progress', { lengthComputable: true, loaded: 1, total: 1 })
+        this.upload.emit('load')
+        const { status = 200, body: replyBody = null, headers = {} } =
+          typeof route === 'function' ? await route(url) : route
+        if (this.settled) return
+        this.settled = true
+        this.status = status
+        this.responseText = replyBody === null ? '' : JSON.stringify(replyBody)
+        for (const [name, value] of Object.entries({ 'Content-Type': 'application/json', ...headers })) {
+          this.responseHeaders.set(name.toLowerCase(), String(value))
+        }
+        this.emit('load')
+      }, 0)
+    }
+  }
 }
 
 /**

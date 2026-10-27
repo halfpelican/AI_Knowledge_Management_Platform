@@ -11,6 +11,7 @@ Not named test_*.py, so pytest collects the tests and not the builders.
 import io
 import struct
 import zipfile
+import zlib
 
 import docx
 import openpyxl
@@ -149,3 +150,174 @@ def words(count: int, prefix: str = "w") -> str:
     """``count`` distinct whitespace-delimited tokens, so a chunk's contents can be
     checked by position rather than by eye."""
     return " ".join(f"{prefix}{number}" for number in range(count))
+
+
+# --- PDFs for D-81's bounds -------------------------------------------------------------
+#
+# Built here, in code, and never committed as binaries (D-81, and Stage 4 item 12a's rule
+# for OOXML). Every page and every form carries a /Resources font: pypdf returns "" for a
+# page with no resources WITHOUT parsing its content stream, so a fixture without one would
+# pass every bound by never being read. The tests assert each fixture IS parsed, by counting
+# its operators, before they assert anything about a bound.
+
+# Object 3 in every document below. Helvetica is one of the standard 14, so nothing is
+# embedded and pypdf has no font program to decode.
+FONT_OBJECT = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+FONT_RESOURCES = b"/Resources << /Font << /F1 3 0 R >> >>"
+
+# Two operators in four bytes: save and restore the graphics state. Cheap for pypdf to
+# act on and dense to parse, which is the shape D-81's measurements used.
+GRAPHICS_STATE_PAIR = b"q Q "
+
+
+def text_content(text: str) -> bytes:
+    """A content stream showing ``text`` (ASCII, no parentheses or backslashes)."""
+    return f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode("ascii")
+
+
+def repeated_operators(pair_count: int) -> bytes:
+    """``2 * pair_count`` operators: ``q Q`` repeated."""
+    return GRAPHICS_STATE_PAIR * pair_count
+
+
+def stream_object(data: bytes, *, dictionary: bytes = b"", compress: bool = True) -> bytes:
+    """A stream object's body. Flate-compressed unless ``compress`` is False, in which case
+    the bytes are stored as they are and no decompression limit applies to them."""
+    body = zlib.compress(data) if compress else data
+    flate = b" /Filter /FlateDecode" if compress else b""
+    return (
+        b"<< /Length " + str(len(body)).encode() + flate + b" " + dictionary + b" >>\nstream\n"
+        + body + b"\nendstream"
+    )
+
+
+def pdf_from_objects(objects) -> bytes:
+    """Number ``objects`` from 1, lay them down with a cross-reference table, and root the
+    trailer at object 1. The same assembly ``pdf_bytes`` does, for any object list."""
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{number} 0 obj\n".encode("ascii") + body + b"\nendobj\n"
+    xref_at = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode("ascii")
+    out += b"0000000000 65535 f \n"
+    for offset in offsets:
+        out += f"{offset:010d} 00000 n \n".encode("ascii")
+    out += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_at}\n%%EOF"
+    ).encode("ascii")
+    return bytes(out)
+
+
+def pdf_pages(contents, *, declared_count=None, compress=True) -> bytes:
+    """One page per entry of ``contents``, each with its own content stream and the font.
+
+    ``declared_count`` writes a /Count into the page tree that differs from the number of
+    pages it really holds, which is how a page tree under-declares itself.
+    """
+    contents = list(contents)
+    first_page = 4
+    kids = " ".join(f"{first_page + 2 * index} 0 R" for index in range(len(contents)))
+    count = len(contents) if declared_count is None else declared_count
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {count} >>".encode("ascii"),
+        FONT_OBJECT,
+    ]
+    for index, content in enumerate(contents):
+        content_number = first_page + 2 * index + 1
+        objects.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " + FONT_RESOURCES
+            + f" /Contents {content_number} 0 R >>".encode("ascii")
+        )
+        objects.append(stream_object(content, compress=compress))
+    return pdf_from_objects(objects)
+
+
+def pdf_shared_stream(page_count: int, content: bytes) -> bytes:
+    """``page_count`` pages whose /Contents all name ONE stream object, object 4."""
+    first_page = 5
+    kids = " ".join(f"{first_page + index} 0 R" for index in range(page_count))
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {page_count} >>".encode("ascii"),
+        FONT_OBJECT,
+        stream_object(content),
+    ]
+    for _ in range(page_count):
+        objects.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " + FONT_RESOURCES
+            + b" /Contents 4 0 R >>"
+        )
+    return pdf_from_objects(objects)
+
+
+def pdf_form_repeated(form_content: bytes, invocations: int) -> bytes:
+    """One page whose content draws one form XObject ``invocations`` times.
+
+    The form carries its OWN /Resources font, for the reason the page does: pypdf parses a
+    form's content only when the form has resources of its own.
+    """
+    page_content = b"/Fm0 Do\n" * invocations
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+        FONT_OBJECT,
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 3 0 R >> /XObject << /Fm0 6 0 R >> >> /Contents 5 0 R >>",
+        stream_object(page_content),
+        stream_object(
+            form_content,
+            dictionary=b"/Type /XObject /Subtype /Form /BBox [0 0 612 792] " + FONT_RESOURCES,
+        ),
+    ]
+    return pdf_from_objects(objects)
+
+
+def pdf_with_embedded_font(text: str, font_program: bytes) -> bytes:
+    """One page whose text is set in a TrueType font carrying ``font_program`` as /FontFile2.
+
+    The program is stored uncompressed, so its STORED size is ``len(font_program)``: the size
+    pypdf's declared-length limit reads. pypdf reads the font program of every font a page's
+    text uses, and never decodes it during extraction, so its bytes need not be a real font.
+    """
+    widths = " ".join(["500"] * 95).encode("ascii")  # characters 32..126
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+        b"<< /Type /Font /Subtype /TrueType /BaseFont /EmbeddedSans /FirstChar 32 "
+        b"/LastChar 126 /Widths [" + widths + b"] /Encoding /WinAnsiEncoding "
+        b"/FontDescriptor 6 0 R >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] " + FONT_RESOURCES
+        + b" /Contents 5 0 R >>",
+        stream_object(text_content(text)),
+        b"<< /Type /FontDescriptor /FontName /EmbeddedSans /Flags 32 "
+        b"/FontBBox [0 -200 1000 900] /ItalicAngle 0 /Ascent 900 /Descent -200 "
+        b"/CapHeight 700 /StemV 80 /FontFile2 7 0 R >>",
+        stream_object(font_program, compress=False),
+    ]
+    return pdf_from_objects(objects)
+
+
+def pdf_with_image(text: str, image_bytes: int) -> bytes:
+    """One page that shows ``text`` and then draws an image XObject of ``image_bytes``
+    stored bytes (a one-pixel-wide greyscale strip, stored uncompressed)."""
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [4 0 R] /Count 1 >>",
+        FONT_OBJECT,
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+        b"/Resources << /Font << /F1 3 0 R >> /XObject << /Im0 6 0 R >> >> /Contents 5 0 R >>",
+        stream_object(text_content(text) + b"\nq 100 0 0 100 0 0 cm /Im0 Do Q"),
+        stream_object(
+            b"\x80" * image_bytes,
+            dictionary=(
+                f"/Type /XObject /Subtype /Image /Width 1 /Height {image_bytes} "
+                f"/ColorSpace /DeviceGray /BitsPerComponent 8"
+            ).encode("ascii"),
+            compress=False,
+        ),
+    ]
+    return pdf_from_objects(objects)

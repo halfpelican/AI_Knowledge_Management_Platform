@@ -10,8 +10,9 @@ import logging
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
+from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError, transaction
-from django.db.models import Prefetch
+from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -50,12 +51,20 @@ from apps.documents.downloads import download_filename
 from apps.documents.models import Document
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
-from apps.ingestion.errors import ExtractionError, OversizedArchiveContentError
+from apps.ingestion.errors import (
+    ExtractionError,
+    OversizedArchiveContentError,
+    TooLargeToExtractError,
+)
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.retrieval.models import Conversation, QueryLog
-from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
+from apps.retrieval.pipeline import (
+    QuestionLengthOutOfRange,
+    answer_question,
+    check_question_length,
+)
 from apps.retrieval.scoping import permission_scope, scoped_documents, scoped_meetings
 from apps.retrieval.search import (
     SearchQueryContainsNullCharacter,
@@ -64,6 +73,7 @@ from apps.retrieval.search import (
 )
 
 from .answers import reply_for
+from .ask_slot import release_ask_slot, take_ask_slot
 from .negotiation import IgnoreClientContentNegotiation
 from .permissions import HasRolePermission
 from .repository import RepositoryFilters, browse, repository_documents
@@ -93,8 +103,8 @@ from .serializers import (
 
 User = get_user_model()
 
-# The download's missing-file errors (D-75). Propagates to the root logger, whose ERROR
-# handler writes logs/errors.log (apps/core/logging_config.py).
+# The download's and reprocess's missing-file errors (D-75). Propagates to the root logger,
+# whose ERROR handler writes logs/errors.log (apps/core/logging_config.py).
 logger = logging.getLogger(__name__)
 
 # One message for an unknown address and a wrong password (D-02): login must not
@@ -172,10 +182,13 @@ UNKNOWN_ATTENDEE_MESSAGE = "One or more of those attendees is not a registered u
 # D-32: FR-08's retry re-runs ingestion on the stored original. Re-indexing a
 # document that is already indexed is FR-15's business, not a retry's.
 ALREADY_INDEXED_MESSAGE = "This document is already indexed."
+# Reprocess's 422 for a document whose file_path is blank, names a file missing from disk, or
+# names a path outside MEDIA_ROOT (D-75's note of 21 October). The cause is logged, not sent.
 NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
-# FR-15's download answers a document whose original is not stored, or is gone from disk, with
+# FR-15's download answers a document whose original is not stored, is gone from disk, or is
+# named by a path outside MEDIA_ROOT, with
 # exactly the 404 body its scoped lookup gives an unknown id or one outside the caller's scope
-# (D-75), so the client cannot tell the three apart. That body is get_object_or_404's own
+# (D-75), so the client cannot tell the cases apart. That body is get_object_or_404's own
 # message, which DRF passes through, so it is restated here word for word: a bare Http404() or
 # NotFound() would answer "Not found." and give the missing file away. A Django release that
 # rewords its message fails apps/api/tests/test_document_download.py, which compares this body
@@ -196,9 +209,17 @@ KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE = (
     "The knowledge service is temporarily unavailable. Your question was not recorded; "
     "please ask it again shortly."
 )
-# FR-13's thread list needs a legible entry from the moment a thread exists, and the
-# interface never asks the user to name a topic before typing (D-43). This placeholder
-# stands only until the first question, which replaces it.
+# D-79: a second POST /api/ask from a user whose previous question is still being answered.
+# The code is what the client branches on, as with ACCOUNT_LOCKED_CODE; it is also what tells
+# this 429 from the rate throttle's, whose body is DRF's and carries no code. No Retry-After,
+# because the answer in flight can take many minutes.
+ASK_IN_FLIGHT_MESSAGE = "Your previous question is still being answered."
+ASK_IN_FLIGHT_CODE = "ask_in_flight"
+# A thread needs a legible title from the moment it exists, since its address reads it (D-77),
+# and the interface never asks the user to name a topic before typing (D-43). This placeholder
+# stands only until the first question, which replaces it. The thread list leaves a thread out
+# until it has a turn (D-80), so the placeholder appears there only on a thread whose first
+# question left nothing to name it with.
 NEW_CONVERSATION_TITLE = "New conversation"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
@@ -208,6 +229,20 @@ CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
 # caller's scope and so confirm that it exists. DocumentDetailView.delete resolves the scope
 # first and consults this second.
 CanManageDocuments = HasRolePermission.for_code(MANAGE_DOCUMENTS_PERMISSION)
+
+
+class ThrottlePostOnlyMixin:
+    """Throttle a view's POST and nothing else (D-79), for a view that also serves a GET.
+
+    DRF applies a view's ``throttle_classes`` to every method, and the list beside an upload or
+    a thread create is read far more often than either is sent. The scope is the view's
+    ``throttle_scope``. It picks by method, as ``get_permissions`` on the same views does.
+    """
+
+    def get_throttles(self):
+        if self.request.method == "POST":
+            return super().get_throttles()
+        return []
 
 
 def not_found(request, exception=None):
@@ -493,7 +528,7 @@ class UserRoleView(APIView):
 # --- FR-08 document upload -----------------------------------------------------------
 
 
-class DocumentsView(APIView):
+class DocumentsView(ThrottlePostOnlyMixin, APIView):
     """``/api/documents`` — FR-08 upload (POST) and the repository list (GET).
 
     **POST.** The rejection order is the proposal's section 7.2 ``validateUpload()``,
@@ -503,6 +538,10 @@ class DocumentsView(APIView):
     by ``get_permissions()`` for POST, so DRF runs it in ``initial()`` before this
     method is entered and before the body is parsed at all (D-30). Processing is
     synchronous, as FR-08 states, with the interface displaying progress.
+
+    **POST is throttled per user in the "ingestion" scope** (D-79), one budget with meeting
+    ingest and reprocess. DRF checks it in ``initial()`` after the permission and before this
+    method, so a rejected upload counts against it too. GET is not throttled.
 
     **GET.** The list FR-08's front end reads the "Indexed" status from, scoped by
     ``visible_to_roles`` from the first day it exists, and since Stage 5 item 1 through
@@ -522,6 +561,8 @@ class DocumentsView(APIView):
     # DRF enforces CSRF as soon as its session authenticator resolves a user, so a
     # cross-site multipart POST here is rejected for want of the token.
     parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "ingestion"
 
     def get_permissions(self):
         # Contributing is not reading: FR-08's 403 guards the upload, and a session
@@ -756,13 +797,15 @@ class DocumentDownloadView(APIView):
     the visibility cascade holds (invariant 2, D-17, D-47), and D-53's probe for this route
     seeds a disagreement to show it fails closed.
 
-    **A missing original is the same 404, logged.** ``file_path`` blank, or the file gone from
-    disk (a delete committing between the lookup and the open, or a hand edit), answers with the
-    body the lookup gives an unknown id, word for word, so the client cannot tell the cases
+    **A missing original is the same 404, logged.** ``file_path`` blank, the file gone from
+    disk (a delete committing between the lookup and the open, or a hand edit), or a
+    ``file_path`` naming a path outside MEDIA_ROOT, which only a script could write, answers with
+    the body the lookup gives an unknown id, word for word, so the client cannot tell the cases
     apart; the cause goes to the error log (D-75), not to the client. The blank case is checked
-    before opening because opening a blank ``FieldFile`` raises ``ValueError``, not ``OSError``.
-    The file is opened before the response is built, so a failure is a 404, not a 500 halfway
-    through a stream.
+    before opening because opening a blank ``FieldFile`` raises ``ValueError``, not ``OSError``,
+    and a path outside MEDIA_ROOT raises ``SuspiciousFileOperation``, which Django would
+    otherwise answer 400. The file is opened before the response is built, so a failure is a
+    404, not a 500 halfway through a stream.
 
     **Typed and named by the signature, never by the name** (D-15's principle on the way out).
     The ``Content-Type`` comes from ``file_type``, which ``read_file_signature`` proved from the
@@ -790,9 +833,10 @@ class DocumentDownloadView(APIView):
             raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
         try:
             handle = document.file_path.open("rb")
-        except OSError:
+        except (OSError, SuspiciousFileOperation):
             logger.error(
-                "The stored original of document %s is missing or unreadable (stored name %r).",
+                "The stored original of document %s is missing, unreadable or outside the media "
+                "folder (stored name %r).",
                 document.pk,
                 stored_name,
                 exc_info=True,
@@ -925,7 +969,7 @@ class SearchView(APIView):
 # --- FR-09 meeting transcript ingestion -------------------------------------------------
 
 
-class MeetingsView(APIView):
+class MeetingsView(ThrottlePostOnlyMixin, APIView):
     """``/api/meetings`` — FR-09 transcript ingestion (POST) and the listing (GET).
 
     A transcript arrives either as pasted text, as JSON, or as an uploaded file, as
@@ -935,11 +979,15 @@ class MeetingsView(APIView):
     is "passed to the chunking and embedding process in FR-08" and a second
     extraction path would be a second thing to keep correct.
 
-    Gated on the same contribute permission as the document upload (D-30).
+    Gated on the same contribute permission as the document upload (D-30), and POST is
+    throttled per user in the same "ingestion" scope as the upload and reprocess (D-79). GET is
+    not throttled.
     """
 
     permission_classes = [IsAuthenticated]
     parser_classes = [JSONParser, MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "ingestion"
 
     def get_permissions(self):
         if self.request.method == "POST":
@@ -1025,6 +1073,14 @@ class MeetingsView(APIView):
             return None, {"file": [UNSUPPORTED_FORMAT_MESSAGE]}
         try:
             return extract_plain_text(uploaded_file, file_format), None
+        except TooLargeToExtractError as exc:
+            # D-81: a PDF over one of the extraction bounds. Caught before its base class, so
+            # the uploader is told which size limit it met, in that bound's own text, rather
+            # than that the file held no readable text. The same 400 as an unreadable file,
+            # because FR-09 enumerates only 201 and 400. Nothing has been stored yet, so the
+            # bound's limit sentence is sent alone: the documents route prefixes it with
+            # "The document was stored but not indexed.", which would be untrue here.
+            return None, {"file": [exc.limit_message]}
         except ExtractionError:
             return None, {"file": [NO_TEXT_IN_TRANSCRIPT_MESSAGE]}
 
@@ -1058,10 +1114,22 @@ class DocumentReprocessView(APIView):
 
     Scoped and permissioned exactly as the upload is: ``contribute_content``, and a
     document outside the caller's scope is 404 rather than 403, because a 403 would
-    confirm the id names something real (CLAUDE.md invariant 1).
+    confirm the id names something real (CLAUDE.md invariant 1). Throttled per user in the
+    "ingestion" scope the upload and meeting ingest share (D-79).
+
+    **No stored original is a 422 with ``NO_STORED_ORIGINAL_MESSAGE``, logged** (D-75's note of
+    21 October). That covers a blank ``file_path``, a file missing from disk and a
+    ``file_path`` naming a path outside MEDIA_ROOT, which raises ``SuspiciousFileOperation``
+    rather than ``OSError``. The file is opened here and closed again before
+    ``reprocess_document`` opens it inside its transaction, so a missing file is found before
+    any chunk is deleted. The cause and the document go to the error log, not to the client.
+    **Not covered:** a file removed between this check and that open still raises inside the
+    transaction, which rolls back and answers 500.
     """
 
     permission_classes = [IsAuthenticated, CanContributeContent]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ingestion"
 
     def post(self, request, pk):
         document = get_object_or_404(
@@ -1072,9 +1140,32 @@ class DocumentReprocessView(APIView):
             return Response(
                 {"detail": ALREADY_INDEXED_MESSAGE}, status=status.HTTP_409_CONFLICT
             )
+        stored_name = document.file_path.name
         if not document.file_path:
             # No original to re-read. Unreachable through the API, which always
             # stores one, but a row can be made without a file.
+            logger.error(
+                "Document %s has no stored original to reprocess (stored name %r).",
+                document.pk,
+                stored_name,
+            )
+            return Response(
+                {"detail": NO_STORED_ORIGINAL_MESSAGE},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        try:
+            # Through the storage rather than the FieldFile, so nothing opened here is cached
+            # on the field for reprocess_document to find closed.
+            with document.file_path.storage.open(stored_name, "rb"):
+                pass
+        except (OSError, SuspiciousFileOperation):
+            logger.error(
+                "The stored original of document %s is missing, unreadable or outside the media "
+                "folder, so it cannot be reprocessed (stored name %r).",
+                document.pk,
+                stored_name,
+                exc_info=True,
+            )
             return Response(
                 {"detail": NO_STORED_ORIGINAL_MESSAGE},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -1141,15 +1232,35 @@ class AskView(APIView):
     ``UnscopedRequestError`` is deliberately not caught, as on the search route: behind
     ``IsAuthenticated`` it is unreachable, and answering a request whose scope could not be
     established is the one thing worse than a 500.
+
+    **Two limits, two 429s (D-79).** The "ask" rate throttle runs in ``initial()``, before the
+    body is read, and answers with DRF's body and ``Retry-After``. The in-flight slot
+    (``apps/api/ask_slot.py``) is taken after every check that can answer 400 or 404 and right
+    before the pipeline, so a refused question never holds it, and is released in ``finally``.
+    While it is held, another ask from the same user is answered at once with
+    ``ASK_IN_FLIGHT_CODE``, writes no ``QueryLog`` row and reaches no provider.
     """
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ask"
 
     def post(self, request):
         serializer = AskSerializer(data=request.data)
         # 400 for a missing question or a conversation_id that is not a UUID. NOT for the
-        # question's length: that rule belongs to the pipeline and arrives below as an
-        # exception, so there is one definition of it (see AskSerializer).
+        # question's length: that rule belongs to the pipeline (see AskSerializer).
         serializer.is_valid(raise_exception=True)
         question = serializer.validated_data["question"]
+        try:
+            # The pipeline's own check, called here as well so that its 400 comes before the
+            # in-flight slot is taken (D-79). answer_question runs it again first thing.
+            check_question_length(question)
+        except QuestionLengthOutOfRange as exc:
+            # FR-12's 400. The bounds and the message belong to the pipeline; this maps the
+            # exception rather than restating the rule, exactly as the search view maps
+            # SearchQueryTooShort. No QueryLog row is written for a question that never ran.
+            return Response(
+                {"question": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST
+            )
         conversation = self._conversation_for(
             request, serializer.validated_data.get("conversation_id")
         )
@@ -1157,16 +1268,24 @@ class AskView(APIView):
         # has ever had a first turn.
         awaiting_a_name = conversation is not None and self._awaiting_a_name(conversation)
 
+        token = take_ask_slot(request.user)
+        if token is None:
+            return Response(
+                {"detail": ASK_IN_FLIGHT_MESSAGE, "code": ASK_IN_FLIGHT_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        try:
+            return self._answer(request, question, conversation, awaiting_a_name)
+        finally:
+            # Whatever the exit: an answer, a 503, or an exception on its way to a 500.
+            release_ask_slot(request.user, token)
+
+    @staticmethod
+    def _answer(request, question, conversation, awaiting_a_name):
+        """The turn itself, run while this user's in-flight slot is held."""
         try:
             outcome = answer_question(
                 question=question, user=request.user, conversation=conversation
-            )
-        except QuestionLengthOutOfRange as exc:
-            # FR-12's 400. The bounds and the message belong to the pipeline; this maps the
-            # exception rather than restating the rule, exactly as the search view maps
-            # SearchQueryTooShort. No QueryLog row is written for a question that never ran.
-            return Response(
-                {"question": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST
             )
         except ProviderUnavailable:
             # NFR-19: "must return a 503 Service Unavailable response with an informative
@@ -1217,7 +1336,7 @@ class AskView(APIView):
         return conversation.title == NEW_CONVERSATION_TITLE and not conversation.queries.exists()
 
 
-class ConversationsView(APIView):
+class ConversationsView(ThrottlePostOnlyMixin, APIView):
     """``/api/conversations`` — FR-13's thread list (GET) and a new thread (POST).
 
     FR-13's Database clause is ``Conversations (Create, Read, Update)``, with no Delete, so
@@ -1228,15 +1347,33 @@ class ConversationsView(APIView):
 
     Every route here is scoped to ``request.user``. A caller may not enumerate the
     existence of another user's threads, so someone else's id is 404 and not 403.
+
+    **The list leaves out a thread nobody has asked anything in (D-80).** A thread is listed
+    once it has a ``QueryLog`` row, answered or not. An empty thread is not deleted:
+    ``GET /api/conversations/{id}`` still reads it, and the Ask screen reuses it by its address.
+
+    **POST is throttled per user in its own "conversation_create" scope** (D-79, D-80), so
+    creating a thread does not spend the ask budget. GET is not throttled.
     """
+
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "conversation_create"
 
     def get(self, request):
         # Newest activity first: "previous conversations are listed" is a list a person
         # scans for the thread they were last in, and last_updated_at is the column the
         # pipeline touches on every turn. The primary key is a deterministic tie-break for
         # two threads created in the same microsecond, nothing more.
-        conversations = Conversation.objects.filter(user=request.user).order_by(
-            "-last_updated_at", "pk"
+        #
+        # D-80: only threads with at least one turn, through an Exists subquery on QueryLog.
+        # Never on the "New conversation" title, which a thread keeps after a turn whose
+        # question named nothing, and never on what a turn renders: a thread whose every turn
+        # is now re-scoped, or whose only turn was a no-answer, still has its rows and stays
+        # listed, so the list cannot show that something was withheld.
+        conversations = (
+            Conversation.objects.filter(user=request.user)
+            .filter(Exists(QueryLog.objects.filter(conversation=OuterRef("pk"))))
+            .order_by("-last_updated_at", "pk")
         )
         return Response(ConversationSerializer(conversations, many=True).data)
 

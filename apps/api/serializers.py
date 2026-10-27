@@ -437,9 +437,10 @@ class AskSerializer(serializers.Serializer):
     turn of.
 
     **No length bounds on ``question``, deliberately.** MINIMUM_QUESTION_LENGTH and
-    MAXIMUM_QUESTION_LENGTH are enforced by ``answer_question``, which raises
-    ``QuestionLengthOutOfRange``; the view maps that exception to FR-12's 400. Declaring
-    ``min_length`` here would be a second definition of "too short" that could drift from
+    MAXIMUM_QUESTION_LENGTH are enforced by the pipeline's ``check_question_length``, which
+    raises ``QuestionLengthOutOfRange``. The view calls it before taking the in-flight slot
+    (D-79) and maps that exception to FR-12's 400, and ``answer_question`` calls it again.
+    Declaring ``min_length`` here would be a second definition of "too short" that could drift from
     the one the pipeline applies, exactly as the keyword search endpoint leaves the
     minimum term length to ``apps.retrieval.search`` (D-41). So this field accepts a blank
     string and untrimmed whitespace: the question travels to the pipeline character for

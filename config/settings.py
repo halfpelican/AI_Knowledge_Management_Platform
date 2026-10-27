@@ -14,7 +14,10 @@ from pathlib import Path
 import environ
 
 from apps.core.constants import (
+    ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
+    CONVERSATION_CREATE_THROTTLE_RATE,
+    INGESTION_THROTTLE_RATE,
     PASSWORD_MINIMUM_LENGTH,
     SESSION_INACTIVITY_MINUTES,
 )
@@ -155,11 +158,29 @@ REST_FRAMEWORK = {
     # reach the API at all, and a cross-site fetch sending application/json is
     # held by the preflight that this same-origin deployment never answers.
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
-    # Registration and login are anonymous and, with FR-02's lockout enforced,
-    # unthrottled they are a denial-of-service primitive: the mandatory 409 on a
-    # duplicate address identifies a registered one and five requests then lock
-    # it. Scoped so only those two views are limited (D-26).
-    "DEFAULT_THROTTLE_RATES": {"auth": AUTHENTICATION_THROTTLE_RATE},
+    # No DEFAULT_THROTTLE_CLASSES: a view is throttled only where it names a scope.
+    #
+    # - "auth": registration and login, per client address. Anonymous and, with FR-02's
+    #   lockout enforced, unthrottled they are a denial-of-service primitive: the mandatory
+    #   409 on a duplicate address identifies a registered one and five requests then lock
+    #   it (D-26).
+    # - "ask", "ingestion" and "conversation_create": per signed-in user (D-79, D-80).
+    #   "ingestion" is one budget shared by the three routes that ingest.
+    #
+    # The counters live in the default cache. No CACHES is set, so that is Django's
+    # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
+    # them, and a multi-process server would need a shared cache.
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": AUTHENTICATION_THROTTLE_RATE,
+        "ask": ASK_THROTTLE_RATE,
+        "ingestion": INGESTION_THROTTLE_RATE,
+        "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
+    },
+    # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
+    # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit
+    # could be dodged by changing that header on every request (D-79). Nothing sits in front
+    # of the server today; if Stage 5 item 9 puts a reverse proxy there, it makes this 1.
+    "NUM_PROXIES": 0,
 }
 
 # --- Audit log (FR-05) -------------------------------------------------------------

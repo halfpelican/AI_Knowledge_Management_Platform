@@ -24,6 +24,11 @@ const UPLOADING = 'uploading' // bytes in flight, determinate bar
 const PROCESSING = 'processing' // transfer done, server extracting and indexing
 const DONE = 'done' // 201
 const FAILED = 'failed' // the server refused it or could not process it
+// D-79's ingestion limit was reached: this file got the 429, or was still queued
+// behind the one that did. Nothing was stored and nothing is wrong with the file,
+// so it stays in the queue, keeps its title field, and the Upload button sends it
+// again. Neither failed nor invalid, and styled as neither.
+const LIMITED = 'limited'
 
 let nextRowId = 0
 
@@ -44,6 +49,12 @@ const STATUS_TEXT = {
   [PROCESSING]: TEXT.uploadProcessing,
   [DONE]: DOCUMENT_STATUS.indexed,
   [FAILED]: 'Failed',
+  [LIMITED]: TEXT.uploadLimitedStatus,
+}
+
+/** The rows the Upload button sends: chosen and not sent, or held back by the limit. */
+function isPending(row) {
+  return row.state === READY || row.state === LIMITED
 }
 
 /**
@@ -139,6 +150,17 @@ export function UploadRow({ row, onTitleChange, onRetry, onRemove, titleRef }) {
  * and its answer — 415, 413, 409, 403, 400 or the 422 that carries FR-08's
  * "Processing failed. Please try again" — is shown against that file's row
  * (CLAUDE.md §6, invariant 4).
+ *
+ * **A 429 is not the file's answer, and the queue does not treat it as one**
+ * (D-79). The ingestion limit is the user's, shared by upload, meeting ingestion
+ * and reprocess, and the server checks it before it validates the file. So when one
+ * file gets a 429, the queue stops: every later file would get the same answer, and
+ * each of them would be sent in full to get it. That file, and every file still
+ * queued behind it, says the upload limit has been reached, that it was not stored,
+ * and when uploading can resume, from `Retry-After`. Each keeps its title field
+ * and stays in the queue, and pressing Upload again sends it as a new upload,
+ * because there is nothing stored to reprocess. None is marked failed or invalid.
+ * Files already sent keep the outcome they had.
  */
 export default function Upload() {
   useDocumentTitle('Upload documents')
@@ -154,7 +176,7 @@ export default function Upload() {
   const titleRefs = useRef(new Map())
 
   const visibilityOptions = visibilityOptionsFor(user?.role)
-  const pending = rows.filter((row) => row.state === READY)
+  const pending = rows.filter(isPending)
 
   function updateRow(id, changes) {
     setRows((current) => current.map((row) => (row.id === id ? { ...row, ...changes } : row)))
@@ -188,6 +210,11 @@ export default function Upload() {
     if (rejected) announce(rejected.file.name, rejected.message)
   }
 
+  /**
+   * Sends one file. Resolves to the message of D-79's ingestion limit when the
+   * server answered 429, so the queue can stop and say the same of the files behind
+   * it, and to null for every other outcome.
+   */
   async function send(row) {
     updateRow(row.id, {
       state: UPLOADING,
@@ -220,16 +247,20 @@ export default function Upload() {
       const message = partial ? TEXT.uploadPartiallyIndexed : TEXT.uploadIndexed
       updateRow(row.id, { state: DONE, document: stored, message, progress: 100 })
       announce(row.file.name, stored?.status ?? message)
+      return null
     } catch (error) {
       const failure = failureFor(error)
       updateRow(row.id, {
-        state: FAILED,
+        // The limit stored nothing and found nothing wrong with the file: queued,
+        // not failed (see LIMITED).
+        state: failure.limited ? LIMITED : FAILED,
         message: failure.message,
         titleError: failure.titleError ?? null,
         document: failure.document ?? null,
         retryable: Boolean(failure.retryable),
       })
       announce(row.file.name, failure.message)
+      return failure.limited ? failure.message : null
     }
   }
 
@@ -252,7 +283,22 @@ export default function Upload() {
     setBusy(true)
     // Sequential: `pending` was read before the first await, and each send()
     // updates only its own row, so the queue is not re-derived mid-flight.
-    for (const row of pending) await send(row)
+    for (const [index, row] of pending.entries()) {
+      const limit = await send(row)
+      if (limit) {
+        // D-79: the limit is the user's, so every file still queued behind this one
+        // would get the same 429. None of them is sent, and each says what its row
+        // above says, because the same is true of it: not stored, and when uploading
+        // can resume. Only the 429'd file is announced, once.
+        const unsent = new Set(pending.slice(index + 1).map((candidate) => candidate.id))
+        setRows((current) =>
+          current.map((candidate) =>
+            unsent.has(candidate.id) ? { ...candidate, state: LIMITED, message: limit, retryable: false } : candidate,
+          ),
+        )
+        break
+      }
+    }
     setBusy(false)
   }
 
@@ -279,7 +325,10 @@ export default function Upload() {
       updateRow(row.id, { state: DONE, document: stored, message, progress: 100 })
       announce(row.file.name, stored?.status ?? message)
     } catch (error) {
-      const failure = failureFor(error)
+      // A 429 here re-ran nothing (D-79): the document is still stored at the status
+      // it had, which the row goes on showing, with the retry still offered and the
+      // limit's sentence saying when it can be pressed again.
+      const failure = failureFor(error, { reprocess: true })
       updateRow(row.id, {
         state: FAILED,
         message: failure.message,

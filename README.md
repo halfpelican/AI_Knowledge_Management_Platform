@@ -15,7 +15,10 @@ AMD Ryzen AI NPU. Read `CLAUDE.md` before changing anything; the build plan is
 ## Setup
 
 ```powershell
-# 1. Python 3.12 (pinned in .python-version) and a virtual environment
+# 1. Python 3.12 (pinned in .python-version) and a virtual environment.
+#    Windows Smart App Control blocks the uv-built venv's unsigned python.exe
+#    ("An Application Control policy has blocked this file"). Turning Smart App
+#    Control off may not be reversible without reinstalling Windows.
 uv python install 3.12
 uv venv --python 3.12
 uv pip sync --python .venv/Scripts/python.exe requirements.txt

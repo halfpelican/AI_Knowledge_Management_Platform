@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from django.core.exceptions import SuspiciousFileOperation
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -354,6 +355,38 @@ def test_an_out_of_scope_document_whose_file_is_also_missing_logs_nothing(
         assert view_records(caplog) == []
         assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
     assert not error_log_file.exists() or error_log_file.read_text(encoding="utf-8") == ""
+
+
+def test_a_file_path_outside_the_media_folder_is_the_out_of_scope_404_and_is_logged(
+    session_client, employee, administrator, media_root, caplog, error_log_file
+):
+    """D-75's note of 21 October. A ``file_path`` naming a path outside MEDIA_ROOT, which only a
+    script could write, raises ``SuspiciousFileOperation`` rather than ``OSError``, and Django
+    answered it 400. It is a missing original: the out-of-scope 404, logged. The file it names
+    exists, so the 404 is the path being refused, and its bytes are not served."""
+    outside_bytes = b"%PDF-1.4 outside the media folder"
+    (media_root.parent / "outside.pdf").write_bytes(outside_bytes)
+    document = stored_document(employee)
+    Document.objects.filter(pk=document.pk).update(file_path="../outside.pdf")
+    restricted = stored_document(
+        administrator, title="Restricted", name="restricted.pdf", content=b"%PDF-1.4 restricted",
+        roles=unreadable_scope(session_client.role_name),
+    )
+    out_of_scope = download(session_client.client, restricted.id)
+    caplog.clear()
+
+    escaped = download(session_client.client, document.id)
+
+    assert out_of_scope.response.status_code == escaped.response.status_code == 404
+    assert escaped.body == out_of_scope.body
+    assert outside_bytes not in escaped.body
+    [record] = view_records(caplog)
+    assert record.levelno == logging.ERROR
+    assert str(document.id) in record.getMessage()
+    assert "'../outside.pdf'" in record.getMessage()
+    assert record.exc_info is not None
+    assert issubclass(record.exc_info[0], SuspiciousFileOperation)
+    assert str(document.id) in error_log_file.read_text(encoding="utf-8")
 
 
 # --- Content negotiation: the Accept header is not consulted ----------------------------------------

@@ -385,6 +385,22 @@ class RetrievalOutcome:
         )
 
 
+def check_question_length(question: str) -> None:
+    """7.10 step 1: raise QuestionLengthOutOfRange unless the question's length is in bounds.
+
+    The one definition of FR-12's question bounds, in characters. ``answer_question`` calls it
+    first. ``POST /api/ask`` also calls it before taking the user's in-flight slot (D-79), so
+    a question that would be refused gets its 400 even while another ask holds the slot.
+    """
+    if not MINIMUM_QUESTION_LENGTH <= len(question) <= MAXIMUM_QUESTION_LENGTH:
+        # Inclusive at both ends: 7.10 lines 10-12 reject on `<` and `>`, so a question
+        # of exactly either length is permitted.
+        raise QuestionLengthOutOfRange(
+            f"A question must be between {MINIMUM_QUESTION_LENGTH} and "
+            f"{MAXIMUM_QUESTION_LENGTH} characters; this one is {len(question)}."
+        )
+
+
 def answer_question(*, question: str, user, conversation=None) -> RetrievalOutcome:
     """7.10 steps 1 to 11: validate, scope, embed, rank, admit, fit, generate, verify, record.
 
@@ -415,13 +431,7 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
     ``recordQuery``, and a query that never ran is not a query outcome.
     """
     # Step 1. First, so that a question outside the bounds costs nothing.
-    if not MINIMUM_QUESTION_LENGTH <= len(question) <= MAXIMUM_QUESTION_LENGTH:
-        # Inclusive at both ends: 7.10 lines 10-12 reject on `<` and `>`, so a question
-        # of exactly either length is permitted.
-        raise QuestionLengthOutOfRange(
-            f"A question must be between {MINIMUM_QUESTION_LENGTH} and "
-            f"{MAXIMUM_QUESTION_LENGTH} characters; this one is {len(question)}."
-        )
+    check_question_length(question)
 
     # Step 2. Re-resolved from the user row on every question, never cached from the
     # first, so a role changed mid-conversation takes effect on the next question. That is

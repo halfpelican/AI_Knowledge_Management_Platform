@@ -17,6 +17,10 @@ import { get, post } from './client.js'
  * Each is `{conversation_id, title, last_updated_at}`; never a user id, because
  * every thread a caller can reach is theirs.
  *
+ * Only threads with at least one turn, answered or not (D-80). A thread created
+ * for a first question that never landed is left out, though it still exists and
+ * `fetchConversation` below still returns it by its id.
+ *
  * 200 with a possibly empty array; 401.
  */
 export function listConversations(options = {}) {
@@ -31,6 +35,10 @@ export function listConversations(options = {}) {
  * and the first turn through `POST /api/ask` replaces that with the question
  * itself. 400 only for a title over 255 characters, which this screen cannot
  * send because it sends no title at all.
+ *
+ * 429 past the per-user create rate, with a `Retry-After` in seconds
+ * (`error.retryAfter`). Its own scope at the ask rate, so creating a thread does
+ * not spend the ask budget (D-79, D-80). A 429 creates nothing.
  */
 export function createConversation({ title } = {}, options = {}) {
   const body = {}

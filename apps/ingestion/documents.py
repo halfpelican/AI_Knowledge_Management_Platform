@@ -41,6 +41,7 @@ from apps.ingestion.chunking import (
     split_into_overlapping_chunks,
 )
 from apps.ingestion.embedding import DOCUMENT_SOURCE_TYPE, embed_and_store_chunks
+from apps.ingestion.errors import ExtractionError, TooLargeToExtractError
 from apps.ingestion.extraction import extract_plain_text
 
 # Section 7.8 message 43: RETURN response(422, "No readable text could be
@@ -66,6 +67,17 @@ INDEXING_FAILED_MESSAGE = "The document could not be indexed."
 TOO_MANY_CHUNKS_MESSAGE = (
     "The document was stored, but it holds too much text to index in one request."
 )
+
+# What happened to the document when a PDF met one of D-81's extraction bounds. The bound's
+# own sentence follows it (``pdf_bound_detail``): extraction.py's limit sentences say what the
+# file met and whether splitting it would help, and nothing about storage, because FR-09's
+# file path meets the same bounds having stored nothing (``MeetingsView._transcript_from``).
+PDF_BOUND_STORED_CLAUSE = "The document was stored but not indexed."
+
+
+def pdf_bound_detail(limit_message: str) -> str:
+    """The FR-08 detail for a D-81 refusal: the stored clause, then the bound's sentence."""
+    return f"{PDF_BOUND_STORED_CLAUSE} {limit_message}"
 
 
 @dataclass(frozen=True)
@@ -178,7 +190,19 @@ def _run_pipeline(document: Document, source_file) -> IngestionOutcome:
     second pipeline to keep correct. The caller owns the transaction; everything
     written here commits with the document row or not at all (NFR-21).
     """
-    text = _extract(source_file, document.file_type)
+    try:
+        text = _extract(source_file, document.file_type)
+    except TooLargeToExtractError as exception:
+        # A PDF crossed one of D-81's per-stream (decoded or stored), page or operator
+        # bounds. Like the chunk-ceiling case below it is "Too large to index", not
+        # "Extraction failed": the PDF is readable and a retry fails at the same bound every
+        # time (D-51, D-81 item 5). Each bound carries its own sentence, so the uploader
+        # learns whether splitting the file would help, and this route adds that the
+        # document was stored. Decided before any ExtractedContent row or embed call, with
+        # the original kept — the same shape as the chunk-ceiling refusal.
+        return _decided_failure(
+            document, DOCUMENT_TOO_LARGE_TO_INDEX, pdf_bound_detail(exception.limit_message)
+        )
     if not text:
         # Section 7.8 lines 41-44. The original is kept and remains downloadable;
         # only its text is missing. A scanned image-only PDF reaches here, and so
@@ -287,10 +311,15 @@ def _extract(uploaded_file, file_format: str) -> str:
     for the caller — there is nothing to index — and FR-08 gives them one response
     code. They are not the same thing to whoever is diagnosing it later, which is
     what the exception message is for; both land on the "Extraction failed" status.
-    """
-    from apps.ingestion.errors import ExtractionError
 
+    ``TooLargeToExtractError`` is an ExtractionError subclass but a DIFFERENT outcome:
+    the file is readable and was refused by a D-81 bound, so it must land on "Too large
+    to index", not "Extraction failed". It is re-raised here, caught in ``_run_pipeline``,
+    which is why the narrower class is listed first.
+    """
     try:
         return extract_plain_text(uploaded_file, file_format)
+    except TooLargeToExtractError:
+        raise
     except ExtractionError:
         return ""

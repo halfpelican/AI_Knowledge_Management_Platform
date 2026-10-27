@@ -229,10 +229,14 @@ def _ooxml_format(file) -> str | None:
       plain ZIP of holiday photos with a 200 MB member is still an unrecognised format (415)
       rather than a size rejection. The oversized-content answer is reserved for a file this
       platform would otherwise have parsed.
-    - it does not touch PDF. ``pypdf`` inflates object streams with no ZIP involved, so
-      **the bomb class is closed for OOXML and OPEN for PDF** — stated rather than papered
-      over, because "closed" while a member is still reachable is the error this sequence of
-      items exists to correct.
+    - it does not touch PDF, and it does not need to. ``pypdf`` inflates object streams with
+      no ZIP involved, so this ZIP-level scan never saw a PDF; D-50 recorded the PDF bomb
+      class as still OPEN here. **It is now closed too, elsewhere** — bounded at the point
+      pypdf inflates, in ``apps/ingestion/extraction.py`` (per-stream cap, page cap, operator
+      budget and a text ceiling, D-81), not by this detector. The two defences stay separate
+      because the two attacks are: an OOXML bomb is caught before any parser runs, by a
+      declared size this ``zipfile``-backed stack cannot exceed; a PDF bomb is caught while
+      pypdf parses, because there is no equivalent cheap declaration to trust.
 
     **The residue.** This is validation doing extraction's job: the bound belongs, in
     principle, to the code that inflates. It is here because one check with the archive

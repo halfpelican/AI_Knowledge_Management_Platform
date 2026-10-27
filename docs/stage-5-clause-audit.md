@@ -410,3 +410,28 @@ FR-13's first row stays ⚠️ for D-42, as after item 4a. Item 4b does not chan
 - **The front end doesn't filter `sources` on a no-answer turn.** It relies on the server sending
   `[]`, which is tested server-side, and on that branch never rendering a panel, which is not
   tested on the screen.
+
+---
+
+## Stage 4's deferred fixes, after item 5 — 26–27 October 2026, on `fix/FR-12-throttle-and-bounds`
+
+Item 5 is not a clause enumeration. It closes the fixes Stage 4 deferred, and this section names
+each one with its evidence, so the stage audit can find them.
+
+| Deferred from | What | State | Evidence |
+|---|---|---|---|
+| D-49 | `POST /api/ask` and the ingestion POSTs were unthrottled; one ask could hold a worker for minutes | ✅ D-79 | `test_throttles.py` (each scope past its rate; ingestion one budget across three routes; creating threads; `X-Forwarded-For` not trusted), `test_ask_in_flight.py` (one ask in flight, freed after a 503 and an exception). Front end: `askLimits.test.jsx`, `ingestionLimits.test.jsx`, `authThrottle.test.jsx` |
+| D-50 | PDF decompression bombs, open for PDF | ✅ D-81, with a stated residue | `apps/ingestion/tests/test_pdf_bounds.py` (each bound, with its fixture proven parsed first), `test_pdf_bomb_upload.py` (both roles), the meeting route's bound test |
+| D-58, D-61's gap 12 | Empty conversations outlived the session that made them | ✅ D-80 | `test_an_empty_thread_is_absent_from_the_list_but_its_address_still_reads_it`, `test_a_thread_is_listed_once_its_first_turn_lands_answered_or_not`, `test_a_thread_whose_every_turn_is_re_scoped_stays_listed`. Front end: `askThreadList.test.jsx` |
+| D-75's notes | Reprocess answered an HTML 500 for a missing file; a path outside the media folder gave a 400 | ✅ | `test_reprocessing_a_document_whose_file_is_gone_from_disk_is_a_422_and_is_logged`, `test_reprocessing_a_file_path_outside_the_media_folder_is_a_422_and_is_logged`, `test_a_file_path_outside_the_media_folder_is_the_out_of_scope_404_and_is_logged` |
+| PR #30 | NFR-08 and NFR-09 load tests, which would collide with the new limits | Ready, never run | D-82. The k6 scripts were run only in a Node simulation; k6 is not installed |
+
+#### Not covered by item 5
+
+- **Many users at once** can still hold every Waitress thread. The in-flight slot is per user.
+- **The question's embedding has no timeout of its own** (D-79's note), so one ask can take about
+  46 minutes in the worst case.
+- **The PDF residue.** One page is bounded only by the caps times about 67 in memory, and the time
+  worst case is about 75 s. Encrypted PDFs are untested.
+- **Load-test cleanup.** One NFR-09 run leaves up to 1,210 documents behind.
+- **Objective 03** has not been run against these limits.

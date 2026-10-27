@@ -724,10 +724,10 @@ def test_an_administrator_is_offered_the_item_an_employee_is_not(
 def test_a_question_outside_the_length_bounds_is_400_and_logs_nothing(
     session_client, service, answerable, question
 ):
-    """FR-12's 400. The view maps ``QuestionLengthOutOfRange`` and never re-checks the
-    length, so there is one definition of the bounds and the two cannot drift. A question
-    that never ran is not a query outcome, so no row is written and the provider is not
-    called."""
+    """FR-12's 400. The view calls the pipeline's own ``check_question_length`` (before the
+    in-flight slot, D-79) and maps ``QuestionLengthOutOfRange``; it never restates the bounds,
+    so there is one definition of them and the two cannot drift. A question that never ran is
+    not a query outcome, so no row is written and the provider is not called."""
     response = session_client.client.post(ASK_URL, {"question": question}, format="json")
 
     assert response.status_code == 400

@@ -138,7 +138,10 @@ export function documentDownloadUrl(docId) {
  * 413 over 50 MB; 415 the file signature is not one of the four accepted
  * formats; 422 the file was stored but nothing could be extracted or indexed —
  * that body still carries `doc_id` and `status`, which is what FR-08's
- * "Processing failed. Please try again" action displays.
+ * "Processing failed. Please try again" action displays; 429 past the per-user
+ * ingestion rate, one budget shared with meeting ingestion and reprocess, with a
+ * `Retry-After` in seconds (`error.retryAfter`). The rate is checked before the
+ * body is validated, so a 429 stores nothing (D-79).
  *
  * @param {object} fields
  * @param {File} fields.file
@@ -172,7 +175,9 @@ export function uploadDocument({ file, title, department, visibleToRoles }, opti
  *
  * 201 with the document, now "Indexed" or "Partially indexed"; 409 already
  * indexed, or a copy was indexed meanwhile; 422 it failed the same way again,
- * which is what a file with no text layer will always do.
+ * which is what a file with no text layer will always do; 429 past the ingestion
+ * rate it shares with upload and meeting ingestion (D-79), which re-runs nothing
+ * and leaves the document at the status it had.
  */
 export function reprocessDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/reprocess`, {}, options)

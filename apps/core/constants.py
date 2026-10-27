@@ -41,6 +41,101 @@ CHUNK_OVERLAP = 50
 # availability measure second.
 MAXIMUM_CHUNKS_PER_SOURCE = 1000
 
+# --- PDF extraction bounds (FR-08, FR-09; docs/decisions.md D-81) ---------------------
+# Four bounds on the work pypdf may do for one PDF (two per-stream caps, the page cap and
+# the operator budget), plus the text ceiling, which is MAXIMUM_CHUNKS_PER_SOURCE above
+# read during extraction (apps/ingestion/extraction.py). Every one of them that refuses a
+# document lands it on "Too large to index" (D-51's status).
+
+# Most bytes one PDF stream may decompress to. apps/ingestion/extraction.py sets every
+# pypdf ``Configuration`` field named ``*_maximum_output_length`` to this, with
+# ``pypdf.apply_configuration`` around the reader and the page loop, so it is scoped to
+# the extracting thread (D-81 item 1). pypdf 6.19.0's own default is 75,000,000.
+#
+# **Why about 10 MB.** pypdf's memory while parsing a content stream is about 67 times
+# its decoded size (D-81's measurement: a 10 MB stream, +671 MB), so this bounds one page
+# near 700 MB, where the 75 MB default allowed roughly 5 GB. It is far above a real page:
+# the corpus PDFs are 3-38 KB files, and a vector-heavy drawing page is a few MB decoded.
+# A 2 MB cap failed the measured 10 MB page in 0.01 s (D-81), and this one fails anything
+# over it as fast, because decompression stops at the cap before parsing starts.
+#
+# Measured on this laptop, 21 October 2026, pypdf 6.19.0, Python 3.12: one page whose
+# single stream decodes to exactly this many bytes of ``q Q`` (5,000,000 operators, a
+# 10 KB file) took 14.9-15.7 s to extract over three runs. That is the "one parse at the
+# per-stream cap" in PDF_MAXIMUM_OPERATORS' worst case below.
+PDF_MAXIMUM_STREAM_BYTES = 10_000_000
+
+# Most bytes one PDF stream may occupy AS STORED in the file. apps/ingestion/extraction.py
+# sets pypdf's ``maximum_declared_stream_length`` to this in the same
+# ``apply_configuration`` call as PDF_MAXIMUM_STREAM_BYTES. pypdf 6.19.0's default is
+# 75,000,000. Settled by the user, 26 October 2026, closing the gap the first build of D-81
+# left open.
+#
+# **Its own constant, because stored size and decoded size are different limits.** The
+# decompression caps above never see a stream stored without a filter, since nothing is
+# decompressed, so an uncompressed content stream escaped the 10 MB cap and was bounded
+# only by pypdf's 75 MB default and the 50 MB upload ceiling. This limit reads the stored
+# length, which for an uncompressed stream is its decoded length too.
+#
+# **What the user measured, pypdf 6.19.0, with this limit at 10 MB:**
+# - a 12 MB image drawn on a page did NOT fail the document: pypdf skipped it, logged
+#   "Impossible to decode XFormObject", and the page's text still came out;
+# - a 12 MB embedded font program that the page's text uses DID fail, with
+#   LimitReachedError, with or without /ToUnicode;
+# - pypdf reads every font program a page uses but never decodes it during extraction (a
+#   Flate font decoding to 12 MB passed under the 10 MB decompression cap), so for a font
+#   only the stored size counts.
+#
+# **Why 20 MB.** A PDF that embeds a whole CJK font rather than a subset can store more than
+# 10 MB of font program, and a 10 MB limit would refuse that document for its font. 20 MB
+# admits those fonts and still bounds an uncompressed content stream well under the 50 MB
+# upload ceiling: about 1.3 GB of parser memory at the measured ~67 times.
+#
+# **What it refuses and what it skips.** pypdf swallows an over-limit XObject, image or form,
+# and carries on, so those are SKIPPED rather than refused: the page's other text is still
+# extracted. Only a page content stream or a font program over it reaches "Too large to
+# index", with the per-stream message.
+PDF_MAXIMUM_STORED_STREAM_BYTES = 20_000_000
+
+# Most pages a PDF may have, counted with ``len(reader.pages)`` before any page is parsed
+# (D-81 item 2). pypdf counts the page tree it walks, not the /Count the file declares, so
+# a tree that under-declares its pages is still counted in full. 2,000 is well above the
+# roughly 820 pages of text MAXIMUM_CHUNKS_PER_SOURCE allows, so a document refused here
+# could never have been indexed whole.
+MAXIMUM_PDF_PAGES = 2000
+
+# Most content-stream operators extraction will process across the WHOLE document, counted
+# by ``extract_text(visitor_operand_before=...)``, which also sees the operators inside form
+# XObjects (D-81 item 3). It bounds the repeated parsing a per-stream cap cannot: pages that
+# share one stream, and a form drawn many times, each parse their content again.
+#
+# **The measurement**, on this laptop, 21 October 2026, pypdf 6.19.0, Python 3.12, while
+# other test suites were running on the same machine: a counting visitor, and the wall time
+# of the whole extraction (reader, parse and processing), three runs per shape.
+#
+#   ``q Q`` on one page, 1M operators             250,570 - 480,564 operators/s
+#   a form of 200k operators drawn 5 times        208,913 - 301,245 operators/s
+#   one stream shared by 10 pages, 1M operators   215,299 - 349,260 operators/s
+#   text lines (BT Tf Td Tj ET), one page          31,979 -  72,114 operators/s
+#   ``1 0 0 1 0 0 cm`` on one page, 200k-400k      21,671 -  23,337 operators/s
+#
+# **The value** is 60 s at the slowest rate measured, 21,671 operators/s for ``cm``, which
+# produces no text and so is never stopped by the text ceiling: 60 x 21,671 = 1,300,260,
+# rounded to 1,300,000. The ``q Q`` shapes reach it in about 3-6 s. It is NOT set from the
+# sandbox figure of 1.76 s per MB, which D-81 rules out.
+#
+# **The recorded worst case is about 75 s**: the budget at the slowest rate, about 60 s,
+# plus one parse at PDF_MAXIMUM_STREAM_BYTES, about 15 s. The second term exists because a
+# stream is parsed whole before the visitor sees its first operator, so the budget can stop
+# the NEXT stream and never the one being parsed (D-81, "What this decision does not cover").
+#
+# **Legitimate documents should sit well below it, and this is an estimate, not a
+# measurement.** pypdf calls the visitor once per operator, and a TJ array counts once however
+# many words it holds, so a typical text page is a few hundred operators; the ~820 pages of
+# text the text ceiling allows would be a few hundred thousand. No real large PDF was
+# measured against it.
+PDF_MAXIMUM_OPERATORS = 1_300_000
+
 # --- Retrieval (FR-11, FR-12) -------------------------------------------------------
 # Candidate passages fetched per query, after permission filtering. Tuned in Stage 4.
 TOP_K = 25
@@ -210,6 +305,34 @@ LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
 # then lock it, so every account in the organisation can be held locked by anyone
 # (D-26). Generous enough that a person typing a password never meets it.
 AUTHENTICATION_THROTTLE_RATE = "20/min"
+
+# --- Per-user rate limits and the in-flight ask (docs/decisions.md D-79) -------------------
+# Each rate is a DRF ScopedRateThrottle scope, passed through REST_FRAMEWORK's
+# DEFAULT_THROTTLE_RATES as the auth rate above is, and counted per signed-in user rather than
+# per address. A request is counted before its body is validated, so a rejected one counts too.
+#
+# POST /api/ask, scope "ask".
+ASK_THROTTLE_RATE = "10/min"
+# Scope "ingestion": one budget shared by POST /api/documents, POST /api/meetings and
+# POST /api/documents/{id}/reprocess. A full Objective 02 run, about 31 requests, fits in an hour.
+INGESTION_THROTTLE_RATE = "60/hour"
+# POST /api/conversations, scope "conversation_create": the ask rate in a budget of its own, so
+# creating a thread does not spend the ask budget (D-80).
+CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
+
+# How much longer than generation's worst case a user's in-flight ask slot is held before it
+# expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
+# MAXIMUM_GENERATION_ATTEMPTS plus this (apps/api/ask_slot.py builds it; the product cannot be
+# built here, because apps/ai/generation.py imports this module).
+#
+# The margin has to cover the question's embedding, which runs inside the slot. That call sets
+# no timeout of its own: apps/ai/_openai_compat.py builds its client with none, so it inherits
+# the openai client's default of 5 s to connect and 600 s to read. MAXIMUM_EMBED_ATTEMPTS of
+# those is 1,815 s. The 60 s on top covers the database work either side. The two SDK figures
+# are restated rather than imported, because nothing outside apps/ai/ may import the SDK
+# (CLAUDE.md section 4); apps/api/tests/test_ask_in_flight.py compares them with the timeout of
+# the client the provider actually builds, so an SDK change that lengthens it fails a test.
+ASK_IN_FLIGHT_MARGIN_SECONDS = MAXIMUM_EMBED_ATTEMPTS * (5 + 600) + 60  # 1,875 s
 
 # --- No-answer response (FR-12; CLAUDE.md invariants 6 and 7) ------------------------
 # replace it with the proposal's text when the coordinator has it. Defined once.

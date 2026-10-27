@@ -21,6 +21,12 @@
  * review finding). Screens may render `error.message` as-is. The parsed body is
  * kept on `error.details` so a form can place a 400's field validation messages
  * next to the fields (see src/utils/fieldErrors.js).
+ *
+ * Two things a screen branches on are lifted off the response as well (D-79):
+ * `error.code`, the body's machine-readable `code` where it carries one, and
+ * `error.retryAfter`, a 429's `Retry-After` in whole seconds. Neither is ever
+ * shown. `detail` is never parsed: a screen that needs to tell two refusals
+ * apart does it by `code`.
  */
 
 import { VALIDATION } from '../constants.js'
@@ -47,12 +53,22 @@ const MESSAGES = {
   // The only 409 in the contract is FR-01's duplicate address, which the
   // registration form places under the email field (src/utils/fieldErrors.js).
   409: VALIDATION.emailTaken,
+  // Every 429 but the two below: D-79's per-user limits on asking, ingestion and
+  // creating a thread, and its one-ask-in-flight refusal. The screens that send
+  // those requests each say which limit it was and when it lifts, from `code` and
+  // `retryAfter`; this is the text for a screen that does not.
+  429: 'Too many requests in a short time. Please wait and try again.',
   // Registration and login are rate limited per client address (D-26); reachable
   // in a demonstration, since the lockout scenario alone needs several attempts.
-  429: 'Too many attempts. Please wait a minute and try again.',
+  // Kept for those two routes only: D-79 found it wrong for an answer that can run
+  // for minutes and for an hourly upload limit.
+  authThrottled: 'Too many attempts. Please wait a minute and try again.',
   503: 'The AI service is currently unavailable. Please try again shortly.',
   default: 'Something went wrong. Please try again.',
 }
+
+/** The two routes D-26 throttles per client address, as `request()` is given them. */
+const AUTH_THROTTLED_PATHS = new Set(['/auth/login', '/auth/register'])
 
 /** The contract's fixed login failure text (same for unknown email and wrong password). */
 export const LOGIN_FAILED_MESSAGE = 'Invalid email or password.'
@@ -63,18 +79,71 @@ export class ApiError extends Error {
    * @param {string} message Fixed, safe, user-facing text.
    * @param {unknown} [details] Parsed response body, if any. Kept for form-level
    *   handling (for example field validation); never rendered verbatim.
+   * @param {object} [extra]
+   * @param {number|null} [extra.retryAfter] A 429's `Retry-After`, in whole seconds.
    */
-  constructor(status, message, details = null) {
+  constructor(status, message, details = null, { retryAfter = null } = {}) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.details = details
+    // The body's `code` where it is a string, else null: `ask_in_flight` on D-79's
+    // in-flight 429 (src/api/ask.js ASK_IN_FLIGHT_CODE), `account_locked` on FR-02's
+    // 403. A screen branches on it and never shows it.
+    this.code =
+      details && typeof details === 'object' && typeof details.code === 'string' ? details.code : null
+    // Whole seconds until a rate limit lets the request through, from a 429's
+    // `Retry-After` (D-79), or null where there is none. D-79's in-flight 429
+    // carries none, because an answer can take minutes.
+    this.retryAfter = retryAfter
   }
 }
 
-export function messageForStatus(status) {
+/**
+ * The fixed text for a failure with this status.
+ *
+ * @param {number} [status]
+ * @param {string} [path] The request's path relative to the API base. Read only for a
+ *   429, which keeps login's text on the two routes D-26 throttles and has its own
+ *   everywhere else (D-79).
+ */
+export function messageForStatus(status, path) {
   if (status === NETWORK_ERROR_STATUS) return MESSAGES.network
+  if (status === 429 && typeof path === 'string' && AUTH_THROTTLED_PATHS.has(barePath(path))) {
+    return MESSAGES.authThrottled
+  }
   return MESSAGES[status] ?? MESSAGES.default
+}
+
+/** A path with its leading slash and without its query, for comparing routes. */
+function barePath(path) {
+  const withoutQuery = path.split('?')[0]
+  return withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`
+}
+
+/**
+ * A `Retry-After` header as whole seconds, or null.
+ *
+ * The contract sends it in seconds, as DRF does (docs/api-contract.md, "Stage 5
+ * item 5"), so only a number of seconds is read. The HTTP-date form the header
+ * also allows is not in the contract, and reads as null, like an absent header.
+ * Rounded up, so a screen never says the user can try again sooner than the
+ * server will let them.
+ *
+ * @param {string|null} value
+ * @returns {number|null}
+ */
+function parseRetryAfter(value) {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return null
+  return Math.ceil(Number(trimmed))
+}
+
+/** The ApiError for a response that was not 2xx, from either transport. */
+function errorForResponse(status, path, data, retryAfterHeader) {
+  const retryAfter = status === 429 ? parseRetryAfter(retryAfterHeader) : null
+  return new ApiError(status, messageForStatus(status, path), data, { retryAfter })
 }
 
 /**
@@ -190,7 +259,7 @@ export async function request(path, { method = 'GET', body, signal } = {}) {
 
   if (!response.ok) {
     if (response.status === 401) notifyUnauthorized(path)
-    throw new ApiError(response.status, messageForStatus(response.status), data)
+    throw errorForResponse(response.status, path, data, response.headers.get('Retry-After'))
   }
 
   return data
@@ -307,7 +376,7 @@ export function upload(path, formData, { method = 'POST', onProgress, signal } =
         return
       }
       if (xhr.status === 401) notifyUnauthorized(path)
-      reject(new ApiError(xhr.status, messageForStatus(xhr.status), data))
+      reject(errorForResponse(xhr.status, path, data, xhr.getResponseHeader('Retry-After')))
     })
 
     xhr.addEventListener('error', () => {

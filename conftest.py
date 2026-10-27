@@ -57,12 +57,16 @@ PASSWORD = "Correct-Horse-9-Battery"
 
 @pytest.fixture(autouse=True)
 def reset_request_throttles():
-    """Clear the throttle counters between tests.
+    """Clear the throttle counters and the in-flight ask slots between tests.
 
-    Registration and login are rate limited per client address (D-26), and DRF keeps
-    those counts in the cache, which outlives a test. Without this, a test that
-    signs in a few times would 429 the next test rather than failing on its own
-    merits, and the lockout tests deliberately make dozens of attempts.
+    Registration and login are rate limited per client address (D-26), and asks, ingestion
+    and thread creation per user (D-79). DRF keeps those counts in the cache, which outlives
+    a test, and so does each user's in-flight ask slot (apps/api/ask_slot.py). Without this,
+    a test that signs in a few times would 429 the next test rather than failing on its own
+    merits, and every test signs in from the same address. The per-user counters would leak
+    less, since each test's users are new rows with new ids, but a slot or a count left by a
+    test that failed halfway is cleared all the same. Throttling itself stays on: the real
+    rates are tested in apps/api/tests/test_throttles.py.
     """
     cache.clear()
     yield

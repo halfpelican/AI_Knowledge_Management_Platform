@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { askQuestion } from '../api/ask.js'
+import { ASK_IN_FLIGHT_CODE, askQuestion } from '../api/ask.js'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { createConversation, fetchConversation, listConversations } from '../api/conversations.js'
 import { TurnBody } from '../components/Answer.jsx'
@@ -12,6 +12,7 @@ import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
+import { whenToRetry } from '../utils/retryAfter.js'
 import { addressForThread, questionInSearch, searchForThread, threadInSearch } from '../utils/threadAddress.js'
 import {
   threadAfterNewTopic,
@@ -77,34 +78,38 @@ const FIELDS = ['question', 'conversation_id']
  * creates none of its own, so the id must exist before the question is sent or the
  * first turn is a one-off with `QueryLog.conversation` NULL that no thread can ever
  * hold, and the thread would reopen without its own first question. It is not
- * *sufficient*: the create succeeds and the ask can still fail. A 503 — NFR-19's
- * own demonstration path, reachable whenever FLM drops — or a 400 the client
- * pre-check missed left a "New conversation" behind at the top of the list, because
- * `last_updated_at` is `auto_now` on create, and FR-13 specifies no Delete.
+ * *sufficient*: the create succeeds and the ask can still fail — a 503, NFR-19's
+ * own demonstration path, reachable whenever FLM drops; a 400 the client pre-check
+ * missed; or one of D-79's 429s. Until D-80 that left a "New conversation" at the
+ * top of the list, because `last_updated_at` is `auto_now` on create, and FR-13
+ * specifies no Delete.
  *
- * What is true instead:
+ * What is true now:
  *
+ * - **The list leaves an empty thread out (D-80, which closes D-58).** The server
+ *   lists only threads with at least one turn, answered or not, so a thread created
+ *   for a first question that failed is not in the list, even while the address
+ *   names it and it is on screen. Once its first turn lands, the list is re-read and
+ *   shows it, marked as current. This screen filters nothing itself: the list is
+ *   exactly what the server sent.
  * - A thread that has had no successful turn is **reused, not abandoned**. The
- *   question stays in the field after a 503, so the retry lands in the same thread
- *   and names it. "Start a new topic" keeps it too: nothing has been asked in it,
- *   so it already *is* a new topic and clearing it would only mean a second empty
- *   row on the next ask. One failed first question therefore costs at most one
- *   thread, however many times it is retried or the topic is cleared.
+ *   question stays in the field after a 503 or a 429, so the retry lands in the same
+ *   thread and names it. "Start a new topic" keeps it too: nothing has been asked in
+ *   it, so it already *is* a new topic and clearing it would only mean a second
+ *   empty row on the next ask. One failed first question therefore costs at most one
+ *   thread, however many times it is retried or the topic is cleared. That still
+ *   matters under D-80: the row exists, and each create spends the per-user create
+ *   budget (D-79).
  * - The list is **not** re-read after a failed ask. Nothing the user asked for
- *   happened, and re-reading would move a "New conversation" to the top of it.
+ *   happened, so there is nothing new for it to show.
  * - **The residue, stated rather than implied.** One created thread can still
  *   outlive the session that made it: its first ask failed and the user left
- *   without asking again. Since D-77 the address names it, so a reload or a return
- *   to that address goes back into it; one the user leaves for good stays behind
- *   (D-58 is narrowed, not closed). Nothing under `frontend/` can remove it.
- *   Closing it needs something the contract does not have — a turn count or
- *   `has_turns` on `GET /api/conversations`, so a thread nobody asked anything in
- *   can be left out of the list, or a Delete FR-13 does not specify. Neither is
- *   invented here.
+ *   without asking again. It is no longer seen in the list (D-80); it stays a row,
+ *   which nothing deletes (D-80 rule 3), and its address goes back into it (D-77).
  *
- * **Four states that are not each other**, and the screen keeps them apart
- * because a user who confuses them retries the wrong thing. The second was added
- * at Stage 4 item 1c, by separating it from the first:
+ * **Six states that are not each other**, and the screen keeps them apart because
+ * a user who confuses them retries the wrong thing. The second was added at Stage 4
+ * item 1c, by separating it from the first, and the last two by D-79:
  *
  * - *No answer* (200, `answered: false`) — the corpus has nothing to answer from.
  *   A designed outcome, stated plainly, with no speculative answer and no empty
@@ -127,6 +132,19 @@ const FIELDS = ['question', 'conversation_id']
  *   field because no `QueryLog` row was written and it can be asked again.
  * - *Rejected* (400) — the question itself was not acceptable, shown under the
  *   field.
+ * - *Still answering the previous question* (429, `code` "ask_in_flight") — the
+ *   server answers one question per user at a time. This screen sends one at a
+ *   time and keeps Ask disabled while it waits, so this is reached from another
+ *   tab, or in this one after the screen was left and come back to while an ask
+ *   was pending — a citation followed, then Back (D-77) — or reloaded. An
+ *   information notice and not NFR-19's: nothing is unavailable. It names no time,
+ *   because the reply carries none.
+ * - *Too many questions* (429, any other body) — past the per-user ask rate, or the
+ *   create rate on a first question (D-79, D-80). It says when the user can ask
+ *   again, from `Retry-After`.
+ *
+ *   The two 429s are told apart by `code` alone, never by `detail`. In both the
+ *   question stays in the field, nothing was recorded, and no turn is added.
  *
  * **Invariant 6 holds by construction.** No reply carries a rejected statement, a
  * rejection count or a no-answer reason, so there is nothing on this screen to
@@ -380,6 +398,24 @@ export default function Ask() {
       setFailure({ variant: 'unavailable', title: TEXT.askUnavailableTitle, text: `${error.message} ${TEXT.askNotRecorded}` })
       return
     }
+    if (error.status === 429) {
+      // D-79's two 429s, told apart by `code` alone; `detail` is never read. Neither
+      // wrote a `QueryLog` row, so the question stays in the field and no turn is
+      // added. The in-flight one is an information notice, not NFR-19's: nothing is
+      // unavailable, and it names no time because the reply carries none. Every
+      // other 429 here is a rate limit — the ask's, or the create's before a first
+      // question (D-80) — and says when, from `Retry-After`.
+      setFailure(
+        error.code === ASK_IN_FLIGHT_CODE
+          ? { variant: 'info', title: TEXT.askInFlightTitle, text: TEXT.askInFlight }
+          : {
+              variant: 'error',
+              title: TEXT.askRateLimitedTitle,
+              text: TEXT.askRateLimited(whenToRetry(error.retryAfter)),
+            },
+      )
+      return
+    }
     if (error.status === 404) {
       // The thread asked in is not there, or is not this caller's: handled as a read
       // of it would be, address included.
@@ -468,8 +504,9 @@ export default function Ask() {
       // has been named from the question — so it is no longer an empty one to
       // return to.
       unusedThreadRef.current = unusedThreadAfterTurn(unusedThreadRef.current, threadId)
-      // The thread's title and its last-updated time changed on the server, so the
-      // list is re-read rather than guessed at, whether or not the reply is shown.
+      // The thread's title and its last-updated time changed on the server, and a
+      // first turn is what puts a thread in the list at all (D-80), so the list is
+      // re-read rather than guessed at, whether or not the reply is shown.
       reloadConversations()
 
       // D-77, rule 4: a reply for a thread the address no longer names is dropped.
@@ -492,10 +529,12 @@ export default function Ask() {
       setAcknowledgement(answered ? TEXT.answerReady(statements.length, sources.length) : TEXT.noAnswerReady)
       pendingTurnFocus.current = { thread: threadId }
     } catch (error) {
-      // Kept for a 503 and a 400 — no turn was written, so the thread is still
-      // empty and still where the next attempt belongs — and dropped for a 404.
-      // src/utils/threads.js carries the reasoning. Applied whether or not the
-      // failure is shown, because it describes the thread, not the screen.
+      // Kept for a 503, a 400 and either 429 — no turn was written, so the thread is
+      // still empty and still where the next attempt belongs — and dropped for a
+      // 404. A 429 on the create made no thread, and what is kept is the null there
+      // was before it, so the next attempt creates again. src/utils/threads.js
+      // carries the reasoning. Applied whether or not the failure is shown, because
+      // it describes the thread, not the screen.
       unusedThreadRef.current = unusedThreadAfterFailure(
         unusedThreadRef.current,
         error instanceof ApiError ? error.status : null,
