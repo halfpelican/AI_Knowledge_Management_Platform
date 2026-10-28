@@ -24,7 +24,7 @@ chunk rows, and no route returns chunks. After the run the script reads the Cont
 for each document the API created, through the Django ORM, read-only. It is labelled as such in
 the results.
 
-Usage, with the server and FLM running (``manage.py runserver`` and ``flm serve``)::
+Usage, with the server and FLM running (``waitress-serve`` as D-85 starts it, and ``flm serve``)::
 
     $env:KMP_CORPUS_ADMIN_EMAIL = "..."      # an Administrator account
     $env:KMP_CORPUS_ADMIN_PASSWORD = "..."
@@ -45,11 +45,14 @@ already holds a ``results.json``, so the 6 October evidence beside the manifest 
 overwritten (D-84 decision 1): a new run writes to a dated folder of its own, for example
 ``--output-dir corpus/objective-02/runs/2026-10-27``.
 
-**What a full run records, and what it checks first (D-83, D-84).** Before signing in, it runs
-scripts/check_flm.py's checks and refuses unless they pass and FLM is v0.9.39, because an
+**What a full run records, and what it checks first (D-83, D-84, D-85).** Before signing in, it
+runs scripts/check_flm.py's checks and refuses unless they pass and FLM is v0.9.39, because an
 ingestion on a noisy FLM stores noise as the index. It refuses if the database its own process
-reads is ``kmp``. The results carry the commit SHA, whether tracked files had uncommitted
-changes, the FLM version and the database NAME, never its URL.
+reads is ``kmp``. It observes the server at ``--base-url`` (scripts/server_record.py: the
+listening process's command line and the reply's Server header) and refuses one that is
+positively not D-85's Waitress at 24 threads, unless ``--any-server`` is passed. The results
+carry the commit SHA, whether tracked files had uncommitted changes, the FLM version, the
+database NAME (never its URL), and the server, its version and its thread count.
 
 **The chunk count reads the database this process sees, which must be the server's.** The
 measurement server has its own ``DATABASE_URL`` (D-84), and a value set in the shell wins over
@@ -87,6 +90,7 @@ if str(SCRIPTS_DIRECTORY) not in sys.path:
 
 import check_flm  # noqa: E402  scripts/check_flm.py, the D-83 gate
 import measurement_record  # noqa: E402  scripts/measurement_record.py
+import server_record  # noqa: E402  scripts/server_record.py, D-85's server record
 
 CORPUS = REPOSITORY_ROOT / "corpus" / "objective-02"
 MANIFEST = CORPUS / "manifest.json"
@@ -122,6 +126,9 @@ class ApiSession:
         self.port = parts.port or (443 if parts.scheme == "https" else 80)
         self.https = parts.scheme == "https"
         self.cookies: dict[str, str] = {}
+        # The last reply's headers, names lower-cased: the Server header names the server
+        # a run went through (D-85).
+        self.last_headers: dict[str, str] = {}
 
     def _connection(self):
         cls = http.client.HTTPSConnection if self.https else http.client.HTTPConnection
@@ -164,6 +171,7 @@ class ApiSession:
             response = connection.getresponse()
             raw = response.read()
             status = response.status
+            self.last_headers = {header.lower(): value for header, value in response.getheaders()}
             for header, value in response.getheaders():
                 if header.lower() == "set-cookie":
                     cookie = SimpleCookie()
@@ -392,8 +400,13 @@ def write_results(manifest, outcomes, started_at, base_url, searches_rerun=None,
         lines += [
             f"Commit `{record.get('commit_sha')}`.{changes} FLM `{flm.get('cli')}` by `flm version`,",
             f"`{flm.get('server')}` by the server. Database `{record.get('database')}`.",
-            "",
         ]
+        if record.get("server"):
+            # D-85 decision 4: the server, its version and the thread count, beside the result.
+            lines.append(f"Server: {server_record.summary(record['server'])}.")
+            if record.get("server_gate_waived"):
+                lines.append("**This server is not D-85's**, and the run was made with `--any-server`.")
+        lines.append("")
     if searches_rerun:
         lines += [
             f"**The search columns were re-run on {searches_rerun}** with `--search-only`, against the",
@@ -485,6 +498,9 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=CORPUS,
                         help="where results.json and results.md go (default: beside the manifest); "
                              "a full run refuses a folder that already holds results.json")
+    parser.add_argument("--any-server", action="store_true",
+                        help="run against a server that is not D-85's Waitress at 24 threads; "
+                             "the results say so")
     args = parser.parse_args()
 
     # Cheap refusals first, before any credential is read or any request is sent.
@@ -518,6 +534,22 @@ def main():
             record = measurement_record.run_record(dump_sha256=None, database=database, flm=flm)
         except measurement_record.RecordError as exc:
             problems.append(f"the run cannot be recorded: {exc}")
+        # D-85: the server this run goes through, observed, before anything is sent to it
+        # but one unauthenticated GET. Refused only on evidence of another server; a lookup
+        # that failed is recorded and warned about instead.
+        server = server_record.observe(
+            args.base_url, server_record.fetch_server_header(args.base_url.rstrip("/") + "/api/")
+        )
+        print(f"Server: {server_record.summary(server)}")
+        contradictions = server_record.contradicts_d85(server)
+        if contradictions and not args.any_server:
+            problems += [f"{c}; start it as `{server_record.D85_COMMAND}`, or pass --any-server"
+                         for c in contradictions]
+        for warning in server_record.problems(server):
+            print(f"WARNING: {warning}")
+        if record is not None:
+            record["server"] = server
+            record["server_gate_waived"] = bool(contradictions and args.any_server)
         if problems:
             print("\n" + "\n".join(f"REFUSED: {p}" for p in problems) + "\nNothing was uploaded.")
             return REFUSED

@@ -5138,6 +5138,54 @@ slice of item 9 that the measurement needs · **Concerns:** Objective 03, NFR-08
   - The in-flight slot is extended to the three ingestion routes if that is cheap. Otherwise the
     gap is recorded here.
 
+> **Built on 27–28 October 2026, in item 6's phase 2.** This records what was built and what the
+> build found.
+>
+> - **Waitress 3.0.2** is pinned in `requirements.in`. The recompiled `requirements.txt` adds only
+>   that line.
+>   - **The shared venv.** The venv is shared with the main checkout, whose `requirements.txt` has no
+>     Waitress, so a `uv pip sync` run there would remove it until this branch merges.
+> - **The serve probe.** It ran Waitress with `--threads=24` and `DEBUG=False`, against a database
+>   that doesn't exist. `/api/` answered 401 JSON with `Server: waitress`. Non-API paths answered
+>   the JSON 404, because nothing serves the SPA yet; that is item 9's job.
+> - **The ingestion slot was cheap, and is built.**
+>   - **One slot per user**, shared by upload, meeting ingest and reprocess. It is separate from the
+>     ask slot, so one user can hold at most two threads.
+>   - **When it's held.** It is taken after each route's own refusals, and released in `finally`
+>     straight after the ingest call, with the token check.
+>   - **No timeout.** The derivation D-79 used would give about three weeks, and a timeout could
+>     only free the slot while its ingestion still held a thread.
+>   - **The 429.** It is `{"detail": "Your previous upload is still being processed.", "code":
+>     "ingestion_in_flight"}`, with no `Retry-After`, and it counts against the ingestion rate.
+> - **The premise was not quite true.** D-85 said no client of ours sends uploads concurrently, but
+>   the Upload screen could. A failed row's retry was pressable while the queue ran, and a retry
+>   re-enabled the Upload button mid-queue.
+>   - Both are fixed. A row's retry is disabled while the page is busy, and busy is now a count of
+>     runs in progress.
+>   - Each screen shows the in-flight 429 in its own words, with no time given.
+> - **The k6 scripts** record the server, Waitress's version and the thread count, and count 429s by
+>   `code`. Each run also records the `Server` header its logins saw, and a mismatch with the stated
+>   server is INVALID.
+>   - **The thread count is as stated by the operator.**
+>   - **`server_record.py` observes it** from the listening process's command line. The runbook
+>     saves that observation next to each k6 summary.
+> - **Found, and left to item 9:**
+>   - **500s are HTML.** Under `DEBUG=False`, a 500 is Django's HTML page, not JSON, because no
+>     `handler500` is set.
+>   - **A disallowed `Host`** gets a 400 HTML page.
+>   - **Waitress's own log lines are dropped** by `LOGGING`. That includes the "Task queue depth"
+>     warning, the one that shows all 24 threads busy.
+> - **Found on the Upload screen, and not fixed:**
+>   - removing a queued file, or editing its title, while the queue runs has no effect;
+>   - a successful retry still offers "Try again", which then answers 409;
+>   - leaving the screen mid-queue doesn't stop the queue.
+> - **Not covered.**
+>   - **The two in-flight codes can drift.** Nothing tests that the client's copies match the
+>     server's.
+>   - **The cache can evict a slot.** `LocMemCache` culls entries past its default of 300, which
+>     could evict a slot or a counter early under many active users. That is not reachable at the
+>     alpha's scale.
+
 ## D-86 · FR-13 is measured end to end on frozen two-turn threads, built beside Objective 03 and never ahead of it
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
@@ -5185,3 +5233,41 @@ embeds the plain join of the earlier questions and the new one.
   that limit is not measured.
 - **Prior answers.** D-42 still passes prior questions only. The previous-answer thread measures
   the cost of that; it does not change it.
+
+> **Built on 27–28 October 2026, in item 6's phase 2.** The thread set is a DRAFT until Benjamin and
+> Sagarika approve it with the thirty.
+>
+> - **Nine threads, not eight.**
+>   - Five ordinary threads, one per format.
+>   - The two scoped threads, each run under both roles.
+>   - The topic change.
+>   - The previous-answer thread.
+>
+>   That is 11 thread-and-role pairs, and 44 runs.
+> - **The scoring rule is version 1, frozen in `threads.json` and `threads.md`.** It sets:
+>   - what a run is, and what counts as answered;
+>   - one outcome per run (answered, path A, path B declined, path B rejected, or unavailable);
+>   - the expected-answer match: a listed phrase, and a cited listed source;
+>   - what counts as a leak;
+>   - the readings and the predictions, decided before the run.
+>
+>   A failed prediction is reported as measured, never re-scored.
+> - **`compose()` is pinned to the shipped pipeline** three ways by `test_compose.py`. Behaviour is
+>   unchanged.
+> - **The harness's candidate set now uses D-66's effective roles**, as `scoping.py` does. On this
+>   corpus it selects the same chunks.
+> - **Where the build departs from D-86 as written:**
+>   - **The topic change can be answered cold.** It has nothing to refer back to, so it is the
+>     declared exception: it measures whether carrying the first question hurts.
+>   - **The HTTP check writes more than D-86 says.** As well as `QueryLog` and `Conversation`, it
+>     writes an answered turn's citation rows, a session, the last-login time and an audit line.
+>     None of them is a retrieval candidate.
+>   - **t09 may not fail.** D20, which its first question retrieves, names the facilities team. The
+>     result is reported as measured.
+>   - **Each way is run once**, so the answered rate is a rate across follow-ups.
+> - **The run order the agent chose.** First the thirty questions, then NFR-08, FR-13's thread run,
+>   the HTTP check, and NFR-09 last.
+>   - **Why.** §1's "never delays it" read as a priority rule, and §6's "before k6" read as
+>     protecting the corpus from NFR-09's uploads. NFR-08 writes nothing the thread run reads.
+>   - **Still open.** It is put to the user, as is whether `run.ps1` should call `server_record.py`
+>     to observe the thread count rather than take it as stated.

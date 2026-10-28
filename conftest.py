@@ -57,11 +57,12 @@ PASSWORD = "Correct-Horse-9-Battery"
 
 @pytest.fixture(autouse=True)
 def reset_request_throttles():
-    """Clear the throttle counters and the in-flight ask slots between tests.
+    """Clear the throttle counters and the in-flight slots between tests.
 
     Registration and login are rate limited per client address (D-26), and asks, ingestion
     and thread creation per user (D-79). DRF keeps those counts in the cache, which outlives
-    a test, and so does each user's in-flight ask slot (apps/api/ask_slot.py). Without this,
+    a test, and so do each user's in-flight ask slot (apps/api/ask_slot.py) and in-flight
+    ingestion slot (apps/api/ingestion_slot.py, D-85). Without this,
     a test that signs in a few times would 429 the next test rather than failing on its own
     merits, and every test signs in from the same address. The per-user counters would leak
     less, since each test's users are new rows with new ids, but a slot or a count left by a

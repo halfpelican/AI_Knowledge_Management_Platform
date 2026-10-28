@@ -74,6 +74,7 @@ from apps.retrieval.search import (
 
 from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
+from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
 from .permissions import HasRolePermission
 from .repository import RepositoryFilters, browse, repository_documents
@@ -215,6 +216,13 @@ KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE = (
 # because the answer in flight can take many minutes.
 ASK_IN_FLIGHT_MESSAGE = "Your previous question is still being answered."
 ASK_IN_FLIGHT_CODE = "ask_in_flight"
+# D-85: a POST to any of the three ingestion routes from a user whose previous upload, transcript
+# or reprocess is still being processed (apps/api/ingestion_slot.py). Its own code, so the client
+# tells it from the ingestion rate's 429, whose body is DRF's and carries none, and from the ask's.
+# "Upload" covers all three, as the client's "upload limit" already does. No Retry-After, because
+# an ingestion's length depends on the file.
+INGESTION_IN_FLIGHT_MESSAGE = "Your previous upload is still being processed."
+INGESTION_IN_FLIGHT_CODE = "ingestion_in_flight"
 # A thread needs a legible title from the moment it exists, since its address reads it (D-77),
 # and the interface never asks the user to name a topic before typing (D-43). This placeholder
 # stands only until the first question, which replaces it. The thread list leaves a thread out
@@ -248,6 +256,14 @@ class ThrottlePostOnlyMixin:
 def not_found(request, exception=None):
     """handler404: JSON like every other error, never Django's HTML page."""
     return JsonResponse({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+def ingestion_in_flight():
+    """D-85's 429 for a second ingestion while the user's slot is held. Stores nothing."""
+    return Response(
+        {"detail": INGESTION_IN_FLIGHT_MESSAGE, "code": INGESTION_IN_FLIGHT_CODE},
+        status=status.HTTP_429_TOO_MANY_REQUESTS,
+    )
 
 
 # --- FR-01 registration --------------------------------------------------------------
@@ -543,6 +559,13 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
     ingest and reprocess. DRF checks it in ``initial()`` after the permission and before this
     method, so a rejected upload counts against it too. GET is not throttled.
 
+    **One ingestion in flight per user** (D-85, ``apps/api/ingestion_slot.py``), shared with
+    meeting ingest and reprocess. Taken after the last rejection and right before ingestion, so
+    only a request that would otherwise be stored can meet it, and released in ``finally``.
+    While it is held, another upload is answered at once with ``INGESTION_IN_FLIGHT_CODE``.
+    The body has been parsed and hashed by then: the slot bounds the extraction and the
+    embedding, not the reading of the request.
+
     **GET.** The list FR-08's front end reads the "Indexed" status from, scoped by
     ``visible_to_roles`` from the first day it exists, and since Stage 5 item 1 through
     ``scoped_documents``, the one place that predicate is written (D-53). FR-11 is Stage 4
@@ -666,6 +689,12 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
                 {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
             )
 
+        # D-85: one ingestion in flight per user, taken after every rejection above, so a
+        # 400, 403, 409, 413 or 415 is answered as before and never holds it. Nothing has been
+        # stored yet, so the 429 stores nothing.
+        token = take_ingestion_slot(request.user)
+        if token is None:
+            return ingestion_in_flight()
         try:
             outcome = ingest_and_index_document(
                 uploaded_file=uploaded_file,
@@ -682,6 +711,9 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
             return Response(
                 {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
             )
+        finally:
+            # Whatever the exit: a 201, a 422, the 409 above, or an exception on its way to a 500.
+            release_ingestion_slot(request.user, token)
         # The document object is returned whatever the code: on a 422 the file is
         # kept and the record carries the status saying why it is not indexed, which
         # is what FR-08's "Processing failed. Please try again" action reads.
@@ -982,6 +1014,11 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
     Gated on the same contribute permission as the document upload (D-30), and POST is
     throttled per user in the same "ingestion" scope as the upload and reprocess (D-79). GET is
     not throttled.
+
+    **One ingestion in flight per user** (D-85), the upload's slot. It is taken after every 400
+    and 403, and an uploaded transcript file is extracted before that, because the minimum-length
+    400 needs its text. So the slot bounds chunking and embedding here, and a file's extraction
+    (bounded by D-81 for a PDF) runs outside it.
     """
 
     permission_classes = [IsAuthenticated]
@@ -1037,13 +1074,20 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
                 {"attendees": [UNKNOWN_ATTENDEE_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        outcome = ingest_meeting_transcript(
-            title=data["title"],
-            meeting_date=data["meeting_date"],
-            transcript_text=transcript_text,
-            visible_to_roles=visible_to_roles,
-            attendees=attendees,
-        )
+        # D-85: the same slot as the document upload, taken after every 400 and 403 above.
+        token = take_ingestion_slot(request.user)
+        if token is None:
+            return ingestion_in_flight()
+        try:
+            outcome = ingest_meeting_transcript(
+                title=data["title"],
+                meeting_date=data["meeting_date"],
+                transcript_text=transcript_text,
+                visible_to_roles=visible_to_roles,
+                attendees=attendees,
+            )
+        finally:
+            release_ingestion_slot(request.user, token)
         body = MeetingSerializer(outcome.meeting).data
         if outcome.detail:
             body["detail"] = outcome.detail
@@ -1115,7 +1159,8 @@ class DocumentReprocessView(APIView):
     Scoped and permissioned exactly as the upload is: ``contribute_content``, and a
     document outside the caller's scope is 404 rather than 403, because a 403 would
     confirm the id names something real (CLAUDE.md invariant 1). Throttled per user in the
-    "ingestion" scope the upload and meeting ingest share (D-79).
+    "ingestion" scope the upload and meeting ingest share (D-79), and it holds the same
+    in-flight slot they do (D-85), taken after the 404, the 409 and the 422.
 
     **No stored original is a 422 with ``NO_STORED_ORIGINAL_MESSAGE``, logged** (D-75's note of
     21 October). That covers a blank ``file_path``, a file missing from disk and a
@@ -1170,6 +1215,11 @@ class DocumentReprocessView(APIView):
                 {"detail": NO_STORED_ORIGINAL_MESSAGE},
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
+        # D-85: the upload's slot, taken after the 404, the 409 and the 422 above, so the
+        # document is left exactly as it was when it is refused.
+        token = take_ingestion_slot(request.user)
+        if token is None:
+            return ingestion_in_flight()
         try:
             outcome = reprocess_document(document)
         except IntegrityError:
@@ -1178,6 +1228,8 @@ class DocumentReprocessView(APIView):
             return Response(
                 {"detail": DUPLICATE_DOCUMENT_MESSAGE}, status=status.HTTP_409_CONFLICT
             )
+        finally:
+            release_ingestion_slot(request.user, token)
         body = DocumentSerializer(outcome.document).data
         if outcome.detail:
             body["detail"] = outcome.detail

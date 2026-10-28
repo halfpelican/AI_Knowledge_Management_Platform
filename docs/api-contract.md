@@ -114,8 +114,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest and reprocess (D-79) |
-| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79) |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest and reprocess (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/documents/{id}` | session | `200` document object, with the detail fields Stage 5 adds (`extracted_text`, `tags`, `can_delete`; see Stage 5 — FR-15) | `401`; `404` no such document, or one outside the caller's scope |
 
@@ -249,7 +249,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79) |
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text` | `401`; `404` no such meeting, or one outside the caller's scope |
 
@@ -939,6 +939,29 @@ That 429 carries no `Retry-After`, because an answer can take a long time: about
 the two 429s apart by `code`, and does not parse `detail`. The check runs after validation and the
 conversation check, so a 400 or a 404 is returned as before, and a rejected ask writes no
 `QueryLog` row.
+
+**One ingestion in flight per user (D-85, Stage 5 item 6).** The three ingestion routes,
+`POST /api/documents`, `POST /api/meetings` and `POST /api/documents/{id}/reprocess`, share one
+slot per user, as they share the `ingestion` rate. While one of them is being processed for a
+user, another from the same user, on any of the three, answers at once:
+
+```json
+{"detail": "Your previous upload is still being processed.", "code": "ingestion_in_flight"}
+```
+
+- **Nothing is stored.** No document, meeting, file or chunk is written, a reprocessed document is
+  left as it was, and no provider is called.
+- **No `Retry-After`**, because how long an ingestion takes depends on the file. Retrying once the
+  earlier request has answered is enough.
+- **Every refusal comes first.** The check runs after every rejection a route decides before
+  ingesting: the upload's 400, 403, 409, 413 and 415, the meeting's 400 and 403, and reprocess's
+  404, 409 and the 422 for a missing original. Those are answered as before. A 422 for content
+  stored but not indexed is ingestion's own outcome, reached inside the slot. The rate is checked
+  before the slot, so this 429 counts against the rate.
+- **It is separate from the ask's slot.** A user may have one question and one ingestion in
+  flight at once.
+- The client tells the three kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
+  and `ingestion_in_flight`. It does not parse `detail`.
 
 **The conversation list leaves out empty threads (D-80).** `GET /api/conversations` returns only
 threads with at least one turn, answered or not. It never filters on the title, or on what a turn

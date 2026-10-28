@@ -8,7 +8,7 @@ import {
   requireThat, minimumSpacingSeconds, accountEmail, accountRange,
   loginAccounts, sessionForThisVu, warmUp, paceFrom, setupTimeoutSeconds,
   nextQuestion, ask, isValidReply, wasAnswered, validityProblems, throttleCounts,
-  runRecord, runRecordLines,
+  runRecord, runRecordLines, observedServer,
 } from './common.js';
 
 const P90_LIMIT_MS = 4000;
@@ -38,11 +38,14 @@ const ACCOUNTS = accountRange(1, VUS);
 // is one account and sends one ask per iteration, so this is the spacing of that
 // account's asks. 6 s is exactly W/N for 10/min, and a no-answer reply comes back
 // fast enough that the floor is what paces the VU: 11 asks then span exactly
-// 60 s at the client, and the 11th is a 429 as soon as the 1st was stamped late,
-// which Waitress's 4 threads under 5 VUs can do. A floor of at least
-// W/(N-1) = 60/9 = 6.67 s holds however late any one ask is stamped
-// (common.js, minimumSpacingSeconds): 7 s puts 11 asks more than 9 * 7 = 63 s
-// apart at the server. Cost: 100 iterations / 5 VUs * 7 s = 140 s at least.
+// 60 s at the client, and the 11th is a 429 as soon as the 1st was stamped later
+// than the 11th. Under D-85's 24 threads, 5 VUs never wait for a thread, so the
+// difference should be milliseconds rather than a queue (unmeasured), but any
+// difference is enough.
+// A floor of at least W/(N-1) = 60/9 = 6.67 s holds however late any one ask is
+// stamped, at any thread count (common.js, minimumSpacingSeconds): 7 s puts 11
+// asks more than 9 * 7 = 63 s apart at the server. Cost: 100 iterations / 5 VUs
+// * 7 s = 140 s at least.
 const ITERATION_FLOOR_S = 7;
 requireThat(ITERATION_FLOOR_S >= minimumSpacingSeconds(ASK_LIMIT),
   `ITERATION_FLOOR_S must be at least ${minimumSpacingSeconds(ASK_LIMIT).toFixed(2)} s.`);
@@ -86,9 +89,12 @@ export const options = {
 
 export function setup() {
   const sessions = loginAccounts(ACCOUNTS);
+  // Before the warm-ups, so a wrong server is reported before they take minutes.
+  // It reaches handleSummary() as data.setup_data (D-85 decision 4).
+  const observed = observedServer(sessions);
   // Account 01 is VU 1's, so its warm-ups are paced like its measured asks.
   warmUp(sessions[0], ITERATION_FLOOR_S);
-  return { sessions };
+  return { sessions, observed_server: observed };
 }
 
 export default function (data) {
@@ -151,7 +157,7 @@ export function handleSummary(data) {
     answered_percent: answeredPct,
     asks_measured: asksMeasured,
     single_user_baseline: SINGLE_USER_BASELINE,
-    ...runRecord(),
+    ...runRecord(data),
     throttled_429: throttleCounts(data),
     role: EXPECTED_ROLE,
     role_checked_at_login: true,
@@ -175,7 +181,7 @@ export function handleSummary(data) {
     `${label('single-user baseline')}${ms(SINGLE_USER_BASELINE.p90_ms)}, not measured by this run: ` +
     'p90 of one generation call, in-process, without embedding, retrieval or HTTP ' +
     `(${SINGLE_USER_BASELINE.source})\n` +
-    runRecordLines(label) +
+    runRecordLines(label, data) +
     `${label('VUs / iterations')}${VUS} / ${ITERATIONS}\n` +
     `${label('run valid')}${valid}\n` +
     problems.map((p) => `    INVALID: ${p}\n`).join('') +

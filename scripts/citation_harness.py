@@ -26,6 +26,26 @@ record in a file; docs/measurement-runbook.md gives the exact commands::
 retrieval is held constant, so only the generation prompt changes. See the comment on
 CANNED_PRIOR_QUESTIONS for why, and why that is not FR-13 end to end.
 
+``--threads`` (Stage 5 item 6, D-86) IS FR-13 end to end, on the frozen two-turn threads
+of ``corpus/objective-02/threads.json``::
+
+    .venv\\Scripts\\python.exe scripts\\citation_harness.py ^
+        --threads corpus\\objective-02\\threads.json ^
+        --dump-sha256 <the snapshot's SHA-256> --out <run folder>\\threads.json
+
+Each follow-up is run three ways: composed with the first turn's question (what ``POST
+/api/ask`` sends on turn two), cold, and spelled out. Both strings of every run come from
+``apps.retrieval.conversation.compose``, the function the pipeline's own
+``conversation_context`` calls, so the join that is embedded and the block that is
+prompted are the shipped ones. Each first turn is run once. scripts/thread_set.py holds
+the validation and the frozen scoring rule, and this file reports what D-86 section 4
+lists, per follow-up and per way. The thread file's SHA-256 is recorded.
+
+Both modes run IN-PROCESS: the pipeline's functions are called here, and no HTTP server is
+involved. The record says so (D-85 decision 4 asks for the server beside every result;
+for this script, "none, in-process" is the true answer). scripts/conversation_http_check.py
+is the run that goes through the server.
+
 This script READS the database and never writes to it. It ingests nothing.
 
 --------------------------------------------------------------------------------
@@ -37,7 +57,10 @@ Each refuses with exit code 2, and nothing is asked:
    ``--unrecorded``. Neither is the default, so a forgotten hash cannot quietly turn a
    measurement into an unrecorded run (scripts/measurement_record.py).
 2. The question set validates (scripts/question_set.py), including a scoped question
-   asked by both roles.
+   asked by both roles; or, under ``--threads``, the thread set does
+   (scripts/thread_set.py), with its frozen scoring rule. ``--threads`` also refuses the
+   options that belong to a question set (--questions, --with-history, --scores-only,
+   --kind).
 3. A recorded run is never taken against the ``kmp`` database (D-84 decision 1).
 4. scripts/check_flm.py's three checks pass (D-83 decision 3).
 5. For a recorded run, FLM is v0.9.39, by the CLI and by the server (D-83 decision 1).
@@ -46,8 +69,9 @@ Each refuses with exit code 2, and nothing is asked:
    That is what catches a run made after NFR-09's uploads without a restore (D-84).
 
 A recorded run's output carries the commit SHA, whether tracked files had uncommitted
-changes, the FLM version, the dump hash, the database NAME (never its URL), and the
-question file's SHA-256, so a frozen set can be checked against the run that used it.
+changes, the FLM version, the dump hash, the database NAME (never its URL), the set
+file's SHA-256, so a frozen set can be checked against the run that used it, and the
+server record, which for this script says the run was in-process.
 
 What is measured is unchanged: the three rates, the top-score distribution, and the
 timing of this one sequential process. Recorded beside them, because D-84 section 4
@@ -113,6 +137,8 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 import check_flm  # noqa: E402  scripts/check_flm.py, the D-83 gate
 import measurement_record  # noqa: E402  scripts/measurement_record.py
 import question_set  # noqa: E402  scripts/question_set.py
+import server_record  # noqa: E402  scripts/server_record.py, D-85's server record
+import thread_set  # noqa: E402  scripts/thread_set.py, D-86's threads and scoring rule
 
 import django  # noqa: E402
 
@@ -146,7 +172,15 @@ from apps.core.constants import (  # noqa: E402
 )
 from apps.documents.models import ContentChunk, Document  # noqa: E402
 from apps.meetings.models import Meeting  # noqa: E402
+
+# FR-13's composition, the shipped function (D-86 decision 5). conversation_context() calls
+# it, and apps/retrieval/tests/test_compose.py pins the two together.
+from apps.retrieval.conversation import compose  # noqa: E402
 from apps.retrieval.query_embedding import embed_question  # noqa: E402
+
+# D-66: the role names whose content a role may read. The candidate set below applies it,
+# as apps/retrieval/scoping.py does.
+from apps.retrieval.scoping import effective_roles  # noqa: E402
 
 # What a no-answer reply would offer as partial matches (FR-12, D-56): the shipped
 # derivation, called on the same pre-threshold ranked list the pipeline gives it. The
@@ -230,12 +264,15 @@ class QuestionResult:
     # The question's own id; question_id adds "@<role>" for a question asked by both roles.
     base_id: str = ""
     # The manifest item the answer is in, or None (a no-answer question, or a set
-    # without sources).
-    source: str | None = None
+    # without sources). A --threads run carries its turn's list of items.
+    source: str | list[str] | None = None
     # The string actually handed to generate_statements. Equal to ``question`` on an
     # ordinary run; the labelled composed form under --with-history. Recorded so the JSON
     # out says which prompt produced these statements rather than leaving it to be assumed.
     prompt_question: str = ""
+    # The string actually embedded: ``question`` on an ordinary run and under
+    # --with-history, compose()'s plain join on a --threads run with history.
+    retrieval_text: str = ""
     retrieved: list[RankedPassage] = field(default_factory=list)
     top_score: float | None = None
     # Where the expected source's best chunk sat in the full ranked list, 1-based, and its
@@ -365,6 +402,18 @@ def corpus_problems(
     )
 
 
+def readable_by(chunk: ContentChunk, role: str) -> bool:
+    """Whether ``role`` may read ``chunk``: its stamp overlaps the role's effective roles.
+
+    D-66: an Administrator reads what an Employee reads. This is
+    apps/retrieval/scoping.py's predicate (``visible_to_roles`` overlaps
+    ``effective_roles(role)``) applied to rows already in memory. Before D-66 the harness
+    tested ``role in visible_to_roles``; on the Objective 02 corpus, where every Employee
+    item is stamped with both roles, the two select the same chunks.
+    """
+    return bool(set(effective_roles(role)) & set(chunk.visible_to_roles or []))
+
+
 def build_candidate_set(chunks: list[ContentChunk], role: str, query_model: str) -> list[ContentChunk]:
     """Chunks this role may see, embedded by the query model.
 
@@ -378,7 +427,7 @@ def build_candidate_set(chunks: list[ContentChunk], role: str, query_model: str)
     return [
         chunk
         for chunk in chunks
-        if chunk.embedding_model == query_model and role in (chunk.visible_to_roles or [])
+        if chunk.embedding_model == query_model and readable_by(chunk, role)
     ]
 
 
@@ -409,6 +458,19 @@ def where_ranked(ranked: list[RankedPassage], sources: SourceIndex | None, item:
         if sources.item_of(passage.source_id) == item:
             return position, passage.score
     return None, None
+
+
+def best_ranked(ranked: list[RankedPassage], sources: SourceIndex | None, items):
+    """``where_ranked`` for one item id or for a list of them (a thread turn's sources).
+
+    For a list, the best-placed of the items: the rank of the first chunk in ``ranked``
+    that belongs to any of them.
+    """
+    if items is None or isinstance(items, str):
+        return where_ranked(ranked, sources, items)
+    placed = [where_ranked(ranked, sources, item) for item in items]
+    placed = [pair for pair in placed if pair[0] is not None]
+    return min(placed) if placed else (None, None)
 
 
 def offered_record(ranked: list[RankedPassage], sources: SourceIndex | None) -> list[dict]:
@@ -468,30 +530,46 @@ def run_question(
         else result.question
     )
 
-    # The pipeline's own query path, not a copy of it: embed_question() applies the
-    # embedding model's query task prefix and validates the response, so the harness
-    # measures what the shipped system sends rather than something adjacent to it.
-    #
     # The BARE question is embedded even under --with-history. FR-13 would embed the plain
     # join of the history and the question; this run deliberately does not, so that the
     # passages are the ones the item-6 run supplied and the prompt block is the only thing
-    # that changed.
-    embedding = embed_question(result.question)
+    # that changed. A --threads run is the one that embeds the join (run_thread_run).
+    return measure(result, result.question, chunks, service, threshold, sources, started)
+
+
+def measure(
+    result: QuestionResult,
+    retrieval_text: str,
+    chunks: list[ContentChunk],
+    service,
+    threshold: float,
+    sources: SourceIndex | None,
+    started: float,
+) -> QuestionResult:
+    """Embed ``retrieval_text``, rank, admit, generate on ``result.prompt_question``, verify.
+
+    The measuring half of run_question, shared with --threads. ``result`` already carries
+    its role, its expectation and the prompt string; this fills in everything observed.
+    """
+    result.retrieval_text = retrieval_text
+
+    # The pipeline's own query path, not a copy of it: embed_question() applies the
+    # embedding model's query task prefix and validates the response, so the harness
+    # measures what the shipped system sends rather than something adjacent to it.
+    embedding = embed_question(retrieval_text)
     query_vector = embedding.vectors[0]
 
     candidates = build_candidate_set(chunks, result.role, embedding.model)
     ranked = rank(candidates, query_vector)
     result.top_score = ranked[0].score if ranked else None
-    result.source_rank, result.source_score = where_ranked(ranked, sources, result.source)
+    result.source_rank, result.source_score = best_ranked(ranked, sources, result.source)
     result.offered = offered_record(ranked, sources)
     admitted = [candidate for candidate in ranked if candidate.score >= threshold]
 
     # The chunks this role may NOT see. Computed only so the harness can assert
     # that none of them reached the prompt or the answer; never printed, never
     # counted in anything the answer discloses.
-    forbidden = {
-        str(chunk.id) for chunk in chunks if result.role not in (chunk.visible_to_roles or [])
-    }
+    forbidden = {str(chunk.id) for chunk in chunks if not readable_by(chunk, result.role)}
 
     if not admitted:
         # No-answer path A: nothing above RELEVANCE_THRESHOLD. Generation is not
@@ -845,6 +923,253 @@ def score_distribution(
     return 0, records
 
 
+# =============================================================================
+# --threads: FR-13 end to end on the frozen two-turn threads (Stage 5 item 6, D-86)
+# =============================================================================
+
+
+def manifest_readable(manifest_items: list[dict]) -> dict[str, set[str]]:
+    """Each role's readable manifest items, by D-66's rule, for the thread set's checks.
+
+    The manifest's ``visible_to_roles`` is what ingestion stamped on each item's chunks,
+    so this is the same overlap readable_by() tests on a chunk.
+    """
+    return {
+        role: {
+            item["id"]
+            for item in manifest_items
+            if item.get("kind") in MANIFEST_SOURCE_KINDS
+            and set(effective_roles(role)) & set(item.get("visible_to_roles") or [])
+        }
+        for role in ROLES
+    }
+
+
+def load_thread_set(path: Path) -> tuple[dict, list[dict], dict[str, set[str]]]:
+    """Read and validate the thread set: (its object, its threads, readable items by role).
+
+    A malformed set is rejected, not measured: ThreadSetError, which main() turns into a
+    refusal. The manifest it names supplies which items each role may read.
+    """
+    payload, threads = thread_set.load(path)
+    manifest_path = REPOSITORY_ROOT / str(payload.get("manifest", ""))
+    if not payload.get("manifest") or not manifest_path.is_file():
+        raise thread_set.ThreadSetError(f"the set names no manifest this checkout has: {payload.get('manifest')!r}")
+    readable = manifest_readable(json.loads(manifest_path.read_text(encoding="utf-8"))["items"])
+    problems = thread_set.problems(
+        payload,
+        minimum_length=MINIMUM_QUESTION_LENGTH,
+        maximum_length=MAXIMUM_QUESTION_LENGTH,
+        roles=ROLES,
+        readable=readable,
+    )
+    if problems:
+        raise thread_set.ThreadSetError("Thread set is not usable:\n  " + "\n  ".join(problems))
+    return payload, threads, readable
+
+
+def run_thread_run(
+    run: dict,
+    chunks: list[ContentChunk],
+    service,
+    threshold: float,
+    sources: SourceIndex | None,
+) -> QuestionResult:
+    """One run of the thread set: compose() its two strings, then measure them.
+
+    ``run["prior"]`` is the first turn's question for a follow-up asked with history, and
+    empty otherwise, so ``compose`` returns exactly what conversation_context() returns on
+    that turn of a real thread. The plain join is embedded and the labelled block is
+    prompted, as POST /api/ask does.
+    """
+    started = time.perf_counter()
+    composed = compose(run["question"], run["prior"])
+    result = QuestionResult(
+        question_id=run["run_id"],
+        kind=run["kind"],
+        role=run["role"],
+        question=run["question"],
+        expects_answer=run["expects_answer"],
+        base_id=run["thread_id"],
+        source=list(run["sources"]),
+        # Scored by thread_set.score's phrases and sources, not by finish()'s one phrase.
+        expected_answer=None,
+    )
+    result.prompt_question = composed.for_prompt
+    return measure(result, composed.for_retrieval, chunks, service, threshold, sources, started)
+
+
+def thread_observation(result: QuestionResult, chunks: list[ContentChunk], sources: SourceIndex | None) -> dict:
+    """What thread_set.score() reads, from one run's result."""
+    readable_sources = {str(chunk.source_id) for chunk in chunks if readable_by(chunk, result.role)}
+
+    def described(statements):
+        return [
+            {"text": s.text, "chunk_id": s.chunk_id,
+             "item": sources.item_by_chunk.get(s.chunk_id) if sources else None}
+            for s in statements
+        ]
+
+    return {
+        "generation_called": result.generation_called,
+        "parsed": result.parsed,
+        "first_attempt_parsed": (result.attempts[0]["outcome"] == "parsed") if result.attempts else None,
+        "proposed": described(result.statements),
+        "verified": described(result.verified_statements),
+        "out_of_scope_chunk_ids": list(result.out_of_scope_ids),
+        "out_of_scope_partial_matches": [
+            offer["source_id"] for offer in result.offered if offer["source_id"] not in readable_sources
+        ],
+        "source_rank": result.source_rank,
+    }
+
+
+def ratio_text(pair) -> str:
+    numerator, denominator = pair
+    return percentage(numerator, denominator)
+
+
+def report_threads(results: list[QuestionResult], scored: list[dict], sources: SourceIndex | None) -> dict:
+    """Print each follow-up's runs and the per-way rates (D-86 section 4). Returns the summary."""
+    print("\n" + "=" * 100)
+    print("PER-FOLLOW-UP DETAIL (one block per thread and role; the first turn, then three ways)")
+    print("=" * 100)
+    for result, score in zip(results, scored):
+        if score["way"] == thread_set.FIRST_TURN:
+            print(f"\n[{score['thread_id']}@{score['role']}] {score['kind']}")
+        predicted = thread_set.predicted_correct(score["kind"], score["way"], score["expects_answer"])
+        rank = "not a candidate" if score["source_rank"] is None else f"rank {score['source_rank']}"
+        verdict = "CORRECT" if score["correct"] else "not correct"
+        flag = "" if score["correct"] == predicted else "   <- NOT AS PREDICTED"
+        print(f"  {score['way']:<13} {score['outcome']:<16} source {rank:<16} phrase "
+              f"{'yes' if score['phrase_found'] else 'no ':<3}  cited {'yes' if score['expected_source_cited'] else 'no ':<3}"
+              f"  {verdict}{flag}")
+        print(f"                question : {result.question}")
+        if result.retrieval_text != result.question:
+            print(f"                embedded : {result.retrieval_text}")
+        ids = ", ".join(item_label(sources, c.chunk_id) for c in result.retrieved) or "(none above threshold)"
+        print(f"                supplied : {ids}")
+        if result.attempts:
+            print("                attempts : " + ", ".join(f"{a['attempt']}:{a['outcome']}" for a in result.attempts))
+        verified = {id(statement) for statement in result.verified_statements}
+        for statement in result.statements:
+            # As in report(): a rejected statement is marked here, in a hand-run
+            # instrument, and nowhere a user could see it (invariant 6).
+            mark = "-" if id(statement) in verified else "x REJECTED"
+            print(f"                  {mark} [{item_label(sources, statement.chunk_id)}] {statement.text}")
+        for leak in score["leaks"]:
+            print(f"                LEAK     : {leak}")
+        if result.error:
+            print(f"                ERROR    : {result.error}")
+
+    summary = thread_set.summarise(scored)
+    responses = [a for r in results for a in r.attempts if a["outcome"] != "call-failed"]
+    conforming = [a for a in responses if a["outcome"] == "parsed"]
+    summary["schema_conformance"] = [len(conforming), len(responses)]
+
+    print("\n" + "=" * 100)
+    print("SUMMARY, PER WAY, ACROSS FOLLOW-UPS (scoring rule version "
+          f"{thread_set.SCORING_RULE_VERSION})")
+    print("=" * 100)
+    for way, rates in summary["per_way"].items():
+        outcomes = ", ".join(f"{name} {count}" for name, count in rates["outcomes"].items())
+        print(f"\n{way}  ({rates['runs']} run(s))")
+        print(f"  answered, where an answer is expected : {ratio_text(rates['answered_where_expected'])}")
+        print(f"  expected-answer match                 : {ratio_text(rates['expected_answer_match'])}")
+        print(f"  not answered, where none is expected  : {ratio_text(rates['not_answered_where_expected'])}")
+        print(f"  outcomes                              : {outcomes}")
+        print(f"  fabricated identifiers                : {ratio_text(rates['fabricated_identifiers'])}")
+        print(f"  first-attempt conformance             : {ratio_text(rates['first_attempt_conformance'])}")
+        print(f"  out-of-scope (must be 0)              : {rates['out_of_scope']}")
+        print(f"  as predicted                          : {ratio_text(rates['matched_prediction'])}")
+    print("\nreadings (scoring rule part 10):")
+    for entry in summary["readings"]:
+        held = "" if entry["prediction_held"] else "   <- prediction did not hold"
+        print(f"  {entry['follow_up']:<18} {entry['kind']:<16} {'; '.join(entry['labels'])}{held}")
+    for entry in summary["scoping"]:
+        print(f"scoping shown, {entry['thread']}: {'YES' if entry['scoping_shown'] else 'NO'}")
+    print(f"\nschema conformance, every response : {ratio_text(summary['schema_conformance'])}")
+    print(f"out-of-scope, every run             : {summary['out_of_scope_total']}  (must be 0)")
+    return summary
+
+
+def thread_run_record(run: dict, result: QuestionResult, score: dict, sources: SourceIndex | None) -> dict:
+    """One run as written to --out: what was composed, what was observed, how it scored."""
+    def item_of(chunk_id):
+        return sources.item_by_chunk.get(chunk_id) if sources else None
+
+    return {
+        **{key: run[key] for key in ("run_id", "thread_id", "kind", "role", "turn", "way", "prior",
+                                     "expects_answer", "expected_answer", "sources")},
+        "question": result.question,
+        "retrieval_text": result.retrieval_text,
+        "prompt_question": result.prompt_question,
+        "top_score": result.top_score,
+        "source_rank": result.source_rank,
+        "source_score": result.source_score,
+        "partial_matches": result.offered,
+        "retrieved": [{"chunk_id": c.chunk_id, "score": c.score, "item": item_of(c.chunk_id)}
+                      for c in result.retrieved],
+        "generation_called": result.generation_called,
+        "attempts": result.attempts,
+        "statements": [{"text": s.text, "chunk_id": s.chunk_id, "item": item_of(s.chunk_id)}
+                       for s in result.statements],
+        "verified_statements": [{"text": s.text, "chunk_id": s.chunk_id, "item": item_of(s.chunk_id)}
+                                for s in result.verified_statements],
+        "error": result.error,
+        "seconds": result.seconds,
+        "score": score,
+        "predicted_correct": thread_set.predicted_correct(run["kind"], run["way"], run["expects_answer"]),
+    }
+
+
+def run_threads(arguments, runs, chunks, service, sources, record, constants, set_path) -> int:
+    """--threads after the gates: every run, the report, the record. Exit 1 on any leak.
+
+    Also 1 below the 95% schema conformance bar, as the question-set mode is.
+    """
+    results: list[QuestionResult] = []
+    scored: list[dict] = []
+    started = time.perf_counter()
+    for position, run in enumerate(runs, start=1):
+        print(f"[{position}/{len(runs)}] {run['run_id']} ...", flush=True)
+        result = run_thread_run(run, chunks, service, arguments.threshold, sources)
+        results.append(result)
+        scored.append(thread_set.score(run, thread_observation(result, chunks, sources)))
+    elapsed = time.perf_counter() - started
+
+    summary = report_threads(results, scored, sources)
+    print(f"\nelapsed: {elapsed / 60:.1f} minutes")
+
+    if arguments.out:
+        payload_out = {
+            "record": record,
+            "mode": "threads",
+            "constants": constants,
+            "provider": settings.AI_PROVIDER,
+            "chat_model": settings.FLM_CHAT_MODEL,
+            "embed_model": settings.FLM_EMBED_MODEL,
+            "embedding_dimension": settings.EMBEDDING_DIMENSION,
+            "thread_set": str(set_path),
+            "elapsed_seconds": elapsed,
+            "summary": summary,
+            "runs": [thread_run_record(run, result, score, sources)
+                     for run, result, score in zip(runs, results, scored)],
+        }
+        arguments.out.write_text(json.dumps(payload_out, indent=2), encoding="utf-8")
+        print(f"full record written to {arguments.out}")
+
+    if summary["out_of_scope_total"]:
+        print("\nRESULT: OUT-OF-SCOPE MATERIAL reached a run. One leak fails the set (scoring rule part 7).")
+        return 1
+    conforming, responses = summary["schema_conformance"]
+    if responses and conforming / responses < 0.95:
+        print("\nRESULT: schema conformance is BELOW 95% on the thread set.")
+        return 1
+    print("\nRESULT: no leak, and schema conformance meets the 95% bar. The readings above are the result.")
+    return 0
+
+
 def refuse(reasons: list[str]) -> int:
     print()
     for reason in reasons:
@@ -858,10 +1183,18 @@ def main() -> int:
     parser.add_argument(
         "--questions",
         type=Path,
-        default=DEFAULT_QUESTION_SET,
+        default=None,
         help=f"question set JSON (default: {DEFAULT_QUESTION_SET.name}, a placeholder set)",
     )
-    parser.add_argument("--limit", type=int, default=0, help="run only the first N questions")
+    # D-86: FR-13 end to end. Its own set and its own scoring rule, so it does not mix with
+    # the question-set options; main() refuses the combinations.
+    parser.add_argument(
+        "--threads",
+        type=Path,
+        help="thread set JSON (D-86): run each follow-up with history, cold and spelled out",
+    )
+    parser.add_argument("--limit", type=int, default=0,
+                        help="run only the first N questions, or the first N threads")
     # This override is a measuring instrument: it lets the score distribution be
     # observed at several thresholds without disturbing the settled value (D-37).
     # It defaults to the constant, so an ordinary run measures what retrieval will
@@ -909,23 +1242,49 @@ def main() -> int:
     problems = measurement_record.recording_problems(
         dump_sha256=arguments.dump_sha256, unrecorded=arguments.unrecorded, out=arguments.out
     )
+    if not problems and not arguments.unrecorded and arguments.out.exists():
+        problems = [f"{arguments.out} exists, and a recorded run never overwrites a record"]
     if problems:
         return refuse(problems)
     recorded = not arguments.unrecorded
 
-    # Gate 2: the question set, including a scoped question asked by both roles.
-    try:
-        payload, questions = load_question_set(arguments.questions)
-    except (question_set.QuestionSetError, OSError, ValueError) as exc:
-        return refuse([f"{arguments.questions}: {exc}"])
-    if arguments.kind:
-        questions = [q for q in questions if q["kind"] == arguments.kind]
-    if arguments.limit:
-        questions = questions[: arguments.limit]
-    runs = question_set.expand_runs(questions, ROLES)
-    asked_by_both = sum(1 for q in questions if q.get("role") == question_set.BOTH_ROLES)
-    print(f"Question set: {arguments.questions}, {len(questions)} question(s) valid, "
-          f"{asked_by_both} asked by both roles, so {len(runs)} run(s)")
+    # Gate 2: the set. The question set, including a scoped question asked by both roles;
+    # or, under --threads, the thread set and its frozen scoring rule (D-86).
+    if arguments.threads:
+        clashes = [flag for flag, given in (
+            ("--questions", arguments.questions is not None),
+            ("--with-history", arguments.with_history),
+            ("--scores-only", arguments.scores_only),
+            ("--kind", arguments.kind is not None),
+        ) if given]
+        if clashes:
+            return refuse([f"--threads runs the thread set on its own; it does not combine with "
+                           f"{', '.join(clashes)}"])
+        set_path = arguments.threads
+        try:
+            payload, threads, readable = load_thread_set(set_path)
+        except (thread_set.ThreadSetError, OSError, ValueError, KeyError) as exc:
+            return refuse([f"{set_path}: {exc}"])
+        if arguments.limit:
+            threads = threads[: arguments.limit]
+        runs = thread_set.expand_runs(threads, ROLES, readable)
+        questions = threads
+        print(f"Thread set: {set_path}, {len(threads)} thread(s) valid, so {len(runs)} run(s) "
+              f"(each follow-up with history, cold and spelled out; each first turn once)")
+    else:
+        set_path = arguments.questions or DEFAULT_QUESTION_SET
+        try:
+            payload, questions = load_question_set(set_path)
+        except (question_set.QuestionSetError, OSError, ValueError) as exc:
+            return refuse([f"{set_path}: {exc}"])
+        if arguments.kind:
+            questions = [q for q in questions if q["kind"] == arguments.kind]
+        if arguments.limit:
+            questions = questions[: arguments.limit]
+        runs = question_set.expand_runs(questions, ROLES)
+        asked_by_both = sum(1 for q in questions if q.get("role") == question_set.BOTH_ROLES)
+        print(f"Question set: {set_path}, {len(questions)} question(s) valid, "
+              f"{asked_by_both} asked by both roles, so {len(runs)} run(s)")
 
     # Gate 3: never a recorded measurement of kmp (D-84 decision 1). The NAME only.
     database = str(settings.DATABASES["default"].get("NAME", ""))
@@ -958,12 +1317,20 @@ def main() -> int:
         if recorded:
             return refuse([f"the run cannot be recorded: {exc}"])
         record = {"commit_sha": None, "error": str(exc), "flm_version": version.as_record()}
-    record.update({
-        "recorded": recorded,
-        "question_set": str(arguments.questions),
-        "question_set_sha256": question_set.file_sha256(arguments.questions),
-        "question_set_status": payload.get("status"),
-    })
+    record.update({"recorded": recorded, "server": server_record.in_process("scripts/citation_harness.py")})
+    if arguments.threads:
+        record.update({
+            "thread_set": str(set_path),
+            "thread_set_sha256": thread_set.file_sha256(set_path),
+            "thread_set_status": payload.get("status"),
+            "scoring_rule_version": payload["scoring_rule"]["version"],
+        })
+    else:
+        record.update({
+            "question_set": str(set_path),
+            "question_set_sha256": question_set.file_sha256(set_path),
+            "question_set_status": payload.get("status"),
+        })
 
     service = get_ai_service()
     health = service.health()
@@ -991,8 +1358,13 @@ def main() -> int:
     print(f"  chat model      : {settings.FLM_CHAT_MODEL}")
     print(f"  embed model     : {settings.FLM_EMBED_MODEL}, dimension {settings.EMBEDDING_DIMENSION}")
     print(f"  health          : {health.available} — {health.detail}")
-    print(f"  question set    : {arguments.questions}  ({len(questions)} question(s), "
-          f"{len(runs)} run(s)), sha256 {record['question_set_sha256'][:16]}")
+    print(f"  server          : none, in-process (D-85: the pipeline's functions are called here)")
+    if arguments.threads:
+        print(f"  thread set      : {set_path}  ({len(questions)} thread(s), {len(runs)} run(s)), "
+              f"sha256 {record['thread_set_sha256'][:16]}, scoring rule v{record['scoring_rule_version']}")
+    else:
+        print(f"  question set    : {set_path}  ({len(questions)} question(s), "
+              f"{len(runs)} run(s)), sha256 {record['question_set_sha256'][:16]}")
     if payload.get("status"):
         print(f"  set status      : {payload['status']}")
     print(f"  indexed chunks  : {len(chunks)}, recorded embedding model(s): {models}")
@@ -1045,6 +1417,9 @@ def main() -> int:
         "MAXIMUM_GENERATION_ATTEMPTS": MAXIMUM_GENERATION_ATTEMPTS,
     }
 
+    if arguments.threads:
+        return run_threads(arguments, runs, chunks, service, sources, record, constants, set_path)
+
     if arguments.scores_only:
         # No ``service``: the question path embeds through embed_question(), which looks
         # the provider up itself, and --scores-only calls no generation at all.
@@ -1080,7 +1455,7 @@ def main() -> int:
             "chat_model": settings.FLM_CHAT_MODEL,
             "embed_model": settings.FLM_EMBED_MODEL,
             "embedding_dimension": settings.EMBEDDING_DIMENSION,
-            "question_set": str(arguments.questions),
+            "question_set": str(set_path),
             "with_history": arguments.with_history,
             "canned_prior_questions": list(CANNED_PRIOR_QUESTIONS) if arguments.with_history else [],
             "elapsed_seconds": elapsed,

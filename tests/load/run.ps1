@@ -5,21 +5,28 @@
 .DESCRIPTION
     In order, stopping at the first failure, before k6 is started:
       1. checks the arguments, LOAD_TEST_PASSWORD, and that python, flm and k6 exist;
-      2. runs `flm version`, and refuses anything but the pinned version (D-83 decision 1);
-      3. runs scripts/check_flm.py with the venv's python, and stops unless it exits 0
+         -ServerThreads must be D-85's 24 unless -OverrideServerThreads is given;
+      2. reads Waitress's version from the venv's python, and refuses if Waitress is
+         not installed there (D-85 decisions 2 and 4);
+      3. runs `flm version`, and refuses anything but the pinned version (D-83 decision 1);
+      4. runs scripts/check_flm.py with the venv's python, and stops unless it exits 0
          AND prints its "RESULT: PASS" line (D-83 decision 3);
-      4. reads the commit with `git rev-parse HEAD`;
-    then runs k6 from the repository root with -e GIT_SHA, -e FLM_VERSION and
-    -e DB_DUMP_SHA256, plus the gate's result, which the scripts write into the
-    results JSON.
+      5. reads the commit with `git rev-parse HEAD`;
+    then runs k6 from the repository root with -e GIT_SHA, -e FLM_VERSION,
+    -e DB_DUMP_SHA256, -e SERVER, -e SERVER_VERSION and -e SERVER_THREADS, plus the
+    gate's result, which the scripts write into the results JSON.
 
     Exit code 2 means the run was refused and k6 was not started. Any other code is
     k6's own, and k6's exit code does not carry the run's verdict: read
     tests/load/results/<test>_summary.json.
 
-    The server must be restarted before each run (D-82 rule 7, D-84 decision 3).
-    This script cannot check that; a run on a server that was not restarted can hit
-    a 429, which makes it INVALID.
+    The server must be restarted before each run (D-82 rule 7, D-84 decision 3), as
+    `waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`
+    under DEBUG=False (D-85). This script cannot check that it was, nor which server
+    or how many threads are listening; a run on a server that was not restarted can
+    hit a 429, which makes it INVALID. The k6 scripts check the server's name from
+    the Server header at login, and make a mismatch INVALID; nothing checks the
+    thread count.
 
     Usage and run order: tests/load/README.md.
 
@@ -32,7 +39,19 @@
 
 .PARAMETER Python
     The venv's python.exe. Default: .venv\Scripts\python.exe in this checkout. A
-    second worktree has no .venv of its own, so pass the main checkout's.
+    second worktree has no .venv of its own, so pass the main checkout's. It runs
+    check_flm.py, and Waitress's version is read from it, so it should be the venv
+    the server runs from.
+
+.PARAMETER ServerThreads
+    The --threads the running Waitress was started with. Default 24, D-85's value.
+    Waitress cannot be asked for its thread count, so this is recorded as stated by
+    the operator; nothing checks it against the server. Anything but 24 is refused
+    unless -OverrideServerThreads is also given.
+
+.PARAMETER OverrideServerThreads
+    Accept a -ServerThreads other than 24. The run is then recorded at that count,
+    and it is not D-85's measured run.
 
 .PARAMETER BaseUrl
     Passed to k6 as BASE_URL. Without it the scripts use http://localhost:8000.
@@ -51,6 +70,12 @@ param(
 
     [string] $Python = '',
 
+    # A string, not [int], so a bad value is refused here with exit 2 rather than
+    # failing PowerShell's parameter binding with a different code.
+    [string] $ServerThreads = '24',
+
+    [switch] $OverrideServerThreads,
+
     [string] $BaseUrl = ''
 )
 
@@ -60,6 +85,11 @@ $ErrorActionPreference = 'Stop'
 # D-83 decision 1. A different version is a decision and a full re-index first,
 # not an edit to this line.
 $RequiredFlmVersion = 'v0.9.39'
+
+# D-85 decisions 2 and 3: the measured run is served by Waitress with 24 threads.
+# The name is this script's statement, not something read from the running server.
+$ServerName = 'waitress'
+$D85ServerThreads = 24
 
 $ScriptFiles = @{ nfr08 = 'nfr08_query_p90.js'; nfr09 = 'nfr09_concurrency.js' }
 $RefusedExitCode = 2
@@ -118,6 +148,18 @@ if ($dumpHash -notmatch '^[0-9a-f]{64}$') {
               'In PowerShell: (Get-FileHash <dump file> -Algorithm SHA256).Hash')
 }
 
+$threadsText = $ServerThreads.Trim()
+if ($threadsText -notmatch '^[1-9][0-9]{0,3}$') {
+    Stop-Run ("-ServerThreads must be the --threads Waitress was started with, a whole number " +
+              "such as $D85ServerThreads; got '$ServerThreads'.")
+}
+$threads = [int] $threadsText
+if ($threads -ne $D85ServerThreads -and -not $OverrideServerThreads) {
+    Stop-Run ("-ServerThreads is $threads, and D-85 measures at --threads=$D85ServerThreads. Restart " +
+              "Waitress with --threads=$D85ServerThreads, or, for a run that is deliberately not " +
+              'D-85''s, add -OverrideServerThreads.')
+}
+
 $password = $env:LOAD_TEST_PASSWORD
 if ([string]::IsNullOrEmpty($password)) {
     Stop-Run ('Set $env:LOAD_TEST_PASSWORD to the password the load-test accounts were created ' +
@@ -149,7 +191,40 @@ if ($null -eq $git) { Stop-Run 'git is not on PATH, so the commit cannot be reco
 $k6 = Find-Program 'k6'
 if ($null -eq $k6) { Stop-Run 'k6 is not on PATH. Install k6 first (README.md, "Before every run").' }
 
-# --- 2. The FLM version (D-83 decision 1) ------------------------------------------
+# --- 2. The server: Waitress's version and the thread count (D-85) ----------------
+
+$Python = (Resolve-Path -LiteralPath $Python).Path
+Write-Step "Waitress's version, from $Python"
+# -I: isolated, so PYTHONPATH and the user's site-packages cannot supply a waitress
+# the venv does not have. This reads what is installed in the venv, which is what
+# waitress-serve runs from when the server is started from the same venv. It is not
+# read from the running server: Waitress reports its version to nobody.
+$waitress = Invoke-Native $Python @('-I', '-c', "import importlib.metadata as m; print(m.version('waitress'))")
+$waitressText = ($waitress.Lines -join "`n").Trim()
+if ($waitress.ExitCode -ne 0) {
+    if ($waitressText -match 'PackageNotFoundError') {
+        Stop-Run ("Waitress is not installed in the venv whose python is $Python. D-85 serves the " +
+                  'measured run with Waitress (requirements.txt pins it): sync that venv with ' +
+                  "uv pip sync --python $Python requirements.txt, start the server with " +
+                  "waitress-serve, and run this again.")
+    }
+    Stop-Run "reading Waitress's version with $Python exited $($waitress.ExitCode): $waitressText"
+}
+if ($waitressText -notmatch '^\d+(\.\d+)+\S*$') {
+    Stop-Run "could not read Waitress's version from $Python; it printed '$waitressText'."
+}
+$serverVersion = $waitressText
+Write-Host "server : $ServerName $serverVersion (installed in that venv, not read from the running server)"
+$threadsGiven = $(if ($PSBoundParameters.ContainsKey('ServerThreads')) { 'given as -ServerThreads' }
+                  else { "-ServerThreads's default" })
+Write-Host ("threads: $threads, as stated by the operator ($threadsGiven). Waitress cannot be " +
+            'asked, so nothing here checks it against the running server.')
+if ($threads -ne $D85ServerThreads) {
+    Write-Host ("WARNING: -OverrideServerThreads: this run is recorded at $threads threads, not D-85's " +
+                "$D85ServerThreads. It is not D-85's measured run.") -ForegroundColor Yellow
+}
+
+# --- 3. The FLM version (D-83 decision 1) ------------------------------------------
 
 Write-Step 'flm version'
 $version = Invoke-Native $flm @('version') -Echo
@@ -168,7 +243,7 @@ if ($flmVersion -ne $RequiredFlmVersion) {
 }
 Write-Host "FLM version: $flmVersion (the pinned version)"
 
-# --- 3. The gate: scripts/check_flm.py (D-83 decision 3) ---------------------------
+# --- 4. The gate: scripts/check_flm.py (D-83 decision 3) ---------------------------
 
 Write-Step "scripts\check_flm.py, with $Python"
 Write-Host ('FLM_BASE_URL = ' + $(if ($env:FLM_BASE_URL) { $env:FLM_BASE_URL } else { "(not set: check_flm.py's default)" }))
@@ -190,7 +265,7 @@ if ($passLine -match '\bagainst\s+(\S+?)\)?\s*$') { $checkedUrl = $Matches[1] }
 $checkedAt = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
 Write-Host "check_flm.py passed at $checkedAt"
 
-# --- 4. The commit ---------------------------------------------------------------
+# --- 5. The commit ---------------------------------------------------------------
 
 Write-Step 'git rev-parse HEAD'
 $head = Invoke-Native $git @('-C', $repoRoot, 'rev-parse', 'HEAD')
@@ -212,16 +287,20 @@ if ($changed.Count -gt 0) {
 }
 Write-Host "commit: $sha"
 
-# --- 5. k6 -----------------------------------------------------------------------
+# --- 6. k6 -----------------------------------------------------------------------
 
 $k6Env = [ordered]@{
-    GIT_SHA             = $sha
-    GIT_TRACKED_CHANGES = $trackedChanges
-    FLM_VERSION         = $flmVersion
-    FLM_CHECK_PASSED_AT = $checkedAt
-    FLM_CHECK_URL       = $checkedUrl
-    DB_DUMP_SHA256      = $dumpHash
-    TEST_PASSWORD       = $password
+    GIT_SHA                  = $sha
+    GIT_TRACKED_CHANGES      = $trackedChanges
+    FLM_VERSION              = $flmVersion
+    FLM_CHECK_PASSED_AT      = $checkedAt
+    FLM_CHECK_URL            = $checkedUrl
+    DB_DUMP_SHA256           = $dumpHash
+    SERVER                   = $ServerName
+    SERVER_VERSION           = $serverVersion
+    SERVER_VERSION_READ_FROM = $Python
+    SERVER_THREADS           = "$threads"
+    TEST_PASSWORD            = $password
 }
 if ($BaseUrl -ne '') { $k6Env['BASE_URL'] = $BaseUrl }
 
@@ -236,7 +315,9 @@ $k6Args += $scriptRelative
 $shown += $scriptRelative
 
 Write-Step 'k6'
-Write-Host 'Was the server restarted before this run? This script cannot tell (D-82 rule 7).' -ForegroundColor Yellow
+Write-Host ("Was the server restarted before this run, as waitress-serve --listen=127.0.0.1:8000 " +
+            "--threads=$threads config.wsgi:application under DEBUG=False? This script cannot " +
+            'tell (D-82 rule 7, D-85).') -ForegroundColor Yellow
 Write-Host ($shown -join ' ')
 
 # From the repository root, because the scripts write tests/load/results/...

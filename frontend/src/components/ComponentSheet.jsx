@@ -634,14 +634,16 @@ export default function ComponentSheet() {
       </section>
 
       <section aria-labelledby="sheet-limits">
-        <h2 id="sheet-limits">Limits (D-79)</h2>
+        <h2 id="sheet-limits">Limits (D-79, D-85)</h2>
         <p>
           The per-user limits on asking, creating a conversation and adding material. The question still being
           answered is an information panel, not the 503&rsquo;s: nothing is unavailable, and it names no time,
           because the server sends none. A rate limit says when the user can try again, rounded up from the
           reply&rsquo;s <code>Retry-After</code>. The upload limit is the user&rsquo;s and not the file&rsquo;s,
           so a file it held back keeps the neutral status a queued file has, never the danger colour of a refused
-          one. Every sentence here is the client&rsquo;s own; none is read from the reply.
+          one. So does a file held back because an earlier upload is still being processed (D-85), with its own
+          sentence, which names no time either. Every sentence here is the client&rsquo;s own; none is read from
+          the reply.
         </p>
         <Notice variant="info" title={TEXT.askInFlightTitle}>
           {TEXT.askInFlight}
@@ -652,6 +654,10 @@ export default function ComponentSheet() {
         <p className="upload-row__status">
           <span className="upload-status upload-status--limited">{TEXT.uploadLimitedStatus}</span>
           <span className="upload-row__message">{TEXT.uploadLimitReached(TEXT.retryInMinutes(12))}</span>
+        </p>
+        <p className="upload-row__status">
+          <span className="upload-status upload-status--limited">{TEXT.uploadLimitedStatus}</span>
+          <span className="upload-row__message">{TEXT.uploadInFlight}</span>
         </p>
       </section>
 

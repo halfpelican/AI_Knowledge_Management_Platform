@@ -10,6 +10,7 @@ import {
   browseDocuments,
   reprocessDocument,
 } from '../api/documents.js'
+import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
 import { ActiveFilterList, FacetGroup, SortHeader } from '../components/Browse.jsx'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
@@ -448,12 +449,19 @@ export default function DocumentRepository() {
         setNotice({ title: TEXT.documentReprocessFailed, text: TEXT.documentReprocessNotPermitted })
         return
       case 429:
-        // D-79's ingestion limit, shared with upload and meeting ingestion. Nothing
-        // was re-run, so the row keeps its status and its retry, and the list is not
-        // re-read: nothing on the server changed.
+        // Two kinds, told apart by `code` alone; `detail` is never read. D-85's:
+        // another upload, transcript or reprocess of this user's is still being
+        // processed, which names no time because the reply carries none. Otherwise
+        // D-79's ingestion limit, shared with upload and meeting ingestion, which says
+        // when from `Retry-After`. Either way nothing was re-run, so the row keeps its
+        // status and its retry, and the list is not re-read: nothing on the server
+        // changed.
         setNotice({
           title: TEXT.documentReprocessFailed,
-          text: TEXT.reprocessLimitReached(whenToRetry(caught.retryAfter)),
+          text:
+            caught.code === INGESTION_IN_FLIGHT_CODE
+              ? TEXT.reprocessInFlight
+              : TEXT.reprocessLimitReached(whenToRetry(caught.retryAfter)),
         })
         return
       default:

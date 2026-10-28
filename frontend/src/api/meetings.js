@@ -43,7 +43,10 @@ export function fetchMeeting(meetingId, options = {}) {
  * lacks `contribute_content`; 422 the transcript was stored but could not be
  * indexed (NFR-20: a failed AI step never discards the source); 429 past the
  * per-user ingestion rate it shares with document upload and reprocess, with a
- * `Retry-After` in seconds, which stores nothing (D-79).
+ * `Retry-After` in seconds, which stores nothing (D-79); and a 429 with `code`
+ * `ingestion_in_flight` (src/api/ingestion.js) and no `Retry-After` while another
+ * ingestion of this user's is still being processed, after the 400 and the 403,
+ * which stores nothing either (D-85).
  *
  * `attendees` is a list of user ids. They are a participation record and never
  * an access control (D-16, CLAUDE.md §6, invariant 3): scoping is

@@ -2,7 +2,7 @@
 
 | File | What it is | Accounts |
 |---|---|---|
-| `run.ps1` | **How every run starts.** Refuses to start k6 unless `scripts/check_flm.py` passes, then records the commit, the FLM version and the snapshot hash (D-83, D-84). | |
+| `run.ps1` | **How every run starts.** Refuses to start k6 unless `scripts/check_flm.py` passes and Waitress is installed, then records the commit, the FLM version, the snapshot hash, and the server, its version and its thread count (D-83, D-84, D-85). | |
 | `nfr08_query_p90.js` | p90 of `POST /api/ask`, answered replies only, 5 VUs sharing 100 asks. Limit 4,000 ms. Objective 03's p90 (D-84 decision 3). | `loadtest01`–`loadtest05` |
 | `nfr09_concurrency.js` | p90 of asks and uploads with 20 concurrent users, against a one-user baseline. At most 25% worse. | load phase `loadtest01`–`loadtest20`, baseline `loadtest21` |
 | `common.js` | Logins, pacing, the ask request, the run record and the validity gate. | |
@@ -22,12 +22,58 @@ SHA-256 is recorded.
 1. **The thirty questions run first, or the snapshot is restored first.** NFR-09 uploads a
    kitchen-roster document every round, and those uploads become retrieval candidates for the
    questions. D-84 puts the questions before either load test.
-2. **Restart the server**, then run **NFR-08 at 5 users** through `run.ps1`. Five is fixed by
-   D-84 decision 3, before the run, so leave `VUS` unset.
-3. **Restart the server again**, then run **NFR-09** through `run.ps1`, as a separate run.
+2. **Restart Waitress** ([The server](#the-server-d-85)), then run **NFR-08 at 5 users** through
+   `run.ps1`. Five is fixed by D-84 decision 3, before the run, so leave `VUS` unset.
+3. **Restart Waitress again**, then run **NFR-09** through `run.ps1`, as a separate run.
 4. **After NFR-09 the database is no longer the snapshot.** It holds up to 1,210 `LoadTest`
    uploads. Restore the snapshot before measuring anything else on it, including a second NFR-08
    run, and pass the same hash.
+
+## The server (D-85)
+
+The measured run is served by Waitress with 24 threads, under `DEBUG=False`:
+
+```powershell
+waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+```
+
+- **Where it runs.** From the repository root, in its own PowerShell window, with the measurement
+  database's environment set first (`docs/measurement-runbook.md` step 1: `DATABASE_URL`,
+  `MEDIA_ROOT`, `AUDIT_LOG_PATH`, `ERROR_LOG_PATH`, `DEBUG=False`). `waitress-serve.exe` is in the
+  venv's `Scripts` folder. Without the venv activated, call it by that path:
+  `.venv\Scripts\waitress-serve.exe`. In a second worktree, use the main checkout's.
+- **Restart it before each run**: Ctrl+C in its window, then the same command again. Waitress
+  runs one process, and the throttle counters and in-flight slots live in its memory (D-79), so
+  stopping it empties them. Without a restart, an earlier run's logins, asks or uploads still
+  count, and the run can hit a 429.
+- **`--threads=24` is set explicitly.** Waitress's default is 4, which NFR-08's five users
+  already exceed. 24 is NFR-09's 20 users plus 4 for everything else (D-85 decision 3).
+- **What is recorded, and how it is known** (D-85 decision 4). `run.ps1` passes all three to k6,
+  and the results JSON keeps them as `server`, `server_version` and `server_threads`, with
+  `server_sources` saying where each came from:
+  - **The server**, `waitress`, is `run.ps1`'s statement, and it is the one value checked
+    against the running server (next bullet).
+  - **The version** is read from the venv's python (`-Python`) with `importlib.metadata`. It is
+    the installed package, so it is the server's version only if the server was started from
+    the same venv. `run.ps1` refuses if Waitress is not installed there.
+  - **The thread count is recorded as stated.** Waitress cannot be asked how many threads it
+    has, so `run.ps1` takes it as `-ServerThreads` (default 24) and nothing checks it against
+    the running server. It refuses anything but 24 unless `-OverrideServerThreads` is also
+    given, and a run with the override is not D-85's measured run.
+- **What is observed: the `Server` header at login.** Waitress names itself in a `Server`
+  response header, `waitress`. Django's `runserver` sends `WSGIServer/0.2 CPython/…`. Every login
+  in `setup()` keeps the header it came back with, and the JSON records them as
+  `server_observed`. If any login came back with no header, or with a server whose name (the
+  part before any `/`) is not the stated `SERVER`, the run is **INVALID**, and `setup()` says so
+  on the console straight after the logins, so the run can be stopped before it spends half an
+  hour. This catches a run against `runserver`. **It does not check the thread count or the
+  version:** Waitress sends neither, so a Waitress started with 4 threads, or from another
+  venv, passes it.
+  - k6 hands `setup()`'s return value to `handleSummary()` as `data.setup_data`, and that is
+    how the header reaches the record. If a k6 build ever leaves `setup_data` out, every run
+    reads INVALID with the reason "k6 passed no setup_data to handleSummary()" rather than
+    passing unchecked. No real k6 has run these scripts on this laptop yet, so that case has
+    been simulated, not seen.
 
 ## Before every run
 
@@ -52,11 +98,10 @@ SHA-256 is recorded.
    `DEBUG` off, as the Waitress alpha runs (D-64), the command refuses unless you also pass
    `--i-know-this-is-local`. The password must not contain a double quote: Windows PowerShell 5.1
    cannot pass one to k6 intact, so `run.ps1` refuses it.
-4. **Restart the server** (stop and start whatever serves `BASE_URL`). Do this before *each* run,
-   including between NFR-08 and NFR-09. The throttle counters and the in-flight slots live in that
-   one process's memory (D-79), so a restart is what makes them start empty. Without one, an
-   earlier run's logins, asks or uploads still count, and the run can hit a 429. `run.ps1` cannot
-   check this.
+4. **Waitress is installed in the venv, and restarted** with D-85's command
+   ([The server](#the-server-d-85)). Do this before *each* run, including between NFR-08 and
+   NFR-09. `run.ps1` cannot check that the server was restarted, or its thread count. The k6
+   scripts check that it is Waitress, from the `Server` header at login.
 5. **Do not log in from a browser on this machine while `setup()` runs.** The login limit is
    20 a minute per address, and the browser shares 127.0.0.1 with k6.
 6. **FLM v0.9.39 is serving** (`flm serve gemma3:4b --embed 1`), and `FLM_BASE_URL` in this shell
@@ -74,36 +119,45 @@ $env:LOAD_TEST_PASSWORD = '<the accounts password>'
 $env:AI_PROVIDER = 'flm'; $env:FLM_CHAT_MODEL = 'gemma3:4b'   # recorded in the results, optional
 $hash = (Get-FileHash <the snapshot dump file> -Algorithm SHA256).Hash
 
-# restart the server, then:
+# restart Waitress (--threads=24), then:
 .\tests\load\run.ps1 -Test nfr08 -DbDumpSha256 $hash
 
-# restart the server, then:
+# restart Waitress (--threads=24), then:
 .\tests\load\run.ps1 -Test nfr09 -DbDumpSha256 $hash
 ```
 
 In a second worktree, which has no `.venv` of its own, add
-`-Python <main checkout>\.venv\Scripts\python.exe`.
+`-Python <main checkout>\.venv\Scripts\python.exe`. `-ServerThreads` defaults to 24; pass it only
+if Waitress was started with another count, and then `-OverrideServerThreads` too.
 
-NFR-08 takes a few minutes: at least 140 s of asks, plus about 30 s of setup. NFR-09 takes 32–37
-minutes, because the load phase starts 20 minutes after setup ends whenever the baseline finishes.
-`check_flm.py` runs before either. Its first chat call can include loading the model, and it
-allows that call 180 s.
+NFR-08's floor alone makes it at least 140 s of asks, plus about 30 s of setup. Expect much
+longer: one NPU answers the asks one at a time, so the run takes roughly the answered asks times
+one generation. 80 answered asks at 8.9 s, the single-user p90, is about 12 minutes. That is an
+estimate, not a measurement.
+
+NFR-09 takes 32–37 minutes, because the load phase starts 20 minutes after setup ends whenever the
+baseline finishes. `check_flm.py` runs before either. Its first chat call can include loading the
+model, and it allows that call 180 s.
 
 ### What `run.ps1` does
 
 It stops at the first failure, prints `REFUSED: <why>` and `k6 was not started`, and exits 2:
 
-1. **The arguments.** `-DbDumpSha256` must be 64 hex digits. `LOAD_TEST_PASSWORD` must be set.
-   The venv's python, `scripts/check_flm.py`, `flm`, `git` and `k6` must all exist. It never falls
-   back to the `python` on `PATH`: on this laptop that is an interpreter without the project's
-   environment.
-2. **`flm version`.** Anything but **v0.9.39** is refused (D-83 decision 1). From v1.0.4 the
+1. **The arguments.** `-DbDumpSha256` must be 64 hex digits. `-ServerThreads` must be a whole
+   number, and 24 unless `-OverrideServerThreads` is given (D-85). `LOAD_TEST_PASSWORD` must be
+   set. The venv's python, `scripts/check_flm.py`, `flm`, `git` and `k6` must all exist. It never
+   falls back to the `python` on `PATH`: on this laptop that is an interpreter without the
+   project's environment.
+2. **Waitress's version**, read from the venv's python with `importlib.metadata` in isolated
+   mode (`-I`), so a `PYTHONPATH` cannot supply a Waitress the venv lacks. Refused if Waitress is
+   not installed in that venv (D-85).
+3. **`flm version`.** Anything but **v0.9.39** is refused (D-83 decision 1). From v1.0.4 the
    embeddings are noise, and a build that is sound but embeds differently would not match the
-   snapshot's vectors, which `check_flm.py` cannot see.
-3. **`scripts/check_flm.py`**, with the venv's python. It must exit 0 *and* print its
+   snapshot's vectors, which `check_flm.py` cannot see. There is no override.
+4. **`scripts/check_flm.py`**, with the venv's python. It must exit 0 *and* print its
    `RESULT: PASS` line. An exit code alone is not trusted, because an interpreter that ran
    nothing also exits 0.
-4. **`git rev-parse HEAD`**, and `git status` for uncommitted changes to tracked files.
+5. **`git rev-parse HEAD`**, and `git status` for uncommitted changes to tracked files.
 
 Then it runs k6 from the repository root, so the results land in `tests/load/results/`, with:
 
@@ -114,6 +168,9 @@ Then it runs k6 from the repository root, so the results land in `tests/load/res
 | `FLM_VERSION` | `flm version`, such as `v0.9.39` |
 | `FLM_CHECK_PASSED_AT`, `FLM_CHECK_URL` | when `check_flm.py` passed, and the URL its `RESULT: PASS` line names |
 | `DB_DUMP_SHA256` | `-DbDumpSha256`, in lower case |
+| `SERVER` | always `waitress` (D-85) |
+| `SERVER_VERSION`, `SERVER_VERSION_READ_FROM` | Waitress's installed version, and the python it was read from |
+| `SERVER_THREADS` | `-ServerThreads`, as stated |
 | `TEST_PASSWORD` | `$env:LOAD_TEST_PASSWORD`. The printed command shows `***` |
 | `BASE_URL` | `-BaseUrl`, only if given |
 
@@ -121,10 +178,10 @@ Any other exit code is k6's own. It does not carry the verdict (see below).
 
 ### Running k6 without `run.ps1`
 
-Without `run.ps1`, the scripts still refuse to start unless `GIT_SHA`, `FLM_VERSION` and
-`DB_DUMP_SHA256` are given, so a run cannot go unrecorded. Without the gate's record, though, the
-run is **INVALID**, because nothing shows `check_flm.py` passed. Use this only to debug the
-scripts.
+Without `run.ps1`, the scripts still refuse to start unless `GIT_SHA`, `FLM_VERSION`,
+`DB_DUMP_SHA256`, `SERVER`, `SERVER_VERSION` and `SERVER_THREADS` are given, so a run cannot go
+unrecorded. Without the gate's record, though, the run is **INVALID**, because nothing shows
+`check_flm.py` passed. Use this only to debug the scripts.
 
 | `-e` variable | Required | Meaning |
 |---|---|---|
@@ -132,7 +189,10 @@ scripts.
 | `GIT_SHA` | yes | The commit under test, 7–40 hex digits. |
 | `FLM_VERSION` | yes | As `flm version` prints it, with the `v`: `v0.9.39`. |
 | `DB_DUMP_SHA256` | yes | The snapshot's SHA-256, 64 hex digits. |
-| `FLM_CHECK_PASSED_AT`, `FLM_CHECK_URL`, `GIT_TRACKED_CHANGES` | set by `run.ps1` | Without `FLM_CHECK_PASSED_AT` the run is INVALID. |
+| `SERVER` | yes | The server's name, `waitress` for D-85's run. |
+| `SERVER_VERSION` | yes | Its version, such as `3.0.2`. Recorded as passed. |
+| `SERVER_THREADS` | yes | The `--threads` it was started with, a whole number. Recorded as stated. |
+| `FLM_CHECK_PASSED_AT`, `FLM_CHECK_URL`, `GIT_TRACKED_CHANGES`, `SERVER_VERSION_READ_FROM` | set by `run.ps1` | Without `FLM_CHECK_PASSED_AT` the run is INVALID. |
 | `AI_PROVIDER`, `FLM_CHAT_MODEL` | no | Recorded in the results, `not recorded` if absent. k6 also reads them from the shell's environment. |
 | `BASE_URL` | no | Default `http://localhost:8000`. |
 | `TEST_EMAIL_PREFIX`, `TEST_EMAIL_DOMAIN` | no | Defaults `loadtest` and `example.com`, which give `loadtest01@example.com`. The command only creates that scheme, so change these only for accounts made some other way. |
@@ -145,13 +205,22 @@ account must log in as an Employee, or `setup()` stops.
 
 ## Pacing, and why each number is what it is
 
-DRF's throttle is a sliding window. It stamps a request when the view runs, and with more VUs than
-Waitress's 4 default threads, that can be well after k6 sent it. So spacing the *sends* W/N apart
-is not enough. A late stamp on the first request of a window lets the (N+1)th land inside it.
-Because a VU sends nothing until its previous reply is back, a start-to-start spacing of at least
-**W/(N−1)** keeps any N+1 consecutive requests more than W apart at the server, however late any
-one of them is stamped (`common.js`, `minimumSpacingSeconds`). Each script checks its numbers
-against this when it loads, and refuses to start if one is short.
+DRF's throttle is a sliding window. It stamps a request when the view runs, which is after k6 sent
+it. So spacing the *sends* W/N apart is not enough. If the first request of a window is stamped
+later than the (N+1)th, the (N+1)th lands inside the window and is a 429. Because a VU sends
+nothing until its previous reply is back, a start-to-start spacing of at least **W/(N−1)** keeps
+any N+1 consecutive requests more than W apart at the server, however late any one of them is
+stamped (`common.js`, `minimumSpacingSeconds`). Each script checks its numbers against this when
+it loads, and refuses to start if one is short.
+
+**The bound does not depend on the thread count**, so D-85's 24 threads change none of the numbers
+below. This section was first written for Waitress's default of 4, where five or twenty VUs meant
+requests waiting for a thread and stamps seconds late. At 24 threads, with at most 20 VUs, no
+request waits for a thread. A stamp is still late by the time Waitress takes to read the whole
+request before handing it to a thread, and by the middleware and session lookup before the view.
+That should be milliseconds, though nobody has measured it, and it differs between requests. Any
+difference is enough at W/N: in the Node harness's model, stamp delays of up to 20 ms already
+gave 429s at a 6 s floor, and delays of up to 5 ms did not. 7 s gave none at delays of up to 1 s.
 
 | What | Limit | Needed | Used | Result |
 |---|---|---|---|---|
@@ -159,8 +228,9 @@ against this when it loads, and refuses to start if one is short.
 | NFR-08 iteration floor | 10 asks/min per user (D-79) | ≥ 60/9 = 6.67 s | 7 s | any 11 asks > 63 s apart |
 | NFR-09 round floor, both phases | 10 asks/min; 60 uploads/hour per user | ≥ 6.67 s for asks; ≤ 60 uploads | 10.5 s | ≤ 58 uploads per load account in 600 s; 50 for the baseline account |
 
-- **6 s for NFR-08 is not enough.** At 6 s, eleven no-answer asks span exactly 60 s at the
-  client. The 11th is then a 429 as soon as the first was stamped even slightly late.
+- **6 s for NFR-08 is not enough, at 24 threads as at 4.** At 6 s, eleven no-answer asks span
+  60 s at the client, plus the 1 ms per ask that `paceFrom` adds. The 11th is then a 429 as soon
+  as the first was stamped about 10 ms later after its send than the 11th was.
 - **10 s for NFR-09 is the limit itself.** In a 600 s phase, a floor *f* starts at most
   ⌊600/*f*⌋ + 1 rounds, counting both ends. At 10 s, that is 60 uploads, the limit, and the 61st
   round falls due at the 600 s mark. Only k6's refusal to start an iteration once the duration is
@@ -170,7 +240,8 @@ against this when it loads, and refuses to start if one is short.
 - **`setupTimeout`** is computed from these numbers, not left at k6's 60 s default, which 21
   logins at 3.5 s already exceed. Worst case: every login runs to its 30 s timeout and every
   warm-up ask to its 300 s, plus 60 s. That is 810 s for NFR-08 and 1290 s for NFR-09. Typical
-  setups take about 30 s and 92 s.
+  setups take about 30 s and 92 s. `setup()` is one VU sending one request at a time, so the
+  thread count does not change these either.
 - **Sessions** expire after 60 idle minutes. A load-phase account in NFR-09 is idle from its login
   until the load phase starts, at most 1290 s + 20 min = 41.5 min.
 
@@ -192,6 +263,9 @@ In this order:
 | `commit_sha`, `uncommitted_tracked_changes` | The checkout `run.ps1` ran in. |
 | `flm_version`, `flm_check` | The FLM build, and when `check_flm.py` passed, and against which URL. `flm_check` is `null` when the run did not go through `run.ps1`. |
 | `db_dump_sha256` | The snapshot the run started from, as given. |
+| `server`, `server_version`, `server_threads`, `server_sources` | The server, its installed version and its thread count as stated by the operator, and how each was known ([The server](#the-server-d-85)). |
+| `server_observed` | The `Server` header values the logins came back with, how many logins, how many had none, and `matches_server`. `null` when it was not recorded. |
+| `throttled_429` | `total`, then `rate_limit`, `ask_in_flight`, `ingestion_in_flight` and `unrecognised`. Any non-zero makes the run INVALID. |
 
 **A miss on 4 s is expected, and it is not a failure of the test.** The single-user generation
 p90 is already 8.90 s, and one NPU answers one question at a time, so five users queue. A valid
@@ -205,16 +279,27 @@ One of these, in both scripts:
 
 - **INVALID RUN**: the run does not count, whatever it measured. `invalid_reasons` says why, one
   line per cause:
-  - **Any 429** (D-82 rule 5). `throttled_429` splits the count into `rate_limit` and
-    `ask_in_flight`. A rate-limit 429 means an account went over D-79 or D-26: was the server
-    restarted? An `ask_in_flight` 429 follows an ask that k6 gave up on at 300 s while the server
-    was still answering it. Each 429 is also printed as it happens, naming the account.
+  - **Any 429** (D-82 rule 5). Each is counted by what the server put in it, and each kind present
+    gets its own line, so the cause is named rather than guessed. Each 429 is also printed as it
+    happens, with its kind, account, code and Retry-After.
+
+    | `throttled_429` kind | How it is told | What it means |
+    |---|---|---|
+    | `rate_limit` | DRF's throttle body: no `code`, and a `Retry-After` header | An account went over D-79's or D-26's rate. Was the server restarted, and was nobody logging in from a browser here? |
+    | `ask_in_flight` | `"code": "ask_in_flight"`, no `Retry-After` (D-79) | An account asked while its previous ask was still being answered: an ask k6 gave up on at 300 s that the server was still answering. |
+    | `ingestion_in_flight` | `"code": "ingestion_in_flight"`, no `Retry-After` (D-85) | An account uploaded while its previous upload was still being processed: an upload k6 gave up on at its timeout that the server was still ingesting. |
+    | `unrecognised` | anything else: another code, or no code and no `Retry-After` | Not a kind these scripts know. It is the total less the other three, so no 429 goes uncounted. |
+
+    A restart prevents only the first kind. The two in-flight kinds come from k6's own timeouts.
+  - **The `Server` header at login is missing, or names another server than `SERVER`**, or was
+    not recorded at all ([The server](#the-server-d-85)). This checks which software answered,
+    not its version or its thread count.
   - **A validity threshold not met:** `http_req_failed` over 1% for asks (and for uploads in
     NFR-09), or `checks` under 99%.
   - **No record that `check_flm.py` passed:** the run did not go through `run.ps1` (D-83
     decision 3).
-  - **No commit SHA, FLM version or snapshot hash.** The scripts refuse to start without them, so
-    this should not happen.
+  - **No commit SHA, FLM version, snapshot hash, server, server version or thread count.** The
+    scripts refuse to start without them, so this should not happen.
   - **No responses recorded at all.**
 
   INVALID is decided first. A run that hit a 429 is INVALID even if it also has no data.
@@ -243,6 +328,18 @@ at the first account, so it costs one failed attempt on `loadtest01` and none on
 - **The ask timeout (300 s) is shorter than the server's worst case**, so an abandoned ask can still
   be holding the account's in-flight slot. The run is then INVALID twice over: the timeout counts
   against `http_req_failed`, and the next ask is an `ask_in_flight` 429.
+- **The upload timeout (300 s) has the same shape.** An upload k6 abandons keeps the account's
+  ingestion slot until the server finishes it, because that slot has no timeout (D-85). The
+  account's next upload, about 10 s later, is then an `ingestion_in_flight` 429, and so is each
+  one after it until the ingestion ends.
+- **At 24 threads the queue for the NPU is inside the server.** Every VU's ask is in the view at
+  once, so FLM is sent one request per VU at a time, twenty in NFR-09's load phase, where 4
+  threads let at most four through. Nothing has measured FLM taking twenty at once. The waiting
+  now counts against each generation attempt's own 300 s timeout, and an attempt that times out
+  is retried, which adds work for the asks behind it. The NPU has the same work either way, so
+  the average wait should not change, but the slowest asks now depend on the order FLM serves
+  requests in, which is not known. No number here changes for it. An NFR-09 load phase whose
+  asks approach 300 s will go INVALID on timeouts rather than read FAIL.
 - **The server's limits are copied, not read.** `common.js` holds 20/min, 10/min and 60/hour as
   copies of `apps/core/constants.py`. If a rate changes there, change it here too, and the pacing
   checks follow.
@@ -254,6 +351,10 @@ at the first account, so it costs one failed attempt on `loadtest01` and none on
   - `check_flm.py` checks the FLM at the shell's `FLM_BASE_URL`, not necessarily the one the
     server uses.
   - `DB_DUMP_SHA256` is recorded as given. Nothing checks the database against it.
+  - Of the server at `BASE_URL`, only its name is checked, by the `Server` header at login. A
+    run against `runserver` is INVALID. A run against Waitress started with other threads, or
+    from another venv than `-Python`, is not caught: `server_version` is the venv's installed
+    Waitress and `server_threads` is what the operator stated.
   - The gate's record is an environment variable, and anyone can type it. It guards against
     forgetting the check, not against getting round it on purpose. The same goes for `-Python`.
   - `run.ps1` depends on `check_flm.py`'s `RESULT: PASS` line. If that wording changes, `run.ps1`

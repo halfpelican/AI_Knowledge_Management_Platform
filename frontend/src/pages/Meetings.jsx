@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client.js'
+import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
 import { ingestMeeting, listMeetings } from '../api/meetings.js'
 import { listUserDirectory } from '../api/users.js'
 import useAuth from '../auth/useAuth.js'
@@ -166,10 +167,18 @@ export default function Meetings() {
       return
     }
     if (error.status === 429) {
-      // D-79's ingestion limit, shared with document upload and reprocess. It is
-      // checked before the body is validated, so nothing was stored: the form keeps what
-      // was entered, nothing is marked against a field, and the list is not re-read.
-      setFormError(TEXT.meetingLimitReached(whenToRetry(error.retryAfter)))
+      // Two kinds, told apart by `code` alone; `detail` is never read. D-85's: another
+      // upload, transcript or reprocess of this user's is still being processed, which
+      // names no time because the reply carries none. Otherwise D-79's ingestion
+      // limit, shared with document upload and reprocess, checked before the body is
+      // validated, which says when from `Retry-After`. Neither stored anything: the
+      // form keeps what was entered, nothing is marked against a field, and the list
+      // is not re-read.
+      setFormError(
+        error.code === INGESTION_IN_FLIGHT_CODE
+          ? TEXT.meetingInFlight
+          : TEXT.meetingLimitReached(whenToRetry(error.retryAfter)),
+      )
       return
     }
     const extracted = extractFieldErrors(error, FIELDS)
