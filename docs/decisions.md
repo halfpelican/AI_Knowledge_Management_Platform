@@ -5271,3 +5271,50 @@ embeds the plain join of the earlier questions and the new one.
 >     protecting the corpus from NFR-09's uploads. NFR-08 writes nothing the thread run reads.
 >   - **Still open.** It is put to the user, as is whether `run.ps1` should call `server_record.py`
 >     to observe the thread count rather than take it as stated.
+
+## D-87 · The measured run's order and pre-flight: the server observed, `DEBUG` confirmed off, and Waitress's queueing logged
+
+**Status:** Settled by the user · **Date:** 2026-10-28 · **Stage:** 5 item 6 · **Concerns:** D-84,
+D-85, D-86, Objective 03, NFR-08, NFR-09
+
+**Decision.**
+
+1. **The order:**
+   1. the thirty questions;
+   2. NFR-08 (k6);
+   3. FR-13's thread run;
+   4. the HTTP check;
+   5. NFR-09 (k6), last.
+
+   This settles the choice D-86's note left open. D-86 §6's "before k6" is read as protecting the
+   corpus from NFR-09's uploads. NFR-08 writes nothing the thread run reads.
+   - **All item 6's code is committed before the first measured run,** front end included, so the
+     SHA recorded beside each result is the code that ran.
+   - **The server is restarted before each run that goes through HTTP:** NFR-08, the HTTP check and
+     NFR-09. Throttle counters and in-flight slots left in memory by one run then can't 429 the
+     next.
+2. **`run.ps1` observes the server and doesn't take it as stated.** Before k6, it runs
+   `scripts/server_record.py` and refuses unless it observes Waitress with `--threads=24`, or the
+   override.
+   - **A missing `--threads` reads as 4.** That is Waitress's default, so the run is refused rather
+     than reported as "unknown".
+   - **`DEBUG` is confirmed off.** The wrapper requests an unmatched `/api/` path and requires the
+     JSON 404. Under `DEBUG`, Django bypasses `handler404` and serves its HTML page. The repo's
+     `.env` sets `DEBUG=True`, so a server started from the usual shell runs in debug unless the
+     runbook overrides it.
+   - **`check_flm.py` still runs first.**
+   - **Every observed value is written into the results file.**
+3. **A `waitress` logger, before the measured run.** It logs at INFO, with timestamps, to its own
+   file beside `errors.log`, at a path read from the environment like the others.
+   - **It keeps propagating,** so a Waitress ERROR still reaches `errors.log`.
+   - **`run.ps1` copies any "Task queue depth" lines** from the run's window into the results, or
+     records that there were none. Queueing is then observed and reported, not left in a file.
+   - **Why nothing shows today.** `waitress-serve` imports the app first, and Django's `LOGGING`
+     gives the root logger its ERROR handler. So Waitress's own `logging.basicConfig()` does
+     nothing, and even its "Serving on" line is dropped. The new file brings it back.
+
+**What this decision does not cover.**
+
+- **The restart is a runbook step.** Nothing proves the operator restarted the server, beyond
+  whatever the new log shows.
+- **The thread count is observed from the command line,** not from inside Waitress.
