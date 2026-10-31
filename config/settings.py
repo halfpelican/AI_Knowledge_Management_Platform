@@ -200,7 +200,18 @@ AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 ERROR_LOG_PATH = Path(env.str("ERROR_LOG_PATH", default=str(BASE_DIR / "logs" / "errors.log")))
 ERROR_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-LOGGING = platform_logging(audit_path=AUDIT_LOG_PATH, error_path=ERROR_LOG_PATH)
+# --- Waitress's log (docs/decisions.md D-87 section 3) ------------------------------------
+# Waitress's own records at INFO and above, timestamped: "Serving on ..." at start-up, and
+# "Task queue depth is N" whenever a request arrives with every thread busy. Before this file
+# existed they went nowhere, for the reason apps/core/logging_config.py records. Beside
+# errors.log by default, and gitignored with it (logs/).
+
+WAITRESS_LOG_PATH = Path(env.str("WAITRESS_LOG_PATH", default=str(BASE_DIR / "logs" / "waitress.log")))
+WAITRESS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+LOGGING = platform_logging(
+    audit_path=AUDIT_LOG_PATH, error_path=ERROR_LOG_PATH, waitress_path=WAITRESS_LOG_PATH
+)
 
 # --- Uploaded files (FR-08, docs/decisions.md D-05) ------------------------------
 # Originals are stored on the local filesystem, not in the database and not in cloud

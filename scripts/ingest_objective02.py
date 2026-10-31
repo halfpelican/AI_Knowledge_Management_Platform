@@ -535,8 +535,9 @@ def main():
         except measurement_record.RecordError as exc:
             problems.append(f"the run cannot be recorded: {exc}")
         # D-85: the server this run goes through, observed, before anything is sent to it
-        # but one unauthenticated GET. Refused only on evidence of another server; a lookup
-        # that failed is recorded and warned about instead.
+        # but two unauthenticated GETs: /api/, and the DEBUG probe (D-87). Refused only on
+        # evidence of another server, or of DEBUG on; a lookup that failed is recorded and
+        # warned about instead.
         server = server_record.observe(
             args.base_url, server_record.fetch_server_header(args.base_url.rstrip("/") + "/api/")
         )

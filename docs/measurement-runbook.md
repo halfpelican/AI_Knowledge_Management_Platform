@@ -1,7 +1,7 @@
 # Item 6 measurement runbook
 
-Stage 5 item 6, as D-83, D-84, D-85 and D-86 settle it. These are the exact steps, in order, for
-one measured run:
+Stage 5 item 6, as D-83, D-84, D-85, D-86 and D-87 settle it. These are the exact steps, in
+order, for one measured run:
 
 - a fresh database holding exactly Objective 02's corpus, and a snapshot of it;
 - the thirty questions, then NFR-08's k6 run (Objective 03);
@@ -26,30 +26,36 @@ The rules that hold throughout:
   uploads documents, which become retrieval candidates. The harness refuses a recorded run when
   the indexed corpus is not exactly the manifest's 25 items, so a forgotten restore is caught.
 - **The server is Waitress with 24 threads, under `DEBUG=False`** (D-85). Wherever a run goes
-  through it, the run records the server, its version and its thread count. Where a run is
-  in-process (the harness), the record says so instead.
+  through it, the run records the server, its version and its thread count, observed. Where a
+  run is in-process (the harness), the record says so instead.
+- **`DEBUG=False` is set in the shell, every time.** The repo's `.env` sets `DEBUG=True`, and a
+  value set in the shell is the only thing that overrides it (D-87 §2). Step 1's block sets it,
+  and step 5 sets it again on the line before the server starts.
+- **The server is restarted before each run that goes through it:** NFR-08, the HTTP check and
+  NFR-09 (D-87 §1). Throttle counters and in-flight slots left by one run then cannot 429 the
+  next. `run.ps1` refuses NFR-08 or NFR-09 on a server that started before the last run in
+  `$runs` ended; nothing checks the HTTP check's restart, so step 12b is the operator's.
+- **All item 6's code is committed before the first measured run,** front end included (D-87
+  §1), so the SHA recorded beside each result is the code that ran.
 - **The dump and the media copy live outside every git checkout.** The dump holds every
   account's password hash and is never committed (CLAUDE.md §7). The snapshot script refuses a
   folder inside a checkout.
 - **Every gate exits 2 when it refuses**, and says why. Stop there; do not work around it.
 
-## The order, and why it is this one
+## The order (D-87 §1)
 
-D-86 makes two statements about order:
-
-- **§1:** "Objective 03 runs first. FR-13 end to end is built alongside it, and never delays it."
-- **§6:** the HTTP check "runs after the harness and before k6".
-
-Read literally, they conflict. Objective 03 is the thirty questions and NFR-08's k6 run. If it
-runs first, FR-13's runs come after a k6 run.
-
-**The order chosen:**
+D-87 §1 settles it:
 
 1. the thirty questions (step 9);
-2. NFR-08's k6 run (step 11);
-3. FR-13's thread run (step 12a);
-4. the HTTP check (step 12b);
-5. NFR-09's k6 run (step 13).
+2. NFR-08's k6 run (step 11), on a freshly started server;
+3. FR-13's thread run (step 12a), with the server stopped;
+4. the HTTP check (step 12b), on a freshly started server;
+5. NFR-09's k6 run (step 13), on a freshly started server, last.
+
+D-86 made two statements about order that conflict if read literally: §1, "Objective 03 runs
+first. FR-13 end to end is built alongside it, and never delays it", and §6, the HTTP check "runs
+after the harness and before k6". D-87 reads §6's "before k6" as protecting the corpus from
+NFR-09's uploads.
 
 **Why.**
 
@@ -67,9 +73,7 @@ runs first, FR-13's runs come after a k6 run.
 - **FR-13 still comes after the harness's thirty**, as §6 says. And both of FR-13's runs come
   before the one k6 run that changes the corpus.
 
-**If §6 is meant literally**, before NFR-08 as well, move step 12 between steps 10 and 11. Nothing
-else changes. That costs Objective 03 the 10–15 minutes above, and it is a decision, not an
-edit to make on the day.
+Changing the order is a decision, not an edit to make on the day.
 
 ## 0. Before the day
 
@@ -116,7 +120,8 @@ $env:DATABASE_URL   = (($line -replace '^DATABASE_URL=', '').Trim()) -replace '/
 $env:MEDIA_ROOT     = "$root\media"
 $env:AUDIT_LOG_PATH = "$root\logs\audit.log"
 $env:ERROR_LOG_PATH = "$root\logs\errors.log"
-$env:DEBUG          = 'False'                       # as the alpha runs (D-64, D-85)
+$env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"  # Waitress's own lines (D-87 §3); run.ps1 reads it too
+$env:DEBUG          = 'False'                       # overrides .env's DEBUG=True (D-64, D-85, D-87 §2)
 $env:FLM_BASE_URL   = 'http://127.0.0.1:8625/v1'    # check_flm.py and run.ps1 read the shell, not .env
 
 ([uri]$env:DATABASE_URL).AbsolutePath               # prints /kmp_obj02_<date>: the name only
@@ -177,34 +182,46 @@ $env:LOAD_TEST_PASSWORD = '<a password meeting FR-01, with no double quote>'
 
 ## 5. The server, in its own window
 
-Paste the step 1 block, then:
+Paste the step 1 block, then, every time the server starts:
 
 ```powershell
+$env:DEBUG = 'False'                                 # .env says True; only the shell overrides it
+$env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"   # the same path the run.ps1 window has
 & $waitress --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
 ```
 
 This is D-85 §2's command, `waitress-serve --listen=127.0.0.1:8000 --threads=24
 config.wsgi:application`, run from the venv's `Scripts` folder so that it is the venv's Waitress.
+The two lines before it repeat step 1's on purpose: a server started from a window without them
+runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `logs\waitress.log`.
 
+- **`DEBUG=False` is explicit** (D-87 §2). With `DEBUG` on, Django serves its HTML debug pages,
+  and every run that checks refuses: `run.ps1`, the ingestion and the HTTP check all request an
+  unmatched `/api/` path and require handler404's JSON 404.
 - **`--threads=24` is set explicitly** (D-85 §3). Waitress's default is 4, which NFR-08's five
   users already exceed. 24 is NFR-09's 20 users plus 4 for screens, logins and uploads, so a load
   run waits on the NPU, not in Waitress.
+- **Waitress writes its own log** to `$root\logs\waitress.log` (D-87 §3). Its first line is
+  `Serving on http://127.0.0.1:8000`, with a timestamp: that line is how `run.ps1` knows when the
+  server started. A `Task queue depth is N` line means a request arrived with no thread free;
+  `run.ps1` copies those from each k6 run's window into its results.
 - **It is one process with no reloader.** The throttle counters and the in-flight slots live in
   its memory (D-79). Stopping it (Ctrl+C) empties them, which is why it is restarted before each
-  k6 run and before the HTTP check.
+  run through it: NFR-08, the HTTP check and NFR-09 (D-87 §1). **Restart** below means: Ctrl+C in
+  this window, then the three lines above again.
 - **What is listening can be checked**, in the step 1 window:
 
   ```powershell
   & $py scripts\server_record.py http://127.0.0.1:8000
   ```
 
-  It prints the server, its version and its thread count. They are read from the process
-  listening on port 8000 and from the reply's `Server` header, not stated. It prints a
-  `NOT D-85:` line for anything that differs. The ingestion and the HTTP check record the same
-  observation themselves.
+  It prints the server, its version, its thread count and `DEBUG`. They are read from the process
+  listening on port 8000, from the reply's `Server` header and from an unmatched `/api/` path,
+  not stated. It prints a `NOT D-85:` line for anything that differs. The ingestion and the HTTP
+  check record the same observation themselves, and refuse a server with `DEBUG` on.
 
-**Writes:** uploads to `$root\media`, the audit log and the error log to `$root\logs`, and rows
-in `$db`. It writes nothing to `kmp` or to the checkout's `media\`.
+**Writes:** uploads to `$root\media`; the audit, error and Waitress logs to `$root\logs`; and rows
+in `$db`. It writes nothing to `kmp` or to the checkout's `media\` or `logs\`.
 
 ## 6. The Employee the ingestion signs in as
 
@@ -355,30 +372,44 @@ and refuses on any difference.
 
 ## 11. NFR-08, Objective 03's p90 at five users (D-84 §3)
 
-**Start the server** (step 5) fresh. A restart before each k6 run empties the throttle counters
-(D-82 rule 7). Then, in the step 1 window:
+**Start the server** (step 5), after step 9's harness has finished. It must start after
+everything already in `$runs` was written, or `run.ps1` refuses it as not restarted (D-87 §1).
+Then, in the step 1 window:
 
 ```powershell
-& $py scripts\server_record.py http://127.0.0.1:8000 | Set-Content -Encoding UTF8 "$runs\server_nfr08.txt"
 $env:LOAD_TEST_PASSWORD = '<the step 4 password>'
-.\tests\load\run.ps1 -Test nfr08 -DbDumpSha256 $hash -Python $py
-Copy-Item tests\load\results\nfr08_summary.json "$runs\nfr08_summary.json"
+.\tests\load\run.ps1 -Test nfr08 -DbDumpSha256 $hash -Python $py -ResultsDir $runs
 ```
 
 - **Leave `VUS` unset.** Five users is D-84 §3, decided before the run.
-- **Leave `-ServerThreads` at its default of 24.** `run.ps1` records the thread count as stated.
-  `server_nfr08.txt` is the observation beside it, read from the process listening on the port.
-  If it does not say `waitress` and `24`, stop: the run would not be D-85's.
+- **Leave `-ServerThreads` at its default of 24.** It is the statement; the thread count recorded
+  is the one observed on the listening process's command line.
+- **`WAITRESS_LOG_PATH` comes from the step 1 block**, the same path the server window set.
+  `-ResultsDir $runs` is where the summary is copied, and where the restart check looks for
+  earlier runs.
 
 **`run.ps1` refuses (exit 2) before k6 starts if:**
 
-- Waitress is not installed in the venv;
-- `-ServerThreads` is not 24 and `-OverrideServerThreads` is not given;
-- FLM is not v0.9.39;
-- `check_flm.py` does not pass.
+- Waitress is not installed in the venv, or `-ServerThreads` is not 24 without the override;
+- no Waitress log is named, or it does not exist;
+- FLM is not v0.9.39, or `check_flm.py` does not pass;
+- the process listening on port 8000 is not Waitress, or its command line has no `--threads=24`
+  (no `--threads` at all is Waitress's default, 4, and is refused as 4);
+- `GET /api/__preflight_not_a_route__` is not handler404's JSON 404, so `DEBUG` is not
+  confirmed off;
+- Waitress's log has no timestamped `Serving on` line for port 8000 from after the listening
+  process started;
+- that start is earlier than the end of the latest run recorded in `$runs` or
+  `tests\load\results`: the server was not restarted.
 
-It records the commit, the FLM version, the dump hash, and the server, its version and its thread
-count, in the results.
+**After k6**, it copies every `Task queue depth` line from the run's window out of
+`$root\logs\waitress.log` into the summary, or records that there were none (D-87 §3). It marks
+the run INVALID if the server started again during it. It exits 3 if k6 wrote no summary for this
+run, and the run is then not recorded.
+
+It records the commit, the FLM version, the dump hash and every observed value in the summary:
+the server, its version and thread count, its pid, `DEBUG`, its start, the previous run, the
+queueing, and the whole pre-flight record. The stated values sit beside them.
 
 **Read the verdict in the JSON, not k6's exit code.** tests/load/README.md has the rest:
 
@@ -389,11 +420,12 @@ count, in the results.
 **Report, with the dump hash, commit, FLM version and server** (D-84 §3, D-85 §4):
 
 - the answered-only p90 against 4 s;
-- beside it, the all-replies p90, the answered rate and the 8.90 s baseline.
+- beside it, the all-replies p90, the answered rate and the 8.90 s baseline;
+- the run's queueing, `waitress_log.queue_depth` (D-87 §3).
 
 **Writes:**
 
-- `tests\load\results\nfr08_summary.json`, copied to `$runs`, and `$runs\server_nfr08.txt`;
+- `tests\load\results\nfr08_summary.json`, copied to `$runs\nfr08_summary.json` by `run.ps1`;
 - QueryLog and Conversation rows in `$db`;
 - log lines in `$root\logs`.
 
@@ -447,8 +479,9 @@ version in place of the question file's. The server is "none, in-process".
 
 ### 12b. The HTTP check, with the server started fresh
 
-Start the server (step 5) again, so the throttle counters are empty. Then, in a window with the
-step 1 block and step 6's four `KMP_CORPUS_*` variables:
+Start the server (step 5) again, so the throttle counters NFR-08 left are empty (D-87 §1). Nothing
+checks this restart: the HTTP check observes the server's threads and `DEBUG`, not its start. Then,
+in a window with the step 1 block and step 6's four `KMP_CORPUS_*` variables:
 
 ```powershell
 & $py scripts\conversation_http_check.py --dump-sha256 $hash --out "$runs\http_check.json"
@@ -490,8 +523,8 @@ also scored by the frozen rule and checked for a leak.
 
 **It also refuses:**
 
-- after one unauthenticated GET: if the server is positively not D-85's, unless `--any-server`
-  is given;
+- after two unauthenticated GETs, `/api/` and the DEBUG probe: if the server is positively not
+  D-85's (another server, another thread count, or `DEBUG` on), unless `--any-server` is given;
 - after signing in, before any thread is created: if the server lists documents or meetings that
   this process's database does not hold. That means it is serving another database.
 
@@ -514,13 +547,18 @@ also scored by the frozen rule and checked for a leak.
 
 ## 13. NFR-09, separately, last
 
-Stop the server and start it again, then:
+**Restart the server** (step 5: Ctrl+C, then its three lines again), after the HTTP check has
+finished. `run.ps1` refuses a server that started before `$runs\http_check.json` was written
+(D-87 §1). Then, in the step 1 window:
 
 ```powershell
-& $py scripts\server_record.py http://127.0.0.1:8000 | Set-Content -Encoding UTF8 "$runs\server_nfr09.txt"
-.\tests\load\run.ps1 -Test nfr09 -DbDumpSha256 $hash -Python $py
-Copy-Item tests\load\results\nfr09_summary.json "$runs\nfr09_summary.json"
+.\tests\load\run.ps1 -Test nfr09 -DbDumpSha256 $hash -Python $py -ResultsDir $runs
 ```
+
+It refuses on the same conditions as step 11, and copies the run's queueing into the summary
+afterwards in the same way. At 24 threads, a `Task queue depth` line appears only when more than
+24 requests are inside Waitress at once; NFR-09's 20 users should not do that, so any line in the
+window is worth reporting.
 
 It takes 32–37 minutes. **Afterwards `$db` is no longer the snapshot.** It holds up to 1,210
 `LoadTest` uploads in `$db` and `$root\media`. Before anything else is measured on it, restore
@@ -528,7 +566,7 @@ It takes 32–37 minutes. **Afterwards `$db` is no longer the snapshot.** It hol
 
 **Writes:**
 
-- `tests\load\results\nfr09_summary.json`, copied to `$runs`, and `$runs\server_nfr09.txt`;
+- `tests\load\results\nfr09_summary.json`, copied to `$runs\nfr09_summary.json` by `run.ps1`;
 - up to 1,210 documents, their chunks and their originals.
 
 ## 14. Keep the evidence
@@ -543,11 +581,12 @@ git status                          # only files under the run folder; never a d
 - `results.json` and `results.md` (step 7);
 - `snapshot.json` (step 8);
 - `scores.json` and `harness.json` (step 9);
-- `server_nfr08.txt` and `nfr08_summary.json` (step 11);
+- `nfr08_summary.json` (step 11), with the server observed and the run's queueing;
 - `threads.json` and `http_check.json` (step 12);
-- `server_nfr09.txt` and `nfr09_summary.json` (step 13).
+- `nfr09_summary.json` (step 13), likewise.
 
-`$root`, which holds the dump, the media and the logs, stays on the laptop. The demonstration
+`$root`, which holds the dump, the media and the logs, Waitress's included, stays on the laptop.
+The summaries carry the log's lines from each k6 run's window, so the log itself is not needed. The demonstration
 database for 1 November is a separate decision (D-84). Nothing here makes `$db` the demo
 database.
 
@@ -558,13 +597,13 @@ database.
 | 2 `check_flm.py` | nothing | — |
 | 3 `create`, `migrate` | an empty database, then its schema | `$db` in `kmp_prototype-db-1` |
 | 4 accounts | 1 Administrator, 21 load-test Employees | `$db` |
-| 5 server | uploads; audit and error logs | `$root\media`, `$root\logs` |
+| 5 server | uploads; audit, error and Waitress logs | `$root\media`, `$root\logs` |
 | 6 register | 1 Employee | `$db` |
 | 7 ingest | the corpus; results, with the server | `$db`, `$root\media`; `$runs\results.json`, `results.md` |
 | 8 snapshot | dump, its hash, media copy, record | `$root\snapshot`; `$runs\snapshot.json` |
 | 9 harness | scores and full records | `$runs\scores.json`, `$runs\harness.json` |
 | 10 restore | the database and media, replaced from the snapshot | `$db`, `$root\media` |
-| 11 NFR-08 | asks and conversations; summary; the server observed | `$db`, `$root\logs`; `$runs\nfr08_summary.json`, `server_nfr08.txt` |
+| 11 NFR-08 | asks and conversations; summary, with the server observed and its queueing | `$db`, `$root\logs`; `$runs\nfr08_summary.json` |
 | 12a threads | the thread run's records | `$runs\threads.json` |
 | 12b HTTP check | 3 conversations, 6 asks, their citations; sign-ins; record | `$db`, `$root\logs`; `$runs\http_check.json` |
-| 13 NFR-09 | up to 1,210 uploads; summary; the server observed | `$db`, `$root\media`; `$runs\nfr09_summary.json`, `server_nfr09.txt` |
+| 13 NFR-09 | up to 1,210 uploads; summary, with the server observed and its queueing | `$db`, `$root\media`; `$runs\nfr09_summary.json` |

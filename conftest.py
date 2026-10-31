@@ -97,10 +97,11 @@ def no_live_provider(monkeypatch):
 
 @dataclass
 class LogFiles:
-    """The two log files one test's logging writes."""
+    """The three log files one test's logging writes."""
 
     audit: Path
     errors: Path
+    waitress: Path
 
 
 def _configure_logging(config):
@@ -122,18 +123,23 @@ def _configure_logging(config):
 
 @pytest.fixture(autouse=True)
 def log_files(tmp_path, settings):
-    """The FR-05 audit file and D-75's error file for this test: AUDIT_LOG_PATH,
-    ERROR_LOG_PATH and LOGGING are overridden to temporary paths and logging is
-    reconfigured from them exactly as config/settings.py builds it, so no test ever
-    appends to logs/audit.log or logs/errors.log."""
+    """The FR-05 audit file, D-75's error file and D-87's Waitress file for this test:
+    AUDIT_LOG_PATH, ERROR_LOG_PATH, WAITRESS_LOG_PATH and LOGGING are overridden to
+    temporary paths and logging is reconfigured from them exactly as config/settings.py
+    builds it, so no test ever appends to logs/audit.log, logs/errors.log or
+    logs/waitress.log."""
     original = settings.LOGGING
     audit_path = tmp_path / "audit.log"
     error_path = tmp_path / "errors.log"
+    waitress_path = tmp_path / "waitress.log"
     settings.AUDIT_LOG_PATH = audit_path
     settings.ERROR_LOG_PATH = error_path
-    settings.LOGGING = platform_logging(audit_path=audit_path, error_path=error_path)
+    settings.WAITRESS_LOG_PATH = waitress_path
+    settings.LOGGING = platform_logging(
+        audit_path=audit_path, error_path=error_path, waitress_path=waitress_path
+    )
     _configure_logging(settings.LOGGING)
-    yield LogFiles(audit=audit_path, errors=error_path)
+    yield LogFiles(audit=audit_path, errors=error_path, waitress=waitress_path)
     _configure_logging(original)
 
 
@@ -147,6 +153,12 @@ def audit_file(log_files):
 def error_log_file(log_files):
     """D-75's error file this test's logging writes (see ``log_files``)."""
     return log_files.errors
+
+
+@pytest.fixture
+def waitress_log_file(log_files):
+    """D-87's Waitress file this test's logging writes (see ``log_files``)."""
+    return log_files.waitress
 
 
 @pytest.fixture

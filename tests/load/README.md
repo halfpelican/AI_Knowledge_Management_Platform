@@ -2,7 +2,7 @@
 
 | File | What it is | Accounts |
 |---|---|---|
-| `run.ps1` | **How every run starts.** Refuses to start k6 unless `scripts/check_flm.py` passes and Waitress is installed, then records the commit, the FLM version, the snapshot hash, and the server, its version and its thread count (D-83, D-84, D-85). | |
+| `run.ps1` | **How every run starts.** Refuses to start k6 unless `scripts/check_flm.py` passes and `scripts/server_record.py preflight` observes D-85's server: Waitress at 24 threads, `DEBUG` off, restarted since the last run. Records the commit, the FLM version, the snapshot hash and every observed value. After k6, copies Waitress's queueing in the run's window into the results (D-83, D-84, D-85, D-87). | |
 | `nfr08_query_p90.js` | p90 of `POST /api/ask`, answered replies only, 5 VUs sharing 100 asks. Limit 4,000 ms. Objective 03's p90 (D-84 decision 3). | `loadtest01`–`loadtest05` |
 | `nfr09_concurrency.js` | p90 of asks and uploads with 20 concurrent users, against a one-user baseline. At most 25% worse. | load phase `loadtest01`–`loadtest20`, baseline `loadtest21` |
 | `common.js` | Logins, pacing, the ask request, the run record and the validity gate. | |
@@ -11,64 +11,94 @@ Every virtual user (VU) logs in its own Employee account, and VU *n* uses accoun
 The baseline gets its own account, so its uploads have their own hourly budget. Both scripts are
 paced so that no account goes over D-79's limits, and any 429 makes the run INVALID.
 
-## Run order for item 6 (D-84)
+## Run order for item 6 (D-84, D-87)
 
 The measurement database is a fresh one holding exactly Objective 02's corpus, with its own
-`DATABASE_URL`, `MEDIA_ROOT`, `AUDIT_LOG_PATH` and `ERROR_LOG_PATH`. It is ingested and
-snapshotted before anything is measured. That part is not this folder's: the item 6 runbook
-(`docs/measurement-runbook.md`) covers it. These steps start once the snapshot exists and its
-SHA-256 is recorded.
+`DATABASE_URL`, `MEDIA_ROOT`, `AUDIT_LOG_PATH`, `ERROR_LOG_PATH` and `WAITRESS_LOG_PATH`. It is
+ingested and snapshotted before anything is measured. That part is not this folder's: the item 6
+runbook (`docs/measurement-runbook.md`) covers it, and it is the authority on the order. These
+steps start once the snapshot exists and its SHA-256 is recorded.
+
+D-87 decision 1 settles the order: the thirty questions, NFR-08, FR-13's thread run, the HTTP
+check, then NFR-09. Two of those are this folder's:
 
 1. **The thirty questions run first, or the snapshot is restored first.** NFR-09 uploads a
    kitchen-roster document every round, and those uploads become retrieval candidates for the
-   questions. D-84 puts the questions before either load test.
-2. **Restart Waitress** ([The server](#the-server-d-85)), then run **NFR-08 at 5 users** through
-   `run.ps1`. Five is fixed by D-84 decision 3, before the run, so leave `VUS` unset.
-3. **Restart Waitress again**, then run **NFR-09** through `run.ps1`, as a separate run.
-4. **After NFR-09 the database is no longer the snapshot.** It holds up to 1,210 `LoadTest`
+   questions.
+2. **Restart Waitress** ([The server](#the-server-d-85-d-87)), then run **NFR-08 at 5 users**
+   through `run.ps1`. Five is fixed by D-84 decision 3, before the run, so leave `VUS` unset.
+3. FR-13's thread run and the HTTP check come next (the runbook's step 12). The HTTP check goes
+   through the server, so Waitress is restarted before it.
+4. **Restart Waitress again**, then run **NFR-09** through `run.ps1`, last.
+5. **After NFR-09 the database is no longer the snapshot.** It holds up to 1,210 `LoadTest`
    uploads. Restore the snapshot before measuring anything else on it, including a second NFR-08
    run, and pass the same hash.
 
-## The server (D-85)
+`run.ps1` refuses a run whose server was not restarted after the last run recorded in
+`tests/load/results` or in `-ResultsDir`, so pass the run folder as `-ResultsDir`. Then the
+restart after the HTTP check is checked as well, because its `http_check.json` is in that folder.
 
-The measured run is served by Waitress with 24 threads, under `DEBUG=False`:
+## The server (D-85, D-87)
+
+The measured run is served by Waitress with 24 threads, under `DEBUG=False`, writing its own log:
 
 ```powershell
+$env:DEBUG = 'False'                                  # .env sets DEBUG=True; the shell's value wins
+$env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"    # beside errors.log (D-87 decision 3)
 waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
 ```
 
 - **Where it runs.** From the repository root, in its own PowerShell window, with the measurement
   database's environment set first (`docs/measurement-runbook.md` step 1: `DATABASE_URL`,
-  `MEDIA_ROOT`, `AUDIT_LOG_PATH`, `ERROR_LOG_PATH`, `DEBUG=False`). `waitress-serve.exe` is in the
-  venv's `Scripts` folder. Without the venv activated, call it by that path:
-  `.venv\Scripts\waitress-serve.exe`. In a second worktree, use the main checkout's.
-- **Restart it before each run**: Ctrl+C in its window, then the same command again. Waitress
-  runs one process, and the throttle counters and in-flight slots live in its memory (D-79), so
-  stopping it empties them. Without a restart, an earlier run's logins, asks or uploads still
-  count, and the run can hit a 429.
+  `MEDIA_ROOT`, `AUDIT_LOG_PATH`, `ERROR_LOG_PATH`, `WAITRESS_LOG_PATH`, `DEBUG=False`).
+  `waitress-serve.exe` is in the venv's `Scripts` folder. Without the venv activated, call it by
+  that path: `.venv\Scripts\waitress-serve.exe`. In a second worktree, use the main checkout's.
+- **`DEBUG=False` has to be set in the shell.** The repo's `.env` sets `DEBUG=True`, and a server
+  started from a window without the override runs in debug. `run.ps1` refuses that run (below).
+- **Restart it before each run through HTTP**: NFR-08, the HTTP check and NFR-09 (D-87 decision
+  1). Ctrl+C in its window, then the same command again. Waitress runs one process, and the
+  throttle counters and in-flight slots live in its memory (D-79), so stopping it empties them.
+  Without a restart, an earlier run's logins, asks or uploads still count, and the run can hit
+  a 429.
 - **`--threads=24` is set explicitly.** Waitress's default is 4, which NFR-08's five users
   already exceed. 24 is NFR-09's 20 users plus 4 for everything else (D-85 decision 3).
-- **What is recorded, and how it is known** (D-85 decision 4). `run.ps1` passes all three to k6,
-  and the results JSON keeps them as `server`, `server_version` and `server_threads`, with
-  `server_sources` saying where each came from:
-  - **The server**, `waitress`, is `run.ps1`'s statement, and it is the one value checked
-    against the running server (next bullet).
-  - **The version** is read from the venv's python (`-Python`) with `importlib.metadata`. It is
-    the installed package, so it is the server's version only if the server was started from
-    the same venv. `run.ps1` refuses if Waitress is not installed there.
-  - **The thread count is recorded as stated.** Waitress cannot be asked how many threads it
-    has, so `run.ps1` takes it as `-ServerThreads` (default 24) and nothing checks it against
-    the running server. It refuses anything but 24 unless `-OverrideServerThreads` is also
-    given, and a run with the override is not D-85's measured run.
-- **What is observed: the `Server` header at login.** Waitress names itself in a `Server`
+- **What `run.ps1` observes before k6 starts** (D-87 decision 2), with
+  `scripts/server_record.py preflight`. It refuses unless each holds:
+  - **Waitress, from the listening process.** The process listening on `-BaseUrl`'s port is
+    looked up (`Get-NetTCPConnection`, `Win32_Process`), and its command line must start
+    Waitress. A server named only by a header, or nothing listening, is refused.
+  - **24 threads, from that command line.** A command line with no `--threads` reads as 4,
+    Waitress's default, and is refused as 4, not as "unknown". With `-OverrideServerThreads`,
+    the observed count must equal `-ServerThreads`.
+  - **`Server: waitress`** on both replies it asks for.
+  - **`DEBUG` off.** `GET /api/__preflight_not_a_route__` must come back as handler404's JSON
+    404, `{"detail": "Not found."}`. Under `DEBUG`, Django serves its HTML debug page instead,
+    which says `DEBUG = True`. Anything else, an HTML 400 for a disallowed `Host` included, is
+    "not confirmed off" and refused.
+  - **The server's start, from Waitress's log.** The last `Serving on` line for the port, with a
+    timestamp, no earlier than the listening process's own start. One from before it means the
+    log is not this server's (a different `WAITRESS_LOG_PATH` in the two windows), and is
+    refused.
+  - **Restarted since the last run.** That start must be later than the end of every run
+    recorded in `tests/load/results` and `-ResultsDir`. A run's end is when its `*.json` was
+    last written, or its `finished_at` if later.
+- **What is recorded, and how it is known** (D-85 decision 4, D-87 decision 2). The results JSON
+  keeps the observed values as `server`, `server_version`, `server_threads`, `server_pid`,
+  `server_debug`, `server_started_at` and `previous_run`, and what was stated as
+  `server_stated`. `server_sources` says where each came from:
+  - **The server and the thread count** are read from the listening process's command line.
+  - **The version** is the Waitress installed in the venv that command line runs from (its
+    `Scripts\waitress-serve.exe`). Where no venv can be read from it, it is the one installed
+    beside `-Python`, and the source says so. The version in `-Python`'s venv is the stated one.
+  - The whole pre-flight record, command line included, is added as `server_preflight` after k6
+    exits.
+- **Also observed: the `Server` header at login.** Waitress names itself in a `Server`
   response header, `waitress`. Django's `runserver` sends `WSGIServer/0.2 CPython/…`. Every login
   in `setup()` keeps the header it came back with, and the JSON records them as
   `server_observed`. If any login came back with no header, or with a server whose name (the
-  part before any `/`) is not the stated `SERVER`, the run is **INVALID**, and `setup()` says so
-  on the console straight after the logins, so the run can be stopped before it spends half an
-  hour. This catches a run against `runserver`. **It does not check the thread count or the
-  version:** Waitress sends neither, so a Waitress started with 4 threads, or from another
-  venv, passes it.
+  part before any `/`) is not `SERVER`, the run is **INVALID**, and `setup()` says so on the
+  console straight after the logins, so the run can be stopped before it spends half an hour.
+  This catches a server that changed between the pre-flight and the logins.
   - k6 hands `setup()`'s return value to `handleSummary()` as `data.setup_data`, and that is
     how the header reaches the record. If a k6 build ever leaves `setup_data` out, every run
     reads INVALID with the reason "k6 passed no setup_data to handleSummary()" rather than
@@ -98,13 +128,17 @@ waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
    `DEBUG` off, as the Waitress alpha runs (D-64), the command refuses unless you also pass
    `--i-know-this-is-local`. The password must not contain a double quote: Windows PowerShell 5.1
    cannot pass one to k6 intact, so `run.ps1` refuses it.
-4. **Waitress is installed in the venv, and restarted** with D-85's command
-   ([The server](#the-server-d-85)). Do this before *each* run, including between NFR-08 and
-   NFR-09. `run.ps1` cannot check that the server was restarted, or its thread count. The k6
-   scripts check that it is Waitress, from the `Server` header at login.
-5. **Do not log in from a browser on this machine while `setup()` runs.** The login limit is
+4. **Waitress is installed in the venv, and restarted** with D-85's command, `DEBUG=False` and
+   `WAITRESS_LOG_PATH` set in its window ([The server](#the-server-d-85-d-87)). Do this before
+   *each* run through HTTP, including before the HTTP check between NFR-08 and NFR-09. `run.ps1`
+   refuses a server it does not observe as Waitress at 24 threads with `DEBUG` off, or that
+   started before the last run recorded in `tests/load/results` and `-ResultsDir` ended.
+5. **This window names the same Waitress log as the server's.** Set `$env:WAITRESS_LOG_PATH` to
+   the same path, as the runbook's step 1 block does, or pass `-WaitressLog`. With neither,
+   `run.ps1` refuses.
+6. **Do not log in from a browser on this machine while `setup()` runs.** The login limit is
    20 a minute per address, and the browser shares 127.0.0.1 with k6.
-6. **FLM v0.9.39 is serving** (`flm serve gemma3:4b --embed 1`), and `FLM_BASE_URL` in this shell
+7. **FLM v0.9.39 is serving** (`flm serve gemma3:4b --embed 1`), and `FLM_BASE_URL` in this shell
    names the same FLM as the server's. `check_flm.py` reads the shell's environment, not `.env`.
    Both default to `http://127.0.0.1:8625/v1`.
 
@@ -117,18 +151,26 @@ policy runs it as it is.
 ```powershell
 $env:LOAD_TEST_PASSWORD = '<the accounts password>'
 $env:AI_PROVIDER = 'flm'; $env:FLM_CHAT_MODEL = 'gemma3:4b'   # recorded in the results, optional
+$env:WAITRESS_LOG_PATH = '<the path the server window set>'   # the runbook's step 1 block sets it
 $hash = (Get-FileHash <the snapshot dump file> -Algorithm SHA256).Hash
 
-# restart Waitress (--threads=24), then:
-.\tests\load\run.ps1 -Test nfr08 -DbDumpSha256 $hash
+# restart Waitress (--threads=24, DEBUG=False), then:
+.\tests\load\run.ps1 -Test nfr08 -DbDumpSha256 $hash -ResultsDir $runs
 
-# restart Waitress (--threads=24), then:
-.\tests\load\run.ps1 -Test nfr09 -DbDumpSha256 $hash
+# the thread run, then restart Waitress and run the HTTP check (the runbook's step 12)
+
+# restart Waitress (--threads=24, DEBUG=False), then:
+.\tests\load\run.ps1 -Test nfr09 -DbDumpSha256 $hash -ResultsDir $runs
 ```
 
 In a second worktree, which has no `.venv` of its own, add
 `-Python <main checkout>\.venv\Scripts\python.exe`. `-ServerThreads` defaults to 24; pass it only
-if Waitress was started with another count, and then `-OverrideServerThreads` too.
+if Waitress was started with another count, and then `-OverrideServerThreads` too. `-BaseUrl`
+defaults to `http://127.0.0.1:8000`, D-85's `--listen`, and must be a server on this machine.
+
+`-ResultsDir` is the run folder: the summary is copied there, and every `*.json` in it counts as
+an earlier run for the restart check. It must exist already. Without it, only
+`tests/load/results` is read, which holds the k6 summaries but not the HTTP check's record.
 
 NFR-08's floor alone makes it at least 140 s of asks, plus about 30 s of setup. Expect much
 longer: one NPU answers the asks one at a time, so the run takes roughly the answered asks times
@@ -144,20 +186,30 @@ model, and it allows that call 180 s.
 It stops at the first failure, prints `REFUSED: <why>` and `k6 was not started`, and exits 2:
 
 1. **The arguments.** `-DbDumpSha256` must be 64 hex digits. `-ServerThreads` must be a whole
-   number, and 24 unless `-OverrideServerThreads` is given (D-85). `LOAD_TEST_PASSWORD` must be
-   set. The venv's python, `scripts/check_flm.py`, `flm`, `git` and `k6` must all exist. It never
-   falls back to the `python` on `PATH`: on this laptop that is an interpreter without the
-   project's environment.
-2. **Waitress's version**, read from the venv's python with `importlib.metadata` in isolated
-   mode (`-I`), so a `PYTHONPATH` cannot supply a Waitress the venv lacks. Refused if Waitress is
-   not installed in that venv (D-85).
+   number, and 24 unless `-OverrideServerThreads` is given (D-85). `-BaseUrl` must be
+   `http://host:port`. `LOAD_TEST_PASSWORD` must be set. A Waitress log must be named, by
+   `-WaitressLog` or `$env:WAITRESS_LOG_PATH`, and exist. `-ResultsDir`, if given, must exist.
+   The venv's python, `scripts/check_flm.py`, `scripts/server_record.py`, `flm`, `git` and `k6`
+   must all exist. It never falls back to the `python` on `PATH`: on this laptop that is an
+   interpreter without the project's environment.
+2. **Waitress's version in `-Python`'s venv**, read with `importlib.metadata` in isolated mode
+   (`-I`), so a `PYTHONPATH` cannot supply a Waitress the venv lacks. Refused if Waitress is not
+   installed there (D-85). This is the stated version, recorded beside the observed one.
 3. **`flm version`.** Anything but **v0.9.39** is refused (D-83 decision 1). From v1.0.4 the
    embeddings are noise, and a build that is sound but embeds differently would not match the
    snapshot's vectors, which `check_flm.py` cannot see. There is no override.
 4. **`scripts/check_flm.py`**, with the venv's python. It must exit 0 *and* print its
    `RESULT: PASS` line. An exit code alone is not trusted, because an interpreter that ran
-   nothing also exits 0.
-5. **`git rev-parse HEAD`**, and `git status` for uncommitted changes to tracked files.
+   nothing also exits 0. It is still the first check that reaches anything outside this
+   window: everything before it is local.
+5. **`scripts/server_record.py preflight`** (D-87 decisions 1 and 2). It sends two GETs, to
+   `/api/` and to `/api/__preflight_not_a_route__`, and looks up the listening process. It
+   refuses on any of the conditions in [The server](#the-server-d-85-d-87), each on its own
+   `REFUSED:` line. Like `check_flm.py`, it must exit 0 *and* print `PREFLIGHT: READY`. Then
+   `run.ps1` checks the values it wrote again itself: `waitress`, the thread count, `DEBUG off`
+   and a server start. A broken pre-flight cannot pass them through alone; the wrapper
+   scenarios show that each of the two layers refuses on its own.
+6. **`git rev-parse HEAD`**, and `git status` for uncommitted changes to tracked files.
 
 Then it runs k6 from the repository root, so the results land in `tests/load/results/`, with:
 
@@ -168,20 +220,49 @@ Then it runs k6 from the repository root, so the results land in `tests/load/res
 | `FLM_VERSION` | `flm version`, such as `v0.9.39` |
 | `FLM_CHECK_PASSED_AT`, `FLM_CHECK_URL` | when `check_flm.py` passed, and the URL its `RESULT: PASS` line names |
 | `DB_DUMP_SHA256` | `-DbDumpSha256`, in lower case |
-| `SERVER` | always `waitress` (D-85) |
-| `SERVER_VERSION`, `SERVER_VERSION_READ_FROM` | Waitress's installed version, and the python it was read from |
-| `SERVER_THREADS` | `-ServerThreads`, as stated |
+| `SERVER`, `SERVER_THREADS`, `SERVER_THREADS_SOURCE`, `SERVER_PID` | observed: the listening process's command line |
+| `SERVER_VERSION`, `SERVER_VERSION_SOURCE` | observed: the Waitress in the venv that command line runs from, and how it was found |
+| `SERVER_DEBUG` | observed: `off` |
+| `SERVER_STARTED_AT` | observed: the last `Serving on` line in Waitress's log |
+| `PREVIOUS_RUN_FILE`, `PREVIOUS_RUN_ENDED_AT` | the latest run record in the results folders, or `none` |
+| `SERVER_OBSERVED_BY` | `scripts/server_record.py preflight, run by tests/load/run.ps1` |
+| `SERVER_STATED`, `SERVER_THREADS_STATED`, `SERVER_VERSION_STATED`, `SERVER_VERSION_READ_FROM` | stated: `waitress`, `-ServerThreads`, and the Waitress in `-Python`'s venv, with that python |
+| `WAITRESS_LOG` | the Waitress log's path |
 | `TEST_PASSWORD` | `$env:LOAD_TEST_PASSWORD`. The printed command shows `***` |
-| `BASE_URL` | `-BaseUrl`, only if given |
+| `BASE_URL` | `-BaseUrl`, default `http://127.0.0.1:8000` |
 
-Any other exit code is k6's own. It does not carry the verdict (see below).
+A value with a double quote, or ending in a backslash, cannot reach k6 intact from Windows
+PowerShell 5.1, and is refused.
+
+**After k6 exits**, `scripts/server_record.py finalise` reads Waitress's log again (D-87
+decision 3). It writes into `tests/load/results/<test>_summary.json`:
+
+- `waitress_log`: the run's window (from just before k6 started to just after it exited), every
+  `Task queue depth` line timestamped inside it, the deepest, and how many fell before or after
+  it. Lines with no timestamp are kept apart, not placed. With none inside the window,
+  `queue_depth` reads `none in the run's window`.
+- `server_at_end`: the process listening when the run ended, and whether it is the one observed
+  before it.
+- `server_preflight`: the whole pre-flight record, command line, DEBUG probe and refusals
+  included.
+
+It marks the run **INVALID** if a `Serving on` line for the port falls inside the window (the
+server started again during the run), or if another process, or none, is listening at the end.
+With `-ResultsDir`, it copies the summary there.
+
+**Exit codes.** 2: refused, k6 not started. 3: k6 ran, but finalise found no summary from this
+run (its `finished_at` is outside the window, or there is no file) or could not write it. The
+run is then not recorded, and an older summary is left untouched. Any other code is k6's own. It
+does not carry the verdict (see below).
 
 ### Running k6 without `run.ps1`
 
 Without `run.ps1`, the scripts still refuse to start unless `GIT_SHA`, `FLM_VERSION`,
 `DB_DUMP_SHA256`, `SERVER`, `SERVER_VERSION` and `SERVER_THREADS` are given, so a run cannot go
 unrecorded. Without the gate's record, though, the run is **INVALID**, because nothing shows
-`check_flm.py` passed. Use this only to debug the scripts.
+`check_flm.py` passed. Without `SERVER_OBSERVED_BY` it is INVALID a second time, because nothing
+observed the server, confirmed `DEBUG` off or checked the restart (D-87 decision 2). Use this only
+to debug the scripts.
 
 | `-e` variable | Required | Meaning |
 |---|---|---|
@@ -191,10 +272,11 @@ unrecorded. Without the gate's record, though, the run is **INVALID**, because n
 | `DB_DUMP_SHA256` | yes | The snapshot's SHA-256, 64 hex digits. |
 | `SERVER` | yes | The server's name, `waitress` for D-85's run. |
 | `SERVER_VERSION` | yes | Its version, such as `3.0.2`. Recorded as passed. |
-| `SERVER_THREADS` | yes | The `--threads` it was started with, a whole number. Recorded as stated. |
+| `SERVER_THREADS` | yes | The `--threads` it was started with, a whole number. Recorded as passed, "NOT observed". |
 | `FLM_CHECK_PASSED_AT`, `FLM_CHECK_URL`, `GIT_TRACKED_CHANGES`, `SERVER_VERSION_READ_FROM` | set by `run.ps1` | Without `FLM_CHECK_PASSED_AT` the run is INVALID. |
+| `SERVER_OBSERVED_BY`, `SERVER_DEBUG` and the rest of the observed and stated values above | set by `run.ps1` | Without `SERVER_OBSERVED_BY` the run is INVALID; with it, so is any `SERVER_DEBUG` but `off`. |
 | `AI_PROVIDER`, `FLM_CHAT_MODEL` | no | Recorded in the results, `not recorded` if absent. k6 also reads them from the shell's environment. |
-| `BASE_URL` | no | Default `http://localhost:8000`. |
+| `BASE_URL` | no | Default `http://localhost:8000`. `run.ps1` always passes it. |
 | `TEST_EMAIL_PREFIX`, `TEST_EMAIL_DOMAIN` | no | Defaults `loadtest` and `example.com`, which give `loadtest01@example.com`. The command only creates that scheme, so change these only for accounts made some other way. |
 | `VUS`, `ITERATIONS` | no | NFR-08 only, defaults 5 and 100. VU *n* needs account *n*. Objective 03 is 5 VUs (D-84). |
 | `BASELINE_ITERATIONS` | no | NFR-09 only, default 50, at most 60 (the baseline account's uploads in an hour). |
@@ -263,8 +345,13 @@ In this order:
 | `commit_sha`, `uncommitted_tracked_changes` | The checkout `run.ps1` ran in. |
 | `flm_version`, `flm_check` | The FLM build, and when `check_flm.py` passed, and against which URL. `flm_check` is `null` when the run did not go through `run.ps1`. |
 | `db_dump_sha256` | The snapshot the run started from, as given. |
-| `server`, `server_version`, `server_threads`, `server_sources` | The server, its installed version and its thread count as stated by the operator, and how each was known ([The server](#the-server-d-85)). |
+| `server`, `server_version`, `server_threads`, `server_pid`, `server_debug`, `server_sources` | The server, its version, its thread count, its pid and `DEBUG`, as the pre-flight observed them, and how each was known ([The server](#the-server-d-85-d-87)). Without `run.ps1`, as passed, and `server_sources` says so. |
+| `server_stated` | What was stated beside them: `waitress`, `-ServerThreads`, and the Waitress in `-Python`'s venv. `null` when nothing was observed. |
+| `server_started_at`, `previous_run` | The server's start, from Waitress's `Serving on` line, and the run record it had to be later than (D-87 decision 1). |
 | `server_observed` | The `Server` header values the logins came back with, how many logins, how many had none, and `matches_server`. `null` when it was not recorded. |
+| `waitress_log` | Added after k6: the run's window and the `Task queue depth` lines inside it, or `none in the run's window` (D-87 decision 3). If it still reads `not added`, the finalise step did not run. |
+| `server_at_end` | Added after k6: the pid listening when the run ended, and `same_process`. |
+| `server_preflight` | Added after k6: the whole pre-flight record, with the command line and the DEBUG probe's status, content type and reason. |
 | `throttled_429` | `total`, then `rate_limit`, `ask_in_flight`, `ingestion_in_flight` and `unrecognised`. Any non-zero makes the run INVALID. |
 
 **A miss on 4 s is expected, and it is not a failure of the test.** The single-user generation
@@ -292,8 +379,13 @@ One of these, in both scripts:
 
     A restart prevents only the first kind. The two in-flight kinds come from k6's own timeouts.
   - **The `Server` header at login is missing, or names another server than `SERVER`**, or was
-    not recorded at all ([The server](#the-server-d-85)). This checks which software answered,
-    not its version or its thread count.
+    not recorded at all ([The server](#the-server-d-85-d-87)). This checks which software
+    answered, not its version or its thread count.
+  - **The server was not observed before the run** (no `SERVER_OBSERVED_BY`: it did not go
+    through `run.ps1`), or **`DEBUG` was not confirmed off** (D-87 decision 2).
+  - Added by `run.ps1` after k6 exits (D-87 decisions 1 and 3): **Waitress started again during
+    the run**, **another process, or none, was listening at its end**, or **Waitress's log could
+    not be read after it**.
   - **A validity threshold not met:** `http_req_failed` over 1% for asks (and for uploads in
     NFR-09), or `checks` under 99%.
   - **No record that `check_flm.py` passed:** the run did not go through `run.ps1` (D-83
@@ -323,7 +415,7 @@ at the first account, so it costs one failed attempt on `loadtest01` and none on
 
 - **NFR-09's uploads stay in the database.** One run uploads up to 50 + 20 × 58 = 1,210 TXT
   documents as Employees, with department `LoadTest`. Nothing removes them. Restore the snapshot
-  instead (run order, step 4). The baseline's uploads also grow the corpus before the load phase
+  instead (run order, step 5). The baseline's uploads also grow the corpus before the load phase
   asks anything.
 - **The ask timeout (300 s) is shorter than the server's worst case**, so an abandoned ask can still
   be holding the account's in-flight slot. The run is then INVALID twice over: the timeout counts
@@ -351,10 +443,21 @@ at the first account, so it costs one failed attempt on `loadtest01` and none on
   - `check_flm.py` checks the FLM at the shell's `FLM_BASE_URL`, not necessarily the one the
     server uses.
   - `DB_DUMP_SHA256` is recorded as given. Nothing checks the database against it.
-  - Of the server at `BASE_URL`, only its name is checked, by the `Server` header at login. A
-    run against `runserver` is INVALID. A run against Waitress started with other threads, or
-    from another venv than `-Python`, is not caught: `server_version` is the venv's installed
-    Waitress and `server_threads` is what the operator stated.
+  - **The thread count is read from the command line, not from inside Waitress** (D-87). A
+    Waitress started some other way than `waitress-serve` (its own script calling `serve()`)
+    has no `--threads` to read, and is refused as not observed.
+  - **The version is the package installed in the server's venv**, read from its metadata. It
+    is not asked of the running process, so a venv whose Waitress was changed after the server
+    started would be recorded wrongly. Restart the server after any `uv pip sync`.
+  - **The restart is shown, not proved** (D-87). The check is that the log's last `Serving on`
+    is later than every run record in `tests/load/results` and `-ResultsDir`. A run that left no
+    record there (the ingestion writes its own folder, the HTTP check writes where `--out`
+    points) is invisible to it, and so is a folder not passed as `-ResultsDir`. A record is
+    dated by when its file was last written; copying it with `Copy-Item` keeps that date, but
+    editing and saving it later moves it.
+  - **Nothing checks the HTTP check's own restart.** `run.ps1` gates NFR-08 and NFR-09 only.
+  - **`DEBUG` is read from one unmatched path.** A deployment whose `handler404` changed would
+    read as "not confirmed off" and be refused, rather than pass.
   - The gate's record is an environment variable, and anyone can type it. It guards against
     forgetting the check, not against getting round it on purpose. The same goes for `-Python`.
   - `run.ps1` depends on `check_flm.py`'s `RESULT: PASS` line. If that wording changes, `run.ps1`

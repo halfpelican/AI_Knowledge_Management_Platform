@@ -117,7 +117,8 @@ class Pacer:
 
 
 NOTHING_SENT = "No request was sent to the server."
-ONE_GET_SENT = "Only one unauthenticated GET reached the server."
+# Two since D-87: GET /api/ for the Server header, and server_record's DEBUG probe.
+ONE_GET_SENT = "Only two unauthenticated GETs reached the server: /api/ and the DEBUG probe."
 NO_THREAD_CREATED = "Only the sign-ins and two list reads reached the server; no thread was created."
 
 

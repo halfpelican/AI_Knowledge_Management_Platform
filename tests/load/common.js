@@ -43,19 +43,38 @@ const FLM_CHECK_URL = __ENV.FLM_CHECK_URL || '';
 const GIT_TRACKED_CHANGES = __ENV.GIT_TRACKED_CHANGES || '';
 
 // The server the run measured, its version and its thread count (D-85 decision 4).
-// run.ps1 states the name (D-85's Waitress), reads the version from the venv's
-// installed package, and takes the thread count from the operator, because a
-// running Waitress cannot be asked for it. The name alone is then checked against
-// the Server header the logins come back with ("The server that answered", below);
-// the version and the thread count are not observed, and the record says so.
+// run.ps1 OBSERVES them before k6 starts (D-87 decision 2): scripts/server_record.py
+// preflight reads the process listening on the port, its command line (and so its
+// --threads) and its venv's Waitress, confirms DEBUG off from an unmatched /api/
+// path, and reads the server's last start from Waitress's log. run.ps1 passes the
+// observed values as SERVER, SERVER_VERSION and SERVER_THREADS, with
+// SERVER_OBSERVED_BY set, and the stated ones beside them. The name is also checked
+// against the Server header the logins come back with ("The server that answered",
+// below). A run that did not go through run.ps1 has only what was passed, and its
+// record says so.
 export const SERVER = __ENV.SERVER || '';
 const SERVER_PATTERN = /^[A-Za-z][\w.-]*$/;
 export const SERVER_VERSION = __ENV.SERVER_VERSION || '';
 const SERVER_VERSION_PATTERN = /^\d+(\.\d+)+\S*$/;
 const SERVER_THREADS_TEXT = __ENV.SERVER_THREADS || '';
 export const SERVER_THREADS = /^[1-9]\d{0,3}$/.test(SERVER_THREADS_TEXT) ? Number(SERVER_THREADS_TEXT) : null;
-// Set only by run.ps1: the python it read SERVER_VERSION from.
+// Set only by run.ps1: the python it read the stated version from.
 const SERVER_VERSION_READ_FROM = __ENV.SERVER_VERSION_READ_FROM || '';
+// Set only by run.ps1, from the pre-flight (D-87 decision 2). Empty means not observed.
+const SERVER_OBSERVED_BY = __ENV.SERVER_OBSERVED_BY || '';
+const SERVER_VERSION_SOURCE = __ENV.SERVER_VERSION_SOURCE || '';
+const SERVER_THREADS_SOURCE = __ENV.SERVER_THREADS_SOURCE || '';
+const SERVER_PID = /^\d+$/.test(__ENV.SERVER_PID || '') ? Number(__ENV.SERVER_PID) : null;
+const SERVER_DEBUG = __ENV.SERVER_DEBUG || '';
+const SERVER_STARTED_AT = __ENV.SERVER_STARTED_AT || '';
+const PREVIOUS_RUN_FILE = __ENV.PREVIOUS_RUN_FILE || '';
+const PREVIOUS_RUN_ENDED_AT = __ENV.PREVIOUS_RUN_ENDED_AT || '';
+const WAITRESS_LOG = __ENV.WAITRESS_LOG || '';
+// What the operator stated, recorded beside what was observed.
+const SERVER_STATED = __ENV.SERVER_STATED || '';
+const SERVER_THREADS_STATED = /^[1-9]\d{0,3}$/.test(__ENV.SERVER_THREADS_STATED || '')
+  ? Number(__ENV.SERVER_THREADS_STATED) : null;
+const SERVER_VERSION_STATED = __ENV.SERVER_VERSION_STATED || '';
 
 // Init-time refusals: thrown here, they stop k6 before setup() sends anything.
 export function requireThat(condition, message) {
@@ -429,7 +448,7 @@ export function wasAnswered(res) {
 // --- What the run measured ---------------------------------------------------------
 // The commit, the FLM build, the gate's result, the database snapshot and the
 // server, for the results JSON (D-82 rule 7, D-83 decision 3, D-84 decision 3,
-// D-85 decision 4). null where a value was not given, so a missing one cannot read
+// D-85 decision 4, D-87 decision 2). null where a value was not given, so a missing one cannot read
 // as recorded. data is handleSummary()'s, for the Server header setup() observed.
 export function runRecord(data) {
   const { observed } = observedFrom(data);
@@ -446,6 +465,20 @@ export function runRecord(data) {
     server: SERVER || null,
     server_version: SERVER_VERSION || null,
     server_threads: SERVER_THREADS,
+    // Observed by run.ps1's pre-flight (D-87 decision 2); null when not observed.
+    server_pid: SERVER_PID,
+    server_debug: SERVER_DEBUG || null,
+    server_started_at: SERVER_STARTED_AT || null,
+    previous_run: PREVIOUS_RUN_FILE
+      ? { file: PREVIOUS_RUN_FILE === 'none' ? null : PREVIOUS_RUN_FILE,
+          ended_at: PREVIOUS_RUN_ENDED_AT === 'none' ? null : (PREVIOUS_RUN_ENDED_AT || null) }
+      : null,
+    // What the operator stated, beside what was observed. null when nothing was observed:
+    // then server, server_version and server_threads are themselves as passed.
+    server_stated: SERVER_OBSERVED_BY
+      ? { server: SERVER_STATED || null, threads: SERVER_THREADS_STATED,
+          version: SERVER_VERSION_STATED || null, version_read_from: SERVER_VERSION_READ_FROM || null }
+      : null,
     // The Server header setup()'s logins came back with: the distinct values, and
     // how many logins had none. null when it was not recorded.
     server_observed: observed
@@ -454,17 +487,33 @@ export function runRecord(data) {
       : null,
     // How each was known.
     server_sources: {
-      server: 'as passed with -e SERVER (tests/load/run.ps1 passes D-85\'s waitress); ' +
-              'checked against server_observed',
-      server_version: SERVER_VERSION_READ_FROM
-        ? `read by tests/load/run.ps1 with importlib.metadata from ${SERVER_VERSION_READ_FROM}: ` +
-          'the installed package, not the running server'
-        : 'as passed with -e SERVER_VERSION; not read by tests/load/run.ps1',
-      server_threads: 'as stated by the operator; Waitress cannot be asked for its thread count, ' +
-                      'so nothing checks it',
+      server: SERVER_OBSERVED_BY
+        ? `observed by ${SERVER_OBSERVED_BY}: the command line of the process listening on the ` +
+          `port${SERVER_PID === null ? '' : ` (pid ${SERVER_PID})`}; also checked against server_observed`
+        : 'as passed with -e SERVER, not observed: the run did not go through tests/load/run.ps1; ' +
+          'checked against server_observed',
+      server_version: SERVER_OBSERVED_BY
+        ? `observed: ${SERVER_VERSION_SOURCE || 'source not recorded'}`
+        : 'as passed with -e SERVER_VERSION, not observed',
+      server_threads: SERVER_OBSERVED_BY
+        ? `observed: ${SERVER_THREADS_SOURCE || 'source not recorded'} of the listening process ` +
+          '(D-87 decision 2: a missing --threads is read as Waitress\'s default, 4)'
+        : 'as passed with -e SERVER_THREADS, not observed',
+      server_debug: SERVER_OBSERVED_BY
+        ? "observed: an unmatched /api/ path got handler404's JSON 404 (D-87 decision 2)"
+        : 'not observed',
+      server_started_at: SERVER_OBSERVED_BY
+        ? "the last 'Serving on' line in Waitress's log before the run (D-87 decision 3)"
+        : 'not observed',
       server_observed: "the Server response header on setup()'s logins. It shows which software " +
                        'answered, not its version or its thread count',
     },
+    // run.ps1 replaces this after k6 exits with the log's lines from the run's window
+    // (D-87 decision 3). Left as it is, nothing copied the run's queueing.
+    waitress_log: WAITRESS_LOG
+      ? { path: WAITRESS_LOG, queue_depth: "not added: tests/load/run.ps1 adds Waitress's log for " +
+          "the run's window after k6 exits, and did not" }
+      : null,
   };
 }
 
@@ -483,12 +532,26 @@ export function runRecordLines(label, data) {
     ? `check_flm.py PASS at ${r.flm_check.at} against ${r.flm_check.against || 'an unreported URL'}`
     : 'check_flm.py NOT RECORDED as run';
   const threads = r.server_threads === null ? 'threads not recorded'
-    : `${r.server_threads} threads, as stated by the operator`;
+    : SERVER_OBSERVED_BY ? `${r.server_threads} threads, observed (${SERVER_THREADS_SOURCE || 'source not recorded'})`
+    : `${r.server_threads} threads, as passed, NOT observed`;
+  const debug = !SERVER_OBSERVED_BY ? 'DEBUG not checked'
+    : r.server_debug === 'off' ? 'DEBUG off' : `DEBUG NOT confirmed off (${r.server_debug || 'not recorded'})`;
+  const stated = r.server_stated
+    ? `${label('server, stated')}${r.server_stated.server || 'not recorded'} ` +
+      `${r.server_stated.version || '(version not recorded)'}; ${r.server_stated.threads} threads\n`
+    : '';
+  const previous = !r.previous_run ? 'not recorded'
+    : r.previous_run.file ? `${r.previous_run.ended_at} (${r.previous_run.file})` : 'none recorded';
+  const started = r.server_started_at
+    ? `${label('server started')}${r.server_started_at}, after the previous run's end: ${previous}\n`
+    : '';
   return (
     `${label('commit')}${r.commit_sha || 'not recorded'} (${changes})\n` +
     `${label('FLM')}${r.flm_version || 'not recorded'}; ${check}\n` +
     `${label('DB snapshot SHA-256')}${r.db_dump_sha256 || 'not recorded'}\n` +
-    `${label('server')}${r.server || 'not recorded'} ${r.server_version || '(version not recorded)'}; ${threads}\n` +
+    `${label('server')}${r.server || 'not recorded'} ${r.server_version || '(version not recorded)'}; ${threads}; ${debug}\n` +
+    stated +
+    started +
     `${label('server, observed')}${observedLine}\n`
   );
 }
@@ -498,9 +561,11 @@ export function runRecordLines(label, data) {
 // words: each kind of 429 (D-82 rule 5), a missing commit SHA (rule 7), a missing
 // FLM version, snapshot hash or gate result (D-83 decision 3, D-84 decision 3), a
 // missing server, server version or thread count, a Server header at login that is
-// missing or names another server (D-85 decision 4), and each validity threshold
+// missing or names another server (D-85 decision 4), a server not observed before
+// the run or DEBUG not confirmed off (D-87 decision 2), and each validity threshold
 // not met. The latency limits are deliberately not in it: a valid run that is too
-// slow is a FAIL, not an invalid run.
+// slow is a FAIL, not an invalid run. run.ps1 adds more after k6 exits: a restart
+// during the run, or another process listening at its end (D-87 decisions 1 and 3).
 //
 // thresholds: [[metricName, expression], ...] that must each have passed.
 export function validityProblems(data, thresholds) {
@@ -516,6 +581,18 @@ export function validityProblems(data, thresholds) {
     problems.push(
       `the Server header at login does not show the stated server: ${server.problem} (D-85). ` +
       'This checks only which software answered, not its version or its thread count.'
+    );
+  }
+  if (!SERVER_OBSERVED_BY) {
+    problems.push(
+      'the server was not observed before the run (no -e SERVER_OBSERVED_BY), so server, ' +
+      'server_version and server_threads are as passed, and nothing confirmed DEBUG off or a ' +
+      'restart since the previous run (D-87 decision 2). Run it through tests/load/run.ps1.'
+    );
+  } else if (SERVER_DEBUG !== 'off') {
+    problems.push(
+      `DEBUG was not confirmed off before the run: -e SERVER_DEBUG is "${SERVER_DEBUG}", not "off" ` +
+      '(D-87 decision 2).'
     );
   }
   if (!SHA_PATTERN.test(GIT_SHA)) {

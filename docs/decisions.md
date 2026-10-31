@@ -5340,3 +5340,70 @@ D-85, D-86, Objective 03, NFR-08, NFR-09
 - **The restart is a runbook step.** Nothing proves the operator restarted the server, beyond
   whatever the new log shows.
 - **The thread count is observed from the command line,** not from inside Waitress.
+
+> **Built on 28–31 October 2026, in item 6's phase 3.** This records what was built, and the choices
+> D-87 left open.
+>
+> **The `waitress` logger** (django-backend agent):
+>
+> - **Where it writes.** It logs at INFO to `WAITRESS_LOG_PATH`, which defaults to
+>   `logs/waitress.log`, in the error file's format: `%(asctime)s %(levelname)s %(name)s
+>   %(message)s`, in local time with no zone.
+> - **How it's set up.** It propagates, so a Waitress ERROR also reaches `errors.log`. It has no
+>   console handler, and with `delay=True` no empty file is created.
+> - **A test pins the logger names** `waitress` and `waitress.queue` to Waitress 3.0.2's own
+>   loggers, so a version that renames them fails a test rather than going silent.
+> - **Proven on a real Waitress**, with one thread and no database. Before the change nothing was
+>   written at all, not even "Serving on", which confirms D-87's cause. After it, the file held the
+>   "Serving on" line and 65 forced "Task queue depth" lines, each timestamped.
+>
+> **`run.ps1`'s pre-flight** (test-engineer agent):
+>
+> - **The order of checks.** `check_flm.py` still runs first. `scripts/server_record.py
+>   preflight` then reads:
+>   - the listening process's command line, where the last `--threads` wins and a missing one
+>     reads as 4;
+>   - its start time;
+>   - Waitress's version, from the server's own venv;
+>   - the DEBUG probe. That is off only for the exact JSON 404 on `/api/__preflight_not_a_route__`,
+>     on only for Django's HTML debug page, and unknown otherwise.
+> - **Each rule is enforced twice,** in `server_record.py` and again in `run.ps1` on the values it
+>   passes to k6.
+> - **The restart is checked from the log.** The last "Serving on" line before the run must be
+>   later than the newest record in `tests/load/results` and in `-ResultsDir`. That includes the
+>   harness's and the HTTP check's records, so the server must start after each of those runs.
+> - **Two checks beyond D-87:**
+>   - the log's start must not predate the listening process's, so the log can't be another
+>     server's;
+>   - the process listening at the end must be the one observed at the start.
+> - **After k6, a `finalise` step** copies the run window's "Task queue depth" lines into the
+>   results, or records that there were none. It marks the run INVALID if a "Serving on" line falls
+>   inside the window. Exit code 3 means k6 ran but the run is not recorded.
+> - **The log's path** comes from `-WaitressLog`, else from `WAITRESS_LOG_PATH`, else the run is
+>   refused.
+> - **Refusals shown on the real Waitress**, on scratch ports and against a database that doesn't
+>   exist:
+>   - no `--threads`;
+>   - a stated count that differs from the observed one;
+>   - DEBUG on;
+>   - a server not restarted;
+>   - a log from before the listening process;
+>   - no log;
+>   - a server that isn't Waitress;
+>   - nothing listening.
+>
+>   One real run at one thread copied 23 genuine queue-depth lines.
+> - **The runbook and `tests/load/README.md`** follow D-87 §1's order. They set `DEBUG='False'` and
+>   `WAITRESS_LOG_PATH` before each server start, and require a restart before NFR-08, the HTTP check
+>   and NFR-09.
+> - **Its 29 tests were moved into `apps/`.** The agent drafted them in the scratchpad, because its
+>   brief kept it out of `apps/`, and the coordinating session moved them to
+>   `apps/ai/tests/test_server_record_preflight.py`, since pytest collects only from `apps/`. Seven
+>   deliberate breaks of `server_record.py` each failed a named test.
+>
+> **Not covered.**
+>
+> - **`run.ps1` itself has no automated test,** only the scenarios above.
+> - **k6 has still never run**, so the k6 changes ran only under the Node simulation.
+> - **Nothing checks that the server was restarted before the HTTP check.**
+> - **The restart check rests on file times.**
