@@ -5186,6 +5186,28 @@ slice of item 9 that the measurement needs · **Concerns:** Objective 03, NFR-08
 >     could evict a slot or a counter early under many active users. That is not reachable at the
 >     alpha's scale.
 
+> **Followed up on 28 October 2026, before the measured run.** The user had three of the Upload
+> screen's findings above fixed, and the fourth recorded for item 8. The entries above stand as
+> what was true when they were written.
+>
+> - **A queued file is held while the queue runs.** Its title field and its Remove button are
+>   disabled until the queue finishes, then given back. The queue sends the rows as they were when
+>   Upload was pressed, so an edit was ignored, and a removed file was still uploaded. An Employee
+>   could not then delete it, because deletion is Administrator-only (D-73). Rows the queue never
+>   held, such as a file refused client-side, keep their actions.
+> - **A successful retry withdraws "Try again"**, as an upload that succeeds first time offers none.
+> - **The client's codes are tied to the server's.** `apps/api/tests/test_in_flight_codes_agreement.py`
+>   reads `ASK_IN_FLIGHT_CODE` and `INGESTION_IN_FLIGHT_CODE` from the front-end files and fails if
+>   either differs from `apps/api/views.py`. It also fails if any other `*_CODE` the client exports
+>   has no server constant of the same value. "The two in-flight codes can drift" above no longer
+>   holds.
+> - **Left for item 8's live run:** leaving the Upload screen mid-queue still doesn't stop the
+>   queue. It is recorded with the other manual checks in `docs/stage-5-clause-audit.md`.
+> - **What the hold does not cover.** It is the `disabled` attribute. A Remove landing in the same
+>   instant as Upload, before the screen re-renders, would still be uploaded. Item 6's retry test
+>   shows that window exists. For a retry the server's in-flight 429 closes it; for a removal
+>   nothing does.
+
 ## D-86 · FR-13 is measured end to end on frozen two-turn threads, built beside Objective 03 and never ahead of it
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**

@@ -70,9 +70,18 @@ function isPending(row) {
  * whole run, or another row's retry. This row's retry waits for it, because a user
  * has one ingestion in flight at a time (D-85): pressed while another file was
  * moving, it was a second ingestion the server now refuses with a 429.
+ *
+ * `queueRunning` is true while the queue is sending. A row still waiting to be
+ * sent is held until it finishes: its title field and its Remove button are
+ * disabled. The queue sends the rows as they were when Upload was pressed, so an
+ * edit made meanwhile was ignored, and a file removed meanwhile was uploaded all
+ * the same, where an Employee could not then delete it, because deletion is
+ * Administrator-only (D-73). Rows the queue has finished with, and rows it never
+ * held, such as a file refused client-side, keep their actions.
  */
-export function UploadRow({ row, pageBusy = false, onTitleChange, onRetry, onRemove, titleRef }) {
+export function UploadRow({ row, pageBusy = false, queueRunning = false, onTitleChange, onRetry, onRemove, titleRef }) {
   const busy = row.state === UPLOADING || row.state === PROCESSING
+  const queued = queueRunning && isPending(row)
   const statusText = STATUS_TEXT[row.state]
 
   return (
@@ -90,7 +99,7 @@ export function UploadRow({ row, pageBusy = false, onTitleChange, onRetry, onRem
           label={`Title for ${row.file.name}`}
           value={row.title}
           error={row.titleError}
-          disabled={busy}
+          disabled={busy || queued}
           required
           // React 19 passes `ref` to a function component as an ordinary prop,
           // so TextInput's `...rest` puts it on the input itself. That is what
@@ -133,6 +142,7 @@ export function UploadRow({ row, pageBusy = false, onTitleChange, onRetry, onRem
           <Button
             variant="secondary"
             aria-label={`${TEXT.uploadRemove} ${row.file.name}`}
+            disabled={queued}
             onClick={() => onRemove(row.id)}
           >
             {TEXT.uploadRemove}
@@ -195,6 +205,9 @@ export default function Upload() {
   // first leaves the page busy for the one still going (see the comment above).
   const [runs, setRuns] = useState(0)
   const busy = runs > 0
+  // True while the queue itself is sending, apart from any retry. The rows it is
+  // still to send are held until it finishes (see UploadRow).
+  const [queueRunning, setQueueRunning] = useState(false)
   // Single polite live region: row status changes are announced here once, rather
   // than every row being its own live region and talking over the others.
   const [announcement, setAnnouncement] = useState('')
@@ -307,9 +320,12 @@ export default function Upload() {
     }
 
     setRuns((count) => count + 1)
+    setQueueRunning(true)
     try {
       // Sequential: `pending` was read before the first await, and each send()
-      // updates only its own row, so the queue is not re-derived mid-flight.
+      // updates only its own row, so the queue is not re-derived mid-flight. That
+      // is why the rows still to be sent are held until it finishes: an edit or a
+      // removal made meanwhile would not reach it.
       for (const [index, row] of pending.entries()) {
         const limit = await send(row)
         if (limit) {
@@ -328,6 +344,7 @@ export default function Upload() {
         }
       }
     } finally {
+      setQueueRunning(false)
       setRuns((count) => count - 1)
     }
   }
@@ -359,7 +376,10 @@ export default function Upload() {
       const stored = await reprocessDocument(row.document.doc_id)
       const partial = stored?.status === DOCUMENT_STATUS.partiallyIndexed
       const message = partial ? TEXT.uploadPartiallyIndexed : TEXT.uploadIndexed
-      updateRow(row.id, { state: DONE, document: stored, message, progress: 100 })
+      // The retry is withdrawn, as it is after an upload's own 201. Left offered, it
+      // re-ran a document that was already indexed, and the server's 409 read as a
+      // duplicate upload.
+      updateRow(row.id, { state: DONE, document: stored, message, progress: 100, retryable: false })
       announce(row.file.name, stored?.status ?? message)
     } catch (error) {
       // A 429 here re-ran nothing (D-79, D-85): the document is still stored at the
@@ -445,6 +465,7 @@ export default function Upload() {
               key={row.id}
               row={row}
               pageBusy={busy}
+              queueRunning={queueRunning}
               titleRef={registerTitleRef(row.id)}
               onTitleChange={(id, title) => updateRow(id, { title, titleError: null })}
               onRetry={handleRetry}
