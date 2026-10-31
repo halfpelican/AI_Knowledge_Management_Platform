@@ -1,0 +1,28 @@
+{
+  "recorded_at": "2026-11-01T08:16:53+11:00",
+  "commit_sha": "5314d86041080767fb84adb002eebfc65ef21bc6",
+  "uncommitted_tracked_changes": false,
+  "uncommitted_tracked_files": [],
+  "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+  "database": "kmp_obj02_20261101",
+  "flm_version": {
+    "cli": "v0.9.39",
+    "cli_output": "FLM v0.9.39",
+    "server": "v0.9.39",
+    "required": "v0.9.39",
+    "notes": []
+  },
+  "kind": "item 6 measurement snapshot (D-84)",
+  "dump_file": "kmp_obj02_20261101.dump",
+  "dump_bytes": 197058,
+  "pg_dump_version": "pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg12+2)",
+  "container": "kmp_prototype-db-1",
+  "media_root": "C:\\kmp-measurement\\2026-11-01\\media",
+  "media_copy": "media",
+  "media": {
+    "files": 23,
+    "bytes": 319746,
+    "tree_sha256": "5284aae16c5c1b7a8cf0a202433dbb24071ffe50da729ea5a77adb3c763364d5"
+  },
+  "restore": "scripts/snapshot_measurement_db.py restore --database kmp_obj02_20261101 --media-root C:\\kmp-measurement\\2026-11-01\\media --from-dir C:\\kmp-measurement\\2026-11-01\\snapshot"
+}
