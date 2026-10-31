@@ -295,6 +295,9 @@ class QuestionResult:
     fabricated_ids: list[str] = field(default_factory=list)
     out_of_scope_ids: list[str] = field(default_factory=list)
     expected_answer: str | None = None
+    # The accepted alternatives frozen with the set, and which form actually matched.
+    accepted_answers: list[str] = field(default_factory=list)
+    expected_answer_form: str | None = None
     expected_answer_found: bool | None = None
     error: str | None = None
     # Wall-clock seconds for the whole run in this process: embed, rank, generate, verify.
@@ -519,6 +522,7 @@ def run_question(
         base_id=question.get("base_id", question.get("id", "?")),
         source=question.get("source"),
         expected_answer=question.get("expected_answer"),
+        accepted_answers=list(question.get("accepted", [])) if question.get("expected_answer") else [],
     )
 
     # The composed form of the question, or the question itself. Built HERE, before
@@ -620,11 +624,14 @@ def finish(result: QuestionResult, forbidden: set[str], started: float | None = 
     seen |= {statement.chunk_id for statement in result.statements}
     result.out_of_scope_ids = sorted(seen & forbidden)
     if result.expected_answer:
-        wanted = normalise(result.expected_answer)
         # Scored over the VERIFIED statements: the expected answer is what a user would
-        # have been shown, and a rejected statement is shown to nobody.
-        answer = normalise(" ".join(statement.text for statement in result.verified_statements))
-        result.expected_answer_found = wanted in answer
+        # have been shown, and a rejected statement is shown to nobody. The expected phrase
+        # matches as a substring; an accepted alternative only as whole tokens.
+        answer = " ".join(statement.text for statement in result.verified_statements)
+        result.expected_answer_form = question_set.matching_form(
+            result.expected_answer, result.accepted_answers, answer
+        )
+        result.expected_answer_found = result.expected_answer_form is not None
     if started is not None:
         result.seconds = time.perf_counter() - started
     return result
@@ -662,6 +669,65 @@ def timing_line(summary: dict) -> str:
 def item_label(sources: SourceIndex | None, chunk_id: str) -> str:
     item = sources.item_by_chunk.get(chunk_id) if sources else None
     return f"{item}:{chunk_id[:8]}" if item else chunk_id[:8]
+
+
+def miss_rows(results: list[QuestionResult], threshold: float) -> list[dict]:
+    """One row per miss, so the fixes after M6 aim at causes, not symptoms.
+
+    A miss is a run that expected an answer and did not show the expected answer, or a run
+    that expected no answer and was answered. Each row says whether the expected source was
+    a candidate for this role and at what rank, its best score against ``threshold``, and
+    where the run ended: no-answer path A (nothing above the threshold, so generation was
+    never called), path B (generation ran and no statement survived verification),
+    unavailable, or answered without the expected answer.
+    """
+    rows = []
+    for result in results:
+        if result.expects_answer:
+            if result.expected_answer_found:
+                continue
+        elif not result.answered:
+            continue
+        if result.error and not result.answered:
+            ended = "unavailable"
+        elif not result.generation_called:
+            ended = "path A"
+        elif not result.answered:
+            ended = "path B"
+        elif result.expects_answer:
+            ended = "answered, expected answer not shown"
+        else:
+            ended = "answered, where no answer was expected"
+        rows.append({
+            "id": result.question_id,
+            "kind": result.kind,
+            "role": result.role,
+            "source": result.source,
+            "source_rank": result.source_rank,
+            "source_score": result.source_score,
+            "threshold": threshold,
+            "above_threshold": (None if result.source_score is None
+                                else result.source_score >= threshold),
+            "ended": ended,
+        })
+    return rows
+
+
+def print_misses(rows: list[dict]) -> None:
+    print(f"\nmisses ({len(rows)}): where the expected source stood, and where each run ended")
+    if not rows:
+        print("  none")
+        return
+    for row in rows:
+        if row["source"] is None:
+            where = "no expected source"
+        elif row["source_rank"] is None:
+            where = f"{row['source']} not a candidate for this role"
+        else:
+            relation = ">=" if row["above_threshold"] else "<"
+            where = (f"{row['source']} rank {row['source_rank']}, score {row['source_score']:.4f} "
+                     f"{relation} threshold {row['threshold']}")
+        print(f"  {row['id']:<18} {row['ended']:<40} {where}")
 
 
 def report(results: list[QuestionResult], sources: SourceIndex | None = None) -> dict:
@@ -706,6 +772,8 @@ def report(results: list[QuestionResult], sources: SourceIndex | None = None) ->
             print("    (empty statement list)")
         if result.expected_answer:
             verdict = "FOUND" if result.expected_answer_found else "not found"
+            if result.expected_answer_found and result.expected_answer_form != result.expected_answer:
+                verdict += f" as {result.expected_answer_form!r}"
             print(f"  expected    : {result.expected_answer!r} -> {verdict}")
         if result.error:
             print(f"  ERROR       : {result.error}")
@@ -1444,6 +1512,8 @@ def main() -> int:
     elapsed = time.perf_counter() - started
 
     summary = report(results, sources)
+    misses = miss_rows(results, arguments.threshold)
+    print_misses(misses)
     print(f"\nelapsed: {elapsed / 60:.1f} minutes")
 
     if arguments.out:
@@ -1460,6 +1530,7 @@ def main() -> int:
             "canned_prior_questions": list(CANNED_PRIOR_QUESTIONS) if arguments.with_history else [],
             "elapsed_seconds": elapsed,
             "summary": summary,
+            "misses": misses,
             "results": [
                 {
                     "id": r.question_id,
@@ -1492,6 +1563,8 @@ def main() -> int:
                     "fabricated_ids": r.fabricated_ids,
                     "out_of_scope_ids": r.out_of_scope_ids,
                     "expected_answer": r.expected_answer,
+                    "accepted": r.accepted_answers,
+                    "expected_answer_form": r.expected_answer_form,
                     "expected_answer_found": r.expected_answer_found,
                     "error": r.error,
                     "seconds": r.seconds,

@@ -1,5 +1,9 @@
 # FR-13 end to end: the thread set, for review
 
+> **FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.**
+>
+> Benjamin Morovan asked some of the questions informally before the set was frozen. No question, expected answer or source was changed because of what the system answered.
+
 **This set was drafted by an agent (rag-pipeline, 27 October 2026), from the corpus files in
 this folder and `manifest.json` only.** The system was never run to see what it would answer.
 PDF, DOCX and XLSX text was read with the project's own extractor, read-only. It is a draft for
@@ -192,3 +196,19 @@ turn. `threads.json` holds the same text, and `scripts/thread_set.py` implements
 Each goes through `POST /api/conversations` and `POST /api/ask`, with asks at least 7 s apart.
 The second turn's `QueryLog` row must show the passages that `compose(follow-up, [first
 question])` retrieves in-process, and not the ones the follow-up retrieves alone.
+
+## Accepted alternatives (frozen with the set)
+
+Accepted alternatives match only as whole tokens: a letter or digit may not touch either end, so '5 years' does not match '15 years' and '23' does not match '2023'. The expected phrase itself still matches as a substring, as it did when the set was approved (scripts/question_set.py matching_form).
+
+| ID | Also accepted |
+|---|---|
+| t01 turn 1 | `1.67` |
+| t01 turn 2 | `30 days`, `30-day`, `thirty-day` |
+| t02 turn 2 | `every 6 months`, `six-monthly`, `6-monthly`, `twice a year`, `twice yearly` |
+| t05 turn 1 | `7 november`, `november 7`, `7th of november`, `7th november`, `november 7th`, `2026-11-07`, `07/11/2026`, `7/11/2026` |
+| t05 turn 2 | `3 weeks`, `three-week`, `3-week` |
+| t06 turn 1 | `yearly`, `every year`, `each year`, `every 12 months`, `every twelve months`, `once per year` |
+| t06 turn 2 | `3 suppliers`, `nearly half`, `close to half` |
+| t08 turn 1 | `86%`, `86 percent`, `86 per cent`, `eighty six percent`, `eighty-six per cent` |
+| t09 turn 2 | `20 people`, `20 attendees`, `20 participants`, `20 guests` |

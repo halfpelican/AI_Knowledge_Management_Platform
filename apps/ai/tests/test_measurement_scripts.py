@@ -528,3 +528,106 @@ def test_postgres_errors_have_role_and_user_names_redacted(snapshot_module):
     redacted = snapshot_module.redact('FATAL:  password authentication failed for user "kmp"')
     assert '"kmp"' not in redacted and '"<redacted>"' in redacted
     assert '"<redacted>"' in snapshot_module.redact('FATAL:  role "kmp" does not exist')
+
+
+# --- accepted alternatives (1 November 2026, frozen with both sets) ---------------------------
+
+
+@pytest.mark.parametrize("answer", [
+    "Full-time staff need at least 12 characters.",
+    "Passwords must be 12-character minimum.",
+    "Use twelve or more characters.",
+    "At least twelve characters.",
+])
+def test_a_correct_answer_in_any_accepted_form_is_found(scripts, answer):
+    question_set = scripts("question_set")
+    accepted = ["12 characters", "12-character", "twelve or more characters"]
+    assert question_set.matching_form("twelve characters", accepted, answer) is not None
+
+
+@pytest.mark.parametrize("expected, accepted, answer", [
+    ("five years", ["5 years"], "Records are kept for 15 years."),
+    ("twenty-three", ["23"], "In 2023 the test ran again."),
+    ("seventy-five dollars", ["$75"], "Meals are reimbursed up to $750 per day."),
+    ("ten percent", ["10%"], "A 110% contingency is held."),
+    ("fifty kilometres", ["50 km"], "Backups are kept 150 km away."),
+    ("thirty days", ["30 days"], "Requests are answered within 300 days."),
+])
+def test_a_wrong_number_never_matches_an_accepted_alternative(scripts, expected, accepted, answer):
+    assert scripts("question_set").matching_form(expected, accepted, answer) is None
+
+
+def test_the_expected_phrase_still_matches_as_a_substring_and_its_form_is_recorded(scripts):
+    question_set = scripts("question_set")
+    assert question_set.matching_form("reconnect", [], "They will be reconnected.") == "reconnect"
+    assert question_set.matching_form("ten percent", ["10%"], "It is 10% of the budget.") == "10%"
+    assert question_set.matching_form("ten percent", ["10%"], "Ten   PERCENT of it.") == "ten percent"
+
+
+def test_currency_and_percent_forms_match_at_a_sentence_end(scripts):
+    question_set = scripts("question_set")
+    assert question_set.matching_form("seventy-five dollars", ["$75"], "Up to $75.") == "$75"
+    assert question_set.matching_form("seventy-five dollars", ["$75"], "Up to $75.00 a day") == "$75"
+    assert question_set.matching_form("ten percent", ["10%"], "(10%)") == "10%"
+
+
+def test_accepted_must_be_a_list_of_alternatives_beside_an_expected_answer(scripts):
+    question_set = scripts("question_set")
+    base = {"id": "x1", "kind": "ordinary", "role": "Employee", "source": "D01",
+            "question": "How much annual leave do I earn?", "expected_answer": "1.67 days"}
+    bounds = {"minimum_length": 10, "maximum_length": 500, "roles": ("Employee", "Administrator")}
+    assert not question_set.problems([{**base, "accepted": ["1.67"]}], **bounds)
+    assert question_set.problems([{**base, "accepted": "1.67"}], **bounds)
+    assert question_set.problems([{**base, "accepted": [""]}], **bounds)
+    no_answer = {"id": "n1", "kind": "no-answer", "role": "Employee", "source": None,
+                 "question": "What is the dress code for staff?", "expected_answer": None,
+                 "accepted": ["anything"]}
+    assert question_set.problems([no_answer], **bounds)
+
+
+def test_a_scoped_runs_alternatives_go_only_to_the_role_that_expects_the_answer(scripts):
+    question_set = scripts("question_set")
+    scoped = {"id": "s9", "kind": "scoped", "role": "both", "source": "D15",
+              "question": "How much of each budget is held back?", "expected_answer": "ten percent",
+              "accepted": ["10%"], "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"}}
+    runs = {run["role"]: run for run in question_set.expand_runs([scoped], ("Employee", "Administrator"))}
+    assert runs["Administrator"]["accepted"] == ["10%"]
+    assert runs["Employee"]["accepted"] == [] and runs["Employee"]["expected_answer"] is None
+
+
+def test_the_frozen_set_gives_every_answerable_question_its_alternatives_and_validates(scripts):
+    question_set = scripts("question_set")
+    payload = json.loads((REPOSITORY_ROOT / "corpus" / "objective-02" / "questions.json").read_text(encoding="utf-8"))
+    assert payload["status"].startswith("FROZEN")
+    answerable = [q for q in payload["questions"] if q.get("expected_answer")]
+    assert len(answerable) == 26 and all(isinstance(q.get("accepted"), list) for q in answerable)
+    assert not question_set.problems(payload["questions"], minimum_length=10, maximum_length=500, roles=("Employee", "Administrator"))
+
+
+def test_a_thread_turns_alternatives_count_and_a_wrong_number_does_not(scripts):
+    thread_set = scripts("thread_set")
+    assert thread_set.phrase_found(["eighty-six percent"], ["Satisfaction was 86%."], ["86%"])
+    assert not thread_set.phrase_found(["eighty-six percent"], ["Satisfaction was 186%."], ["86%"])
+    assert thread_set.phrase_found(["thirty days"], ["Up to thirty days carries over."])
+
+
+def test_a_miss_says_where_the_source_stood_and_where_the_run_ended(scripts):
+    harness = scripts("citation_harness")
+    QuestionResult = harness.QuestionResult
+
+    def result(**overrides):
+        fields = {"question_id": "q01", "kind": "ordinary", "role": "Employee",
+                  "question": "How much leave?", "expects_answer": True, "base_id": "q01",
+                  "source": "D01", "expected_answer": "1.67 days"}
+        fields.update(overrides)
+        return QuestionResult(**fields)
+
+    path_a = result(source_rank=4, source_score=0.21)
+    path_b = result(question_id="q02", source_rank=1, source_score=0.55, generation_called=True)
+    not_candidate = result(question_id="q03", source_rank=None, source_score=None)
+    found = result(question_id="q04", expected_answer_found=True, expected_answer_form="1.67 days")
+    rows = {row["id"]: row for row in harness.miss_rows([path_a, path_b, not_candidate, found], 0.30)}
+    assert set(rows) == {"q01", "q02", "q03"}
+    assert rows["q01"]["ended"] == "path A" and rows["q01"]["above_threshold"] is False
+    assert rows["q02"]["ended"] == "path B" and rows["q02"]["above_threshold"] is True
+    assert rows["q03"]["source_rank"] is None and rows["q03"]["above_threshold"] is None

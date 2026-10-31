@@ -127,8 +127,8 @@ def test_the_thread_set_has_d86s_composition(scripts):
     runs = thread_set.expand_runs(threads, ROLES, readable_items())
     assert len(runs) == 44
     assert sum(run["way"] == thread_set.FIRST_TURN for run in runs) == 11
-    assert payload["status"].startswith("DRAFT")
-    assert payload["scoring_rule"]["version"] == 1 and len(payload["scoring_rule"]["parts"]) == 11
+    assert payload["status"].startswith("FROZEN")
+    assert payload["scoring_rule"]["version"] == 2 and len(payload["scoring_rule"]["parts"]) == 11
 
 
 def test_every_follow_up_but_the_topic_change_is_spelled_out_differently(scripts):
@@ -238,7 +238,7 @@ def change(payload, thread_id, edit):
                                                    {"thread": "t04", "role": "Employee"}]),
          "t03 is not asked by 'Administrator'"),
         ("t01", lambda t, p: p.update(http_check=[]), "http_check names 2 to 3"),
-        ("t01", lambda t, p: p.pop("scoring_rule"), "scoring_rule version 1"),
+        ("t01", lambda t, p: p.pop("scoring_rule"), "scoring_rule version 2"),
     ],
 )
 def test_a_malformed_thread_set_is_refused(scripts, thread_id, edit, refused_because):

@@ -29,6 +29,8 @@ import json
 import re
 from pathlib import Path
 
+import question_set  # the shared matcher for accepted alternatives
+
 THREAD_KINDS = ("ordinary", "scoped", "topic-change", "previous-answer")
 BOTH_ROLES = "both"
 OUTCOMES = ("answer", "no-answer")
@@ -38,7 +40,7 @@ COLD = "cold"
 SPELLED_OUT = "spelled-out"
 FOLLOW_UP_WAYS = (WITH_HISTORY, COLD, SPELLED_OUT)
 WAYS = (FIRST_TURN, *FOLLOW_UP_WAYS)
-SCORING_RULE_VERSION = 1
+SCORING_RULE_VERSION = 2
 HTTP_CHECK_SIZE = (2, 3)  # D-86 decision 6: two or three threads
 THREAD_ID_PATTERN = re.compile(r"t\d{2}")
 
@@ -277,8 +279,10 @@ def expand_runs(threads: list[dict], roles: tuple[str, ...], readable: dict[str,
                 "prior": [],
                 "expects_answer": True,
                 "expected_answer": list(first["expected_answer"]),
+                "accepted": list(first.get("accepted", [])),
                 "sources": list(first["sources"]),
                 "restricted_phrases": [],
+                "restricted_accepted": [],
             })
             for way, question, prior in (
                 (WITH_HISTORY, follow_up["question"], [first["question"]]),
@@ -294,8 +298,10 @@ def expand_runs(threads: list[dict], roles: tuple[str, ...], readable: dict[str,
                     "prior": prior,
                     "expects_answer": expectation == "answer",
                     "expected_answer": list(follow_up["expected_answer"]),
+                    "accepted": list(follow_up.get("accepted", [])),
                     "sources": list(follow_up["sources"]),
                     "restricted_phrases": list(follow_up["expected_answer"]) if hidden else [],
+                    "restricted_accepted": list(follow_up.get("accepted", [])) if hidden else [],
                 })
     return runs
 
@@ -319,10 +325,17 @@ def outcome_of(*, generation_called: bool, parsed: bool, proposed: int, verified
     return PATH_B_REJECTED if proposed else PATH_B_DECLINED
 
 
-def phrase_found(phrases: list[str], verified_texts: list[str]) -> bool:
-    """Any phrase in the verified statements' text, joined with spaces (rule part 4)."""
-    joined = normalise(" ".join(verified_texts))
-    return any(normalise(phrase) in joined for phrase in phrases)
+def phrase_found(phrases: list[str], verified_texts: list[str], accepted=()) -> bool:
+    """Any phrase, or any accepted alternative, in the verified statements' text (rule part 4).
+
+    A listed phrase matches as a substring, as in version 1. An accepted alternative,
+    added in version 2, matches only as whole tokens (question_set.matching_form).
+    """
+    text = " ".join(verified_texts)
+    joined = normalise(text)
+    if any(normalise(phrase) in joined for phrase in phrases):
+        return True
+    return question_set.matching_form(None, accepted, text) is not None
 
 
 def score(run: dict, observation: dict) -> dict:
@@ -344,14 +357,16 @@ def score(run: dict, observation: dict) -> dict:
     )
     answered = outcome == ANSWERED
     texts = [statement["text"] for statement in verified]
-    found = answered and phrase_found(run["expected_answer"], texts)
+    found = answered and phrase_found(run["expected_answer"], texts, run.get("accepted", []))
     cited = answered and any(statement.get("item") in run["sources"] for statement in verified)
     leaks = [f"out-of-scope chunk {chunk_id}" for chunk_id in observation.get("out_of_scope_chunk_ids", [])]
     leaks += [
         f"out-of-scope source {source_id} in the partial matches"
         for source_id in observation.get("out_of_scope_partial_matches", [])
     ]
-    if run.get("restricted_phrases") and phrase_found(run["restricted_phrases"], texts):
+    if run.get("restricted_phrases") and phrase_found(
+        run["restricted_phrases"], texts, run.get("restricted_accepted", [])
+    ):
         leaks.append("a phrase of an item outside this role's scope is in its verified statements")
     match = bool(found and cited)
     if outcome == UNAVAILABLE:

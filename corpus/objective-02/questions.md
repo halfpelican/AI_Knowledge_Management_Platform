@@ -1,5 +1,9 @@
 # Objective 02: the thirty-question set, for review
 
+> **FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.**
+>
+> Benjamin Morovan asked some of the questions informally before the set was frozen. No question, expected answer or source was changed because of what the system answered.
+
 **This set was drafted by an agent (rag-pipeline, 27 October 2026), from the corpus files in
 this folder and `manifest.json` only.** The system was never run to see what it would answer.
 PDF, DOCX and XLSX text was read with the project's own extractor, read-only. It is a draft for
@@ -50,3 +54,36 @@ the only answer the corpus gives to that question.
 | n02 | no-answer | Administrator | How much did the latest penetration test cost? | No answer | none | Shares vocabulary with T02, which reports the test's findings but no cost. D15's "Security uplift" row is not its cost |
 | n03 | no-answer | Employee | What is the dress code for staff working in the office? | No answer | none | No item mentions a dress code |
 | n04 | no-answer | Administrator | Are staff allowed to bring their dogs to the office? | No answer | none | No item mentions pets or dogs |
+
+## Accepted alternatives (frozen with the set)
+
+Accepted alternatives match only as whole tokens: a letter or digit may not touch either end, so '5 years' does not match '15 years' and '23' does not match '2023'. The expected phrase itself still matches as a substring, as it did when the set was approved (scripts/question_set.py matching_form).
+
+| ID | Also accepted |
+|---|---|
+| q01 | `1.67` |
+| q02 | `12 characters`, `12-character`, `twelve-character`, `12 or more characters`, `twelve or more characters` |
+| q03 | `notice board`, `notice-board` |
+| q04 | `5 years`, `5-year`, `five-year` |
+| q05 | `50 kilometres`, `50 kilometers`, `fifty kilometers`, `50 km`, `50km`, `50-kilometre` |
+| q06 | `3 quotes`, `three written quotes`, `3 written quotes`, `three quotations`, `3 quotations` |
+| q07 | `1 working day`, `one business day`, `1 business day` |
+| q08 | `4 weeks`, `four-week`, `4-week` |
+| q09 | `3 clear goals`, `three goals`, `3 goals` |
+| q10 | `$75`, `75 dollars`, `seventy five dollars`, `aud 75`, `a$75` |
+| q11 | `30 days`, `30-day`, `thirty-day` |
+| q12 | `31 january 2027`, `january 31, 2027`, `january 31 2027`, `31/01/2027`, `31 jan 2027`, `jan 31, 2027`, `31st january 2027`, `31st of january 2027`, `31 january, 2027` |
+| q13 | — |
+| q14 | `$500`, `500 dollars`, `five hundred dollar`, `aud 500`, `a$500` |
+| q15 | — |
+| q16 | `a week in advance`, `1 week in advance`, `one week's notice`, `a week's notice`, `one week ahead`, `a week ahead`, `seven days in advance`, `7 days in advance` |
+| q17 | `7 am to 6 pm`, `7am to 6pm`, `7:00 am to 6:00 pm`, `7:00am to 6:00pm`, `7 a.m. to 6 p.m.`, `7am-6pm`, `7 am - 6 pm`, `7am – 6pm`, `7 am – 6 pm`, `07:00 to 18:00`, `7:00 to 18:00`, `7 am until 6 pm`, `7am until 6pm`, `7.00 am to 6.00 pm`, `seven am to six pm` |
+| q18 | `exception in writing` |
+| q19 | `re-connect` |
+| q20 | `tomás` |
+| q21 | `40 minutes`, `40-minute`, `forty-minute`, `40 mins`, `forty mins` |
+| q22 | `45 days`, `forty five days`, `45-day`, `forty-five-day` |
+| s01 | — |
+| s02 | `10%`, `10 percent`, `10 per cent`, `ten per cent` |
+| s03 | `change in regulation`, `changes in regulation` |
+| s04 | `23`, `twenty three` |

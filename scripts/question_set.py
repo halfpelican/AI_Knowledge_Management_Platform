@@ -22,9 +22,46 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 
 QUESTION_KINDS = ("ordinary", "scoped", "no-answer")
+
+
+def normalise(text: str) -> str:
+    """Whitespace collapsed and case folded, as the harness compares answer text."""
+    return " ".join(str(text).split()).casefold()
+
+
+def _alternative_pattern(alternative: str) -> re.Pattern:
+    """An accepted alternative, matched only as whole tokens.
+
+    A letter or digit may not touch either end, so "5 years" does not match a wrong
+    "15 years", "23" does not match "2023", "$75" does not match "$750", and "10%" does
+    not match "110%". An end that is not a letter or digit (a "$" or a "%") needs no
+    boundary, because nothing can extend it into another number.
+    """
+    text = normalise(alternative)
+    start = r"(?<![0-9a-z])" if text[:1].isalnum() else ""
+    end = r"(?![0-9a-z])" if text[-1:].isalnum() else ""
+    return re.compile(start + re.escape(text) + end)
+
+
+def matching_form(expected: str | None, accepted, answer_text: str) -> str | None:
+    """The form of the expected answer found in ``answer_text``, or None.
+
+    The expected phrase matches as a substring after normalising, exactly as it always
+    has, so the approved set scores as it did. An accepted alternative (a digit, currency,
+    percent, date or time form of the same fact, frozen with the set) matches only as
+    whole tokens; see ``_alternative_pattern``.
+    """
+    joined = normalise(answer_text)
+    if expected and normalise(expected) in joined:
+        return expected
+    for alternative in accepted or ():
+        if _alternative_pattern(alternative).search(joined):
+            return alternative
+    return None
 BOTH_ROLES = "both"
 OUTCOMES = ("answer", "no-answer")
 
@@ -89,6 +126,12 @@ def problems(
                 found.append(f"{identifier}: a role expects an answer, so expected_answer is needed")
         elif by_role is not None:
             found.append(f"{identifier}: expected_by_role is only read with role 'both'")
+        if "accepted" in question:
+            accepted = question["accepted"]
+            if not isinstance(accepted, list) or not all(isinstance(a, str) and a.strip() for a in accepted):
+                found.append(f"{identifier}: accepted must be a list of non-empty alternatives")
+            elif accepted and not (isinstance(expected, str) and expected.strip()):
+                found.append(f"{identifier}: accepted alternatives need an expected_answer")
         if "source" in question:
             source = question["source"]
             if kind == "no-answer" and source is not None:
@@ -117,6 +160,7 @@ def expand_runs(questions: list[dict], roles: tuple[str, ...]) -> list[dict]:
                     "role": role,
                     "expects_answer": expects,
                     "expected_answer": question.get("expected_answer") if expects else None,
+                    "accepted": list(question.get("accepted", [])) if expects else [],
                 })
             continue
         runs.append({

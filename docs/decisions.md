@@ -5107,6 +5107,32 @@ Objective 03, FR-12, FR-13, NFR-08
   from this measurement.
 - **The k6 runs themselves.** The user runs them.
 
+> **The thirty questions are frozen, on 1 November 2026.** Benjamin Morovan and Sagarika Dey
+> approved them as written on 1 November.
+>
+> - **Accepted alternatives were added before the freeze, at the user's request.** The harness
+>   scored the expected phrase as a literal substring, and 17 of the 26 answerable questions expect
+>   number words or a date, so a correct "12 characters", "$75", "10%" or "7 am to 6 pm" would have
+>   scored as not found.
+>   - **What each question now carries.** It has an `accepted` list: digit, currency, percent, date
+>     and time forms of the same fact.
+>   - **How they match.** An alternative matches only as whole tokens, so "5 years" can't match a
+>     wrong "15 years", nor "23" match "2023". The expected phrase still matches as a substring, so
+>     the approved set scores as it did.
+>   - **Recorded per run:** which form matched.
+> - **No question, expected answer or source changed.** This was checked field by field against
+>   the approved file.
+> - **Benjamin Morovan asked some of the questions informally before the set was frozen.** No
+>   question, expected answer or source was changed because of what the system answered.
+> - **Neither retrieval nor the prompt was tuned against this set** before the measured run.
+> - **The harness reports each miss:**
+>   - whether the expected source was a candidate for the role, and at what rank;
+>   - its best score against `RELEVANCE_THRESHOLD`;
+>   - where the run ended: path A, path B, unavailable, or answered without the expected answer.
+>
+>   So the fixes after M6 aim at causes. The coordinating session built this directly, after the
+>   rag-pipeline agent stalled.
+
 ## D-85 · The measured run is served by Waitress with 24 threads, the value the alpha will use
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6, pulling forward the
@@ -5293,6 +5319,17 @@ embeds the plain join of the earlier questions and the new one.
 >     protecting the corpus from NFR-09's uploads. NFR-08 writes nothing the thread run reads.
 >   - **Still open.** It is put to the user, as is whether `run.ps1` should call `server_record.py`
 >     to observe the thread count rather than take it as stated.
+
+> **The nine threads are frozen, on 1 November 2026.** Benjamin Morovan and Sagarika Dey approved
+> them with the thirty on 1 November.
+>
+> - **The scoring rule is now version 2.** Each turn gained the same kind of accepted alternatives
+>   as the thirty, matched only as whole tokens. Part 4 says so, and the rule records the change and
+>   its reason.
+> - **Nothing else changed:** no phrase, source or expectation. The informal-asking note applies to
+>   the threads too.
+> - **D-87 settled the order.** FR-13's thread run follows NFR-08, and the user has moved it after
+>   the gate.
 
 ## D-87 · The measured run's order and pre-flight: the server observed, `DEBUG` confirmed off, and Waitress's queueing logged
 
