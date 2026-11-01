@@ -13,8 +13,8 @@ Times are local (+11:00) unless they end in Z.
 | Run | VUs / asks | Commit | Result file | Verdict |
 |---|---|---|---|---|
 | 1 | 5 / 100 | `b8d8304` | `nfr08_summary.run1-invalid-5vu.json` | **INVALID**, kept as a finding |
-| 2 | 1 / 20 | this record's commit | `nfr08_summary.run2-baseline-1vu.json` | not yet run |
-| 3 | 5 / 25 | this record's commit | `nfr08_summary.json` | not yet run |
+| 2 | 1 / 20 | `945fd02` | `nfr08_summary.run2-baseline-1vu.json` | **INVALID** under the old rule (two 503s); answered-only p90 51,206 ms |
+| 3 | 5 / 25 | the commit after `945fd02` that adds the 503 rule and the attempt log | `nfr08_summary.json` | not yet run |
 
 ## Run 1: 5 VUs, 100 asks, INVALID
 
@@ -98,8 +98,7 @@ The user asked for this check before any rerun.
   - the same script through `run.ps1`, with `$env:VUS = '1'` and `$env:ITERATIONS = '20'` set
     in that window and removed afterwards;
   - account `loadtest01`;
-  - the server restarted first;
-  - the same commit as run 3.
+  - the server restarted first, at 15:30:02, from `945fd02`.
 - **Reading it:**
   - It is its own result, not the gate's number. Its 4 s verdict is expected to read FAIL.
   - The `single_user_baseline` field it writes still names the 8.90 s generation-only figure.
@@ -127,18 +126,67 @@ These changes were recorded before the run started, at the user's instruction of
    - **Why:** so it fits the gate day. At run 1's answered p90 of 251 s, 25 asks shared by 5
      users are about 5 rounds, roughly 21 minutes plus setup.
 4. **Concurrency stays 5** (D-84 decision 3).
+5. **A 503 is scored as a miss, not treated as a harness failure** (D-82's later note of
+   1 November).
+   - **Why:** NFR-08 is an answer within 4 s for 90% of requests, and a 503 is a request that got
+     no answer within 4 s. A 429 or a timeout means the harness failed; a 503 means the system
+     failed (NFR-19's designed response), which is a result.
+   - **How:** each 503 goes into the p90 sample ranked slower than any answered reply, and is
+     counted on its own as `server_503`. The verdict's p90 is `p90_ms`.
+   - **When it was decided:** after run 1 showed two 503s in 100 asks. Under the old rule, one
+     503 in 25 asks would have invalidated run 3.
+   - **Run 1 is not re-scored.**
+6. **Failed provider attempts are logged** (`apps/ai/attempt_log.py`).
+   - **What:** each failed generation or question-embedding attempt, with its cause, its seconds
+     and the account, and each 503's cause. They are WARNINGs on `apps.ai.attempts` in
+     `C:\kmp-measurement\2026-11-01\logs\errors.log`.
+   - **Why:** run 1's logs could not say whether attempts timed out and were retried.
+   - **Effect on the comparison:** run 3 is on a later commit than run 2. The server code differs
+     only by this logging.
+
+**Still INVALID, as before:** any 429, a k6 timeout or any other status besides 200 and the
+documented 503, a `checks` rate of 99% or less, or a missing SHA.
 
 **Unchanged:**
 
 - the 7 s iteration floor and the 3.5 s login spacing;
-- accounts `loadtest01` to `loadtest05`;
-- the validity rules: any 429 invalidates the run, `http_req_failed{name:ask}` must stay under
-  1%, and `checks` must stay over 99%.
-
-**What these changes do not cover.** A 503 is still a failed request. Out of 25 asks, a single 503
-is 4%, which fails the `http_req_failed` threshold, so a 503 would make run 3 INVALID. Run 1 had
-two 503s in 100 asks.
+- accounts `loadtest01` to `loadtest05`.
 
 ## Results
 
-Filled in after each run.
+Run 1 is written up above.
+
+### Run 2: INVALID under the rule it ran under
+
+- **The run:**
+  - commit `945fd02`, with a clean tree at the pre-flight;
+  - server pid 15752, started at 15:30:02;
+  - k6 window from 16:18:12 to 16:30:46;
+  - the file is `nfr08_summary.run2-baseline-1vu.json`.
+- **What it measured:**
+  - 18 of 20 asks answered;
+  - answered-only p90 **51,206 ms** from 18 samples (all replies: the same 18), at one user,
+    end to end;
+  - no 429 and no Waitress queueing.
+- **Why it is INVALID:** two 503s, at 16:23:06 and 16:28:53. Under the rule at `945fd02` they failed
+  the `http_req_failed` and `checks` thresholds.
+  - Like run 1, it is not re-scored.
+  - Under the new rule, 2 misses in 20 asks would put the 90th-percentile request on a 503.
+- **QueryLog** (20 rows from `loadtest01`, all answered: the 2 warm-ups and the 18). At one user
+  each ask starts when the previous reply arrives, so the gap between rows is close to the ask's
+  time in the server:
+  - The 18 answered asks took 8 to 57 s.
+  - Each 503 came at most 177 s after the previous reply. That is about 59 s per attempt for three
+    attempts, **not timeouts**.
+- **The two 503s were the same question.** Measured asks 3 and 13 are both `QUESTIONS[3]`, "How are
+  records managed and retained?", because `tests/load/common.js` cycles its 10 questions by
+  iteration.
+  - Both slow answered asks (56.9 s and 51.0 s) were `QUESTIONS[1]`.
+  - So the failure follows the question, not the load. That is likely because generation runs at
+    temperature 0, so a retry repeats the same reply.
+  - `945fd02` logs no cause. Run 3 logs it.
+- **What this predicts for run 3.**
+  - 25 shared iterations ask `QUESTIONS[3]` three times (iterations 3, 13 and 23).
+  - If it fails each time, that is 3 misses in 25 (12%). The 90th-percentile request is then a
+    503, so run 3 reads FAIL on that alone, whatever the latencies.
+  - **Nothing was changed for it:** not the question set, nor the generation settings.

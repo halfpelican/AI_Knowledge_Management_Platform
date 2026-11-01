@@ -4287,6 +4287,12 @@ sets no `handler500`. That was found by reading the code, not by running it.
 > - **Not covered:** a file removed between that check and the reprocess's own open still
 >   gives a 500, with the transaction rolled back.
 
+> **1 November 2026: the error file also holds WARNINGs from one logger, `apps.ai.attempts`.**
+> They record failed provider attempts and the cause of each `POST /api/ask` 503 (D-82's later
+> note of the same day). The root's handler stays at ERROR, so `django.request`'s 4xx WARNINGs
+> still stay out. The new logger has its own WARNING handler on the same file, and its lines
+> keep this decision's format.
+
 ## D-76 · Every `/api/` response is marked never-cache, by one middleware
 
 **Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Concerns:** every
@@ -5033,6 +5039,43 @@ NFR-08, NFR-09 and PR #30
 > - **Not covered:**
 >   - NFR-09 inherits the timeout. Its phase durations were not revisited.
 >   - A 503 still counts as a failed request, so one 503 in 25 asks invalidates the rerun.
+>     *Superseded the same day by the note below.*
+
+> **1 November 2026, later: in NFR-08 a 503 is scored as a miss, not treated as a harness failure,**
+> at the user's instruction.
+>
+> - **The rule changed after run 1 showed two 503s in 100 asks.** Under the old rule, one 503 in
+>   the rerun's 25 asks would have invalidated it.
+> - **The reason.**
+>   - A 429 or a timeout means the harness failed: the run did not measure what it set out to.
+>   - A 503 means the system failed. It is NFR-19's designed response, so it is a result.
+> - **How a 503 is scored.** NFR-08 is an answer within 4 s for 90% of requests, and a 503 is a
+>   request that got no answer within 4 s. So each 503 is a miss:
+>   - it goes into the p90 sample, ranked slower than any answered reply;
+>   - it is also reported on its own, as `server_503`;
+>   - the verdict's p90 is `p90_ms`. When the 90th-percentile request is a 503, `p90_ms` is `null`
+>     and the verdict is FAIL.
+> - **What still makes a run INVALID:** a 429, a k6 timeout, any other status, or a missing SHA.
+>   `http_req_failed` treats only 200 and 503 as expected for the measured asks, and the check
+>   accepts the documented 503 body, so `checks rate>0.99` no longer fails on one.
+> - **Run 1 is not re-scored.** It stays INVALID as recorded, and its answered-only p90 is
+>   reported as `p90_answered_ms`, which every run still carries.
+> - **Tested.** `apps/api/tests/test_nfr08_k6_scoring.py` runs the real script under k6 against a
+>   stub, with three outcomes:
+>   - every ask answered: PASS, with a p90 in milliseconds;
+>   - one 503: the run is valid, and the p90 falls on the 503, so it reads FAIL;
+>   - one 500: INVALID.
+>
+>   It is skipped where k6 is not installed, which includes CI.
+> - **Failed provider attempts are now logged** (`apps/ai/attempt_log.py`), also at the user's
+>   instruction, so the rerun can show what run 1 could not.
+>   - **What a line holds:** each failed generation or question-embedding attempt, with its cause,
+>     its seconds and the account, and the cause of each 503. They are WARNINGs on
+>     `apps.ai.attempts`, written to the error file by a handler of their own.
+>   - **What stays the same:** behaviour and attempt counts.
+>
+>   The rerun runs on a later commit than the single-user baseline, and the server code differs
+>   only by this logging.
 
 ## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
 

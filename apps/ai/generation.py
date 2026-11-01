@@ -46,6 +46,7 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable, StatementList
 from apps.ai.schema import SchemaViolation, parse_statement_list
 from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS
@@ -99,6 +100,10 @@ def run_generation_attempts(
         except ProviderUnavailable as exc:
             last_detail = f"call failed: {exc}"
             _record(on_attempt, number, "call-failed", started, detail=str(exc))
+            attempt_log.failed_attempt(
+                "generation", number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
+                attempt_log.cause_of(exc), str(exc),
+            )
             continue
         try:
             parsed = parse_statement_list(raw)
@@ -106,6 +111,10 @@ def run_generation_attempts(
             # Invariant 10: a reply that does not conform is no reply at all.
             last_detail = f"schema violation: {exc}"
             _record(on_attempt, number, "schema-violation", started, raw=raw, detail=str(exc))
+            attempt_log.failed_attempt(
+                "generation", number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
+                "SchemaViolation", str(exc),
+            )
             continue
         _record(
             on_attempt,

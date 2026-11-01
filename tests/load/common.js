@@ -412,22 +412,23 @@ export function nextQuestion() {
 }
 
 // name is 'ask' for measured requests and 'warmup' for untimed ones.
-export function ask(session, question, name = 'ask') {
-  const res = http.post(
-    `${BASE_URL}/api/ask`,
-    JSON.stringify({ question }),
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': session.cookies.csrftoken,
-      },
-      // Request-scoped, so they go on every request: k6 empties each VU's
-      // cookie jar at the start of every iteration.
-      cookies: session.cookies,
-      tags: { name },
-      timeout: `${ASK_TIMEOUT_S}s`,
-    }
-  );
+// responseCallback, when given, says which statuses http_req_failed counts as
+// expected: NFR-08 passes 200 and 503 (D-82's note of 1 November 2026). Without
+// it, k6's default applies: anything outside 200-399 is a failed request.
+export function ask(session, question, name = 'ask', responseCallback = null) {
+  const params = {
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': session.cookies.csrftoken,
+    },
+    // Request-scoped, so they go on every request: k6 empties each VU's
+    // cookie jar at the start of every iteration.
+    cookies: session.cookies,
+    tags: { name },
+    timeout: `${ASK_TIMEOUT_S}s`,
+  };
+  if (responseCallback) params.responseCallback = responseCallback;
+  const res = http.post(`${BASE_URL}/api/ask`, JSON.stringify({ question }), params);
   recordResponse(res, name, session.account);
   return res;
 }
@@ -444,6 +445,18 @@ export function isValidReply(res) {
 export function wasAnswered(res) {
   try {
     return res.json('answered') === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// The server's documented 503 (FR-12, NFR-19): {"detail": "<the fixed notice>"}.
+// Anything else with status 503 is not the designed response, and is not this.
+export function isServiceUnavailable(res) {
+  if (res.status !== 503) return false;
+  try {
+    const detail = res.json('detail');
+    return typeof detail === 'string' && detail.length > 0;
   } catch (e) {
     return false;
   }

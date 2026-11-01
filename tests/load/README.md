@@ -3,7 +3,7 @@
 | File | What it is | Accounts |
 |---|---|---|
 | `run.ps1` | **How every run starts.** Refuses to start k6 unless `scripts/check_flm.py` passes and `scripts/server_record.py preflight` observes D-85's server: Waitress at 24 threads, `DEBUG` off, restarted since the last run. Records the commit, the FLM version, the snapshot hash and every observed value. After k6, copies Waitress's queueing in the run's window into the results (D-83, D-84, D-85, D-87). | |
-| `nfr08_query_p90.js` | p90 of `POST /api/ask`, answered replies only, 5 VUs sharing 25 asks (100 before 1 November 2026). Limit 4,000 ms. Objective 03's p90 (D-84 decision 3). | `loadtest01`–`loadtest05` |
+| `nfr08_query_p90.js` | p90 of `POST /api/ask` over answered replies and 503s, each 503 a miss, 5 VUs sharing 25 asks (100 before 1 November 2026). Limit 4,000 ms. Objective 03's p90 (D-84 decision 3). | `loadtest01`–`loadtest05` |
 | `nfr09_concurrency.js` | p90 of asks and uploads with 20 concurrent users, against a one-user baseline. At most 25% worse. | load phase `loadtest01`–`loadtest20`, baseline `loadtest21` |
 | `common.js` | Logins, pacing, the ask request, the run record and the validity gate. | |
 
@@ -344,8 +344,10 @@ In this order:
 
 | Field | Meaning |
 |---|---|
-| `p90_answered_ms` against `limit_ms` (4000) | **The NFR-08 number.** p90 over answered replies only, end to end over HTTP. `answered_samples` is how many. |
-| `p90_all_replies_ms` | p90 over every valid reply, answered or not. A no-answer reply skips generation, so this reads lower. |
+| `p90_ms` against `limit_ms` (4000) | **The NFR-08 number,** since 1 November 2026. p90 over answered replies and 503s, end to end over HTTP. Each 503 is a miss: a request with no answer within 4 s, ranked slower than any answered reply (D-82's note). `null` with `p90_falls_on_a_503: true` when the 90th-percentile request was a 503. `p90_samples` is how many. |
+| `server_503` | How many measured asks got the server's documented 503. A 503 is the system failing, NFR-19's designed response, so it is a result and does not invalidate the run. A 429, a k6 timeout or any other status is the harness failing, and does (`unexpected_status`). |
+| `p90_answered_ms` | p90 over answered replies alone, without the 503s: how NFR-08's first run on 1 November was reported, which is not re-scored. `answered_samples` is how many. |
+| `p90_all_replies_ms` | p90 over every 200 reply, answered or not. A no-answer reply skips generation, so this reads lower. |
 | `answered_percent`, `asks_measured` | Answered replies as a share of all measured asks, failed ones included as not answered. |
 | `single_user_baseline` | **8,900 ms, not measured by this run.** It is the p90 of 50 single generation calls, timed in-process: one user, sequential, the six-chunk corpus, with the history block (`docs/flm-baseline.md`, Stage 4 item 9a). It leaves out the question's embedding, retrieval and HTTP, so even one user over HTTP would read above it. It shows the scale, and is not the same measure. |
 | `commit_sha`, `uncommitted_tracked_changes` | The checkout `run.ps1` ran in. |

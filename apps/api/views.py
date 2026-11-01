@@ -28,6 +28,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
+from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
@@ -1335,22 +1336,27 @@ class AskView(APIView):
     @staticmethod
     def _answer(request, question, conversation, awaiting_a_name):
         """The turn itself, run while this user's in-flight slot is held."""
-        try:
-            outcome = answer_question(
-                question=question, user=request.user, conversation=conversation
-            )
-        except ProviderUnavailable:
-            # NFR-19: "must return a 503 Service Unavailable response with an informative
-            # notice, rather than crashing or hanging indefinitely", and FR-12's Responses
-            # clause names 503 explicitly. Reached after MAXIMUM_GENERATION_ATTEMPTS — one
-            # initial call and two retries — or on a transport failure while embedding. A
-            # provider outage is never turned into a no-answer: "the system could not ask"
-            # and "the corpus has no answer" are different events, and invariant 7's signal
-            # depends on them staying apart.
-            return Response(
-                {"detail": KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        # Every failed provider attempt inside, and the 503 below, are logged naming this
+        # account (apps/ai/attempt_log.py, 1 November 2026).
+        with attempt_log.account(request.user.pk):
+            try:
+                outcome = answer_question(
+                    question=question, user=request.user, conversation=conversation
+                )
+            except ProviderUnavailable as exc:
+                # NFR-19: "must return a 503 Service Unavailable response with an informative
+                # notice, rather than crashing or hanging indefinitely", and FR-12's Responses
+                # clause names 503 explicitly. Reached after MAXIMUM_GENERATION_ATTEMPTS — one
+                # initial call and two retries — or on a transport failure while embedding. A
+                # provider outage is never turned into a no-answer: "the system could not ask"
+                # and "the corpus has no answer" are different events, and invariant 7's
+                # signal depends on them staying apart. The cause goes to the error file; the
+                # reply's notice stays the fixed one.
+                attempt_log.unavailable(exc)
+                return Response(
+                    {"detail": KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
 
         if awaiting_a_name:
             name_thread_from(conversation, question)

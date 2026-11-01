@@ -16,6 +16,11 @@ ERROR_FILE_HANDLER = "error_file"
 WAITRESS_LOGGER = "waitress"
 WAITRESS_FILE_HANDLER = "waitress_file"
 
+# apps/ai/attempt_log.py's logger, spelled out rather than imported so this module, which
+# config/settings.py imports, stays free of apps/ imports. A test holds the two equal.
+PROVIDER_ATTEMPTS_LOGGER = "apps.ai.attempts"
+PROVIDER_ATTEMPTS_FILE_HANDLER = "provider_attempts_file"
+
 
 def audit_logging(path) -> dict:
     """LOGGING for the ``audit`` logger (FR-05): one line per record, appended to
@@ -102,6 +107,24 @@ def platform_logging(*, audit_path, error_path, waitress_path) -> dict:
     config["loggers"][WAITRESS_LOGGER] = {
         "handlers": [WAITRESS_FILE_HANDLER],
         "level": "INFO",
+        "propagate": True,
+    }
+    # Failed provider attempts and the 503 they end in (apps/ai/attempt_log.py, 1 November
+    # 2026): WARNINGs, written to the error file by a handler of their own, because the
+    # root's handler there drops everything below ERROR. It keeps propagating, as Waitress's
+    # does, so pytest's capture still sees it; the root's handler drops the WARNING, so each
+    # line is written once.
+    config["handlers"][PROVIDER_ATTEMPTS_FILE_HANDLER] = {
+        "class": "logging.FileHandler",
+        "level": "WARNING",
+        "filename": str(error_path),
+        "formatter": "errors",
+        "encoding": "utf-8",
+        "delay": True,
+    }
+    config["loggers"][PROVIDER_ATTEMPTS_LOGGER] = {
+        "handlers": [PROVIDER_ATTEMPTS_FILE_HANDLER],
+        "level": "WARNING",
         "propagate": True,
     }
     return config

@@ -419,9 +419,13 @@ queueing, and the whole pre-flight record. The stated values sit beside them.
 
 **Report, with the dump hash, commit, FLM version and server** (D-84 §3, D-85 §4):
 
-- the answered-only p90 against 4 s;
-- beside it, the all-replies p90, the answered rate and the 8.90 s baseline;
-- the run's queueing, `waitress_log.queue_depth` (D-87 §3).
+- `p90_ms` against 4 s: answered replies and 503s, each 503 a miss ranked slower than any answer
+  (D-82's note of 1 November 2026);
+- beside it, the 503 count, the answered-only p90, the all-replies p90, the answered rate, the
+  8.90 s baseline and the single-user end-to-end baseline;
+- the run's queueing, `waitress_log.queue_depth` (D-87 §3);
+- the failed provider attempts and 503 causes in the run's window: `WARNING apps.ai.attempts` lines
+  in `$root\logs\errors.log`.
 
 **Writes:**
 

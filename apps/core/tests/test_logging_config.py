@@ -32,8 +32,11 @@ from waitress import utilities as waitress_utilities
 from waitress import wasyncore
 
 import config.settings as settings_module
+from apps.ai import attempt_log
 from apps.core.logging_config import (
     ERROR_FILE_HANDLER,
+    PROVIDER_ATTEMPTS_FILE_HANDLER,
+    PROVIDER_ATTEMPTS_LOGGER,
     WAITRESS_FILE_HANDLER,
     WAITRESS_LOGGER,
     audit_logging,
@@ -68,8 +71,9 @@ def test_the_audit_logger_is_configured_exactly_as_before(tmp_path):
     assert platform["handlers"]["audit_file"] == alone["handlers"]["audit_file"]
     assert platform["formatters"]["audit"] == alone["formatters"]["audit"]
     assert platform["disable_existing_loggers"] is False
-    # D-87 adds the Waitress logger and nothing else.
-    assert set(platform["loggers"]) == {"audit", WAITRESS_LOGGER}
+    # D-87 adds the Waitress logger, and D-82's note of 1 November 2026 the provider-attempts
+    # logger, and nothing else.
+    assert set(platform["loggers"]) == {"audit", WAITRESS_LOGGER, PROVIDER_ATTEMPTS_LOGGER}
 
 
 def test_the_error_handler_is_on_the_root_logger_and_filters_at_error(tmp_path):
@@ -144,6 +148,46 @@ def test_a_warning_still_reaches_pytests_capture(caplog):
     else sees."""
     logging.getLogger("apps.api.views").warning("still captured")
     assert [record.getMessage() for record in caplog.records] == ["still captured"]
+
+
+# --- Failed provider attempts (apps/ai/attempt_log.py, 1 November 2026) ------------------------
+
+
+def test_the_provider_attempts_logger_is_the_one_attempt_log_writes_through():
+    assert attempt_log.ATTEMPT_LOGGER_NAME == PROVIDER_ATTEMPTS_LOGGER
+
+
+def test_a_provider_attempt_warning_is_written_to_the_error_file_once_with_a_timestamp(
+    error_log_file, caplog
+):
+    """Its own handler takes the WARNING the root's ERROR handler drops. It still propagates, so
+    pytest sees it too, and the root's handler does not write it a second time."""
+    attempt_log.failed_attempt("generation", 1, 3, 300.0, "APITimeoutError", "Request timed out.")
+
+    lines = error_log_file.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert re.match(
+        rf"^{TIMESTAMP} WARNING {PROVIDER_ATTEMPTS_LOGGER} generation attempt 1 of 3 failed after "
+        r"300\.0 s \(account not set\): APITimeoutError: Request timed out\.$",
+        lines[0],
+    )
+    assert [r.name for r in caplog.records] == [PROVIDER_ATTEMPTS_LOGGER]
+
+
+def test_the_provider_attempts_handler_writes_the_error_file_at_warning(tmp_path):
+    paths = _paths(tmp_path)
+    config = platform_logging(**paths)
+
+    assert config["loggers"][PROVIDER_ATTEMPTS_LOGGER] == {
+        "handlers": [PROVIDER_ATTEMPTS_FILE_HANDLER],
+        "level": "WARNING",
+        "propagate": True,
+    }
+    handler = config["handlers"][PROVIDER_ATTEMPTS_FILE_HANDLER]
+    assert handler["filename"] == str(paths["error_path"])
+    assert handler["level"] == "WARNING"
+    # The root's handler stays at ERROR, so a django.request 4xx WARNING stays out.
+    assert config["handlers"][ERROR_FILE_HANDLER]["level"] == "ERROR"
 
 
 # --- Waitress's file (D-87 section 3) ----------------------------------------------------------
