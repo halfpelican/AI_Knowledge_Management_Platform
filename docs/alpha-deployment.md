@@ -190,12 +190,15 @@ $env:CSRF_COOKIE_SECURE    = 'False'
 $env:SPA_DIST_DIR          = "$root\frontend\dist"
 $env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-01\logs\waitress.log'
 $env:FLM_BASE_URL          = 'http://127.0.0.1:8625/v1'
-$name = & $py manage.py shell -c "from django.db import connection; print(connection.settings_dict['NAME'])"
+$name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
 "Django will connect to: $name"
 if ($name -ne 'kmp_demo_20261101') { throw "Not starting: the database is '$name', not kmp_demo_20261101." }
 & "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
 ```
 
+- **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
+  automatically", so `$name` holds two lines, never equals `kmp_demo_20261101`, and the check
+  refuses even the right database.
 - **24 threads, set explicitly** (D-85). Waitress defaults to 4.
 - **The console stays quiet.** Waitress's own lines go to `WAITRESS_LOG_PATH` (D-87). From another
   window, `Get-Content C:\kmp-demo\2026-11-01\logs\waitress.log -Tail 1` shows
