@@ -622,6 +622,15 @@ def test_the_harness_candidate_set_applies_d66(scripts, document):
 # --- conversation_http_check.py --------------------------------------------------------------
 
 
+# The database every run below names unless a test passes its own: not ``kmp``, and on a port
+# nothing listens on, so no refusal here can depend on where the suite runs and nothing can be
+# written. Until 1 November 2026 the script inherited the suite's DATABASE_URL. CI's database is
+# called ``kmp``, so the script refused it first (D-84 decision 1), before the accounts and FLM
+# checks these tests are for, and CI failed from d9b3487 onwards while the laptop's ``kmp_fr15``
+# passed.
+NOT_THE_PROTECTED_DATABASE_URL = "postgres://nobody:nothing@127.0.0.1:1/kmp_http_check_test"
+
+
 def run_http_check(*arguments, database_url=None, env_overrides=None):
     import os
 
@@ -630,8 +639,7 @@ def run_http_check(*arguments, database_url=None, env_overrides=None):
                  "KMP_CORPUS_EMPLOYEE_EMAIL", "KMP_CORPUS_EMPLOYEE_PASSWORD"):
         env.pop(name, None)
     env.update(env_overrides or {})
-    if database_url:
-        env["DATABASE_URL"] = database_url
+    env["DATABASE_URL"] = database_url or NOT_THE_PROTECTED_DATABASE_URL
     return subprocess.run(
         [sys.executable, str(SCRIPTS / "conversation_http_check.py"), *arguments],
         capture_output=True, text=True, timeout=300, cwd=REPOSITORY_ROOT, env=env,
