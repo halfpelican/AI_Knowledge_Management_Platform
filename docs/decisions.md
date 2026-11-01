@@ -133,7 +133,7 @@ Rules for this file:
 | D-71 | FR-12 keyword search collapses whitespace on both sides before matching, so a phrase that wraps a line is found | Settled by the user | 2026-10-06 |
 | D-72 | FR-15 browse: a separate endpoint sharing the list's scoped query; Department from the column, a deliberate departure; 204 only when a filter matches nothing | Settled by the user | 2026-10-06 |
 | D-73 | FR-15 deletion: manage_documents for Administrators (accounts 0005), scoped-first 404 then 403, chunks, tags and document in one transaction, file on commit, 204 | Settled by the user | 2026-10-06 |
-| D-74 | The demonstration corpus is tagged from the manifest by an idempotent script, applied_by="user", against kmp | Settled by the user | 2026-10-06 |
+| D-74 | The demonstration corpus is tagged from the manifest by an idempotent script, applied_by="user", against kmp (corrected 2026-11-01: the alpha's database is kmp_demo_20261101, D-88) | Settled by the user | 2026-10-06 |
 | D-75 | FR-15 download: a scoped route returning the original as an attachment, typed by its signature and named with the signature's extension; a missing file is the same 404; errors.log | Settled by the user | 2026-10-13 |
 | D-76 | Every /api/ response is marked never-cache by one middleware (add_never_cache_headers); nothing outside /api/ | Settled by the user | 2026-10-13 |
 
@@ -4190,6 +4190,12 @@ the proposal places elsewhere.
 - **A fresh database.** The seed needs the corpus ingested first (`scripts/ingest_objective02.py`)
   and does nothing for documents that are not there.
 
+> **Corrected 1 November 2026: the alpha's database is `kmp_demo_20261101`, not `kmp`** (D-88).
+> This decision called `kmp` "the database the alpha runs on". That was true when it was written,
+> and D-84 then left the demonstration database open. The script ran against `kmp_demo_20261101`
+> on 1 November, because the snapshot it was restored from has no tags. It created 14 tags and 48
+> links, and a second run created none. `kmp` is unchanged by this.
+
 ## D-75 · FR-15's download: a scoped view returning the original as an attachment, typed and named by its signature
 
 **Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Closes:** FR-15's
@@ -5259,6 +5265,10 @@ Objective 03, FR-12, FR-13, NFR-08
 >   So the fixes after M6 aim at causes. The coordinating session built this directly, after the
 >   rag-pipeline agent stalled.
 
+> **1 November 2026: the demo database is decided, by D-88.** It is `kmp_demo_20261101`, restored
+> from this decision's measured snapshot. It is neither `kmp` nor the measurement database. That
+> closes "the demo database for 1 November", which this decision left open.
+
 ## D-85 · The measured run is served by Waitress with 24 threads, the value the alpha will use
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6, pulling forward the
@@ -5570,3 +5580,66 @@ D-85, D-86, Objective 03, NFR-08, NFR-09
 > - **k6 has still never run**, so the k6 changes ran only under the Node simulation.
 > - **Nothing checks that the server was restarted before the HTTP check.**
 > - **The restart check rests on file times.**
+
+## D-88 · The M6 alpha serves `kmp_demo_20261101`, restored from item 6's snapshot, from a worktree of its own
+
+**Status:** Settled by the user · **Date:** 2026-11-01 · **Stage:** 5 item 9 · **Closes:** D-84's
+open item, "the demo database for 1 November" · **Corrects:** D-74, `scripts/seed_objective02_tags.py`
+
+**The database.** The alpha and the demonstration use `kmp_demo_20261101`, a new database restored
+from item 6's measured snapshot (dump `3bf98403…6f59`). So they show Objective 02's corpus exactly as
+it was measured.
+
+- **Not `kmp`,** which stays as it is (D-84 decision 1).
+- **Not the measurement database `kmp_obj02_20261101`,** which holds the runs' QueryLog rows and
+  the load-test accounts.
+
+**How it was restored, on 1 November.**
+
+- **The checks came first.** `scripts/snapshot_measurement_db.py restore` refuses a name other than
+  the one snapshotted, so its own checks (`verify_snapshot`) would not run for a new name. The same
+  checks ran instead, using the module's own functions, before anything was created:
+  - `snapshot.json` matched the committed copy;
+  - the dump's SHA-256 matched it;
+  - the media copy's tree hash, `5284aae1…64d5` (23 files), matched it;
+  - the name is not a protected one;
+  - the media destination is outside every checkout, and new.
+- **Then the restore:**
+  - `createdb kmp_demo_20261101`, which fails if the database exists, so nothing can be overwritten;
+  - `pg_restore`;
+  - the media copied to `C:\kmp-demo\2026-11-01\media`, with its tree hash checked again.
+- **Tags.** `scripts/seed_objective02_tags.py` ran against it, because the snapshot has none and
+  FR-15's browse needs them (D-74). It created 14 tags and 48 links, and a second run created none.
+- **Accounts.** `loadtest01` to `loadtest21` were deleted: 21 rows, none of which owned anything in
+  the snapshot. Two accounts remain:
+  - `corpus.admin@example.com`, the Administrator;
+  - `corpus.employee@example.com`, an Employee.
+
+  **Nobody knows their passwords.** Both were generated in memory during item 6's run and never
+  shown or stored. The user sets the Administrator's with `manage.py changepassword` before the
+  walk, and the Employee for the walk registers through FR-01.
+
+**Where it runs from** (`docs/alpha-deployment.md`):
+
+- **A worktree of its own, `KMP_Prototype-alpha`, checked out detached at `main`'s commit.** The main
+  checkout is not touched, and GitHub Desktop can still switch it to `main`.
+- **A venv of its own,** made with `uv venv` and synced from that commit's `requirements.txt`. A sync
+  from an older checkout into the shared venv would remove WhiteNoise.
+- **A `.env` of its own,** naming:
+  - `kmp_demo_20261101`;
+  - `MEDIA_ROOT=C:\kmp-demo\2026-11-01\media`;
+  - logs in `C:\kmp-demo\2026-11-01\logs`.
+- **The server window:**
+  - `DATABASE_URL` and `MEDIA_ROOT` are set together in it;
+  - it is a fresh PowerShell window, never the measurement one;
+  - Waitress starts only after Django has printed the database it will connect to and that name is
+    `kmp_demo_20261101`.
+
+**Not covered.**
+
+- **The demonstration script and D-40's screening** of its questions. They are the rest of item 9,
+  run against this database.
+- **The rule from here on: no re-index, reprocess or delete** between building the demonstration's
+  threads and demonstrating them (D-40). A second restore resets everything, so it may only come
+  before that point.
+- **M8's hosting and database** (D-64).
