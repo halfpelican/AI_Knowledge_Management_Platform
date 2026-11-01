@@ -1,0 +1,173 @@
+{
+  "requirement": "NFR-08",
+  "verdict": "INVALID RUN",
+  "run_valid": false,
+  "invalid_reasons": [
+    "67 response(s) were 429 ask_in_flight: an account asked while its previous ask was still being answered (D-79). That follows an ask k6 abandoned at its 300 s timeout while the server was still answering it. Any 429 invalidates the run (D-82 rule 5).",
+    "threshold http_req_failed{name:ask} rate<0.01 was not met",
+    "threshold checks rate>0.99 was not met"
+  ],
+  "p90_answered_ms": 251468.56883,
+  "limit_ms": 4000,
+  "answered_samples": 28,
+  "p90_all_replies_ms": 251468.56883,
+  "all_reply_samples": 28,
+  "answered_percent": 28,
+  "asks_measured": 100,
+  "single_user_baseline": {
+    "p90_ms": 8900,
+    "measures": "one generation call (FLM chat completion and schema parse), timed in-process; excludes the question's embedding, retrieval and HTTP",
+    "conditions": "one user, sequential, 50 calls, six-chunk corpus, with the history block",
+    "source": "docs/flm-baseline.md, Stage 4 item 9a",
+    "measured_by_this_run": false
+  },
+  "commit_sha": "b8d8304d3c481b7770a4c8b85c126b0db16b18e9",
+  "uncommitted_tracked_changes": false,
+  "flm_version": "v0.9.39",
+  "flm_check": {
+    "result": "PASS",
+    "script": "scripts/check_flm.py",
+    "at": "2026-11-01T03:47:28.714Z",
+    "against": "http://127.0.0.1:8625/v1",
+    "by": "tests/load/run.ps1"
+  },
+  "db_dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+  "server": "waitress",
+  "server_version": "3.0.2",
+  "server_threads": 24,
+  "server_pid": 51708,
+  "server_debug": "off",
+  "server_started_at": "2026-11-01T08:24:41.838+11:00",
+  "previous_run": {
+    "file": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-FR15\\corpus\\objective-02\\runs\\2026-11-01\\harness.json",
+    "ended_at": "2026-11-01T08:23:01.131+11:00"
+  },
+  "server_stated": {
+    "server": "waitress",
+    "threads": 24,
+    "version": "3.0.2",
+    "version_read_from": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv\\Scripts\\python.exe"
+  },
+  "server_observed": {
+    "values": [
+      "waitress"
+    ],
+    "logins": 5,
+    "without_header": 0,
+    "matches_server": true
+  },
+  "server_sources": {
+    "server": "observed by scripts/server_record.py preflight, run by tests/load/run.ps1: the command line of the process listening on the port (pid 51708); also checked against server_observed",
+    "server_version": "observed: the Waitress installed in C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv, the venv the listening process's command line runs from",
+    "server_threads": "observed: --threads on the command line of the listening process (D-87 decision 2: a missing --threads is read as Waitress's default, 4)",
+    "server_debug": "observed: an unmatched /api/ path got handler404's JSON 404 (D-87 decision 2)",
+    "server_started_at": "the last 'Serving on' line in Waitress's log before the run (D-87 decision 3)",
+    "server_observed": "the Server response header on setup()'s logins. It shows which software answered, not its version or its thread count"
+  },
+  "waitress_log": {
+    "path": "C:\\kmp-measurement\\2026-11-01\\logs\\waitress.log",
+    "path_from": "$env:WAITRESS_LOG_PATH",
+    "window": {
+      "start": "2026-11-01T03:47:33.609+00:00",
+      "end": "2026-11-01T04:11:38.573+00:00"
+    },
+    "server_started_at": "2026-11-01T08:24:41.838+11:00",
+    "serving_on_line": "2026-11-01 08:24:41,838 INFO waitress Serving on http://127.0.0.1:8000",
+    "process_started_at": "2026-10-31T21:24:40.010Z",
+    "queue_depth": "none in the run's window",
+    "queue_depth_lines": [],
+    "queue_depth_lines_in_window": 0,
+    "max_queue_depth_in_window": null,
+    "queue_depth_lines_before_window": 0,
+    "queue_depth_lines_after_window": 0,
+    "queue_depth_lines_untimed": [],
+    "serving_on_lines_in_window": []
+  },
+  "throttled_429": {
+    "total": 67,
+    "rate_limit": 0,
+    "ask_in_flight": 67,
+    "ingestion_in_flight": 0,
+    "unrecognised": 0
+  },
+  "role": "Employee",
+  "role_checked_at_login": true,
+  "accounts": "loadtest01@example.com to loadtest05@example.com, one per VU",
+  "ai_provider": "not recorded",
+  "model": "not recorded",
+  "vus": 5,
+  "iterations": 100,
+  "iteration_floor_s": 7,
+  "login_spacing_s": 3.5,
+  "base_url": "http://127.0.0.1:8000",
+  "finished_at": "2026-11-01T04:11:37.973Z",
+  "server_at_end": {
+    "pid": 51708,
+    "pid_before_the_run": 51708,
+    "same_process": true,
+    "note": null
+  },
+  "server_preflight": {
+    "observed_at": "2026-11-01T14:47:29.139+11:00",
+    "observed_by": "scripts/server_record.py preflight, run by tests/load/run.ps1",
+    "base_url": "http://127.0.0.1:8000",
+    "server": {
+      "via": "http",
+      "base_url": "http://127.0.0.1:8000",
+      "server": "waitress",
+      "version": "3.0.2",
+      "version_source": "the Waitress installed in C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv, the venv the listening process's command line runs from",
+      "version_in_this_python": "3.0.2",
+      "venv": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv",
+      "threads": 24,
+      "threads_source": "--threads on the command line",
+      "listen": "127.0.0.1:8000",
+      "pid": 51708,
+      "process_started_at": "2026-10-31T21:24:40.010Z",
+      "command_line": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  \"C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv\\Scripts\\waitress-serve.exe\" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application ",
+      "server_header": "waitress",
+      "d85_command": "waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application",
+      "notes": [],
+      "debug": {
+        "path": "/api/__preflight_not_a_route__",
+        "url": "http://127.0.0.1:8000/api/__preflight_not_a_route__",
+        "status": 404,
+        "content_type": "application/json",
+        "server_header": "waitress",
+        "body": "{\"detail\": \"Not found.\"}",
+        "body_bytes": 24,
+        "debug": "off",
+        "reason": "a 404 in handler404's JSON, which Django sends only with DEBUG off"
+      }
+    },
+    "stated": {
+      "server": "waitress",
+      "threads": 24,
+      "override_threads": false
+    },
+    "waitress_log": {
+      "path": "C:\\kmp-measurement\\2026-11-01\\logs\\waitress.log",
+      "path_from": "$env:WAITRESS_LOG_PATH",
+      "exists": true,
+      "server_started_at": "2026-11-01T08:24:41.838+11:00",
+      "serving_on_line": "2026-11-01 08:24:41,838 INFO waitress Serving on http://127.0.0.1:8000",
+      "serving_on_line_number": 2,
+      "process_started_at": "2026-10-31T21:24:40.010Z"
+    },
+    "restart": {
+      "server_started_at": "2026-11-01T08:24:41.838+11:00",
+      "previous_run": {
+        "file": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-FR15\\corpus\\objective-02\\runs\\2026-11-01\\harness.json",
+        "ended_at": "2026-11-01T08:23:01.131+11:00",
+        "from": "when the file was last written"
+      },
+      "results_dirs": [
+        "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-FR15\\tests\\load\\results",
+        "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-FR15\\corpus\\objective-02\\runs\\2026-11-01"
+      ],
+      "restarted_after_previous_run": true
+    },
+    "refusals": [],
+    "ready": true
+  }
+}

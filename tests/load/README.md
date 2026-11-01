@@ -3,7 +3,7 @@
 | File | What it is | Accounts |
 |---|---|---|
 | `run.ps1` | **How every run starts.** Refuses to start k6 unless `scripts/check_flm.py` passes and `scripts/server_record.py preflight` observes D-85's server: Waitress at 24 threads, `DEBUG` off, restarted since the last run. Records the commit, the FLM version, the snapshot hash and every observed value. After k6, copies Waitress's queueing in the run's window into the results (D-83, D-84, D-85, D-87). | |
-| `nfr08_query_p90.js` | p90 of `POST /api/ask`, answered replies only, 5 VUs sharing 100 asks. Limit 4,000 ms. Objective 03's p90 (D-84 decision 3). | `loadtest01`–`loadtest05` |
+| `nfr08_query_p90.js` | p90 of `POST /api/ask`, answered replies only, 5 VUs sharing 25 asks (100 before 1 November 2026). Limit 4,000 ms. Objective 03's p90 (D-84 decision 3). | `loadtest01`–`loadtest05` |
 | `nfr09_concurrency.js` | p90 of asks and uploads with 20 concurrent users, against a one-user baseline. At most 25% worse. | load phase `loadtest01`–`loadtest20`, baseline `loadtest21` |
 | `common.js` | Logins, pacing, the ask request, the run record and the validity gate. | |
 
@@ -27,6 +27,9 @@ check, then NFR-09. Two of those are this folder's:
    questions.
 2. **Restart Waitress** ([The server](#the-server-d-85-d-87)), then run **NFR-08 at 5 users**
    through `run.ps1`. Five is fixed by D-84 decision 3, before the run, so leave `VUS` unset.
+   On 1 November 2026 a single-user end-to-end baseline ran before the rerun, as its own result
+   (`VUS=1`, `ITERATIONS=20`), because the 8.90 s baseline times generation alone
+   (`corpus/objective-02/runs/2026-11-01/nfr08-runs.md`).
 3. FR-13's thread run and the HTTP check come next (the runbook's step 12). The HTTP check goes
    through the server, so Waitress is restarted before it.
 4. **Restart Waitress again**, then run **NFR-09** through `run.ps1`, last.
@@ -278,7 +281,7 @@ to debug the scripts.
 | `AI_PROVIDER`, `FLM_CHAT_MODEL` | no | Recorded in the results, `not recorded` if absent. k6 also reads them from the shell's environment. |
 | `BASE_URL` | no | Default `http://localhost:8000`. `run.ps1` always passes it. |
 | `TEST_EMAIL_PREFIX`, `TEST_EMAIL_DOMAIN` | no | Defaults `loadtest` and `example.com`, which give `loadtest01@example.com`. The command only creates that scheme, so change these only for accounts made some other way. |
-| `VUS`, `ITERATIONS` | no | NFR-08 only, defaults 5 and 100. VU *n* needs account *n*. Objective 03 is 5 VUs (D-84). |
+| `VUS`, `ITERATIONS` | no | NFR-08 only, defaults 5 and 25. VU *n* needs account *n*. Objective 03 is 5 VUs (D-84). |
 | `BASELINE_ITERATIONS` | no | NFR-09 only, default 50, at most 60 (the baseline account's uploads in an hour). |
 
 `TEST_EMAIL`, `GIT_COMMIT` and `ROLE` are no longer read. The first two make the scripts refuse to
@@ -321,11 +324,14 @@ gave 429s at a 6 s floor, and delays of up to 5 ms did not. 7 s gave none at del
   against its ask rate.
 - **`setupTimeout`** is computed from these numbers, not left at k6's 60 s default, which 21
   logins at 3.5 s already exceed. Worst case: every login runs to its 30 s timeout and every
-  warm-up ask to its 300 s, plus 60 s. That is 810 s for NFR-08 and 1290 s for NFR-09. Typical
-  setups take about 30 s and 92 s. `setup()` is one VU sending one request at a time, so the
-  thread count does not change these either.
+  warm-up ask to its 2,835 s, plus 60 s. That is 5,880 s for NFR-08 and 6,360 s for NFR-09
+  (810 s and 1,290 s while the ask timeout was 300 s). Typical setups take about 30 s and 92 s.
+  `setup()` is one VU sending one request at a time, so the thread count does not change these
+  either.
 - **Sessions** expire after 60 idle minutes. A load-phase account in NFR-09 is idle from its login
-  until the load phase starts, at most 1290 s + 20 min = 41.5 min.
+  until the load phase starts: about 92 s + 20 min typically. At the worst-case setup it is
+  6,360 s + 20 min, past the expiry. That bound was 41.5 min before the ask timeout grew on
+  1 November 2026, and NFR-09 has not been revisited for it.
 
 ## Reading the result
 
@@ -373,7 +379,7 @@ One of these, in both scripts:
     | `throttled_429` kind | How it is told | What it means |
     |---|---|---|
     | `rate_limit` | DRF's throttle body: no `code`, and a `Retry-After` header | An account went over D-79's or D-26's rate. Was the server restarted, and was nobody logging in from a browser here? |
-    | `ask_in_flight` | `"code": "ask_in_flight"`, no `Retry-After` (D-79) | An account asked while its previous ask was still being answered: an ask k6 gave up on at 300 s that the server was still answering. |
+    | `ask_in_flight` | `"code": "ask_in_flight"`, no `Retry-After` (D-79) | An account asked while its previous ask was still being answered: an ask k6 gave up on at its timeout that the server was still answering. Since 1 November 2026 the timeout outlasts the server's slot, so this should not happen. |
     | `ingestion_in_flight` | `"code": "ingestion_in_flight"`, no `Retry-After` (D-85) | An account uploaded while its previous upload was still being processed: an upload k6 gave up on at its timeout that the server was still ingesting. |
     | `unrecognised` | anything else: another code, or no code and no `Retry-After` | Not a kind these scripts know. It is the total less the other three, so no 429 goes uncounted. |
 
@@ -417,9 +423,13 @@ at the first account, so it costs one failed attempt on `loadtest01` and none on
   documents as Employees, with department `LoadTest`. Nothing removes them. Restore the snapshot
   instead (run order, step 5). The baseline's uploads also grow the corpus before the load phase
   asks anything.
-- **The ask timeout (300 s) is shorter than the server's worst case**, so an abandoned ask can still
-  be holding the account's in-flight slot. The run is then INVALID twice over: the timeout counts
-  against `http_req_failed`, and the next ask is an `ask_in_flight` 429.
+- **The ask timeout outlasts the server's in-flight slot** (2,775 s + 60 s, since 1 November 2026).
+  It was 300 s, shorter than the server's worst case, and NFR-08's first run on 1 November was
+  INVALID for it: k6 abandoned asks the server was still answering, and each account's next asks
+  were `ask_in_flight` 429s, 67 of them (D-82's dated note). `ASK_SLOT_TIMEOUT_S` in `common.js`
+  copies the server's value, and `apps/api/tests/test_load_test_timeout_agreement.py` holds the
+  copy equal. NFR-08's `maxDuration` is derived from it. NFR-09's phase durations were not
+  revisited: an ask still running when a phase ends is interrupted after k6's graceful stop.
 - **The upload timeout (300 s) has the same shape.** An upload k6 abandons keeps the account's
   ingestion slot until the server finishes it, because that slot has no timeout (D-85). The
   account's next upload, about 10 s later, is then an `ingestion_in_flight` 429, and so is each
@@ -430,8 +440,9 @@ at the first account, so it costs one failed attempt on `loadtest01` and none on
   now counts against each generation attempt's own 300 s timeout, and an attempt that times out
   is retried, which adds work for the asks behind it. The NPU has the same work either way, so
   the average wait should not change, but the slowest asks now depend on the order FLM serves
-  requests in, which is not known. No number here changes for it. An NFR-09 load phase whose
-  asks approach 300 s will go INVALID on timeouts rather than read FAIL.
+  requests in, which is not known. No number here changes for it. NFR-08's first run on
+  1 November 2026 measured it at 5 users: answered asks had a p90 of 251 s
+  (`corpus/objective-02/runs/2026-11-01/nfr08-runs.md`).
 - **The server's limits are copied, not read.** `common.js` holds 20/min, 10/min and 60/hour as
   copies of `apps/core/constants.py`. If a rate changes there, change it here too, and the pacing
   checks follow.

@@ -4,7 +4,7 @@
 import { check } from 'k6';
 import { Rate, Trend } from 'k6/metrics';
 import {
-  BASE_URL, EXPECTED_ROLE, ASK_LIMIT, LOGIN_SPACING_S,
+  BASE_URL, EXPECTED_ROLE, ASK_LIMIT, ASK_TIMEOUT_S, LOGIN_SPACING_S,
   requireThat, minimumSpacingSeconds, accountEmail, accountRange,
   loginAccounts, sessionForThisVu, warmUp, paceFrom, setupTimeoutSeconds,
   nextQuestion, ask, isValidReply, wasAnswered, validityProblems, throttleCounts,
@@ -13,9 +13,13 @@ import {
 
 const P90_LIMIT_MS = 4000;
 // D-84 decision 3 fixes 5 for Objective 03. VUS is still read so the script can be
-// tried smaller, and the JSON records whatever ran.
+// tried smaller, and the JSON records whatever ran: the single-user end-to-end
+// baseline of 1 November 2026 is VUS=1, ITERATIONS=20.
 const VUS = Number(__ENV.VUS || 5);
-const ITERATIONS = Number(__ENV.ITERATIONS || 100);
+// 25 since 1 November 2026, down from 100, so the rerun fits the gate day: the
+// first run's answered asks had a p90 of 251 s at 5 users, so 25 asks are about 5
+// rounds of that. Recorded in corpus/objective-02/runs/2026-11-01/nfr08-runs.md.
+const ITERATIONS = Number(__ENV.ITERATIONS || 25);
 
 // Reported beside the measured p90, as D-84 decision 3 asks; this run does not
 // measure it. It is not the same measure as ask_answered_ms: it times one
@@ -44,8 +48,8 @@ const ACCOUNTS = accountRange(1, VUS);
 // difference is enough.
 // A floor of at least W/(N-1) = 60/9 = 6.67 s holds however late any one ask is
 // stamped, at any thread count (common.js, minimumSpacingSeconds): 7 s puts 11
-// asks more than 9 * 7 = 63 s apart at the server. Cost: 100 iterations / 5 VUs
-// * 7 s = 140 s at least.
+// asks more than 9 * 7 = 63 s apart at the server. Cost: 25 iterations / 5 VUs
+// * 7 s = 35 s at least.
 const ITERATION_FLOOR_S = 7;
 requireThat(ITERATION_FLOOR_S >= minimumSpacingSeconds(ASK_LIMIT),
   `ITERATION_FLOOR_S must be at least ${minimumSpacingSeconds(ASK_LIMIT).toFixed(2)} s.`);
@@ -53,8 +57,19 @@ requireThat(ITERATION_FLOOR_S >= minimumSpacingSeconds(ASK_LIMIT),
 // k6's default setupTimeout is 60 s. setup() logs in VUS accounts, 3.5 s apart,
 // then makes 2 warm-up asks from account 01 paced at the floor. Typically:
 // 4 * 3.5 s + one login + 2 asks of ~7 s = about 30 s. Allowed: every step at its
-// worst, 5 * 30 s (login timeout) + 2 * 300 s (ask timeout) + 60 s = 810 s.
+// worst, 5 * 30 s (login timeout) + 2 * 2,835 s (ask timeout) + 60 s = 5,880 s.
 const SETUP_TIMEOUT_S = setupTimeoutSeconds(ACCOUNTS.length, ITERATION_FLOOR_S);
+
+// k6 ends the scenario at maxDuration and interrupts any ask still in flight,
+// which abandons it as a timeout does. So maxDuration follows ASK_TIMEOUT_S
+// rather than being a guess (it was 45 m, shorter than one ask's timeout now).
+// No iteration lasts longer than ASK_TIMEOUT_S + ITERATION_FLOOR_S, and a VU
+// starts its next iteration as soon as one ends, so each VU has started its
+// (k+1)th by k such lengths. Every one of ITERATIONS has therefore started by
+// ceil(ITERATIONS / VUS) - 1 lengths and finished by ceil(ITERATIONS / VUS).
+// It is a ceiling only: at 5 VUs and 25 iterations it is 5 * 2,842 s = 3 h 57 m,
+// and a run whose asks come back takes minutes.
+const MAX_DURATION_S = Math.ceil(ITERATIONS / VUS) * (ASK_TIMEOUT_S + ITERATION_FLOOR_S);
 
 // Timed for every ask, and again for answered replies only, because a
 // no-answer reply skips generation and comes back much faster.
@@ -75,7 +90,7 @@ export const options = {
       executor: 'shared-iterations',
       vus: VUS,
       iterations: ITERATIONS,
-      maxDuration: '45m',
+      maxDuration: `${MAX_DURATION_S}s`,
     },
   },
   // count, so a run with no answered replies reads as NO DATA, not a p90 of 0.
@@ -167,6 +182,8 @@ export function handleSummary(data) {
     vus: VUS,
     iterations: ITERATIONS,
     iteration_floor_s: ITERATION_FLOOR_S,
+    ask_timeout_s: ASK_TIMEOUT_S,
+    max_duration_s: MAX_DURATION_S,
     login_spacing_s: LOGIN_SPACING_S,
     base_url: BASE_URL,
     finished_at: new Date().toISOString(),
@@ -183,6 +200,7 @@ export function handleSummary(data) {
     `(${SINGLE_USER_BASELINE.source})\n` +
     runRecordLines(label, data) +
     `${label('VUs / iterations')}${VUS} / ${ITERATIONS}\n` +
+    `${label('ask timeout / max')}${ASK_TIMEOUT_S} s / ${MAX_DURATION_S} s\n` +
     `${label('run valid')}${valid}\n` +
     problems.map((p) => `    INVALID: ${p}\n`).join('') +
     `${label('verdict')}${verdict}\n`;

@@ -5011,6 +5011,29 @@ NFR-08, NFR-09 and PR #30
 > - **Objective 03 on 23 October** could not run against this branch: item 5 was not built until
 >   26 October.
 
+> **1 November 2026: "the 300 s ask timeout is kept" no longer holds. k6's ask timeout now
+> outlasts the server's in-flight slot,** at the user's instruction.
+>
+> - **Why.** NFR-08's first run (5 VUs, 100 asks) was INVALID for exactly the gap this decision
+>   accepted. k6 abandoned asks at 300 s while the server was still answering them, and each
+>   account's next asks were refused with `ask_in_flight`: 67 of them. The summary is kept as
+>   evidence in `corpus/objective-02/runs/2026-11-01/`.
+> - **The new value.** `ASK_TIMEOUT_S` is `ASK_SLOT_TIMEOUT_S` + 60 s, 2,835 s. `common.js`
+>   copies the slot's 2,775 s, and `apps/api/tests/test_load_test_timeout_agreement.py` holds the
+>   copy equal to the server's.
+> - **NFR-08's other changes:**
+>   - `maxDuration` is derived from the ask timeout, so k6 never interrupts an ask in flight;
+>   - `ITERATIONS` drops from 100 to 25, so the rerun fits the gate day;
+>   - concurrency stays 5.
+> - **A single-user end-to-end baseline** (1 VU, 20 asks) runs first, as its own result. The
+>   8.90 s baseline times generation alone.
+> - **Where it is recorded.** The run record, `nfr08-runs.md` in the same folder, was written
+>   before the rerun. It also holds what the logs show about generation attempts in the first
+>   run.
+> - **Not covered:**
+>   - NFR-09 inherits the timeout. Its phase durations were not revisited.
+>   - A 503 still counts as a failed request, so one 503 in 25 asks invalidates the rerun.
+
 ## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Found:** FLM

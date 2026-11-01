@@ -146,22 +146,26 @@ export const LOGIN_TIMEOUT_S = 30;
 requireThat(LOGIN_SPACING_S >= minimumSpacingSeconds(AUTH_LIMIT),
   `LOGIN_SPACING_S must be at least ${minimumSpacingSeconds(AUTH_LIMIT).toFixed(2)} s.`);
 
-// Long on purpose: the single NPU queues requests, so a slow system should show
-// up as a measured FAIL, not a timeout. It is shorter than the server's own worst
-// case (D-79: 300 s per generation attempt, 3 attempts, plus the question's
-// embedding), so an ask k6 abandons can still be holding that account's
-// in-flight slot, and the account's next ask is then a 429 with code
-// ask_in_flight. The validity gate names that kind apart.
+// A copy of the server's in-flight slot timeout, ASK_SLOT_TIMEOUT_SECONDS in
+// apps/api/ask_slot.py: 300 s per generation attempt x 3 attempts, plus 1,875 s
+// for the question's embedding (ASK_IN_FLIGHT_MARGIN_SECONDS). No ask outlasts it.
+// apps/api/tests/test_load_test_timeout_agreement.py holds the copy equal.
+export const ASK_SLOT_TIMEOUT_S = 2775;
+
+// At least the slot's timeout, so k6 never abandons an ask whose slot is still
+// held (1 November 2026, after NFR-08's first run; D-82's dated note). It was
+// 300 s, shorter than the server's worst case: k6 gave up on asks the server
+// was still answering, and each account's next asks were 429 ask_in_flight
+// until the server finished, 67 of them, so the run was INVALID. A slow system
+// now shows up as a slow ask, a FAIL, or a 503 from the server's own bound.
+// The extra 60 s is for k6's clock starting before the server takes the slot.
 //
 // Under D-85's 24 threads every VU's ask is inside the server at once, so the
 // queue for the NPU is inside the server's calls to FLM rather than in front of
 // Waitress, and FLM sees one request per VU at a time (20 in NFR-09's load
-// phase) instead of at most 4, which nothing has measured FLM doing. The
-// wait then counts against each generation attempt's own 300 s as well as this.
-// That moves where the time is spent, not how much there is, so this stays; but
-// a server-side attempt that times out is retried, which adds NPU work for the
-// asks behind it.
-export const ASK_TIMEOUT_S = 300;
+// phase). The wait counts against each generation attempt's own 300 s, and an
+// attempt that times out is retried, which adds NPU work for the asks behind it.
+export const ASK_TIMEOUT_S = ASK_SLOT_TIMEOUT_S + 60;
 
 // Two untimed asks before measuring, so the first measured ask does not pay for
 // loading the model.
