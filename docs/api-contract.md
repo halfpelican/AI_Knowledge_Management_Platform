@@ -100,7 +100,8 @@ Response bodies the front end relies on (Stage 2 implementation):
   The client shows it under the email field, as FR-01 requires, rather than as a
   form-level banner.
 - `403`: `{"detail": "Your role does not hold the 'manage_roles' permission."}`.
-- Unmatched path: JSON `404 {"detail": "Not found."}`.
+- Unmatched path under `/api/`: JSON `404 {"detail": "Not found."}`. Since Stage 5 item 9 a path
+  outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
 - CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
   `POST /api/auth/login` when the browser already holds a session.
 - `POST /api/auth/register` starts no session (D-23).
@@ -979,3 +980,31 @@ the text ceiling.
 - **On `POST /api/meetings`, with a PDF file,** the answer is `400 {"file": ["..."]}` with the
   sentence alone. Nothing is stored.
 - **The text ceiling keeps its existing wording on both routes.**
+
+## Stage 5 item 9 — one origin for the SPA and the API, and JSON 400 and 500
+
+The alpha serves the production build of `frontend/` and `/api` from one origin, Django under
+Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
+
+| Path | Answer |
+|---|---|
+| `/api/...` | as every section above states; an unmatched one is `404 {"detail": "Not found."}` |
+| `/api` | `301` to `/api/` |
+| a file in the build, such as `/assets/index-<hash>.js` or `/favicon.svg` | `200` the file. Under `/assets/`, `Cache-Control: max-age=315360000, public, immutable`, because Vite puts a content hash in every name there; anything else, `max-age=60, public` |
+| `/assets/...` naming no file in the build | `404 {"detail": "Not found."}`, never `index.html` |
+| any other path, for `GET` or `HEAD` | `200` the build's `index.html`, `Cache-Control: no-cache`, so the React router answers a reload or a typed address on a client route |
+| any other path, another method | `405`, or Django's `403` page first when the CSRF check refuses it |
+| any path outside `/api/`, with no build in `SPA_DIST_DIR` | `404 {"detail": "Not found."}`, as before item 9 |
+
+- **`/media/` is a client route like any other.** It answers `index.html` and never a stored file.
+  An original leaves only through FR-15's scoped download.
+- **Under `DEBUG=False`, two errors that were Django's HTML pages are JSON under `/api/`:**
+  - an unhandled exception is `500 {"detail": "A server error occurred."}`. The body never
+    carries the exception; the traceback goes to the error file (D-75).
+  - a `Host` header outside `ALLOWED_HOSTS` is `400 {"detail": "Bad request."}`.
+
+  Both carry D-76's never-cache headers like every other `/api/` response. Outside `/api/` both
+  stay Django's own HTML pages. Under `DEBUG=True` Django shows its debug pages instead, which is
+  one reason the alpha runs with `DEBUG=False`.
+- **Nothing outside `/api/` is marked never-cache** by D-76's middleware: `index.html` is
+  `no-cache` (stored, but revalidated on every load) and the assets are cached as above.

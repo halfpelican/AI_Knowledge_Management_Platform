@@ -79,11 +79,17 @@ two names are not interchangeable.
 
 Both servers have to be running. The browser only ever talks to Vite: `/api` is
 proxied from there to Django on port 8000, so the session cookie is same-origin and
-there is no CORS configuration anywhere (D-21). Port 8000 serves the API and nothing
-else — no server-rendered pages, no admin site — so it is the wrong address to open
-in a browser. With Django stopped, the interface loads and every request from it
+there is no CORS configuration anywhere (D-21). In development, port 8000 serves the API
+and nothing else — no server-rendered pages, no admin site — so it is the wrong address
+to open in a browser. With Django stopped, the interface loads and every request from it
 fails. `frontend/README.md` has the rest: Node version, the component sheet, lint
 and build.
+
+**The alpha is different** (Stage 5 item 9, D-64). Django under Waitress serves the
+production build (`frontend/dist`) and `/api` from one origin, `http://127.0.0.1:8000`,
+with `DEBUG=False` and no Vite server. `docs/alpha-deployment.md` is the runbook. Once
+`frontend/dist` has been built, `runserver` on port 8000 serves that build too, so delete
+`frontend/dist` if you want development's API-only port 8000 back.
 
 ## First-run accounts
 

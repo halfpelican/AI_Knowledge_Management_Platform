@@ -108,3 +108,5 @@ tzdata==2026.3
     #   psycopg
 waitress==3.0.2
     # via -r requirements.in
+whitenoise==6.12.0
+    # via -r requirements.in
