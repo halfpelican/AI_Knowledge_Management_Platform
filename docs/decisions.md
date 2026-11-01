@@ -3469,6 +3469,44 @@ build over HTTPS later is a `.env` change and not a code change:
   that terminates TLS. That is a new
   decision with the registration question attached, not an edit to this one.
 
+> **1 November 2026: item 9 built the configuration, with Django serving the build.** The brief
+> allowed either Django with a static-files layer and a catch-all, or a reverse proxy in front.
+> This is the first, because it adds no second process to the laptop. `docs/alpha-deployment.md`
+> is the runbook, and `docs/api-contract.md`'s "Stage 5 item 9" section lists every path's answer.
+>
+> - **WhiteNoise 6.12.0 serves `frontend/dist` from its own folder** (`WHITENOISE_ROOT`), with no
+>   `collectstatic` and no `django.contrib.staticfiles`. It reads the folder at start-up, so the
+>   SPA is built before the server starts and a rebuild needs a restart.
+> - **`config/spa.py`'s catch-all answers every other path with `index.html`.**
+>   - It answers `GET` and `HEAD` only; anything else is a 405.
+>   - It leaves out `/api` and `/assets/`. An unmatched `/api/` path keeps its JSON 404, and a
+>     missing asset is a 404 rather than HTML served as a script.
+>   - With no build, it is the JSON 404, as before item 9.
+> - **Caching:**
+>   - `index.html` is `no-cache`;
+>   - `/assets/` is immutable, because Vite content-hashes those names and `vite.config.js` now
+>     writes `assetsDir` out;
+>   - everything else gets WhiteNoise's 60 s.
+>   - WhiteNoise also serves `/index.html` itself, with the 60 s, but only a typed address reaches
+>     it.
+> - **Nothing serves `MEDIA_ROOT`.** `/media/...` is a client route, and a test pins it.
+> - **JSON 400 and 500 under `/api/`** (`config/errors.py`), with fixed sentences and never the
+>   exception. The traceback still reaches the error file (D-75). `handler400` covers the
+>   disallowed `Host` that D-85's note left to item 9. Outside `/api/`, Django's pages are
+>   unchanged.
+> - **The settings this decision names** (`CSRF_TRUSTED_ORIGINS` and both `*_COOKIE_SECURE`) are
+>   read from the environment, with the loopback defaults. `DEBUG` already defaulted to `False`.
+> - **The build refuses another origin.** `vite.config.js` refuses a `VITE_API_BASE_URL` that is
+>   another origin or a relative path, because the SameSite=Lax cookies would then never reach
+>   `/api`.
+> - **Not covered:**
+>   - **The demonstration script that item 9's brief also asks for,** with D-40's conditions. It
+>     needs the deployed alpha's database, to screen each question's top-score margin.
+>   - **Which database the alpha serves.**
+>   - **A path that is neither `/api` nor a client route** shows the SPA's shell with an empty main
+>     area, as it does in development.
+>   - **`npm ci` reports 5 advisories** (2 moderate, 3 high), which nobody has looked into.
+
 ## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
 
 **Status:** Settled by the user · **Date:** 2026-10-05 · **Settles:** D-54 · **Stage:** 5

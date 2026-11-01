@@ -21,5 +21,8 @@ anthropic==1.5.0
 # The WSGI server for the measured run and the alpha (D-64, D-85). Pure Python,
 # and it runs on native Windows, where Gunicorn does not.
 waitress==3.0.2
+# Serves the built SPA (frontend/dist) from the same origin as /api in the alpha
+# (D-64, Stage 5 item 9). Pure Python, so there is nothing to compile.
+whitenoise==6.12.0
 pytest==9.1.1
 pytest-django==4.14.0

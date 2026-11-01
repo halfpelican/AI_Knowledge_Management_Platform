@@ -35,7 +35,15 @@ if ENV_FILE.exists():
 
 SECRET_KEY = env.str("SECRET_KEY")  # required, no default
 DEBUG = env.bool("DEBUG", default=False)
+# The M6 alpha is served on loopback (D-64), so the defaults are the loopback values. Exposing it
+# beyond the laptop is a .env change and a new decision, not a code change.
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["127.0.0.1", "localhost"])
+# The origins an unsafe request may come from besides its own. The alpha's pages and /api share
+# one origin (D-21), so Django's own same-origin check already passes them; these are D-64's
+# loopback defaults, for waitress-serve's port 8000.
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS", default=["http://127.0.0.1:8000", "http://localhost:8000"]
+)
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -60,6 +68,9 @@ MIDDLEWARE = [
     # Also sets X-Content-Type-Options: nosniff, which is what binds a download to the
     # Content-Type its signature chose (D-75).
     "django.middleware.security.SecurityMiddleware",
+    # Serves the built SPA's files (WHITENOISE_ROOT below) before any session or view work,
+    # directly after SecurityMiddleware as WhiteNoise's documentation places it (Stage 5 item 9).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -141,6 +152,11 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = "Lax"
+# Off by default: the alpha is plain HTTP on loopback (D-64), and whether a browser returns a
+# Secure cookie over plain HTTP, even on loopback, varies by browser. Turn both on in .env when
+# the same build is served over HTTPS.
+SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=False)
+CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=False)
 
 # --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
 # Every route is protected unless it opts out explicitly (registration and login).
@@ -231,6 +247,38 @@ MEDIA_URL = "/media/"
 # memory: the size ceiling is checked against the declared length before the body is
 # parsed at all (FR-08: "enforced before the file is written to storage").
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2 MB
+# Nothing serves MEDIA_ROOT. No URL pattern maps MEDIA_URL, WhiteNoise's root is the SPA build
+# below and not this folder, and a stored original leaves only through FR-15's scoped download.
+
+# --- The single-page app, from the same origin as /api (D-21, D-64, Stage 5 item 9) -------
+# The production build of frontend/ (`npm run build`) is served by this process, so the SPA
+# and /api share one origin and the SameSite=Lax cookies above are sent on every call. Two
+# parts serve it:
+#
+# - WhiteNoise serves every file in the build at its own path: /assets/..., /favicon.svg.
+#   It reads the folder once, at start-up, so the SPA is built BEFORE the server starts.
+# - config.spa.index answers every other path outside /api/ and /assets/ with the build's
+#   index.html, so a client route such as /documents/<id> survives a reload. /api/ keeps its
+#   own JSON 404 (config/urls.py).
+#
+# An absolute path. Without a build, the catch-all answers the JSON 404 and WhiteNoise serves
+# nothing. Under DEBUG=False WhiteNoise prints "UserWarning: No directory at: ..." to the
+# server's console as it starts, and the deployment runbook's smoke check fails on GET /.
+
+SPA_DIST_DIR = Path(env.str("SPA_DIST_DIR", default=str(BASE_DIR / "frontend" / "dist")))
+WHITENOISE_ROOT = SPA_DIST_DIR
+# Vite writes every file under assets/ (its default build.assetsDir) with a content hash in its
+# name, so a changed file is a new URL and these can be cached for good: WhiteNoise then sends
+# "max-age=315360000, public, immutable". Everything else in the build, such as favicon.svg,
+# keeps WhiteNoise's 60 seconds. The URL conf's catch-all leaves /assets/ alone for the same
+# reason, so a missing asset is a 404 rather than index.html served as JavaScript.
+WHITENOISE_IMMUTABLE_FILE_TEST = r"^/assets/"
+# No collectstatic and no django.contrib.staticfiles: the build is served from its own folder.
+# Without this, under DEBUG WhiteNoise would ask the staticfiles finders about every request.
+WHITENOISE_USE_FINDERS = False
+# One origin, so nothing needs the build cross-origin. WhiteNoise's default is
+# "Access-Control-Allow-Origin: *" on every file it serves.
+WHITENOISE_ALLOW_ALL_ORIGINS = False
 
 # --- Internationalisation -------------------------------------------------------
 

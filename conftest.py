@@ -288,6 +288,19 @@ def media_root(tmp_path, settings):
     return root
 
 
+@pytest.fixture(autouse=True)
+def spa_not_built(tmp_path, settings):
+    """Every test sees no SPA build unless it builds one (Stage 5 item 9).
+
+    SPA_DIST_DIR defaults to frontend/dist, which exists on a laptop that has run
+    ``npm run build`` and never in CI. Without this, a path outside /api/ would answer
+    index.html on one machine and the JSON 404 on the other, and WhiteNoise would scan
+    the build for every test client. A test that needs the SPA points both settings at a
+    build of its own (apps/api/tests/test_single_origin.py)."""
+    settings.SPA_DIST_DIR = tmp_path / "spa-not-built"
+    settings.WHITENOISE_ROOT = None
+
+
 @pytest.fixture
 def corpus():
     """The directory holding the committed sample files."""
