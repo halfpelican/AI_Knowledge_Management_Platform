@@ -12,26 +12,54 @@ there).
 > of those would let anyone who can reach the laptop register an Employee account, and each is a
 > new decision with that question attached (D-64), not a change to this runbook.
 
+**Where it runs from (D-88).**
+
+- **Its own worktree, `KMP_Prototype-alpha`,** checked out *detached* at `main`'s commit. The main
+  checkout is left alone, and GitHub Desktop can still switch it to `main`.
+- **Its own `.venv`.** A `uv pip sync` from an older checkout into a shared venv would remove
+  WhiteNoise, and a local `.venv` makes every `$root\.venv` path below work as written.
+- **Its own `.env`,** naming the alpha's database, `kmp_demo_20261101`, its `MEDIA_ROOT` and its
+  own log paths.
+
+**Its database is `kmp_demo_20261101`,** restored once from item 6's measured snapshot (D-88).
+The media and logs live in `C:\kmp-demo\2026-11-01`, outside every checkout.
+
+- **Never point the alpha at `kmp` or at the measurement database `kmp_obj02_20261101`.**
+- **Do not re-index, reprocess or delete** between building the demonstration threads and
+  demonstrating them (D-40).
+
 **The measured run uses the same port.** `docs/measurement-runbook.md` serves Waitress on
-`127.0.0.1:8000` from its own database. Only one server can listen there, so finish or stop the
-measured run first. Never point the alpha at the measurement database.
+`127.0.0.1:8000` from its own database. Only one server can listen there, so stop the measurement
+server first.
 
 **Before you start:**
 
 - the commit to deploy is merged to `main`, and CI passed on it;
 - Docker Desktop is running, with the database up (`docker compose up -d`);
 - `flm` is v0.9.39, with `gemma3:4b` and `embed-gemma` pulled (`README.md`, D-83);
-- Node and npm are installed (`node --version`).
+- Node and npm are installed (`node --version`), and so is `uv`.
 
 ## 1. The code
 
+The first time, from the main checkout, which this step does not change:
+
 ```powershell
-$root = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype'
+$main = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype'
+$root = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-alpha'
+git -C $main fetch origin
+git -C $main worktree add --detach $root origin/main
+```
+
+Every time, including the first:
+
+```powershell
+$root = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-alpha'
 $py   = "$root\.venv\Scripts\python.exe"
 Set-Location $root
-git switch main
-git pull --ff-only
+git fetch origin
+git switch --detach origin/main
 git status --porcelain     # must print nothing, so the commit recorded in step 7 is what runs
+git log --oneline -1
 ```
 
 ## 2. FLM
@@ -51,39 +79,51 @@ $env:FLM_BASE_URL = 'http://127.0.0.1:8625/v1'  # the URL .env names; check_flm.
 $LASTEXITCODE                                   # must be 0
 ```
 
-`check_flm.py` exits 1 if the embeddings are not deterministic. Do not deploy past that.
+`check_flm.py` exits 1 if the embeddings are not deterministic. Do not deploy past that. The first
+time, run this step after step 3, because `$py` does not exist until then.
 
-## 3. Python dependencies
+## 3. Python dependencies, in the worktree's own venv
+
+The first time:
 
 ```powershell
-uv pip sync --python .venv/Scripts/python.exe requirements.txt
+uv venv --python 3.12 .venv
+& $py --version                 # Python 3.12.x
 ```
 
-That makes the venv match `requirements.txt` exactly. Since item 9 that includes
-`whitenoise==6.12.0`, which serves the built SPA. The venv is shared by every worktree, so a
-later sync from a checkout whose `requirements.txt` predates item 9 removes WhiteNoise again.
+Every time:
+
+```powershell
+uv pip sync --python .venv\Scripts\python.exe requirements.txt
+```
+
+That makes this venv match `requirements.txt` exactly, `whitenoise==6.12.0` included. Nothing
+else syncs into it.
 
 ## 4. The environment, then the database
 
-Set these in the window that will run the server. They apply to the `manage.py` commands run in
-the same window too.
+**The first time, write `$root\.env`** with these values and nothing else. Generate the key with
+`& $py -c "import secrets; print(secrets.token_urlsafe(50))"`. It uses letters, digits, `-` and
+`_` only, so `.env` reads it as written. `.env` is gitignored; never commit it.
 
-```powershell
-$env:DEBUG                 = 'False'      # .env sets DEBUG=True; the shell's value wins over .env
-$env:ALLOWED_HOSTS         = '127.0.0.1,localhost'
-$env:CSRF_TRUSTED_ORIGINS  = 'http://127.0.0.1:8000,http://localhost:8000'
-$env:SESSION_COOKIE_SECURE = 'False'      # plain HTTP on loopback (D-64)
-$env:CSRF_COOKIE_SECURE    = 'False'
-$env:SPA_DIST_DIR          = "$root\frontend\dist"
-$env:WAITRESS_LOG_PATH     = "$root\logs\waitress.log"   # Waitress's own log (D-87)
-$env:FLM_BASE_URL          = 'http://127.0.0.1:8625/v1'
+```
+SECRET_KEY=<the generated key>
+DEBUG=False
+ALLOWED_HOSTS=127.0.0.1,localhost
+DATABASE_URL=postgres://kmp:kmp@127.0.0.1:5432/kmp_demo_20261101
+MEDIA_ROOT=C:\kmp-demo\2026-11-01\media
+AUDIT_LOG_PATH=C:\kmp-demo\2026-11-01\logs\audit.log
+ERROR_LOG_PATH=C:\kmp-demo\2026-11-01\logs\errors.log
+WAITRESS_LOG_PATH=C:\kmp-demo\2026-11-01\logs\waitress.log
+AI_PROVIDER=flm
+FLM_BASE_URL=http://127.0.0.1:8625/v1
+FLM_API_KEY=flm
+FLM_CHAT_MODEL=gemma3:4b
+FLM_EMBED_MODEL=embed-gemma
+EMBEDDING_DIMENSION=768
 ```
 
-- **Only `DEBUG` differs from its default.** The others are set anyway, so the window shows the
-  configuration that runs, and a stray line in `.env` cannot change it.
-- **`DATABASE_URL` and `MEDIA_ROOT` come from `.env`** unless the demonstration database is a
-  different one. Then set both here, together, because a database's documents are stored in its
-  `MEDIA_ROOT`.
+Then, in the deployment window:
 
 ```powershell
 & $py manage.py migrate
@@ -104,15 +144,8 @@ D-64 puts out of scope for the alpha (NFR-03's scan moves to round 2):
 Anything else is a stop:
 
 - `ai.W001` means FLM is unreachable. Go back to step 2.
-- `security.W009` means `SECRET_KEY` is weak, as `.env.example`'s `change-me-dev-only` is. Generate
-  one, put it in `.env` as `SECRET_KEY=...`, and run the check again:
-
-  ```powershell
-  & $py -c "import secrets; print(secrets.token_urlsafe(50))"
-  ```
-
-  The key uses letters, digits, `-` and `_` only, so `.env` reads it as written. Changing the key
-  signs everyone out, because sessions are signed with it. Stored passwords and data are not
+- `security.W009` means `SECRET_KEY` is weak. Put a generated one in `.env`, as above. Changing the
+  key signs everyone out, because sessions are signed with it. Stored passwords and data are not
   affected.
 
 ## 5. The front end
@@ -136,21 +169,44 @@ The build writes `frontend\dist`: `index.html`, `favicon.svg`, and `assets\index
 - **Build before starting the server.** WhiteNoise reads the folder once, at start-up, so a rebuild
   needs a restart.
 
-## 6. Start the server
+## 6. Start the server, in a fresh window
 
-In the window from step 4:
+**Open a new PowerShell window for the server.** Never use the measurement window, or any window
+that has set `DATABASE_URL` or `MEDIA_ROOT` for something else. In it, the database and its media
+are set together, as `.env` names them. Django is then asked which database it will connect to,
+and the server starts only if that is `kmp_demo_20261101`:
 
 ```powershell
+$root = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-alpha'
+$py   = "$root\.venv\Scripts\python.exe"
+Set-Location $root
+$env:DEBUG                 = 'False'
+$env:DATABASE_URL          = 'postgres://kmp:kmp@127.0.0.1:5432/kmp_demo_20261101'
+$env:MEDIA_ROOT            = 'C:\kmp-demo\2026-11-01\media'
+$env:ALLOWED_HOSTS         = '127.0.0.1,localhost'
+$env:CSRF_TRUSTED_ORIGINS  = 'http://127.0.0.1:8000,http://localhost:8000'
+$env:SESSION_COOKIE_SECURE = 'False'      # plain HTTP on loopback (D-64)
+$env:CSRF_COOKIE_SECURE    = 'False'
+$env:SPA_DIST_DIR          = "$root\frontend\dist"
+$env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-01\logs\waitress.log'
+$env:FLM_BASE_URL          = 'http://127.0.0.1:8625/v1'
+$name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
+"Django will connect to: $name"
+if ($name -ne 'kmp_demo_20261101') { throw "Not starting: the database is '$name', not kmp_demo_20261101." }
 & "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
 ```
 
+- **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
+  automatically", so `$name` holds two lines, never equals `kmp_demo_20261101`, and the check
+  refuses even the right database.
 - **24 threads, set explicitly** (D-85). Waitress defaults to 4.
 - **The console stays quiet.** Waitress's own lines go to `WAITRESS_LOG_PATH` (D-87). From another
-  window, `Get-Content "$root\logs\waitress.log" -Tail 1` shows
+  window, `Get-Content C:\kmp-demo\2026-11-01\logs\waitress.log -Tail 1` shows
   `Serving on http://127.0.0.1:8000`.
 - **`UserWarning: No directory at: ...frontend\dist\`** in the console means there is no build at
   `SPA_DIST_DIR`. Stop the server, do step 5, and start it again.
-- **Errors** go to `logs\errors.log` (D-75).
+- **Errors** go to `C:\kmp-demo\2026-11-01\logs\errors.log` (D-75), with failed provider attempts
+  as WARNINGs (D-82's note).
 - **To stop:** Ctrl+C. A restart also clears the throttle counters and in-flight slots, which live
   in the process's memory (D-79).
 
@@ -160,7 +216,7 @@ In a second window. The record is kept outside the repository, so it is never co
 checkout does not change it.
 
 ```powershell
-$root   = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype'
+$root   = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-alpha'
 $py     = "$root\.venv\Scripts\python.exe"
 $record = "$env:USERPROFILE\Documents\KMP-alpha-deployments.txt"
 Set-Location $root
@@ -168,7 +224,7 @@ $sha      = git rev-parse HEAD
 $dirty    = [bool](git status --porcelain)
 $flm      = flm version | Select-Object -First 1
 $waitress = & $py -c "import importlib.metadata as m; print(m.version('waitress'))"
-"$(Get-Date -Format o)  commit $sha  dirty=$dirty  flm '$flm'  waitress $waitress threads=24  DEBUG=False  http://127.0.0.1:8000" |
+"$(Get-Date -Format o)  commit $sha  dirty=$dirty  database kmp_demo_20261101  flm '$flm'  waitress $waitress threads=24  DEBUG=False  http://127.0.0.1:8000" |
     Add-Content $record
 Get-Content $record -Tail 1
 ```
@@ -214,8 +270,15 @@ When all five checks pass, open `http://127.0.0.1:8000` in the browser on this l
 
 ## Redeploying
 
-1. Ctrl+C in the server window.
-2. Repeat steps 1 to 8. Step 7 appends a new line, so the record keeps every deployment in order.
+1. Ctrl+C in the server window, and close it.
+2. In the deployment window, repeat step 1's every-time block. It moves the worktree, detached, to
+   the new `origin/main`. Then do steps 2, 3's sync, 4's `migrate` and `check --deploy`, and 5.
+3. Start the server in a **new** window (step 6), then do steps 7 and 8. Step 7 appends a new line,
+   so the record keeps every deployment in order.
+
+Redeploying does not touch the database. Restoring it again from the snapshot (D-88) resets the
+demonstration's threads and accounts, so do that only before the demonstration threads are
+built (D-40).
 
 ## What this deployment does not do
 

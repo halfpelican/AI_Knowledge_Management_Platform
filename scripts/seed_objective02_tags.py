@@ -17,15 +17,16 @@ nothing and says so.
 **No Department tags.** FR-15's Department dimension is the ``documents.department`` column
 (D-72), the same source FR-14's filter uses.
 
-**Which database.** It writes wherever ``DATABASE_URL`` points, and prints the name first. The
-corpus lives in ``kmp``, the database the alpha runs on. A worktree's ``.env`` may point at its
-own test database, so run it with ``DATABASE_URL`` set explicitly; an environment variable takes
-precedence over ``.env``. Each document is found by its manifest title, and a title that matches
+**Which database.** It writes wherever ``DATABASE_URL`` points, and prints the name first. Since
+1 November 2026 the alpha's database is ``kmp_demo_20261101``, restored from item 6's snapshot, and
+that is where these tags go (D-88). It was ``kmp`` when D-74 was written. A worktree's ``.env``
+may point at its own test database, so run it with ``DATABASE_URL`` set explicitly; an
+environment variable takes precedence over ``.env``. Each document is found by its manifest title, and a title that matches
 nothing (corpus not ingested) or more than one document stops the run before anything is written.
 
 Usage::
 
-    $env:DATABASE_URL = "postgres://kmp:kmp@127.0.0.1:5432/kmp"
+    $env:DATABASE_URL = "postgres://kmp:kmp@127.0.0.1:5432/kmp_demo_20261101"
     .venv/Scripts/python.exe scripts/seed_objective02_tags.py [--dry-run]
 """
 
