@@ -1,0 +1,19 @@
+2026-11-01 18:22:39,437 WARNING apps.ai.attempts generation attempt 1 of 3 failed after 106.8 s (account 24f894fb-36c4-4405-837f-3f810a479bd3): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:23:48,343 WARNING apps.ai.attempts generation attempt 1 of 3 failed after 174.5 s (account 38892b2b-cb1c-4842-a1e8-40df185d36c2): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:24:45,693 WARNING apps.ai.attempts generation attempt 2 of 3 failed after 126.3 s (account 24f894fb-36c4-4405-837f-3f810a479bd3): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:25:42,509 WARNING apps.ai.attempts generation attempt 2 of 3 failed after 114.2 s (account 38892b2b-cb1c-4842-a1e8-40df185d36c2): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:27:57,890 WARNING apps.ai.attempts generation attempt 3 of 3 failed after 135.4 s (account 38892b2b-cb1c-4842-a1e8-40df185d36c2): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:27:57,890 WARNING apps.ai.attempts POST /api/ask answered 503 (account 38892b2b-cb1c-4842-a1e8-40df185d36c2): ProviderUnavailable: FLM at http://127.0.0.1:8625/v1 returned no response conforming to STATEMENT_LIST_SCHEMA in 3 attempts; last failure: schema violation: unbalanced JSON object in the response
+2026-11-01 18:27:57,890 ERROR django.request Service Unavailable: /api/ask
+2026-11-01 18:30:26,720 WARNING apps.ai.attempts generation attempt 1 of 3 failed after 58.6 s (account 5c73fdb5-794e-423f-8267-2d438e189481): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:32:38,391 WARNING apps.ai.attempts generation attempt 2 of 3 failed after 131.7 s (account 5c73fdb5-794e-423f-8267-2d438e189481): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:33:37,002 WARNING apps.ai.attempts generation attempt 3 of 3 failed after 58.6 s (account 5c73fdb5-794e-423f-8267-2d438e189481): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:33:37,003 WARNING apps.ai.attempts POST /api/ask answered 503 (account 5c73fdb5-794e-423f-8267-2d438e189481): ProviderUnavailable: FLM at http://127.0.0.1:8625/v1 returned no response conforming to STATEMENT_LIST_SCHEMA in 3 attempts; last failure: schema violation: unbalanced JSON object in the response
+2026-11-01 18:33:37,004 ERROR django.request Service Unavailable: /api/ask
+2026-11-01 18:35:23,121 WARNING apps.ai.attempts generation attempt 1 of 3 failed after 162.3 s (account 38892b2b-cb1c-4842-a1e8-40df185d36c2): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:36:21,123 WARNING apps.ai.attempts generation attempt 2 of 3 failed after 58.0 s (account 38892b2b-cb1c-4842-a1e8-40df185d36c2): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:37:29,703 WARNING apps.ai.attempts generation attempt 1 of 3 failed after 125.4 s (account 2b57d2c5-fa29-4e83-acfb-023df8a42203): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:39:33,092 WARNING apps.ai.attempts generation attempt 2 of 3 failed after 123.4 s (account 2b57d2c5-fa29-4e83-acfb-023df8a42203): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:40:28,927 WARNING apps.ai.attempts generation attempt 3 of 3 failed after 55.8 s (account 2b57d2c5-fa29-4e83-acfb-023df8a42203): SchemaViolation: unbalanced JSON object in the response
+2026-11-01 18:40:28,927 WARNING apps.ai.attempts POST /api/ask answered 503 (account 2b57d2c5-fa29-4e83-acfb-023df8a42203): ProviderUnavailable: FLM at http://127.0.0.1:8625/v1 returned no response conforming to STATEMENT_LIST_SCHEMA in 3 attempts; last failure: schema violation: unbalanced JSON object in the response
+2026-11-01 18:40:28,927 ERROR django.request Service Unavailable: /api/ask

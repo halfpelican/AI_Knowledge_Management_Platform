@@ -14,7 +14,7 @@ Times are local (+11:00) unless they end in Z.
 |---|---|---|---|---|
 | 1 | 5 / 100 | `b8d8304` | `nfr08_summary.run1-invalid-5vu.json` | **INVALID**, kept as a finding |
 | 2 | 1 / 20 | `945fd02` | `nfr08_summary.run2-baseline-1vu.json` | **INVALID** under the old rule (two 503s); answered-only p90 51,206 ms |
-| 3 | 5 / 25 | the commit after `945fd02` that adds the 503 rule and the attempt log | `nfr08_summary.json` | not yet run |
+| 3 | 5 / 25 | `eed8249` | `nfr08_summary.json` | **Valid, FAIL:** 3 × 503, answered-only p90 276,689 ms |
 
 ## Run 1: 5 VUs, 100 asks, INVALID
 
@@ -190,3 +190,73 @@ Run 1 is written up above.
   - If it fails each time, that is 3 misses in 25 (12%). The 90th-percentile request is then a
     503, so run 3 reads FAIL on that alone, whatever the latencies.
   - **Nothing was changed for it:** not the question set, nor the generation settings.
+
+### Run 3: valid, FAIL
+
+- **The run:**
+  - commit `eed8249`, with a clean tree;
+  - server pid 53900, started at 16:47:14;
+  - k6 window from 18:19:58 to 18:40:29;
+  - the file is `nfr08_summary.json`.
+- **What it measured:**
+  - 22 of 25 asks answered and 3 got a 503, so 0 invalid reasons;
+  - `p90_ms` is `null`, because the 90th-percentile request was a 503 (25 samples);
+  - answered-only p90 **276,689 ms** (22 samples), against 51,206 ms at one user in run 2;
+  - no 429, no unexpected status, and no Waitress queueing.
+- **QueryLog:** 24 rows in the window, all answered: the 2 warm-ups and the 22.
+- **The attempt log** is `nfr08_run3_attempts.log` in this folder: the window's lines from the error
+  file.
+  - **13 failed generation attempts, every one a `SchemaViolation`:** "unbalanced JSON object in
+    the response", a reply that stopped before its JSON closed. 9 were in the three 503s and 4
+    in asks answered on attempt 3. With the three 503 lines, that is 16 lines from
+    `apps.ai.attempts`.
+  - **No timeouts, no FLM errors and no failed embeddings.**
+  - **The 3 503s** are three schema violations each: loadtest04 at 18:27:57, loadtest03 at
+    18:33:37 and loadtest01 at 18:40:28.
+  - **4 more failed attempts were in asks that were then answered on attempt 3:** loadtest02's
+    first two and loadtest04's second ask's first two. They count among the 22 answered, and their
+    time includes the two discarded generations.
+  - **How long a failed attempt took:**
+    - 55.8 to 58.6 s with little else running, as in run 2 (about 59 s each);
+    - 106.8 to 174.5 s while other asks were generating.
+- **Matching the prediction.** Three 503s match the three times `QUESTIONS[3]` was asked. The log
+  names no question, by design, so this matches by count; it is not observed.
+
+### What the attempt log confirms about the cause, and what it does not
+
+- **Confirmed: one model on one NPU shares its time across concurrent asks.** This is the
+  consequence of D-35.
+  - The same failing generation took about 58 s alone and up to 174.5 s with others running.
+  - The answered-only p90 grew from 51 s at one user to 277 s at five, about 5.4 times.
+  - The log cannot tell whether FLM serves requests strictly one at a time or interleaves them.
+    Either way the throughput is fixed and divided among the asks.
+- **Not the cause of the 503s: queueing.**
+  - No attempt timed out at five users.
+  - Every failure was a reply that stopped before its JSON closed.
+  - The same failure happened at one user in run 2.
+  - The steady 56 to 59 s per attempt when uncontended fits a reply running to
+    `GENERATION_MAX_TOKENS` (800). That is the likely reading. The reply's `finish_reason` is not
+    logged, so it is not observed.
+- **An addition to the cause: the discarded attempts took NPU time from everyone.**
+  - The 13 failed attempts at about 58 s each, uncontended, come to roughly 750 s of NPU time.
+    That is an estimate from the uncontended per-attempt time, not a measurement. Their
+    wall-clock time, shared with other asks, was longer.
+  - So a large share of the run's NPU time went to replies that were then thrown away, which
+    raises every answered ask's time too.
+- **Not tuned tonight.** NFR-08 is not in the M6 gate.
+
+## NFR-09: not run on 1 November 2026
+
+**Decided by the user, on the evidence of runs 2 and 3.** NFR-09 allows at most 25% degradation at
+20 users, and at 5 users NFR-08's answered-only p90 is already about +440% over one user (277 s
+against 51 s). A run would also take well over the README's 32 to 37 minutes.
+
+**The expected failure is a prediction, not a result.**
+
+- **At 20 users,** each ask would wait behind up to 19 others.
+- **Per-attempt times would pass the 300 s attempt timeout.** At 5 users, failing attempts already
+  took up to 174.5 s. So most asks would likely end in 503 after three attempts, and the run would
+  mostly measure timeouts.
+- **It may be worse than that.** FLM may still generate a request that Django has abandoned, so
+  retries would add work to the queue rather than recover from it. The attempt log cannot show
+  that directly. It is a possibility, not an observation.

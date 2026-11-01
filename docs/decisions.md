@@ -5077,6 +5077,28 @@ NFR-08, NFR-09 and PR #30
 >   The rerun runs on a later commit than the single-user baseline, and the server code differs
 >   only by this logging.
 
+> **1 November 2026: NFR-08's results, and NFR-09 not run.** The evidence is in
+> `corpus/objective-02/runs/2026-11-01/`. Every run used dump `3bf98403…6f59`, FLM v0.9.39, and
+> Waitress at 24 threads.
+>
+> | Run | Users / asks | Commit | Result |
+> |---|---|---|---|
+> | 1 | 5 / 100 | `b8d8304` | INVALID under the old rule (67 × 429 after k6's 300 s timeout; 2 × 503) |
+> | 2 | 1 / 20 | `945fd02` | INVALID under the old rule (2 × 503); answered-only p90 51 s |
+> | 3 | 5 / 25 | `eed8249` | **Valid, FAIL:** 3 × 503, so the p90 falls on a 503; answered-only p90 277 s |
+>
+> - **What run 3's attempt log confirms:**
+>   - One 4B model on one NPU divides its time among concurrent asks, as D-35 implies. A failing
+>     generation took about 58 s alone and up to 174.5 s with others running.
+>   - All 13 failed attempts were replies that stopped before their JSON closed. None timed out.
+>     So the 503s are not caused by queueing. The same question failed the same way at one user.
+>   - Those discarded attempts also took NPU time from every other ask.
+>   - The reply being cut off at `GENERATION_MAX_TOKENS` is the likely reading, not observed.
+> - **Not tuned.** NFR-08 is not in the M6 gate.
+> - **NFR-09 was not run,** by the user's decision on the evidence of runs 2 and 3. At 5 users the
+>   answered-only p90 is already about +440% over one user, and NFR-09 allows 25% at 20 users.
+>   Its failure is recorded as a prediction, not a result.
+
 ## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Found:** FLM
