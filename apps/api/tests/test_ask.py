@@ -811,6 +811,33 @@ def test_a_provider_outage_is_503_with_an_informative_notice(
     assert not QueryLog.objects.exists()
 
 
+def test_a_503s_cause_goes_to_the_error_file_naming_the_account_and_never_into_the_reply(
+    session_client, monkeypatch, answerable, error_log_file
+):
+    """1 November 2026 (apps/ai/attempt_log.py). NFR-08's first run had two 503s whose cause
+    nothing recorded: the view discarded the exception. Its message now goes to the error file
+    as a WARNING naming the account, from both roles, while the reply keeps the fixed notice and
+    the question appears nowhere in the log."""
+    cause = (
+        "FLM at http://127.0.0.1:8625/v1 returned no response conforming to "
+        "STATEMENT_LIST_SCHEMA in 3 attempts; last failure: schema violation: empty response"
+    )
+    install(monkeypatch, ControlledService(generation_failure=ProviderUnavailable(cause)))
+
+    response = ask(session_client.client)
+
+    assert response.status_code == 503
+    assert "STATEMENT_LIST_SCHEMA" not in response.content.decode()
+    text = error_log_file.read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if " WARNING apps.ai.attempts " in line]
+    assert len(lines) == 1
+    assert (
+        f"POST /api/ask answered 503 (account {session_client.user.pk}): ProviderUnavailable: "
+        f"{cause}"
+    ) in lines[0]
+    assert QUESTION not in text
+
+
 # --- 401 -------------------------------------------------------------------------------------
 
 

@@ -126,6 +126,13 @@ visible from inside WSL2, so keeping everything on the Windows side means
 flm serve gemma3:4b --embed 1
 ```
 
+**FLM must be v0.9.39** (D-83). From v1.0.4 onward its embeddings are non-deterministic
+(upstream ROCm/FastFlowLM#732): the same text embeds to a different vector each time, so
+retrieval silently returns noise while chat still works. Check with `flm version`, and run
+`scripts/check_flm.py` before any measurement, load test or demonstration; it fails on a
+noisy build. Newer releases are evaluated after M8, and a version whose vectors differ means a
+full re-index.
+
 ```
 AI_PROVIDER=flm
 FLM_BASE_URL=http://127.0.0.1:8625/v1

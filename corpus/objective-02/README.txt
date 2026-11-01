@@ -11,5 +11,13 @@ folders:
                 copy of D03 that must be refused as a duplicate.
                 I02, the oversized file, is not stored here: the script generates it at run time.
 
+  runs/<date>/  a later run's evidence (D-84): results.json and results.md from
+                ingest_objective02.py --output-dir, snapshot.json, the harness's scores.json
+                and harness.json, and the k6 summaries. docs/measurement-runbook.md.
+
 D03 must be uploaded before B01. The script does this by following the manifest's order.
-The results of the run are in results.json and results.md, beside the manifest.
+The results of the 6 October run are in results.json and results.md, beside the manifest.
+The script refuses to overwrite them.
+
+questions.json is the thirty-question set the citation harness asks (D-84 section 2), drafted
+from these files and the manifest only. questions.md is the same set as a table, for review.

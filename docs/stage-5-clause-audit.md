@@ -435,3 +435,29 @@ each one with its evidence, so the stage audit can find them.
   worst case is about 75 s. Encrypted PDFs are untested.
 - **Load-test cleanup.** One NFR-09 run leaves up to 1,210 documents behind.
 - **Objective 03** has not been run against these limits.
+
+---
+
+## The Upload screen's findings, after item 6 — 28 October 2026, on `fix/FR-12-remeasure-objective-02`
+
+Item 6 measures; it is not a clause enumeration. Building D-85's screens found four defects on
+FR-08's Upload screen (D-85's built note). Three are fixed before the measured run (D-85's
+follow-up note), and the fourth is left for item 8.
+
+| Found | State | Evidence |
+|---|---|---|
+| A file removed from the queue while it ran was still uploaded, and an Employee could not delete it afterwards (D-73) | ✅ | Front end (`uploadQueue.test.jsx`): `holds a queued file's title and Remove until the queue finishes, then an edit and a removal both take effect` |
+| A queued file's title edited while the queue ran was ignored | ✅ | The same test |
+| A successful retry still offered "Try again", which answered 409 | ✅ | `withdraws Try again once the retry has indexed the document, as an upload that succeeds first time offers none` |
+| The client's copies of the in-flight codes could drift from the server's | ✅ | **Backend** (`apps/api/tests/test_in_flight_codes_agreement.py`): `test_the_clients_copy_of_each_in_flight_code_equals_the_one_the_server_sends`, once per code, and `test_every_code_the_client_exports_is_a_server_constant_with_the_same_value` |
+
+#### Not covered after item 6
+
+- **Leaving the Upload screen mid-queue doesn't stop the queue.** The remaining files are still
+  sent, and their outcomes are shown nowhere, because the screen is gone. Until they finish, the
+  user's next upload, transcript or reprocess gets D-85's in-flight 429. Worth one manual check in
+  item 8's live run: start a queue of three files, open the repository while the first is still
+  processing, and confirm that all three arrive and that an upload sent meanwhile shows the
+  in-flight sentence.
+- **A Remove pressed in the same instant as Upload**, before the screen re-renders, would still be
+  uploaded. The hold is the `disabled` attribute (D-85's follow-up note).

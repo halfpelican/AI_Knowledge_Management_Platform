@@ -199,7 +199,7 @@ export const TEXT = {
   roleChangeSelfDemotion:
     'You cannot remove your own Administrator role. Ask another Administrator to change it for you.',
 
-  /* ---- D-79's limits, on every screen that can meet one ------------------ */
+  /* ---- D-79's limits and D-85's in-flight refusal, on every screen that can meet one */
   // Login and registration keep the API client's own 429 text (D-26). These are
   // the per-user limits D-79 added, kept together so every 429 the interface can
   // show is read in one place. None of them restates a rate: the rates are the
@@ -241,6 +241,21 @@ export const TEXT = {
     `The upload limit has been reached, so this document was not processed again. You can try again ${when}.`,
   meetingLimitReached: (when) =>
     `The upload limit has been reached, so this transcript was not stored. What you entered is still in the form, and you can add it ${when}.`,
+  // D-85's in-flight 429 on the same three routes (`code` "ingestion_in_flight"):
+  // another upload, transcript or reprocess of this user's is still being processed,
+  // in another tab or from a screen that was left before it answered. Not the limit,
+  // so none of these says "limit". They promise no time, because the reply carries
+  // none and an ingestion takes as long as its file does. "Upload" is the word for
+  // adding material on all three, as "the upload limit" is.
+  uploadInFlight:
+    'Your previous upload is still being processed, so this file was not stored. ' +
+    'It stays in the queue, and you can upload it again once the previous upload has finished.',
+  reprocessInFlight:
+    'Your previous upload is still being processed, so this document was not processed again. ' +
+    'You can try again once the previous upload has finished.',
+  meetingInFlight:
+    'Your previous upload is still being processed, so this transcript was not stored. ' +
+    'What you entered is still in the form, and you can add it once the previous upload has finished.',
 
   /* ---- Visibility, shared by FR-08 and FR-09 (D-29) --------------------- */
   // Omitting the field means both roles, so "Everyone" sends nothing at all. A

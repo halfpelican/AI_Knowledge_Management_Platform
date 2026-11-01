@@ -1,0 +1,328 @@
+{
+  "database": "kmp_obj02_20261101",
+  "window_start": "2026-11-01T03:47:33.609000+00:00",
+  "k6_finished": "2026-11-01T04:11:37.973000+00:00",
+  "rows_in_window": 33,
+  "rows_answered": 33,
+  "rows_no_answer": {},
+  "rows_after_k6_finished": 1,
+  "rows_before_window": 0,
+  "errors_503_at": [
+    "2026-11-01T03:59:27.278000+00:00",
+    "2026-11-01T04:09:52.126000+00:00"
+  ],
+  "errors_503_seconds_after_run_start": [
+    713.7,
+    1338.5
+  ],
+  "accounts": {
+    "loadtest01@example.com": [
+      {
+        "ended_at": "2026-11-01T03:48:16.459028+00:00",
+        "seconds_after_run_start": 42.9,
+        "gap_since_previous_end_s": 42.9,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:48:37.541086+00:00",
+        "seconds_after_run_start": 63.9,
+        "gap_since_previous_end_s": 21.1,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:51:15.770063+00:00",
+        "seconds_after_run_start": 222.2,
+        "gap_since_previous_end_s": 158.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:53:20.136624+00:00",
+        "seconds_after_run_start": 346.5,
+        "gap_since_previous_end_s": 124.4,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:55:06.751684+00:00",
+        "seconds_after_run_start": 453.1,
+        "gap_since_previous_end_s": 106.6,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:58:22.387186+00:00",
+        "seconds_after_run_start": 648.8,
+        "gap_since_previous_end_s": 195.6,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:06:26.263098+00:00",
+        "seconds_after_run_start": 1132.7,
+        "gap_since_previous_end_s": 483.9,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:12:04.652938+00:00",
+        "seconds_after_run_start": 1471.0,
+        "gap_since_previous_end_s": 338.4,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": true
+      }
+    ],
+    "loadtest02@example.com": [
+      {
+        "ended_at": "2026-11-01T03:51:43.432278+00:00",
+        "seconds_after_run_start": 249.8,
+        "gap_since_previous_end_s": 249.8,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:53:32.736989+00:00",
+        "seconds_after_run_start": 359.1,
+        "gap_since_previous_end_s": 109.3,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:01:55.092860+00:00",
+        "seconds_after_run_start": 861.5,
+        "gap_since_previous_end_s": 502.4,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:06:58.916308+00:00",
+        "seconds_after_run_start": 1165.3,
+        "gap_since_previous_end_s": 303.8,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:11:13.145799+00:00",
+        "seconds_after_run_start": 1419.5,
+        "gap_since_previous_end_s": 254.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      }
+    ],
+    "loadtest03@example.com": [
+      {
+        "ended_at": "2026-11-01T03:52:45.722979+00:00",
+        "seconds_after_run_start": 312.1,
+        "gap_since_previous_end_s": 312.1,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:54:00.824690+00:00",
+        "seconds_after_run_start": 387.2,
+        "gap_since_previous_end_s": 75.1,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:56:44.212788+00:00",
+        "seconds_after_run_start": 550.6,
+        "gap_since_previous_end_s": 163.4,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:59:39.924626+00:00",
+        "seconds_after_run_start": 726.3,
+        "gap_since_previous_end_s": 175.7,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:02:56.165143+00:00",
+        "seconds_after_run_start": 922.6,
+        "gap_since_previous_end_s": 196.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:07:08.794873+00:00",
+        "seconds_after_run_start": 1175.2,
+        "gap_since_previous_end_s": 252.6,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:11:28.510883+00:00",
+        "seconds_after_run_start": 1434.9,
+        "gap_since_previous_end_s": 259.7,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      }
+    ],
+    "loadtest04@example.com": [
+      {
+        "ended_at": "2026-11-01T03:49:02.619579+00:00",
+        "seconds_after_run_start": 89.0,
+        "gap_since_previous_end_s": 89.0,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:52:57.674230+00:00",
+        "seconds_after_run_start": 324.1,
+        "gap_since_previous_end_s": 235.1,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:54:20.853295+00:00",
+        "seconds_after_run_start": 407.2,
+        "gap_since_previous_end_s": 83.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:57:59.628387+00:00",
+        "seconds_after_run_start": 626.0,
+        "gap_since_previous_end_s": 218.8,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:00:07.858111+00:00",
+        "seconds_after_run_start": 754.2,
+        "gap_since_previous_end_s": 128.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:04:18.092232+00:00",
+        "seconds_after_run_start": 1004.5,
+        "gap_since_previous_end_s": 250.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:08:45.286357+00:00",
+        "seconds_after_run_start": 1271.7,
+        "gap_since_previous_end_s": 267.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:11:37.862883+00:00",
+        "seconds_after_run_start": 1444.3,
+        "gap_since_previous_end_s": 172.6,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      }
+    ],
+    "loadtest05@example.com": [
+      {
+        "ended_at": "2026-11-01T03:50:20.371813+00:00",
+        "seconds_after_run_start": 166.8,
+        "gap_since_previous_end_s": 166.8,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:53:10.808289+00:00",
+        "seconds_after_run_start": 337.2,
+        "gap_since_previous_end_s": 170.4,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:54:50.975123+00:00",
+        "seconds_after_run_start": 437.4,
+        "gap_since_previous_end_s": 100.2,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T03:58:13.051081+00:00",
+        "seconds_after_run_start": 639.4,
+        "gap_since_previous_end_s": 202.1,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      },
+      {
+        "ended_at": "2026-11-01T04:00:28.764925+00:00",
+        "seconds_after_run_start": 775.2,
+        "gap_since_previous_end_s": 135.7,
+        "answered": true,
+        "no_answer_reason": null,
+        "rejected_count": 0,
+        "after_k6_finished": false
+      }
+    ]
+  },
+  "produced_by": "a read-only query of QueryLog (user email startswith loadtest, answered_at >= window start), 1 November 2026; see nfr08-runs.md"
+}

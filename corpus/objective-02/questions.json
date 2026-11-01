@@ -1,0 +1,482 @@
+{
+  "name": "Objective 02 thirty-question set, v1",
+  "status": "FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.",
+  "corpus": "The Objective 02 verification corpus: the 20 documents and 5 transcripts listed in corpus/objective-02/manifest.json (6 PDF, 5 DOCX, 5 XLSX, 4 TXT, 5 pasted transcripts). Five items are Administrator-only: D09, D15, D16, T02 and T05.",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Drafted on 27 October 2026 by the rag-pipeline agent from the corpus files and manifest.json only. The system was never run to see what it answers. The text of each PDF, DOCX and XLSX was read with the project's own extractor (apps/ingestion/extraction.py), read-only.",
+    "Proportions as in D-84: 22 ordinary, 4 scoped, 4 no-answer. Every one of the 25 valid items is the source of at least one question; D04, the 26-page handbook, is the source of two.",
+    "kind=ordinary: answerable from the source item by the stated role. Asked as an Employee unless the item is Administrator-only (q15 only).",
+    "kind=scoped, role=both: the answer is only in an Administrator-only item. The harness asks it twice. expected_by_role says what each role should get: the Administrator the answer, the Employee the no-answer state. A scoped question shows scoping only if both hold.",
+    "kind=no-answer: nothing in the corpus answers it, for any role. n01 and n02 share vocabulary with a real document without being answerable from it, as n07 did in scripts/citation_questions.json.",
+    "expected_answer is the phrase the harness's expected-answer diagnostic looks for in the verified statements, with whitespace collapsed and case folded on both sides. It is a diagnostic, not one of the three rates, and it cannot tell which source an answer came from where the phrase occurs in more than one item.",
+    "answer is the full answer a reader should find at location in the source item. source is the manifest item id, or null for a no-answer question.",
+    "Locations: PDF by page and section heading; DOCX by paragraph number counted over every paragraph, headings included, with the heading above it; XLSX by sheet, row and cell; TXT and transcripts by line number in the file.",
+    "Benjamin Morovan asked some of the questions informally before the set was frozen. No question, expected answer or source was changed because of what the system answered.",
+    "Accepted alternatives match only as whole tokens: a letter or digit may not touch either end, so '5 years' does not match '15 years' and '23' does not match '2023'. The expected phrase itself still matches as a substring, as it did when the set was approved (scripts/question_set.py matching_form)."
+  ],
+  "questions": [
+    {
+      "id": "q01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D01",
+      "question": "How much annual leave does a full-time employee earn each month?",
+      "expected_answer": "1.67 days",
+      "answer": "1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+      "location": "D01_leave_policy_2026.pdf, page 1, section 'Annual leave'",
+      "accepted": [
+        "1.67"
+      ]
+    },
+    {
+      "id": "q02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D02",
+      "question": "How many characters does my password need to have?",
+      "expected_answer": "twelve characters",
+      "answer": "At least twelve characters, and it may not be reused across systems.",
+      "location": "D02_it_acceptable_use.pdf, page 1, section 'Passwords and access'",
+      "accepted": [
+        "12 characters",
+        "12-character",
+        "twelve-character",
+        "12 or more characters",
+        "twelve or more characters"
+      ]
+    },
+    {
+      "id": "q03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D03",
+      "question": "Where can I find out who the trained first aiders are?",
+      "expected_answer": "noticeboard",
+      "answer": "They are listed on the noticeboard beside each kitchen.",
+      "location": "D03_health_safety_induction.pdf, page 1, section 'First aid'",
+      "accepted": [
+        "notice board",
+        "notice-board"
+      ]
+    },
+    {
+      "id": "q04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D04",
+      "question": "How long do we need to keep project records after a project has closed?",
+      "expected_answer": "five years",
+      "answer": "Five years after project closure.",
+      "location": "D04_records_management_handbook.pdf, page 14, under 'Chapter 13: Migrating records between systems'",
+      "accepted": [
+        "5 years",
+        "5-year",
+        "five-year"
+      ]
+    },
+    {
+      "id": "q05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D04",
+      "question": "How far from the main site do backups of our vital records have to be stored?",
+      "expected_answer": "fifty kilometres",
+      "answer": "In a second location at least fifty kilometres from the primary site.",
+      "location": "D04_records_management_handbook.pdf, page 23, under 'Chapter 22: Managing vital records'",
+      "accepted": [
+        "50 kilometres",
+        "50 kilometers",
+        "fifty kilometers",
+        "50 km",
+        "50km",
+        "50-kilometre"
+      ]
+    },
+    {
+      "id": "q06",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D05",
+      "question": "How many quotes do I need to get for a purchase of about $12,000?",
+      "expected_answer": "three quotes",
+      "answer": "Three quotes: purchases between five thousand and fifty thousand dollars need three.",
+      "location": "D05_procurement_guidelines.pdf, page 1, section 'Quotes and tenders'",
+      "accepted": [
+        "3 quotes",
+        "three written quotes",
+        "3 written quotes",
+        "three quotations",
+        "3 quotations"
+      ]
+    },
+    {
+      "id": "q07",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D06",
+      "question": "How quickly do we have to acknowledge a customer complaint?",
+      "expected_answer": "one working day",
+      "answer": "Within one working day.",
+      "location": "D06_complaints_procedure.pdf, page 1, section 'Why complaints matter'",
+      "accepted": [
+        "1 working day",
+        "one business day",
+        "1 business day"
+      ]
+    },
+    {
+      "id": "q08",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D07",
+      "question": "How much notice is needed to end a work-from-home arrangement?",
+      "expected_answer": "four weeks",
+      "answer": "Four weeks written notice, by either party.",
+      "location": "D07_remote_work_agreement.docx, paragraph 11, under 'Review and ending the arrangement'",
+      "accepted": [
+        "4 weeks",
+        "four-week",
+        "4-week"
+      ]
+    },
+    {
+      "id": "q09",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D08",
+      "question": "How many goals should a manager set for a new starter's first three months?",
+      "expected_answer": "three clear goals",
+      "answer": "Three clear goals for the first ninety days.",
+      "location": "D08_onboarding_checklist.docx, paragraph 7, under 'First month'",
+      "accepted": [
+        "3 clear goals",
+        "three goals",
+        "3 goals"
+      ]
+    },
+    {
+      "id": "q10",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D10",
+      "question": "What is the daily limit for meals when I'm travelling for work?",
+      "expected_answer": "seventy-five dollars",
+      "answer": "Meals are reimbursed up to seventy-five dollars per day.",
+      "location": "D10_expense_claims_guide.docx, paragraph 5, under 'Limits'",
+      "accepted": [
+        "$75",
+        "75 dollars",
+        "seventy five dollars",
+        "aud 75",
+        "a$75"
+      ]
+    },
+    {
+      "id": "q11",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D11",
+      "question": "How long do we have to respond when someone asks to see the personal information we hold about them?",
+      "expected_answer": "thirty days",
+      "answer": "Requests are answered within thirty days.",
+      "location": "D11_data_privacy_notice.docx, paragraph 7, under 'Access and correction'",
+      "accepted": [
+        "30 days",
+        "30-day",
+        "thirty-day"
+      ]
+    },
+    {
+      "id": "q12",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D12",
+      "question": "When does the contract with our catering supplier end?",
+      "expected_answer": "2027-01-31",
+      "answer": "Ridgeline Catering's contract ends on 2027-01-31.",
+      "location": "D12_vendor_register_2026.xlsx, sheet 'Data', row 5 (contract end in cell D5)",
+      "accepted": [
+        "31 january 2027",
+        "january 31, 2027",
+        "january 31 2027",
+        "31/01/2027",
+        "31 jan 2027",
+        "jan 31, 2027",
+        "31st january 2027",
+        "31st of january 2027",
+        "31 january, 2027"
+      ]
+    },
+    {
+      "id": "q13",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D13",
+      "question": "Who is running the time management workshop?",
+      "expected_answer": "Nguyen",
+      "answer": "A. Nguyen: 'Managing your time', 2026-11-10, Room 3.2.",
+      "location": "D13_training_schedule_q4.xlsx, sheet 'Data', row 7 (facilitator in cell C7)",
+      "accepted": []
+    },
+    {
+      "id": "q14",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D14",
+      "question": "Which items have to have an asset tag attached?",
+      "expected_answer": "five hundred dollars",
+      "answer": "Every item over five hundred dollars.",
+      "location": "D14_asset_inventory_melbourne.xlsx, sheet 'Summary', row 5 (cell A5)",
+      "accepted": [
+        "$500",
+        "500 dollars",
+        "five hundred dollar",
+        "aud 500",
+        "a$500"
+      ]
+    },
+    {
+      "id": "q15",
+      "kind": "ordinary",
+      "role": "Administrator",
+      "source": "D16",
+      "question": "What is Femi Adeyemi's role on the team?",
+      "expected_answer": "Developer",
+      "answer": "Developer.",
+      "location": "D16_team_skills_matrix.xlsx, sheet 'Data', row 7 (role in cell B7)",
+      "note": "D16 is Administrator-only, so this ordinary question is asked as an Administrator. It is the one Administrator-only item without a scoped question: there are five such items and four scoped slots.",
+      "accepted": []
+    },
+    {
+      "id": "q16",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D17",
+      "question": "Do I need approval to book a meeting room for thirty people?",
+      "expected_answer": "one week in advance",
+      "answer": "Yes. Bookings of more than twenty people must be approved by the facilities team at least one week in advance.",
+      "location": "D17_meeting_room_rules.txt, line 13, under 'Large events'",
+      "accepted": [
+        "a week in advance",
+        "1 week in advance",
+        "one week's notice",
+        "a week's notice",
+        "one week ahead",
+        "a week ahead",
+        "seven days in advance",
+        "7 days in advance"
+      ]
+    },
+    {
+      "id": "q17",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D18",
+      "question": "What hours is the IT service desk open?",
+      "expected_answer": "seven in the morning to six in the evening",
+      "answer": "From seven in the morning to six in the evening.",
+      "location": "D18_helpdesk_faq.txt, line 13, under 'Who do I call?'",
+      "note": "Line 4 of the same file gives a different window, seven in the morning to eight in the evening, for password resets. D17 also says 'six in the evening', about bookings, which is why the expected phrase is the whole range.",
+      "accepted": [
+        "7 am to 6 pm",
+        "7am to 6pm",
+        "7:00 am to 6:00 pm",
+        "7:00am to 6:00pm",
+        "7 a.m. to 6 p.m.",
+        "7am-6pm",
+        "7 am - 6 pm",
+        "7am – 6pm",
+        "7 am – 6 pm",
+        "07:00 to 18:00",
+        "7:00 to 18:00",
+        "7 am until 6 pm",
+        "7am until 6pm",
+        "7.00 am to 6.00 pm",
+        "seven am to six pm"
+      ]
+    },
+    {
+      "id": "q18",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D19",
+      "question": "Can I use a pool car for a personal trip?",
+      "expected_answer": "written exception",
+      "answer": "No. Fleet vehicles may not be used for private trips unless the department head has approved a written exception.",
+      "location": "D19_fleet_vehicle_notes.txt, line 13, under 'Private use'",
+      "accepted": [
+        "exception in writing"
+      ]
+    },
+    {
+      "id": "q19",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D20",
+      "question": "Do I need to pack up my computer for the office move?",
+      "expected_answer": "reconnect",
+      "answer": "No. Do not pack computers; the IT team will move and reconnect them.",
+      "location": "D20_office_relocation_notice.txt, line 7, under 'What staff need to do'",
+      "accepted": [
+        "re-connect"
+      ]
+    },
+    {
+      "id": "q20",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "T01",
+      "question": "Who is on call on the Sunday of the database migration weekend?",
+      "expected_answer": "Tomas",
+      "answer": "Tomas. Lena covers the Saturday.",
+      "location": "T01_weekly_ops_standup.txt, line 11 (Tomas); line 9 (Lena)",
+      "accepted": [
+        "tomás"
+      ]
+    },
+    {
+      "id": "q21",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "T03",
+      "question": "How long does the build pipeline take at the moment?",
+      "expected_answer": "forty minutes",
+      "answer": "Around forty minutes.",
+      "location": "T03_product_planning_workshop.txt, line 23 (Jamal)",
+      "accepted": [
+        "40 minutes",
+        "40-minute",
+        "forty-minute",
+        "40 mins",
+        "forty mins"
+      ]
+    },
+    {
+      "id": "q22",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "T04",
+      "question": "After how many days without logging in will the team start contacting customers?",
+      "expected_answer": "forty-five days",
+      "answer": "At forty-five days of inactivity. Cancelled accounts had usually not logged in for sixty days.",
+      "location": "T04_customer_success_retro.txt, line 15 (Rania); line 11 (Ollie) for the sixty days",
+      "accepted": [
+        "45 days",
+        "forty five days",
+        "45-day",
+        "forty-five-day"
+      ]
+    },
+    {
+      "id": "s01",
+      "kind": "scoped",
+      "role": "both",
+      "source": "D09",
+      "expected_by_role": {
+        "Administrator": "answer",
+        "Employee": "no-answer"
+      },
+      "question": "Who is the sponsor of Project Atlas?",
+      "expected_answer": "chief operating officer",
+      "answer": "The chief operating officer. The project manager is the head of digital services.",
+      "location": "D09_project_atlas_kickoff.docx, paragraph 3, under 'Project summary'",
+      "note": "Atlas appears only in D09 and D15, both Administrator-only, so an Employee's candidate set holds nothing about it.",
+      "accepted": []
+    },
+    {
+      "id": "s02",
+      "kind": "scoped",
+      "role": "both",
+      "source": "D15",
+      "expected_by_role": {
+        "Administrator": "answer",
+        "Employee": "no-answer"
+      },
+      "question": "How much of each project's budget is held back as contingency?",
+      "expected_answer": "ten percent",
+      "answer": "Ten percent of each project budget. Only the steering group may release it.",
+      "location": "D15_project_budget_fy27.xlsx, sheet 'Summary', row 4 (cell A4)",
+      "note": "An Administrator can also see T02's contingency reserve of two million dollars (line 21), which is a different thing. Nothing an Employee can see mentions contingency.",
+      "accepted": [
+        "10%",
+        "10 percent",
+        "10 per cent",
+        "ten per cent"
+      ]
+    },
+    {
+      "id": "s03",
+      "kind": "scoped",
+      "role": "both",
+      "source": "T02",
+      "expected_by_role": {
+        "Administrator": "answer",
+        "Employee": "no-answer"
+      },
+      "question": "What new risk was added to the risk register?",
+      "expected_answer": "regulatory change",
+      "answer": "Regulatory change, added as a fourth top risk. Ingrid owns it until a compliance manager is appointed.",
+      "location": "T02_board_risk_committee.txt, line 3 (Ingrid proposes it); line 5 (the Chair adds it)",
+      "accepted": [
+        "change in regulation",
+        "changes in regulation"
+      ]
+    },
+    {
+      "id": "s04",
+      "kind": "scoped",
+      "role": "both",
+      "source": "T05",
+      "expected_by_role": {
+        "Administrator": "answer",
+        "Employee": "no-answer"
+      },
+      "question": "How many staff entered their password in the last phishing test?",
+      "expected_answer": "twenty-three",
+      "answer": "Twenty-three entered credentials on the fake page; sixty-one of the four hundred clicked the link.",
+      "location": "T05_security_incident_debrief.txt, line 3 (Beth)",
+      "note": "An Employee can see D02, which says phishing messages must be reported, and T01, which mentions password resets. Neither gives a count.",
+      "accepted": [
+        "23",
+        "twenty three"
+      ]
+    },
+    {
+      "id": "n01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "question": "How many weeks of paid parental leave can I take?",
+      "expected_answer": null,
+      "note": "Shares vocabulary with D01, which covers annual, personal and carer's leave and says nothing about parental leave. No item mentions parental, maternity or paternity leave."
+    },
+    {
+      "id": "n02",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "source": null,
+      "question": "How much did the latest penetration test cost?",
+      "expected_answer": null,
+      "note": "Shares vocabulary with T02 (Administrator-only), which reports the penetration test's two findings, and whose only costs are Helen's supplier plan. D15's 'Security uplift' budget row is not the test's cost."
+    },
+    {
+      "id": "n03",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "question": "What is the dress code for staff working in the office?",
+      "expected_answer": null,
+      "note": "No item mentions a dress code."
+    },
+    {
+      "id": "n04",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "source": null,
+      "question": "Are staff allowed to bring their dogs to the office?",
+      "expected_answer": null,
+      "note": "No item mentions pets or dogs."
+    }
+  ]
+}

@@ -4287,6 +4287,12 @@ sets no `handler500`. That was found by reading the code, not by running it.
 > - **Not covered:** a file removed between that check and the reprocess's own open still
 >   gives a 500, with the transaction rolled back.
 
+> **1 November 2026: the error file also holds WARNINGs from one logger, `apps.ai.attempts`.**
+> They record failed provider attempts and the cause of each `POST /api/ask` 503 (D-82's later
+> note of the same day). The root's handler stays at ERROR, so `django.request`'s 4xx WARNINGs
+> still stay out. The new logger has its own WARNING handler on the same file, and its lines
+> keep this decision's format.
+
 ## D-76 · Every `/api/` response is marked never-cache, by one middleware
 
 **Status:** Settled by the user · **Date:** 2026-10-13 · **Stage:** 5 item 2a · **Concerns:** every
@@ -5010,3 +5016,519 @@ NFR-08, NFR-09 and PR #30
 >   them up.
 > - **Objective 03 on 23 October** could not run against this branch: item 5 was not built until
 >   26 October.
+
+> **1 November 2026: "the 300 s ask timeout is kept" no longer holds. k6's ask timeout now
+> outlasts the server's in-flight slot,** at the user's instruction.
+>
+> - **Why.** NFR-08's first run (5 VUs, 100 asks) was INVALID for exactly the gap this decision
+>   accepted. k6 abandoned asks at 300 s while the server was still answering them, and each
+>   account's next asks were refused with `ask_in_flight`: 67 of them. The summary is kept as
+>   evidence in `corpus/objective-02/runs/2026-11-01/`.
+> - **The new value.** `ASK_TIMEOUT_S` is `ASK_SLOT_TIMEOUT_S` + 60 s, 2,835 s. `common.js`
+>   copies the slot's 2,775 s, and `apps/api/tests/test_load_test_timeout_agreement.py` holds the
+>   copy equal to the server's.
+> - **NFR-08's other changes:**
+>   - `maxDuration` is derived from the ask timeout, so k6 never interrupts an ask in flight;
+>   - `ITERATIONS` drops from 100 to 25, so the rerun fits the gate day;
+>   - concurrency stays 5.
+> - **A single-user end-to-end baseline** (1 VU, 20 asks) runs first, as its own result. The
+>   8.90 s baseline times generation alone.
+> - **Where it is recorded.** The run record, `nfr08-runs.md` in the same folder, was written
+>   before the rerun. It also holds what the logs show about generation attempts in the first
+>   run.
+> - **Not covered:**
+>   - NFR-09 inherits the timeout. Its phase durations were not revisited.
+>   - A 503 still counts as a failed request, so one 503 in 25 asks invalidates the rerun.
+>     *Superseded the same day by the note below.*
+
+> **1 November 2026, later: in NFR-08 a 503 is scored as a miss, not treated as a harness failure,**
+> at the user's instruction.
+>
+> - **The rule changed after run 1 showed two 503s in 100 asks.** Under the old rule, one 503 in
+>   the rerun's 25 asks would have invalidated it.
+> - **The reason.**
+>   - A 429 or a timeout means the harness failed: the run did not measure what it set out to.
+>   - A 503 means the system failed. It is NFR-19's designed response, so it is a result.
+> - **How a 503 is scored.** NFR-08 is an answer within 4 s for 90% of requests, and a 503 is a
+>   request that got no answer within 4 s. So each 503 is a miss:
+>   - it goes into the p90 sample, ranked slower than any answered reply;
+>   - it is also reported on its own, as `server_503`;
+>   - the verdict's p90 is `p90_ms`. When the 90th-percentile request is a 503, `p90_ms` is `null`
+>     and the verdict is FAIL.
+> - **What still makes a run INVALID:** a 429, a k6 timeout, any other status, or a missing SHA.
+>   `http_req_failed` treats only 200 and 503 as expected for the measured asks, and the check
+>   accepts the documented 503 body, so `checks rate>0.99` no longer fails on one.
+> - **Run 1 is not re-scored.** It stays INVALID as recorded, and its answered-only p90 is
+>   reported as `p90_answered_ms`, which every run still carries.
+> - **Tested.** `apps/api/tests/test_nfr08_k6_scoring.py` runs the real script under k6 against a
+>   stub, with three outcomes:
+>   - every ask answered: PASS, with a p90 in milliseconds;
+>   - one 503: the run is valid, and the p90 falls on the 503, so it reads FAIL;
+>   - one 500: INVALID.
+>
+>   It is skipped where k6 is not installed, which includes CI.
+> - **Failed provider attempts are now logged** (`apps/ai/attempt_log.py`), also at the user's
+>   instruction, so the rerun can show what run 1 could not.
+>   - **What a line holds:** each failed generation or question-embedding attempt, with its cause,
+>     its seconds and the account, and the cause of each 503. They are WARNINGs on
+>     `apps.ai.attempts`, written to the error file by a handler of their own.
+>   - **What stays the same:** behaviour and attempt counts.
+>
+>   The rerun runs on a later commit than the single-user baseline, and the server code differs
+>   only by this logging.
+
+> **1 November 2026: NFR-08's results, and NFR-09 not run.** The evidence is in
+> `corpus/objective-02/runs/2026-11-01/`. Every run used dump `3bf98403…6f59`, FLM v0.9.39, and
+> Waitress at 24 threads.
+>
+> | Run | Users / asks | Commit | Result |
+> |---|---|---|---|
+> | 1 | 5 / 100 | `b8d8304` | INVALID under the old rule (67 × 429 after k6's 300 s timeout; 2 × 503) |
+> | 2 | 1 / 20 | `945fd02` | INVALID under the old rule (2 × 503); answered-only p90 51 s |
+> | 3 | 5 / 25 | `eed8249` | **Valid, FAIL:** 3 × 503, so the p90 falls on a 503; answered-only p90 277 s |
+>
+> - **What run 3's attempt log confirms:**
+>   - One 4B model on one NPU divides its time among concurrent asks, as D-35 implies. A failing
+>     generation took about 58 s alone and up to 174.5 s with others running.
+>   - All 13 failed attempts were replies that stopped before their JSON closed. None timed out.
+>     So the 503s are not caused by queueing. The same question failed the same way at one user.
+>   - Those discarded attempts also took NPU time from every other ask.
+>   - The reply being cut off at `GENERATION_MAX_TOKENS` is the likely reading, not observed.
+> - **Not tuned.** NFR-08 is not in the M6 gate.
+> - **NFR-09 was not run,** by the user's decision on the evidence of runs 2 and 3. At 5 users the
+>   answered-only p90 is already about +440% over one user, and NFR-09 allows 25% at 20 users.
+>   Its failure is recorded as a prediction, not a result.
+
+## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Found:** FLM
+v1.0.9 installed on 15 October, with its embeddings noise again
+
+**What happened.** On 27 October, while item 6 was being planned, `C:\Program Files\flm\flm.exe`
+was found at **v1.0.9**, with the file dated 15 October. `scripts/check_flm.py` failed. The same
+input embedded twice in one request gave a cosine of 0.6046, against the 0.999 required. Chat still
+worked. So for twelve days every question embedded as noise against a good stored index, and
+retrieval could not have found the right passages. Nothing caught it: the suite runs on a stub
+provider, so CI cannot see FLM, and nothing ran `check_flm.py`.
+
+**Decision.**
+
+1. **The required version is v0.9.39.** From v1.0.4 onward, FLM's embeddings are non-deterministic
+   (upstream issue ROCm/FastFlowLM#732, still open). The version is recorded in `CLAUDE.md` §4,
+   `docs/ai-provider.md` §3 and the README's setup steps, not only in a session's memory.
+2. **The stored index was checked after the reinstall.** `check_flm.py` passes on v0.9.39. Chunks
+   sampled from each upload date in `kmp` were re-embedded exactly as ingestion embeds them and
+   compared with their stored vectors:
+   - 22 September: cosine 1.00000;
+   - 5 October: at least 0.99983.
+
+   Both are above 0.999. Nothing was embedded after 15 October, so nothing is re-indexed.
+3. **`check_flm.py` is a gate.** Item 6's measurement runs, the k6 runs and the alpha runbook
+   (item 9) call it first and stop on a non-zero exit. Every results file records the FLM version.
+4. **Newer FLM releases are evaluated after M8.** A version whose vectors differ means a full
+   re-index and a re-run of Objective 02's search checks.
+
+**What this decision does not cover.**
+
+- **What upgraded FLM on 15 October.** Nothing records whether it was a manual install or an
+  updater.
+- **An enforced pin.** Nothing stops an installer upgrading FLM again. The gate catches it; it
+  doesn't prevent it.
+- **CI** still cannot see FLM.
+
+## D-84 · Item 6 measures a fresh Objective 02 database, on a frozen thirty-question set, and Objective 03's p90 at five users
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
+Objective 03, FR-12, FR-13, NFR-08
+
+**Decision.**
+
+1. **The database: a fresh one holding exactly Objective 02's corpus**, ingested by
+   `scripts/ingest_objective02.py` on working FLM. `kmp` stays as it is.
+   - **The 6 October evidence is kept.** The script always writes
+     `corpus/objective-02/results.json` and `results.md`, so a second run would overwrite them. It
+     gains an output-directory option, and this run writes to a dated folder.
+   - **Its own paths.** The measurement server has its own `DATABASE_URL`, `MEDIA_ROOT`,
+     `AUDIT_LOG_PATH` and `ERROR_LOG_PATH`. Otherwise the corpus files and the load test's uploads
+     would land in `kmp`'s media folder. All four are already read from the environment.
+   - **A snapshot first.** Right after ingestion, before anything is measured, the database is
+     dumped and its media copied. The dump's hash is recorded with the commit SHA and the FLM
+     version.
+   - **Order of the runs.** The thirty questions run before the load test, or the dump is restored
+     first. NFR-09 uploads a kitchen-roster document every round, and those would become retrieval
+     candidates for the questions.
+   - **The demo database is a separate decision.** Whether the 1 November demo runs on `kmp` or on
+     the restored measurement database is not decided here.
+2. **The question set.**
+   - **Drafted by the rag-pipeline agent** from the corpus files and the manifest only, never from
+     the system's answers.
+   - **Worded the way a staff member would ask it**, not by copying the manifest's phrase. That
+     would only test word overlap.
+   - **The 64-set's proportions:** 22 ordinary, 4 scoped and 4 no-answer. They are spread across
+     all four formats and the five transcripts, and each has an expected answer and its source
+     item id.
+   - **Every scoped question is asked under both roles.** There are five Administrator-only items,
+     and a scoped question only shows scoping if the Administrator gets the answer and the
+     Employee gets the no-answer state.
+   - **Benjamin and Sagarika review and approve the set.** It is then committed, and frozen before
+     the first measured run. Any later change is recorded with its reason. The report says an agent
+     drafted the set and they reviewed it.
+3. **Objective 03's p90 is measured at five concurrent users.** That is NFR-08's script default and
+   a small-team load. 20 users is kept for NFR-09's degradation test. The choice is recorded here,
+   before the run, so it can't look picked for the result.
+   - **A miss is expected.** The single-user p90 is already 8.90 s, and one NPU answers one
+     question at a time, so five users queue.
+   - **What is reported:** the answered-only p90 against 4 s, with the all-replies p90, the
+     answered rate and the 8.90 s baseline beside it, plus the commit SHA, the FLM version and the
+     dump hash.
+   - **A miss is then recorded as a decision**, as the risk register says: a local-model baseline,
+     not a dropped NFR.
+   - **How it runs.** It is gated on `check_flm.py`, with the server restarted first. NFR-09 runs
+     separately afterwards. The user installs k6 and runs it.
+4. **What item 6 re-measures**, from the brief: `RELEVANCE_THRESHOLD` (D-37), the partial-matches
+   floor (D-56), the three citation rates, p90, and FR-13 end to end.
+
+**What this decision does not cover.**
+
+- **The demo database** for 1 November.
+- **The measured values.** A new threshold or a partial-matches floor is a later decision, made
+  from this measurement.
+- **The k6 runs themselves.** The user runs them.
+
+> **The thirty questions are frozen, on 1 November 2026.** Benjamin Morovan and Sagarika Dey
+> approved them as written on 1 November.
+>
+> - **Accepted alternatives were added before the freeze, at the user's request.** The harness
+>   scored the expected phrase as a literal substring, and 17 of the 26 answerable questions expect
+>   number words or a date, so a correct "12 characters", "$75", "10%" or "7 am to 6 pm" would have
+>   scored as not found.
+>   - **What each question now carries.** It has an `accepted` list: digit, currency, percent, date
+>     and time forms of the same fact.
+>   - **How they match.** An alternative matches only as whole tokens, so "5 years" can't match a
+>     wrong "15 years", nor "23" match "2023". The expected phrase still matches as a substring, so
+>     the approved set scores as it did.
+>   - **Recorded per run:** which form matched.
+> - **No question, expected answer or source changed.** This was checked field by field against
+>   the approved file.
+> - **Benjamin Morovan asked some of the questions informally before the set was frozen.** No
+>   question, expected answer or source was changed because of what the system answered.
+> - **Neither retrieval nor the prompt was tuned against this set** before the measured run.
+> - **The harness reports each miss:**
+>   - whether the expected source was a candidate for the role, and at what rank;
+>   - its best score against `RELEVANCE_THRESHOLD`;
+>   - where the run ended: path A, path B, unavailable, or answered without the expected answer.
+>
+>   So the fixes after M6 aim at causes. The coordinating session built this directly, after the
+>   rag-pipeline agent stalled.
+
+## D-85 · The measured run is served by Waitress with 24 threads, the value the alpha will use
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6, pulling forward the
+slice of item 9 that the measurement needs · **Concerns:** Objective 03, NFR-08, NFR-09, D-64
+
+**Decision.**
+
+1. **Waitress is added now**, to `requirements.in`, with `requirements.txt` recompiled. It is pure
+   Python, so there are no compiled parts for CI or the laptop to trip on.
+2. **The measured run is served by**
+   `waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`, under
+   `DEBUG=False`. The thread count is set explicitly: Waitress defaults to 4, which NFR-08's five
+   users already exceed and NFR-09's twenty far exceed.
+3. **24 threads, chosen before the run.** That is NFR-09's stated 20 concurrent users plus 4 for
+   screens, logins and uploads. A load run then waits on the NPU rather than in Waitress, and the
+   app's other routes stay answerable while asks wait. FLM answers one question at a time, so
+   threads change where a request waits, not how fast it is answered.
+4. **Recorded beside every result:** the server, its version and the thread count.
+5. **Still item 9's:** serving the built SPA from one origin, `CSRF_TRUSTED_ORIGINS` and the cookie
+   flags. The load test calls only `/api/`.
+
+**What this decision does not cover.**
+
+- **Holding every thread.** With 24 threads, asks alone need 24 users asking at once to hold them
+  all. Ingestion, though, is rate-limited only (D-79), so one user firing uploads concurrently
+  could still hold them.
+  - No client of ours sends uploads concurrently. The Upload screen sends one at a time, and the
+    ingest script and the k6 virtual users are sequential.
+  - The in-flight slot is extended to the three ingestion routes if that is cheap. Otherwise the
+    gap is recorded here.
+
+> **Built on 27–28 October 2026, in item 6's phase 2.** This records what was built and what the
+> build found.
+>
+> - **Waitress 3.0.2** is pinned in `requirements.in`. The recompiled `requirements.txt` adds only
+>   that line.
+>   - **The shared venv.** The venv is shared with the main checkout, whose `requirements.txt` has no
+>     Waitress, so a `uv pip sync` run there would remove it until this branch merges.
+> - **The serve probe.** It ran Waitress with `--threads=24` and `DEBUG=False`, against a database
+>   that doesn't exist. `/api/` answered 401 JSON with `Server: waitress`. Non-API paths answered
+>   the JSON 404, because nothing serves the SPA yet; that is item 9's job.
+> - **The ingestion slot was cheap, and is built.**
+>   - **One slot per user**, shared by upload, meeting ingest and reprocess. It is separate from the
+>     ask slot, so one user can hold at most two threads.
+>   - **When it's held.** It is taken after each route's own refusals, and released in `finally`
+>     straight after the ingest call, with the token check.
+>   - **No timeout.** The derivation D-79 used would give about three weeks, and a timeout could
+>     only free the slot while its ingestion still held a thread.
+>   - **The 429.** It is `{"detail": "Your previous upload is still being processed.", "code":
+>     "ingestion_in_flight"}`, with no `Retry-After`, and it counts against the ingestion rate.
+> - **The premise was not quite true.** D-85 said no client of ours sends uploads concurrently, but
+>   the Upload screen could. A failed row's retry was pressable while the queue ran, and a retry
+>   re-enabled the Upload button mid-queue.
+>   - Both are fixed. A row's retry is disabled while the page is busy, and busy is now a count of
+>     runs in progress.
+>   - Each screen shows the in-flight 429 in its own words, with no time given.
+> - **The k6 scripts** record the server, Waitress's version and the thread count, and count 429s by
+>   `code`. Each run also records the `Server` header its logins saw, and a mismatch with the stated
+>   server is INVALID.
+>   - **The thread count is as stated by the operator.**
+>   - **`server_record.py` observes it** from the listening process's command line. The runbook
+>     saves that observation next to each k6 summary.
+> - **Found, and left to item 9:**
+>   - **500s are HTML.** Under `DEBUG=False`, a 500 is Django's HTML page, not JSON, because no
+>     `handler500` is set.
+>   - **A disallowed `Host`** gets a 400 HTML page.
+>   - **Waitress's own log lines are dropped** by `LOGGING`. That includes the "Task queue depth"
+>     warning, the one that shows all 24 threads busy.
+> - **Found on the Upload screen, and not fixed:**
+>   - removing a queued file, or editing its title, while the queue runs has no effect;
+>   - a successful retry still offers "Try again", which then answers 409;
+>   - leaving the screen mid-queue doesn't stop the queue.
+> - **Not covered.**
+>   - **The two in-flight codes can drift.** Nothing tests that the client's copies match the
+>     server's.
+>   - **The cache can evict a slot.** `LocMemCache` culls entries past its default of 300, which
+>     could evict a slot or a counter early under many active users. That is not reachable at the
+>     alpha's scale.
+
+> **Followed up on 28 October 2026, before the measured run.** The user had three of the Upload
+> screen's findings above fixed, and the fourth recorded for item 8. The entries above stand as
+> what was true when they were written.
+>
+> - **A queued file is held while the queue runs.** Its title field and its Remove button are
+>   disabled until the queue finishes, then given back. The queue sends the rows as they were when
+>   Upload was pressed, so an edit was ignored, and a removed file was still uploaded. An Employee
+>   could not then delete it, because deletion is Administrator-only (D-73). Rows the queue never
+>   held, such as a file refused client-side, keep their actions.
+> - **A successful retry withdraws "Try again"**, as an upload that succeeds first time offers none.
+> - **The client's codes are tied to the server's.** `apps/api/tests/test_in_flight_codes_agreement.py`
+>   reads `ASK_IN_FLIGHT_CODE` and `INGESTION_IN_FLIGHT_CODE` from the front-end files and fails if
+>   either differs from `apps/api/views.py`. It also fails if any other `*_CODE` the client exports
+>   has no server constant of the same value. "The two in-flight codes can drift" above no longer
+>   holds.
+> - **Left for item 8's live run:** leaving the Upload screen mid-queue still doesn't stop the
+>   queue. It is recorded with the other manual checks in `docs/stage-5-clause-audit.md`.
+> - **What the hold does not cover.** It is the `disabled` attribute. A Remove landing in the same
+>   instant as Upload, before the screen re-renders, would still be uploaded. Item 6's retry test
+>   shows that window exists. For a retry the server's in-flight 429 closes it; for a removal
+>   nothing does.
+
+## D-86 · FR-13 is measured end to end on frozen two-turn threads, built beside Objective 03 and never ahead of it
+
+**Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
+FR-13, D-42, D-84 §4
+
+**Why it needs its own set.** The harness's `--with-history` mode holds retrieval constant on
+purpose: it embeds the bare question. So it does not measure FR-13 end to end. FR-13 really
+embeds the plain join of the earlier questions and the new one.
+
+**Decision.**
+
+1. **Objective 03 runs first.** FR-13 end to end is built alongside it, and never delays it.
+2. **A thread set.** About eight two-turn threads, drafted by the rag-pipeline agent from the corpus
+   files only, as the thirty were.
+   - **No follow-up can be answered cold.** Each one depends on the first turn, through a pronoun
+     or a dropped subject. A follow-up that already works cold proves nothing about history.
+   - **Two threads turn to Administrator-only material.** Each is run under both roles, so the
+     Employee's no-answer shows scoping, not a retrieval miss, and nothing may leak.
+   - **One thread changes topic.**
+   - **One thread's follow-up refers to something only in the previous answer.** Under D-42 it
+     should fail. Measuring that turns the deviation into evidence rather than an argument.
+3. **One frozen scoring rule.** It is frozen with the threads and is the same for all three ways
+   each follow-up is run: with history, asked cold, and spelled out in full.
+4. **What is reported per follow-up:**
+   - the answered rate;
+   - the expected source's rank;
+   - the expected-answer match;
+   - the split between no-answer paths A and B;
+   - the fabrication rate;
+   - first-attempt conformance;
+   - the out-of-scope count, which must be 0.
+5. **How it is run.** A harness `--threads` mode composes the retrieval string and the prompt with
+   the shipped code. `apps/retrieval/conversation.py` exposes a pure `compose(question,
+   prior_questions)`, and a test pins the two together. The harness writes nothing.
+6. **A small HTTP check.** Two or three threads go through `/api/conversations` and `/api/ask`,
+   to prove the history read from `QueryLog` is wired correctly. It runs after the harness and
+   before k6, with asks paced at least 7 s apart. It writes only `QueryLog` and `Conversation`
+   rows, which are not retrieval candidates.
+7. **Review and freeze.** Benjamin and Sagarika review the threads with the thirty, and both sets
+   freeze together.
+
+**What this decision does not cover.**
+
+- **Threads longer than two turns.** History is truncated at `MAXIMUM_CONVERSATION_TURNS`, and
+  that limit is not measured.
+- **Prior answers.** D-42 still passes prior questions only. The previous-answer thread measures
+  the cost of that; it does not change it.
+
+> **Built on 27–28 October 2026, in item 6's phase 2.** The thread set is a DRAFT until Benjamin and
+> Sagarika approve it with the thirty.
+>
+> - **Nine threads, not eight.**
+>   - Five ordinary threads, one per format.
+>   - The two scoped threads, each run under both roles.
+>   - The topic change.
+>   - The previous-answer thread.
+>
+>   That is 11 thread-and-role pairs, and 44 runs.
+> - **The scoring rule is version 1, frozen in `threads.json` and `threads.md`.** It sets:
+>   - what a run is, and what counts as answered;
+>   - one outcome per run (answered, path A, path B declined, path B rejected, or unavailable);
+>   - the expected-answer match: a listed phrase, and a cited listed source;
+>   - what counts as a leak;
+>   - the readings and the predictions, decided before the run.
+>
+>   A failed prediction is reported as measured, never re-scored.
+> - **`compose()` is pinned to the shipped pipeline** three ways by `test_compose.py`. Behaviour is
+>   unchanged.
+> - **The harness's candidate set now uses D-66's effective roles**, as `scoping.py` does. On this
+>   corpus it selects the same chunks.
+> - **Where the build departs from D-86 as written:**
+>   - **The topic change can be answered cold.** It has nothing to refer back to, so it is the
+>     declared exception: it measures whether carrying the first question hurts.
+>   - **The HTTP check writes more than D-86 says.** As well as `QueryLog` and `Conversation`, it
+>     writes an answered turn's citation rows, a session, the last-login time and an audit line.
+>     None of them is a retrieval candidate.
+>   - **t09 may not fail.** D20, which its first question retrieves, names the facilities team. The
+>     result is reported as measured.
+>   - **Each way is run once**, so the answered rate is a rate across follow-ups.
+> - **The run order the agent chose.** First the thirty questions, then NFR-08, FR-13's thread run,
+>   the HTTP check, and NFR-09 last.
+>   - **Why.** §1's "never delays it" read as a priority rule, and §6's "before k6" read as
+>     protecting the corpus from NFR-09's uploads. NFR-08 writes nothing the thread run reads.
+>   - **Still open.** It is put to the user, as is whether `run.ps1` should call `server_record.py`
+>     to observe the thread count rather than take it as stated.
+
+> **The nine threads are frozen, on 1 November 2026.** Benjamin Morovan and Sagarika Dey approved
+> them with the thirty on 1 November.
+>
+> - **The scoring rule is now version 2.** Each turn gained the same kind of accepted alternatives
+>   as the thirty, matched only as whole tokens. Part 4 says so, and the rule records the change and
+>   its reason.
+> - **Nothing else changed:** no phrase, source or expectation. The informal-asking note applies to
+>   the threads too.
+> - **D-87 settled the order.** FR-13's thread run follows NFR-08, and the user has moved it after
+>   the gate.
+
+## D-87 · The measured run's order and pre-flight: the server observed, `DEBUG` confirmed off, and Waitress's queueing logged
+
+**Status:** Settled by the user · **Date:** 2026-10-28 · **Stage:** 5 item 6 · **Concerns:** D-84,
+D-85, D-86, Objective 03, NFR-08, NFR-09
+
+**Decision.**
+
+1. **The order:**
+   1. the thirty questions;
+   2. NFR-08 (k6);
+   3. FR-13's thread run;
+   4. the HTTP check;
+   5. NFR-09 (k6), last.
+
+   This settles the choice D-86's note left open. D-86 §6's "before k6" is read as protecting the
+   corpus from NFR-09's uploads. NFR-08 writes nothing the thread run reads.
+   - **All item 6's code is committed before the first measured run,** front end included, so the
+     SHA recorded beside each result is the code that ran.
+   - **The server is restarted before each run that goes through HTTP:** NFR-08, the HTTP check and
+     NFR-09. Throttle counters and in-flight slots left in memory by one run then can't 429 the
+     next.
+2. **`run.ps1` observes the server and doesn't take it as stated.** Before k6, it runs
+   `scripts/server_record.py` and refuses unless it observes Waitress with `--threads=24`, or the
+   override.
+   - **A missing `--threads` reads as 4.** That is Waitress's default, so the run is refused rather
+     than reported as "unknown".
+   - **`DEBUG` is confirmed off.** The wrapper requests an unmatched `/api/` path and requires the
+     JSON 404. Under `DEBUG`, Django bypasses `handler404` and serves its HTML page. The repo's
+     `.env` sets `DEBUG=True`, so a server started from the usual shell runs in debug unless the
+     runbook overrides it.
+   - **`check_flm.py` still runs first.**
+   - **Every observed value is written into the results file.**
+3. **A `waitress` logger, before the measured run.** It logs at INFO, with timestamps, to its own
+   file beside `errors.log`, at a path read from the environment like the others.
+   - **It keeps propagating,** so a Waitress ERROR still reaches `errors.log`.
+   - **`run.ps1` copies any "Task queue depth" lines** from the run's window into the results, or
+     records that there were none. Queueing is then observed and reported, not left in a file.
+   - **Why nothing shows today.** `waitress-serve` imports the app first, and Django's `LOGGING`
+     gives the root logger its ERROR handler. So Waitress's own `logging.basicConfig()` does
+     nothing, and even its "Serving on" line is dropped. The new file brings it back.
+
+**What this decision does not cover.**
+
+- **The restart is a runbook step.** Nothing proves the operator restarted the server, beyond
+  whatever the new log shows.
+- **The thread count is observed from the command line,** not from inside Waitress.
+
+> **Built on 28–31 October 2026, in item 6's phase 3.** This records what was built, and the choices
+> D-87 left open.
+>
+> **The `waitress` logger** (django-backend agent):
+>
+> - **Where it writes.** It logs at INFO to `WAITRESS_LOG_PATH`, which defaults to
+>   `logs/waitress.log`, in the error file's format: `%(asctime)s %(levelname)s %(name)s
+>   %(message)s`, in local time with no zone.
+> - **How it's set up.** It propagates, so a Waitress ERROR also reaches `errors.log`. It has no
+>   console handler, and with `delay=True` no empty file is created.
+> - **A test pins the logger names** `waitress` and `waitress.queue` to Waitress 3.0.2's own
+>   loggers, so a version that renames them fails a test rather than going silent.
+> - **Proven on a real Waitress**, with one thread and no database. Before the change nothing was
+>   written at all, not even "Serving on", which confirms D-87's cause. After it, the file held the
+>   "Serving on" line and 65 forced "Task queue depth" lines, each timestamped.
+>
+> **`run.ps1`'s pre-flight** (test-engineer agent):
+>
+> - **The order of checks.** `check_flm.py` still runs first. `scripts/server_record.py
+>   preflight` then reads:
+>   - the listening process's command line, where the last `--threads` wins and a missing one
+>     reads as 4;
+>   - its start time;
+>   - Waitress's version, from the server's own venv;
+>   - the DEBUG probe. That is off only for the exact JSON 404 on `/api/__preflight_not_a_route__`,
+>     on only for Django's HTML debug page, and unknown otherwise.
+> - **Each rule is enforced twice,** in `server_record.py` and again in `run.ps1` on the values it
+>   passes to k6.
+> - **The restart is checked from the log.** The last "Serving on" line before the run must be
+>   later than the newest record in `tests/load/results` and in `-ResultsDir`. That includes the
+>   harness's and the HTTP check's records, so the server must start after each of those runs.
+> - **Two checks beyond D-87:**
+>   - the log's start must not predate the listening process's, so the log can't be another
+>     server's;
+>   - the process listening at the end must be the one observed at the start.
+> - **After k6, a `finalise` step** copies the run window's "Task queue depth" lines into the
+>   results, or records that there were none. It marks the run INVALID if a "Serving on" line falls
+>   inside the window. Exit code 3 means k6 ran but the run is not recorded.
+> - **The log's path** comes from `-WaitressLog`, else from `WAITRESS_LOG_PATH`, else the run is
+>   refused.
+> - **Refusals shown on the real Waitress**, on scratch ports and against a database that doesn't
+>   exist:
+>   - no `--threads`;
+>   - a stated count that differs from the observed one;
+>   - DEBUG on;
+>   - a server not restarted;
+>   - a log from before the listening process;
+>   - no log;
+>   - a server that isn't Waitress;
+>   - nothing listening.
+>
+>   One real run at one thread copied 23 genuine queue-depth lines.
+> - **The runbook and `tests/load/README.md`** follow D-87 §1's order. They set `DEBUG='False'` and
+>   `WAITRESS_LOG_PATH` before each server start, and require a restart before NFR-08, the HTTP check
+>   and NFR-09.
+> - **Its 29 tests were moved into `apps/`.** The agent drafted them in the scratchpad, because its
+>   brief kept it out of `apps/`, and the coordinating session moved them to
+>   `apps/ai/tests/test_server_record_preflight.py`, since pytest collects only from `apps/`. Seven
+>   deliberate breaks of `server_record.py` each failed a named test.
+>
+> **Not covered.**
+>
+> - **`run.ps1` itself has no automated test,** only the scenarios above.
+> - **k6 has still never run**, so the k6 changes ran only under the Node simulation.
+> - **Nothing checks that the server was restarted before the HTTP check.**
+> - **The restart check rests on file times.**

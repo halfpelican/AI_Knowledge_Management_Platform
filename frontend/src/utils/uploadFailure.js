@@ -1,4 +1,5 @@
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
+import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
 import { TEXT, VALIDATION } from '../constants.js'
 import { canReprocess, statusMessageFor } from './documentStatus.js'
 import { extractFieldErrors } from './fieldErrors.js'
@@ -23,12 +24,22 @@ import { whenToRetry } from './retryAfter.js'
  * duplicate email address, while FR-08's 409 is a document whose *content* has been
  * uploaded before, compared by hash and not by filename.
  *
- * The 429 is the one failure that is not about the file at all (D-79). It is the
- * user's ingestion limit, one budget shared by upload, meeting ingestion and
- * reprocess, and the rate is checked before the body is validated. So an upload's
- * 429 stored nothing and a reprocess's 429 re-ran nothing, and the result says so
- * and carries `limited: true`, which the queue reads to stop sending and to keep
- * the file queued rather than mark it failed or invalid.
+ * The 429 is the one failure that is not about the file at all, and it comes in two
+ * kinds, told apart by `code` alone, never by `detail` and never by whether a
+ * `Retry-After` came with it:
+ *
+ * - **In flight** (D-85), `code` "ingestion_in_flight": another upload, transcript
+ *   or reprocess of this user's is still being processed. Checked after every
+ *   refusal the route decides first, so the file was not refused; it was not
+ *   stored either. Its own text, which names no time, because the reply carries
+ *   none. Read first, so that it can never reach the rate's sentence below.
+ * - **Rate** (D-79), no `code`: the user's ingestion limit, one budget shared by
+ *   upload, meeting ingestion and reprocess, checked before the body is validated.
+ *   The limit's text, with when it lifts from `Retry-After`.
+ *
+ * Either way an upload's 429 stored nothing and a reprocess's 429 re-ran nothing,
+ * and the result says so and carries `limited: true`, which the queue reads to stop
+ * sending and to keep the file queued rather than mark it failed or invalid.
  *
  * @param {unknown} error the rejection from `uploadDocument` or `reprocessDocument`
  * @param {object} [options]
@@ -43,10 +54,14 @@ export function failureFor(error, { reprocess = false } = {}) {
   }
   switch (error.status) {
     case 429: {
-      const when = whenToRetry(error.retryAfter)
       // A reprocess's document is still stored, at the status it had, and still
       // offered the retry it was offered: the status did not change, so neither
-      // does what `canReprocess` said about it.
+      // does what `canReprocess` said about it. True of both kinds.
+      if (error.code === INGESTION_IN_FLIGHT_CODE) {
+        if (reprocess) return { message: TEXT.reprocessInFlight, retryable: true, limited: true }
+        return { message: TEXT.uploadInFlight, limited: true }
+      }
+      const when = whenToRetry(error.retryAfter)
       if (reprocess) return { message: TEXT.reprocessLimitReached(when), retryable: true, limited: true }
       return { message: TEXT.uploadLimitReached(when), limited: true }
     }

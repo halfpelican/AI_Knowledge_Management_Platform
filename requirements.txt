@@ -106,3 +106,5 @@ tzdata==2026.3
     # via
     #   django
     #   psycopg
+waitress==3.0.2
+    # via -r requirements.in

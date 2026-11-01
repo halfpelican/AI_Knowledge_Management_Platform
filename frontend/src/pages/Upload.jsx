@@ -24,10 +24,12 @@ const UPLOADING = 'uploading' // bytes in flight, determinate bar
 const PROCESSING = 'processing' // transfer done, server extracting and indexing
 const DONE = 'done' // 201
 const FAILED = 'failed' // the server refused it or could not process it
-// D-79's ingestion limit was reached: this file got the 429, or was still queued
-// behind the one that did. Nothing was stored and nothing is wrong with the file,
-// so it stays in the queue, keeps its title field, and the Upload button sends it
-// again. Neither failed nor invalid, and styled as neither.
+// The server held this file back for a reason that is the user's and not the
+// file's: D-79's ingestion limit, or D-85's earlier upload still being processed.
+// This file got the 429, or was still queued behind the one that did. Nothing was
+// stored and nothing is wrong with the file, so it stays in the queue, keeps its
+// title field, and the Upload button sends it again. Neither failed nor invalid,
+// and styled as neither.
 const LIMITED = 'limited'
 
 let nextRowId = 0
@@ -63,9 +65,23 @@ function isPending(row) {
  * FR-08: "Each file shows a progress indicator and an individual progress bar
  * during upload." The bar belongs to the row, and so does the outcome: the
  * status, the message and the retry action all sit beside the file they concern.
+ *
+ * `pageBusy` is true while anything on the page is sending: the queue, for its
+ * whole run, or another row's retry. This row's retry waits for it, because a user
+ * has one ingestion in flight at a time (D-85): pressed while another file was
+ * moving, it was a second ingestion the server now refuses with a 429.
+ *
+ * `queueRunning` is true while the queue is sending. A row still waiting to be
+ * sent is held until it finishes: its title field and its Remove button are
+ * disabled. The queue sends the rows as they were when Upload was pressed, so an
+ * edit made meanwhile was ignored, and a file removed meanwhile was uploaded all
+ * the same, where an Employee could not then delete it, because deletion is
+ * Administrator-only (D-73). Rows the queue has finished with, and rows it never
+ * held, such as a file refused client-side, keep their actions.
  */
-export function UploadRow({ row, onTitleChange, onRetry, onRemove, titleRef }) {
+export function UploadRow({ row, pageBusy = false, queueRunning = false, onTitleChange, onRetry, onRemove, titleRef }) {
   const busy = row.state === UPLOADING || row.state === PROCESSING
+  const queued = queueRunning && isPending(row)
   const statusText = STATUS_TEXT[row.state]
 
   return (
@@ -83,7 +99,7 @@ export function UploadRow({ row, onTitleChange, onRetry, onRemove, titleRef }) {
           label={`Title for ${row.file.name}`}
           value={row.title}
           error={row.titleError}
-          disabled={busy}
+          disabled={busy || queued}
           required
           // React 19 passes `ref` to a function component as an ordinary prop,
           // so TextInput's `...rest` puts it on the input itself. That is what
@@ -118,7 +134,7 @@ export function UploadRow({ row, onTitleChange, onRetry, onRemove, titleRef }) {
 
       <div className="upload-row__actions">
         {row.retryable ? (
-          <Button variant="secondary" onClick={() => onRetry(row.id)} disabled={busy}>
+          <Button variant="secondary" onClick={() => onRetry(row.id)} disabled={busy || pageBusy}>
             {TEXT.uploadRetry}
           </Button>
         ) : null}
@@ -126,6 +142,7 @@ export function UploadRow({ row, onTitleChange, onRetry, onRemove, titleRef }) {
           <Button
             variant="secondary"
             aria-label={`${TEXT.uploadRemove} ${row.file.name}`}
+            disabled={queued}
             onClick={() => onRemove(row.id)}
           >
             {TEXT.uploadRemove}
@@ -161,6 +178,21 @@ export function UploadRow({ row, onTitleChange, onRetry, onRemove, titleRef }) {
  * and stays in the queue, and pressing Upload again sends it as a new upload,
  * because there is nothing stored to reprocess. None is marked failed or invalid.
  * Files already sent keep the outcome they had.
+ *
+ * **D-85's in-flight 429 stops the queue the same way, with its own sentence.** It
+ * says another upload of this user's is still being processed — from another tab,
+ * or from this screen left before its queue finished — and names no time, because
+ * the reply carries none. The files behind it would be sent while that upload is
+ * still being processed, to meet the same refusal, so they are not sent either. The
+ * two kinds are told apart by `code` (src/utils/uploadFailure.js).
+ *
+ * **One send at a time from this screen, retries included.** A row's retry is
+ * disabled while the queue or another retry is sending, because the server holds
+ * one ingestion per user and would refuse the second with that 429. And `busy` is a
+ * count of the runs in progress rather than a flag, so the run that finishes first
+ * cannot clear the other's: a retry that ended while the queue was still sending
+ * used to re-enable Upload, and pressing it then could start a second queue over
+ * files the first was still going to send.
  */
 export default function Upload() {
   useDocumentTitle('Upload documents')
@@ -168,7 +200,14 @@ export default function Upload() {
   const [rows, setRows] = useState([])
   const [department, setDepartment] = useState('')
   const [visibility, setVisibility] = useState(VISIBILITY_EVERYONE)
-  const [busy, setBusy] = useState(false)
+  // How many runs are sending: the queue counts as one for its whole run, and each
+  // retry as one. The page is busy while any is. A count, so that whichever run ends
+  // first leaves the page busy for the one still going (see the comment above).
+  const [runs, setRuns] = useState(0)
+  const busy = runs > 0
+  // True while the queue itself is sending, apart from any retry. The rows it is
+  // still to send are held until it finishes (see UploadRow).
+  const [queueRunning, setQueueRunning] = useState(false)
   // Single polite live region: row status changes are announced here once, rather
   // than every row being its own live region and talking over the others.
   const [announcement, setAnnouncement] = useState('')
@@ -280,40 +319,55 @@ export default function Upload() {
       return
     }
 
-    setBusy(true)
-    // Sequential: `pending` was read before the first await, and each send()
-    // updates only its own row, so the queue is not re-derived mid-flight.
-    for (const [index, row] of pending.entries()) {
-      const limit = await send(row)
-      if (limit) {
-        // D-79: the limit is the user's, so every file still queued behind this one
-        // would get the same 429. None of them is sent, and each says what its row
-        // above says, because the same is true of it: not stored, and when uploading
-        // can resume. Only the 429'd file is announced, once.
-        const unsent = new Set(pending.slice(index + 1).map((candidate) => candidate.id))
-        setRows((current) =>
-          current.map((candidate) =>
-            unsent.has(candidate.id) ? { ...candidate, state: LIMITED, message: limit, retryable: false } : candidate,
-          ),
-        )
-        break
+    setRuns((count) => count + 1)
+    setQueueRunning(true)
+    try {
+      // Sequential: `pending` was read before the first await, and each send()
+      // updates only its own row, so the queue is not re-derived mid-flight. That
+      // is why the rows still to be sent are held until it finishes: an edit or a
+      // removal made meanwhile would not reach it.
+      for (const [index, row] of pending.entries()) {
+        const limit = await send(row)
+        if (limit) {
+          // D-79's limit, or D-85's earlier upload still in flight: either is the
+          // user's, so every file still queued behind this one would get the same
+          // 429. None of them is sent, and each says what its row above says,
+          // because the same is true of it: not stored, and when uploading can
+          // resume. Only the 429'd file is announced, once.
+          const unsent = new Set(pending.slice(index + 1).map((candidate) => candidate.id))
+          setRows((current) =>
+            current.map((candidate) =>
+              unsent.has(candidate.id) ? { ...candidate, state: LIMITED, message: limit, retryable: false } : candidate,
+            ),
+          )
+          break
+        }
       }
+    } finally {
+      setQueueRunning(false)
+      setRuns((count) => count - 1)
     }
-    setBusy(false)
   }
 
   async function handleRetry(id) {
     const row = rows.find((candidate) => candidate.id === id)
     if (!row) return
-    setBusy(true)
-    // A row that reached the server carries the document it stored, so the retry
-    // re-runs ingestion against that stored original rather than sending the
-    // file a second time (D-32). A row with no document never arrived at all —
-    // a network failure — so for that one there is nothing on the server to
-    // reprocess and the file itself is sent again.
-    if (row.document?.doc_id) await reprocess(row)
-    else await send(row)
-    setBusy(false)
+    // Its own run, counted beside the queue's rather than in place of it, so its
+    // end does not re-enable Upload while the queue is still sending. The button is
+    // disabled while anything is sending; this count is what keeps the page right
+    // if a press lands before that has rendered.
+    setRuns((count) => count + 1)
+    try {
+      // A row that reached the server carries the document it stored, so the retry
+      // re-runs ingestion against that stored original rather than sending the
+      // file a second time (D-32). A row with no document never arrived at all —
+      // a network failure — so for that one there is nothing on the server to
+      // reprocess and the file itself is sent again.
+      if (row.document?.doc_id) await reprocess(row)
+      else await send(row)
+    } finally {
+      setRuns((count) => count - 1)
+    }
   }
 
   async function reprocess(row) {
@@ -322,12 +376,16 @@ export default function Upload() {
       const stored = await reprocessDocument(row.document.doc_id)
       const partial = stored?.status === DOCUMENT_STATUS.partiallyIndexed
       const message = partial ? TEXT.uploadPartiallyIndexed : TEXT.uploadIndexed
-      updateRow(row.id, { state: DONE, document: stored, message, progress: 100 })
+      // The retry is withdrawn, as it is after an upload's own 201. Left offered, it
+      // re-ran a document that was already indexed, and the server's 409 read as a
+      // duplicate upload.
+      updateRow(row.id, { state: DONE, document: stored, message, progress: 100, retryable: false })
       announce(row.file.name, stored?.status ?? message)
     } catch (error) {
-      // A 429 here re-ran nothing (D-79): the document is still stored at the status
-      // it had, which the row goes on showing, with the retry still offered and the
-      // limit's sentence saying when it can be pressed again.
+      // A 429 here re-ran nothing (D-79, D-85): the document is still stored at the
+      // status it had, which the row goes on showing, with the retry still offered
+      // and a sentence saying when it can be pressed again: the limit's time, or
+      // once the earlier upload has finished.
       const failure = failureFor(error, { reprocess: true })
       updateRow(row.id, {
         state: FAILED,
@@ -406,6 +464,8 @@ export default function Upload() {
             <UploadRow
               key={row.id}
               row={row}
+              pageBusy={busy}
+              queueRunning={queueRunning}
               titleRef={registerTitleRef(row.id)}
               onTitleChange={(id, title) => updateRow(id, { title, titleError: null })}
               onRetry={handleRetry}

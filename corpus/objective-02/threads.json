@@ -1,0 +1,448 @@
+{
+  "name": "FR-13 end-to-end thread set, v1",
+  "status": "FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.",
+  "corpus": "The Objective 02 verification corpus: the 20 documents and 5 transcripts listed in corpus/objective-02/manifest.json. Five items are Administrator-only: D09, D15, D16, T02 and T05.",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Drafted on 27 October 2026 by the rag-pipeline agent from the corpus files and manifest.json only. The system was never run to see what it answers. PDF, DOCX and XLSX text was read with the project's own extractor (apps/ingestion/extraction.py), read-only.",
+    "Nine two-turn threads (D-86 asks for about eight): five ordinary, one per format (PDF, DOCX, XLSX, TXT, transcript); two scoped, whose follow-up turns to Administrator-only material and which are asked by both roles; one topic change; one whose follow-up refers to something only in the first turn's answer.",
+    "Every follow-up except the topic change depends on the first turn through a pronoun or a dropped subject (depends_on). cold_lure says what the follow-up alone is likely to retrieve instead. The topic change is the one follow-up that can be answered cold, by design: it has nothing to refer to. It measures whether carrying the first question hurts.",
+    "spelled_out is the follow-up with each reference replaced by what it refers to, and no other change. For every thread but t09 the referent is named in the first turn's question. In t09 it is named only in the first turn's answer, which D-42 never passes on, so t09 is predicted to fail with history.",
+    "expected_answer lists the phrases the scoring rule looks for in the verified statements. Any one of them is enough. sources lists the manifest items the answer is in, and at least one verified statement must cite one of them.",
+    "Every phrase was checked against the extracted text: it occurs in each turn's source, and a phrase of an Administrator-only source occurs in no item an Employee can read (apps/ai/tests/test_fr13_measurement_scripts.py checks both).",
+    "http_check names the threads scripts/conversation_http_check.py runs through POST /api/conversations and POST /api/ask (D-86 decision 6).",
+    "Locations: PDF by page and section heading; DOCX by paragraph number counted over every paragraph, headings included; XLSX by sheet and cell; TXT and transcripts by line number in the file.",
+    "Benjamin Morovan asked some of the threads informally before the set was frozen. No question, expected answer or source was changed because of what the system answered.",
+    "Accepted alternatives match only as whole tokens: a letter or digit may not touch either end, so '5 years' does not match '15 years' and '23' does not match '2023'. The expected phrase itself still matches as a substring, as it did when the set was approved (scripts/question_set.py matching_form)."
+  ],
+  "scoring_rule": {
+    "version": 2,
+    "applies_to": "Every run of every thread, the same way: each follow-up asked with history, cold and spelled out, and each first turn. Frozen with the set; a change is a new version, recorded with its reason.",
+    "parts": [
+      "1. A run is one question asked one way by one role, through the shipped code: the strings from apps.retrieval.conversation.compose(), embedded by embed_question(), the role's candidate set (FR-11's predicates, D-66), ranked, admitted at RELEVANCE_THRESHOLD, fitted to MAXIMUM_CONTEXT_TOKENS, generate_statements(), verify_citations(). With history: compose(follow-up, [first question]), which is what POST /api/ask composes on turn two (D-42: the question only, never the answer). Cold: compose(follow-up, []). Spelled out: compose(spelled-out follow-up, []). First turn: compose(first question, []). Each run is made once.",
+      "2. Answered: at least one statement survived verification, which is RetrievalOutcome.answered.",
+      "3. Outcome, exactly one per run: answered; no-answer path A (nothing cleared the threshold, generation not called); no-answer path B, split into B-declined (the model proposed no statement) and B-rejected (verification rejected every proposed statement); unavailable (MAXIMUM_GENERATION_ATTEMPTS replies failed or did not conform: the 503). Unavailable is neither an answer nor a no-answer and is counted on its own.",
+      "4. Expected-answer match: answered, AND one of the turn's expected_answer phrases occurs in the verified statements' text joined with spaces (whitespace collapsed and case folded on both sides), AND at least one verified statement cites a chunk of one of the turn's sources. The phrase and the source are recorded separately as well. Version 2: a turn's accepted alternatives also count, matched only as whole tokens (scripts/question_set.py matching_form), so a digit, currency, percent, date or time form of the same fact is found and a wrong number is not.",
+      "5. Correct: where the role should be answered, an expected-answer match. Where it should not (an Employee on a scoped follow-up), not answered and no leak. An unavailable run is never correct.",
+      "6. Expected-source rank: the 1-based position of the best chunk of a source item in the role's full ranked candidate list, before the threshold. 'Not a candidate' where the role cannot read it.",
+      "7. Leak, which must be 0; one leak fails the set whatever else it shows. A chunk the asking role may not read that is (a) among the passages supplied to generation, (b) cited by any statement the model proposed, verified or rejected, or (c) named by the partial matches; (d) a phrase of a source item the asking role may not read, in that role's verified statements; and, for the HTTP check, (e) the id or title of a source item the role may not read anywhere in a reply body.",
+      "8. Fabrication: proposed statements that verify_citations() rejected, over all proposed statements.",
+      "9. First-attempt conformance: runs whose first generation attempt parsed, over runs where generation was called.",
+      "10. Reading a follow-up, per role, decided before the run: 'history works' if with history is correct and cold is not; 'cold-answerable' if cold is correct, and the follow-up then proves nothing about history (it is reported, not removed); 'history hurts' if cold is correct and with history is not; 'not resolved with history' if neither is correct; and if spelled out is not correct, the failure is retrieval's or generation's, not history's. A scoped thread shows scoping when the Administrator is correct with history, and the Employee is not answered with history, the source is not a candidate for the Employee, and neither role leaks.",
+      "11. Predictions, frozen with the set: an ordinary thread, and a scoped thread asked by the Administrator, is correct on its first turn, with history and spelled out, and not correct cold. A scoped thread asked by the Employee is correct (not answered) every way. The topic change is correct every way. t09, the previous-answer thread, is correct on its first turn and spelled out, and not correct with history or cold (D-42). A prediction that fails is reported as measured; nothing is re-scored."
+    ],
+    "reported_per_follow_up": "For each way: the outcome, answered, the expected-source rank, the phrase found, the source cited, the expected-answer match, correct, proposed and rejected statements, whether the first attempt parsed, and leaks. Across follow-ups, per way: the answered rate, the expected-answer match rate, the path A, B-declined, B-rejected and unavailable split, the fabrication rate, first-attempt conformance, and the out-of-scope count.",
+    "changes": [
+      "Version 2, 1 November 2026, before the first measured run: accepted alternatives added for number words, dates and times, at the user's request, because a correct '30 days' or '86%' would otherwise not be found. No phrase, source or expectation changed."
+    ]
+  },
+  "http_check": [
+    {
+      "thread": "t03",
+      "role": "Employee"
+    },
+    {
+      "thread": "t04",
+      "role": "Employee"
+    },
+    {
+      "thread": "t06",
+      "role": "Administrator"
+    }
+  ],
+  "threads": [
+    {
+      "id": "t01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "format": "PDF",
+      "turns": [
+        {
+          "question": "How much annual leave do full-time staff build up each month?",
+          "expected": "answer",
+          "expected_answer": [
+            "1.67 days"
+          ],
+          "sources": [
+            "D01"
+          ],
+          "answer": "1.67 days for every month of service, credited on the last working day of each month.",
+          "location": "D01_leave_policy_2026.pdf, page 1, 'Annual leave'",
+          "accepted": [
+            "1.67"
+          ]
+        },
+        {
+          "question": "Is there a limit on how much of it I can save up?",
+          "spelled_out": "Is there a limit on how much annual leave I can save up?",
+          "expected": "answer",
+          "expected_answer": [
+            "thirty days"
+          ],
+          "sources": [
+            "D01"
+          ],
+          "answer": "Yes. Unused leave carries over to the next year up to a maximum of thirty days.",
+          "location": "D01_leave_policy_2026.pdf, page 1, 'Annual leave'",
+          "depends_on": "'it' is the annual leave asked about in the first turn.",
+          "cold_lure": "'limit' alone leads to D10's 'Limits' section and its reimbursement cap. D10 and D11 both say 'within thirty days', which the source requirement does not count.",
+          "accepted": [
+            "30 days",
+            "30-day",
+            "thirty-day"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "t02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "format": "DOCX",
+      "turns": [
+        {
+          "question": "What do I need before I can start working from home?",
+          "expected": "answer",
+          "expected_answer": [
+            "probation"
+          ],
+          "sources": [
+            "D07"
+          ],
+          "answer": "A remote arrangement is open to employees who have completed their probation, hold a role that can be done away from the office, and have a safe workspace with reliable internet access.",
+          "location": "D07_remote_work_agreement.docx, paragraph 5, under 'Eligibility'",
+          "accepted": []
+        },
+        {
+          "question": "How often does that get reviewed?",
+          "spelled_out": "How often do the requirements for working from home get reviewed?",
+          "expected": "answer",
+          "expected_answer": [
+            "every six months"
+          ],
+          "sources": [
+            "D07"
+          ],
+          "answer": "Eligibility is reviewed every six months.",
+          "location": "D07_remote_work_agreement.docx, paragraph 5, under 'Eligibility'",
+          "depends_on": "'that' is what the first turn asked about: the requirements for working from home.",
+          "cold_lure": "Every item says its owner 'reviews it at least once a year', D07 included, and D07 also has a quarterly check-in. Only the first turn's subject picks out the six-monthly eligibility review.",
+          "accepted": [
+            "every 6 months",
+            "six-monthly",
+            "6-monthly",
+            "twice a year",
+            "twice yearly"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "t03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "format": "XLSX",
+      "turns": [
+        {
+          "question": "Which company handles our catering?",
+          "expected": "answer",
+          "expected_answer": [
+            "Ridgeline"
+          ],
+          "sources": [
+            "D12"
+          ],
+          "answer": "Ridgeline Catering.",
+          "location": "D12_vendor_register_2026.xlsx, sheet 'Data', cell A5",
+          "accepted": []
+        },
+        {
+          "question": "How do I place an order with them?",
+          "spelled_out": "How do I place an order with our catering company?",
+          "expected": "answer",
+          "expected_answer": [
+            "book@ridgeline.example"
+          ],
+          "sources": [
+            "D12"
+          ],
+          "answer": "Through Ridgeline Catering's contact in the vendor register, book@ridgeline.example.",
+          "location": "D12_vendor_register_2026.xlsx, sheet 'Data', cell C5",
+          "depends_on": "'them' is the company that handles our catering, from the first turn.",
+          "cold_lure": "The register has eight contacts, and the only one with 'orders' in it is Lantern Grove's, orders@lanterngrove.example, the preferred stationery vendor.",
+          "accepted": []
+        }
+      ]
+    },
+    {
+      "id": "t04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "format": "TXT",
+      "turns": [
+        {
+          "question": "Who is allowed to drive the fleet vehicles?",
+          "expected": "answer",
+          "expected_answer": [
+            "driver induction"
+          ],
+          "sources": [
+            "D19"
+          ],
+          "answer": "Only employees with a current licence who have completed the driver induction. Licence details are checked every year.",
+          "location": "D19_fleet_vehicle_notes.txt, line 4, 'Who may drive'",
+          "accepted": []
+        },
+        {
+          "question": "What records do they need to keep?",
+          "spelled_out": "What records do the people allowed to drive the fleet vehicles need to keep?",
+          "expected": "answer",
+          "expected_answer": [
+            "odometer"
+          ],
+          "sources": [
+            "D19"
+          ],
+          "answer": "A logbook entry for every trip: the date, the start and end odometer readings, the destination and the purpose. The fleet coordinator collects logbooks monthly.",
+          "location": "D19_fleet_vehicle_notes.txt, line 7, 'Logbooks'",
+          "depends_on": "'they' are the people allowed to drive the fleet vehicles, from the first turn.",
+          "cold_lure": "D04, the Records Management Handbook, is 19 chunks about keeping records, and D11 covers how long personal information is kept.",
+          "accepted": []
+        }
+      ]
+    },
+    {
+      "id": "t05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "format": "transcript",
+      "turns": [
+        {
+          "question": "What date did the planning workshop set for the feature freeze?",
+          "expected": "answer",
+          "expected_answer": [
+            "seventh of November"
+          ],
+          "sources": [
+            "T03"
+          ],
+          "answer": "The seventh of November.",
+          "location": "T03_product_planning_workshop.txt, line 13 (Sofia)",
+          "accepted": [
+            "7 november",
+            "november 7",
+            "7th of november",
+            "7th november",
+            "november 7th",
+            "2026-11-07",
+            "07/11/2026",
+            "7/11/2026"
+          ]
+        },
+        {
+          "question": "Why does it have to be that early?",
+          "spelled_out": "Why does the feature freeze have to be that early?",
+          "expected": "answer",
+          "expected_answer": [
+            "three weeks",
+            "testing has enough time"
+          ],
+          "sources": [
+            "T03"
+          ],
+          "answer": "It has to be at least three weeks before the release so that testing has enough time.",
+          "location": "T03_product_planning_workshop.txt, line 11 (Wei)",
+          "depends_on": "'it' is the feature freeze from the first turn.",
+          "cold_lure": "With no subject, 'that early' matches any advance notice in the corpus: leave requests two weeks ahead (D01), large bookings a week ahead (D17), claims within thirty days (D10).",
+          "accepted": [
+            "3 weeks",
+            "three-week",
+            "3-week"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "t06",
+      "kind": "scoped",
+      "role": "both",
+      "format": "XLSX and PDF, then transcript",
+      "turns": [
+        {
+          "question": "How often are our suppliers reviewed?",
+          "expected": "answer",
+          "expected_answer": [
+            "once a year",
+            "annually"
+          ],
+          "sources": [
+            "D12",
+            "D05"
+          ],
+          "answer": "Once a year: each vendor is reviewed against price, delivery performance and quality (D12), and suppliers are reviewed annually (D05).",
+          "location": "D12_vendor_register_2026.xlsx, sheet 'Summary', cell A5; D05_procurement_guidelines.pdf, page 1, 'Contract management'",
+          "accepted": [
+            "yearly",
+            "every year",
+            "each year",
+            "every 12 months",
+            "every twelve months",
+            "once per year"
+          ]
+        },
+        {
+          "question": "Are we relying too heavily on just a few of them?",
+          "spelled_out": "Are we relying too heavily on just a few of our suppliers?",
+          "expected_by_role": {
+            "Administrator": "answer",
+            "Employee": "no-answer"
+          },
+          "expected_answer": [
+            "almost half",
+            "three suppliers"
+          ],
+          "sources": [
+            "T02"
+          ],
+          "answer": "The risk committee heard that three suppliers account for almost half of our spend. Helen recommended developing alternatives for the two most critical services, and will bring a plan with costs and timelines.",
+          "location": "T02_board_risk_committee.txt, line 15 (Helen); line 19 for the plan",
+          "depends_on": "'them' are our suppliers, from the first turn.",
+          "cold_lure": "'Relying on a few' says nothing about suppliers. T02 also discusses loss of key staff, which an Administrator's cold run could take instead.",
+          "scoping": "Supplier concentration is only in T02, which is Administrator-only. D12 and D05, which an Employee can read, say how suppliers are reviewed but nothing about the share of spend.",
+          "accepted": [
+            "3 suppliers",
+            "nearly half",
+            "close to half"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "t07",
+      "kind": "scoped",
+      "role": "both",
+      "format": "TXT, then DOCX",
+      "turns": [
+        {
+          "question": "What gets published on the intranet about the office move?",
+          "expected": "answer",
+          "expected_answer": [
+            "weekly"
+          ],
+          "sources": [
+            "D20"
+          ],
+          "answer": "A weekly update, until the move is complete.",
+          "location": "D20_office_relocation_notice.txt, line 13, 'Questions'",
+          "accepted": []
+        },
+        {
+          "question": "Is it being replaced?",
+          "spelled_out": "Is the intranet being replaced?",
+          "expected_by_role": {
+            "Administrator": "answer",
+            "Employee": "no-answer"
+          },
+          "expected_answer": [
+            "Atlas",
+            "knowledge platform"
+          ],
+          "sources": [
+            "D09"
+          ],
+          "answer": "Yes. Project Atlas replaces the organisation's ageing intranet with a searchable knowledge platform.",
+          "location": "D09_project_atlas_kickoff.docx, paragraph 3, under 'Project summary'",
+          "depends_on": "'it' is the intranet, from the first turn.",
+          "cold_lure": "Nothing in 'Is it being replaced?' names the intranet. D09 is the only item that uses 'replaces', so an Administrator's cold run may still reach it, which the cold run is there to show.",
+          "scoping": "Project Atlas is only in D09 and D15, both Administrator-only. Many items an Employee can read mention the intranet, as the place to raise questions, but none says it is being replaced.",
+          "accepted": []
+        }
+      ]
+    },
+    {
+      "id": "t08",
+      "kind": "topic-change",
+      "role": "Employee",
+      "format": "transcript, then PDF",
+      "turns": [
+        {
+          "question": "What was the customer satisfaction score last quarter?",
+          "expected": "answer",
+          "expected_answer": [
+            "eighty-six percent"
+          ],
+          "sources": [
+            "T04"
+          ],
+          "answer": "Eighty-six percent.",
+          "location": "T04_customer_success_retro.txt, line 3 (Ollie)",
+          "accepted": [
+            "86%",
+            "86 percent",
+            "86 per cent",
+            "eighty six percent",
+            "eighty-six per cent"
+          ]
+        },
+        {
+          "question": "Where are the first aid kits kept?",
+          "spelled_out": "Where are the first aid kits kept?",
+          "expected": "answer",
+          "expected_answer": [
+            "reception"
+          ],
+          "sources": [
+            "D03"
+          ],
+          "answer": "At reception and on every floor.",
+          "location": "D03_health_safety_induction.pdf, page 1, 'First aid'",
+          "depends_on": null,
+          "cold_lure": "None: this is the topic change, answerable cold by design. With history, the first question's customer-success words are embedded with it and can pull T04 ahead of D03.",
+          "accepted": []
+        }
+      ]
+    },
+    {
+      "id": "t09",
+      "kind": "previous-answer",
+      "role": "Employee",
+      "format": "TXT, then TXT",
+      "turns": [
+        {
+          "question": "Who do I ask if I have questions about the office move?",
+          "expected": "answer",
+          "expected_answer": [
+            "facilities team"
+          ],
+          "sources": [
+            "D20"
+          ],
+          "answer": "The facilities team.",
+          "location": "D20_office_relocation_notice.txt, line 13, 'Questions'",
+          "accepted": []
+        },
+        {
+          "question": "What do they have to approve?",
+          "spelled_out": "What does the facilities team have to approve?",
+          "expected": "answer",
+          "expected_answer": [
+            "twenty people"
+          ],
+          "sources": [
+            "D17"
+          ],
+          "answer": "Meeting room bookings of more than twenty people, or that run past six in the evening, at least one week in advance.",
+          "location": "D17_meeting_room_rules.txt, line 13, 'Large events'",
+          "depends_on": "'they' is the facilities team, which only the first turn's ANSWER names. The first question says 'who do I ask', so under D-42 the retrieval string and the prompt carry no name for 'they'.",
+          "cold_lure": "Approvals are everywhere: leave requests (D01), purchases (D05), expenses (D10), private use of fleet vehicles (D19). D20 itself, which the first question retrieves, names the facilities team, so the model could still make the link in two steps; the run shows whether it does.",
+          "accepted": [
+            "20 people",
+            "20 attendees",
+            "20 participants",
+            "20 guests"
+          ]
+        }
+      ]
+    }
+  ]
+}

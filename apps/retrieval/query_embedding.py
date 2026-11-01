@@ -51,7 +51,10 @@ is given.
 
 from django.conf import settings
 
+import time
+
 import apps.ai
+from apps.ai import attempt_log
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
 from apps.ai.prefixes import query_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS
@@ -73,9 +76,14 @@ def embed_question(question: str) -> EmbeddingResult:
     prefixed = query_text(question)
 
     for attempt in range(1, MAXIMUM_EMBED_ATTEMPTS + 1):  # 1 initial call + 2 retries
+        started = time.perf_counter()
         try:
             result = service.embed([prefixed])
-        except ProviderUnavailable:
+        except ProviderUnavailable as exc:
+            attempt_log.failed_attempt(
+                "question embedding", attempt, MAXIMUM_EMBED_ATTEMPTS, time.perf_counter() - started,
+                attempt_log.cause_of(exc), str(exc),
+            )
             # A transient outage. Retry; the loop bound is the whole policy, and the
             # last failure is re-raised with its own message rather than replaced.
             if attempt == MAXIMUM_EMBED_ATTEMPTS:
@@ -83,6 +91,10 @@ def embed_question(question: str) -> EmbeddingResult:
             continue
         problem = _usability_problem(result)
         if problem is not None:
+            attempt_log.failed_attempt(
+                "question embedding", attempt, MAXIMUM_EMBED_ATTEMPTS, time.perf_counter() - started,
+                "unusable reply", problem,
+            )
             # Not retried, and not on the next attempt either: the remaining attempts
             # would spend two more calls collecting the same answer.
             raise ProviderUnavailable(f"The embedding provider {problem}.")

@@ -54,9 +54,10 @@ const MESSAGES = {
   // registration form places under the email field (src/utils/fieldErrors.js).
   409: VALIDATION.emailTaken,
   // Every 429 but the two below: D-79's per-user limits on asking, ingestion and
-  // creating a thread, and its one-ask-in-flight refusal. The screens that send
-  // those requests each say which limit it was and when it lifts, from `code` and
-  // `retryAfter`; this is the text for a screen that does not.
+  // creating a thread, its one-ask-in-flight refusal, and D-85's one-ingestion-in-
+  // flight refusal. The screens that send those requests each say which it was and
+  // when to try again, from `code` and `retryAfter`; this is the text for a screen
+  // that does not.
   429: 'Too many requests in a short time. Please wait and try again.',
   // Registration and login are rate limited per client address (D-26); reachable
   // in a demonstration, since the lockout scenario alone needs several attempts.
@@ -88,8 +89,9 @@ export class ApiError extends Error {
     this.status = status
     this.details = details
     // The body's `code` where it is a string, else null: `ask_in_flight` on D-79's
-    // in-flight 429 (src/api/ask.js ASK_IN_FLIGHT_CODE), `account_locked` on FR-02's
-    // 403. A screen branches on it and never shows it.
+    // in-flight 429 (src/api/ask.js ASK_IN_FLIGHT_CODE), `ingestion_in_flight` on
+    // D-85's (src/api/ingestion.js), `account_locked` on FR-02's 403. A screen
+    // branches on it and never shows it.
     this.code =
       details && typeof details === 'object' && typeof details.code === 'string' ? details.code : null
     // Whole seconds until a rate limit lets the request through, from a 429's

@@ -10,7 +10,9 @@ AMD Ryzen AI NPU. Read `CLAUDE.md` before changing anything; the build plan is
 - Windows 11, native PowerShell (not WSL: the NPU is not visible from WSL2)
 - [uv](https://docs.astral.sh/uv/) for Python and package management
 - Docker Desktop, for the local PostgreSQL + pgvector database
-- FastFlowLM (`flm`) with the `gemma3:4b` and `embed-gemma` models pulled
+- FastFlowLM (`flm`) **v0.9.39 exactly**, with the `gemma3:4b` and `embed-gemma` models pulled.
+  From v1.0.4 onward its embeddings are non-deterministic (upstream ROCm/FastFlowLM#732), so
+  retrieval returns noise while chat still works (D-83).
 
 ## Setup
 
@@ -46,8 +48,10 @@ flm serve gemma3:4b --embed 1
 ```
 
 That serves `gemma3:4b` for generation and `embed-gemma` (768 dimensions) for
-embeddings at `http://127.0.0.1:8625/v1`. Confirm it with
-`python scripts/check_flm.py`. `manage.py check`, `migrate` and `runserver` probe
+embeddings at `http://127.0.0.1:8625/v1`. Confirm the version with `flm version`
+(it must say v0.9.39) and the server with `.venv/Scripts/python.exe scripts/check_flm.py`, which
+fails, exiting 1, if the embeddings are not deterministic. Run it before any measurement, load
+test or demonstration (D-83). `manage.py check`, `migrate` and `runserver` probe
 the provider on start: a warning if it is unreachable, a hard stop if the
 embedding dimension does not match `EMBEDDING_DIMENSION` (`docs/ai-provider.md`
 section 4).

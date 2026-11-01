@@ -141,7 +141,10 @@ export function documentDownloadUrl(docId) {
  * "Processing failed. Please try again" action displays; 429 past the per-user
  * ingestion rate, one budget shared with meeting ingestion and reprocess, with a
  * `Retry-After` in seconds (`error.retryAfter`). The rate is checked before the
- * body is validated, so a 429 stores nothing (D-79).
+ * body is validated, so a 429 stores nothing (D-79). A second 429, `code`
+ * `ingestion_in_flight` (`error.code`, src/api/ingestion.js) and no `Retry-After`,
+ * while another upload, transcript or reprocess of this user's is still being
+ * processed; it comes after every refusal above, and stores nothing (D-85).
  *
  * @param {object} fields
  * @param {File} fields.file
@@ -177,7 +180,9 @@ export function uploadDocument({ file, title, department, visibleToRoles }, opti
  * indexed, or a copy was indexed meanwhile; 422 it failed the same way again,
  * which is what a file with no text layer will always do; 429 past the ingestion
  * rate it shares with upload and meeting ingestion (D-79), which re-runs nothing
- * and leaves the document at the status it had.
+ * and leaves the document at the status it had; and the same with `code`
+ * `ingestion_in_flight` and no `Retry-After` while another ingestion of this
+ * user's is still being processed (D-85).
  */
 export function reprocessDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/reprocess`, {}, options)

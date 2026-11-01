@@ -5,11 +5,11 @@ import exec from 'k6/execution';
 import { check } from 'k6';
 import { Trend, Rate } from 'k6/metrics';
 import {
-  BASE_URL, GIT_SHA, EXPECTED_ROLE, ASK_LIMIT, INGESTION_LIMIT, LOGIN_SPACING_S,
+  BASE_URL, EXPECTED_ROLE, ASK_LIMIT, INGESTION_LIMIT, LOGIN_SPACING_S,
   requireThat, minimumSpacingSeconds, accountEmail, accountRange,
   loginAccounts, sessionForThisVu, warmUp, paceFrom, setupTimeoutSeconds,
   nextQuestion, ask, isValidReply, wasAnswered, validityProblems, throttleCounts,
-  recordResponse,
+  recordResponse, runRecord, runRecordLines, observedServer,
 } from './common.js';
 
 const MAX_DEGRADATION = 0.25;
@@ -114,11 +114,15 @@ export const options = {
 
 export function setup() {
   const sessions = loginAccounts([...LOAD_ACCOUNTS, BASELINE_ACCOUNT]);
+  // Before the warm-ups, so a wrong server is reported before they take minutes.
+  // It reaches handleSummary() as data.setup_data (D-85 decision 4).
+  const observed = observedServer(sessions);
   // Account 01's next ask is in the load phase, at least 20 minutes later.
   warmUp(sessions[0], ROUND_FLOOR_S);
   return {
     load: sessions.slice(0, CONCURRENT_USERS),
     baseline: sessions[CONCURRENT_USERS],
+    observed_server: observed,
   };
 }
 
@@ -147,6 +151,9 @@ function uploadDocument(session) {
       headers: { 'X-CSRFToken': session.cookies.csrftoken },
       cookies: session.cookies,
       tags: { name: 'upload' },
+      // An upload k6 abandons here keeps the account's ingestion slot until the
+      // server has finished it (D-85; the slot has no timeout), so the account's
+      // next upload can be a 429 ingestion_in_flight. The gate names that kind.
       timeout: '300s',
     }
   );
@@ -235,7 +242,7 @@ export function handleSummary(data) {
     },
     answered_percent: data.metrics.answered_rate
       ? Number((data.metrics.answered_rate.values.rate * 100).toFixed(1)) : null,
-    commit_sha: GIT_SHA || null,
+    ...runRecord(data),
     role: EXPECTED_ROLE,
     role_checked_at_login: true,
     accounts: {
@@ -258,7 +265,7 @@ export function handleSummary(data) {
     `  questions: baseline ${fmt(askResult.baseline_p90_ms)} -> load ${fmt(askResult.load_p90_ms)} (${pct(askResult.degradation_percent)})\n` +
     `  uploads  : baseline ${fmt(uploadResult.baseline_p90_ms)} -> load ${fmt(uploadResult.load_p90_ms)} (${pct(uploadResult.degradation_percent)})\n` +
     `  samples (ask base/load, upload base/load): ${count('ask_baseline_ms')}/${count('ask_load_ms')}, ${count('upload_baseline_ms')}/${count('upload_load_ms')}\n` +
-    `  commit   : ${GIT_SHA || 'not recorded'}\n` +
+    runRecordLines((name) => `  ${name.padEnd(9)}: `, data) +
     `  run valid: ${valid}\n` +
     problems.map((p) => `    INVALID: ${p}\n`).join('') +
     `  verdict  : ${verdict}\n`;

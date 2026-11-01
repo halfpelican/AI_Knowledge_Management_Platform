@@ -76,8 +76,21 @@ what the tests assert about its text, plus the fact that verification is indiffe
 where in the prompt an identifier came from. What is NOT known is whether gemma3:4b's
 schema conformance holds with a history block in front of it. Measuring it needs a
 multi-turn question set the harness does not have.
+
+(Stage 4 item 9a later measured the block in the prompt with retrieval held constant;
+D-42 records it. FR-13 end to end — the composed join changing what is retrieved — is
+D-86's, and ``compose`` below is what its harness mode calls.)
+
+**7. ``compose`` is the composition, and it is pure (D-86 decision 5).** It takes the
+question and the earlier questions and returns both strings, with no database and no
+user. ``conversation_context`` reads the history and calls it, and does nothing else to
+the strings. scripts/citation_harness.py's ``--threads`` mode calls the same function, so
+the harness embeds and prompts what ``POST /api/ask`` embeds and prompts for the same
+history. apps/retrieval/tests/test_compose.py pins the two together: a second copy of the
+join or of the labelling, in either place, fails it.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from apps.ai.prompting import build_conversational_question
@@ -156,6 +169,33 @@ def prior_questions(*, conversation, user) -> tuple[str, ...]:
     return tuple(reversed(list(newest_first)))
 
 
+def compose(question: str, prior_questions: Sequence[str]) -> ConversationContext:
+    """Both composed forms of ``question``, given the earlier questions, oldest first.
+
+    Pure: no database, no user, no conversation, no I/O. What the pipeline embeds is
+    ``for_retrieval`` and what it hands ``generate_statements`` is ``for_prompt``, for
+    exactly these earlier questions (clause 3 of the module docstring).
+
+    ``prior_questions`` is used as given. Reading them — both predicates, the most recent
+    MAXIMUM_CONVERSATION_TURNS, chronological order — is ``prior_questions()``'s job, and
+    a caller with its own history (the harness's thread set) is responsible for the same
+    properties. Questions only, never answers (clause 1).
+
+    With no earlier questions both strings are ``question`` (the D-45 neutralisation of
+    ``for_prompt`` aside, as ``ConversationContext`` says), which is what a one-off and a
+    thread's first turn send.
+    """
+    history = tuple(prior_questions)
+    return ConversationContext(
+        prior_questions=history,
+        # Plain, so the query vector is about the subject and not about the framing.
+        for_retrieval=RETRIEVAL_JOIN.join([*history, question]),
+        # Labelled, so nothing in it can be mistaken for a passage. The prompt text is in
+        # apps/ai/prompting.py with the rest of the prompt.
+        for_prompt=build_conversational_question(question, list(history)),
+    )
+
+
 def conversation_context(*, question: str, conversation, user) -> ConversationContext:
     """Both composed forms of ``question`` for this turn of this conversation.
 
@@ -167,13 +207,9 @@ def conversation_context(*, question: str, conversation, user) -> ConversationCo
     string replaces: ``QueryLog.question`` stores the question as asked (see
     apps/retrieval/query_log.py), so the composed strings live and die inside one call of
     ``answer_question``.
+
+    The history is read here and the strings are ``compose``'s, unchanged: this function
+    must not touch them, or the harness's ``--threads`` mode stops measuring what this
+    path sends (D-86).
     """
-    history = prior_questions(conversation=conversation, user=user)
-    return ConversationContext(
-        prior_questions=history,
-        # Plain, so the query vector is about the subject and not about the framing.
-        for_retrieval=RETRIEVAL_JOIN.join([*history, question]),
-        # Labelled, so nothing in it can be mistaken for a passage. The prompt text is in
-        # apps/ai/prompting.py with the rest of the prompt.
-        for_prompt=build_conversational_question(question, list(history)),
-    )
+    return compose(question, prior_questions(conversation=conversation, user=user))
