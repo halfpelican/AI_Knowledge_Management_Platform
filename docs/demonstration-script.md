@@ -1,5 +1,16 @@
 # Demonstration script: the twelve M6 requirements on the alpha
 
+> **Amended 2 November 2026,** after item 10 (D-90). The changes:
+>
+> - the lockout is FR-02's and is shown, with a throwaway account (D-25);
+> - FR-13's wording is corrected (D-91), and its per-turn claim is cited to its tests;
+> - the full list of recorded deviations, including the sentence D-33 owes;
+> - a current list of what the front-end suite does not cover;
+> - D-61's six routes restored;
+> - "item 9a" corrected to Stage 4's.
+>
+> The 1 November walk followed the earlier text, and `docs/stage-5-item-8-walk.md` records it as it was.
+
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
 pass: both roles, real files, the real corpus.
@@ -89,12 +100,21 @@ words a message, the message is quoted.
 
 1. **Sign in with the wrong password, once.**
    - **Expected:** "Invalid email or password.", which does not say which half was wrong.
-   - Five failures lock the account for 15 minutes (FR-03, not in the gate). Do not show it.
+   - Five failures lock the account for 15 minutes, and a locked account gets a 403 with its own
+     message. That is **FR-02's**, not FR-03's (D-25). FR-03 adds only the warning, the countdown
+     and the administrator release. **Never lock `corpus.admin@example.com` or the demonstration
+     accounts.** Show it with its own account, in step 4.
 2. **Sign in with the right password.**
    - **Expected:** the Employee's dashboard, and the navigation shows `Signed in as` the name
      registered in FR-01.
 3. **In window A, sign in as `corpus.admin@example.com`.**
    - **Expected:** the Administrator's dashboard, and `Role management` in the navigation.
+4. **The lockout, with a throwaway account.** Register a new account through FR-01, with a
+   password used nowhere else. Sign in with a wrong password five times.
+   - **Expected:** the fifth refusal, and every attempt after it, gives the locked-account
+     message (a 403 on the server).
+   - Sign in with the right password.
+   - **Expected:** still refused until 15 minutes have passed.
 
 ### FR-04 · Logout and session management (window B)
 
@@ -127,8 +147,13 @@ words a message, the message is quoted.
      enforcement: the server refuses whatever the page shows.
 3. **Open the same address in a third, signed-out window.**
    - **Expected:** a JSON **401**.
-4. **Say it:** every protected route is tested from both roles (23 of 23 endpoints), and the audit
-   trail D-57 to D-61 found no route across the permission boundary.
+4. **Say it:** every protected route is tested from both roles (23 of 23 endpoints). The audit
+   trail D-57 to D-61 found no route across the permission boundary on the six routes it walked:
+   `/api/ask`, `/api/search`, `/api/conversations*`, `/api/documents/{id}`,
+   `/api/meetings/{id}` and reprocess. The four FR-14 and FR-15 routes added since
+   (`GET /api/dashboard`, `GET /api/documents/browse`, `GET /api/documents/{id}/download` and
+   `DELETE /api/documents/{id}`) have leakage tests, but no audit has walked them until item
+   11.
 
 ### FR-08 · Document upload, extraction and indexing (window B)
 
@@ -228,13 +253,19 @@ same routes. Every question below was screened with them in place.
 3. **Window A, the same two turns.**
    - **Expected:** the first is answered as before. The second is answered: "The sponsor of Project
      Atlas is the chief operating officer", citing **Project Atlas Kickoff Brief** (D09).
-   - **This is the clause.** In the same kind of thread, with the same history, the permission is
-     checked again on every turn, for whoever asks.
+   - **What this shows:** the same history, in two roles, and the second turn's scope differs
+     by role.
+   - **That the scope is re-evaluated on every turn is evidenced by test, not by this walk.**
+     Two sessions holding two roles cannot show a role changing mid-thread.
+     `apps/api/tests/test_fr11_scoping.py:608` changes the role between turns, from Employee to
+     Administrator, and the next turn takes the new scope. `:633` does the reverse.
 4. **Reopen a thread from `Your conversations`, or from the dashboard's recent questions** (D-77).
    - **Expected:** the turns come back in order.
 5. **Do not ask a follow-up that needs the earlier turn to make sense,** such as "Is there a limit
-   on how much of it I can save up?". The screen found the model answering the earlier question
-   again in 7 of the 9 frozen threads, the same way on all three runs.
+   on how much of it I can save up?".
+   - In the screen's three clean cases (t01, t04, and t06 as the Administrator), such a
+     follow-up was not correct on any trial (D-91). The replies varied across trials in t04.
+   - **FR-13 is partial at the gate** (D-91).
    - [What the screen found](#what-the-screen-found-that-the-walk-avoids) has the details.
    - If an assessor asks for one, say so plainly. FR-13's thread measurement (D-86) comes after
      the gate.
@@ -316,14 +347,22 @@ same checks as D-88. The steps:
 
 ### What the screen found that the walk avoids
 
-- **Follow-ups that need the earlier turn fail.** In 7 of the 9 frozen threads (t01, t02, t03,
-  t04, t06, t07, t09), the second turn restated the first turn's answer, or answered wrongly, the
-  same way on all three runs. t05's second turn found its phrase but cited another transcript.
-  - **Only t08 passes both turns.** It is the topic change, whose second question stands on its
-    own.
-  - **The prompt does label the earlier questions as context,** with "The question to answer:"
-    before the new one (`apps/ai/prompting.py`). This is the 4B model's behaviour, measured
-    tonight.
+- **Follow-ups that need the earlier turn did not resolve.** Rescored with the frozen rule
+  (version 2), from the stored statements, with nothing re-run (D-91):
+  - **The clean cases:** in the three threads whose first turn was correct on every trial and
+    whose follow-up expected an answer (t01, t04, and t06 as the Administrator), the follow-up
+    was not correct on any trial. t04's replies varied from trial to trial; t01's and t06's
+    did not.
+  - **Confounded:** t02, t03, t05 and t07. A first turn that was not correct says nothing
+    about history.
+  - **A different failure:** t06 and t07 as the Employee expected a no-answer, and were answered
+    from material the Employee may read. That is no leak.
+  - **Only t08 is correct on both turns.** It is the topic change, whose second question stands
+    on its own.
+  - **t09 failed, as predicted** (D-86 decision 2).
+  - **The prompt labels the earlier questions as context,** with "The question to answer:"
+    before the new one (`apps/ai/prompting.py`). Whether the failure is the model's or the
+    prompt's is not known. The cold and spelled-out runs that would separate them are step 5's.
   - **It is not tuned here.** FR-13's thread run (D-86) is the measurement, and it comes after the
     gate.
 - **Citations that do not support their statement were seen,** the limitation invariant 5
@@ -365,7 +404,10 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
   - 5 users: a valid FAIL, with the 90th percentile a 503, and 277 s answered only;
   - this is a local-model baseline on one NPU (D-35, `docs/ai-provider.md` §7);
   - NFR-09 was not run, and its failure is a prediction, not a result.
-- **The permission boundary:** every audit so far found no route across it (D-57 to D-61).
+- **The permission boundary:** the audits D-57 to D-61 found no route across it on the six routes
+  they walked (`/api/ask`, `/api/search`, `/api/conversations*`, `/api/documents/{id}`,
+  `/api/meetings/{id}` and reprocess). The four FR-14 and FR-15 routes have leakage tests, but no
+  audit has walked them until item 11.
 
 ## The answers worth having ready
 
@@ -373,22 +415,66 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
   - Verification checks that the identifier was supplied, not that the passage supports the
     statement. Invariant 5 concedes this by design.
   - Tonight's screen saw it, as [above](#what-the-screen-found-that-the-walk-avoids).
-  - Item 9a's measurement of it comes after the gate.
+  - Stage 4's item 9a measured three such mis-citations (`docs/flm-baseline.md`, "three
+    mis-citations"). Stage 5's item 9a is the leakage tests, which is a different item.
 - **Does the same question always answer the same way? No.** D-40 is open, and its trigger is
   unidentified. These questions were screened for it.
-- **Does the assistant follow a conversation?** It keeps the thread and re-checks permission on
-  every turn. A follow-up that only makes sense with the earlier turn is not reliable on this
-  model: 7 of the 9 frozen threads failed it in the screen. Say so, and do not claim more.
-  FR-13's thread measurement comes after the gate.
-- **What is not verified by any test?** Give D-62's list, not "the front end is tested".
+- **Does the assistant follow a conversation?** It keeps the thread, and its scope is re-checked
+  on every turn, which is tested (`test_fr11_scoping.py:608` and `:633`). A follow-up that only
+  makes sense with the earlier turn did not resolve in the screen's clean cases (D-91). **FR-13 is
+  partial at the gate.** Say so, and do not claim more. The measurement is step 5's.
+- **What is not verified by any test?** Give this list, derived from `frontend/tests` on 2 November.
+  It supersedes D-62's. Step 6 (D-94) writes the full enumeration to
+  `docs/stage-5-front-end-clauses.md`.
+  - **Untested in the front-end suite:**
+    - Register, beyond its 429 message;
+    - Login, beyond its 429 message and the role landing (the locked-account message
+      included);
+    - the logout control and its redirect;
+    - RoleManagement;
+    - RequireAuth, RequireRole and AccessDenied;
+    - Upload's client-side format refusal and its progress display;
+    - Meetings, beyond its 429 messages, and MeetingDetail;
+    - Search, its field and its results (the two-character minimum, the grouping, the
+      partial-match label).
+  - **Tested:** Ask and its threads (five files), the Dashboard, DocumentRepository and
+    DocumentDetail, the Upload queue and its 429s, the status vocabulary, the production build
+    and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,
-  never a tick:
-  - D-45: there is no input sanitiser. The defence is parameterised SQL, React's escaping and the
-    prompt's delimiter.
-  - D-42: earlier questions are passed to the model, not earlier answers.
-- **Why does one question fail at generation?** Item 6 found "How are records managed and
-  retained?" cut off before its JSON closed, three times, at one user and at five. It is not one
-  of the questions here.
+  never a tick. Each was checked against its entry on 2 November.
+  - **D-15 (FR-08):** four upload formats, PDF, DOCX, XLSX and TXT, not the six FR-08's upload
+    area names. DOC and XLS have no parser.
+  - **D-25 (FR-02):** the session carries no role. The role is re-read on every request, so a
+    role change takes effect without re-login. The literal clause is not met; its purpose is
+    exceeded.
+  - **D-33 §1 (FR-08), the sentence D-33 owes this script:** FR-08's classification hand-off is
+    deferred with FR-10, which is NIT3004 work. When FR-10 is built, §7.8 step 4 goes between
+    `ExtractedContent` and chunking in `ingest_and_index_document()`, and it must be unable to
+    fail the document — a classification failure marks it unclassified and never revokes
+    indexed status (`CLAUDE.md` invariant 8).
+  - **D-33 §2 (FR-09):** a 422 when every chunk fails to embed, which FR-09's Responses clause
+    does not list. The transcript is kept (invariant 8).
+  - **D-42 (FR-13):** earlier questions are passed to the model, not earlier answers. Its
+    boundary is contradicted by the 1 November screen (D-42's dated note, D-91).
+  - **D-43 (FR-13):** a conversation's `Update` is its title on create and the time of its last
+    turn. There is no rename route and no `PATCH`.
+  - **D-45 (FR-12):** there is no input sanitiser. The defence is parameterised SQL, React's
+    escaping and the prompt's delimiter.
+  - **D-56 (FR-12):** partial matches have no relevance floor. The acknowledgement is recorded,
+    and the floor is owed by step 7 (D-93).
+  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19.
+  - **D-70 (FR-14):** the department filter narrows documents only. Meetings have no department.
+  - **D-72 (FR-15):** Department comes from the documents' column, not from ContentTags. That is
+    a deliberate departure from FR-15's server clause.
+- **Why does one question fail at generation?** "How are records managed and retained?" (from
+  `tests/load/common.js`, not one of the thirty) gave a 503 twice at one user and three times at
+  five users.
+  - **At five users,** the attempt log shows every failed attempt was a reply that stopped
+    before its JSON closed.
+  - **At one user,** the cause was not logged, so the same failure there is inferred, not
+    observed.
+  - Step 7 observes it, logging each attempt's `finish_reason` and token count before anything
+    changes. It is not one of the questions here.
 
 ## Afterwards
 

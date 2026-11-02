@@ -213,3 +213,39 @@ generic name. That could be addressed after the gate (D-75's route, D-62's front
 
 D21 was deleted. Restoring the snapshot (D-88) resets all of this. Do it only before a new set of
 demonstration threads is built.
+
+## Dated notes
+
+These correct the record without editing it.
+
+### 2 November 2026: the FR-13 PASS is qualified (D-91)
+
+- **What still stands.** The walk showed FR-13's thread, its reopening, and the second turn's
+  scope differing by role, and those passed as recorded.
+- **What is partial.** FR-13 as a requirement is partial at the gate. A follow-up that needs the
+  earlier turn did not resolve in the 1 November screen's clean cases, and the measured reason is
+  step 5's.
+- **The scope re-evaluation is evidenced by test** (`test_fr11_scoping.py:608` and `:633`), not by
+  two sessions in two roles.
+
+### 2 November 2026: corrected wording
+
+- **"The same way on all three runs" was wrong,** for the screen's follow-ups as this record and the
+  script repeated it. t04's follow-up replies varied from trial to trial, as did t02's and t09's.
+  D-91 gives the rescored counts.
+- **"This is the 4B model's behaviour" is withdrawn.** The model was never separated from the
+  prompt.
+
+### 2 November 2026: an FR-02 clause was left out (D-25)
+
+- **What was left out.** The walk left out the lockout: five failures lock an account for 15
+  minutes, a locked account gets a 403, and the screen shows a distinct message. The script called
+  it FR-03; it is FR-02's.
+- **Where it is shown instead.** In step 3's extra, recorded walk, with a throwaway account. That
+  walk will be noted here.
+
+### 2 November 2026: the D-35 screen recording
+
+**No recording of the 1 November walk was made.** D-35's insurance does not exist yet. Before
+anything is re-indexed or the alpha is redeployed, the user records a walk on the alpha (step 7's
+precondition).
