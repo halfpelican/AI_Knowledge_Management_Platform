@@ -1,0 +1,2755 @@
+{
+  "database": "kmp_demo_screen",
+  "threshold": 0.3,
+  "band": 0.005,
+  "answer_margin": 0.05,
+  "no_answer_margin": 0.02,
+  "trials_per_question": 3,
+  "first_pass": {
+    "trials": [
+      {
+        "label": "s01 as Administrator",
+        "fr": "FR-11",
+        "role": "Administrator",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "s01 as Employee",
+        "fr": "FR-11",
+        "role": "Employee",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "q07",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How quickly do we have to acknowledge a customer complaint?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                "source": "Customer Complaints Procedure"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                "source": "Customer Complaints Procedure"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                "source": "Customer Complaints Procedure"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "n02 as Employee",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How much did the latest penetration test cost?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "D21 bike cage",
+        "fr": "FR-08/FR-12",
+        "role": "Employee",
+        "question": "How many bicycles can the secure bike cage hold?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                "source": "Bicycle Parking and End-of-Trip Facilities Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                "source": "Bicycle Parking and End-of-Trip Facilities Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                "source": "Bicycle Parking and End-of-Trip Facilities Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "T06 single-use cups",
+        "fr": "FR-09/FR-12",
+        "role": "Employee",
+        "question": "When will single-use cups be removed from the office kitchens?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t01 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How much annual leave do full-time staff build up each month?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Employee Leave Policy 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Employee Leave Policy 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Employee Leave Policy 2026"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t01 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is there a limit on how much of it I can save up?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Expense Claims Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Expense Claims Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Expense Claims Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t07 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t07 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is it being replaced?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Weekly Operations Standup"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Weekly Operations Standup"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Weekly Operations Standup"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t07 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The Melbourne office will relocate to a new building on the other side of the river. The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The Melbourne office will relocate to a new building on the other side of the river. The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The Melbourne office will relocate to a new building on the other side of the river. The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t07 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Is it being replaced?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Project Atlas Kickoff Brief"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Project Atlas Kickoff Brief"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Project Atlas Kickoff Brief"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      }
+    ],
+    "started": "2026-11-01T21:41:03+1100",
+    "before_uploads": [
+      {
+        "label": "s01 as Administrator",
+        "fr": "FR-11",
+        "role": "Administrator",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "answer",
+        "top_score": 0.4988,
+        "top_source": "Project Atlas Kickoff Brief",
+        "admitted": 2,
+        "nearest_to_threshold": 0.3241,
+        "distance_from_threshold": 0.0241,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "s01 as Employee",
+        "fr": "FR-11",
+        "role": "Employee",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "no-answer",
+        "top_score": 0.19,
+        "top_source": "Asset Inventory Melbourne Office",
+        "admitted": 0,
+        "nearest_to_threshold": 0.19,
+        "distance_from_threshold": 0.11,
+        "within_band": [],
+        "verdict": "ok (path A: nothing admitted)"
+      },
+      {
+        "label": "q07",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How quickly do we have to acknowledge a customer complaint?",
+        "expectation": "answer",
+        "top_score": 0.619,
+        "top_source": "Customer Complaints Procedure",
+        "admitted": 3,
+        "nearest_to_threshold": 0.2945,
+        "distance_from_threshold": 0.0055,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "n02 as Employee",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How much did the latest penetration test cost?",
+        "expectation": "no-answer",
+        "top_score": 0.2517,
+        "top_source": "Procurement Guidelines",
+        "admitted": 0,
+        "nearest_to_threshold": 0.2517,
+        "distance_from_threshold": 0.0483,
+        "within_band": [],
+        "verdict": "ok (path A: nothing admitted)"
+      },
+      {
+        "label": "t01 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How much annual leave do full-time staff build up each month?",
+        "retrieval_text": "How much annual leave do full-time staff build up each month?",
+        "expectation": "answer",
+        "top_score": 0.5364,
+        "top_source": "Employee Leave Policy 2026",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2864,
+        "distance_from_threshold": 0.0136,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t01 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is there a limit on how much of it I can save up?",
+        "retrieval_text": "How much annual leave do full-time staff build up each month? Is there a limit on how much of it I can save up?",
+        "expectation": "answer",
+        "top_score": 0.5191,
+        "top_source": "Employee Leave Policy 2026",
+        "admitted": 2,
+        "nearest_to_threshold": 0.2906,
+        "distance_from_threshold": 0.0094,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What gets published on the intranet about the office move?",
+        "retrieval_text": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "top_score": 0.6089,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 5,
+        "nearest_to_threshold": 0.292,
+        "distance_from_threshold": 0.008,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is it being replaced?",
+        "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+        "expectation": "no-answer",
+        "top_score": 0.5773,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 4,
+        "nearest_to_threshold": 0.2985,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3047,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2985,
+            "source": "Onboarding Checklist for New Starters"
+          },
+          {
+            "score": 0.2971,
+            "source": "Vendor Register 2026"
+          },
+          {
+            "score": 0.2969,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t07 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "What gets published on the intranet about the office move?",
+        "retrieval_text": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "top_score": 0.6079,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 6,
+        "nearest_to_threshold": 0.2921,
+        "distance_from_threshold": 0.0079,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Is it being replaced?",
+        "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+        "expectation": "answer",
+        "top_score": 0.5773,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 5,
+        "nearest_to_threshold": 0.2985,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3047,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2985,
+            "source": "Onboarding Checklist for New Starters"
+          },
+          {
+            "score": 0.2971,
+            "source": "Vendor Register 2026"
+          },
+          {
+            "score": 0.2969,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      }
+    ],
+    "d40_rereading": {
+      "runs": 34,
+      "admitted": 124,
+      "admitted_within_0_005": 4,
+      "share": 0.0323
+    },
+    "upload_d21": {
+      "status": 201,
+      "body": {
+        "status": "Indexed",
+        "title": "Bicycle Parking and End-of-Trip Facilities Guide",
+        "chunk_count": null
+      }
+    },
+    "upload_t06": {
+      "status": 400,
+      "body": {
+        "status": null,
+        "title": null,
+        "chunk_count": null
+      }
+    },
+    "after_uploads": [
+      {
+        "label": "s01 as Administrator",
+        "fr": "FR-11",
+        "role": "Administrator",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "answer",
+        "top_score": 0.4995,
+        "top_source": "Project Atlas Kickoff Brief",
+        "admitted": 2,
+        "nearest_to_threshold": 0.3242,
+        "distance_from_threshold": 0.0242,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "s01 as Employee",
+        "fr": "FR-11",
+        "role": "Employee",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "no-answer",
+        "top_score": 0.192,
+        "top_source": "Asset Inventory Melbourne Office",
+        "admitted": 0,
+        "nearest_to_threshold": 0.192,
+        "distance_from_threshold": 0.108,
+        "within_band": [],
+        "verdict": "ok (path A: nothing admitted)"
+      },
+      {
+        "label": "q07",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How quickly do we have to acknowledge a customer complaint?",
+        "expectation": "answer",
+        "top_score": 0.6188,
+        "top_source": "Customer Complaints Procedure",
+        "admitted": 3,
+        "nearest_to_threshold": 0.2947,
+        "distance_from_threshold": 0.0053,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "n02 as Employee",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How much did the latest penetration test cost?",
+        "expectation": "no-answer",
+        "top_score": 0.2509,
+        "top_source": "Procurement Guidelines",
+        "admitted": 0,
+        "nearest_to_threshold": 0.2509,
+        "distance_from_threshold": 0.0491,
+        "within_band": [],
+        "verdict": "ok (path A: nothing admitted)"
+      },
+      {
+        "label": "D21 bike cage",
+        "fr": "FR-08/FR-12",
+        "role": "Employee",
+        "question": "How many bicycles can the secure bike cage hold?",
+        "expectation": "answer",
+        "top_score": 0.4587,
+        "top_source": "Bicycle Parking and End-of-Trip Facilities Guide",
+        "admitted": 1,
+        "nearest_to_threshold": 0.1705,
+        "distance_from_threshold": 0.1295,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "T06 single-use cups",
+        "fr": "FR-09/FR-12",
+        "role": "Employee",
+        "question": "When will single-use cups be removed from the office kitchens?",
+        "expectation": "answer",
+        "top_score": 0.3327,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2931,
+        "distance_from_threshold": 0.0069,
+        "within_band": [],
+        "verdict": "FLAG: top score under threshold + 0.05"
+      },
+      {
+        "label": "t01 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How much annual leave do full-time staff build up each month?",
+        "retrieval_text": "How much annual leave do full-time staff build up each month?",
+        "expectation": "answer",
+        "top_score": 0.5362,
+        "top_source": "Employee Leave Policy 2026",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2856,
+        "distance_from_threshold": 0.0144,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t01 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is there a limit on how much of it I can save up?",
+        "retrieval_text": "How much annual leave do full-time staff build up each month? Is there a limit on how much of it I can save up?",
+        "expectation": "answer",
+        "top_score": 0.5192,
+        "top_source": "Employee Leave Policy 2026",
+        "admitted": 2,
+        "nearest_to_threshold": 0.2898,
+        "distance_from_threshold": 0.0102,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What gets published on the intranet about the office move?",
+        "retrieval_text": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "top_score": 0.607,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 5,
+        "nearest_to_threshold": 0.2916,
+        "distance_from_threshold": 0.0084,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is it being replaced?",
+        "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+        "expectation": "no-answer",
+        "top_score": 0.5773,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 4,
+        "nearest_to_threshold": 0.2985,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3047,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2985,
+            "source": "Onboarding Checklist for New Starters"
+          },
+          {
+            "score": 0.2971,
+            "source": "Vendor Register 2026"
+          },
+          {
+            "score": 0.2969,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t07 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "What gets published on the intranet about the office move?",
+        "retrieval_text": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "top_score": 0.6079,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 6,
+        "nearest_to_threshold": 0.2921,
+        "distance_from_threshold": 0.0079,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Is it being replaced?",
+        "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+        "expectation": "answer",
+        "top_score": 0.5773,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 5,
+        "nearest_to_threshold": 0.2985,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3047,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2985,
+            "source": "Onboarding Checklist for New Starters"
+          },
+          {
+            "score": 0.2971,
+            "source": "Vendor Register 2026"
+          },
+          {
+            "score": 0.2969,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      }
+    ],
+    "finished": "2026-11-01T21:47:06+1100"
+  },
+  "second_pass": {
+    "started": "2026-11-01T21:48:55+1100",
+    "upload_t06": {
+      "status": 201,
+      "status_field": "Indexed"
+    },
+    "after_both_uploads": [
+      {
+        "label": "s01 as Administrator",
+        "fr": "FR-11",
+        "role": "Administrator",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "answer",
+        "top_score": 0.5019,
+        "top_source": "Project Atlas Kickoff Brief",
+        "admitted": 2,
+        "nearest_to_threshold": 0.3235,
+        "distance_from_threshold": 0.0235,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "s01 as Employee",
+        "fr": "FR-11",
+        "role": "Employee",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "no-answer",
+        "top_score": 0.193,
+        "top_source": "Asset Inventory Melbourne Office",
+        "admitted": 0,
+        "nearest_to_threshold": 0.193,
+        "distance_from_threshold": 0.107,
+        "within_band": [],
+        "verdict": "ok (path A: nothing admitted)"
+      },
+      {
+        "label": "q07",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How quickly do we have to acknowledge a customer complaint?",
+        "expectation": "answer",
+        "top_score": 0.6181,
+        "top_source": "Customer Complaints Procedure",
+        "admitted": 3,
+        "nearest_to_threshold": 0.2944,
+        "distance_from_threshold": 0.0056,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "n02 as Employee",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How much did the latest penetration test cost?",
+        "expectation": "no-answer",
+        "top_score": 0.2526,
+        "top_source": "Procurement Guidelines",
+        "admitted": 0,
+        "nearest_to_threshold": 0.2526,
+        "distance_from_threshold": 0.0474,
+        "within_band": [],
+        "verdict": "ok (path A: nothing admitted)"
+      },
+      {
+        "label": "D21 bike cage",
+        "fr": "FR-08/FR-12",
+        "role": "Employee",
+        "question": "How many bicycles can the secure bike cage hold?",
+        "expectation": "answer",
+        "top_score": 0.4584,
+        "top_source": "Bicycle Parking and End-of-Trip Facilities Guide",
+        "admitted": 1,
+        "nearest_to_threshold": 0.1713,
+        "distance_from_threshold": 0.1287,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "T06 single-use cups",
+        "fr": "FR-09/FR-12",
+        "role": "Employee",
+        "question": "When will single-use cups be removed from the office kitchens?",
+        "expectation": "answer",
+        "top_score": 0.5501,
+        "top_source": "Sustainability Working Group",
+        "admitted": 2,
+        "nearest_to_threshold": 0.2936,
+        "distance_from_threshold": 0.0064,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t01 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How much annual leave do full-time staff build up each month?",
+        "retrieval_text": "How much annual leave do full-time staff build up each month?",
+        "expectation": "answer",
+        "top_score": 0.5355,
+        "top_source": "Employee Leave Policy 2026",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2859,
+        "distance_from_threshold": 0.0141,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t01 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is there a limit on how much of it I can save up?",
+        "retrieval_text": "How much annual leave do full-time staff build up each month? Is there a limit on how much of it I can save up?",
+        "expectation": "answer",
+        "top_score": 0.5186,
+        "top_source": "Employee Leave Policy 2026",
+        "admitted": 2,
+        "nearest_to_threshold": 0.2898,
+        "distance_from_threshold": 0.0102,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t02 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What do I need before I can start working from home?",
+        "retrieval_text": "What do I need before I can start working from home?",
+        "expectation": "answer",
+        "top_score": 0.4659,
+        "top_source": "Remote Work Agreement Template",
+        "admitted": 4,
+        "nearest_to_threshold": 0.3025,
+        "distance_from_threshold": 0.0025,
+        "within_band": [
+          {
+            "score": 0.3025,
+            "source": "Health and Safety Induction Guide"
+          },
+          {
+            "score": 0.2963,
+            "source": "Onboarding Checklist for New Starters"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t02 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How often does that get reviewed?",
+        "retrieval_text": "What do I need before I can start working from home? How often does that get reviewed?",
+        "expectation": "answer",
+        "top_score": 0.5291,
+        "top_source": "Remote Work Agreement Template",
+        "admitted": 5,
+        "nearest_to_threshold": 0.2899,
+        "distance_from_threshold": 0.0101,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t03 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Which company handles our catering?",
+        "retrieval_text": "Which company handles our catering?",
+        "expectation": "answer",
+        "top_score": 0.3697,
+        "top_source": "Vendor Register 2026",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2839,
+        "distance_from_threshold": 0.0161,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t03 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How do I place an order with them?",
+        "retrieval_text": "Which company handles our catering? How do I place an order with them?",
+        "expectation": "answer",
+        "top_score": 0.362,
+        "top_source": "Vendor Register 2026",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2883,
+        "distance_from_threshold": 0.0117,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t04 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Who is allowed to drive the fleet vehicles?",
+        "retrieval_text": "Who is allowed to drive the fleet vehicles?",
+        "expectation": "answer",
+        "top_score": 0.5889,
+        "top_source": "Fleet Vehicle Usage Notes",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2585,
+        "distance_from_threshold": 0.0415,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t04 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What records do they need to keep?",
+        "retrieval_text": "Who is allowed to drive the fleet vehicles? What records do they need to keep?",
+        "expectation": "answer",
+        "top_score": 0.6447,
+        "top_source": "Fleet Vehicle Usage Notes",
+        "admitted": 20,
+        "nearest_to_threshold": 0.3,
+        "distance_from_threshold": 0.0,
+        "within_band": [
+          {
+            "score": 0.3049,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.3,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t05 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What date did the planning workshop set for the feature freeze?",
+        "retrieval_text": "What date did the planning workshop set for the feature freeze?",
+        "expectation": "answer",
+        "top_score": 0.5287,
+        "top_source": "Product Planning Workshop",
+        "admitted": 4,
+        "nearest_to_threshold": 0.3078,
+        "distance_from_threshold": 0.0078,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t05 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Why does it have to be that early?",
+        "retrieval_text": "What date did the planning workshop set for the feature freeze? Why does it have to be that early?",
+        "expectation": "answer",
+        "top_score": 0.5278,
+        "top_source": "Product Planning Workshop",
+        "admitted": 4,
+        "nearest_to_threshold": 0.3058,
+        "distance_from_threshold": 0.0058,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t06 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How often are our suppliers reviewed?",
+        "retrieval_text": "How often are our suppliers reviewed?",
+        "expectation": "answer",
+        "top_score": 0.4814,
+        "top_source": "Vendor Register 2026",
+        "admitted": 9,
+        "nearest_to_threshold": 0.3005,
+        "distance_from_threshold": 0.0005,
+        "within_band": [
+          {
+            "score": 0.3034,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.3012,
+            "source": "Customer Complaints Procedure"
+          },
+          {
+            "score": 0.3005,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2987,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2951,
+            "source": "Data Privacy Notice"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t06 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Are we relying too heavily on just a few of them?",
+        "retrieval_text": "How often are our suppliers reviewed? Are we relying too heavily on just a few of them?",
+        "expectation": "no-answer",
+        "top_score": 0.4435,
+        "top_source": "Vendor Register 2026",
+        "admitted": 4,
+        "nearest_to_threshold": 0.3011,
+        "distance_from_threshold": 0.0011,
+        "within_band": [
+          {
+            "score": 0.3011,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2954,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t07 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What gets published on the intranet about the office move?",
+        "retrieval_text": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "top_score": 0.6091,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 5,
+        "nearest_to_threshold": 0.2927,
+        "distance_from_threshold": 0.0073,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is it being replaced?",
+        "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+        "expectation": "no-answer",
+        "top_score": 0.5773,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 4,
+        "nearest_to_threshold": 0.2985,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3047,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2985,
+            "source": "Onboarding Checklist for New Starters"
+          },
+          {
+            "score": 0.2971,
+            "source": "Vendor Register 2026"
+          },
+          {
+            "score": 0.2969,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t08 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What was the customer satisfaction score last quarter?",
+        "retrieval_text": "What was the customer satisfaction score last quarter?",
+        "expectation": "answer",
+        "top_score": 0.5251,
+        "top_source": "Customer Success Retrospective",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2871,
+        "distance_from_threshold": 0.0129,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t08 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Where are the first aid kits kept?",
+        "retrieval_text": "What was the customer satisfaction score last quarter? Where are the first aid kits kept?",
+        "expectation": "answer",
+        "top_score": 0.429,
+        "top_source": "Customer Success Retrospective",
+        "admitted": 2,
+        "nearest_to_threshold": 0.2907,
+        "distance_from_threshold": 0.0093,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t09 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Who do I ask if I have questions about the office move?",
+        "retrieval_text": "Who do I ask if I have questions about the office move?",
+        "expectation": "answer",
+        "top_score": 0.5672,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 7,
+        "nearest_to_threshold": 0.3015,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3015,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2978,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t09 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What do they have to approve?",
+        "retrieval_text": "Who do I ask if I have questions about the office move? What do they have to approve?",
+        "expectation": "answer",
+        "top_score": 0.5735,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 24,
+        "nearest_to_threshold": 0.3002,
+        "distance_from_threshold": 0.0002,
+        "within_band": [
+          {
+            "score": 0.3028,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.3028,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.3025,
+            "source": "Sustainability Working Group"
+          },
+          {
+            "score": 0.3002,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2983,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t06 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "How often are our suppliers reviewed?",
+        "retrieval_text": "How often are our suppliers reviewed?",
+        "expectation": "answer",
+        "top_score": 0.4811,
+        "top_source": "Vendor Register 2026",
+        "admitted": 11,
+        "nearest_to_threshold": 0.2998,
+        "distance_from_threshold": 0.0002,
+        "within_band": [
+          {
+            "score": 0.3042,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.3021,
+            "source": "Board Risk Committee Meeting"
+          },
+          {
+            "score": 0.302,
+            "source": "Customer Complaints Procedure"
+          },
+          {
+            "score": 0.3018,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2998,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2957,
+            "source": "Data Privacy Notice"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t06 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Are we relying too heavily on just a few of them?",
+        "retrieval_text": "How often are our suppliers reviewed? Are we relying too heavily on just a few of them?",
+        "expectation": "answer",
+        "top_score": 0.4437,
+        "top_source": "Vendor Register 2026",
+        "admitted": 5,
+        "nearest_to_threshold": 0.3013,
+        "distance_from_threshold": 0.0013,
+        "within_band": [
+          {
+            "score": 0.3013,
+            "source": "Records Management Handbook"
+          },
+          {
+            "score": 0.2953,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      },
+      {
+        "label": "t07 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "What gets published on the intranet about the office move?",
+        "retrieval_text": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "top_score": 0.6092,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 6,
+        "nearest_to_threshold": 0.2912,
+        "distance_from_threshold": 0.0088,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "t07 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Is it being replaced?",
+        "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+        "expectation": "answer",
+        "top_score": 0.5773,
+        "top_source": "Office Relocation Announcement",
+        "admitted": 5,
+        "nearest_to_threshold": 0.2985,
+        "distance_from_threshold": 0.0015,
+        "within_band": [
+          {
+            "score": 0.3047,
+            "source": "Asset Inventory Melbourne Office"
+          },
+          {
+            "score": 0.2985,
+            "source": "Onboarding Checklist for New Starters"
+          },
+          {
+            "score": 0.2971,
+            "source": "Vendor Register 2026"
+          },
+          {
+            "score": 0.2969,
+            "source": "Records Management Handbook"
+          }
+        ],
+        "verdict": "FLAG: a candidate within 0.005 of the threshold"
+      }
+    ],
+    "trials": [
+      {
+        "label": "s01 as Administrator",
+        "fr": "FR-11",
+        "role": "Administrator",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "s01 as Employee",
+        "fr": "FR-11",
+        "role": "Employee",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "q07",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How quickly do we have to acknowledge a customer complaint?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                "source": "Customer Complaints Procedure"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                "source": "Customer Complaints Procedure"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                "source": "Customer Complaints Procedure"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "n02 as Employee",
+        "fr": "FR-12",
+        "role": "Employee",
+        "question": "How much did the latest penetration test cost?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "D21 bike cage",
+        "fr": "FR-08/FR-12",
+        "role": "Employee",
+        "question": "How many bicycles can the secure bike cage hold?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                "source": "Bicycle Parking and End-of-Trip Facilities Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                "source": "Bicycle Parking and End-of-Trip Facilities Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                "source": "Bicycle Parking and End-of-Trip Facilities Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "T06 single-use cups",
+        "fr": "FR-09/FR-12",
+        "role": "Employee",
+        "question": "When will single-use cups be removed from the office kitchens?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Single-use cups go from every kitchen on 1 March 2027.",
+                "source": "Sustainability Working Group"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Single-use cups go from every kitchen on 1 March 2027.",
+                "source": "Sustainability Working Group"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Single-use cups go from every kitchen on 1 March 2027.",
+                "source": "Sustainability Working Group"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t01 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How much annual leave do full-time staff build up each month?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Employee Leave Policy 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Employee Leave Policy 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Employee Leave Policy 2026"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t01 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is there a limit on how much of it I can save up?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Expense Claims Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Expense Claims Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+                "source": "Expense Claims Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t02 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What do I need before I can start working from home?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t02 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How often does that get reviewed?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+                "source": "Office Relocation Announcement"
+              },
+              {
+                "text": "The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.",
+                "source": "Onboarding Checklist for New Starters"
+              },
+              {
+                "text": "The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+                "source": "Office Relocation Announcement"
+              },
+              {
+                "text": "The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": false,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t03 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Which company handles our catering?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Lantern Grove Supplies is the preferred vendor for catering.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Lantern Grove Supplies is the preferred vendor for catering.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Lantern Grove Supplies is the preferred vendor for catering.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t03 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How do I place an order with them?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Ridgeline Catering is the vendor for catering.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Ridgeline Catering is the vendor for catering.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Ridgeline Catering is the vendor for catering.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t04 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Who is allowed to drive the fleet vehicles?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "source": "Fleet Vehicle Usage Notes"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "source": "Fleet Vehicle Usage Notes"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "source": "Fleet Vehicle Usage Notes"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t04 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What records do they need to keep?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "When responsibilities for roles and responsibilities change hands, the outgoing owner must brief their successor and update the register.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "When responsibilities for financial records change hands, the outgoing owner must brief their successor and update the register.",
+                "source": "Records Management Handbook"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how roles and responsibilities is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how financial records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Fleet Vehicle Usage Notes"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how roles and responsibilities is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Each business unit must document how financial records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "source": "Fleet Vehicle Usage Notes"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": false,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t05 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What date did the planning workshop set for the feature freeze?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time. Sofia: Agreed. Let's fix the Tidewater feature freeze for the seventh of November.",
+                "source": "Training Schedule Q4"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+                "source": "Training Schedule Q4"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+                "source": "Training Schedule Q4"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": false,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t05 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Why does it have to be that early?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+                "source": "Weekly Operations Standup"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+                "source": "Weekly Operations Standup"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Wei: We should agree a date after which no new features are added. The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+                "source": "Weekly Operations Standup"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t06 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "How often are our suppliers reviewed?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t06 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Are we relying too heavily on just a few of them?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Procurement Guidelines"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Procurement Guidelines"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Procurement Guidelines"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t07 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t07 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Is it being replaced?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Weekly Operations Standup"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Weekly Operations Standup"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Weekly Operations Standup"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t08 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What was the customer satisfaction score last quarter?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t08 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Where are the first aid kits kept?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "First aid kits are kept at reception and on every floor.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "First aid kits are kept at reception and on every floor.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "First aid kits are kept at reception and on every floor.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t09 turn 1 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "Who do I ask if I have questions about the office move?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Direct questions to the facilities team.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Direct questions to the facilities team.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Direct questions to the facilities team.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t09 turn 2 as Employee",
+        "fr": "FR-13",
+        "role": "Employee",
+        "question": "What do they have to approve?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Exceptions to office relocation announcement require written approval and are kept on file so that they can be checked during an audit.",
+                "source": "Records Management Handbook"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Exceptions to office relocation announcement require written approval and are kept on file so that they can be checked during an audit.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Exceptions to the rules on metadata standards require written approval from the records manager and are logged in the exceptions register.",
+                "source": "Records Management Handbook"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Exceptions to office relocation announcement require written approval and are kept on file so that they can be checked during an audit.",
+                "source": "Records Management Handbook"
+              },
+              {
+                "text": "Exceptions to the rules on metadata standards require written approval from the records manager and are logged in the exceptions register.",
+                "source": "Records Management Handbook"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": false,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t06 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "How often are our suppliers reviewed?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+                "source": "Vendor Register 2026"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": false,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "t06 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Are we relying too heavily on just a few of them?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Procurement Guidelines"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Procurement Guidelines"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "source": "Procurement Guidelines"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t07 turn 1 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "What gets published on the intranet about the office move?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The move will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The Melbourne office will relocate to a new building on the other side of the river. The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+                "source": "Office Relocation Announcement"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The move will be published on the intranet until the move is complete.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": false,
+        "as_expected_every_trial": false
+      },
+      {
+        "label": "t07 turn 2 as Administrator",
+        "fr": "FR-13",
+        "role": "Administrator",
+        "question": "Is it being replaced?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Project Atlas Kickoff Brief"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Project Atlas Kickoff Brief"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "A weekly update will be published on the intranet until the move is complete.",
+                "source": "Project Atlas Kickoff Brief"
+              },
+              {
+                "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+                "source": "Health and Safety Induction Guide"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": false
+      }
+    ],
+    "finished": "2026-11-01T22:06:17+1100"
+  },
+  "third_pass": {
+    "thread": "t08 turn 1, then s01",
+    "started": "2026-11-01T22:07:30+1100",
+    "scores": [
+      {
+        "label": "turn 1 as Employee",
+        "expectation": "answer",
+        "top_score": 0.5251,
+        "top_source": "Customer Success Retrospective",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2871,
+        "distance_from_threshold": 0.0129,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "turn 2 as Employee",
+        "expectation": "no-answer",
+        "top_score": 0.41,
+        "top_source": "Customer Success Retrospective",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2288,
+        "distance_from_threshold": 0.0712,
+        "within_band": [],
+        "verdict": "path B: passages admitted, the no-answer depends on generation (see trials)"
+      },
+      {
+        "label": "turn 1 as Administrator",
+        "expectation": "answer",
+        "top_score": 0.527,
+        "top_source": "Customer Success Retrospective",
+        "admitted": 1,
+        "nearest_to_threshold": 0.2885,
+        "distance_from_threshold": 0.0115,
+        "within_band": [],
+        "verdict": "ok"
+      },
+      {
+        "label": "turn 2 as Administrator",
+        "expectation": "answer",
+        "top_score": 0.4318,
+        "top_source": "Project Atlas Kickoff Brief",
+        "admitted": 3,
+        "nearest_to_threshold": 0.3088,
+        "distance_from_threshold": 0.0088,
+        "within_band": [],
+        "verdict": "ok"
+      }
+    ],
+    "trials": [
+      {
+        "label": "turn 1 as Employee",
+        "question": "What was the customer satisfaction score last quarter?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "turn 2 as Employee",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "no-answer",
+        "results": [
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          },
+          {
+            "answered": false,
+            "statements": []
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "turn 1 as Administrator",
+        "question": "What was the customer satisfaction score last quarter?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "Our satisfaction score rose to eighty-six percent.",
+                "source": "Customer Success Retrospective"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      },
+      {
+        "label": "turn 2 as Administrator",
+        "question": "Who is the sponsor of Project Atlas?",
+        "expectation": "answer",
+        "results": [
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor of Project Atlas is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor of Project Atlas is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          },
+          {
+            "answered": true,
+            "statements": [
+              {
+                "text": "The sponsor of Project Atlas is the chief operating officer.",
+                "source": "Project Atlas Kickoff Brief"
+              }
+            ]
+          }
+        ],
+        "identical_across_trials": true,
+        "as_expected_every_trial": true
+      }
+    ],
+    "finished": "2026-11-01T22:09:11+1100"
+  }
+}
