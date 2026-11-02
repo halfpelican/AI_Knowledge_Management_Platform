@@ -41,6 +41,10 @@ with the Xbox Game Bar, or OBS), and keep it.
 - **`Documents\KMP-alpha-deployments.txt`'s last line** names the commit that is running, with
   `dirty=False`.
 - **The five smoke checks pass** (step 8).
+- **Nothing else is serving.** No `manage.py runserver` on port 8000, and no `npm run dev` on
+  `localhost:5173` or `5174`. Check that `Server: waitress` answers on 8000. On 2 November the
+  alpha's window had been closed and a dev server held port 8000, so the first attempt at FR-01 ran
+  against `kmp` (`docs/stage-5-item-8-walk.md`). Keep the alpha's window open for the whole walk.
 
 **Two browser windows, both on `http://127.0.0.1:8000`.** Cookies are per host, so use the same
 host in both windows.
@@ -87,7 +91,8 @@ words a message, the message is quoted.
    - **Expected:** "Invalid email or password.", which does not say which half was wrong.
    - Five failures lock the account for 15 minutes (FR-03, not in the gate). Do not show it.
 2. **Sign in with the right password.**
-   - **Expected:** the Employee's dashboard, and the navigation shows `Signed in as Demo Employee`.
+   - **Expected:** the Employee's dashboard, and the navigation shows `Signed in as` the name
+     registered in FR-01.
 3. **In window A, sign in as `corpus.admin@example.com`.**
    - **Expected:** the Administrator's dashboard, and `Role management` in the navigation.
 
@@ -129,10 +134,16 @@ words a message, the message is quoted.
 
 1. **Open `Upload` and choose `D21_bicycle_end_of_trip_facilities.docx`.**
    - Department: `Operations`.
-   - Visible to: leave it unchosen, which means both roles (D-29).
+   - Visible to: an Employee is not offered a choice. The page shows a note, because the only
+     scope an Employee may upload to is both roles (D-29). An Administrator would see a select.
    - Upload.
    - **Expected:** it ends **Indexed**. Text was extracted from the DOCX, chunked and embedded in
      the same request, and the record and its vectors commit together.
+   - **The document's title is the file name,** `D21_bicycle_end_of_trip_facilities`, unless it is
+     edited in the queue row before uploading. The title does not affect the screen.
+   - **The drop zone gives no feedback when a file is chosen.** The browser's own "No file chosen"
+     label comes back, and the row appears under **Files**, which may be below the fold. This is a
+     usability finding for item 7.
 2. **Choose `I01_annual_report_2026.pdf`.**
    - **Expected: 415.** A PDF's name over a PNG's bytes, refused by the file's signature.
 3. **Choose `B01_duplicate_of_D03_renamed.pdf`.**
@@ -180,9 +191,11 @@ same routes. Every question below was screened with them in place.
 
 ### FR-12 · Knowledge search and answer generation, with verified citations (window B)
 
-1. **Search,** with the field at the top of every page: `asset tag`.
+1. **Search,** with the search field in the page header, or at `/search`: `asset tag`.
    - **Expected:** one result, **Asset Inventory Melbourne Office** (D14), with a snippet showing
      the phrase. Checked on the screening database.
+   - **Not the repository's "filter by title" field.** That is FR-15's, and it matches titles only.
+     FR-12's search reads the passages, and it writes a `SearchLog` row.
 2. **`Ask`:** "How quickly do we have to acknowledge a customer complaint?"
    - **Expected:** answered, with a numbered citation to **Customer Complaints Procedure** (D06).
    - Open the citation: it leads to the cited passage's document.
@@ -192,8 +205,8 @@ same routes. Every question below was screened with them in place.
    - **Expected:** the fixed no-answer, with no generation (path A). Nothing in the corpus answers
      it, and no statement without a citation is ever shown (invariant 6).
 4. **`Ask`:** "How many bicycles can the secure bike cage hold?"
-   - **Expected:** answered, **40**, citing the guide uploaded in FR-08. Upload to answer, end to
-     end.
+   - **Expected:** answered, **40**, citing the guide uploaded in FR-08
+     (`D21_bicycle_end_of_trip_facilities`). Upload to answer, end to end.
 5. **`Ask`:** "When will single-use cups be removed from the office kitchens?"
    - **Expected:** answered, **1 March 2027**, citing the meeting ingested in FR-09.
 
@@ -243,8 +256,13 @@ same routes. Every question below was screened with them in place.
    - **Expected:** D01, D07, D08 and D13.
    - Add process `onboarding`.
    - **Expected:** D08 and D13.
-3. **The empty state** (D-74): project `supplier review` with topic `safety`.
-   - **Expected:** nothing matches, and the page says so.
+3. **The empty state** (D-74): open
+   `http://127.0.0.1:8000/documents?project=supplier%20review&topic=safety`.
+   - **Expected:** "No documents match these filters", with both filters shown as active.
+   - **Why the address and not the facets:** the facets narrow as values are picked. Choose
+     `supplier review`, and `safety` is no longer offered, so D-74's pair cannot be clicked
+     together. The repository keeps its filters in the address, so a link reaches the 204. A title
+     filter that matches nothing, such as `zzz`, shows the same state.
 4. **Facets disclose nothing** (D-74): the Project values offered to the Employee do not include
    `atlas`.
    - Window A's do. `atlas` is used only on D09 and D15.
