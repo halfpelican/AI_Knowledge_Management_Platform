@@ -5643,3 +5643,40 @@ it was measured.
   threads and demonstrating them (D-40). A second restore resets everything, so it may only come
   before that point.
 - **M8's hosting and database** (D-64).
+
+## D-89 · The load-test accounts are retired: unusable on the measurement database, deleted elsewhere
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Stage:** 5, after the gate · **Concerns:**
+D-82, D-84, D-88, FR-02
+
+**Why.** `loadtest01` to `loadtest21` (`manage.py create_load_test_users --count 21`, D-82) were
+made for item 6's NFR-08 runs, all with one throwaway password. That password was shown once in
+the 1 November session. While any of them can sign in, they are an open door with a known key.
+
+**What was done, on 2 November.** Read-only counts came first, in four databases, and the alpha's
+count had to be 0 before anything was written.
+
+| Database | Before | Action | After |
+|---|---|---|---|
+| `kmp_demo_20261101` (the alpha) | 0 | none; D-88 deleted them on 1 November | 0 |
+| `kmp_obj02_20261101` (item 6's measurement) | 21, all with a usable password | passwords made **unusable**; rows kept | 21, none usable |
+| `kmp_demo_screen` (the demonstration screen) | 21, all with a usable password | rows **deleted**; no PROTECT refusal, since the screen never used them | 0 |
+| `kmp` (development) | 0 | none | 0 |
+
+- **Why the measurement database keeps its rows.** QueryLog, Conversation and SearchLog point at
+  users with PROTECT, so a delete would fail. Those rows are NFR-08's evidence. The user model has
+  no `is_active` column, so an unusable password is how an account is retired.
+- **The users table of `kmp_obj02_20261101` has changed since its snapshot.** The dump `3bf98403…`
+  still holds the 21 accounts with their old password hash.
+- **Afterwards:** no usable load-test password in any of the four databases.
+
+**What still applies.**
+
+- **Every restore of the snapshot must repeat the delete,** or retire them as above, because the
+  dump holds the accounts.
+- **Re-running `create_load_test_users` re-enables them.** It resets an existing account's password
+  to `LOAD_TEST_PASSWORD`. Run it only for a load test, and retire the accounts again afterwards.
+- **The password shown in that session must be changed wherever it was used.**
+
+**Not covered.** The k6 summaries already committed name the accounts but hold no password, so
+nothing in the repository needs changing.
