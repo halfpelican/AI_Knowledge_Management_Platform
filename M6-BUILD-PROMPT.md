@@ -437,8 +437,9 @@ round 2.
 **Commit points** — one per numbered item, the lettered ones included. Do not merge
 two items into one commit to save a round trip.
 
-**Done when the auditor's set-level verdict is COMPLETE.** Not before, and not on
-anyone's assurance that it is basically there.
+**Done when the auditor's set-level verdict is COMPLETE, apart from D-60's accepted decline of
+§8 condition 4 for FR-11, FR-12 and FR-13.** Not before, and not on anyone's assurance that it
+is basically there.
 
 ---
 

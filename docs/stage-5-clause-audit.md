@@ -461,3 +461,20 @@ follow-up note), and the fourth is left for item 8.
   in-flight sentence.
 - **A Remove pressed in the same instant as Upload**, before the screen re-renders, would still be
   uploaded. The hold is the `disabled` attribute (D-85's follow-up note).
+
+## After item 10 (2 November 2026)
+
+Item 10's audit returned INCOMPLETE (D-90), and the user's decisions of 2 November answer it.
+This section records what changes in this audit's rows. The rows above stay as written on their
+day.
+
+| Requirement | Clause | Before | After item 10 | Evidence |
+|---|---|---|---|---|
+| FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ for D-42 | ⚠️ **for the screen's reason, pending step 5** | The 1 November screen, rescored with the frozen rule: in the three clean cases (t01, t04, and t06 as the Administrator), a follow-up whose referent is named in the first question was not correct on any trial (D-91). That contradicts D-42's boundary (D-42's dated note). The measured reason is step 5's run: history, cold and spelled out, then the HTTP check. Until then, this row rests on an informal look, not a measurement |
+| FR-02 | Five failed attempts lock the account for 15 minutes; a locked account gets 403 and a distinct message | not walked | ⚠️ **left out of the 1 November walk** | The script called the lockout FR-03, and the walk followed it (D-25's dated note; item 10's H2). The server side is tested (`test_login.py`). The front-end message is step 6's (D-94), and the live demonstration is step 3's extra recorded walk |
+
+- **The lockout is FR-02's** (D-25). `CLAUDE.md:185` is corrected.
+- **FR-13's per-turn re-scoping is evidenced by test,** not by the walk:
+  `apps/api/tests/test_fr11_scoping.py:608` (a promotion between turns takes effect on the next
+  turn) and `:633` (a demotion between turns takes effect on the next turn). Two sessions in two
+  roles show the scope differing. They cannot show it being re-evaluated.
