@@ -6137,3 +6137,53 @@ instruction that the user would merge after Sagarika's review.
 **What stands.** Nothing in the repository claims a pull request was reviewed. The "approved by
 Benjamin Morovan and Sagarika Dey" lines are about the frozen question and thread sets (D-84's and
 D-86's notes), not pull requests, and they stand.
+
+## D-97 · FR-04's logout confirmation is fixed now, in its own pull request, before step 5
+
+**Status:** Settled by the user · **Date:** 2026-11-03 · **Concerns:** FR-04, FR-02, D-62, D-94,
+`docs/stage-5-item-8-walk.md`
+
+**What was found.**
+
+- **The defect.** FR-04 Front-End: "On activation, user is immediately redirected to the Login page
+  with a brief confirmation 'You've been logged out'." The redirect happened, but the confirmation
+  never appeared after a logout from a guarded route, which is every screen a signed-in user works
+  on.
+- **How it was found.** Step 6 found it: a front-end test asserting it failed against `main` (PR #44,
+  `docs/stage-5-front-end-clauses.md`, defect 1). The user then confirmed it in a browser on the
+  alpha on 3 November, at the end of step 3's lockout walk (PR #45).
+- **Why the walk missed it.** Item 8's FR-04 PASS recorded the redirect only. The 1 November walk
+  never looked for the confirmation.
+- **The cause.** React Router 7 applies a navigation inside `startTransition`. Logout cleared the
+  user as an ordinary update, which rendered first, at the old address. `RequireAuth`'s redirect
+  from there then replaced the logout's navigation, and the notice with it. The same race lost the
+  session-expired notice, and it lost Login's return to the route the user was sent away from,
+  which Login's own redirect to `/` replaced.
+
+**Decision.** The user chose from three options: fix it in its own pull request before step 5; fold
+it into item 7; or record it and fix it after step 10.
+
+- **Fixed now,** on `fix/FR-04-logout-confirmation`, before step 5. Step 5's "before" is
+  unaffected, because the fix does not touch answer generation.
+- **Tests first.** test-engineer wrote the tests and showed each one failing on `main`, 10 runs out
+  of 10. react-frontend fixed the cause. The tests and the fix are one commit.
+- **The fix.**
+  - Signing out clears the user inside a transition (`signOut` in `AuthProvider.jsx`). React Router
+    already applies its navigation in one, so the two render together, and no render has a
+    cleared user at the old address. Deliberate break F1, clearing the user outside the
+    transition, brings the defect back. F2, moving the navigation outside it, does not: only the
+    user's update needs moving.
+  - After sign-in, Login's redirect is the only navigation, aimed at the route the user came from,
+    or else their role's dashboard.
+
+**What it does not change.**
+
+- **The alpha keeps the defect until it is redeployed.** Redeploying waits on the D-35 recording
+  (step 7's precondition). Until then the demonstration script tells the presenter not to claim
+  the confirmation (PR #45).
+- **Still open:** three gaps that predate the fix and are not FR failures.
+  - A logout that fails with a 5xx clears the user in the page, while the server session may still
+    be live. No test pins this either way (break F13 changed it, and nothing failed). Whether it
+    should is the user's call.
+  - The "Could not sign out" notice stays on screen after the user signs back in.
+  - A sign-in whose follow-up `/me` fails leaves the user on the form with no message.

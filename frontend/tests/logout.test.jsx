@@ -3,17 +3,11 @@
  * authenticated roles" and "On activation, user is immediately redirected to the
  * Login page with a brief confirmation 'You've been logged out'."
  *
- * **The confirmation is not asserted here, because the shipped screen does not show
- * it** (found while writing this file, 2 November 2026, and reported rather than
- * fixed: docs/stage-5-front-end-clauses.md, FR-04). From any route behind
- * RequireAuth, `AuthProvider.logout` clears the user (src/auth/AuthProvider.jsx:87)
- * before the navigation that carries `reason: 'signed-out'` (src/App.jsx:42) has
- * committed, because React Router wraps location updates in `startTransition`.
- * RequireAuth (src/auth/RequireAuth.jsx:21) re-renders at the old address with no
- * user and replaces that navigation with its own, so /login arrives with
- * `{from: …}` and Login.jsx shows no notice. A test asserting the confirmation fails
- * against the shipped code, so it is left out until the screen is fixed; this file
- * asserts the half that holds.
+ * **The confirmation is asserted in authNotices.test.jsx,** with the session-expired
+ * notice and the return to a guarded route, because all three were one race. The
+ * shipped screen did not show it when this file was written (2 November 2026,
+ * docs/stage-5-front-end-clauses.md, defect 1), and it was fixed under D-97. This file
+ * asserts the control for both roles, the landing, and a failed logout.
  *
  * The whole application is rendered with the real auth provider. That the session is
  * destroyed server-side and refused afterwards is pytest's.
