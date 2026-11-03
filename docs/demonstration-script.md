@@ -10,6 +10,14 @@
 > - "item 9a" corrected to Stage 4's.
 >
 > The 1 November walk followed the earlier text, and `docs/stage-5-item-8-walk.md` records it as it was.
+>
+> **Amended 3 November 2026,** after step 3's lockout walk. The changes:
+>
+> - FR-02 step 4's expectations are corrected. The 2 November text said the fifth wrong password,
+>   and every attempt after it, shows the locked-account message. Only the right password shows
+>   it, and only for the first five attempts during a lock (D-25, D-26);
+> - FR-04 step 1 says the "You've been logged out" confirmation does not appear (a defect, found
+>   at step 6 and confirmed in the walk's 3 November note).
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -110,16 +118,27 @@ words a message, the message is quoted.
 3. **In window A, sign in as `corpus.admin@example.com`.**
    - **Expected:** the Administrator's dashboard, and `Role management` in the navigation.
 4. **The lockout, with a throwaway account.** Register a new account through FR-01, with a
-   password used nowhere else. Sign in with a wrong password five times.
-   - **Expected:** the fifth refusal, and every attempt after it, gives the locked-account
-     message (a 403 on the server).
-   - Sign in with the right password.
-   - **Expected:** still refused until 15 minutes have passed.
+   password used nowhere else.
+   - **Sign in with a wrong password five times.**
+     - **Expected:** "Invalid email or password." each time (a 401). The fifth locks the account
+       for 15 minutes, and nothing on the screen says so.
+   - **Sign in with the right password.**
+     - **Expected:** "This account is temporarily locked after too many failed sign-in attempts.
+       Please try again later." (a 403). Only the right password shows it. A wrong password during
+       the lock is still the ordinary 401, so the lock is never confirmed to someone who knows
+       only the address.
+   - **Stop after one or two attempts.** Every attempt during the lock is counted. Past ten in
+     all, even the right password gets the 401 until the lock expires (D-26).
+   - **After 15 minutes, sign in with the right password.**
+     - **Expected:** the dashboard. The lock is never extended, so the wait is 15 minutes from the
+       fifth failure. Leave this until the end of the walk, or say it rather than wait.
 
 ### FR-04 · Logout and session management (window B)
 
 1. **Log out** from the navigation.
    - **Expected:** the sign-in page.
+   - **Do not claim the confirmation.** FR-04 asks for "You've been logged out", and it does not
+     appear: a known defect (`docs/stage-5-item-8-walk.md`, 3 November note). Say so if asked.
 2. **Press Back, or open `http://127.0.0.1:8000/dashboard` directly.**
    - **Expected:** sent back to sign-in, because the session is gone on the server, not only in the
      page.
