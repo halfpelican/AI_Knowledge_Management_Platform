@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, Outlet, Route, Routes, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, Route, Routes } from 'react-router-dom'
 import AuthProvider from './auth/AuthProvider.jsx'
 import RequireAuth from './auth/RequireAuth.jsx'
 import RequireRole from './auth/RequireRole.jsx'
@@ -31,15 +31,14 @@ import './App.css'
  */
 function PrimaryNav({ onLogoutError }) {
   const { user, loading, logout } = useAuth()
-  const navigate = useNavigate()
   const [signingOut, setSigningOut] = useState(false)
 
   async function handleLogout() {
     setSigningOut(true)
     onLogoutError(null)
     try {
+      // On success the auth provider sends the user to /login with the confirmation.
       await logout()
-      navigate('/login', { replace: true, state: { reason: 'signed-out' } })
     } catch (error) {
       onLogoutError(error.message)
     } finally {

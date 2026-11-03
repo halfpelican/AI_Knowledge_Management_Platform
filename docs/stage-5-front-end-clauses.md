@@ -198,3 +198,31 @@ None is fixed here. Fixing them is react-frontend's work, under a decision the u
 | FR-09 | Attendee association | Outside this step's list |
 | FR-09 | The stored transcript viewable in full | Outside this step's list |
 | FR-12 | The search field "from every page" | Outside this step's list. Tested on two pages, not walked across the routes |
+
+## Dated notes
+
+These correct the record without editing it.
+
+### 3 November 2026: defects 1 to 3 are fixed (D-97)
+
+- **What was fixed.** Defects 1 to 3 were one race, and are fixed together on
+  `fix/FR-04-logout-confirmation`.
+  - Signing out clears the user inside a transition (`signOut` in `src/auth/AuthProvider.jsx`).
+  - After sign-in, Login's own redirect is the only navigation.
+  - The user had confirmed defect 1 in a browser on the alpha first, at the end of step 3's
+    lockout walk.
+- **The tests:** `frontend/tests/authNotices.test.jsx`.
+  - The defects: defect 1's confirmation for both roles, defect 2's notice, and defect 3's return
+    to `/meetings`.
+  - The paths around the fix: a logout answered 5xx, a logout answered 401, a signed-in user
+    opening `/login`, and the confirmation still shown once the page settles.
+- **What changes in the tables above,** which stay as written on their day:
+  - **FR-04 row 2b** is now ✅, in `authNotices.test.jsx`.
+  - **"Left uncovered":** the FR-04 row is closed.
+  - **FR-02 row 4:** the landing is now decided by Login's own redirect, to the route the user came
+    from, or else the role's dashboard. `/` and Home no longer take part. Break B6 as written no
+    longer applies, since Login has no `navigate` call. Breaks F7 and F15 are its equivalents,
+    and both are caught.
+- **Observation 4 still stands.** A failed logout that is not a 401 still clears the user in the
+  page. No test pins this either way, and whether it should is the user's call (D-97).
+- **The line numbers in defects 1 to 3** refer to the code before the fix.

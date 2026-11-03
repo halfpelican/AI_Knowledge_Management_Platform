@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { ApiError, LOGIN_FAILED_MESSAGE } from '../api/client.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
@@ -79,7 +79,8 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
  * wrong password, so the form never reveals which. A 403 is the locked account
  * and shows its own, distinct message.
  *
- * On success the user goes to the page they were sent here from, else `/`.
+ * On success the user goes to the page they were sent here from, else to their
+ * role's dashboard.
  * FR-02's own clause is "On success, user is redirected to a role-specific
  * dashboard (e.g., Administrator → Admin Console; Employee → Knowledge
  * Dashboard)". Those dashboards are FR-14, built in Stage 5, so the branch on
@@ -89,7 +90,6 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
 export default function Login() {
   useDocumentTitle('Sign in')
   const { user, loading, login } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const arrival = location.state?.reason
   const [values, setValues] = useState({ email: location.state?.email ?? '', password: '' })
@@ -97,7 +97,12 @@ export default function Login() {
   const [formError, setFormError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  if (!loading && user) return <Navigate to="/" replace />
+  // Signed in, by this form or before arriving. FR-02: a role-specific dashboard, but a
+  // guarded route the user was sent away from still wins, so they land where they were
+  // going. This is the only navigation after sign-in, so nothing can replace it.
+  if (!loading && user) {
+    return <Navigate to={location.state?.from ?? dashboardPathForRole(user.role)} replace />
+  }
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -113,10 +118,8 @@ export default function Login() {
 
     setSubmitting(true)
     try {
-      const me = await login({ email: values.email.trim(), password: values.password })
-      // FR-02: a role-specific dashboard. A guarded route the user was sent away
-      // from still wins, so they land where they were going.
-      navigate(location.state?.from ?? dashboardPathForRole(me?.role), { replace: true })
+      // Sets the user, and the redirect above sends them on.
+      await login({ email: values.email.trim(), password: values.password })
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         setFormError(LOGIN_FAILED_MESSAGE)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as authApi from '../api/auth.js'
 import { ApiError, onUnauthorized } from '../api/client.js'
@@ -14,7 +14,8 @@ import { AuthContext } from './context.js'
  * the `user.role` held here only shapes what the interface offers.
  *
  * Session expiry (FR-04): if any request answers 401 while the app believes a
- * user is signed in, the user is cleared and sent to /login with a notice.
+ * user is signed in, the user is cleared and sent to /login with a notice. Logout
+ * does the same with its own notice.
  */
 export default function AuthProvider({ children }) {
   const navigate = useNavigate()
@@ -55,15 +56,31 @@ export default function AuthProvider({ children }) {
     return () => controller.abort()
   }, [])
 
+  // Clears the user and goes to /login, where `reason` picks the notice. D-97: React
+  // Router applies a navigation inside startTransition, so the user is cleared inside
+  // one too, and the two render together. Cleared as an ordinary update, the user would
+  // render first, at the old address, and RequireAuth's redirect from there would
+  // replace this navigation and its notice.
+  const signOut = useCallback(
+    (reason) => {
+      // A 401 from here on is not a second expiry to redirect for.
+      userRef.current = null
+      startTransition(() => {
+        setUser(null)
+        navigate('/login', { replace: true, state: { reason } })
+      })
+    },
+    [navigate],
+  )
+
   useEffect(
     () =>
       onUnauthorized(() => {
         // A 401 on the login form or the initial /me check is not an expiry.
         if (!userRef.current) return
-        setUser(null)
-        navigate('/login', { replace: true, state: { reason: 'expired' } })
+        signOut('expired')
       }),
-    [navigate],
+    [signOut],
   )
 
   const login = useCallback(
@@ -77,16 +94,20 @@ export default function AuthProvider({ children }) {
 
   const register = useCallback((details) => authApi.register(details), [])
 
+  // FR-04: on success, /login with "You've been logged out". Any other failure still
+  // clears the user, and is thrown for the navigation to report.
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
     } catch (error) {
       // 401 means the session was already gone; that is still signed out.
-      if (!(error instanceof ApiError && error.status === 401)) throw error
-    } finally {
-      setUser(null)
+      if (!(error instanceof ApiError && error.status === 401)) {
+        setUser(null)
+        throw error
+      }
     }
-  }, [])
+    signOut('signed-out')
+  }, [signOut])
 
   const value = useMemo(
     () => ({ user, loading, login, register, logout, refresh }),
