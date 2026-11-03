@@ -496,3 +496,12 @@ PR #46, D-97. The rows above stay as written on their day.
 | Requirement | Clause | Before | After the fix | Evidence |
 |---|---|---|---|---|
 | FR-04 | "…redirected to the Login page with a brief confirmation 'You've been logged out'" | ❌ the confirmation does not appear | ✅ **on `main`, by test**; not yet shown in a browser | `frontend/tests/authNotices.test.jsx` asserts the confirmation for both roles. It failed on the earlier `main` in 10 runs out of 10, and passes with the fix. The alpha runs `8598d19`, from before the fix, until it is redeployed after the D-35 recording |
+
+## After step 5 (3 November 2026)
+
+FR-13's "before": D-86's measurement, run at `2f65a8e` on `kmp_obj02_20261101`
+(`corpus/objective-02/runs/2026-11-03/fr13-before.md`). The rows above stay as written on their day.
+
+| Requirement | Clause | Before | After step 5 | Evidence |
+|---|---|---|---|---|
+| FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ for the screen's reason, pending step 5 (an informal look) | ⚠️ **partial, measured** | **Wired:** the history changes what is retrieved, both in-process and through the server (HTTP check: WIRED 3 of 3, 0 leaks). **Not answered:** with history, 1 of 9 answerable follow-ups matched, and that one (t08) is cold-answerable. Spelled out, 3 of 9 matched; cold, 1 of 9. 7 of the 9 other answered with-history replies restate the first turn. Where spelling the question out works and history does not (t01, t05), history is the limit. Where spelling it out fails too (t02, t03, t04, t06 and t07 as the Administrator, t09), the limit is generation or retrieval as well. t09 failed, as D-86 decision 2 expected. Out-of-scope passages: 0 in every run. The two Employee follow-ups that should get no answer (t06, t07) were answered by restating the first turn, from material the Employee may read: not a leak |

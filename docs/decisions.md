@@ -6014,6 +6014,25 @@ stored.
 - `docs/stage-5-item-8-walk.md`: the FR-13 PASS is qualified in a dated note.
 - D-42: a dated note.
 
+**Dated note, 3 November 2026: step 5 has measured it.** D-86's run was made at `2f65a8e` on
+`kmp_obj02_20261101`: the thread run, then the HTTP check
+(`corpus/objective-02/runs/2026-11-03/fr13-before.md`).
+
+- **The decision stands. FR-13 is partial, now by measurement rather than by the screen.**
+- **The history is wired.** It changes what is retrieved, in-process and through the server (WIRED
+  3 of 3).
+- **The follow-ups are not answered.** With history, 1 of 9 answerable follow-ups matched (t08,
+  which is cold-answerable). Spelled out, 3 of 9 matched. 7 of the other 9 answered with-history
+  replies restate the first turn, as the screen saw.
+- **The cause is split.** For t01 and t05, history is the limit, because spelling the question out
+  works. For six others, spelling it out fails too, so generation or retrieval limits it as well.
+- **The clean cases agree with the screen.** t01, t04 and t06 as the Administrator did not resolve
+  with history. t08 passed, and t09 failed, as expected.
+- **No leak.** 0 out-of-scope passages in every run. The Employee's t06 and t07 follow-ups were
+  answered from material the Employee may read, when no answer was expected: the "different
+  failure" this decision's table names.
+- **Step 7 starts from this baseline,** and its "after" runs the same threads again.
+
 ## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,

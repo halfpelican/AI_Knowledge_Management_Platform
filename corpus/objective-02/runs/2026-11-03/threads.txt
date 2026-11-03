@@ -1,0 +1,447 @@
+Thread set: corpus\objective-02\threads.json, 9 thread(s) valid, so 44 run(s) (each follow-up with history, cold and spelled out; each first turn once)
+FLM gate: scripts/check_flm.py's checks, before any question is asked (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (2.1s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (0.9s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1299
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+FLM gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : 2f65a8e0caec824ade9d235ffc4797ce006e8d15
+  FLM version     : v0.9.39 (flm version), server v0.9.39
+  dump sha256     : 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59
+  database        : kmp_obj02_20261101
+  provider        : flm (FLMService)
+  endpoint        : http://127.0.0.1:8625/v1
+  chat model      : gemma3:4b
+  embed model     : embed-gemma, dimension 768
+  health          : True — FLM at http://127.0.0.1:8625/v1 advertises 33 model(s)
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  thread set      : corpus\objective-02\threads.json  (9 thread(s), 44 run(s)), sha256 acfe3d47afed7d97, scoring rule v2
+  set status      : FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.
+  indexed chunks  : 43, recorded embedding model(s): ['embed-gemma']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2331 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/44] t01@Employee/first-turn ...
+[2/44] t01@Employee/with-history ...
+[3/44] t01@Employee/cold ...
+[4/44] t01@Employee/spelled-out ...
+[5/44] t02@Employee/first-turn ...
+[6/44] t02@Employee/with-history ...
+[7/44] t02@Employee/cold ...
+[8/44] t02@Employee/spelled-out ...
+[9/44] t03@Employee/first-turn ...
+[10/44] t03@Employee/with-history ...
+[11/44] t03@Employee/cold ...
+[12/44] t03@Employee/spelled-out ...
+[13/44] t04@Employee/first-turn ...
+[14/44] t04@Employee/with-history ...
+[15/44] t04@Employee/cold ...
+[16/44] t04@Employee/spelled-out ...
+[17/44] t05@Employee/first-turn ...
+[18/44] t05@Employee/with-history ...
+[19/44] t05@Employee/cold ...
+[20/44] t05@Employee/spelled-out ...
+[21/44] t06@Administrator/first-turn ...
+[22/44] t06@Administrator/with-history ...
+[23/44] t06@Administrator/cold ...
+[24/44] t06@Administrator/spelled-out ...
+[25/44] t06@Employee/first-turn ...
+[26/44] t06@Employee/with-history ...
+[27/44] t06@Employee/cold ...
+[28/44] t06@Employee/spelled-out ...
+[29/44] t07@Administrator/first-turn ...
+[30/44] t07@Administrator/with-history ...
+[31/44] t07@Administrator/cold ...
+[32/44] t07@Administrator/spelled-out ...
+[33/44] t07@Employee/first-turn ...
+[34/44] t07@Employee/with-history ...
+[35/44] t07@Employee/cold ...
+[36/44] t07@Employee/spelled-out ...
+[37/44] t08@Employee/first-turn ...
+[38/44] t08@Employee/with-history ...
+[39/44] t08@Employee/cold ...
+[40/44] t08@Employee/spelled-out ...
+[41/44] t09@Employee/first-turn ...
+[42/44] t09@Employee/with-history ...
+[43/44] t09@Employee/cold ...
+[44/44] t09@Employee/spelled-out ...
+
+====================================================================================================
+PER-FOLLOW-UP DETAIL (one block per thread and role; the first turn, then three ways)
+====================================================================================================
+
+[t01@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How much annual leave do full-time staff build up each month?
+                supplied : D01:25a78c27
+                attempts : 1:parsed
+                  - [D01:25a78c27] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.
+  with-history  answered         source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Is there a limit on how much of it I can save up?
+                embedded : How much annual leave do full-time staff build up each month? Is there a limit on how much of it I can save up?
+                supplied : D01:25a78c27, D10:e149a71c
+                attempts : 1:parsed
+                  - [D10:e149a71c] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.
+  cold          answered         source rank 5           phrase no   cited no   not correct
+                question : Is there a limit on how much of it I can save up?
+                supplied : D10:e149a71c
+                attempts : 1:parsed
+                  - [D10:e149a71c] Under the Olive Summit reimbursement cap, any single expense above five hundred dollars requires approval from a department head before the money is spent.
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Is there a limit on how much annual leave I can save up?
+                supplied : D01:25a78c27, D10:e149a71c
+                attempts : 1:parsed
+                  - [D01:25a78c27] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month. Part-time staff accrue leave on a pro-rata basis according to their contracted hours. Unused leave carries over to the next year up to a maximum of thirty days.
+
+[t02@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What do I need before I can start working from home?
+                supplied : D07:0116bb02, D20:f75351f0, D01:25a78c27, D03:ae71359f
+                attempts : 1:parsed
+                  - [D07:0116bb02] Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.
+  with-history  answered         source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : How often does that get reviewed?
+                embedded : What do I need before I can start working from home? How often does that get reviewed?
+                supplied : D07:0116bb02, D01:25a78c27, D08:9fe4800b, D20:f75351f0, D03:ae71359f
+                attempts : 1:parsed
+                  - [D08:9fe4800b] The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.
+                  - [D03:ae71359f] The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.
+  cold          answered         source rank 22          phrase no   cited no   not correct
+                question : How often does that get reviewed?
+                supplied : D04:5b84ad25, D04:bfa0d3d8, D04:886a7e4a, D04:5fe9ff24, D04:af45c907, D04:7f675205, D04:4d4c1949, D04:5f0c9590
+                attempts : 1:parsed
+                  - [D04:4d4c1949] Guidance on classifying records is reviewed whenever legislation, technology or business needs change in a way that affects it.
+  spelled-out   answered         source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : How often do the requirements for working from home get reviewed?
+                supplied : D07:0116bb02, D04:5b84ad25, D01:25a78c27, D04:bfa0d3d8, D04:886a7e4a, D08:9fe4800b, D04:c37ca375, D04:7f675205, D04:4d4c1949
+                attempts : 1:parsed
+                  - [D01:25a78c27] Each business unit must document how review and continuous improvement is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D04:bfa0d3d8] Guidance on review and continuous improvement is reviewed whenever legislation, technology or business needs change in a way that affects it.
+                  - [D04:886a7e4a] Each business unit must document how meeting records and minutes is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D04:c37ca375] Guidance on meeting records and minutes is reviewed whenever legislation, technology or business needs change in a way that affects it.
+                  - [D04:4d4c1949] Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D08:9fe4800b] Guidance on retention schedules is reviewed whenever legislation, technology or business needs change in a way that affects it.
+
+[t03@Employee] ordinary
+  first-turn    answered         source rank 1           phrase no   cited yes  not correct   <- NOT AS PREDICTED
+                question : Which company handles our catering?
+                supplied : D12:db6d9ae4
+                attempts : 1:parsed
+                  - [D12:db6d9ae4] Lantern Grove Supplies is the preferred vendor for catering.
+  with-history  answered         source rank 1           phrase no   cited yes  not correct   <- NOT AS PREDICTED
+                question : How do I place an order with them?
+                embedded : Which company handles our catering? How do I place an order with them?
+                supplied : D12:db6d9ae4
+                attempts : 1:parsed
+                  - [D12:db6d9ae4] Ridgeline Catering is the vendor for catering.
+  cold          path-A           source rank 1           phrase no   cited no   not correct
+                question : How do I place an order with them?
+                supplied : (none above threshold)
+  spelled-out   path-B-declined  source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : How do I place an order with our catering company?
+                supplied : D12:db6d9ae4
+                attempts : 1:parsed
+
+[t04@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Who is allowed to drive the fleet vehicles?
+                supplied : D19:da414d14
+                attempts : 1:parsed
+                  - [D19:da414d14] Only employees with a current licence who have completed the driver induction may use a fleet vehicle.
+  with-history  answered         source rank 1           phrase no   cited yes  not correct   <- NOT AS PREDICTED
+                question : What records do they need to keep?
+                embedded : Who is allowed to drive the fleet vehicles? What records do they need to keep?
+                supplied : D19:da414d14, D04:6ccb904d, D04:7f675205, D04:b0798a19, D04:5f0c9590, D04:886a7e4a, D04:bfa0d3d8, D04:2ad2f78b
+                attempts : 1:parsed
+                  - [D04:6ccb904d] Only employees with a current licence who have completed the driver induction may use a fleet vehicle.
+                  - [D04:b0798a19] Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D04:7f675205] Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D04:5f0c9590] Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D04:2ad2f78b] When responsibilities for roles and responsibilities change hands, the outgoing owner must brief their successor and update the register.
+                  - [D19:da414d14] When responsibilities for financial records change hands, the outgoing owner must brief their successor and update the register.
+  cold          unavailable      source rank 22          phrase no   cited no   not correct
+                question : What records do they need to keep?
+                supplied : D04:4d4c1949, D04:6ccb904d, D04:7f675205, D04:b0798a19, D04:5fe9ff24, D04:5ca125d8, D04:5d45c7af, D04:886a7e4a
+                attempts : 1:schema-violation, 2:schema-violation, 3:schema-violation
+                ERROR    : ProviderUnavailable: FLM at http://127.0.0.1:8625/v1 returned no response conforming to STATEMENT_LIST_SCHEMA in 3 attempts; last failure: schema violation: statement 0 has an empty or non-string 'chunk_id'
+  spelled-out   answered         source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : What records do the people allowed to drive the fleet vehicles need to keep?
+                supplied : D19:da414d14, D04:6ccb904d, D04:b0798a19, D04:7f675205, D04:5fe9ff24, D04:bfa0d3d8, D04:4d4c1949, D04:886a7e4a
+                attempts : 1:parsed
+                  - [D04:6ccb904d] Only employees with a current licence who have completed the driver induction may use a fleet vehicle, and they need to keep logbooks.
+
+[t05@Employee] ordinary
+  first-turn    path-B-declined  source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : What date did the planning workshop set for the feature freeze?
+                supplied : T03:dcb441b1, D13:a839910b, T01:c0aa1caf
+                attempts : 1:parsed
+  with-history  path-B-declined  source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Why does it have to be that early?
+                embedded : What date did the planning workshop set for the feature freeze? Why does it have to be that early?
+                supplied : T03:dcb441b1, T01:c0aa1caf, D13:a839910b
+                attempts : 1:parsed
+  cold          path-A           source rank 2           phrase no   cited no   not correct
+                question : Why does it have to be that early?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Why does the feature freeze have to be that early?
+                supplied : T03:dcb441b1
+                attempts : 1:parsed
+                  - [T03:dcb441b1] The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.
+
+[t06@Administrator] scoped
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How often are our suppliers reviewed?
+                supplied : D12:db6d9ae4, D05:693da2bc, D04:5b84ad25, D04:886a7e4a, D04:bfa0d3d8, D04:af45c907, D16:b868d740, D04:5fe9ff24, T02:f8b31e5e, D04:7f675205
+                attempts : 1:parsed
+                  - [D12:db6d9ae4] Suppliers are reviewed annually, and poor performance is recorded in the vendor register.
+  with-history  answered         source rank 3           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Are we relying too heavily on just a few of them?
+                embedded : How often are our suppliers reviewed? Are we relying too heavily on just a few of them?
+                supplied : D12:db6d9ae4, D05:693da2bc, T02:f8b31e5e, D04:bfa0d3d8, D04:886a7e4a
+                attempts : 1:parsed
+                  - [D05:693da2bc] Suppliers are reviewed annually against price, delivery performance and quality.
+  cold          path-A           source rank 6           phrase no   cited no   not correct
+                question : Are we relying too heavily on just a few of them?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 3           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Are we relying too heavily on just a few of our suppliers?
+                supplied : D05:693da2bc, D12:db6d9ae4
+                attempts : 1:parsed
+                  - [D12:db6d9ae4] Lantern Grove Supplies is the preferred vendor for stationery and office consumables.
+                  - [D12:db6d9ae4] Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.
+
+[t06@Employee] scoped
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How often are our suppliers reviewed?
+                supplied : D12:db6d9ae4, D05:693da2bc, D04:5b84ad25, D04:886a7e4a, D04:bfa0d3d8, D04:af45c907, D04:5fe9ff24, D06:d43c263f, D04:7f675205
+                attempts : 1:parsed
+                  - [D12:db6d9ae4] Suppliers are reviewed annually.
+  with-history  answered         source not a candidate  phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Are we relying too heavily on just a few of them?
+                embedded : How often are our suppliers reviewed? Are we relying too heavily on just a few of them?
+                supplied : D12:db6d9ae4, D05:693da2bc, D04:bfa0d3d8, D04:886a7e4a
+                attempts : 1:parsed
+                  - [D05:693da2bc] Suppliers are reviewed annually against price, delivery performance and quality.
+  cold          path-A           source not a candidate  phrase no   cited no   CORRECT
+                question : Are we relying too heavily on just a few of them?
+                supplied : (none above threshold)
+  spelled-out   answered         source not a candidate  phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Are we relying too heavily on just a few of our suppliers?
+                supplied : D05:693da2bc, D12:db6d9ae4
+                attempts : 1:parsed
+                  - [D12:db6d9ae4] Lantern Grove Supplies is the preferred vendor for stationery and office consumables.
+                  - [D12:db6d9ae4] Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.
+
+[t07@Administrator] scoped
+  first-turn    answered         source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : What gets published on the intranet about the office move?
+                supplied : D20:f75351f0, T01:c0aa1caf, D03:ae71359f, D08:9fe4800b, D09:90a0f686, D14:06f5ef26
+                attempts : 1:parsed
+                  - [D03:ae71359f] The move will be published on the intranet until the move is complete.
+  with-history  answered         source rank 3           phrase no   cited yes  not correct   <- NOT AS PREDICTED
+                question : Is it being replaced?
+                embedded : What gets published on the intranet about the office move? Is it being replaced?
+                supplied : D20:f75351f0, T01:c0aa1caf, D09:90a0f686, D03:ae71359f, D14:06f5ef26
+                attempts : 1:parsed
+                  - [D09:90a0f686] A weekly update will be published on the intranet until the move is complete.
+                  - [D03:ae71359f] Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.
+  cold          path-A           source rank 3           phrase no   cited no   not correct
+                question : Is it being replaced?
+                supplied : (none above threshold)
+  spelled-out   path-B-declined  source rank 1           phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Is the intranet being replaced?
+                supplied : D09:90a0f686, D20:f75351f0, T01:c0aa1caf
+                attempts : 1:parsed
+
+[t07@Employee] scoped
+  first-turn    answered         source rank 1           phrase yes  cited no   not correct   <- NOT AS PREDICTED
+                question : What gets published on the intranet about the office move?
+                supplied : D20:f75351f0, T01:c0aa1caf, D03:ae71359f, D08:9fe4800b, D14:06f5ef26
+                attempts : 1:parsed
+                  - [D03:ae71359f] A weekly update will be published on the intranet until the move is complete.
+  with-history  answered         source not a candidate  phrase no   cited no   not correct   <- NOT AS PREDICTED
+                question : Is it being replaced?
+                embedded : What gets published on the intranet about the office move? Is it being replaced?
+                supplied : D20:f75351f0, T01:c0aa1caf, D03:ae71359f, D14:06f5ef26
+                attempts : 1:parsed
+                  - [T01:c0aa1caf] A weekly update will be published on the intranet until the move is complete.
+                  - [D03:ae71359f] Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.
+  cold          path-A           source not a candidate  phrase no   cited no   CORRECT
+                question : Is it being replaced?
+                supplied : (none above threshold)
+  spelled-out   path-B-declined  source not a candidate  phrase no   cited no   CORRECT
+                question : Is the intranet being replaced?
+                supplied : D20:f75351f0, T01:c0aa1caf
+                attempts : 1:parsed
+
+[t08@Employee] topic-change
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What was the customer satisfaction score last quarter?
+                supplied : T04:91cb0be0
+                attempts : 1:parsed
+                  - [T04:91cb0be0] Our satisfaction score rose to eighty-six percent.
+  with-history  answered         source rank 2           phrase yes  cited yes  CORRECT
+                question : Where are the first aid kits kept?
+                embedded : What was the customer satisfaction score last quarter? Where are the first aid kits kept?
+                supplied : T04:91cb0be0, D03:ae71359f
+                attempts : 1:parsed
+                  - [D03:ae71359f] First aid kits are kept at reception and on every floor.
+  cold          answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Where are the first aid kits kept?
+                supplied : D03:ae71359f
+                attempts : 1:parsed
+                  - [D03:ae71359f] First aid kits are kept at reception and on every floor.
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Where are the first aid kits kept?
+                supplied : D03:ae71359f
+                attempts : 1:parsed
+                  - [D03:ae71359f] First aid kits are kept at reception and on every floor.
+
+[t09@Employee] previous-answer
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Who do I ask if I have questions about the office move?
+                supplied : D20:f75351f0, T01:c0aa1caf, D18:68446b83, D03:ae71359f, D08:9fe4800b, D12:db6d9ae4, D14:06f5ef26
+                attempts : 1:parsed
+                  - [D20:f75351f0] Direct questions to the facilities team.
+  with-history  answered         source not a candidate  phrase no   cited no   not correct
+                question : What do they have to approve?
+                embedded : Who do I ask if I have questions about the office move? What do they have to approve?
+                supplied : D20:f75351f0, T01:c0aa1caf, D08:9fe4800b, D05:693da2bc, D04:b0798a19, D07:0116bb02, D12:db6d9ae4, D04:edb5e68b, D03:ae71359f, D04:7f675205
+                attempts : 1:parsed
+                  - [D04:b0798a19] Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.
+  cold          answered         source rank 14          phrase no   cited no   not correct
+                question : What do they have to approve?
+                supplied : D05:693da2bc, D02:aaf92567, D10:e149a71c, D04:b0798a19, D04:7f675205, D12:db6d9ae4, D06:d43c263f, D08:9fe4800b, D01:25a78c27, D07:0116bb02, D04:2ad2f78b
+                attempts : 1:parsed
+                  - [D04:2ad2f78b] Exceptions to the rules on contracts and agreements require written approval from the records manager.
+                  - [D04:2ad2f78b] Exceptions to the rules on financial records require written approval from the records manager.
+  spelled-out   answered         source rank 2           phrase yes  cited no   not correct   <- NOT AS PREDICTED
+                question : What does the facilities team have to approve?
+                supplied : D05:693da2bc, D17:6c3088c1, D04:b0798a19, D02:aaf92567, D10:e149a71c, D04:7f675205, D01:25a78c27, D08:9fe4800b, D04:6ccb904d, D03:ae71359f, D06:d43c263f
+                attempts : 1:parsed
+                  - [D05:693da2bc] Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.
+
+====================================================================================================
+SUMMARY, PER WAY, ACROSS FOLLOW-UPS (scoring rule version 2)
+====================================================================================================
+
+first-turn  (11 run(s))
+  answered, where an answer is expected : 90.9%  (10/11)
+  expected-answer match                 : 63.6%  (7/11)
+  not answered, where none is expected  : n/a (0 samples)
+  outcomes                              : answered 10, path-A 0, path-B-declined 1, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/10)
+  first-attempt conformance             : 100.0%  (11/11)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 63.6%  (7/11)
+
+with-history  (11 run(s))
+  answered, where an answer is expected : 88.9%  (8/9)
+  expected-answer match                 : 11.1%  (1/9)
+  not answered, where none is expected  : 0.0%  (0/2)
+  outcomes                              : answered 10, path-A 0, path-B-declined 1, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/18)
+  first-attempt conformance             : 100.0%  (11/11)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 18.2%  (2/11)
+
+cold  (11 run(s))
+  answered, where an answer is expected : 44.4%  (4/9)
+  expected-answer match                 : 11.1%  (1/9)
+  not answered, where none is expected  : 100.0%  (2/2)
+  outcomes                              : answered 4, path-A 6, path-B-declined 0, path-B-rejected 0, unavailable 1
+  fabricated identifiers                : 0.0%  (0/5)
+  first-attempt conformance             : 80.0%  (4/5)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 100.0%  (11/11)
+
+spelled-out  (11 run(s))
+  answered, where an answer is expected : 77.8%  (7/9)
+  expected-answer match                 : 33.3%  (3/9)
+  not answered, where none is expected  : 50.0%  (1/2)
+  outcomes                              : answered 8, path-A 0, path-B-declined 3, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/15)
+  first-attempt conformance             : 100.0%  (11/11)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 36.4%  (4/11)
+
+readings (scoring rule part 10):
+  t01@Employee       ordinary         not resolved with history   <- prediction did not hold
+  t02@Employee       ordinary         not resolved with history; spelled-out not correct: a retrieval or generation limit, not history   <- prediction did not hold
+  t03@Employee       ordinary         not resolved with history; spelled-out not correct: a retrieval or generation limit, not history   <- prediction did not hold
+  t04@Employee       ordinary         not resolved with history; spelled-out not correct: a retrieval or generation limit, not history   <- prediction did not hold
+  t05@Employee       ordinary         not resolved with history   <- prediction did not hold
+  t06@Administrator  scoped           not resolved with history; spelled-out not correct: a retrieval or generation limit, not history   <- prediction did not hold
+  t06@Employee       scoped           ANSWERED by a role that cannot see the source's item (check for a leak)   <- prediction did not hold
+  t07@Administrator  scoped           not resolved with history; spelled-out not correct: a retrieval or generation limit, not history   <- prediction did not hold
+  t07@Employee       scoped           ANSWERED by a role that cannot see the source's item (check for a leak)   <- prediction did not hold
+  t08@Employee       topic-change     cold-answerable: proves nothing about history
+  t09@Employee       previous-answer  not resolved with history; spelled-out not correct: a retrieval or generation limit, not history   <- prediction did not hold
+scoping shown, t06: NO
+scoping shown, t07: NO
+
+schema conformance, every response : 92.5%  (37/40)
+out-of-scope, every run             : 0  (must be 0)
+
+elapsed: 8.7 minutes
+full record written to corpus\objective-02\runs\2026-11-03\threads.json
+
+RESULT: schema conformance is BELOW 95% on the thread set.
