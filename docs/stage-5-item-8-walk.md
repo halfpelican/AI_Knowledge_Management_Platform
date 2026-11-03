@@ -249,3 +249,50 @@ These correct the record without editing it.
 **No recording of the 1 November walk was made.** D-35's insurance does not exist yet. Before
 anything is re-indexed or the alpha is redeployed, the user records a walk on the alpha (step 7's
 precondition).
+
+### 3 November 2026: the lockout walk, step 3 (D-25, D-26): PASS
+
+FR-02's lockout, walked live, as the 2 November note above said it would be.
+
+- **The alpha:** the same deployment, commit `8598d19`, database `kmp_demo_20261101`, Waitress at
+  24 threads, `DEBUG` off. The server was not running, and was restarted at 17:21:18 local from
+  `start-alpha.ps1`; the restart is a line in `Documents\KMP-alpha-deployments.txt`. FLM v0.9.39,
+  with `check_flm.py` passing. Not a measured run.
+- **The account:** `lockout.walk@example.com`, "Lockout Walk", an Employee, registered through
+  FR-01 at 06:33:06. Its password was a throwaway, shown to the user once and recorded nowhere.
+  No other account was used.
+
+| Step | On screen | On the server |
+|---|---|---|
+| 1. A wrong password, five times | refused | the fifth set `locked_until` to 06:48:23, so the lock began at 06:33:23 (a lock is never extended, `apps/api/views.py:314`) |
+| 2. Two more attempts during the lock, one of them the right password | the right password: "This account is temporarily locked after too many failed sign-in attempts. Please try again later." | `failed_attempts` 7: attempts during a lock are counted (D-26), and `last_login` still empty |
+| 3. The right password, after the lock expired | the Employee dashboard, "Signed in as Lockout Walk" | `last_login` 06:49:06, 43 seconds after expiry; `failed_attempts` 0; `locked_until` cleared |
+
+- **The demonstration accounts were never locked.** After the walk, `corpus.admin@example.com`,
+  `demo.employee@example.com` and `lockout.walk@example.com` all have no failures and no lock.
+  `corpus.employee@example.com` has one counted failure, with no lock; this walk did not use it,
+  and nothing records where the failure came from.
+- **The account stays** in `kmp_demo_20261101`, as the walk's Employee does. Restoring the snapshot
+  (D-88) removes it.
+- **The script's expectation was wrong, and the server was right.** The 2 November amendment
+  to `docs/demonstration-script.md` said the fifth wrong password, and every attempt after it,
+  shows the locked-account message. It does not: a wrong password always gets the ordinary 401,
+  locked or not, so a lock is never confirmed to someone who only knows the address. Only the
+  right password shows the locked message, and only for the first five attempts during a lock
+  (D-26's ceiling). The script is corrected.
+
+### 3 November 2026: FR-04's confirmation does not appear
+
+- **What happened.** At the end of step 3's walk, Log out returned to the plain sign-in form, with
+  no "You've been logged out" confirmation.
+- **What FR-04 asks for:** "On activation, user is immediately redirected to the Login page with a
+  brief confirmation 'You've been logged out'." The redirect happens. The confirmation does not.
+- **How it was found.** Step 6 found it in the front-end suite: the test asserting it fails against
+  `main`, so it was left out and reported (PR #44,
+  `docs/stage-5-front-end-clauses.md`, defect 1). This walk confirms it in a browser, against the
+  alpha's build.
+- **The cause, as step 6 traced it.** Logout clears the user first. The sign-in guard then redirects
+  to `/login` itself, and that redirect replaces the logout's, which carries the confirmation.
+- **What it changes here.** The FR-04 PASS above stands for what it recorded: the redirect, the
+  session gone on the server, and Back refused. The 1 November walk never looked for the
+  confirmation. FR-04 is partial until the fix lands, and the fix is the user's decision.
