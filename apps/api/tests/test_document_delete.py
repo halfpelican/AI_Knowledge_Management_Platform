@@ -114,28 +114,37 @@ def tag(document, dimension, name):
 
 
 def stored_document(
-    uploader, *, title=TITLE, roles=None, text=PASSAGE, department="Operations", cosine=ABOVE
+    uploader, *, title=TITLE, roles=None, text=PASSAGE, department="Operations", cosine=ABOVE,
+    chunks=None,
 ):
     """A document as ingestion leaves it: a stored file, its extracted text, a chunk stamped
     from it (D-17) and, as D-74's seed leaves it, two tag links. ``cosine`` is the chunk's
-    score against QUERY, so two documents can be given a rank order."""
+    score against QUERY, so two documents can be given a rank order.
+
+    ``chunks``, a sequence of ``(text, cosine)``, gives the document several chunks in that
+    order instead of the one ``text`` at ``cosine``, as a document longer than CHUNK_SIZE is
+    ingested; its extracted text is then theirs joined."""
     roles = BOTH_ROLES if roles is None else roles
+    chunks = [(text, cosine)] if chunks is None else list(chunks)
     document = Document.objects.create(
         title=title, file_type="txt", uploaded_by=uploader, department=department,
         visible_to_roles=roles,
     )
     document.file_path.save("escalation.txt", ContentFile(STORED_BYTES), save=True)
-    ExtractedContent.objects.create(document=document, extracted_text=text)
-    ContentChunk.objects.create(
-        source_type=DOCUMENT_SOURCE_TYPE,
-        source_id=document.id,
-        chunk_index=0,
-        chunk_text=text,
-        embedding=at_cosine(cosine),
-        embedding_model=STUB_EMBEDDING_MODEL,
-        embedding_dimension=settings.EMBEDDING_DIMENSION,
-        visible_to_roles=roles,
+    ExtractedContent.objects.create(
+        document=document, extracted_text=" ".join(chunk_text for chunk_text, _ in chunks)
     )
+    for index, (chunk_text, chunk_cosine) in enumerate(chunks):
+        ContentChunk.objects.create(
+            source_type=DOCUMENT_SOURCE_TYPE,
+            source_id=document.id,
+            chunk_index=index,
+            chunk_text=chunk_text,
+            embedding=at_cosine(chunk_cosine),
+            embedding_model=STUB_EMBEDDING_MODEL,
+            embedding_dimension=settings.EMBEDDING_DIMENSION,
+            visible_to_roles=roles,
+        )
     tag(document, PROJECT_DIMENSION, "bridge maintenance")
     tag(document, TOPIC_DIMENSION, "escalation")
     return document
@@ -346,6 +355,65 @@ def test_after_a_delete_search_finds_nothing_and_a_question_only_it_answered_tak
 
     # Path A returns without invoking generation at all (invariant 7).
     assert len(service.generate_calls) == generated_before
+
+
+# A document of three chunks whose answer is in the MIDDLE one: the other two score below the
+# threshold, so the question's only answer is chunk 1, never chunk 0.
+OPENING = "Willow Bridge fault handling, part one: who this procedure applies to."
+CLOSING = "Willow Bridge fault handling, part three: how each call is recorded afterwards."
+BELOW = 0.10
+assert BELOW < RELEVANCE_THRESHOLD
+
+
+def test_after_a_delete_a_question_answered_from_a_later_chunk_takes_path_a_and_no_chunk_remains(
+    employee_client, administrator_client, employee, administrator, service
+):
+    """Item 9a: "after a delete, a question whose only answer lived in that document returns
+    no-answer, and none of its chunks remain", for a document of more than one chunk.
+
+    Every other delete test's document has exactly one chunk, so "none of its chunks remain"
+    could not be told from "its first chunk is gone": a delete that removed only ``chunk_index``
+    0 passed all of them. A chunk left behind is still stamped and still retrievable, and failing
+    closed on the deleted source row drops it from ``sources`` only, not from what generation is
+    sent (``test_source_rows_fail_closed.py``), so the deleted document would go on answering.
+    """
+    document = stored_document(
+        employee, chunks=[(OPENING, BELOW), (PASSAGE, ABOVE), (CLOSING, BELOW)]
+    )
+    chunks = ContentChunk.objects.filter(source_type=DOCUMENT_SOURCE_TYPE, source_id=document.id)
+    answer_chunk = chunks.get(chunk_index=1)
+    assert chunks.count() == 3  # the premise
+    users = {employee_client: employee, administrator_client: administrator}
+
+    for client in users:
+        live = client.post("/api/ask", {"question": QUESTION}, format="json").json()
+        # The premise: answered, and from the middle chunk.
+        assert live["answered"] is True
+        assert [statement["chunk_id"] for statement in live["statements"]] == [str(answer_chunk.id)]
+    generated_before = len(service.generate_calls)
+    assert generated_before == 2
+
+    assert delete(administrator_client, document.id).status_code == 204
+
+    for client, user in users.items():
+        logged_before = set(QueryLog.objects.values_list("id", flat=True))
+        asked = client.post("/api/ask", {"question": QUESTION}, format="json")
+        assert asked.status_code == 200
+        body = asked.json()
+        assert body["answered"] is False
+        assert body["message"] == NO_ANSWER_MESSAGE
+        assert body["statements"] == [] and body["sources"] == [] and body["partial_matches"] == []
+        for trace in (PASSAGE, str(answer_chunk.id)):
+            assert trace.encode() not in asked.content
+        row = QueryLog.objects.exclude(id__in=logged_before).get()
+        assert row.user == user
+        assert row.no_answer_reason == NO_RELEVANT_PASSAGE  # path A, not B
+
+    assert len(service.generate_calls) == generated_before
+    # None of the three, not only the first.
+    assert not ContentChunk.objects.filter(
+        source_type=DOCUMENT_SOURCE_TYPE, source_id=document.id
+    ).exists()
 
 
 def test_a_citation_of_a_deleted_chunk_survives_with_its_chunk_null(
