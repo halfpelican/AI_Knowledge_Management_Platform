@@ -478,3 +478,13 @@ day.
   `apps/api/tests/test_fr11_scoping.py:608` (a promotion between turns takes effect on the next
   turn) and `:633` (a demotion between turns takes effect on the next turn). Two sessions in two
   roles show the scope differing. They cannot show it being re-evaluated.
+
+## After step 3 (3 November 2026)
+
+Step 3's lockout walk on the alpha, recorded in `docs/stage-5-item-8-walk.md`'s 3 November notes.
+The rows above stay as written on their day.
+
+| Requirement | Clause | Before | After step 3 | Evidence |
+|---|---|---|---|---|
+| FR-02 | Five failed attempts lock the account for 15 minutes; a locked account gets 403 and a distinct message | ⚠️ left out of the 1 November walk | ✅ **walked live** | A throwaway account: five wrong passwords locked it; the right password during the lock showed the locked-account message; the right password after expiry signed in and reset the counters. The front-end message's test is step 6's (`login.test.jsx`, PR #44) |
+| FR-04 | "…redirected to the Login page with a brief confirmation 'You've been logged out'" | ✅ in the 1 November walk, which recorded the redirect only | ❌ **the confirmation does not appear** | Found by step 6 in the front-end suite (PR #44, defect 1), and confirmed in a browser at the end of step 3's walk. The redirect, and the session ending on the server, still stand. The fix is the user's decision |
