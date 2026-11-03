@@ -769,6 +769,21 @@ eight of the thirteen gaps the auditor found were in the untested layer. Whether
 front-end testing is in scope for M6 is not settled anywhere and needs a decision
 before Stage 3, which ships more screens.
 
+> **2 November 2026: the lockout is FR-02's, as this entry ruled, and the record now says so
+> everywhere** (the user's decision 1).
+>
+> - **What FR-02 and FR-03 each own.** FR-02's own text locks an account for 15 minutes after five
+>   failures, and gives a locked account a 403 (`apps/core/constants.py:286-289` quotes it). FR-03
+>   adds only the warning, the countdown and the administrator release.
+> - **`CLAUDE.md:185` is corrected,** with the user's approval, from "(FR-03, NIT3004)" to
+>   "(FR-02 enforces, D-25; FR-03 adds the interface, NIT3004)".
+> - **The 1 November walk left out an FR-02 clause:** the lock, its 403 and the locked-account
+>   message. `docs/demonstration-script.md` called the lockout FR-03, and `docs/stage-5-item-8-walk.md`
+>   followed it. Item 10 found this (its H2, D-90).
+> - **It is shown in an extra, recorded walk on the alpha,** with a newly registered throwaway
+>   account. That is step 3 of the user's post-M6 order. The server side is already tested
+>   (`test_login.py`), and the front-end message is step 6's (D-94).
+
 ## D-26 · Stage 2 security review, round two
 
 **Status:** Settled · **Date:** 2026-09-13 · **Amends:** one bullet of D-25
@@ -1813,6 +1828,26 @@ question-then-follow-up set, which does not exist.
   turns a follow-up is most likely to be shortening.
 - `QueryLog.question` stores the bare question, never the composed string, or every
   follow-up row would contain its predecessors and the log would stop being readable.
+
+> **2 November 2026: the 1 November screen contradicts this entry's boundary** (the user's
+> decision 2, D-91).
+>
+> - **The boundary.** Follow-ups that need not restate a subject noun resolve; only references
+>   into an answer do not. D-86 decision 2 predicted the same: only t09, whose referent is in the
+>   answer, should fail.
+> - **What the screen supports.** In the three threads where the first turn was correct on every
+>   trial and the follow-up expected an answer, the follow-up was not correct on any trial: t01,
+>   t04, and t06 asked by the Administrator. The referent is named in the first question in all
+>   three. This is the stored statements rescored with the frozen rule (version 2), with nothing
+>   re-run. The table is in D-91.
+> - **What it does not support:**
+>   - a count over all seven question-referent threads, because four are confounded by a first
+>     turn that was itself not correct;
+>   - a cause, because the model was not separated from the prompt.
+> - **The screen is not D-86's measurement.** It was an informal look, on `kmp_demo_screen` with
+>   two extra documents. The measured reason comes from step 5's run: the nine threads with
+>   history, cold and spelled out, then the HTTP check.
+> - **FR-13 is partial at the gate** (D-91).
 
 ## D-43 · A conversation's title is optional on create and derived from its first question
 
@@ -3337,6 +3372,17 @@ anything. It sits beside D-60's record of conditions 4 and 5 and does not change
 24.16.0 on the development machine. The `frontend` CI job has not run on GitHub as of
 this entry, because nothing on this branch has been pushed.
 
+> **2 November 2026: this entry's list of what the front-end suite does not cover is superseded**
+> (item 10's H3, D-90).
+>
+> - **What changed since.** `documentRepository.test.jsx` tests DocumentRepository and
+>   DocumentDetail, `askReopened.test.jsx` renders the provenance-removed state, and D-77 and D-78
+>   fixed and tested D-61's gaps 3 and 4.
+> - **The current list** is `docs/demonstration-script.md`'s "What is not verified by any test",
+>   derived from `frontend/tests` on 2 November. Step 6 (D-94) writes the full enumeration, clause
+>   by clause, to `docs/stage-5-front-end-clauses.md`, and that file supersedes both.
+> - **What stands:** this entry's amendment of CLAUDE.md §8 condition 2.
+
 ## D-63 · FR-15's detail view shows extracted content after all; D-52's reasons for cutting it were false
 
 **Status:** Settled by the user · **Date:** 2026-09-28 · **Supersedes:** D-52 ·
@@ -4195,6 +4241,18 @@ the proposal places elsewhere.
 > and D-84 then left the demonstration database open. The script ran against `kmp_demo_20261101`
 > on 1 November, because the snapshot it was restored from has no tags. It created 14 tags and 48
 > links, and a second run created none. `kmp` is unchanged by this.
+
+> **2 November 2026 (item 10's H5, D-90): this entry's empty-state claim could not hold, from the
+> day it was written.**
+>
+> - **The rule that defeats it.** Under D-72's facet rule, each facet's values are counted over the
+>   documents matching every other active filter. So no pair of facet choices can match nothing,
+>   and "at least one combination of filters an Employee can choose matches nothing" was false for
+>   facets when both entries were written. It is not only false "after either is chosen", as the
+>   walk record first put it.
+> - **The 204 empty state is still reachable,** and tested in both suites. It is reached through
+>   the page address, which holds the filters (`/documents?project=supplier%20review&topic=safety`),
+>   or through a title filter that matches nothing. `docs/demonstration-script.md` uses the address.
 
 ## D-75 · FR-15's download: a scoped view returning the original as an attachment, typed and named by its signature
 
@@ -5643,3 +5701,439 @@ it was measured.
   threads and demonstrating them (D-40). A second restore resets everything, so it may only come
   before that point.
 - **M8's hosting and database** (D-64).
+
+## D-89 · The load-test accounts are retired: unusable on the measurement database, deleted elsewhere
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Stage:** 5, after the gate · **Concerns:**
+D-82, D-84, D-88, FR-02
+
+**Why.** `loadtest01` to `loadtest21` (`manage.py create_load_test_users --count 21`, D-82) were
+made for item 6's NFR-08 runs, all with one throwaway password. That password was shown once in
+the 1 November session. While any of them can sign in, they are an open door with a known key.
+
+**What was done, on 2 November.** Read-only counts came first, in four databases, and the alpha's
+count had to be 0 before anything was written.
+
+| Database | Before | Action | After |
+|---|---|---|---|
+| `kmp_demo_20261101` (the alpha) | 0 | none; D-88 deleted them on 1 November | 0 |
+| `kmp_obj02_20261101` (item 6's measurement) | 21, all with a usable password | passwords made **unusable**; rows kept | 21, none usable |
+| `kmp_demo_screen` (the demonstration screen) | 21, all with a usable password | rows **deleted**; no PROTECT refusal, since the screen never used them | 0 |
+| `kmp` (development) | 0 | none | 0 |
+
+- **Why the measurement database keeps its rows.** QueryLog, Conversation and SearchLog point at
+  users with PROTECT, so a delete would fail. Those rows are NFR-08's evidence. The user model has
+  no `is_active` column, so an unusable password is how an account is retired.
+- **The users table of `kmp_obj02_20261101` has changed since its snapshot.** The dump `3bf98403…`
+  still holds the 21 accounts with their old password hash.
+- **Afterwards:** no usable load-test password in any of the four databases.
+
+**What still applies.**
+
+- **Every restore of the snapshot must repeat the delete,** or retire them as above, because the
+  dump holds the accounts.
+- **Re-running `create_load_test_users` re-enables them.** It resets an existing account's password
+  to `LOAD_TEST_PASSWORD`. Run it only for a load test, and retire the accounts again afterwards.
+- **The password shown in that session must be changed wherever it was used.**
+
+**Not covered.** The k6 summaries already committed name the accounts but hold no password, so
+nothing in the repository needs changing.
+
+## D-90 · Item 10's audit returned INCOMPLETE, and its verdict is recorded here verbatim
+
+**Status:** Recorded · **Date:** 2026-11-02 · **Stage:** 5 item 10 · **Concerns:** the twelve gate
+requirements · **Audited:** `d697392`
+
+One `requirements-auditor` run, read only, on `d697392`: `main` after #39, plus item 8's walk
+record (#40). It audited the twelve as a set, and hunted for a claim in this file that is true
+where written and false where used. It edited nothing and ran nothing. It is recorded here because
+a verdict that lives only in a terminal is the failure mode D-61 names. **Nothing it found was
+fixed in the session that ran it.**
+
+**What the user decided on it, 2 November.**
+
+| Finding | Decided by |
+|---|---|
+| H2: the lockout is FR-02's | D-25's dated note; `CLAUDE.md:185` corrected; an extra recorded walk |
+| H1 and FR-13 | D-91 (FR-13 partial at the gate), D-42's dated note |
+| S3: D-56 | D-93 (acknowledged, with the floor owed by a new dev set) |
+| S1 and S4's drift test | D-94 (front-end tests now, as step 6) |
+| §8 condition 4 | D-92 (D-60's decline accepted, scoped) |
+| NFR-08, a note rather than a decision | D-95 |
+| H3: D-62's list | D-62's dated note |
+| H5: D-74's empty state | D-74's dated note |
+| S2, H4, H6, and the script's FR-13 wording | `docs/demonstration-script.md`, amended 2 November |
+
+**Where the report overstates, verified against the repository:**
+
+- **H1 reads `as_expected_every_trial: false` as "fail on every run".** It means "not as expected
+  on every trial". D-91 gives what the stored trials support, rescored with the frozen rule.
+- **H1's verdict word, "falsified", is stronger than the screen supports.** The screen was informal
+  and on another corpus, and four of the seven threads it counts are confounded (D-91).
+- **Its fix 4 conflicts with the user's tuning rule.** It suggests taking a floor from item 6's
+  `harness.json`, and D-93 settles that the frozen sets are not tuning sets.
+
+**The verdict, verbatim.** Reproduced as the auditor returned it, quoted rather than edited. Its
+line numbers are against `d697392`.
+
+> ## Audit: M6 gate, the twelve MUST-HAVEs as a set. Branch test/FR-12-live-walk-record @ d697392, 2026-11-02
+>
+> **Verdict:** INCOMPLETE
+>
+> All twelve requirements have an owner and are implemented on the server with a UI on top. Every one was walked live on the alpha and confirmed on the server. I found no requirement that is enforced only in the UI. The set is still not complete, for four reasons:
+>
+> 1. **FR-13 is partial.** Its follow-up clause fails when measured, and the failures fall in the very case D-42 says works.
+> 2. **FR-12's partial-matches gap (D-56) has no owner.** Item 6, which owned it, finished without closing it.
+> 3. **Seven requirements fail §8 condition 2.** Their UI-only clauses have no front-end test.
+> 4. **The demonstration script presents two deviations where the record holds about ten.**
+>
+> Separately, §8 condition 4 is permanently declined for FR-11, FR-12 and FR-13 (D-60). So under §8 as written, the set cannot reach COMPLETE until that decline is accepted explicitly.
+>
+> I edited nothing and ran nothing: no tests and no database access. I read files and git history only, and I read the CI results and the walk as evidence rather than re-running them.
+>
+> ---
+>
+> ### 1. The twelve
+>
+> | FR | Owner and where it lives | Implemented | Tested | UI only? | Status |
+> |---|---|---|---|---|---|
+> | 01 | django-backend and react-frontend. `apps/api/views.py:273-299`, `apps/accounts/validators.py`, `frontend/src/pages/Register.jsx` | Server: 201, 400 and 409, with password complexity checked on the server. UI: the form | `test_register.py`. The route is anonymous, so the dual-role rule does not apply. Front end: only the 429 text (`authThrottle.test.jsx:53`). Submit-disabled, the inline field error and the password rules have no front-end test | No | Met on the server. §8 condition 2 **not met** |
+> | 02 | Same agents. `views.py:354-416`, `Login.jsx` | 200, 400, 401, and 403 for a locked account. The UI lands each role on its dashboard | `test_login.py`, including the lock tests at `:230-274`. Front end: the role landing (`dashboard.test.jsx`) and the 429 text. The "distinct message" for a locked account (`Login.jsx:124-129`) has no front-end test | No | Met, with a recorded deviation (D-25: the session carries no role). The lockout was left out of the walk on a misclassification (H2). §8 condition 2 partial |
+> | 04 | django-backend. `views.py:422-432`, `config/settings.py:144-147`, `Login.jsx:20` | The session is destroyed on the server, with a 60-minute inactivity expiry | `test_logout.py` (both roles, an expired session gives 401, the inactivity clock). Front end: nothing for the logout confirmation or the redirect | No | Met on the server. §8 condition 2 **not met** |
+> | 05 | django-backend. `views.py:489-542`, `apps/accounts/audit.py`, `RoleManagement.jsx` | PATCH; 403 for self-demotion or removing the last Administrator; 404; an audit entry | `test_roles.py` and `test_rbac.py`. Front end: none | No | Met on the server. §8 condition 2 **not met**. D-22 is still "provisional, to confirm" (`decisions.md:570`) |
+> | 06 | django-backend. `config/settings.py:168`, `apps/api/permissions.py`, `RequireRole.jsx`, `AccessDenied.jsx` | Every route checked on the server | The dual-role matrix covers 23 of 23 endpoints (CI), plus `test_rbac.py`. The front-end guard has no test | No | Met on the server. The guard is usability only and untested |
+> | 08 | rag-pipeline, django-backend and react-frontend. `views.py:548-724` and `:1152-1237`, `apps/ingestion/`, `Upload.jsx` | 403, 415 (by file signature), 413, 400, 409 and 422. There is one chunk write site, and it records the model and dimension (`embedding.py:78-89`) | Many pytest files. Front end: `uploadQueue.test.jsx` and `ingestionLimits.test.jsx` cover the queue, the retry and the 429s. Nothing tests the client-side format refusal or the per-file progress bar | No | Met, with recorded deviations (D-15, D-30, D-33 §1) that the script never presents. §8 condition 2 partial |
+> | 09 | rag-pipeline and django-backend. `views.py:1005-1149`, `apps/ingestion/meetings.py`, `Meetings.jsx` | 201 and 400, plus a 422 by convention. A future meeting date is refused on the server (`serializers.py:319-324`) | `test_meeting_ingestion.py`. Front end: the 429 messages only | No | Met, with a recorded deviation (D-33 §2). §8 condition 2 partial |
+> | 11 | rag-pipeline. One predicate, `apps/retrieval/scoping.py:114-190` | The FR gives it no interface of its own | `test_fr11_scoping.py`, `test_scoping.py`, `test_fr11_scoping_bites.py`, `test_source_rows_fail_closed.py` | No | Met. §8 condition 4 declined (D-60) |
+> | 12 | rag-pipeline. `apps/retrieval/{pipeline,ranking,verification,query_log,search,partial_matches}.py`, `apps/api/answers.py`, `Ask.jsx`, `Answer.jsx`, `Search.jsx` | Grounded generation, verification, both no-answer paths, and a 503 after three attempts | Extensive pytest. Front end: the `ask*.test.jsx` files. Nothing front-end tests the search field on every page, the grouping, the two-character minimum, the Search screen or the partial-match label | No | **Partial.** D-56's missing floor is open with no owner (S3). D-45 is a deviation. §8 condition 2 partial; condition 4 declined |
+> | 13 | django-backend for the endpoints, rag-pipeline for `apps/retrieval/conversation.py`, react-frontend for `Ask.jsx` | History is prior questions only. Scope is re-resolved every turn. The thread lives in the URL | `test_conversations.py`, `test_fr11_scoping.py:608,633`, `test_fr11_thread_scope.py`. Front end: `askThread`, `askReopened`, `askThreadList` | No | **Partial.** Follow-up resolution fails when measured (H1). D-42 and D-43. §8 condition 4 declined |
+> | 14 | django-backend and react-frontend. `views.py:1500-1605`, `Dashboard.jsx` | One scoped endpoint, with counts taken after the scope filter | `test_dashboard.py` (both roles, byte-identical with and without restricted rows). `dashboard.test.jsx` | No | Met, with recorded deviations (D-69, D-70) the script never presents |
+> | 15 | django-backend and react-frontend. `views.py:727-934`, `apps/api/repository.py`, `apps/documents/deletion.py`, `DocumentRepository.jsx`, `DocumentDetail.jsx` | Browse, detail, download and delete, each resolved through the scope first | The `test_document_*` files and `apps/documents/tests/test_deletion.py`. `documentRepository.test.jsx` | No | Met, with a recorded deviation (D-72) the script never presents |
+>
+> ---
+>
+> ### 2. Set-level findings
+>
+> **S1. §8 condition 2 is met for FR-14, FR-15 and most of FR-12 and FR-13, and nowhere else.**
+> - **The gap.** The UI-only clauses of FR-01, FR-02, FR-04, FR-05, FR-06, FR-08, FR-09 and FR-12's search half have no front-end test.
+> - **It is recorded.** D-62 lists every page except Ask as untested (`decisions.md:3289-3294`) and says the amended condition "does not reach back and pass anything" (`:3332-3334`).
+> - **Nobody owns it.** `M6-BUILD-PROMPT.md:300-303` assigns each clause to "whichever item owns its behaviour". No Stage 5 item owns FR-01, 02, 04, 05, 06 or 09, so these tests were never owed by anyone.
+> - **The walk does not stand in.** Item 8's walk is hand-testing, which §8 says does not count.
+>
+> **S2. The demonstration script ticks deviations the record says must not be ticked.**
+> - **What it lists.** `demonstration-script.md:384-388` gives D-45 and D-42 as the build's only on-purpose shortfalls. That list was copied from `M6-BUILD-PROMPT.md:484-487`, written on 28 September.
+> - **What the record holds against the twelve:**
+>   - D-25: FR-02's session carries no role (`decisions.md:732-742`).
+>   - D-33 §1: FR-08's classification hand-off is deferred. D-33 says "What is owed. Not code. A sentence in the demonstration script" (`:1104-1109`). That sentence is absent.
+>   - D-33 §2: FR-09's 422.
+>   - D-43: FR-13's Update has no PATCH.
+>   - D-56: FR-12's partial matches have no floor.
+>   - D-69: FR-14 does not read KnowledgeGaps.
+>   - D-70: FR-14's department filter narrows documents only.
+>   - D-72: FR-15's Department comes from the column, "a deliberate departure from FR-15's server clause" (`:4006-4007`).
+>   - D-15: four formats, not six.
+> - **The consequence.** The walk marks FR-02, FR-08, FR-09, FR-14 and FR-15 PASS without naming any of these.
+>
+> **S3. D-56 has lost its owner.**
+> - `apps/retrieval/partial_matches.py:119-148` still has no relevance floor.
+> - D-56 says "either a floor or an explicit acknowledgement is owed" (`decisions.md:2817-2819`).
+> - D-61 gap 6 and `stage-4-open-items.md:127-128` gave it to item 6. D-84 deferred it to "a later decision, made from this measurement" (`:5238-5239`).
+> - Item 6 has merged (`fe456d9`). Its `harness.json` records partial matches for all 34 runs, but no decision followed.
+> - It is on the walk path. FR-11 step 1 (top score 0.193) and FR-12 step 3 (0.2526) are path-A no-answers, so each offers up to five nearest titles labelled "partial matches".
+>
+> **S4. Duplication, minor.**
+> - **Server constants restated in the front end, with no drift test (D-61 gap 13, still unowned):** `frontend/src/constants.js:91-92` (50 MB) and `:114-116` (2, 10, 500), and the literal "50 MB" in `apps/api/views.py:151`.
+> - **The meeting list order is written twice:** `views.py:1039` and `:1583`.
+> - **D-29's self-exclusion check is written twice:** `views.py:673-682` and `:1062-1067`.
+>
+> **Other set-level checks, nothing found:**
+> - **Wrong layer:** none.
+> - **UI-only enforcement:** none. Every UI guard I checked has a server check behind it: format and size by signature (`views.py:642-665`), the search minimum, the future meeting date, the delete (`:804-806`), and the role screen (`/api/users` answers 403).
+> - **AI SDK imports outside `apps/ai/`:** none.
+> - **Inline literals in Python:** none outside `constants.py`, apart from `views.py:151`.
+>
+> ---
+>
+> ### 3. The decisions.md hunt
+>
+> **These claims fail where they are used:**
+>
+> **H1. D-42's boundary for FR-13 (the main finding).**
+> - **The claim.** `decisions.md:1794-1798` (23 September): "follow-up questions need not restate the subject" holds for subject nouns, not for references into an answer. It was written while "FR-13 end to end is still unmeasured" (`:1787-1790`).
+> - **Where it is used:**
+>   - `stage-4-clause-audit.md:84`: "Holds for subject nouns".
+>   - `stage-5-clause-audit.md:346` and `:400`: FR-13's first row stays partial "for D-42".
+>   - `stage-4-open-items.md:143-145`.
+>   - D-86 decision 2 (`decisions.md:5392-5393`): only the thread whose referent is in the answer "should fail".
+>   - `demonstration-script.md:388`: D-42 is offered as the deviation.
+> - **What the measurement shows.** `corpus/objective-02/threads.md:34-35` designs t01 to t07 so that turn 1's question names the referent, which is the class D-42 says works. Only t09 needs the answer.
+> - **The 1 November screen** (`corpus/demo/screening-2026-11-01.json`, `second_pass.trials`):
+>   - t01, t02, t03, t04, t06 and t07 fail on every run (`as_expected_every_trial: false`).
+>   - t05 scores as expected, but cites another transcript.
+>   - t09 fails, as predicted.
+> - **Verdict.** Six of the seven threads whose referent is in the question fail. D-42's boundary is falsified, and FR-13's shortfall is the clause's ordinary case, not its conceded edge.
+>
+> **H2. Which requirement the lockout belongs to.**
+> - **The record.** D-25 (`decisions.md:690`, `:759-765`) puts the five-failure lock and its 403 in FR-02, and raised the conflicting CLAUDE.md annotation on 13 September. `apps/core/constants.py:286-289` agrees: "Enforcement is therefore FR-02's".
+> - **The stale claims.** `CLAUDE.md:185` still says "(FR-03, NIT3004)". D-61's verbatim audit (`decisions.md:3206`) calls the lockout "SHOULD-tier effort".
+> - **Where they are used:**
+>   - `demonstration-script.md:92`: "FR-03, not in the gate. Do not show it."
+>   - `stage-5-item-8-walk.md:199`.
+> - **Result.** A gate clause was excluded from the walk: FR-02's business-logic lock, its 403 response, and the locked-account message on screen. The server side is tested; the front-end message is not.
+>
+> **H3. D-62's list of what the front-end suite does not cover.**
+> - **The claim.** `decisions.md:3285-3325`, written 28 September.
+> - **Where it is used.** `demonstration-script.md:383` says "Give D-62's list". `M6-BUILD-PROMPT.md:481-483` says the same.
+> - **It is now wrong.** It calls DocumentRepository and DocumentDetail untested, but they are tested in `documentRepository.test.jsx`. It says nothing renders the provenance-removed state, but `askReopened.test.jsx:174-175` does. It calls D-61's gaps 3 and 4 "neither tested nor fixed", but D-77 and D-78 fixed and tested both.
+>
+> **H4. D-61's permission-boundary claim.**
+> - **The claim** covers six named routes (`decisions.md:3051-3054`).
+> - **Where it is used.** `demonstration-script.md:130-131` and `:368` repeat it as "every audit found no route across it", without the route list.
+> - **The gap.** No audit has walked these four (item 11 has not run):
+>   - `GET /api/dashboard`;
+>   - `GET /api/documents/browse`;
+>   - `GET /api/documents/{id}/download`;
+>   - `DELETE /api/documents/{id}`.
+> - They do have leakage tests, so the boundary is tested. The sentence just claims more than any audit checked.
+>
+> **H5. D-74's empty state.**
+> - **The claim.** `decisions.md:4180-4181`: "At least one combination of filters an Employee can choose matches nothing".
+> - **Why it cannot hold.** Under D-72's facet rule (`:4022-4025`), each facet's values are counted over the documents matching every other active filter. So no pair of facet choices can match nothing. The claim was false for facets on the day both decisions were written, not only "after either is chosen" (walk `:163`).
+> - D-74 carries no correction for this.
+>
+> **H6. Which item 9a.**
+> - **The claim.** `demonstration-script.md:376`: "Item 9a's measurement of it comes after the gate."
+> - **Why it is wrong.** The mis-citation measurement is Stage 4's item 9a, which exists (`flm-baseline.md:583`). Stage 5's item 9a is the leakage tests. Minor.
+>
+> **These hold where they are used:**
+> - **D-66.** Its D-29 residue is named at `:3631-3635`.
+> - **D-65.** The `q` exception is named.
+> - **D-53.** Every source read goes through the scoped helpers.
+> - **D-70.** A status reflects its chunks: there is one write site, and reindex works one source per transaction.
+> - **D-75 and D-47.** No route writes `visible_to_roles`, and the upsert hole is pinned by a test.
+> - **D-79 and D-85.** One Waitress process with the in-process cache.
+> - **D-83.** `check_flm.py` fails a noisy build: 0.6046 against 0.999 required.
+> - **D-64, D-67, D-68, D-73, D-76, D-88.**
+>
+> ---
+>
+> ### 4. The items already recorded, and how they are classified
+>
+> **FR-13 follow-ups.** The shortfall is disclosed (walk `:200-202`, script `:235-240`, `:379-382`), but it is misclassified in four places:
+> - **The walk headline.** It marks FR-13 PASS with no qualifier (walk `:23`, `:119`). It should read partial.
+> - **The cause.** It is blamed on D-42 (see H1), but the failures fall in the case D-42 says works.
+> - **The wording.** "The same way on all three runs" (script `:237`, `:320-321`) is false for t02, t04 and t09 (`identical_across_trials: false`).
+> - **The failures are answered.** They come back with citations, often to the wrong source. t01 cites the Expense Claims Guide. t04 cites the Records Management Handbook. t07 cites the Weekly Operations Standup, and for the Administrator, the Project Atlas Kickoff Brief. So on follow-ups, invariant 5's conceded limitation is the common case.
+> - **The attribution.** "This is the 4B model's behaviour" (script `:325`) is unsupported: D-86's cold and spelled-out modes, which would separate the model from the prompt, were not run.
+> - **Per-turn re-scoping.** "The permission is checked again on every turn" (script `:231-232`): two sessions holding two roles cannot show re-evaluation. The evidence is `test_fr11_scoping.py:633`, and the script should cite it.
+>
+> **FR-15 empty state.** Correctly not a gate failure. The 204 is reachable from the UI's own title filter (script `:264-265`) and is tested in both suites. Its root cause is H5.
+>
+> **NFR-08 and NFR-09.** Correctly outside the gate. The results are recorded as a note under D-82 (`:5125-5145`), not as the decision D-84 asks for (`:5228-5229`).
+>
+> **Items 7, 9a and 11.** All five of 9a's assertions already exist in item 2 and item 3 tests (for example `test_document_delete.py:206`), so deferring 9a costs little. Item 11 not having run is what H4's wording hides.
+>
+> **Also open:** the walk does not record whether the D-35 screen recording was made (walk `:203`). Confirm it exists.
+>
+> ---
+>
+> ### Invariant check
+>
+> - **Pass: invariants 1, 2, 3, 4, 7, 8, 9 and 10.**
+> - **Pass: invariant 5.** Verification is set membership. The follow-up mis-citations are its conceded limit, not a breach.
+> - **Pass: invariant 6.** Tested at the UI (`ask.test.jsx:58-80`).
+> - **Pass: no AI SDK import outside `apps/ai/`.**
+> - **Pass: every chunk write records model and dimension.**
+> - **Fail, minor: constants.** S4.
+>
+> ### Gate impact
+>
+> None of this means a requirement cannot be shown. Smallest fixes, in order:
+>
+> 1. **Documentation only, for FR-13.** Add a dated note to D-42 recording the screen. Re-mark FR-13 as partial for the measured reason. Qualify the walk's FR-13 PASS. Fix script `:237`, `:320-321` and `:325`.
+> 2. **The lockout.** Correct `CLAUDE.md:185` to FR-02 and fix script `:92`. If the lockout is shown, use a throwaway account.
+> 3. **The script.** Add S2's deviations list. Replace "Give D-62's list" with a current one. Restore D-61's route list. Fix `:376`.
+> 4. **D-56.** Choose a floor from item 6's `harness.json`, or record the acknowledgement D-56 says is owed.
+> 5. **Front-end tests for S1, the largest piece.** One test file per screen: Register, the Login locked message, the logout confirmation, RoleManagement, RequireRole and AccessDenied, the Upload client-side refusal, the Meetings processing indicator, and Search with the partial-match label.
+> 6. **§8 condition 4.** Accept D-60 explicitly in the stage exit criterion, or `M6-BUILD-PROMPT.md:440` cannot be met.
+>
+> **INCOMPLETE:** all twelve were demonstrated, but FR-13's follow-up clause fails when measured, under a decision that says it holds. FR-12's partial-match gap has no owner. Seven requirements have untested UI-only clauses. The script presents recorded deviations as passes.
+
+## D-91 · FR-13 is partial at the gate
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** FR-13, D-42, D-86 ·
+**Measured reason:** step 5 of the user's post-M6 order, not yet run
+
+**Decision.** FR-13 is partial at M6. Its thread, its reopening and its per-turn scoping work. A
+follow-up that relies on the earlier turn did not resolve in the 1 November screen. The measured
+reason comes from step 5's run: the nine frozen threads, with history, cold and spelled out
+(D-86), then the HTTP check, on `kmp_obj02_20261101`.
+
+**What the screen supports.** These are the stored statements in
+`corpus/demo/screening-2026-11-01.json` (`second_pass.trials`), rescored per trial with the frozen
+rule, version 2. A run that should be answered is correct if it is answered, contains an expected
+phrase or an accepted form, and cites one of the turn's sources. A run that should not be answered
+is correct if it is not. Nothing was re-run. Leaks (part 7) cannot be judged from what the screen
+stored.
+
+| Thread, role | Turn 1 correct | Turn 2 expected | Turn 2 correct | Reading |
+|---|---|---|---|---|
+| t01, Employee | 3/3 | answer | 0/3 | **clean case; the follow-up failed every trial** |
+| t04, Employee | 3/3 | answer | 0/3 | **clean case; failed every trial** (the replies varied) |
+| t06, Administrator | 3/3 | answer | 0/3 | **clean case; failed every trial** |
+| t02, Employee | 0/3 (right phrase, wrong source) | answer | 0/3 | confounded |
+| t03, Employee | 0/3 | answer | 0/3 | confounded |
+| t05, Employee | 0/3 | answer | 0/3 (phrase found, another transcript cited) | confounded |
+| t07, Administrator | 0/3 | answer | 0/3 | confounded |
+| t07, Employee | 0/3 (right phrase, wrong source) | no-answer | 0/3, answered | confounded; answered from material the Employee may read, which is no leak, but a different failure from one that does not resolve |
+| t06, Employee | 3/3 | no-answer | 0/3, answered | the same different failure |
+| t08, Employee (topic change) | 3/3 | answer | 3/3 | as predicted |
+| t09, Employee (previous answer) | 3/3 | answer | 0/3 | as predicted (D-86 decision 2) |
+
+- **The three clean cases all name their referent in the first question,** the class D-42 says
+  resolves. None resolved on any trial.
+- **The other question-referent threads say nothing about history.** Their first turn was not
+  correct on every trial.
+- **The screen's own flag differs from the rule.** Its `as_expected_every_trial` checked the
+  phrase, not the source. So t02's and t07's first turns, and t05's follow-up, looked better there
+  than under the rule. The user's reading of 2 November counted t02 as clean, and had t02 and t04
+  failing on "at least one" trial. The rescore puts t02 among the confounded and t04 at 0/3.
+
+**Limits.**
+
+- **Not D-86's measurement.** The screen ran on `kmp_demo_screen`, with D21 and T06 added, not on
+  the corpus `threads.json` is frozen against. It ran with history only, and the per-trial verdicts
+  were not stored.
+- **No cause.** The model was not separated from the prompt. Cold and spelled-out runs do that,
+  and they are step 5's.
+
+**Where it applies.**
+
+- `docs/stage-5-clause-audit.md`, "After item 10": FR-13's first row is partial for this reason,
+  pending step 5.
+- `docs/stage-5-item-8-walk.md`: the FR-13 PASS is qualified in a dated note.
+- D-42: a dated note.
+
+## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,
+FR-11, FR-12, FR-13, D-60, `M6-BUILD-PROMPT.md:440`
+
+**Decision.** D-60 recorded that Stage 4 closed with §8 condition 4 declined for FR-11, FR-12 and
+FR-13. Condition 4 is "the work is committed on its branch with the FR ID in the message", and the
+stage's commit subjects were not reworded. The user accepts that decline explicitly.
+
+- **Scope:** commits `9508442` ("docs(M6): the coverage rule, the decision index, and Stage 5
+  rewritten") to `e81c6e6` ("fix(FR-11/FR-12/FR-13): close the fourth audit, including the seventh
+  instance").
+- **It excuses nothing later.** A commit outside that range that lacks its FR ID fails condition
+  4 as before.
+
+**The exit criterion.** `M6-BUILD-PROMPT.md:440` is amended, with the user's approval, to "Done
+when the auditor's set-level verdict is COMPLETE, apart from D-60's accepted decline of §8
+condition 4 for FR-11, FR-12 and FR-13."
+
+## D-93 · D-56's floor is owed by step 7, from a new dev set; the frozen sets are test sets, not tuning sets
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** FR-12, D-56, D-37, D-84,
+`RELEVANCE_THRESHOLD` · **Supersedes:** D-84's "a later decision, made from this measurement"
+
+**The acknowledgement D-56 says is owed.**
+
+- **The gap.** Partial matches are derived before the threshold, with no relevance floor
+  (`apps/retrieval/partial_matches.py`).
+- **So:** a path-A no-answer still offers up to five nearest titles as "partial matches", however
+  weak. Two of the walk's questions show this: FR-11 step 1 and FR-12 step 3.
+- **Owner:** step 7 of the user's post-M6 order (RAG answer quality, rag-pipeline), which chooses
+  the floor.
+
+**The rule for choosing it, and any threshold.**
+
+- **The floor is chosen in step 7 from a new dev question set,** drafted from the corpus. It is
+  never chosen from item 6's `harness.json`.
+- **This supersedes D-84's "made from this measurement",** for the partial-matches floor and for
+  `RELEVANCE_THRESHOLD` alike.
+- **Why.** `corpus/objective-02/questions.json` and `threads.json` are test sets, not tuning sets.
+  Nothing is tuned against them, and they measure the result.
+- **So the record holds one rule.** Item 10's fix 4, a floor taken from `harness.json`, is not
+  taken.
+
+**Not covered.** The floor's value, and whether `RELEVANCE_THRESHOLD` moves. Both are step 7's,
+from the dev set.
+
+## D-94 · S1's front-end tests are in scope now, as step 6, before item 7
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 2,
+FR-01, FR-02, FR-04, FR-05, FR-06, FR-08, FR-09, FR-12, D-62, D-61 gap 13
+
+**Decision.**
+
+- **What is in scope.** The UI-only clauses item 10 found untested (its S1) are tested now, as step
+  6 of the user's post-M6 order, before item 7. That is FR-01, FR-02, FR-04, FR-05, FR-06, FR-08,
+  FR-09, and FR-12's search half.
+- **Owners:** test-engineer, with react-frontend, on branch `test/FR-01-front-end-clauses`.
+- **How:**
+  - the UI-only clauses are enumerated from the FR text and ticked against `frontend/tests` first;
+  - then only the missing tests are written;
+  - they mock at `fetch` through `tests/fakeApi.js`, and `tests/setup.js` is not loosened;
+  - each new test must fail under a deliberate break, named in its commit.
+- **Included: the front-end constants drift test** (S4, D-61 gap 13). It holds
+  `frontend/src/constants.js` to `apps/core/constants.py`, built like
+  `test_in_flight_codes_agreement.py`.
+
+**Not covered**, and still open: S4's duplicated server logic (`views.py:1039` and `:1583`;
+`:673-682` and `:1062-1067`) and the "50 MB" literal at `views.py:151`.
+
+## D-95 · NFR-08's miss is a local-model baseline, not a dropped NFR
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** NFR-08, NFR-09, D-35,
+D-82, D-84 §3
+
+**Decision.** D-84 §3 asks for this decision: "A miss is then recorded as a decision, as the risk
+register says: a local-model baseline, not a dropped NFR." Until now the results stood only as a
+note under D-82.
+
+- **NFR-08 stays a requirement.** It is not dropped.
+- **On this hardware it is missed.** One 4B model on one NPU, with no external provider (D-35),
+  gives the following, measured on 1 November (`corpus/objective-02/runs/2026-11-01/nfr08-runs.md`):
+
+  | Run | Users / asks | Result |
+  |---|---|---|
+  | 2 | 1 / 20 | answered-only p90 51,206 ms |
+  | 3 | 5 / 25 | valid FAIL: 3 × 503, so the p90 falls on a 503; answered-only p90 276,689 ms |
+
+  The limit is 4,000 ms. Every run used dump `3bf98403…6f59`, FLM v0.9.39, Waitress at 24 threads
+  and `DEBUG` off.
+- **These numbers are the baseline later changes are measured against.**
+- **The 503s are investigated by step 7,** which observes first: each attempt's `finish_reason` and
+  completion tokens are logged before anything is changed. D-82's note that the same question
+  "failed the same way at one user" was inferred, not observed, because run 2 logged no cause.
+- **NFR-09 was not run.** Its failure is recorded as a prediction, not a result (D-82's note).
+
+## D-96 · Pull requests: green CI before the user merges; review welcome, not required
+
+**Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** the merge process,
+CLAUDE.md §7
+
+**Decision.** The process the repository follows, written down.
+
+- **Green CI is required before the user merges a pull request.**
+- **The user merges,** using the branch protection bypass where the rule asks for a review.
+- **Sagarika Dey's review is welcome, but not required.**
+- **The coordinating session and its agents never merge and never use the bypass.** They open the
+  pull request, and say when CI is green.
+
+**How far back this is the practice.** Checked with `gh` on 2 November 2026:
+
+- **#1 to #40 are all merged, and none has a review from Sagarika Dey.**
+- **The only reviews in the history are the repository owner's (`halfpelican`):** #24 approved, and
+  #30 changes-requested twice and merged anyway.
+- **#23 shows no review decision.** Every other pull request was merged with the review still
+  required.
+
+So this decision describes what the repository has done since #1. It replaces an in-session
+instruction that the user would merge after Sagarika's review.
+
+**What stands.** Nothing in the repository claims a pull request was reviewed. The "approved by
+Benjamin Morovan and Sagarika Dey" lines are about the frozen question and thread sets (D-84's and
+D-86's notes), not pull requests, and they stand.
