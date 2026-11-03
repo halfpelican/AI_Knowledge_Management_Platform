@@ -1,0 +1,572 @@
+{
+  "record": {
+    "recorded_at": "2026-11-03T22:25:36+11:00",
+    "commit_sha": "2f65a8e0caec824ade9d235ffc4797ce006e8d15",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+    "database": "kmp_obj02_20261101",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "recorded": true,
+    "base_url": "http://127.0.0.1:8000",
+    "server": {
+      "via": "http",
+      "base_url": "http://127.0.0.1:8000",
+      "server": "waitress",
+      "version": "3.0.2",
+      "version_source": "the Waitress installed in C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv, the venv the listening process's command line runs from",
+      "version_in_this_python": "3.0.2",
+      "venv": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv",
+      "threads": 24,
+      "threads_source": "--threads on the command line",
+      "listen": "127.0.0.1:8000",
+      "pid": 63712,
+      "process_started_at": "2026-11-03T11:25:10.446Z",
+      "command_line": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  \"C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype\\.venv\\Scripts\\waitress-serve.exe\" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application",
+      "server_header": "waitress",
+      "d85_command": "waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application",
+      "notes": [],
+      "debug": {
+        "path": "/api/__preflight_not_a_route__",
+        "url": "http://127.0.0.1:8000/api/__preflight_not_a_route__",
+        "status": 404,
+        "content_type": "application/json",
+        "server_header": "waitress",
+        "body": "{\"detail\": \"Not found.\"}",
+        "body_bytes": 24,
+        "debug": "off",
+        "reason": "a 404 in handler404's JSON, which Django sends only with DEBUG off"
+      }
+    },
+    "server_gate_waived": false,
+    "thread_set": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-step4\\corpus\\objective-02\\threads.json",
+    "thread_set_sha256": "acfe3d47afed7d97c2f1952d0528a9612cb6b9b65706f1491ad32f16cf2aee87",
+    "thread_set_status": "FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.",
+    "scoring_rule_version": 2,
+    "minimum_ask_interval_seconds": 7.0
+  },
+  "summary": {
+    "threads": 3,
+    "checked": 3,
+    "wired": 3,
+    "leaks": 0,
+    "gaps_between_asks_seconds": [
+      9.31,
+      10.92,
+      7.89,
+      47.27,
+      13.36
+    ],
+    "smallest_gap_seconds": 7.89
+  },
+  "threads": [
+    {
+      "thread": "t03",
+      "role": "Employee",
+      "questions": [
+        "Which company handles our catering?",
+        "How do I place an order with them?"
+      ],
+      "asks": [
+        {
+          "question": "Which company handles our catering?",
+          "http_status": 200,
+          "seconds": 9.31,
+          "gap_from_previous_ask": null,
+          "transport_note": null,
+          "server_header": "waitress",
+          "reply": {
+            "answered": true,
+            "result_count": 1,
+            "statements": [
+              {
+                "text": "Lantern Grove Supplies is the preferred vendor for catering.",
+                "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+              }
+            ],
+            "sources": [
+              {
+                "source_type": "document",
+                "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+                "title": "Vendor Register 2026",
+                "chunk_ids": [
+                  "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+                ]
+              }
+            ],
+            "partial_matches": []
+          }
+        },
+        {
+          "question": "How do I place an order with them?",
+          "http_status": 200,
+          "seconds": 7.53,
+          "gap_from_previous_ask": 9.31,
+          "transport_note": null,
+          "server_header": "waitress",
+          "reply": {
+            "answered": true,
+            "result_count": 1,
+            "statements": [
+              {
+                "text": "Ridgeline Catering is the vendor for catering.",
+                "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+              }
+            ],
+            "sources": [
+              {
+                "source_type": "document",
+                "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+                "title": "Vendor Register 2026",
+                "chunk_ids": [
+                  "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+                ]
+              }
+            ],
+            "partial_matches": []
+          }
+        }
+      ],
+      "conversation_id": "8ddd97b4-0309-4663-b6de-ab8ce4d0825b",
+      "thread_read": {
+        "http_status": 200,
+        "turn_questions": [
+          "Which company handles our catering?",
+          "How do I place an order with them?"
+        ]
+      },
+      "query_log": [
+        {
+          "question": "Which company handles our catering?",
+          "answered": true,
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "same_user": true,
+          "retrieved_chunk_ids": [
+            "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+          ]
+        },
+        {
+          "question": "How do I place an order with them?",
+          "answered": true,
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "same_user": true,
+          "retrieved_chunk_ids": [
+            "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+          ]
+        }
+      ],
+      "in_process": {
+        "first_turn": [
+          "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+        ],
+        "with_history": [
+          "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+        ],
+        "cold": [],
+        "with_history_retrieval_text": "Which company handles our catering? How do I place an order with them?"
+      },
+      "verdict": "WIRED",
+      "same_order_as_compose": true,
+      "first_turn_matches_a_one_off": true,
+      "score": {
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": true,
+        "expected_answer_match": false,
+        "correct": false,
+        "leaks": []
+      }
+    },
+    {
+      "thread": "t04",
+      "role": "Employee",
+      "questions": [
+        "Who is allowed to drive the fleet vehicles?",
+        "What records do they need to keep?"
+      ],
+      "asks": [
+        {
+          "question": "Who is allowed to drive the fleet vehicles?",
+          "http_status": 200,
+          "seconds": 7.89,
+          "gap_from_previous_ask": 10.92,
+          "transport_note": null,
+          "server_header": "waitress",
+          "reply": {
+            "answered": true,
+            "result_count": 1,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc"
+              }
+            ],
+            "sources": [
+              {
+                "source_type": "document",
+                "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+                "title": "Fleet Vehicle Usage Notes",
+                "chunk_ids": [
+                  "da414d14-176b-4cb1-bb22-231cef9d70cc"
+                ]
+              }
+            ],
+            "partial_matches": []
+          }
+        },
+        {
+          "question": "What records do they need to keep?",
+          "http_status": 200,
+          "seconds": 46.28,
+          "gap_from_previous_ask": 7.89,
+          "transport_note": null,
+          "server_header": "waitress",
+          "reply": {
+            "answered": true,
+            "result_count": 8,
+            "statements": [
+              {
+                "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+                "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd"
+              },
+              {
+                "text": "Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711"
+              },
+              {
+                "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85"
+              },
+              {
+                "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4"
+              },
+              {
+                "text": "Each business unit must document how roles and responsibilities is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b"
+              },
+              {
+                "text": "Each business unit must document how financial records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+                "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc"
+              }
+            ],
+            "sources": [
+              {
+                "source_type": "document",
+                "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+                "title": "Fleet Vehicle Usage Notes",
+                "chunk_ids": [
+                  "da414d14-176b-4cb1-bb22-231cef9d70cc"
+                ]
+              },
+              {
+                "source_type": "document",
+                "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+                "title": "Records Management Handbook",
+                "chunk_ids": [
+                  "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+                  "7f675205-b040-4768-9221-dd9f4d229a85",
+                  "b0798a19-d1c9-44da-b63c-fa7b82155711",
+                  "5f0c9590-f495-45d4-be40-68f1671481d4",
+                  "886a7e4a-d781-4427-ba1f-e999afe14602",
+                  "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+                  "2ad2f78b-e0f4-4aaf-b243-74697d99471b"
+                ]
+              }
+            ],
+            "partial_matches": []
+          }
+        }
+      ],
+      "conversation_id": "dd3869a6-522f-4a11-bcc8-0dead9be169e",
+      "thread_read": {
+        "http_status": 200,
+        "turn_questions": [
+          "Who is allowed to drive the fleet vehicles?",
+          "What records do they need to keep?"
+        ]
+      },
+      "query_log": [
+        {
+          "question": "Who is allowed to drive the fleet vehicles?",
+          "answered": true,
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "same_user": true,
+          "retrieved_chunk_ids": [
+            "da414d14-176b-4cb1-bb22-231cef9d70cc"
+          ]
+        },
+        {
+          "question": "What records do they need to keep?",
+          "answered": true,
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "same_user": true,
+          "retrieved_chunk_ids": [
+            "da414d14-176b-4cb1-bb22-231cef9d70cc",
+            "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+            "7f675205-b040-4768-9221-dd9f4d229a85",
+            "b0798a19-d1c9-44da-b63c-fa7b82155711",
+            "5f0c9590-f495-45d4-be40-68f1671481d4",
+            "886a7e4a-d781-4427-ba1f-e999afe14602",
+            "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+            "2ad2f78b-e0f4-4aaf-b243-74697d99471b"
+          ]
+        }
+      ],
+      "in_process": {
+        "first_turn": [
+          "da414d14-176b-4cb1-bb22-231cef9d70cc"
+        ],
+        "with_history": [
+          "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "7f675205-b040-4768-9221-dd9f4d229a85",
+          "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "5f0c9590-f495-45d4-be40-68f1671481d4",
+          "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "2ad2f78b-e0f4-4aaf-b243-74697d99471b"
+        ],
+        "cold": [
+          "4d4c1949-7906-4067-8abe-512165b65490",
+          "7f675205-b040-4768-9221-dd9f4d229a85",
+          "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "5ca125d8-632b-4959-b7e0-e29417e2e83e",
+          "5d45c7af-8012-418e-97aa-e1d9a0295805",
+          "886a7e4a-d781-4427-ba1f-e999afe14602"
+        ],
+        "with_history_retrieval_text": "Who is allowed to drive the fleet vehicles? What records do they need to keep?"
+      },
+      "verdict": "WIRED",
+      "same_order_as_compose": true,
+      "first_turn_matches_a_one_off": true,
+      "score": {
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": true,
+        "expected_answer_match": false,
+        "correct": false,
+        "leaks": []
+      }
+    },
+    {
+      "thread": "t06",
+      "role": "Administrator",
+      "questions": [
+        "How often are our suppliers reviewed?",
+        "Are we relying too heavily on just a few of them?"
+      ],
+      "asks": [
+        {
+          "question": "How often are our suppliers reviewed?",
+          "http_status": 200,
+          "seconds": 13.35,
+          "gap_from_previous_ask": 47.27,
+          "transport_note": null,
+          "server_header": "waitress",
+          "reply": {
+            "answered": true,
+            "result_count": 10,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+                "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+              }
+            ],
+            "sources": [
+              {
+                "source_type": "document",
+                "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+                "title": "Vendor Register 2026",
+                "chunk_ids": [
+                  "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+                ]
+              },
+              {
+                "source_type": "document",
+                "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+                "title": "Procurement Guidelines",
+                "chunk_ids": [
+                  "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+                ]
+              },
+              {
+                "source_type": "document",
+                "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+                "title": "Records Management Handbook",
+                "chunk_ids": [
+                  "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+                  "886a7e4a-d781-4427-ba1f-e999afe14602",
+                  "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+                  "af45c907-c12e-4fdf-a1ca-193352a495ba",
+                  "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+                  "7f675205-b040-4768-9221-dd9f4d229a85"
+                ]
+              },
+              {
+                "source_type": "document",
+                "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+                "title": "Team Roster and Skills Matrix",
+                "chunk_ids": [
+                  "b868d740-9d56-4046-96e4-8e40f24ce014"
+                ]
+              },
+              {
+                "source_type": "meeting",
+                "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+                "title": "Board Risk Committee Meeting",
+                "chunk_ids": [
+                  "f8b31e5e-5a97-4ad7-9303-155ff0c1777c"
+                ]
+              }
+            ],
+            "partial_matches": []
+          }
+        },
+        {
+          "question": "Are we relying too heavily on just a few of them?",
+          "http_status": 200,
+          "seconds": 11.6,
+          "gap_from_previous_ask": 13.36,
+          "transport_note": null,
+          "server_header": "waitress",
+          "reply": {
+            "answered": true,
+            "result_count": 5,
+            "statements": [
+              {
+                "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+                "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+              }
+            ],
+            "sources": [
+              {
+                "source_type": "document",
+                "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+                "title": "Vendor Register 2026",
+                "chunk_ids": [
+                  "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+                ]
+              },
+              {
+                "source_type": "document",
+                "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+                "title": "Procurement Guidelines",
+                "chunk_ids": [
+                  "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+                ]
+              },
+              {
+                "source_type": "meeting",
+                "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+                "title": "Board Risk Committee Meeting",
+                "chunk_ids": [
+                  "f8b31e5e-5a97-4ad7-9303-155ff0c1777c"
+                ]
+              },
+              {
+                "source_type": "document",
+                "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+                "title": "Records Management Handbook",
+                "chunk_ids": [
+                  "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+                  "886a7e4a-d781-4427-ba1f-e999afe14602"
+                ]
+              }
+            ],
+            "partial_matches": []
+          }
+        }
+      ],
+      "conversation_id": "20393855-d68d-490c-bd6a-afb0f44a6287",
+      "thread_read": {
+        "http_status": 200,
+        "turn_questions": [
+          "How often are our suppliers reviewed?",
+          "Are we relying too heavily on just a few of them?"
+        ]
+      },
+      "query_log": [
+        {
+          "question": "How often are our suppliers reviewed?",
+          "answered": true,
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "same_user": true,
+          "retrieved_chunk_ids": [
+            "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+            "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+            "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+            "886a7e4a-d781-4427-ba1f-e999afe14602",
+            "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+            "af45c907-c12e-4fdf-a1ca-193352a495ba",
+            "b868d740-9d56-4046-96e4-8e40f24ce014",
+            "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+            "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+            "7f675205-b040-4768-9221-dd9f4d229a85"
+          ]
+        },
+        {
+          "question": "Are we relying too heavily on just a few of them?",
+          "answered": true,
+          "no_answer_reason": null,
+          "rejected_count": 0,
+          "same_user": true,
+          "retrieved_chunk_ids": [
+            "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+            "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+            "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+            "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+            "886a7e4a-d781-4427-ba1f-e999afe14602"
+          ]
+        }
+      ],
+      "in_process": {
+        "first_turn": [
+          "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+          "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "b868d740-9d56-4046-96e4-8e40f24ce014",
+          "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+          "7f675205-b040-4768-9221-dd9f4d229a85"
+        ],
+        "with_history": [
+          "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+          "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "886a7e4a-d781-4427-ba1f-e999afe14602"
+        ],
+        "cold": [],
+        "with_history_retrieval_text": "How often are our suppliers reviewed? Are we relying too heavily on just a few of them?"
+      },
+      "verdict": "WIRED",
+      "same_order_as_compose": true,
+      "first_turn_matches_a_one_off": true,
+      "score": {
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "leaks": []
+      }
+    }
+  ]
+}

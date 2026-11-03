@@ -1,0 +1,5662 @@
+{
+  "record": {
+    "recorded_at": "2026-11-03T22:16:04+11:00",
+    "commit_sha": "2f65a8e0caec824ade9d235ffc4797ce006e8d15",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+    "database": "kmp_obj02_20261101",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "recorded": true,
+    "server": {
+      "via": "in-process",
+      "server": null,
+      "version": null,
+      "threads": null,
+      "note": "scripts/citation_harness.py calls the pipeline's functions in its own process; no HTTP server is involved"
+    },
+    "thread_set": "corpus\\objective-02\\threads.json",
+    "thread_set_sha256": "acfe3d47afed7d97c2f1952d0528a9612cb6b9b65706f1491ad32f16cf2aee87",
+    "thread_set_status": "FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.",
+    "scoring_rule_version": 2,
+    "corpus_problems": []
+  },
+  "mode": "threads",
+  "constants": {
+    "TOP_K": 25,
+    "RELEVANCE_THRESHOLD": 0.3,
+    "threshold_used": 0.3,
+    "MAXIMUM_CONTEXT_TOKENS": 4000,
+    "MAXIMUM_GENERATION_ATTEMPTS": 3
+  },
+  "provider": "flm",
+  "chat_model": "gemma3:4b",
+  "embed_model": "embed-gemma",
+  "embedding_dimension": 768,
+  "thread_set": "corpus\\objective-02\\threads.json",
+  "elapsed_seconds": 524.2947093000403,
+  "summary": {
+    "per_way": {
+      "first-turn": {
+        "runs": 11,
+        "answered_where_expected": [
+          10,
+          11
+        ],
+        "expected_answer_match": [
+          7,
+          11
+        ],
+        "not_answered_where_expected": [
+          0,
+          0
+        ],
+        "correct": [
+          7,
+          11
+        ],
+        "outcomes": {
+          "answered": 10,
+          "path-A": 0,
+          "path-B-declined": 1,
+          "path-B-rejected": 0,
+          "unavailable": 0
+        },
+        "fabricated_identifiers": [
+          0,
+          10
+        ],
+        "first_attempt_conformance": [
+          11,
+          11
+        ],
+        "out_of_scope": 0,
+        "matched_prediction": [
+          7,
+          11
+        ]
+      },
+      "with-history": {
+        "runs": 11,
+        "answered_where_expected": [
+          8,
+          9
+        ],
+        "expected_answer_match": [
+          1,
+          9
+        ],
+        "not_answered_where_expected": [
+          0,
+          2
+        ],
+        "correct": [
+          1,
+          11
+        ],
+        "outcomes": {
+          "answered": 10,
+          "path-A": 0,
+          "path-B-declined": 1,
+          "path-B-rejected": 0,
+          "unavailable": 0
+        },
+        "fabricated_identifiers": [
+          0,
+          18
+        ],
+        "first_attempt_conformance": [
+          11,
+          11
+        ],
+        "out_of_scope": 0,
+        "matched_prediction": [
+          2,
+          11
+        ]
+      },
+      "cold": {
+        "runs": 11,
+        "answered_where_expected": [
+          4,
+          9
+        ],
+        "expected_answer_match": [
+          1,
+          9
+        ],
+        "not_answered_where_expected": [
+          2,
+          2
+        ],
+        "correct": [
+          3,
+          11
+        ],
+        "outcomes": {
+          "answered": 4,
+          "path-A": 6,
+          "path-B-declined": 0,
+          "path-B-rejected": 0,
+          "unavailable": 1
+        },
+        "fabricated_identifiers": [
+          0,
+          5
+        ],
+        "first_attempt_conformance": [
+          4,
+          5
+        ],
+        "out_of_scope": 0,
+        "matched_prediction": [
+          11,
+          11
+        ]
+      },
+      "spelled-out": {
+        "runs": 11,
+        "answered_where_expected": [
+          7,
+          9
+        ],
+        "expected_answer_match": [
+          3,
+          9
+        ],
+        "not_answered_where_expected": [
+          1,
+          2
+        ],
+        "correct": [
+          4,
+          11
+        ],
+        "outcomes": {
+          "answered": 8,
+          "path-A": 0,
+          "path-B-declined": 3,
+          "path-B-rejected": 0,
+          "unavailable": 0
+        },
+        "fabricated_identifiers": [
+          0,
+          15
+        ],
+        "first_attempt_conformance": [
+          11,
+          11
+        ],
+        "out_of_scope": 0,
+        "matched_prediction": [
+          4,
+          11
+        ]
+      }
+    },
+    "readings": [
+      {
+        "follow_up": "t01@Employee",
+        "kind": "ordinary",
+        "labels": [
+          "not resolved with history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t02@Employee",
+        "kind": "ordinary",
+        "labels": [
+          "not resolved with history",
+          "spelled-out not correct: a retrieval or generation limit, not history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t03@Employee",
+        "kind": "ordinary",
+        "labels": [
+          "not resolved with history",
+          "spelled-out not correct: a retrieval or generation limit, not history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t04@Employee",
+        "kind": "ordinary",
+        "labels": [
+          "not resolved with history",
+          "spelled-out not correct: a retrieval or generation limit, not history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t05@Employee",
+        "kind": "ordinary",
+        "labels": [
+          "not resolved with history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t06@Administrator",
+        "kind": "scoped",
+        "labels": [
+          "not resolved with history",
+          "spelled-out not correct: a retrieval or generation limit, not history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t06@Employee",
+        "kind": "scoped",
+        "labels": [
+          "ANSWERED by a role that cannot see the source's item (check for a leak)"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t07@Administrator",
+        "kind": "scoped",
+        "labels": [
+          "not resolved with history",
+          "spelled-out not correct: a retrieval or generation limit, not history"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t07@Employee",
+        "kind": "scoped",
+        "labels": [
+          "ANSWERED by a role that cannot see the source's item (check for a leak)"
+        ],
+        "prediction_held": false
+      },
+      {
+        "follow_up": "t08@Employee",
+        "kind": "topic-change",
+        "labels": [
+          "cold-answerable: proves nothing about history"
+        ],
+        "prediction_held": true
+      },
+      {
+        "follow_up": "t09@Employee",
+        "kind": "previous-answer",
+        "labels": [
+          "not resolved with history",
+          "spelled-out not correct: a retrieval or generation limit, not history"
+        ],
+        "prediction_held": false
+      }
+    ],
+    "scoping": [
+      {
+        "thread": "t06",
+        "scoping_shown": false
+      },
+      {
+        "thread": "t07",
+        "scoping_shown": false
+      }
+    ],
+    "out_of_scope_total": 0,
+    "schema_conformance": [
+      37,
+      40
+    ]
+  },
+  "runs": [
+    {
+      "run_id": "t01@Employee/first-turn",
+      "thread_id": "t01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "1.67 days"
+      ],
+      "sources": [
+        "D01"
+      ],
+      "question": "How much annual leave do full-time staff build up each month?",
+      "retrieval_text": "How much annual leave do full-time staff build up each month?",
+      "prompt_question": "How much annual leave do full-time staff build up each month?",
+      "top_score": 0.5354417338023111,
+      "source_rank": 1,
+      "source_score": 0.5354417338023111,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.5354417338023111
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.28544439803372407
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2807265178012978
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.27001608690767287
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.26952606348471286
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.5354417338023111,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 10.3,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.\", \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "error": null,
+      "seconds": 10.693487899960019,
+      "score": {
+        "run_id": "t01@Employee/first-turn",
+        "thread_id": "t01",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t01@Employee/with-history",
+      "thread_id": "t01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "How much annual leave do full-time staff build up each month?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "thirty days"
+      ],
+      "sources": [
+        "D01"
+      ],
+      "question": "Is there a limit on how much of it I can save up?",
+      "retrieval_text": "How much annual leave do full-time staff build up each month? Is there a limit on how much of it I can save up?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- How much annual leave do full-time staff build up each month?\n\nThe question to answer: Is there a limit on how much of it I can save up?",
+      "top_score": 0.5178112557818157,
+      "source_rank": 1,
+      "source_score": 0.5178112557818157,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.5178112557818157
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3303350396191914
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.29076347193228025
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2833770714520609
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.27211481595904363
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.5178112557818157,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3303350396191914,
+          "item": "D10"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 11.4,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.\", \"chunk_id\": \"e149a71c-2c74-46cf-a5ec-b9d0d831ea87\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        }
+      ],
+      "error": null,
+      "seconds": 11.766099000000395,
+      "score": {
+        "run_id": "t01@Employee/with-history",
+        "thread_id": "t01",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t01@Employee/cold",
+      "thread_id": "t01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "thirty days"
+      ],
+      "sources": [
+        "D01"
+      ],
+      "question": "Is there a limit on how much of it I can save up?",
+      "retrieval_text": "Is there a limit on how much of it I can save up?",
+      "prompt_question": "Is there a limit on how much of it I can save up?",
+      "top_score": 0.324852684828753,
+      "source_rank": 5,
+      "source_score": 0.2501484365638086,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.324852684828753
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.28888235725571637
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.2666656439856307
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.2529795373561297
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2501484365638086
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.324852684828753,
+          "item": "D10"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 8.6,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Under the Olive Summit reimbursement cap, any single expense above five hundred dollars requires approval from a department head before the money is spent.\", \"chunk_id\": \"e149a71c-2c74-46cf-a5ec-b9d0d831ea87\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Under the Olive Summit reimbursement cap, any single expense above five hundred dollars requires approval from a department head before the money is spent.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Under the Olive Summit reimbursement cap, any single expense above five hundred dollars requires approval from a department head before the money is spent.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        }
+      ],
+      "error": null,
+      "seconds": 8.958546700072475,
+      "score": {
+        "run_id": "t01@Employee/cold",
+        "thread_id": "t01",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 5,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t01@Employee/spelled-out",
+      "thread_id": "t01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "thirty days"
+      ],
+      "sources": [
+        "D01"
+      ],
+      "question": "Is there a limit on how much annual leave I can save up?",
+      "retrieval_text": "Is there a limit on how much annual leave I can save up?",
+      "prompt_question": "Is there a limit on how much annual leave I can save up?",
+      "top_score": 0.48557445460392434,
+      "source_rank": 1,
+      "source_score": 0.48557445460392434,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.48557445460392434
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3665559201620291
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.29399157153073197
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.25811648502689033
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.2530879845748229
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.48557445460392434,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3665559201620291,
+          "item": "D10"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 14.1,
+          "raw": "```json\n{\n\"statements\": [\n{\"text\": \"Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month. Part-time staff accrue leave on a pro-rata basis according to their contracted hours. Unused leave carries over to the next year up to a maximum of thirty days.\", \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"}]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month. Part-time staff accrue leave on a pro-rata basis according to their contracted hours. Unused leave carries over to the next year up to a maximum of thirty days.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month. Part-time staff accrue leave on a pro-rata basis according to their contracted hours. Unused leave carries over to the next year up to a maximum of thirty days.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "error": null,
+      "seconds": 14.471676800050773,
+      "score": {
+        "run_id": "t01@Employee/spelled-out",
+        "thread_id": "t01",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t02@Employee/first-turn",
+      "thread_id": "t02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "probation"
+      ],
+      "sources": [
+        "D07"
+      ],
+      "question": "What do I need before I can start working from home?",
+      "retrieval_text": "What do I need before I can start working from home?",
+      "prompt_question": "What do I need before I can start working from home?",
+      "top_score": 0.4645582629681153,
+      "source_rank": 1,
+      "source_score": 0.4645582629681153,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.4645582629681153
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.33314143775349364
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3287123835102091
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3023552860647667
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2950142996600898
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.4645582629681153,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.33314143775349364,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3287123835102091,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.3023552860647667,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 12.3,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.\",\n      \"chunk_id\": \"0116bb02-fdbf-43e6-9af4-7aaf9bc15450\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.",
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "item": "D07"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Employees who want a remote arrangement must have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.",
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "item": "D07"
+        }
+      ],
+      "error": null,
+      "seconds": 12.700361399911344,
+      "score": {
+        "run_id": "t02@Employee/first-turn",
+        "thread_id": "t02",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t02@Employee/with-history",
+      "thread_id": "t02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "What do I need before I can start working from home?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "every six months"
+      ],
+      "sources": [
+        "D07"
+      ],
+      "question": "How often does that get reviewed?",
+      "retrieval_text": "What do I need before I can start working from home? How often does that get reviewed?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- What do I need before I can start working from home?\n\nThe question to answer: How often does that get reviewed?",
+      "top_score": 0.5298010657682504,
+      "source_rank": 1,
+      "source_score": 0.5298010657682504,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.5298010657682504
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3767142536527889
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.36249222129913694
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.33185188752410455
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.32084970319156525
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.5298010657682504,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3767142536527889,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.36249222129913694,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.33185188752410455,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.32084970319156525,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 18.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.\", \"chunk_id\": \"9fe4800b-9e5f-4f9c-9330-29efccc0aa52\"},\n    {\"text\": \"The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "statements": [
+        {
+          "text": "The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.",
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "item": "D08"
+        },
+        {
+          "text": "The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.",
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "item": "D08"
+        },
+        {
+          "text": "The owner of health and safety induction guide reviews it at least once a year and records any change, together with the date and the reason for the change.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 18.954235100070946,
+      "score": {
+        "run_id": "t02@Employee/with-history",
+        "thread_id": "t02",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 2,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t02@Employee/cold",
+      "thread_id": "t02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "every six months"
+      ],
+      "sources": [
+        "D07"
+      ],
+      "question": "How often does that get reviewed?",
+      "retrieval_text": "How often does that get reviewed?",
+      "prompt_question": "How often does that get reviewed?",
+      "top_score": 0.3886132952472846,
+      "source_rank": 22,
+      "source_score": 0.26750845175916876,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3886132952472846
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.3125389045982498
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.3075999861745092
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.30570580261209357
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.29716794342887776
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+          "score": 0.3886132952472846,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.3647275819341607,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.35889740940443055,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.34399992115883893,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "score": 0.3433945332463514,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.33246821357971074,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "score": 0.3214652738796455,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4",
+          "score": 0.3181630835764214,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 15.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Guidance on classifying records is reviewed whenever legislation, technology or business needs change in a way that affects it.\",\n      \"chunk_id\": \"4d4c1949-7906-4067-8abe-512165b65490\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Guidance on classifying records is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "item": "D04"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Guidance on classifying records is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "item": "D04"
+        }
+      ],
+      "error": null,
+      "seconds": 15.383044000016525,
+      "score": {
+        "run_id": "t02@Employee/cold",
+        "thread_id": "t02",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 22,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t02@Employee/spelled-out",
+      "thread_id": "t02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "every six months"
+      ],
+      "sources": [
+        "D07"
+      ],
+      "question": "How often do the requirements for working from home get reviewed?",
+      "retrieval_text": "How often do the requirements for working from home get reviewed?",
+      "prompt_question": "How often do the requirements for working from home get reviewed?",
+      "top_score": 0.5234724182084939,
+      "source_rank": 1,
+      "source_score": 0.5234724182084939,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.5234724182084939
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.37236097156472725
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3563802584609018
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.3295254473692743
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.31327423038291896
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.5234724182084939,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+          "score": 0.37236097156472725,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3563802584609018,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.3532278833205331,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.34077358517984446,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.3295254473692743,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "c37ca375-9214-4056-a030-1a8a5ca3cf57",
+          "score": 0.3238171403319622,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.32198373892728327,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "score": 0.3197231347341381,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 50.3,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Each business unit must document how review and continuous improvement is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"Guidance on review and continuous improvement is reviewed whenever legislation, technology or business needs change in a way that affects it.\",\n      \"chunk_id\": \"bfa0d3d8-72aa-4edb-b9e0-1d6335de7373\"\n    },\n    {\n      \"text\": \"Each business unit must document how meeting records and minutes is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\",\n      \"chunk_id\": \"886a7e4a-d781-4427-ba1f-e999afe14602\"\n    },\n    {\n      \"text\": \"Guidance on meeting records and minutes is reviewed whenever legislation, technology or business needs change in a way that affects it.\",\n      \"chunk_id\": \"c37ca375-9214-4056-a030-1a8a5ca3cf57\"\n    },\n    {\n      \"text\": \"Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\",\n      \"chunk_id\": \"4d4c1949-7906-4067-8abe-512165b65490\"\n    },\n    {\n      \"text\": \"Guidance on retention schedules is reviewed whenever legislation, technology or business needs change in a way that affects it.\",\n      \"chunk_id\": \"9fe4800b-9e5f-4f9c-9330-29efccc0aa52\"\n    }\n  ]\n}\n```",
+          "statements": 6
+        }
+      ],
+      "statements": [
+        {
+          "text": "Each business unit must document how review and continuous improvement is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "Guidance on review and continuous improvement is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how meeting records and minutes is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "item": "D04"
+        },
+        {
+          "text": "Guidance on meeting records and minutes is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "c37ca375-9214-4056-a030-1a8a5ca3cf57",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "item": "D04"
+        },
+        {
+          "text": "Guidance on retention schedules is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "item": "D08"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Each business unit must document how review and continuous improvement is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "Guidance on review and continuous improvement is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how meeting records and minutes is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "item": "D04"
+        },
+        {
+          "text": "Guidance on meeting records and minutes is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "c37ca375-9214-4056-a030-1a8a5ca3cf57",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "item": "D04"
+        },
+        {
+          "text": "Guidance on retention schedules is reviewed whenever legislation, technology or business needs change in a way that affects it.",
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "item": "D08"
+        }
+      ],
+      "error": null,
+      "seconds": 50.607570499996655,
+      "score": {
+        "run_id": "t02@Employee/spelled-out",
+        "thread_id": "t02",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 6,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t03@Employee/first-turn",
+      "thread_id": "t03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "Ridgeline"
+      ],
+      "sources": [
+        "D12"
+      ],
+      "question": "Which company handles our catering?",
+      "retrieval_text": "Which company handles our catering?",
+      "prompt_question": "Which company handles our catering?",
+      "top_score": 0.37082629195956107,
+      "source_rank": 1,
+      "source_score": 0.37082629195956107,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.37082629195956107
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2847692836434741
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.26628413726605205
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.252228948174018
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.23652816836053794
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.37082629195956107,
+          "item": "D12"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 7.4,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Lantern Grove Supplies is the preferred vendor for catering.\", \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Lantern Grove Supplies is the preferred vendor for catering.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Lantern Grove Supplies is the preferred vendor for catering.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "error": null,
+      "seconds": 7.710946599952877,
+      "score": {
+        "run_id": "t03@Employee/first-turn",
+        "thread_id": "t03",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": true,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t03@Employee/with-history",
+      "thread_id": "t03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "Which company handles our catering?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "book@ridgeline.example"
+      ],
+      "sources": [
+        "D12"
+      ],
+      "question": "How do I place an order with them?",
+      "retrieval_text": "Which company handles our catering? How do I place an order with them?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- Which company handles our catering?\n\nThe question to answer: How do I place an order with them?",
+      "top_score": 0.36154794823948394,
+      "source_rank": 1,
+      "source_score": 0.36154794823948394,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.36154794823948394
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.28833158621551913
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.246952486880773
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.24011830819407562
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.22287480454563643
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.36154794823948394,
+          "item": "D12"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 7.4,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Ridgeline Catering is the vendor for catering.\", \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Ridgeline Catering is the vendor for catering.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Ridgeline Catering is the vendor for catering.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "error": null,
+      "seconds": 7.728455399977975,
+      "score": {
+        "run_id": "t03@Employee/with-history",
+        "thread_id": "t03",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": true,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t03@Employee/cold",
+      "thread_id": "t03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "book@ridgeline.example"
+      ],
+      "sources": [
+        "D12"
+      ],
+      "question": "How do I place an order with them?",
+      "retrieval_text": "How do I place an order with them?",
+      "prompt_question": "How do I place an order with them?",
+      "top_score": 0.25316003776747964,
+      "source_rank": 1,
+      "source_score": 0.25316003776747964,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.25316003776747964
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.24974106115571248
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.2239128343578541
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.21899911033987066
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.19619996135232354
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 0.3374076000181958,
+      "score": {
+        "run_id": "t03@Employee/cold",
+        "thread_id": "t03",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "path-A",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": null
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t03@Employee/spelled-out",
+      "thread_id": "t03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "book@ridgeline.example"
+      ],
+      "sources": [
+        "D12"
+      ],
+      "question": "How do I place an order with our catering company?",
+      "retrieval_text": "How do I place an order with our catering company?",
+      "prompt_question": "How do I place an order with our catering company?",
+      "top_score": 0.30818500579654734,
+      "source_rank": 1,
+      "source_score": 0.30818500579654734,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.30818500579654734
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2586721932888798
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.24574073134068028
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.22785892983071723
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.21818545830613748
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.30818500579654734,
+          "item": "D12"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 3.2,
+          "raw": "```json\n{\"statements\": []}\n```",
+          "statements": 0
+        }
+      ],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 3.5025634999619797,
+      "score": {
+        "run_id": "t03@Employee/spelled-out",
+        "thread_id": "t03",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "path-B-declined",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t04@Employee/first-turn",
+      "thread_id": "t04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "driver induction"
+      ],
+      "sources": [
+        "D19"
+      ],
+      "question": "Who is allowed to drive the fleet vehicles?",
+      "retrieval_text": "Who is allowed to drive the fleet vehicles?",
+      "prompt_question": "Who is allowed to drive the fleet vehicles?",
+      "top_score": 0.5881988007482016,
+      "source_rank": 1,
+      "source_score": 0.5881988007482016,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.5881988007482016
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.259067014485872
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2555087902083044
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.2510930186503778
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.24182638812956786
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "score": 0.5881988007482016,
+          "item": "D19"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 7.8,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Only employees with a current licence who have completed the driver induction may use a fleet vehicle.\", \"chunk_id\": \"da414d14-176b-4cb1-bb22-231cef9d70cc\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "item": "D19"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "item": "D19"
+        }
+      ],
+      "error": null,
+      "seconds": 8.096955599961802,
+      "score": {
+        "run_id": "t04@Employee/first-turn",
+        "thread_id": "t04",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t04@Employee/with-history",
+      "thread_id": "t04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "Who is allowed to drive the fleet vehicles?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "odometer"
+      ],
+      "sources": [
+        "D19"
+      ],
+      "question": "What records do they need to keep?",
+      "retrieval_text": "Who is allowed to drive the fleet vehicles? What records do they need to keep?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- Who is allowed to drive the fleet vehicles?\n\nThe question to answer: What records do they need to keep?",
+      "top_score": 0.6437227511810437,
+      "source_rank": 1,
+      "source_score": 0.6437227511810437,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.6437227511810437
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3722357373333045
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3083233245799992
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.291810896238391
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.28185783935480213
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "score": 0.6437227511810437,
+          "item": "D19"
+        },
+        {
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "score": 0.3722357373333045,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.3663560769910053,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.35938008246425013,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4",
+          "score": 0.35045323196493144,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.34962203143395065,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.3484700846652441,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "score": 0.3398176420797644,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 47.4,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Only employees with a current licence who have completed the driver induction may use a fleet vehicle.\",\n      \"chunk_id\": \"6ccb904d-43d2-478f-8b6b-656cbfdf70cd\"\n    },\n    {\n      \"text\": \"Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\",\n      \"chunk_id\": \"b0798a19-d1c9-44da-b63c-fa7b82155711\"\n    },\n    {\n      \"text\": \"Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\",\n      \"chunk_id\": \"7f675205-b040-4768-9221-dd9f4d229a85\"\n    },\n    {\n      \"text\": \"Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\",\n      \"chunk_id\": \"5f0c9590-f495-45d4-be40-68f1671481d4\"\n    },\n    {\n      \"text\": \"When responsibilities for roles and responsibilities change hands, the outgoing owner must brief their successor and update the register.\",\n      \"chunk_id\": \"2ad2f78b-e0f4-4aaf-b243-74697d99471b\"\n    },\n    {\n      \"text\": \"When responsibilities for financial records change hands, the outgoing owner must brief their successor and update the register.\",\n      \"chunk_id\": \"da414d14-176b-4cb1-bb22-231cef9d70cc\"\n    }\n  ]\n}\n```",
+          "statements": 6
+        }
+      ],
+      "statements": [
+        {
+          "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4",
+          "item": "D04"
+        },
+        {
+          "text": "When responsibilities for roles and responsibilities change hands, the outgoing owner must brief their successor and update the register.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        },
+        {
+          "text": "When responsibilities for financial records change hands, the outgoing owner must brief their successor and update the register.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "item": "D19"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle.",
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how personnel records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how retention schedules is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4",
+          "item": "D04"
+        },
+        {
+          "text": "When responsibilities for roles and responsibilities change hands, the outgoing owner must brief their successor and update the register.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        },
+        {
+          "text": "When responsibilities for financial records change hands, the outgoing owner must brief their successor and update the register.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "item": "D19"
+        }
+      ],
+      "error": null,
+      "seconds": 47.76807910006028,
+      "score": {
+        "run_id": "t04@Employee/with-history",
+        "thread_id": "t04",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": true,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 6,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t04@Employee/cold",
+      "thread_id": "t04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "odometer"
+      ],
+      "sources": [
+        "D19"
+      ],
+      "question": "What records do they need to keep?",
+      "retrieval_text": "What records do they need to keep?",
+      "prompt_question": "What records do they need to keep?",
+      "top_score": 0.5283696606904037,
+      "source_rank": 22,
+      "source_score": 0.3619890061242555,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.5283696606904037
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.42680451407783543
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.36307195139933957
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.3619890061242555
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.3523021032698694
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "score": 0.5283696606904037,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "score": 0.5256063299199675,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.5255863409029868,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.5213408494922329,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.506577397698839,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5ca125d8-632b-4959-b7e0-e29417e2e83e",
+          "score": 0.5055086425044371,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805",
+          "score": 0.5053753235722792,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.5033997143129111,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "schema-violation",
+          "seconds": 13.2,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The passages describe guidance on retention schedules, legal holds, financial records, personnel records, project records, meeting records and minutes, disaster recovery for records and disposal and destruction.\",\n      \"chunk_id\": null\n    }\n  ]\n}\n```",
+          "detail": "statement 0 has an empty or non-string 'chunk_id'"
+        },
+        {
+          "attempt": 2,
+          "outcome": "schema-violation",
+          "seconds": 13.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The passages describe guidance on retention schedules, legal holds, financial records, personnel records, project records, meeting records and minutes, disaster recovery for records and disposal and destruction.\",\n      \"chunk_id\": null\n    }\n  ]\n}\n```",
+          "detail": "statement 0 has an empty or non-string 'chunk_id'"
+        },
+        {
+          "attempt": 3,
+          "outcome": "schema-violation",
+          "seconds": 13.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The passages describe guidance on retention schedules, legal holds, financial records, personnel records, project records, meeting records and minutes, disaster recovery for records and disposal and destruction.\",\n      \"chunk_id\": null\n    }\n  ]\n}\n```",
+          "detail": "statement 0 has an empty or non-string 'chunk_id'"
+        }
+      ],
+      "statements": [],
+      "verified_statements": [],
+      "error": "ProviderUnavailable: FLM at http://127.0.0.1:8625/v1 returned no response conforming to STATEMENT_LIST_SCHEMA in 3 attempts; last failure: schema violation: statement 0 has an empty or non-string 'chunk_id'",
+      "seconds": 39.71133230009582,
+      "score": {
+        "run_id": "t04@Employee/cold",
+        "thread_id": "t04",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "unavailable",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 22,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": false
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t04@Employee/spelled-out",
+      "thread_id": "t04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "odometer"
+      ],
+      "sources": [
+        "D19"
+      ],
+      "question": "What records do the people allowed to drive the fleet vehicles need to keep?",
+      "retrieval_text": "What records do the people allowed to drive the fleet vehicles need to keep?",
+      "prompt_question": "What records do the people allowed to drive the fleet vehicles need to keep?",
+      "top_score": 0.6136520436566278,
+      "source_rank": 1,
+      "source_score": 0.6136520436566278,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.6136520436566278
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3962028393856521
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3116334650432595
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.29615966865291143
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.2930560672255692
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "score": 0.6136520436566278,
+          "item": "D19"
+        },
+        {
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "score": 0.3962028393856521,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.38087465358652983,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.37514263096432504,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.3688185346806176,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.36085221437726545,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "score": 0.3592310841136088,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.3552329549202042,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 14.8,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Only employees with a current licence who have completed the driver induction may use a fleet vehicle, and they need to keep logbooks.\",\n      \"chunk_id\": \"6ccb904d-43d2-478f-8b6b-656cbfdf70cd\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle, and they need to keep logbooks.",
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "item": "D04"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Only employees with a current licence who have completed the driver induction may use a fleet vehicle, and they need to keep logbooks.",
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "item": "D04"
+        }
+      ],
+      "error": null,
+      "seconds": 15.081212599994615,
+      "score": {
+        "run_id": "t04@Employee/spelled-out",
+        "thread_id": "t04",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t05@Employee/first-turn",
+      "thread_id": "t05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "seventh of November"
+      ],
+      "sources": [
+        "T03"
+      ],
+      "question": "What date did the planning workshop set for the feature freeze?",
+      "retrieval_text": "What date did the planning workshop set for the feature freeze?",
+      "prompt_question": "What date did the planning workshop set for the feature freeze?",
+      "top_score": 0.5251504726394131,
+      "source_rank": 1,
+      "source_score": 0.5251504726394131,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.5251504726394131
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.31879846136305995
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3050526951522811
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.22438056588541364
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.21789206684513618
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "score": 0.5251504726394131,
+          "item": "T03"
+        },
+        {
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "score": 0.31879846136305995,
+          "item": "D13"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.3050526951522811,
+          "item": "T01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 4.3,
+          "raw": "```json\n{\"statements\": []}\n```",
+          "statements": 0
+        }
+      ],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 4.692074700025842,
+      "score": {
+        "run_id": "t05@Employee/first-turn",
+        "thread_id": "t05",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "path-B-declined",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t05@Employee/with-history",
+      "thread_id": "t05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "What date did the planning workshop set for the feature freeze?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "three weeks",
+        "testing has enough time"
+      ],
+      "sources": [
+        "T03"
+      ],
+      "question": "Why does it have to be that early?",
+      "retrieval_text": "What date did the planning workshop set for the feature freeze? Why does it have to be that early?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- What date did the planning workshop set for the feature freeze?\n\nThe question to answer: Why does it have to be that early?",
+      "top_score": 0.5282564415217975,
+      "source_rank": 1,
+      "source_score": 0.5282564415217975,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.5282564415217975
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.31211429546303143
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.3097787641039245
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.2283503425383583
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.22490652395899624
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "score": 0.5282564415217975,
+          "item": "T03"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.31211429546303143,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "score": 0.3097787641039245,
+          "item": "D13"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 4.7,
+          "raw": "```json\n{\n  \"statements\": []\n}\n```",
+          "statements": 0
+        }
+      ],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 4.995821899967268,
+      "score": {
+        "run_id": "t05@Employee/with-history",
+        "thread_id": "t05",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "path-B-declined",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t05@Employee/cold",
+      "thread_id": "t05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "three weeks",
+        "testing has enough time"
+      ],
+      "sources": [
+        "T03"
+      ],
+      "question": "Why does it have to be that early?",
+      "retrieval_text": "Why does it have to be that early?",
+      "prompt_question": "Why does it have to be that early?",
+      "top_score": 0.2281008778417229,
+      "source_rank": 2,
+      "source_score": 0.21744041580894746,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2281008778417229
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.21744041580894746
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2160733467706233
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.20660344607042203
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.19837858051836038
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 0.32972249994054437,
+      "score": {
+        "run_id": "t05@Employee/cold",
+        "thread_id": "t05",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "path-A",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 2,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": null
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t05@Employee/spelled-out",
+      "thread_id": "t05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "three weeks",
+        "testing has enough time"
+      ],
+      "sources": [
+        "T03"
+      ],
+      "question": "Why does the feature freeze have to be that early?",
+      "retrieval_text": "Why does the feature freeze have to be that early?",
+      "prompt_question": "Why does the feature freeze have to be that early?",
+      "top_score": 0.315378294553706,
+      "source_rank": 1,
+      "source_score": 0.315378294553706,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.315378294553706
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.21151442048367924
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.20222842965305404
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.18391179038603891
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.1831934981321004
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "score": 0.315378294553706,
+          "item": "T03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 8.3,
+          "raw": "```json\n{\"statements\": [{\"text\": \"The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.\", \"chunk_id\": \"dcb441b1-1f4f-4529-864d-ee6aa42c2639\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "item": "T03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.",
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "item": "T03"
+        }
+      ],
+      "error": null,
+      "seconds": 8.573876600014046,
+      "score": {
+        "run_id": "t05@Employee/spelled-out",
+        "thread_id": "t05",
+        "kind": "ordinary",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Administrator/first-turn",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "once a year",
+        "annually"
+      ],
+      "sources": [
+        "D12",
+        "D05"
+      ],
+      "question": "How often are our suppliers reviewed?",
+      "retrieval_text": "How often are our suppliers reviewed?",
+      "prompt_question": "How often are our suppliers reviewed?",
+      "top_score": 0.48139031049663183,
+      "source_rank": 1,
+      "source_score": 0.48139031049663183,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.48139031049663183
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.40428141193823597
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3441767538919806
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.3068744441670908
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.3030752577567997
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.48139031049663183,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.40428141193823597,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+          "score": 0.3441767538919806,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.3420890525534736,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.33346111568478665,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "score": 0.32413727245080864,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b868d740-9d56-4046-96e4-8e40f24ce014",
+          "score": 0.3068744441670908,
+          "item": "D16"
+        },
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.30347773545449314,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+          "score": 0.3030752577567997,
+          "item": "T02"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.30109985854968047,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 13.2,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Suppliers are reviewed annually, and poor performance is recorded in the vendor register.\", \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "error": null,
+      "seconds": 13.47486439999193,
+      "score": {
+        "run_id": "t06@Administrator/first-turn",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Administrator/with-history",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "How often are our suppliers reviewed?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "almost half",
+        "three suppliers"
+      ],
+      "sources": [
+        "T02"
+      ],
+      "question": "Are we relying too heavily on just a few of them?",
+      "retrieval_text": "How often are our suppliers reviewed? Are we relying too heavily on just a few of them?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- How often are our suppliers reviewed?\n\nThe question to answer: Are we relying too heavily on just a few of them?",
+      "top_score": 0.44467989481028225,
+      "source_rank": 3,
+      "source_score": 0.32376520439592194,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.44467989481028225
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.42478752513605117
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.32376520439592194
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.30641759075223246
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.29167812494411927
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.44467989481028225,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.42478752513605117,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+          "score": 0.32376520439592194,
+          "item": "T02"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.30641759075223246,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.3016667420286738,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 11.7,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Suppliers are reviewed annually against price, delivery performance and quality.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "error": null,
+      "seconds": 12.032067699939944,
+      "score": {
+        "run_id": "t06@Administrator/with-history",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 3,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Administrator/cold",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "almost half",
+        "three suppliers"
+      ],
+      "sources": [
+        "T02"
+      ],
+      "question": "Are we relying too heavily on just a few of them?",
+      "retrieval_text": "Are we relying too heavily on just a few of them?",
+      "prompt_question": "Are we relying too heavily on just a few of them?",
+      "top_score": 0.206148433409699,
+      "source_rank": 6,
+      "source_score": 0.1591526669282666,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.206148433409699
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.1830435103960629
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.18006935167863827
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.1720753157699442
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.1649315112911132
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 0.33459940005559474,
+      "score": {
+        "run_id": "t06@Administrator/cold",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "path-A",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 6,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": null
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t06@Administrator/spelled-out",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "almost half",
+        "three suppliers"
+      ],
+      "sources": [
+        "T02"
+      ],
+      "question": "Are we relying too heavily on just a few of our suppliers?",
+      "retrieval_text": "Are we relying too heavily on just a few of our suppliers?",
+      "prompt_question": "Are we relying too heavily on just a few of our suppliers?",
+      "top_score": 0.38885632322267655,
+      "source_rank": 3,
+      "source_score": 0.2727574519507706,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.38885632322267655
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.37824378316355695
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.2727574519507706
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.2453139181509831
+        },
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.2337074582200474
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.38885632322267655,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.37824378316355695,
+          "item": "D12"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 15.8,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Lantern Grove Supplies is the preferred vendor for stationery and office consumables.\",\n      \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"\n    },\n    {\n      \"text\": \"Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.\",\n      \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"\n    }\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "statements": [
+        {
+          "text": "Lantern Grove Supplies is the preferred vendor for stationery and office consumables.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        },
+        {
+          "text": "Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Lantern Grove Supplies is the preferred vendor for stationery and office consumables.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        },
+        {
+          "text": "Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "error": null,
+      "seconds": 16.079515099991113,
+      "score": {
+        "run_id": "t06@Administrator/spelled-out",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 3,
+        "leaks": [],
+        "proposed": 2,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Employee/first-turn",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "once a year",
+        "annually"
+      ],
+      "sources": [
+        "D12",
+        "D05"
+      ],
+      "question": "How often are our suppliers reviewed?",
+      "retrieval_text": "How often are our suppliers reviewed?",
+      "prompt_question": "How often are our suppliers reviewed?",
+      "top_score": 0.4810947652280588,
+      "source_rank": 1,
+      "source_score": 0.4810947652280588,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.4810947652280588
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.4058427995680168
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3440593831856738
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.302162339569552
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.29543425269185103
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.4810947652280588,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.4058427995680168,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+          "score": 0.3440593831856738,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.3418053841796966,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.3333855513469993,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "score": 0.32378069680387,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.3028626840888921,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf",
+          "score": 0.302162339569552,
+          "item": "D06"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.30107141783060387,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 13.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Suppliers are reviewed annually.\",\n      \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Suppliers are reviewed annually.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Suppliers are reviewed annually.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "error": null,
+      "seconds": 13.413293299963698,
+      "score": {
+        "run_id": "t06@Employee/first-turn",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Employee/with-history",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "How often are our suppliers reviewed?"
+      ],
+      "expects_answer": false,
+      "expected_answer": [
+        "almost half",
+        "three suppliers"
+      ],
+      "sources": [
+        "T02"
+      ],
+      "question": "Are we relying too heavily on just a few of them?",
+      "retrieval_text": "How often are our suppliers reviewed? Are we relying too heavily on just a few of them?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- How often are our suppliers reviewed?\n\nThe question to answer: Are we relying too heavily on just a few of them?",
+      "top_score": 0.44467989481028225,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.44467989481028225
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.42478752513605117
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.30641759075223246
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.2759047900075318
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2678739736634618
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.44467989481028225,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.42478752513605117,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.30641759075223246,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.3016667420286738,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 10.5,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Suppliers are reviewed annually against price, delivery performance and quality.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Suppliers are reviewed annually against price, delivery performance and quality.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "error": null,
+      "seconds": 10.797741899965331,
+      "score": {
+        "run_id": "t06@Employee/with-history",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": false,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Employee/cold",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": false,
+      "expected_answer": [
+        "almost half",
+        "three suppliers"
+      ],
+      "sources": [
+        "T02"
+      ],
+      "question": "Are we relying too heavily on just a few of them?",
+      "retrieval_text": "Are we relying too heavily on just a few of them?",
+      "prompt_question": "Are we relying too heavily on just a few of them?",
+      "top_score": 0.206148433409699,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.206148433409699
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.1830435103960629
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.18006935167863827
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.1720753157699442
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.1434995677978853
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 0.3445140999974683,
+      "score": {
+        "run_id": "t06@Employee/cold",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": false,
+        "outcome": "path-A",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": true,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": null
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t06@Employee/spelled-out",
+      "thread_id": "t06",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": false,
+      "expected_answer": [
+        "almost half",
+        "three suppliers"
+      ],
+      "sources": [
+        "T02"
+      ],
+      "question": "Are we relying too heavily on just a few of our suppliers?",
+      "retrieval_text": "Are we relying too heavily on just a few of our suppliers?",
+      "prompt_question": "Are we relying too heavily on just a few of our suppliers?",
+      "top_score": 0.38885632322267655,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.38885632322267655
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.37824378316355695
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.2453139181509831
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.2186846203471081
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.2104811849458826
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.38885632322267655,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.37824378316355695,
+          "item": "D12"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 14.9,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Lantern Grove Supplies is the preferred vendor for stationery and office consumables.\",\n      \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"\n    },\n    {\n      \"text\": \"Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.\",\n      \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"\n    }\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "statements": [
+        {
+          "text": "Lantern Grove Supplies is the preferred vendor for stationery and office consumables.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        },
+        {
+          "text": "Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Lantern Grove Supplies is the preferred vendor for stationery and office consumables.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        },
+        {
+          "text": "Northgate Cleaning, Bluewater IT, Summit Legal and Fernhill Security are listed as approved suppliers.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "error": null,
+      "seconds": 15.21726960001979,
+      "score": {
+        "run_id": "t06@Employee/spelled-out",
+        "thread_id": "t06",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": false,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 2,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Administrator/first-turn",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "weekly"
+      ],
+      "sources": [
+        "D20"
+      ],
+      "question": "What gets published on the intranet about the office move?",
+      "retrieval_text": "What gets published on the intranet about the office move?",
+      "prompt_question": "What gets published on the intranet about the office move?",
+      "top_score": 0.6094848836408827,
+      "source_rank": 1,
+      "source_score": 0.6094848836408827,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.6094848836408827
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3990332833127563
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.34515400290997394
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.32939073965417925
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.3268659502013425
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.6094848836408827,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.3990332833127563,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.34515400290997394,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.32939073965417925,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "score": 0.3268659502013425,
+          "item": "D09"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.31784461803516234,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 10.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"The move will be published on the intranet until the move is complete.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "The move will be published on the intranet until the move is complete.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The move will be published on the intranet until the move is complete.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 10.91410289995838,
+      "score": {
+        "run_id": "t07@Administrator/first-turn",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Administrator/with-history",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "What gets published on the intranet about the office move?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "Atlas",
+        "knowledge platform"
+      ],
+      "sources": [
+        "D09"
+      ],
+      "question": "Is it being replaced?",
+      "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- What gets published on the intranet about the office move?\n\nThe question to answer: Is it being replaced?",
+      "top_score": 0.577336705855071,
+      "source_rank": 3,
+      "source_score": 0.3400497177967903,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.577336705855071
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.37401961359958724
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.3400497177967903
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3234880932418773
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.3047251817536233
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.577336705855071,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.37401961359958724,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "score": 0.3400497177967903,
+          "item": "D09"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.3234880932418773,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.3047251817536233,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 16.1,
+          "raw": "```json\n{\n\"statements\": [\n{\"text\": \"A weekly update will be published on the intranet until the move is complete.\", \"chunk_id\": \"90a0f686-5d8f-474d-a75e-a873d4be4bd3\"},\n{\"text\": \"Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}\n]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "statements": [
+        {
+          "text": "A weekly update will be published on the intranet until the move is complete.",
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "item": "D09"
+        },
+        {
+          "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "A weekly update will be published on the intranet until the move is complete.",
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "item": "D09"
+        },
+        {
+          "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 16.41383750003297,
+      "score": {
+        "run_id": "t07@Administrator/with-history",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": true,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 3,
+        "leaks": [],
+        "proposed": 2,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Administrator/cold",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "Atlas",
+        "knowledge platform"
+      ],
+      "sources": [
+        "D09"
+      ],
+      "question": "Is it being replaced?",
+      "retrieval_text": "Is it being replaced?",
+      "prompt_question": "Is it being replaced?",
+      "top_score": 0.2702955783641192,
+      "source_rank": 3,
+      "source_score": 0.2480507864933434,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2702955783641192
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.25699322302739425
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.2480507864933434
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.24370879872482526
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.24114811499999883
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 0.30671570007689297,
+      "score": {
+        "run_id": "t07@Administrator/cold",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "path-A",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 3,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": null
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t07@Administrator/spelled-out",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Administrator",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "Atlas",
+        "knowledge platform"
+      ],
+      "sources": [
+        "D09"
+      ],
+      "question": "Is the intranet being replaced?",
+      "retrieval_text": "Is the intranet being replaced?",
+      "prompt_question": "Is the intranet being replaced?",
+      "top_score": 0.36661033926062,
+      "source_rank": 1,
+      "source_score": 0.36661033926062,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.36661033926062
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.31727412710138775
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.31598488024795734
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.28020589138196605
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.27892445351165435
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "score": 0.36661033926062,
+          "item": "D09"
+        },
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.31727412710138775,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.31598488024795734,
+          "item": "T01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 4.2,
+          "raw": "```json\n{\n  \"statements\": []\n}\n```",
+          "statements": 0
+        }
+      ],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 4.4677783999359235,
+      "score": {
+        "run_id": "t07@Administrator/spelled-out",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Administrator",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "path-B-declined",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Employee/first-turn",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "weekly"
+      ],
+      "sources": [
+        "D20"
+      ],
+      "question": "What gets published on the intranet about the office move?",
+      "retrieval_text": "What gets published on the intranet about the office move?",
+      "prompt_question": "What gets published on the intranet about the office move?",
+      "top_score": 0.6079383933279818,
+      "source_rank": 1,
+      "source_score": 0.6079383933279818,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.6079383933279818
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.4005267251085303
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.345538350309317
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.33015639294022503
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.31765312527112854
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.6079383933279818,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.4005267251085303,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.345538350309317,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.33015639294022503,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.31765312527112854,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 11.0,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"A weekly update will be published on the intranet until the move is complete.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "A weekly update will be published on the intranet until the move is complete.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "A weekly update will be published on the intranet until the move is complete.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 11.315150500042364,
+      "score": {
+        "run_id": "t07@Employee/first-turn",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Employee/with-history",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "What gets published on the intranet about the office move?"
+      ],
+      "expects_answer": false,
+      "expected_answer": [
+        "Atlas",
+        "knowledge platform"
+      ],
+      "sources": [
+        "D09"
+      ],
+      "question": "Is it being replaced?",
+      "retrieval_text": "What gets published on the intranet about the office move? Is it being replaced?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- What gets published on the intranet about the office move?\n\nThe question to answer: Is it being replaced?",
+      "top_score": 0.577336705855071,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.577336705855071
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.37401961359958724
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3234880932418773
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.3047251817536233
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2984785110710113
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.577336705855071,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.37401961359958724,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.3234880932418773,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.3047251817536233,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 15.1,
+          "raw": "```json\n{\n\"statements\": [\n{\"text\": \"A weekly update will be published on the intranet until the move is complete.\", \"chunk_id\": \"c0aa1caf-0c17-45ae-adab-747ac3b27bd7\"},\n{\"text\": \"Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}\n]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "statements": [
+        {
+          "text": "A weekly update will be published on the intranet until the move is complete.",
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "item": "T01"
+        },
+        {
+          "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "A weekly update will be published on the intranet until the move is complete.",
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "item": "T01"
+        },
+        {
+          "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 15.436257000081241,
+      "score": {
+        "run_id": "t07@Employee/with-history",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": false,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 2,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Employee/cold",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": false,
+      "expected_answer": [
+        "Atlas",
+        "knowledge platform"
+      ],
+      "sources": [
+        "D09"
+      ],
+      "question": "Is it being replaced?",
+      "retrieval_text": "Is it being replaced?",
+      "prompt_question": "Is it being replaced?",
+      "top_score": 0.2702955783641192,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2702955783641192
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.25699322302739425
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.24370879872482526
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.24114811499999883
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.23828858833397454
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 0.32914819999132305,
+      "score": {
+        "run_id": "t07@Employee/cold",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": false,
+        "outcome": "path-A",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": true,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": null
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t07@Employee/spelled-out",
+      "thread_id": "t07",
+      "kind": "scoped",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": false,
+      "expected_answer": [
+        "Atlas",
+        "knowledge platform"
+      ],
+      "sources": [
+        "D09"
+      ],
+      "question": "Is the intranet being replaced?",
+      "retrieval_text": "Is the intranet being replaced?",
+      "prompt_question": "Is the intranet being replaced?",
+      "top_score": 0.31727412710138775,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.31727412710138775
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.31598488024795734
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.28020589138196605
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.27892445351165435
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2667551786480255
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.31727412710138775,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.31598488024795734,
+          "item": "T01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 3.6,
+          "raw": "```json\n{\"statements\": []}\n```",
+          "statements": 0
+        }
+      ],
+      "statements": [],
+      "verified_statements": [],
+      "error": null,
+      "seconds": 3.891167400055565,
+      "score": {
+        "run_id": "t07@Employee/spelled-out",
+        "thread_id": "t07",
+        "kind": "scoped",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": false,
+        "outcome": "path-B-declined",
+        "answered": false,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": true,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 0,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t08@Employee/first-turn",
+      "thread_id": "t08",
+      "kind": "topic-change",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "eighty-six percent"
+      ],
+      "sources": [
+        "T04"
+      ],
+      "question": "What was the customer satisfaction score last quarter?",
+      "retrieval_text": "What was the customer satisfaction score last quarter?",
+      "prompt_question": "What was the customer satisfaction score last quarter?",
+      "top_score": 0.5251197448260274,
+      "source_rank": 1,
+      "source_score": 0.5251197448260274,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.5251197448260274
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2871228716602113
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.2478480679867425
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.23345388853288357
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.20024176093370671
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "score": 0.5251197448260274,
+          "item": "T04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 7.2,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Our satisfaction score rose to eighty-six percent.\", \"chunk_id\": \"91cb0be0-af6d-4e0b-b0b3-25f42263523f\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Our satisfaction score rose to eighty-six percent.",
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "item": "T04"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Our satisfaction score rose to eighty-six percent.",
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "item": "T04"
+        }
+      ],
+      "error": null,
+      "seconds": 7.546838199952617,
+      "score": {
+        "run_id": "t08@Employee/first-turn",
+        "thread_id": "t08",
+        "kind": "topic-change",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t08@Employee/with-history",
+      "thread_id": "t08",
+      "kind": "topic-change",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "What was the customer satisfaction score last quarter?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "reception"
+      ],
+      "sources": [
+        "D03"
+      ],
+      "question": "Where are the first aid kits kept?",
+      "retrieval_text": "What was the customer satisfaction score last quarter? Where are the first aid kits kept?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- What was the customer satisfaction score last quarter?\n\nThe question to answer: Where are the first aid kits kept?",
+      "top_score": 0.42845196837535393,
+      "source_rank": 2,
+      "source_score": 0.3315998202992598,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.42845196837535393
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3315998202992598
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2887249443726694
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.2496361114830433
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2369207008488075
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "score": 0.42845196837535393,
+          "item": "T04"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.3315998202992598,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 8.2,
+          "raw": "```json\n{\"statements\": [{\"text\": \"First aid kits are kept at reception and on every floor.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "First aid kits are kept at reception and on every floor.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "First aid kits are kept at reception and on every floor.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 8.504317099926993,
+      "score": {
+        "run_id": "t08@Employee/with-history",
+        "thread_id": "t08",
+        "kind": "topic-change",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 2,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t08@Employee/cold",
+      "thread_id": "t08",
+      "kind": "topic-change",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "reception"
+      ],
+      "sources": [
+        "D03"
+      ],
+      "question": "Where are the first aid kits kept?",
+      "retrieval_text": "Where are the first aid kits kept?",
+      "prompt_question": "Where are the first aid kits kept?",
+      "top_score": 0.4360871096128262,
+      "source_rank": 1,
+      "source_score": 0.4360871096128262,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.4360871096128262
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.26524877076473147
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2605996920234831
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.21846377248764054
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.21434117612313067
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.4360871096128262,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 7.5,
+          "raw": "```json\n{\"statements\": [{\"text\": \"First aid kits are kept at reception and on every floor.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "First aid kits are kept at reception and on every floor.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "First aid kits are kept at reception and on every floor.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 7.770585900056176,
+      "score": {
+        "run_id": "t08@Employee/cold",
+        "thread_id": "t08",
+        "kind": "topic-change",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t08@Employee/spelled-out",
+      "thread_id": "t08",
+      "kind": "topic-change",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "reception"
+      ],
+      "sources": [
+        "D03"
+      ],
+      "question": "Where are the first aid kits kept?",
+      "retrieval_text": "Where are the first aid kits kept?",
+      "prompt_question": "Where are the first aid kits kept?",
+      "top_score": 0.4360871096128262,
+      "source_rank": 1,
+      "source_score": 0.4360871096128262,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.4360871096128262
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.26524877076473147
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2605996920234831
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.21846377248764054
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.21434117612313067
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.4360871096128262,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 7.6,
+          "raw": "```json\n{\"statements\": [{\"text\": \"First aid kits are kept at reception and on every floor.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "First aid kits are kept at reception and on every floor.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "First aid kits are kept at reception and on every floor.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "error": null,
+      "seconds": 7.926772900042124,
+      "score": {
+        "run_id": "t08@Employee/spelled-out",
+        "thread_id": "t08",
+        "kind": "topic-change",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t09@Employee/first-turn",
+      "thread_id": "t09",
+      "kind": "previous-answer",
+      "role": "Employee",
+      "turn": 1,
+      "way": "first-turn",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "facilities team"
+      ],
+      "sources": [
+        "D20"
+      ],
+      "question": "Who do I ask if I have questions about the office move?",
+      "retrieval_text": "Who do I ask if I have questions about the office move?",
+      "prompt_question": "Who do I ask if I have questions about the office move?",
+      "top_score": 0.5674601330657602,
+      "source_rank": 1,
+      "source_score": 0.5674601330657602,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.5674601330657602
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3741014696512082
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3695017156832735
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3574772298141432
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.34997228401721897
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.5674601330657602,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.3741014696512082,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.3695017156832735,
+          "item": "D18"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.3574772298141432,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.34997228401721897,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.3057122770032216,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.3019751138681035,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 9.8,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Direct questions to the facilities team.\", \"chunk_id\": \"f75351f0-ae0c-4ebf-93a0-b71041d0485e\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Direct questions to the facilities team.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Direct questions to the facilities team.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        }
+      ],
+      "error": null,
+      "seconds": 10.177787499967963,
+      "score": {
+        "run_id": "t09@Employee/first-turn",
+        "thread_id": "t09",
+        "kind": "previous-answer",
+        "role": "Employee",
+        "way": "first-turn",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": true,
+        "expected_answer_match": true,
+        "correct": true,
+        "source_rank": 1,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    },
+    {
+      "run_id": "t09@Employee/with-history",
+      "thread_id": "t09",
+      "kind": "previous-answer",
+      "role": "Employee",
+      "turn": 2,
+      "way": "with-history",
+      "prior": [
+        "Who do I ask if I have questions about the office move?"
+      ],
+      "expects_answer": true,
+      "expected_answer": [
+        "twenty people"
+      ],
+      "sources": [
+        "D17"
+      ],
+      "question": "What do they have to approve?",
+      "retrieval_text": "Who do I ask if I have questions about the office move? What do they have to approve?",
+      "prompt_question": "Earlier questions in this conversation, oldest first. They are provided as context only, so that a pronoun or an abbreviated reference in the question below can be resolved. They are NOT passages: they carry no chunk_id, they are not a source of facts, and nothing in them may be cited.\n- Who do I ask if I have questions about the office move?\n\nThe question to answer: What do they have to approve?",
+      "top_score": 0.5742284281299284,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.5742284281299284
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3777248145753491
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.3624969924841165
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.3579912603805731
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3477259194566488
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.5742284281299284,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.3777248145753491,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.3624969924841165,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.3579912603805731,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.3477259194566488,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.34760788937240605,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.34716228136699223,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "edb5e68b-16f6-4342-94fc-6d75af713652",
+          "score": 0.3391353425940208,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.33884262873645254,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.3367972253158117,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 13.6,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.\", \"chunk_id\": \"b0798a19-d1c9-44da-b63c-fa7b82155711\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "item": "D04"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Staff are expected to follow the arrangements for office relocation announcement and to ask their manager when they are unsure how a rule applies to their situation.",
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "item": "D04"
+        }
+      ],
+      "error": null,
+      "seconds": 13.933518500067294,
+      "score": {
+        "run_id": "t09@Employee/with-history",
+        "thread_id": "t09",
+        "kind": "previous-answer",
+        "role": "Employee",
+        "way": "with-history",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": null,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t09@Employee/cold",
+      "thread_id": "t09",
+      "kind": "previous-answer",
+      "role": "Employee",
+      "turn": 2,
+      "way": "cold",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "twenty people"
+      ],
+      "sources": [
+        "D17"
+      ],
+      "question": "What do they have to approve?",
+      "retrieval_text": "What do they have to approve?",
+      "prompt_question": "What do they have to approve?",
+      "top_score": 0.43499544105987303,
+      "source_rank": 14,
+      "source_score": 0.318466291957515,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.43499544105987303
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.38295518723461414
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3703217818328729
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3686655556383458
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.3580869294823065
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.43499544105987303,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.38295518723461414,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3703217818328729,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.3686655556383458,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.3672113630903428,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.3580869294823065,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf",
+          "score": 0.3561389696932411,
+          "item": "D06"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.35556373596884633,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3428281162847004,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.3331340801993878,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "score": 0.33291667643228257,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 17.5,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Exceptions to the rules on contracts and agreements require written approval from the records manager.\", \"chunk_id\": \"2ad2f78b-e0f4-4aaf-b243-74697d99471b\"}, {\"text\": \"Exceptions to the rules on financial records require written approval from the records manager.\", \"chunk_id\": \"2ad2f78b-e0f4-4aaf-b243-74697d99471b\"}]}\n```",
+          "statements": 2
+        }
+      ],
+      "statements": [
+        {
+          "text": "Exceptions to the rules on contracts and agreements require written approval from the records manager.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        },
+        {
+          "text": "Exceptions to the rules on financial records require written approval from the records manager.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Exceptions to the rules on contracts and agreements require written approval from the records manager.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        },
+        {
+          "text": "Exceptions to the rules on financial records require written approval from the records manager.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        }
+      ],
+      "error": null,
+      "seconds": 17.828430900000967,
+      "score": {
+        "run_id": "t09@Employee/cold",
+        "thread_id": "t09",
+        "kind": "previous-answer",
+        "role": "Employee",
+        "way": "cold",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": false,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 14,
+        "leaks": [],
+        "proposed": 2,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": false
+    },
+    {
+      "run_id": "t09@Employee/spelled-out",
+      "thread_id": "t09",
+      "kind": "previous-answer",
+      "role": "Employee",
+      "turn": 2,
+      "way": "spelled-out",
+      "prior": [],
+      "expects_answer": true,
+      "expected_answer": [
+        "twenty people"
+      ],
+      "sources": [
+        "D17"
+      ],
+      "question": "What does the facilities team have to approve?",
+      "retrieval_text": "What does the facilities team have to approve?",
+      "prompt_question": "What does the facilities team have to approve?",
+      "top_score": 0.43687044693341137,
+      "source_rank": 2,
+      "source_score": 0.40009351946273974,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.43687044693341137
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.40009351946273974
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.38525048708728427
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3772608868981592
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3655377481400785
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.43687044693341137,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "6c3088c1-141c-49e5-a004-f2a5d48be1a5",
+          "score": 0.40009351946273974,
+          "item": "D17"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.38525048708728427,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.3772608868981592,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3655377481400785,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.36239914156166053,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.35734666578982976,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.3464779842404014,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "score": 0.34586781694338536,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.33918023732264074,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf",
+          "score": 0.32565858304417117,
+          "item": "D06"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 13.4,
+          "raw": "```json\n{\"statements\": [{\"text\": \"Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"}]}\n```",
+          "statements": 1
+        }
+      ],
+      "statements": [
+        {
+          "text": "Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "error": null,
+      "seconds": 13.765575699973851,
+      "score": {
+        "run_id": "t09@Employee/spelled-out",
+        "thread_id": "t09",
+        "kind": "previous-answer",
+        "role": "Employee",
+        "way": "spelled-out",
+        "expects_answer": true,
+        "outcome": "answered",
+        "answered": true,
+        "phrase_found": true,
+        "expected_source_cited": false,
+        "expected_answer_match": false,
+        "correct": false,
+        "source_rank": 2,
+        "leaks": [],
+        "proposed": 1,
+        "fabricated": 0,
+        "first_attempt_parsed": true
+      },
+      "predicted_correct": true
+    }
+  ]
+}
