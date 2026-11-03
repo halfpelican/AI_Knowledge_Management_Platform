@@ -488,3 +488,11 @@ The rows above stay as written on their day.
 |---|---|---|---|---|
 | FR-02 | Five failed attempts lock the account for 15 minutes; a locked account gets 403 and a distinct message | ⚠️ left out of the 1 November walk | ✅ **walked live** | A throwaway account: five wrong passwords locked it; the right password during the lock showed the locked-account message; the right password after expiry signed in and reset the counters. The front-end message's test is step 6's (`login.test.jsx`, PR #44) |
 | FR-04 | "…redirected to the Login page with a brief confirmation 'You've been logged out'" | ✅ in the 1 November walk, which recorded the redirect only | ❌ **the confirmation does not appear** | Found by step 6 in the front-end suite (PR #44, defect 1), and confirmed in a browser at the end of step 3's walk. The redirect, and the session ending on the server, still stand. The fix is the user's decision |
+
+## After the FR-04 fix (3 November 2026)
+
+PR #46, D-97. The rows above stay as written on their day.
+
+| Requirement | Clause | Before | After the fix | Evidence |
+|---|---|---|---|---|
+| FR-04 | "…redirected to the Login page with a brief confirmation 'You've been logged out'" | ❌ the confirmation does not appear | ✅ **on `main`, by test**; not yet shown in a browser | `frontend/tests/authNotices.test.jsx` asserts the confirmation for both roles. It failed on the earlier `main` in 10 runs out of 10, and passes with the fix. The alpha runs `8598d19`, from before the fix, until it is redeployed after the D-35 recording |

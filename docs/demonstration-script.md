@@ -17,7 +17,8 @@
 >   and every attempt after it, shows the locked-account message. Only the right password shows
 >   it, and only for the first five attempts during a lock (D-25, D-26);
 > - FR-04 step 1 says the "You've been logged out" confirmation does not appear (a defect, found
->   at step 6 and confirmed in the walk's 3 November note).
+>   at step 6 and confirmed in the walk's 3 November note). The fix is merged (D-97), but the
+>   alpha still runs `8598d19`, so the step holds until the alpha is redeployed.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -137,8 +138,10 @@ words a message, the message is quoted.
 
 1. **Log out** from the navigation.
    - **Expected:** the sign-in page.
-   - **Do not claim the confirmation.** FR-04 asks for "You've been logged out", and it does not
-     appear: a known defect (`docs/stage-5-item-8-walk.md`, 3 November note). Say so if asked.
+   - **Do not claim the confirmation on the alpha at `8598d19`.** FR-04 asks for "You've been
+     logged out", and that build does not show it: a known defect (`docs/stage-5-item-8-walk.md`,
+     3 November notes). Say so if asked. It is fixed on `main` (D-97). On an alpha redeployed from
+     a commit that includes the fix, expect the "Logged out" notice, and check that it appears.
 2. **Press Back, or open `http://127.0.0.1:8000/dashboard` directly.**
    - **Expected:** sent back to sign-in, because the session is gone on the server, not only in the
      page.
