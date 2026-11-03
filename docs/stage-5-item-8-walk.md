@@ -296,3 +296,15 @@ FR-02's lockout, walked live, as the 2 November note above said it would be.
 - **What it changes here.** The FR-04 PASS above stands for what it recorded: the redirect, the
   session gone on the server, and Back refused. The 1 November walk never looked for the
   confirmation. FR-04 is partial until the fix lands, and the fix is the user's decision.
+
+### 3 November 2026: FR-04's confirmation is fixed on `main`, not on the alpha (D-97)
+
+- **What changed.** The user decided to fix the confirmation before step 5, in its own pull
+  request. PR #46 merged it, so `main` is now at `2f65a8e`. The session-expired notice, and the
+  return to the page the user was sent from, were the same race, and are fixed with it.
+- **The evidence is the front-end suite.** `frontend/tests/authNotices.test.jsx` asserts the
+  confirmation for both roles. It failed on the earlier `main` in 10 runs out of 10, and passes with
+  the fix.
+- **The alpha still has the defect.** It runs `8598d19`, which predates the fix, and no browser has
+  shown the confirmation yet. Redeploying the alpha waits on the D-35 recording, which is step 7's
+  precondition. The first walk on a redeployed alpha should look for the confirmation.
