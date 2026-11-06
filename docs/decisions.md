@@ -6206,3 +6206,33 @@ it into item 7; or record it and fix it after step 10.
     should is the user's call.
   - The "Could not sign out" notice stays on screen after the user signs back in.
   - A sign-in whose follow-up `/me` fails leaves the user on the form with no message.
+
+## D-98 · The D-35 recording is accepted as partial; no demonstration submission is required
+
+**Status:** Settled by the user · **Date:** 2026-11-07 · **Concerns:** D-35, D-40, step 7's
+precondition, `docs/stage-5-item-8-walk.md`
+
+**What exists.** One recording of the walk on the alpha, made on 6 November:
+`2026-11-06 16-45-32.mp4`.
+
+- It runs 11 minutes 34 seconds, at 3840×2400. It is kept on the laptop and never committed.
+- Its SHA-256 and its contents are in the walk record's 6 November note.
+- **It covers FR-01 to FR-13,** so far as the server shows.
+- **It does not cover FR-14, FR-15, D21's deletion, or three FR-11 and FR-12 questions.** These
+  were walked after the recording stopped.
+
+**Decision.** The user accepts the recording as partial, and records no part 2.
+
+- **Why:** the platform was demonstrated live in class, so a demonstration submission is not
+  required.
+- **What changes:** the "NOT MADE" line in the user's post-M6 order no longer holds, and step 7 may
+  begin.
+- **What is still true:** D-35's other half stands. The demonstration runs on one machine, with no
+  external AI spend.
+
+**Kept, and still open:**
+
+- **From the 4 November restore:** `kmp_demo_20261101_pre_d35` and
+  `C:\kmp-demo\2026-11-01\media.pre-d35`, which hold the 2 and 3 November walks' state. Deleting
+  them is the user's call.
+- **The alpha itself:** it now holds the 6 November walk's state.

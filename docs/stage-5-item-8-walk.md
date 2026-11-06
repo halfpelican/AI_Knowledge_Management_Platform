@@ -308,3 +308,40 @@ FR-02's lockout, walked live, as the 2 November note above said it would be.
 - **The alpha still has the defect.** It runs `8598d19`, which predates the fix, and no browser has
   shown the confirmation yet. Redeploying the alpha waits on the D-35 recording, which is step 7's
   precondition. The first walk on a redeployed alpha should look for the confirmation.
+
+### 6 November 2026: the D-35 recording, partial and accepted (D-98)
+
+- **The recording:** `C:\Users\mozza\Videos\2026-11-06 16-45-32.mp4`, on the laptop, outside every
+  checkout, and never committed.
+  - 11 minutes 34 seconds, from 16:45:32 to 16:57:06 local; 259 MB.
+  - 3840×2400 (the whole screen) at 30 fps, 3,000 kbps video and 128 kbps audio, recorded with OBS
+    Studio 33.0.0's Display Capture.
+  - SHA-256 `39800f6d869661966b465c109087b2b0bb3e142e7160423541e662d0519a23b7`.
+- **The alpha:** `8598d19`, on `kmp_demo_20261101`. Just before the take, it was reset to item
+  6's snapshot (D-88's restore, with `corpus.admin`'s password carried over), and `check_flm.py`
+  passed.
+- **What it shows,** by the server's own timestamps:
+  - FR-01: `demo.employee` registered at 16:46:35.
+  - FR-05: two role changes, at 16:47:36 and 16:47:41.
+  - FR-08: D21 uploaded. It answered the bike-cage question at 16:54:07.
+  - FR-09: T06 ingested at 16:51:58.
+  - FR-11: Atlas, refused for the Employee and answered for the Administrator, at 16:52.
+  - FR-12: the bike-cage and customer-satisfaction answers.
+  - FR-13: the second turn scoped by role, at 16:55:34 and 16:55:47. The Employee's second turn
+    ended in `no_statement_verified`, not `no_relevant_passage`. It was still a no-answer and not
+    a leak, but it took the other path from the identical question at 16:52 (D-40, open).
+  - FR-02, FR-04 and FR-06 leave no server trace, so the file itself is the evidence for them.
+- **What it does not show:**
+  - **The walk went on, unrecorded, until 17:20.** That covers the complaint and single-use cups
+    questions, FR-11's penetration-test refusal, D21's deletion with the bike cage refused for
+    both roles afterwards, and presumably FR-14 and FR-15.
+  - **One question was reworded,** "What was the customer satisfaction last quarter?", which D-40
+    counts as unscreened.
+  - **No lockout account was made,** so FR-02 step 4 was skipped or described.
+- **The takes before it are not evidence.** Game Bar recorded one window only. Then OBS recorded
+  only the top-left quarter of the screen, because its canvas was 1920×1080. A standby at 13:59 and
+  a restart at 15:59 also took Docker, the database and FLM down. The alpha was reset to the
+  snapshot before each take, at the user's request, and each reset is a line in
+  `Documents\KMP-alpha-deployments.txt`.
+- **The user accepted it as partial.** The platform was demonstrated live in class, so a
+  demonstration submission is not required (D-98).

@@ -19,6 +19,9 @@
 > - FR-04 step 1 says the "You've been logged out" confirmation does not appear (a defect, found
 >   at step 6 and confirmed in the walk's 3 November note). The fix is merged (D-97), but the
 >   alpha still runs `8598d19`, so the step holds until the alpha is redeployed.
+>
+> **Amended 7 November 2026,** after the D-35 recording (D-98): Xbox Game Bar records only the
+> window that had focus when it started, so the recording advice now names OBS's Display Capture.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -45,8 +48,17 @@ pass: both roles, real files, the real corpus.
 3. **The same question can still answer differently on two runs** (D-40, open). If it happens, say
    so. Both outcomes are honest, and the no-answer is a legitimate reply.
 
-**The D-35 screen recording.** Start recording the screen before step 1 (Windows: `Win+Alt+R`
-with the Xbox Game Bar, or OBS), and keep it.
+**The D-35 screen recording.** Start recording the screen before step 1, and keep it.
+
+- **Use OBS Studio, with a Display Capture source,** so that both browser windows land in one
+  file. Xbox Game Bar (`Win+Alt+R`) records only the window that had focus when it started, so
+  every switch between window A and window B is lost.
+- **Set OBS's Base (Canvas) Resolution to the screen's own,** and Fit the capture to it (Ctrl+F).
+  With a 1920×1080 canvas on the laptop's 3840×2400 screen, only the top-left quarter is
+  recorded.
+- **Keep the file under 2 GB,** for Dropbox. 3,000 kbps at 30 fps comes to about 23 MB a minute.
+- **Use a crash-safe format** (OBS's Hybrid MP4), and keep the laptop plugged in and awake. A
+  standby or a restart takes Docker, the database and FLM down with it (D-98).
 
 - **It is the demonstration's insurance** if the NPU fails on the day, and it must exist before
   any re-index.
