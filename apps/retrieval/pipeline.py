@@ -31,6 +31,9 @@ runs found more (before the prompt fix, 2 ordinary questions where the model dec
 passages in front of it and 3 where verification rejected every statement; after the fix,
 6 declined). A rising rate of this path is the project's main quality signal: it means
 retrieval is admitting passages that score above the floor but do not answer the question.
+Step 7 phase 2b (8 November 2026) raised the threshold to 0.4472, which on the 31-run
+development set does separate the two, but by only 0.003 (0.445715 against 0.448714). One
+development set is not D-37's general claim overturned, and path B still catches the rest.
 
 **The query record (7.10 step 11) is item 8's, and it is here.** Every one of the three
 exits calls ``record_query`` (``apps/retrieval/query_log.py``) before returning, as 7.10
@@ -465,9 +468,11 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
 
     # FR-12's "partially related items", derived HERE — once, from the pre-threshold ranked
     # list, above the path-A branch — so that both no-answer paths are handed the same value
-    # and no field of the reply can tell them apart (invariant 7,
-    # apps/retrieval/partial_matches.py). Every item named is in the asking role's scope
-    # because ``candidates`` was (invariant 1), and none of them carries passage text.
+    # (invariant 7, apps/retrieval/partial_matches.py). Every item named is in the asking
+    # role's scope because ``candidates`` was (invariant 1), and none of them carries passage
+    # text. Only items whose best passage reaches PARTIAL_MATCH_FLOOR are named (D-56's
+    # floor, step 7 phase 2b), so an EMPTY offer now implies path A: that module says why
+    # this discloses nothing outside the caller's scope.
     offered = partial_matches(ranked)
 
     admitted = admit(ranked)

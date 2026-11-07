@@ -128,9 +128,10 @@ UNATTENDED_MEETING_TEXT = "The committee noted the audit timetable and closed th
 
 # Cosines against QUERY. RELEVANCE_THRESHOLD is imported rather than assumed, so a re-tune
 # (D-37 calls the value provisional) fails this file loudly instead of silently changing
-# which exit each test takes.
+# which exit each test takes. It did, at step 7 phase 2b: the threshold rose from 0.3 to
+# 0.4472, above the 0.40 this file used, so ABOVE moved to 0.60 and every exit is unchanged.
 BELOW = 0.10
-ABOVE = 0.40
+ABOVE = 0.60
 NEAREST = 0.95
 assert BELOW < RELEVANCE_THRESHOLD < ABOVE < NEAREST
 

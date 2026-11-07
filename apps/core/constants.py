@@ -140,10 +140,34 @@ PDF_MAXIMUM_OPERATORS = 1_300_000
 # Candidate passages fetched per query, after permission filtering. Tuned in Stage 4.
 TOP_K = 25
 
-# Cosine-similarity floor for admitting a passage. Measured in Stage 4 step 0
-# against the placeholder corpus; see docs/flm-baseline.md. Provisional — the
-# corpus is 6 chunks and the value moves with the corpus and the embedding model.
-RELEVANCE_THRESHOLD = 0.3
+# Cosine-similarity floor for admitting a passage (apps/retrieval/ranking.py admit(), ``>=``).
+# Below it on every in-scope passage, the question takes no-answer path A and generation is
+# never called (invariant 7a). It was 0.3 from D-37 (22 September 2026, a 6-chunk corpus).
+# TUNED in step 7 phase 2b (8 November 2026) on corpus/objective-02/dev-set.json, never on
+# questions.json or threads.json (D-93), by the user's rule set in advance: decline the most
+# no-answer runs without losing any answerable one. A no-answer run is declined at T when no
+# in-scope passage scores >= T; an answerable run is lost when none of its expected sources'
+# passages scores >= T. On kmp_obj02_20261101 (43 chunks, FLM v0.9.39), the lowest answerable
+# run kept is d17 at 0.448714 and the highest no-answer run is d25 at 0.445715, so every T in
+# (0.445715, 0.448714] declines all 7 no-answer runs and loses none of the 24; 0.3 declined 2.
+# The rule takes the middle of that interval, 0.4472145, here to four places: a margin of
+# about 0.0015 each side, which is NARROW. It holds on these 31 runs; the frozen sets measure
+# it and do not tune it. Re-tune with the corpus or the embedding model, as before.
+# The scores: corpus/objective-02/runs/2026-11-08/threshold-floor.md.
+RELEVANCE_THRESHOLD = 0.4472
+
+# Cosine-similarity floor for OFFERING an item as one of FR-12's partial matches beside a
+# no-answer (D-56; apps/retrieval/partial_matches.py, ``>=``). An item is offered only if its
+# best ranked passage reaches this. Before it, the five nearest were offered however weak, so
+# a question the corpus cannot answer was shown five unrelated titles (D-93).
+# TUNED in the same pass, on the same development set and nothing else, by the user's rule:
+# the lowest value at which no no-answer run is offered a partial match, i.e. just above the
+# highest-scoring partial match the real offer path gave any no-answer run. That is d25's
+# D20 at 0.445715, so 0.4458, at the threshold's precision. It must stay BELOW
+# RELEVANCE_THRESHOLD, or path A, where every passage is below the threshold, could never
+# offer anything. It is only 0.0014 below it, so on path A an item is offered only from that
+# narrow band; on path B every admitted item clears it. The scores are in the same file.
+PARTIAL_MATCH_FLOOR = 0.4458
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in
 # Stage 4 once the prompt and the model's context window are measured.

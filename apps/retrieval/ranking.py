@@ -168,9 +168,9 @@ def admit(ranked: list[RankedPassage]) -> list[RankedPassage]:
     with it — the no-answer response, generation never called, and the
     ``no_relevant_passage`` reason code that distinguishes this path from
     ``no_statement_verified`` (invariant 7) — is item 4's decision, not this
-    function's. The value is settled on measured evidence in D-37 and re-measured in
-    D-38; it is not re-tuned here, and the next re-measurement is Stage 5 item 3
-    against a real corpus.
+    function's. The value was settled on measured evidence in D-37 and re-measured in
+    D-38, and was re-tuned in step 7 phase 2b on the Objective 02 development set
+    (``apps/core/constants.py`` has the rule and the scores). It is not tuned here.
     """
     return [passage for passage in ranked if passage.score >= RELEVANCE_THRESHOLD]
 

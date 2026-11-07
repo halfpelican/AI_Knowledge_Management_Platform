@@ -151,6 +151,40 @@ def test_relevance_threshold_is_a_cosine_similarity():
     assert 0.0 <= constants.RELEVANCE_THRESHOLD <= 1.0
 
 
+# Step 7 phase 2b (8 November 2026): both tuned on corpus/objective-02/dev-set.json alone
+# (D-93), by the user's rule; the scores are in corpus/objective-02/runs/2026-11-08/
+# threshold-floor.md. Pinned exactly, as TOP_K is, so that a change is a decision with
+# evidence rather than an edit nobody notices.
+# The development set's boundary scores the two values were chosen from.
+HIGHEST_NO_ANSWER_SCORE = 0.445715  # d25, Employee, its best passage D20
+LOWEST_ANSWERABLE_SCORE = 0.448714  # d17, Employee, its expected source D18
+
+
+def test_the_tuned_relevance_threshold_is_the_middle_of_the_rules_interval():
+    assert isinstance(constants.RELEVANCE_THRESHOLD, float)
+    assert constants.RELEVANCE_THRESHOLD == 0.4472
+    # The rule's tie interval was (0.445715, 0.448714]: every no-answer run declined, no
+    # answerable run lost. The value is its middle, to four places.
+    assert HIGHEST_NO_ANSWER_SCORE < constants.RELEVANCE_THRESHOLD <= LOWEST_ANSWERABLE_SCORE
+    middle = (HIGHEST_NO_ANSWER_SCORE + LOWEST_ANSWERABLE_SCORE) / 2
+    assert round(middle, 4) == constants.RELEVANCE_THRESHOLD
+
+
+def test_the_partial_match_floor_is_just_above_the_highest_no_answer_offer():
+    assert isinstance(constants.PARTIAL_MATCH_FLOOR, float)
+    assert constants.PARTIAL_MATCH_FLOOR == 0.4458
+    # Just above the highest-scoring partial match offered to any no-answer run, at the
+    # threshold's precision: the smallest four-place value above it.
+    assert HIGHEST_NO_ANSWER_SCORE < constants.PARTIAL_MATCH_FLOOR
+    assert round(constants.PARTIAL_MATCH_FLOOR - 0.0001, 4) <= HIGHEST_NO_ANSWER_SCORE
+
+
+def test_the_partial_match_floor_is_a_cosine_similarity_below_the_threshold():
+    # At or above the threshold, path A (every passage below the threshold) could never
+    # offer a partial match, and the rule says stop rather than ship that.
+    assert 0.0 <= constants.PARTIAL_MATCH_FLOOR < constants.RELEVANCE_THRESHOLD <= 1.0
+
+
 def test_the_statement_cap_is_a_positive_whole_number():
     # Step 7 phase 2a (7 November 2026). Tuned on the development set; the prompt and the
     # schema both read it (apps/ai/prompting.py, apps/ai/schema.py).

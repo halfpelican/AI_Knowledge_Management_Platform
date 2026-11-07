@@ -45,6 +45,7 @@ from apps.core.constants import (
     NO_ANSWER_MESSAGE,
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
+    PARTIAL_MATCH_FLOOR,
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
@@ -78,6 +79,26 @@ ABOVE = 0.80
 assert BELOW < RELEVANCE_THRESHOLD < ABOVE
 
 
+def in_the_band(fraction: float) -> float:
+    """A score ``fraction`` of the way from PARTIAL_MATCH_FLOOR up to RELEVANCE_THRESHOLD.
+
+    Step 7 phase 2b. Anything in that band is below the threshold, so it is not admitted and
+    the question takes path A, and at or above the floor, so it IS offered as a partial
+    match. Below the floor (BELOW) nothing is offered. Stated as a fraction so the scores
+    follow the two constants if either is re-tuned; the premise is asserted where each test
+    uses it, so a deliberate break of either constant fails those tests by name.
+    """
+    return PARTIAL_MATCH_FLOOR + fraction * (RELEVANCE_THRESHOLD - PARTIAL_MATCH_FLOOR)
+
+
+NEAR_MISS = in_the_band(0.5)
+
+
+def band_premise():
+    """The floor is below the threshold, so the band exists and NEAR_MISS is inside it."""
+    assert PARTIAL_MATCH_FLOOR <= NEAR_MISS < RELEVANCE_THRESHOLD
+
+
 # --- Vectors, rows and the double ---------------------------------------------------------
 
 
@@ -87,12 +108,11 @@ def wide(*components) -> list[float]:
 
 QUERY = wide(1.0)
 
-# A query vector orthogonal to every chunk ``at_cosine`` builds, so each of them scores 0.0
-# against it: still a candidate, still ranked, and below any floor this project would set.
-# It is how a test drives no-answer path A over a corpus that path B also answers on — which
-# item 10a made necessary, because ``partial_matches`` is derived from the corpus and two
-# tests that differ in their corpus no longer differ only in their path.
-ELSEWHERE = wide(0.0, 0.0, 1.0)
+# ELSEWHERE, a query vector orthogonal to every chunk, used to drive no-answer path A over a
+# corpus path B also answers on. It scored every passage 0.0, and since step 7's floor a
+# passage there is not offered as a partial match, so the tests that compare the two paths now
+# keep the corpus in the band (NEAR_MISS) for path A and point path B's query straight at a
+# passage (``at_cosine`` of its own score), which then scores 1.0.
 
 
 def at_cosine(value: float) -> list[float]:
@@ -150,8 +170,8 @@ class ControlledService:
 
     def __init__(self, *, vector=None, statements=None, generation_failure=None):
         # ``vector`` is what ``embed`` answers with: QUERY by default, so a chunk built by
-        # at_cosine(v) scores exactly v. A test passes ELSEWHERE to take the same corpus down
-        # no-answer path A instead.
+        # at_cosine(v) scores exactly v. A test passes at_cosine(v) to point the question
+        # straight at a passage built at v, which then scores 1.0.
         self.vector = QUERY if vector is None else vector
         self.statements = statements
         self.generation_failure = generation_failure
@@ -205,9 +225,14 @@ def answerable(employee):
 
 @pytest.fixture
 def unanswerable(employee):
-    """One document visible to both roles whose only passage is below the threshold."""
+    """One document visible to both roles whose only passage is below the threshold.
+
+    A NEAR_MISS since step 7: below RELEVANCE_THRESHOLD, so path A, and at or above
+    PARTIAL_MATCH_FLOOR, so it is offered as a partial match.
+    """
+    band_premise()
     return make_document(
-        employee, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=BELOW
+        employee, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=NEAR_MISS
     )
 
 
@@ -427,18 +452,23 @@ def test_the_two_no_answer_paths_return_byte_identical_bodies(
     second document before the path-B request, which made the corpus the difference as well
     as the path; now that ``partial_matches`` is derived FROM the corpus, a test built that
     way would compare two bodies that differ for the wrong reason and would pass or fail for
-    the wrong reason too. So the single document above stays put, and path A is reached by a
-    query vector orthogonal to it (``ELSEWHERE``): nothing clears the floor, generation is
-    never called. Both bodies therefore carry the same non-empty partial-match list, which is
-    the strongest form of the assertion item 10a needed — the field is present, populated,
-    and identical on both paths.
+    the wrong reason too. So the single document above stays put. Its passage is a NEAR_MISS
+    to the ordinary query, so path A is reached with it: nothing clears the threshold,
+    generation is never called, and the passage is offered. Path B points the query straight
+    at the passage. Both bodies therefore carry the same non-empty partial-match list, which
+    is the strongest form of the assertion item 10a needed — the field is present,
+    populated, and identical on both paths. (Until step 7's floor, path A used a query
+    orthogonal to the passage; at a score of 0.0 it is no longer offered, and path B's offer
+    is never empty, so the bodies would differ in that one field.
+    apps/retrieval/partial_matches.py states it.)
     """
+    band_premise()
     document, _ = make_document(
-        employee, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=ABOVE
+        employee, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=NEAR_MISS
     )
 
-    # Path A: nothing scores above the floor, so generation is never called.
-    path_a_service = install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    # Path A: nothing scores at or above the threshold, so generation is never called.
+    path_a_service = install(monkeypatch, ControlledService())
     path_a = employee_client.post(ASK_URL, {"question": QUESTION}, format="json")
     assert path_a_service.generate_calls == []
 
@@ -447,7 +477,8 @@ def test_the_two_no_answer_paths_return_byte_identical_bodies(
     path_b_service = install(
         monkeypatch,
         ControlledService(
-            statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))]
+            vector=at_cosine(NEAR_MISS),
+            statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))],
         ),
     )
     path_b = employee_client.post(ASK_URL, {"question": QUESTION}, format="json")
@@ -529,21 +560,26 @@ def test_a_no_answer_reply_offers_the_partially_related_items_found(
     no-answer reply carries no passages at all (``sources`` is empty on both paths).
     """
     user = session_client.user
+    # Both in the band below the threshold (step 7), the document nearer.
+    band_premise()
+    document_score, meeting_score = in_the_band(2 / 3), in_the_band(1 / 3)
     document, _ = make_document(
-        user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=0.60
+        user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=document_score
     )
     meeting, _ = make_meeting(
-        title=MEETING_TITLE, roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT, cosine=0.50
+        title=MEETING_TITLE, roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT, cosine=meeting_score
     )
     if path == "a":
-        # Nothing clears the floor: generation is never called.
-        install(monkeypatch, ControlledService(vector=ELSEWHERE))
+        # Nothing clears the threshold: generation is never called. Both are offered.
+        install(monkeypatch, ControlledService())
     else:
-        # Both passages clear it and the model cites an identifier that was never supplied.
+        # Pointed at the document, both clear it (1.0 and just under), and the model cites
+        # an identifier that was never supplied.
         install(
             monkeypatch,
             ControlledService(
-                statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))]
+                vector=at_cosine(document_score),
+                statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))],
             ),
         )
 
@@ -579,10 +615,12 @@ def test_one_entry_per_source_however_many_of_its_passages_were_near_misses(
     chunks misdescribes the corpus, and two rows for one document read as two documents.
     """
     user = session_client.user
+    # Three near misses of one document, all in the band below the threshold (step 7).
+    band_premise()
     document, _ = make_document(
-        user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=BELOW
+        user, title=DOCUMENT_TITLE, roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=in_the_band(0.9)
     )
-    for index, cosine in ((1, 0.09), (2, 0.08)):
+    for index, cosine in ((1, in_the_band(0.6)), (2, in_the_band(0.3))):
         make_chunk(
             source_type=DOCUMENT_SOURCE_TYPE,
             source_id=document.id,
@@ -606,15 +644,18 @@ def test_no_more_than_the_cap_is_offered(session_client, service):
     these" and starts reading as the result set the notice has just said does not exist.
     """
     user = session_client.user
+    # Evenly spaced down the band below the threshold (step 7), nearest first.
+    band_premise()
+    count = MAXIMUM_PARTIAL_MATCHES + 2
     documents = [
         make_document(
             user,
             title=f"Near miss {index}",
             roles=BOTH_ROLES,
             text=PASSAGE_TEXT,
-            cosine=0.29 - index / 100,
+            cosine=in_the_band((count - index) / (count + 1)),
         )[0]
-        for index in range(MAXIMUM_PARTIAL_MATCHES + 2)
+        for index in range(count)
     ]
 
     body = ask(session_client.client).json()
@@ -660,6 +701,32 @@ def test_the_key_is_present_and_empty_when_there_is_nothing_to_rank(session_clie
     assert body["partial_matches"] == []
 
 
+def test_nothing_is_offered_when_every_passage_is_below_the_floor(session_client, service):
+    """D-56's floor on the reply (step 7 phase 2b), from an Employee and an Administrator session.
+
+    The case the floor was owed for (D-93): a question nothing in the corpus answers used to
+    be offered the five nearest titles however weak. 0.445715 is the highest score any
+    no-answer question in the development set reached (d25, the move notice); the floor was set
+    just above it. The reply is path A's with an empty offer, and no title reaches the body.
+    """
+    user = session_client.user
+    nearest = 0.445715
+    assert nearest < PARTIAL_MATCH_FLOOR
+    make_document(user, title="Nearly", roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=nearest)
+    make_meeting(title="Far off", roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT, cosine=BELOW)
+
+    response = ask(session_client.client)
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["answered"] is False
+    assert body["message"] == NO_ANSWER_MESSAGE
+    assert body["partial_matches"] == []
+    assert service.generate_calls == []
+    raw = response.content.decode()
+    assert "Nearly" not in raw and "Far off" not in raw
+
+
 def test_a_restricted_source_is_never_offered_as_a_partial_match(
     employee_client, service, unanswerable, restricted
 ):
@@ -691,14 +758,17 @@ def test_an_administrator_is_offered_the_item_an_employee_is_not(
     """The other half of the scope: the same question, the wider role, the extra item.
 
     Without this the test above would pass on a field that was empty for everybody — the
-    weakest way to satisfy invariant 1 is to offer nobody anything. Both documents are taken
-    below the floor by ``ELSEWHERE`` so the Administrator reaches a no-answer too; the
-    assertion is on the SET, because two passages tied at the same score are ordered by the
-    candidate set and ``rank``'s stable sort makes that deterministic without making it
-    meaningful.
+    weakest way to satisfy invariant 1 is to offer nobody anything. The Administrator reaches
+    a no-answer by path B: the restricted passage (0.99) is admitted, the model cites an
+    identifier never supplied, and the offer holds it and the NEAR_MISS document. (Until step
+    7's floor both were taken to 0.0 by an orthogonal query, which now offers nothing.) The
+    assertion is on the SET, as it was, so it says nothing about the order.
     """
     restricted_document, _ = restricted
-    install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    install(
+        monkeypatch,
+        ControlledService(statements=[Statement(text="Invented.", chunk_id=str(uuid.uuid4()))]),
+    )
 
     body = ask(administrator_client).json()
 

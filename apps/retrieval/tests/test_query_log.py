@@ -37,6 +37,7 @@ from apps.core.constants import (
     NO_ANSWER_REASONS,
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
+    PARTIAL_MATCH_FLOOR,
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
@@ -55,6 +56,10 @@ ABOVE = 0.80
 ALSO_ABOVE = 0.70
 NEAREST = 0.99  # what a restricted chunk scores, so it would lead the ranking
 assert BELOW < RELEVANCE_THRESHOLD < ALSO_ABOVE < ABOVE < NEAREST
+
+# Step 7 phase 2b: between PARTIAL_MATCH_FLOOR and RELEVANCE_THRESHOLD, so not admitted but
+# offered as a partial match. Asserted where it is used, so a break fails the test by name.
+NEAR_MISS = (PARTIAL_MATCH_FLOOR + RELEVANCE_THRESHOLD) / 2
 
 FABRICATED = "00000000-0000-4000-8000-000000000000"
 
@@ -272,7 +277,11 @@ def test_the_two_no_answer_paths_are_one_reply_and_two_rows(document, monkeypatc
     """
     from dataclasses import asdict
 
-    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW, text="Too far.")
+    # A near miss, not BELOW, since step 7's floor: below it path A offers no partial match
+    # and path B offers its admitted item, so the replies would differ in that one field
+    # (apps/retrieval/partial_matches.py states it). In the band both offer this document.
+    assert PARTIAL_MATCH_FLOOR <= NEAR_MISS < RELEVANCE_THRESHOLD
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=NEAR_MISS, text="Too far.")
     install(monkeypatch, ControlledService())
 
     path_a = answer_question(question=QUESTION, user=document.uploaded_by)
