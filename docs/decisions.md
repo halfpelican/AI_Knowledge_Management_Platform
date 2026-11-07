@@ -5201,6 +5201,19 @@ NFR-08, NFR-09 and PR #30
 >   answered-only p90 is already about +440% over one user, and NFR-09 allows 25% at 20 users.
 >   Its failure is recorded as a prediction, not a result.
 
+**Dated note, 7 November 2026: the team is two people.** This entry's "Haseeb is leaving the
+project" is now complete. At the user's request he is removed from the project's current
+documents.
+
+- **`CLAUDE.md` §1 lists two members:** Benjamin Morovan and Sagarika Dey.
+- **Haseeb's areas pass to Benjamin Morovan:** database, auth & RBAC, retrieval scoping, security
+  and NFR verification. So does any task still assigned to him, such as the final security
+  review (item 11). That was the user's decision.
+- **Two transcripts in code that used his name now use a fictional speaker:** a test fixture
+  (`apps/ingestion/tests/test_meetings.py`) and the component sheet's sample.
+- **Records of what he did stay as written:** this entry, D-01's Python versions, and
+  `docs/two-week-plan.md`. So do his commits.
+
 ## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Found:** FLM
