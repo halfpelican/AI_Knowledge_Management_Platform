@@ -15,6 +15,7 @@ from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnava
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
+    ChatReply,
     GenerationAttempt,
     run_generation_attempts,
 )
@@ -59,26 +60,34 @@ class FLMService:
             # must not be spent as an NPU call that can only invite invention.
             raise ValueError("generate_statements() needs at least one passage")
         messages = build_generation_messages(question, passages)
+        # One value for the request and for the attempt log's record of it.
+        max_tokens = GENERATION_MAX_TOKENS
         return run_generation_attempts(
-            call_once=lambda: self._chat_once(messages),
+            call_once=lambda: self._chat_once(messages, max_tokens=max_tokens),
             label=f"FLM at {settings.FLM_BASE_URL}",
             on_attempt=on_attempt,
+            max_tokens=max_tokens,
         )
 
-    def _chat_once(self, messages: list[dict]) -> str:
-        """One chat completion. Returns the raw reply text.
+    def _chat_once(self, messages: list[dict], *, max_tokens: int) -> ChatReply:
+        """One chat completion. Returns the reply text and what FLM reported about it.
 
         Raises ProviderUnavailable for a retryable transport failure, and lets a 4xx
         surface unchanged — the same division ``_openai_compat.embed`` makes, for the
         same reason: a misconfiguration is not an outage and repeating it three times
         produces the same answer three times.
+
+        ``finish_reason`` and the usage counts are read for the attempt log only
+        (apps/ai/attempt_log.py), and None where FLM leaves them out. FLM v0.9.39 was seen
+        on 7 November 2026 to answer "stop" for a reply cut off at ``max_tokens``, so the
+        completion-token count is recorded beside it.
         """
         try:
             response = self._client.chat.completions.create(
                 model=settings.FLM_CHAT_MODEL,
                 messages=messages,
                 temperature=0.0,  # the same reply for the same passages, run to run
-                max_tokens=GENERATION_MAX_TOKENS,
+                max_tokens=max_tokens,
                 stream=False,
                 timeout=GENERATION_TIMEOUT_SECONDS,
             )
@@ -94,12 +103,22 @@ class FLMService:
             # An HTTP 200 carrying an error body instead of a completion: how FLM
             # reports an NPU fault (see the embed path's test for the observed case).
             raise ProviderUnavailable(f"{settings.FLM_BASE_URL} returned no completion ({exc})") from exc
+        usage = getattr(response, "usage", None)
+        completion_tokens = getattr(usage, "completion_tokens", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", None)
         choices = response.choices or []
         if not choices:
             # No reply at all. Returned as an empty string so the schema check treats it
             # as a failed attempt, which is what it is.
-            return ""
-        return choices[0].message.content or ""
+            return ChatReply(
+                text="", completion_tokens=completion_tokens, prompt_tokens=prompt_tokens
+            )
+        return ChatReply(
+            text=choices[0].message.content or "",
+            finish_reason=getattr(choices[0], "finish_reason", None),
+            completion_tokens=completion_tokens,
+            prompt_tokens=prompt_tokens,
+        )
 
     def health(self) -> ProviderHealth:
         # A report, not a call path: this never raises.

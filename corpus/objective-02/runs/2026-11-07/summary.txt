@@ -1,0 +1,130 @@
+
+=== 'How are records managed and retained?': 10 asks
+  ask status: {200: 6, 503: 4}
+  200 outcomes (answered, no_answer_reason): {(True, None): 6}
+  attempts: 18
+  outcome x finish_reason: {('parsed', 'stop'): 6, ('schema-violation', 'stop'): 12}
+  outcome x detail: {('parsed', '-'): 6, ('schema-violation', 'SchemaViolation: unbalanced JSON object in the response'): 12}
+  parsed: completion_tokens [252, 252, 252, 252, 442, 796]
+  schema-violation: completion_tokens [800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800]
+  max_tokens sent: {'800': 18}
+  prompt_tokens: {'5671': 18}
+  seconds per attempt: [40.6, 40.7, 41.2, 44.1, 65.2, 79.4, 79.6, 79.6, 80.4, 81.1, 81.3, 81.4, 81.5, 83.5, 83.9, 87.3, 109.6, 113.3]
+  distinct prompts (messages sha256): {'01d4c5ece907': 5, 'c185aceb141a': 13}
+  distinct supplied-id lists on 200s: 2
+  distinct reply texts (sha256): {'8652b9d99b4e': 4, 'fbf4bb307bf9': 1, '81175628b5df': 1, 'a2ec530f86b3': 1, 'fd38a8e47d18': 4, '45d21039d973': 4, 'a92a9973536c': 3}
+   ask  1 (200): [(1, 'parsed', '8652b9d9')]
+   ask  2 (200): [(1, 'parsed', 'fbf4bb30')]
+   ask  3 (200): [(1, 'parsed', '8652b9d9')]
+   ask  4 (200): [(1, 'parsed', '8652b9d9')]
+   ask  5 (200): [(1, 'parsed', '8652b9d9')]
+   ask  9 (200): [(1, 'parsed', '81175628')]
+   ask 10 (503): [(1, 'schema-violation', 'a2ec530f'), (2, 'schema-violation', 'fd38a8e4'), (3, 'schema-violation', '45d21039')]
+   ask 11 (503): [(1, 'schema-violation', 'a92a9973'), (2, 'schema-violation', 'fd38a8e4'), (3, 'schema-violation', '45d21039')]
+   ask 12 (503): [(1, 'schema-violation', 'a92a9973'), (2, 'schema-violation', 'fd38a8e4'), (3, 'schema-violation', '45d21039')]
+   ask 13 (503): [(1, 'schema-violation', 'a92a9973'), (2, 'schema-violation', 'fd38a8e4'), (3, 'schema-violation', '45d21039')]
+  calls without a log line: 0
+  log/call disagreements: 0
+
+=== 'What is the leave policy for annual leave?': 3 asks
+  ask status: {200: 3}
+  200 outcomes (answered, no_answer_reason): {(True, None): 3}
+  attempts: 3
+  outcome x finish_reason: {('parsed', 'stop'): 3}
+  outcome x detail: {('parsed', '-'): 3}
+  parsed: completion_tokens [101, 101, 101]
+  max_tokens sent: {'800': 3}
+  prompt_tokens: {'5182': 3}
+  seconds per attempt: [16.1, 16.2, 22.8]
+  distinct prompts (messages sha256): {'f44c394f120d': 3}
+  distinct supplied-id lists on 200s: 1
+  distinct reply texts (sha256): {'656fe7833e08': 3}
+   ask  6 (200): [(1, 'parsed', '656fe783')]
+   ask 14 (200): [(1, 'parsed', '656fe783')]
+   ask 17 (200): [(1, 'parsed', '656fe783')]
+  calls without a log line: 0
+  log/call disagreements: 0
+
+=== 'What are the rules for acceptable use of IT equipment?': 3 asks
+  ask status: {200: 2, 503: 1}
+  200 outcomes (answered, no_answer_reason): {(True, None): 2}
+  attempts: 5
+  outcome x finish_reason: {('parsed', 'stop'): 2, ('schema-violation', 'stop'): 3}
+  outcome x detail: {('parsed', '-'): 2, ('schema-violation', 'SchemaViolation: unbalanced JSON object in the response'): 3}
+  parsed: completion_tokens [336, 336]
+  schema-violation: completion_tokens [800, 800, 800]
+  max_tokens sent: {'800': 5}
+  prompt_tokens: {'5716': 5}
+  seconds per attempt: [38.0, 49.5, 81.1, 81.2, 82.1]
+  distinct prompts (messages sha256): {'8f5a2c3723ec': 5}
+  distinct supplied-id lists on 200s: 1
+  distinct reply texts (sha256): {'a30fc7958336': 1, 'a87aa435c200': 1, 'e3f48edf19d3': 1, '8e2988e011c7': 1, '7197bb8194f7': 1}
+   ask  7 (200): [(1, 'parsed', 'a30fc795')]
+   ask 15 (200): [(1, 'parsed', 'a87aa435')]
+   ask 18 (503): [(1, 'schema-violation', 'e3f48edf'), (2, 'schema-violation', '8e2988e0'), (3, 'schema-violation', '7197bb81')]
+  calls without a log line: 0
+  log/call disagreements: 0
+
+=== 'How do I make a complaint?': 3 asks
+  ask status: {200: 3}
+  200 outcomes (answered, no_answer_reason): {(True, None): 3}
+  attempts: 3
+  outcome x finish_reason: {('parsed', 'stop'): 3}
+  outcome x detail: {('parsed', '-'): 3}
+  parsed: completion_tokens [90, 90, 90]
+  max_tokens sent: {'800': 3}
+  prompt_tokens: {'1416': 3}
+  seconds per attempt: [10.7, 10.8, 14.0]
+  distinct prompts (messages sha256): {'280d1fa97cd2': 3}
+  distinct supplied-id lists on 200s: 1
+  distinct reply texts (sha256): {'24ca0cdb1779': 3}
+   ask  8 (200): [(1, 'parsed', '24ca0cdb')]
+   ask 16 (200): [(1, 'parsed', '24ca0cdb')]
+   ask 19 (200): [(1, 'parsed', '24ca0cdb')]
+  calls without a log line: 0
+  log/call disagreements: 0
+
+prompt A supplied: ['4d4c1949', '5d45c7af', '4432b7b7', 'b0798a19', '6ccb904d', '886a7e4a', '5f0c9590', '5fe9ff24']
+prompt B supplied: ['4d4c1949', '5d45c7af', '4432b7b7', 'b0798a19', '6ccb904d', '5f0c9590', '886a7e4a', '5fe9ff24']
+same set: True same order: False
+
+ask  1 a1 parsed           tokens 252 chars   709 statements opened  3 complete  3 distinct texts  3 fenced True sha 8652b9d9 | tail '    "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4"\n    }\n  ]\n}\n```'
+ask  2 a1 parsed           tokens 442 chars  1360 statements opened  5 complete  5 distinct texts  5 fenced True sha fbf4bb30 | tail '    "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490"\n    }\n  ]\n}\n```'
+ask  3 a1 parsed           tokens 252 chars   709 statements opened  3 complete  3 distinct texts  3 fenced True sha 8652b9d9 | tail '    "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4"\n    }\n  ]\n}\n```'
+ask  4 a1 parsed           tokens 252 chars   709 statements opened  3 complete  3 distinct texts  3 fenced True sha 8652b9d9 | tail '    "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4"\n    }\n  ]\n}\n```'
+ask  5 a1 parsed           tokens 252 chars   709 statements opened  3 complete  3 distinct texts  3 fenced True sha 8652b9d9 | tail '    "chunk_id": "5f0c9590-f495-45d4-be40-68f1671481d4"\n    }\n  ]\n}\n```'
+ask  6 a1 parsed           tokens 101 chars   302 statements opened  1 complete  1 distinct texts  1 fenced True sha 656fe783 | tail 'ted hours.", "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"}]}\n```'
+ask  7 a1 parsed           tokens 336 chars  1145 statements opened  3 complete  3 distinct texts  3 fenced True sha a30fc795 | tail '    "chunk_id": "60158103-4599-45e5-ac6c-e09f5ac04a8b"\n    }\n  ]\n}\n```'
+ask  8 a1 parsed           tokens  90 chars   243 statements opened  1 complete  1 distinct texts  1 fenced True sha 24ca0cdb | tail '    "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf"\n    }\n  ]\n}\n```'
+ask  9 a1 parsed           tokens 796 chars  2323 statements opened 10 complete 10 distinct texts 10 fenced True sha 81175628 | tail '    "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08"\n    }\n  ]\n}\n```'
+ask 10 a1 schema-violation tokens 800 chars  2343 statements opened 10 complete 10 distinct texts 10 fenced True sha a2ec530f | tail '      "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602"\n    },\n     {'
+ask 10 a2 schema-violation tokens 800 chars  2331 statements opened 10 complete 10 distinct texts  8 fenced True sha fd38a8e4 | tail '      "chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n'
+ask 10 a3 schema-violation tokens 800 chars  2317 statements opened 10 complete 10 distinct texts 10 fenced True sha 45d21039 | tail '"chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n      '
+ask 11 a1 schema-violation tokens 800 chars  2330 statements opened 11 complete 10 distinct texts 10 fenced True sha a92a9973 | tail '"5fe9ff24-2080-4ef1-99d2-f9621a204e08"\n    },\n    {\n      "text": "The'
+ask 11 a2 schema-violation tokens 800 chars  2331 statements opened 10 complete 10 distinct texts  8 fenced True sha fd38a8e4 | tail '      "chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n'
+ask 11 a3 schema-violation tokens 800 chars  2317 statements opened 10 complete 10 distinct texts 10 fenced True sha 45d21039 | tail '"chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n      '
+ask 12 a1 schema-violation tokens 800 chars  2330 statements opened 11 complete 10 distinct texts 10 fenced True sha a92a9973 | tail '"5fe9ff24-2080-4ef1-99d2-f9621a204e08"\n    },\n    {\n      "text": "The'
+ask 12 a2 schema-violation tokens 800 chars  2331 statements opened 10 complete 10 distinct texts  8 fenced True sha fd38a8e4 | tail '      "chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n'
+ask 12 a3 schema-violation tokens 800 chars  2317 statements opened 10 complete 10 distinct texts 10 fenced True sha 45d21039 | tail '"chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n      '
+ask 13 a1 schema-violation tokens 800 chars  2330 statements opened 11 complete 10 distinct texts 10 fenced True sha a92a9973 | tail '"5fe9ff24-2080-4ef1-99d2-f9621a204e08"\n    },\n    {\n      "text": "The'
+ask 13 a2 schema-violation tokens 800 chars  2331 statements opened 10 complete 10 distinct texts  8 fenced True sha fd38a8e4 | tail '      "chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n'
+ask 13 a3 schema-violation tokens 800 chars  2317 statements opened 10 complete 10 distinct texts 10 fenced True sha 45d21039 | tail '"chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805"\n    },\n    {\n      '
+ask 14 a1 parsed           tokens 101 chars   302 statements opened  1 complete  1 distinct texts  1 fenced True sha 656fe783 | tail 'ted hours.", "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"}]}\n```'
+ask 15 a1 parsed           tokens 336 chars  1156 statements opened  3 complete  3 distinct texts  3 fenced True sha a87aa435 | tail '    "chunk_id": "60158103-4599-45e5-ac6c-e09f5ac04a8b"\n    }\n  ]\n}\n```'
+ask 16 a1 parsed           tokens  90 chars   243 statements opened  1 complete  1 distinct texts  1 fenced True sha 24ca0cdb | tail '    "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf"\n    }\n  ]\n}\n```'
+ask 17 a1 parsed           tokens 101 chars   302 statements opened  1 complete  1 distinct texts  1 fenced True sha 656fe783 | tail 'ted hours.", "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"}]}\n```'
+ask 18 a1 schema-violation tokens 800 chars  2811 statements opened  8 complete  7 distinct texts  8 fenced True sha e3f48edf | tail 'material must not be printed at home.",\n      "chunk_id": "5d45c7af-80'
+ask 18 a2 schema-violation tokens 800 chars  2640 statements opened  9 complete  8 distinct texts  7 fenced True sha 8e2988e0 | tail '"\n    },\n    {\n      "text": "IT Acceptable Use Policy states that the'
+ask 18 a3 schema-violation tokens 800 chars  2758 statements opened  8 complete  7 distinct texts  8 fenced True sha 7197bb81 | tail 'ach quarterly check-in.",\n      "chunk_id": "5d45c7af-8012-418e-97aa-e'
+ask 19 a1 parsed           tokens  90 chars   243 statements opened  1 complete  1 distinct texts  1 fenced True sha 24ca0cdb | tail '    "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf"\n    }\n  ]\n}\n```'
+
+ask 1 a1 vs ask 2 a1: common prefix 354 chars of 709 / 1360; diverge at 'he financial year to which they relate, and personnel records for seve' | 'he financial year to which they relate, personnel records for seven ye'
+ask 1 a1 vs ask 9 a1: common prefix 49 chars of 709 / 2323; diverge at '\n  "statements": [\n    {\n      "text": "Retention schedules are review' | '\n  "statements": [\n    {\n      "text": "Each business unit must docume'
+ask 9 a1 vs ask 10 a1: common prefix 2058 chars of 2323 / 2343; diverge at ' the primary site.",\n      "chunk_id": "886a7e4a-d781-4427-ba1f-e999af' | ' the primary site.",\n      "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82'
+ask 10 a1 vs ask 11 a1: common prefix 1253 chars of 2343 / 2330; diverge at ' "text": "The organisation aims to make classifying records simple to ' | ' "text": "The organisation aims to make meeting records and minutes si'
+ask 11 a1 vs ask 11 a2: common prefix 296 chars of 2330 / 2331; diverge at '2165b65490"\n    },\n    {\n      "text": "Staff who work with retention ' | '2165b65490"\n    },\n    {\n      "text": "Regular sampling is used to ch'
+ask 11 a2 vs ask 11 a3: common prefix 1641 chars of 2331 / 2317; diverge at '2165b65490"\n    },\n    {\n      "text": "Guidance on retention schedule' | '2165b65490"\n    },\n    {\n      "text": "Each business unit must docume'
+ask 9 a1 vs ask 11 a1: common prefix 1253 chars of 2323 / 2330; diverge at ' "text": "The organisation aims to make classifying records simple to ' | ' "text": "The organisation aims to make meeting records and minutes si'
+ask 7 a1 vs ask 15 a1: common prefix 616 chars of 1145 / 1156; diverge at 'tors and visitors who are given access. Lost or stolen devices, suspec' | 'tors and visitors who are given access. Reporting lost or stolen devic'
+ask 7 a1 vs ask 18 a1: common prefix 775 chars of 1145 / 2811; diverge at 'desk immediately.",\n      "chunk_id": "68446b83-9a1e-4af9-b311-42613f1' | 'desk immediately.",\n      "chunk_id": "6c3088c1-141c-49e5-a004-f2a5d48'
+ask 15 a1 vs ask 18 a1: common prefix 616 chars of 1156 / 2811; diverge at 'tors and visitors who are given access. Reporting lost or stolen devic' | 'tors and visitors who are given access. Lost or stolen devices, suspec'

@@ -5228,6 +5228,57 @@ documents.
 - **Records of what he did stay as written:** this entry, D-01's Python versions, and
   `docs/two-week-plan.md`. So do his commits.
 
+**Dated note, 7 November 2026: the 503 is reproduced, and every failed attempt observed was a reply
+cut off at `max_tokens`.** This is step 7, phase 1, of the user's post-M6 order: "Observe before
+changing anything". The 1 November note above calls a cut-off at `GENERATION_MAX_TOKENS` "the
+likely reading, not observed". The evidence is in `corpus/objective-02/runs/2026-11-07/`.
+
+- **What changed: logging only.** Every generation attempt now logs its `finish_reason`,
+  completion and prompt tokens, and the `max_tokens` sent (`apps/ai/attempt_log.py`).
+  - A failed attempt is a WARNING, as before. A parsed attempt is an INFO line.
+  - The shipped LOGGING keeps that logger at WARNING, so a running server does not record the INFO
+    line.
+  - `max_tokens` (800), the prompt, the temperature (0.0), the three attempts and the schema are
+    unchanged.
+- **How it ran.**
+  - In-process, through the shipped `answer_question`, as an Employee (`loadtest01`, with no
+    conversation, as `tests/load/common.js` asks), on `kmp_obj02_20261101` with FLM v0.9.39.
+  - 19 asks: "How are records managed and retained?" 10 times, interleaved with three questions
+    NFR-08 answered, 3 times each.
+  - Each ask was rolled back, so no row was committed.
+- **What was observed:**
+  - **The 503 reproduced:** 4 of 10 asks of the records question, and 1 of 3 of "What are the
+    rules for acceptable use of IT equipment?". Leave and complaint answered 3 of 3.
+  - **38 attempts:** 23 parsed and 15 schema violations, every one "unbalanced JSON object in the
+    response". No timeouts and no FLM errors.
+  - **All 15 failed attempts ended at exactly 800 of 800 completion tokens,** with the JSON still
+    open. Every parsed attempt ended below 800, between 90 and 796.
+  - **`finish_reason` was `stop` on all 38.** FLM v0.9.39 never reported `length`, even for a reply
+    cut off at the ceiling. So `finish_reason` cannot show the cut; the token count can.
+  - **No retry recovered an ask.** Each answered ask parsed on attempt 1. Each ask whose attempt 1
+    failed failed all three.
+  - **Retries at temperature 0 changed the text, not the length.** Each 503 ask's three attempts
+    were three different texts, all cut at 800. Asks 11, 12 and 13 repeated the same three texts
+    in the same order. On 1 November, two asks recovered on attempt 3; here none did.
+  - **The cut replies are long statement lists.** Each holds 10 complete statements (7 or 8 for the
+    IT question), with the next one open. They diverge from each other after a shared opening;
+    they are not one text cut at different points.
+  - **On the records question, the outcome followed the passage order.** Retrieval supplied the
+    same 8 passages in two orders, with the 6th and 7th swapped. Their cosine scores differ by
+    0.000008.
+    - Order A: 5 of 5 asks answered, at 252 or 442 tokens.
+    - Order B: 1 of 5 answered, at 796 tokens. The other four were 503s.
+    - Which order a given ask got was not controlled.
+- **What it does not show:**
+  - **The 1 November replies themselves.** Their token counts were not recorded. The question, the
+    code path and the message match, but the time does not: run 3's uncontended failures took 56
+    to 59 s; an 800-token reply today took 79 to 113 s. So a cut-off at 800 on 1 November is still
+    inferred.
+  - **Why identical requests got different replies, or why the query vector moved during the
+    run.** Neither was isolated.
+  - **Whether a higher ceiling or a shorter answer would end the 503s.** Nothing was changed to test
+    that. Those are phase 2 decisions.
+
 ## D-83 · FLM is pinned to v0.9.39, and `check_flm.py` gates every measurement run and the alpha
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Found:** FLM
