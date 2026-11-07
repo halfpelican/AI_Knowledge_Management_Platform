@@ -16,6 +16,7 @@ from apps.core.constants import (
     CONTRIBUTE_CONTENT_PERMISSION,
     EMPLOYEE_ROLE_NAME,
     MANAGE_DOCUMENTS_PERMISSION,
+    MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
 )
 
@@ -44,10 +45,12 @@ def test_manage_documents_is_held_by_administrator_only(employee_role, administr
     assert MANAGE_DOCUMENTS_PERMISSION not in permission_names(employee_role)
 
 
-def test_the_seeded_permissions_are_exactly_the_three_codes(employee_role, administrator_role):
-    """Every seed so far, together: what each role holds after 0003, 0004 and 0005."""
+def test_the_seeded_permissions_are_exactly_the_four_codes(employee_role, administrator_role):
+    """Every seed so far, together: what each role holds after 0003, 0004, 0005 and 0006.
+    Three codes until 0006 added ``manage_meetings`` (D-99), Administrator's alone."""
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
+        MANAGE_MEETINGS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
 
@@ -69,8 +72,10 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=MANAGE_DOCUMENTS_PERMISSION
     ).exists()
-    # 0003's and 0004's seeds are untouched: unseeding one migration must not undo another.
-    assert permission_names(administrator_role) == {MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION}
+    # 0003's, 0004's and 0006's seeds are untouched: unseeding one migration must not undo another.
+    assert permission_names(administrator_role) == {
+        MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_MEETINGS_PERMISSION,
+    }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 

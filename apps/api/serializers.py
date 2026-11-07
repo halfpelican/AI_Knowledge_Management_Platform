@@ -285,6 +285,31 @@ class MeetingListSerializer(MeetingSerializer):
         read_only_fields = fields
 
 
+class MeetingDetailSerializer(MeetingSerializer):
+    """``GET /api/meetings/{id}``: the meeting object plus ``can_delete`` (D-99).
+
+    ``can_delete`` is whether the caller's role holds ``manage_meetings``, supplied by the view in
+    the context, exactly as ``DocumentDetailSerializer`` takes it for ``manage_documents`` (D-73).
+    A hint for showing the delete control; ``DELETE`` checks the permission itself whatever the
+    screen did (invariant 4). Read from the context with no default, so a caller that forgets to
+    decide it raises rather than rendering a guess.
+
+    Only ``can_delete``: the document detail's ``extracted_text`` and ``tags`` stay document
+    fields. A meeting's text is already ``transcript_text``, and FR-15's browse by tag is about
+    documents (D-74). ``POST /api/meetings`` keeps ``MeetingSerializer``, as the upload keeps
+    ``DocumentSerializer``.
+    """
+
+    can_delete = serializers.SerializerMethodField()
+
+    class Meta(MeetingSerializer.Meta):
+        fields = MeetingSerializer.Meta.fields + ("can_delete",)
+        read_only_fields = fields
+
+    def get_can_delete(self, meeting):
+        return self.context["can_delete"]
+
+
 class MeetingIngestSerializer(serializers.Serializer):
     """FR-09 request body, as JSON with pasted text or multipart with a file.
 

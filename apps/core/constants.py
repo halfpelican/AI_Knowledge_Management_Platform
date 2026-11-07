@@ -473,8 +473,8 @@ EFFECTIVE_ROLES = {
 }
 
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
-# role_permissions, seeded by accounts migrations 0003, 0004 and 0005; a test asserts the
-# constants and the seed agree.
+# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006; a test asserts
+# the constants and the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -488,6 +488,12 @@ CONTRIBUTE_CONTENT_PERMISSION = "contribute_content"
 # There is no ownership rule: deletion is a role permission, and D-66 puts every
 # Employee-only document in an Administrator's scope, so no document is undeletable.
 MANAGE_DOCUMENTS_PERMISSION = "manage_documents"
+# Deleting a meeting (docs/decisions.md D-99). NOT in the proposal: FR-09 gives Meetings Create,
+# Read and Update status only, and FR-15's deletion covers documents. Added at the lead's request
+# on 7 November 2026 as its own code rather than a reuse of manage_documents, so that granting
+# one never grants the other. Held by Administrator only, seeded by accounts migration 0006.
+# D-66 puts every Employee-only meeting in an Administrator's scope, so none is undeletable.
+MANAGE_MEETINGS_PERMISSION = "manage_meetings"
 
 # Provenance of a ContentTags row (FR-10, FR-15).
 TAG_APPLIED_BY_VALUES = ("ai", "user")

@@ -121,7 +121,8 @@
   font-size: var(--text-sm);
 }
 
-.document-detail__actions {
+.document-detail__actions,
+.meeting-detail__actions {
   margin: 0 0 var(--space-5);
 }
 

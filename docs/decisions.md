@@ -6264,3 +6264,64 @@ corrected the reason above.
   recording advice: OBS's Display Capture, under 2 GB.
 - **The server cannot confirm what the class demonstration showed.** The two onboarding
   questions on the alpha on 7 November, at 10:52 and 10:54, came from a separate session.
+
+## D-99 · An Administrator can delete a meeting: `manage_meetings`, scoped first, one transaction
+
+**Status:** Settled by the user · **Date:** 2026-11-07 · **Concerns:** FR-09, FR-15, invariants 1,
+4 and 9 · **Builds on:** D-07, D-46, D-67, D-73
+
+**Not in the proposal.** FR-09 gives Meetings only Create, Read and Update status, and FR-15's
+permissioned deletion covers documents only ("Documents (Read, Delete) … Meetings (Read)"). The
+lead asked for it on 7 November. CLAUDE.md §1 says a behaviour outside the proposal is raised, not
+built silently: it was raised, and the user decided.
+
+**The user's choices:**
+
+- **A new permission, `manage_meetings`,** not `manage_documents`. The proposal ties
+  `manage_documents` to documents, and the two can then be given to different roles later.
+  Migration `accounts 0006` seeds it, held by Administrator only, as 0005 seeds `manage_documents`.
+- **Built now, before step 7,** on `feat/FR-15-meeting-deletion`. It does not touch answer
+  generation, so step 5's baseline stands.
+
+**`DELETE /api/meetings/{id}`, mirroring D-73 clause for clause:**
+
+1. **Scope first.** The meeting is resolved through `scoped_meetings()`, as the detail is. Unknown
+   or out of scope is **404**, from one query, with the same body either way (invariant 1, D-46).
+2. **Then the permission.** Without `manage_meetings`, the answer is **403**. In the other order,
+   the status code would tell a caller whether a meeting they cannot see exists.
+3. **One transaction** (`apps/meetings/deletion.py`, invariant 9):
+   - the meeting row is locked first, as `manage.py reindex` locks it before rewriting its chunks;
+   - its `ContentChunk` rows go, by `source_type` and `source_id` (D-07);
+   - its `ContentTag` rows go. Nothing writes meeting tags yet, but the table admits them;
+   - the meeting goes, and its `MeetingAttendee` rows with it, through their CASCADE.
+
+   `AnswerCitation.chunk` is `SET_NULL` (D-67), so earlier answers keep their record without the
+   text. No other model has a foreign key to `Meeting`.
+4. **204 No Content.**
+
+**Where it differs from D-73:**
+
+- **No file to remove on commit.** FR-09 reads an uploaded transcript for its text and discards
+  the file, so `transcript_text` is the only copy, and no `on_commit` callback is registered.
+- **Attendees cascade,** where a document's `ExtractedContent` does.
+- **The detail gains `can_delete` only,** true for a holder of `manage_meetings`. The front end
+  shows the Delete control from it. It is usability only: the server decides (invariant 4).
+- **No audit line,** because the document delete writes none.
+
+**The interface** mirrors the document's:
+
+- a "Delete meeting" control, shown only when `can_delete` is true;
+- a confirmation that says the meeting, its transcript and its indexed passages go, and that it
+  cannot be undone;
+- on success, the meetings list with a notice. On a 403 or a 404, a message in words, which never
+  says more than a 404 would.
+
+**Evidence:**
+
+- **The server side:** `pytest` 2,280 passed, with dual-role coverage 24/24. Of 14 deliberate breaks,
+  13 were caught, and the fourteenth (a file removed before commit) does not apply.
+- **The front end:** `npm test` 183 passed. 17 of 17 deliberate breaks were caught.
+- **Both break tables** are in the commit that carries this entry.
+
+**Open:** the document delete's own test does not catch a missing double-submit guard. The meeting
+test was written to catch it (break B17), and the document test was not changed.

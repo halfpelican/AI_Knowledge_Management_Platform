@@ -40,6 +40,7 @@ from apps.core.constants import (
     LOCKOUT_THRESHOLD,
     DOCUMENT_INDEXED,
     MANAGE_DOCUMENTS_PERMISSION,
+    MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MAX_UPLOAD_BYTES,
     MEETING_INDEXED,
@@ -60,6 +61,7 @@ from apps.ingestion.errors import (
 from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
+from apps.meetings.deletion import delete_meeting
 from apps.retrieval.models import Conversation, QueryLog
 from apps.retrieval.pipeline import (
     QuestionLengthOutOfRange,
@@ -92,6 +94,7 @@ from .serializers import (
     DocumentSerializer,
     DocumentUploadSerializer,
     LoginSerializer,
+    MeetingDetailSerializer,
     MeetingIngestSerializer,
     MeetingListSerializer,
     MeetingSerializer,
@@ -238,6 +241,9 @@ CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
 # caller's scope and so confirm that it exists. DocumentDetailView.delete resolves the scope
 # first and consults this second.
 CanManageDocuments = HasRolePermission.for_code(MANAGE_DOCUMENTS_PERMISSION)
+# Meeting deletion (D-99), which mirrors D-73 and is not in the proposal. The same rule: never a
+# permission_classes entry, because MeetingDetailView.delete must resolve the scope first.
+CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -1130,6 +1136,22 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
             return None, {"file": [NO_TEXT_IN_TRANSCRIPT_MESSAGE]}
 
 
+def scoped_meeting_or_404(request, pk):
+    """The meeting, if the caller's scope holds it; 404 otherwise, unknown or not (D-46).
+
+    The one lookup behind the meeting detail and its delete (D-99), as ``scoped_document_or_404``
+    is for documents. One scoped query and ``get_object_or_404``, so an unknown id and one outside
+    the caller's scope are the same query with the same answer and there is no branch that could
+    tell them apart.
+    """
+    return get_object_or_404(
+        scoped_meetings(role_name=permission_scope(request.user)).prefetch_related(
+            "attendees__user"
+        ),
+        pk=pk,
+    )
+
+
 class MeetingDetailView(APIView):
     """``GET /api/meetings/{id}`` — FR-09: "once processed, the stored transcript is
     then viewable in full".
@@ -1137,16 +1159,47 @@ class MeetingDetailView(APIView):
     Scoped through ``scoped_meetings`` (D-53), and a meeting outside the caller's scope is 404,
     not 403: CLAUDE.md invariant 1 requires that its existence not be disclosed, and
     a 403 would confirm the id names something real.
+
+    **D-99 adds ``can_delete``** to the body (``MeetingDetailSerializer``) and the ``DELETE``
+    method below. Meeting deletion is not in the proposal: FR-09 gives Meetings Create, Read and
+    Update status only. The lead asked for it on 7 November 2026, and it mirrors
+    ``DocumentDetailView`` (D-73) clause for clause.
     """
 
+    def _may_delete(self, request) -> bool:
+        """Whether the caller's role holds ``manage_meetings``, read from ``role_permissions`` on
+        this request as every permission is (``apps/api/permissions.py``, D-14, D-21)."""
+        return CanManageMeetings().has_permission(request, self)
+
     def get(self, request, pk):
-        meeting = get_object_or_404(
-            scoped_meetings(role_name=permission_scope(request.user)).prefetch_related(
-                "attendees__user"
-            ),
-            pk=pk,
+        meeting = scoped_meeting_or_404(request, pk)
+        return Response(
+            MeetingDetailSerializer(
+                meeting, context={"can_delete": self._may_delete(request)}
+            ).data
         )
-        return Response(MeetingSerializer(meeting).data)
+
+    def delete(self, request, pk):
+        """``DELETE /api/meetings/{id}`` (D-99, mirroring D-73).
+
+        **Scope first, permission second, and the order is the security property.** The meeting
+        is resolved through ``scoped_meetings`` exactly as ``get`` resolves it, so an unknown id
+        and one outside the caller's scope are both 404, by one query (D-46). Only a meeting the
+        caller may see reaches the permission check, which answers 403 for a role without
+        ``manage_meetings``. In the other order an Employee could tell an Administrator-only
+        meeting from a non-existent one by the code. That is why the check is here and not in
+        ``permission_classes``, which DRF runs before this method.
+
+        **Then everything goes in one transaction** (``apps/meetings/deletion.py``): the chunks
+        and tag links by source, which have no foreign key (D-07), and the meeting with its
+        attendees. A meeting stores no file, so nothing waits for the commit. 204 with no body,
+        the document delete's convention.
+        """
+        meeting = scoped_meeting_or_404(request, pk)
+        if not self._may_delete(request):
+            self.permission_denied(request, message=CanManageMeetings.message)
+        delete_meeting(meeting)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DocumentReprocessView(APIView):

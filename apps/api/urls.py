@@ -43,6 +43,7 @@ urlpatterns = [
     path("documents/<uuid:pk>", views.DocumentDetailView.as_view(), name="document-detail"),
     # Stage 3: FR-09
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
+    # D-99 adds can_delete to its GET, and the DELETE method, mirroring documents/<uuid:pk>.
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
     # Stage 4: FR-12 keyword search, the Front-End clause's grouped results (D-41).
     path("search", views.SearchView.as_view(), name="search"),

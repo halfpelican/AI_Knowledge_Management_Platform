@@ -31,6 +31,7 @@ from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
     MANAGE_DOCUMENTS_PERMISSION,
+    MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
 )
 from conftest import PASSWORD
@@ -48,7 +49,7 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
                     "document-detail",  # Stage 4 item 10b: FR-12's citation link (D-46)
-                    "meeting-list", "meeting-detail",  # Stage 3: FR-09
+                    "meeting-list", "meeting-detail",  # Stage 3: FR-09; its DELETE is D-99's
                     "search",  # Stage 4: FR-12 keyword search (D-41)
                     "ask",  # Stage 4: FR-12's answer path, FR-13's turn
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
@@ -64,9 +65,14 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
 # INSIDE the method, after resolving the document through the caller's scope, because a
 # permission class runs first and would answer 403 for a document the caller cannot see
 # (D-73). apps/api/tests/test_document_delete.py proves the 403 and the 404 before it.
+# meeting-detail is absent for the same reason: its DELETE checks manage_meetings inside the
+# method, after the scoped lookup (D-99). apps/api/tests/test_meeting_delete.py proves both.
 PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE_ROLES_PERMISSION}
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
-IN_VIEW_PERMISSION_CODES = {MANAGE_DOCUMENTS_PERMISSION}  # DocumentDetailView.delete (D-73)
+IN_VIEW_PERMISSION_CODES = {
+    MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
+    MANAGE_MEETINGS_PERMISSION,  # MeetingDetailView.delete (D-99)
+}
 
 USERS = reverse("user-list")
 ROLES = reverse("role-list")
@@ -314,3 +320,4 @@ def test_every_permission_code_in_use_is_seeded():
     assert IN_VIEW_PERMISSION_CODES <= seeded
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_ROLES_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_DOCUMENTS_PERMISSION).exists()
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_MEETINGS_PERMISSION).exists()

@@ -179,6 +179,9 @@ SECTION_5_PLAN = [
     # Stage 5 item 2 (D-73): FR-15's delete permission, Administrator only. Placed where the
     # executor plans it, immediately after accounts 0004, the rule D-51 records.
     ("accounts", "0005_seed_manage_documents"),
+    # D-99: the meeting delete permission, Administrator only. Placed where the executor plans
+    # it, immediately after accounts 0005, the rule D-51 records.
+    ("accounts", "0006_seed_manage_meetings"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     ("documents", "0002_content_chunks"),

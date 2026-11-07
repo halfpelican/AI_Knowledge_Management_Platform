@@ -446,6 +446,11 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ),
     # FR-15's download (D-75): the stored original, scoped by the document's own stamp alone.
     ("api/documents/<uuid:pk>/download", "GET"): _downloads,
+    # Meeting deletion (D-99), the same as the document delete's: scope before manage_meetings,
+    # so the Employee gets 404 and the Administrator's mirror is the 204.
+    ("api/meetings/<uuid:pk>", "DELETE"): _is_found(
+        lambda case: f"/api/meetings/{case.meeting.id}", method="delete"
+    ),
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {
@@ -522,3 +527,9 @@ def test_an_unknown_identifier_is_answered_exactly_as_the_withheld_one_is(employ
     unknown = employee_client.get(f"/api/documents/{uuid.uuid4()}/download")
     assert withheld.status_code == unknown.status_code == 404
     assert withheld.content == unknown.content
+    # Meeting deletion (D-99), the same: one 404 body, and the withheld meeting is still there.
+    withheld = employee_client.delete(f"/api/meetings/{disagreement.meeting.id}")
+    unknown = employee_client.delete(f"/api/meetings/{uuid.uuid4()}")
+    assert withheld.status_code == unknown.status_code == 404
+    assert withheld.content == unknown.content
+    assert Meeting.objects.filter(pk=disagreement.meeting.id).exists()

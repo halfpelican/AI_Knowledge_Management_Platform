@@ -475,6 +475,24 @@ export const TEXT = {
   documentDeleteCancel: 'Cancel',
   documentDeleteFailed: 'Could not delete the document',
   documentDeleteNotPermitted: 'You do not have permission to delete documents.',
+  // The meeting delete, which is not in the proposal and mirrors the document
+  // delete above (src/pages/MeetingDetail.jsx). The control shows only when the
+  // meeting detail says `can_delete`; the server checks `manage_meetings` on
+  // every delete whatever this screen showed (CLAUDE.md §6, invariant 4). Its
+  // 404 reuses `meetingNotFound` below, the detail's own 404 message, so a
+  // meeting already gone and one now out of scope read the same.
+  meetingDelete: 'Delete meeting',
+  meetingDeleteConfirm: (title) => `Delete “${title}”?`,
+  // What the delete removes, and what D-67 does to answers that cited it.
+  // Nothing more: there is no undo, and the dialogue says so.
+  meetingDeleteBody:
+    'The meeting, its transcript and its indexed passages are removed, so it will no longer be found by search or used to answer questions. Earlier answers that cited it will no longer show it as a source. This cannot be undone.',
+  meetingDeleting: 'Deleting…',
+  meetingDeleteCancel: 'Cancel',
+  meetingDeleteFailed: 'Could not delete the meeting',
+  meetingDeleteNotPermitted: 'You do not have permission to delete meetings.',
+  // Shown on the meetings list a successful delete returns to.
+  meetingsDeleted: (title) => `“${title}” was deleted.`,
 
   /* ---- FR-09 meeting transcripts ---------------------------------------- */
   loadingMeetings: 'Loading meetings…',
