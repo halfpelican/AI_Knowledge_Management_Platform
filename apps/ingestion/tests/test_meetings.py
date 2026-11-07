@@ -42,7 +42,7 @@ MEETING_TITLE = "Records management working group"
 # A transcript in the shape FR-09 receives one: speaker labels, timestamps, and a
 # blank line between turns. Long enough to clear MINIMUM_CONTENT_LENGTH.
 TRANSCRIPT = (
-    "[00:00:04] Haseeb Malik: The retention schedule changes on the first of "
+    "[00:00:04] Jordan Avery: The retention schedule changes on the first of "
     "November, so every record created before that date keeps its current period.\n"
     "\n"
     "[00:01:37] Sagarika Dey: Finance asked whether purchase orders above ten "
