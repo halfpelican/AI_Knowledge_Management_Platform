@@ -115,6 +115,7 @@ MEDIA_ROOT=C:\kmp-demo\2026-11-01\media
 AUDIT_LOG_PATH=C:\kmp-demo\2026-11-01\logs\audit.log
 ERROR_LOG_PATH=C:\kmp-demo\2026-11-01\logs\errors.log
 WAITRESS_LOG_PATH=C:\kmp-demo\2026-11-01\logs\waitress.log
+ATTEMPTS_LOG_PATH=C:\kmp-demo\2026-11-01\logs\attempts.log
 AI_PROVIDER=flm
 FLM_BASE_URL=http://127.0.0.1:8625/v1
 FLM_API_KEY=flm
@@ -122,6 +123,10 @@ FLM_CHAT_MODEL=gemma3:4b
 FLM_EMBED_MODEL=embed-gemma
 EMBEDDING_DIMENSION=768
 ```
+
+`ATTEMPTS_LOG_PATH` (step 7, 7 November 2026) is where every generation attempt is logged, parsed or
+failed, with what its reply reported; `errors.log` keeps the failures only. A commit from before
+the statement cap ignores it.
 
 Then, in the deployment window:
 

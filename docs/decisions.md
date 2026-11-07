@@ -6389,3 +6389,69 @@ built silently: it was raised, and the user decided.
 
 **Open:** the document delete's own test does not catch a missing double-submit guard. The meeting
 test was written to catch it (break B17), and the document test was not changed.
+
+## D-100 · Answers are capped at 6 statements, and a retry after a cut-off asks for fewer
+
+**Status:** Settled by the user · **Date:** 2026-11-07 · **Concerns:** FR-12, NFR-08, NFR-19,
+invariant 10, D-82, D-93 · **Stage:** step 7 of the post-M6 order, phase 2a
+
+**What phase 1 observed** (D-82's 7 November note, PR #54):
+
+- **Every failed generation attempt was a reply cut off at exactly 800 of 800 completion tokens,**
+  with its JSON still open: 15 of 15 attempts.
+- **FLM reports `finish_reason: stop` even then,** so only the token count shows the cut.
+- **No retry recovered an ask.** A repeated request came back just as long.
+
+**The user's decisions:**
+
+1. **Fewer statements, and a smarter retry.** Each answer is capped at `MAXIMUM_STATEMENTS`, in the
+   prompt and in the schema check. A reply over the cap is a schema violation, so it is treated as
+   no response and retried, never trimmed (invariant 10).
+   - After a ceiling hit or a cap violation, the next attempt asks for fewer: 6, then 3, then 1.
+   - After any other failure, the cap stays.
+   - There are still three attempts in total (NFR-19).
+   - The user declined the other options: raising the ceiling, which doubles a long reply's time and
+     keeps the padding, and keeping the complete statements of a cut reply, which breaks invariant
+     10.
+2. **Successful attempts are logged to their own file,** `ATTEMPTS_LOG_PATH` (default
+   `logs/attempts.log`), and never to `errors.log`. Failed attempts stay WARNINGs.
+3. **The scripts that produced the evidence stay beside it,** as provenance.
+
+**How 6 was chosen: on a new development set, never the frozen ones (D-93).**
+
+- **The set:** `corpus/objective-02/dev-set.json` holds 28 questions in 31 runs: 24 expect an
+  answer, 7 do not, and both roles are covered.
+- **No overlap with the frozen sets:** a four-way check against all 56 frozen questions and turns
+  flagged none.
+- **The rule, set in advance:** zero ceiling hits and zero 503s first, then the best expected-answer
+  match, then the smaller cap. One pass per setting, in-process on `kmp_obj02_20261101`, with every
+  ask rolled back.
+
+| | no cap | 3 | 4 | 5 | **6** |
+|---|---|---|---|---|---|
+| ceiling hits | 8 | 0 | 0 | 0 | **0** |
+| 503s | 2 | 0 | 1 | 1 | **0** |
+| match, with an expected source cited (of 24) | 9 | 13 | 14 | 15 | **15** |
+| declined where no answer is expected (of 7) | 6 | 3 | 3 | 3 | **5** |
+| slowest ask, seconds | 351 | 43 | 155 | 164 | **76** |
+
+**Accepted with its trade-off.** The cap of 6 declined one fewer of the 7 no-answer questions than
+the uncapped baseline.
+
+- **No leak:** every cited item was within the asking role's scope.
+- **The user accepted it.** The tool for questions with no real answer is the relevance threshold,
+  which phase 2b sets from the same development set.
+
+**Open:**
+
+- **Two 503s were malformed JSON, not length:** under the caps of 4 and 5, a stray `})` and an
+  unclosed object. The cap stays after those, so all three attempts repeated the error. This did
+  not happen under 6, but it can happen at any cap.
+- **The reduced retry never fired live.** No capped attempt hit the ceiling or broke its cap, so only
+  the tests show it working.
+- **Wrong-passage citations remain.** The right sentence often cites a different supplied item:
+  under 6, the expected phrase appears in 20 of 24 runs, but only 15 match.
+- **The summarise-the-onboarding question (d02) never matched,** under any setting.
+- **One scoped question answered for the Employee (d11) grew with the cap,** from 1 statement to 6.
+  None of its citations was out of scope.
+- **The evidence:** `corpus/objective-02/runs/2026-11-07/statement-cap-sweep.md`.

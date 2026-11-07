@@ -1,0 +1,38 @@
+{
+ "label": "baseline",
+ "cap": null,
+ "code_has_cap": false,
+ "runs": 31,
+ "set_sha256": "19a0639ad4c2d82bc347eddf4f7ed79edfa7294788b7d1b4ee11f4013fb6286f",
+ "started": "2026-11-07T20:11:51+11:00",
+ "finished": "2026-11-07T20:41:19+11:00",
+ "counts_before": {
+  "query_log": 83,
+  "answer_citation": 199,
+  "conversation": 3,
+  "content_chunk": 43
+ },
+ "counts_after": {
+  "query_log": 83,
+  "answer_citation": 199,
+  "conversation": 3,
+  "content_chunk": 43
+ },
+ "attempts": 35,
+ "ceiling_hits": 8,
+ "server_503": 2,
+ "cap_violations": 0,
+ "schema_violations": 8,
+ "answered_where_expected": "21/24",
+ "no_answer_where_expected": "6/7",
+ "expected_answer_match": "9/24",
+ "phrase_anywhere": "17/24",
+ "out_of_scope_citations": 0,
+ "completion_tokens_median": 109,
+ "completion_tokens_max": 800,
+ "attempt_seconds_median": 23.3,
+ "attempt_seconds_max": 117.4,
+ "ask_seconds_median": 19.9,
+ "ask_seconds_max": 350.7,
+ "statements_per_answer_max": 9
+}

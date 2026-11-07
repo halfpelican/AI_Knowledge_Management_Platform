@@ -177,6 +177,7 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
 | `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004) |
+| `MAXIMUM_STATEMENTS` | **6**, *tune* — chosen on the development set; a retry after a cut-off asks for fewer (D-100) |
 | `MINIMUM_QUESTION_LENGTH` | ~10 characters |
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |
 | `MINIMUM_CONTENT_LENGTH` | below this, mark "insufficient content", do not embed |

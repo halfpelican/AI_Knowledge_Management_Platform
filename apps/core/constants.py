@@ -149,6 +149,20 @@ RELEVANCE_THRESHOLD = 0.3
 # Stage 4 once the prompt and the model's context window are measured.
 MAXIMUM_CONTEXT_TOKENS = 4000
 
+# The most statements one answer may hold (FR-12; step 7 phase 2a, 7 November 2026). The
+# prompt asks for at most this many (apps/ai/prompting.py) and the schema enforces it
+# (STATEMENT_LIST_SCHEMA's maxItems, apps/ai/schema.py): a reply with more is a schema
+# violation, retried and never trimmed (invariant 10). The FIRST attempt asks for this many;
+# an attempt after a reply that hit max_tokens or broke the cap asks for fewer
+# (apps/ai/generation.py). Phase 1 saw every 503 come from a reply still listing statements
+# at the 800-token ceiling (D-82's note of 7 November 2026).
+# TUNED on corpus/objective-02/dev-set.json, never on questions.json or threads.json (D-93):
+# zero ceiling hits and zero 503s first, then the best expected-answer match, then the
+# smaller value on a tie. On 7 November 2026 (one pass of 31 runs each), 3 and 6 had zero
+# of both; 4 and 5 had one 503 each, from malformed JSON. 6 matched 15 of 24 against 3's
+# 13 of 24, so 6. The sweep is in corpus/objective-02/runs/2026-11-07/.
+MAXIMUM_STATEMENTS = 6
+
 # --- Resilience (NFR-19, NFR-20; docs/decisions.md D-19) ----------------------------
 # Total attempts, not retries: one initial attempt plus two retries, confirmed as
 # the uniform policy in D-19. After the last attempt the view answers 503 with the

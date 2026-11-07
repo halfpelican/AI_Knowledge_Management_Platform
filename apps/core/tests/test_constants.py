@@ -151,6 +151,13 @@ def test_relevance_threshold_is_a_cosine_similarity():
     assert 0.0 <= constants.RELEVANCE_THRESHOLD <= 1.0
 
 
+def test_the_statement_cap_is_a_positive_whole_number():
+    # Step 7 phase 2a (7 November 2026). Tuned on the development set; the prompt and the
+    # schema both read it (apps/ai/prompting.py, apps/ai/schema.py).
+    assert isinstance(constants.MAXIMUM_STATEMENTS, int)
+    assert constants.MAXIMUM_STATEMENTS >= 1
+
+
 def test_context_and_content_limits_are_positive():
     assert constants.MAXIMUM_CONTEXT_TOKENS > 0
     assert constants.MINIMUM_CONTENT_LENGTH > 0

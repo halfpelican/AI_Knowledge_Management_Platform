@@ -121,6 +121,7 @@ $env:MEDIA_ROOT     = "$root\media"
 $env:AUDIT_LOG_PATH = "$root\logs\audit.log"
 $env:ERROR_LOG_PATH = "$root\logs\errors.log"
 $env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"  # Waitress's own lines (D-87 §3); run.ps1 reads it too
+$env:ATTEMPTS_LOG_PATH = "$root\logs\attempts.log"  # every generation attempt, parsed or failed (step 7)
 $env:DEBUG          = 'False'                       # overrides .env's DEBUG=True (D-64, D-85, D-87 §2)
 $env:FLM_BASE_URL   = 'http://127.0.0.1:8625/v1'    # check_flm.py and run.ps1 read the shell, not .env
 

@@ -1,0 +1,247 @@
+{
+  "name": "Objective 02 development set, v1",
+  "status": "DEVELOPMENT SET, NOT FROZEN. Drafted on 7 November 2026 for step 7 of the user's post-M6 order, to tune against: the statement cap (phase 2a), and the relevance threshold and D-56 floor (phase 2b). It may be edited, and every edit is recorded in notes with its reason. It is not a test set: corpus/objective-02/questions.json and threads.json are, and nothing is tuned against them (D-93).",
+  "corpus": "The Objective 02 verification corpus: the 20 documents and 5 transcripts listed in corpus/objective-02/manifest.json. Five items are Administrator-only: D09, D15, D16, T02 and T05.",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Drafted on 7 November 2026 by the rag-pipeline agent from the indexed chunk text of kmp_obj02_20261101, read-only. No question, expected answer or source was chosen or changed because of what the system answered.",
+    "No overlap with the frozen sets: dev_set_overlap.py in corpus/objective-02/runs/2026-11-07/ compares every question here with every question in questions.json and every turn (and spelled_out form) in threads.json, lexically and by embedding, and its output is dev_set_overlap.txt beside it.",
+    "Required by the order: the two onboarding questions the alpha was asked on 7 November (d01, d02), 'How are records managed and retained?' (d03, NFR-08's QUESTIONS[3]) and the IT acceptable-use question (d04, NFR-08's QUESTIONS[1]).",
+    "Most answerable questions here ask for a summary or a procedure, because the statement cap is about long answers. A few ask for one fact.",
+    "Field names follow questions.json, so scripts/question_set.py validates this file and expand_runs reads it: kind, role, source, question, expected_answer, accepted, answer, location, expected_by_role. Added here: sources, the list of manifest items any of which counts as a correct cited source (it always contains source).",
+    "expected_answer and accepted are matched as questions.json's are (scripts/question_set.py matching_form): expected_answer as a substring, each accepted phrase as whole tokens, whitespace collapsed and case folded. UNLIKE questions.json, where accepted holds other forms of the same fact, accepted here may also list other key facts of a long answer. A summary is counted as matching when it states any one of them. That is a weaker test than the frozen set's, and it is stated rather than hidden.",
+    "kind=scoped, role=both: the answer is only in an Administrator-only item. Asked once per role: the Administrator should get the answer, the Employee the no-answer state.",
+    "kind=no-answer: nothing in the corpus answers it, for any role. d25, d26 and d27 each share vocabulary with a real item without being answerable from it."
+  ],
+  "questions": [
+    {
+      "id": "d01", "kind": "ordinary", "role": "Employee", "source": "D08", "sources": ["D08"],
+      "question": "What is the onboarding process for new employees?",
+      "expected_answer": "first week",
+      "accepted": ["before day one", "first month", "ninety-day review", "ninety days", "Saffron Trail", "buddy"],
+      "answer": "Before day one, HR sends the contract and payroll forms, IT prepares the laptop and accounts and the manager confirms the first-week schedule. In the first week, new starters meet their team, complete mandatory training, receive their access badge and are paired with a Saffron Trail buddy. In the first month the manager sets three goals for the first ninety days and books weekly one-to-ones. At ninety days the manager and employee review progress.",
+      "location": "D08_onboarding_checklist.docx, every section"
+    },
+    {
+      "id": "d02", "kind": "ordinary", "role": "Employee", "source": "D08", "sources": ["D08"],
+      "question": "Summarise the onboarding process for new employees.",
+      "expected_answer": "first week",
+      "accepted": ["before day one", "first month", "ninety-day review", "ninety days", "Saffron Trail", "buddy"],
+      "answer": "As d01: before day one, first week, first month, ninety-day review.",
+      "location": "D08_onboarding_checklist.docx, every section"
+    },
+    {
+      "id": "d03", "kind": "ordinary", "role": "Employee", "source": "D04", "sources": ["D04"],
+      "question": "How are records managed and retained?",
+      "expected_answer": "seven years",
+      "accepted": ["7 years", "five years after project closure", "Juniper Ledger"],
+      "answer": "Retention periods are in the Juniper Ledger retention schedule: financial records seven years after the end of the financial year, personnel records seven years after employment ends, project records five years after project closure. The record owner confirms no legal hold applies before disposal is authorised.",
+      "location": "D04_records_management_handbook.pdf, 'Chapter 13: Migrating records between systems'"
+    },
+    {
+      "id": "d04", "kind": "ordinary", "role": "Employee", "source": "D02", "sources": ["D02"],
+      "question": "What are the rules for acceptable use of IT equipment?",
+      "expected_answer": "twelve characters",
+      "accepted": ["12 characters", "multi-factor authentication", "full-disk encryption", "Copper Finch"],
+      "answer": "Laptops must meet the Copper Finch device standard (full-disk encryption, current operating system, endpoint protection). Passwords are at least twelve characters and not reused; multi-factor authentication is mandatory for email, the repository and systems with personal information; credentials are never shared. Lost devices, phishing and unexpected access are reported to the service desk immediately.",
+      "location": "D02_it_acceptable_use.pdf, page 1"
+    },
+    {
+      "id": "d05", "kind": "ordinary", "role": "Employee", "source": "D03", "sources": ["D03"],
+      "question": "What does the health and safety induction cover?",
+      "expected_answer": "evacuation",
+      "accepted": ["Amber Corridor", "first aiders", "first aid kits", "ergonomic"],
+      "answer": "Emergency evacuation (nearest exit, no lifts, the Amber Corridor route to the courtyard), first aid (first aiders on the noticeboard, kits at reception and every floor, injuries logged the same day) and ergonomics.",
+      "location": "D03_health_safety_induction.pdf, page 1"
+    },
+    {
+      "id": "d06", "kind": "ordinary", "role": "Employee", "source": "D05", "sources": ["D05"],
+      "question": "Give me an overview of the procurement guidelines.",
+      "expected_answer": "value for money",
+      "accepted": ["Slate Meridian", "fifty thousand dollars", "executive committee", "one written quote"],
+      "answer": "Purchases must deliver value for money, be transparent and free of conflicts of interest. Quotes rise with value up to the Slate Meridian tender threshold of fifty thousand dollars; approval limits run from team leaders to the executive committee; every contract has a manager and suppliers are reviewed annually.",
+      "location": "D05_procurement_guidelines.pdf, page 1"
+    },
+    {
+      "id": "d07", "kind": "ordinary", "role": "Employee", "source": "D06", "sources": ["D06"],
+      "question": "How are customer complaints escalated when they cannot be resolved straight away?",
+      "expected_answer": "Willow Bridge",
+      "accepted": ["team leader within two days", "service manager within five days", "customer experience director"],
+      "answer": "By the Willow Bridge escalation ladder: team leader within two days, service manager within five days, customer experience director within ten days, each step documented.",
+      "location": "D06_complaints_procedure.pdf, page 1, 'Escalation'"
+    },
+    {
+      "id": "d08", "kind": "ordinary", "role": "Employee", "source": "D07", "sources": ["D07"],
+      "question": "What equipment and security rules apply when working from home?",
+      "expected_answer": "virtual private network",
+      "accepted": ["laptop and headset", "printed at home", "supplied equipment"],
+      "answer": "The organisation supplies a laptop and headset; work is done on that equipment over the corporate virtual private network, and confidential material must not be printed at home.",
+      "location": "D07_remote_work_agreement.docx, 'Equipment and security'"
+    },
+    {
+      "id": "d09", "kind": "ordinary", "role": "Employee", "source": "D20", "sources": ["D20"],
+      "question": "Summarise what staff need to know about the office relocation.",
+      "expected_answer": "Driftwood Lane",
+      "accepted": ["second weekend of November", "crates", "work from home on the Friday"],
+      "answer": "The Melbourne office moves across the river on the Driftwood Lane move weekend, the second weekend of November. Staff pack belongings into labelled crates by the Thursday, leave computers to IT, and work from home on the Friday before the move.",
+      "location": "D20_office_relocation_notice.txt, every section"
+    },
+    {
+      "id": "d10", "kind": "ordinary", "role": "Employee", "source": "D10", "sources": ["D10"],
+      "question": "How do I submit an expense claim?",
+      "expected_answer": "finance portal",
+      "accepted": ["itemised receipt", "within thirty days"],
+      "answer": "In the finance portal within thirty days of the expense, with an itemised receipt for every item.",
+      "location": "D10_expense_claims_guide.docx, 'How to claim'"
+    },
+    {
+      "id": "d11", "kind": "scoped", "role": "both", "source": "T05", "sources": ["T05"],
+      "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+      "question": "What happened in the security incident debrief?",
+      "expected_answer": "Cobalt Reef",
+      "accepted": ["twenty-three", "sixty-one", "ninety people", "banner"],
+      "answer": "The Cobalt Reef phishing drill went to four hundred staff: sixty-one clicked and twenty-three entered credentials; ninety reported it. Actions: a mobile-visible external email banner, a reminder on reporting, results to the executive team.",
+      "location": "T05_security_incident_debrief.txt",
+      "note": "T05 is Administrator-only and nothing an Employee can read mentions the drill."
+    },
+    {
+      "id": "d12", "kind": "ordinary", "role": "Employee", "source": "T03", "sources": ["T03"],
+      "question": "What was decided at the product planning workshop?",
+      "expected_answer": "mobile redesign",
+      "accepted": ["accessibility fixes", "search improvements", "dashboard", "extra tester"],
+      "answer": "The next release takes the search improvements, the new dashboard and the accessibility fixes; the mobile redesign is deferred; a feature freeze is set; owners are assigned for each action.",
+      "location": "T03_product_planning_workshop.txt"
+    },
+    {
+      "id": "d13", "kind": "ordinary", "role": "Employee", "source": "T04", "sources": ["T04"],
+      "question": "What actions were agreed at the customer success retrospective?",
+      "expected_answer": "handover template",
+      "accepted": ["inactivity report", "call script", "follow-up retrospective"],
+      "answer": "Rania builds the inactivity report, Ollie writes the call script and the handover template draft, and Nadia books the follow-up retrospective.",
+      "location": "T04_customer_success_retro.txt, the closing lines"
+    },
+    {
+      "id": "d14", "kind": "ordinary", "role": "Employee", "source": "T01", "sources": ["T01"],
+      "question": "What were the main points of the weekly operations standup?",
+      "expected_answer": "Opal Junction",
+      "accepted": ["rollback plan", "password resets", "dry run", "access review"],
+      "answer": "The database migration and its Opal Junction cutover with a rollback plan, weekend on-call cover and a Thursday dry run; the falling ticket backlog led by password resets; noisy monitoring alerts; the quarterly access review.",
+      "location": "T01_weekly_ops_standup.txt"
+    },
+    {
+      "id": "d15", "kind": "ordinary", "role": "Employee", "source": "D11", "sources": ["D11"],
+      "question": "How is consent to use personal information recorded?",
+      "expected_answer": "Cedar Vault",
+      "accepted": ["consent register"],
+      "answer": "In the Cedar Vault consent register with the date, the purpose and the person who gave it; withdrawal updates the register the same day.",
+      "location": "D11_data_privacy_notice.docx, 'How we record consent'"
+    },
+    {
+      "id": "d16", "kind": "ordinary", "role": "Employee", "source": "D17", "sources": ["D17"],
+      "question": "What etiquette is expected when using a meeting room?",
+      "expected_answer": "Granite Pier",
+      "accepted": ["start and finish on time", "wipe the whiteboards", "leave the room tidy"],
+      "answer": "The Granite Pier booking etiquette: start and finish on time, leave the room tidy, wipe the whiteboards, return the chairs, and check the calendar before asking people to leave.",
+      "location": "D17_meeting_room_rules.txt, 'Etiquette'"
+    },
+    {
+      "id": "d17", "kind": "ordinary", "role": "Employee", "source": "D18", "sources": ["D18"],
+      "question": "What should I do if my laptop is running slowly?",
+      "expected_answer": "restart",
+      "accepted": ["log a ticket"],
+      "answer": "Restart it at least once a week and close applications you are not using; if it is still slow, log a ticket.",
+      "location": "D18_helpdesk_faq.txt, 'My laptop is slow'"
+    },
+    {
+      "id": "d18", "kind": "ordinary", "role": "Employee", "source": "D01", "sources": ["D01"],
+      "question": "How do I request leave, and how quickly does my manager respond?",
+      "expected_answer": "three working days",
+      "accepted": ["two weeks before", "human resources portal"],
+      "answer": "Through the human resources portal at least two weeks before the start date, except in emergencies; the line manager approves or declines within three working days.",
+      "location": "D01_leave_policy_2026.pdf, page 1, 'Approval process'"
+    },
+    {
+      "id": "d19", "kind": "ordinary", "role": "Employee", "source": "D01", "sources": ["D01"],
+      "question": "When do I need a medical certificate for personal leave?",
+      "expected_answer": "two consecutive days",
+      "accepted": ["2 consecutive days"],
+      "answer": "For an absence longer than two consecutive days.",
+      "location": "D01_leave_policy_2026.pdf, page 1, 'Personal and carer's leave'"
+    },
+    {
+      "id": "d20", "kind": "ordinary", "role": "Employee", "source": "D13", "sources": ["D13"],
+      "question": "What does the fourth quarter training program cover?",
+      "expected_answer": "leadership",
+      "accepted": ["Pebble Creek", "coaching"],
+      "answer": "The Pebble Creek workshop series on leadership, communication and coaching skills, limited to twenty participants per session.",
+      "location": "D13_training_schedule_q4.xlsx, sheet 'Summary'"
+    },
+    {
+      "id": "d21", "kind": "scoped", "role": "both", "source": "D16", "sources": ["D16"],
+      "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+      "question": "Which team members are rated expert in customer service?",
+      "expected_answer": "Chloe Dubois",
+      "accepted": ["Grace Tan", "Hugo Silva"],
+      "answer": "Chloe Dubois, Grace Tan and Hugo Silva, each rated four (expert).",
+      "location": "D16_team_skills_matrix.xlsx, sheet 'Data'",
+      "note": "D16 is Administrator-only."
+    },
+    {
+      "id": "d22", "kind": "scoped", "role": "both", "source": "T02", "sources": ["T02"],
+      "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+      "question": "What did the risk committee decide about the contingency reserve?",
+      "expected_answer": "two million",
+      "accepted": ["ring-fenced", "untouched", "Fernwood"],
+      "answer": "The Fernwood contingency reserve, two million dollars, stays ring-fenced and untouched until after the November forecast.",
+      "location": "T02_board_risk_committee.txt, Ingrid's budget item and the Chair's reply",
+      "note": "T02 is Administrator-only. D15's contingency line is Administrator-only too, so an Employee can read nothing about contingency."
+    },
+    {
+      "id": "d23", "kind": "ordinary", "role": "Administrator", "source": "D09", "sources": ["D09"],
+      "question": "How is Project Atlas delivered, and who reviews each phase?",
+      "expected_answer": "Quartz Harbour",
+      "accepted": ["four phases", "steering group"],
+      "answer": "In four phases, each ending at the Quartz Harbour milestone gate, where the steering group reviews the deliverables and decides whether to proceed, adjust or stop.",
+      "location": "D09_project_atlas_kickoff.docx, 'Milestones'"
+    },
+    {
+      "id": "d24", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "How much is the annual staff bonus?",
+      "expected_answer": null,
+      "answer": null,
+      "location": null
+    },
+    {
+      "id": "d25", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "Is there staff parking at the new office building?",
+      "expected_answer": null,
+      "answer": null,
+      "location": null,
+      "note": "D20 announces the move and says nothing about parking."
+    },
+    {
+      "id": "d26", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "What is the policy on smoking at work?",
+      "expected_answer": null,
+      "answer": null,
+      "location": null,
+      "note": "D03 covers health and safety and says nothing about smoking."
+    },
+    {
+      "id": "d27", "kind": "no-answer", "role": "Administrator", "source": null, "sources": [],
+      "question": "What salary does the head of digital services earn?",
+      "expected_answer": null,
+      "answer": null,
+      "location": null,
+      "note": "D09 names the head of digital services as Atlas's project manager and gives no salary."
+    },
+    {
+      "id": "d28", "kind": "ordinary", "role": "Employee", "source": "D19", "sources": ["D19"],
+      "question": "Summarise the rules for using a fleet vehicle.",
+      "expected_answer": "Coral Ridge",
+      "accepted": ["driver induction", "fuel card"],
+      "answer": "Only licensed employees who have completed the driver induction may drive; the Coral Ridge logbook rule records every trip; refuel with the fuel card and report faults the same day; no private use without a written exception.",
+      "location": "D19_fleet_vehicle_notes.txt, every section"
+    }
+  ]
+}

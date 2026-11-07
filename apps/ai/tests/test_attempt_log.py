@@ -28,8 +28,8 @@ import apps.ai
 from apps.ai import attempt_log
 from apps.ai.base import EmbeddingResult, Passage, ProviderUnavailable
 from apps.ai.flm import FLMService
-from apps.ai.generation import GENERATION_MAX_TOKENS, run_generation_attempts
-from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS, MAXIMUM_GENERATION_ATTEMPTS
+from apps.ai.generation import GENERATION_MAX_TOKENS, fewer_statements, run_generation_attempts
+from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS, MAXIMUM_GENERATION_ATTEMPTS, MAXIMUM_STATEMENTS
 from apps.retrieval.query_embedding import embed_question
 
 FLM_URL = "http://127.0.0.1:8625/v1/chat/completions"
@@ -53,8 +53,8 @@ def _scripted(*steps):
     remaining = list(steps)
     calls = []
 
-    def call_once():
-        calls.append(1)
+    def call_once(max_statements):
+        calls.append(max_statements)
         step = remaining.pop(0)
         if isinstance(step, BaseException):
             raise step
@@ -267,13 +267,16 @@ def test_a_parsed_attempt_is_an_info_line_carrying_what_its_reply_reported(caplo
     assert record.levelno == logging.INFO
     match = re.fullmatch(
         rf"generation attempt 1 of {MAXIMUM_GENERATION_ATTEMPTS} parsed after \d+\.\d s "
-        r"\[finish_reason=stop completion_tokens=37 prompt_tokens=412 max_tokens=(\d+)\] "
-        r"\(account account-5\): 1 statement\(s\)",
+        r"\[finish_reason=stop completion_tokens=37 prompt_tokens=412 max_tokens=(\d+) "
+        r"max_statements=(\d+)\] \(account account-5\): 1 statement\(s\)",
         record.getMessage(),
     )
     assert match, record.getMessage()
     # The max_tokens logged is the max_tokens the request carried.
     assert int(match.group(1)) == sent[0]["max_tokens"] == GENERATION_MAX_TOKENS
+    # And the cap logged is the one the first attempt's prompt stated.
+    assert int(match.group(2)) == MAXIMUM_STATEMENTS
+    assert f"Give at most {MAXIMUM_STATEMENTS} statement" in sent[0]["messages"][1]["content"]
 
 
 def test_each_attempt_carries_its_own_reply_and_a_failed_call_reports_only_max_tokens(
@@ -294,21 +297,26 @@ def test_each_attempt_carries_its_own_reply_and_a_failed_call_reports_only_max_t
     assert [r.levelno for r in records] == [logging.WARNING, logging.WARNING, logging.INFO]
     assert len(sent) == MAXIMUM_GENERATION_ATTEMPTS
     first, second, third = (r.getMessage() for r in records)
+    # The timeout keeps the cap; the ceiling hit halves it for attempt 3 (step 7 phase 2a).
+    reduced = fewer_statements(MAXIMUM_STATEMENTS)
     assert re.fullmatch(
         r"generation attempt 1 of 3 failed after \d+\.\d s \[finish_reason=unreported "
         r"completion_tokens=unreported prompt_tokens=unreported "
-        rf"max_tokens={sent[0]['max_tokens']}\] \(account not set\): APITimeoutError: .+",
+        rf"max_tokens={sent[0]['max_tokens']} max_statements={MAXIMUM_STATEMENTS}\] "
+        r"\(account not set\): APITimeoutError: .+",
         first,
     ), first
     assert re.fullmatch(
         r"generation attempt 2 of 3 failed after \d+\.\d s \[finish_reason=length "
-        rf"completion_tokens=800 prompt_tokens=1500 max_tokens={sent[1]['max_tokens']}\] "
+        rf"completion_tokens=800 prompt_tokens=1500 max_tokens={sent[1]['max_tokens']} "
+        rf"max_statements={MAXIMUM_STATEMENTS}\] "
         r"\(account not set\): SchemaViolation: unbalanced JSON object in the response",
         second,
     ), second
     assert re.fullmatch(
         r"generation attempt 3 of 3 parsed after \d+\.\d s \[finish_reason=stop "
-        rf"completion_tokens=41 prompt_tokens=1500 max_tokens={sent[2]['max_tokens']}\] "
+        rf"completion_tokens=41 prompt_tokens=1500 max_tokens={sent[2]['max_tokens']} "
+        rf"max_statements={reduced}\] "
         r"\(account not set\): 1 statement\(s\)",
         third,
     ), third
@@ -325,26 +333,30 @@ def test_a_reply_that_reports_no_usage_reads_unreported(caplog, flm_settings):
     (line,) = [r.getMessage() for r in _records(caplog)]
     assert (
         "[finish_reason=stop completion_tokens=unreported prompt_tokens=unreported "
-        f"max_tokens={GENERATION_MAX_TOKENS}]"
+        f"max_tokens={GENERATION_MAX_TOKENS} max_statements={MAXIMUM_STATEMENTS}]"
     ) in line
 
 
-def test_a_parsed_attempt_never_reaches_the_error_file(caplog, error_log_file, flm_settings):
-    """The brief's rule: a success is not a warning in errors.log. The failed attempt before it
-    is, which shows the file was being written; the parsed one is not, even with the logger
-    lowered to INFO the way an in-process observer lowers it."""
+def test_success_lines_go_to_the_attempts_file_and_never_to_the_error_file(
+    error_log_file, attempts_log_file, flm_settings
+):
+    """The user's decision of 7 November 2026 (step 7 phase 2a), under the shipped LOGGING as
+    conftest.py builds it, with nothing lowered by the test: the attempts file holds every
+    attempt, the failed one and the parsed one; the error file holds the failure only."""
     service, _ = _flm(
         _chat(TRUNCATED, finish_reason="length", usage=_usage(1500, 800)),
         _chat(CONFORMING, finish_reason="stop", usage=_usage(1500, 41)),
     )
 
-    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+    with attempt_log.account("account-9"):
         service.generate_statements(QUESTION, PASSAGES)
 
-    # Both were emitted...
-    assert [r.levelno for r in _records(caplog)] == [logging.WARNING, logging.INFO]
-    # ...and only the failure was written.
-    lines = error_log_file.read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 1
-    assert " WARNING apps.ai.attempts generation attempt 1 of 3 failed after " in lines[0]
+    attempts = attempts_log_file.read_text(encoding="utf-8").splitlines()
+    assert len(attempts) == 2
+    assert " WARNING apps.ai.attempts generation attempt 1 of 3 failed after " in attempts[0]
+    assert " INFO apps.ai.attempts generation attempt 2 of 3 parsed after " in attempts[1]
+    assert "(account account-9): 1 statement(s)" in attempts[1]
+    errors = error_log_file.read_text(encoding="utf-8").splitlines()
+    assert len(errors) == 1
+    assert " WARNING apps.ai.attempts generation attempt 1 of 3 failed after " in errors[0]
     assert "parsed" not in error_log_file.read_text(encoding="utf-8")

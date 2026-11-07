@@ -256,6 +256,21 @@ not assume.
 5. If FLM exposes constrained decoding or a grammar option in a later release, use
    it and delete steps 2 and 3.
 
+**The statement cap (step 7 phase 2a, 7 November 2026).** The schema's `statements` array
+has `maxItems` = `MAXIMUM_STATEMENTS`, a tuned constant in `apps/core/constants.py`. Each
+attempt's user prompt says how many statements it may give, and rule 8 of the system
+prompt tells the model to keep to it.
+
+- **Over the cap is a failed attempt,** like any other schema violation. Nothing is trimmed
+  to fit (invariant 10).
+- **The first attempt asks for `MAXIMUM_STATEMENTS`.** After a reply that reached
+  `max_tokens` or broke the cap, the next attempt asks for half as many (at least one);
+  after any other failure the number stays.
+- **Three attempts in total, as before.**
+- **Why.** Phase 1 found every 503 was a reply still listing statements at the 800-token
+  ceiling, and repeating the identical request never recovered it (D-82's note of
+  7 November 2026).
+
 **Measure it before building on it.** `scripts/citation_harness.py` runs a fixed
 question set against a fixed corpus and reports:
 

@@ -85,11 +85,15 @@ class AnthropicService:
         """
         if not passages:
             raise ValueError("generate_statements() needs at least one passage")
-        user_prompt = build_user_prompt(question, passages)
         # One value for the request and for the attempt log's record of it.
         max_tokens = GENERATION_MAX_TOKENS
+        # Built per attempt, because each attempt's prompt states the statement cap the
+        # loop asks it for (apps/ai/generation.py).
         return run_generation_attempts(
-            call_once=lambda: self._claude_once(user_prompt, max_tokens=max_tokens),
+            call_once=lambda max_statements: self._claude_once(
+                build_user_prompt(question, passages, max_statements=max_statements),
+                max_tokens=max_tokens,
+            ),
             label=f"Claude ({settings.ANTHROPIC_MODEL})",
             on_attempt=on_attempt,
             max_tokens=max_tokens,

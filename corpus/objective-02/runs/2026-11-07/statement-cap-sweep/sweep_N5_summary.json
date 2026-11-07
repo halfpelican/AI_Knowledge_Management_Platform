@@ -1,0 +1,38 @@
+{
+ "label": "N5",
+ "cap": 5,
+ "code_has_cap": true,
+ "runs": 31,
+ "set_sha256": "19a0639ad4c2d82bc347eddf4f7ed79edfa7294788b7d1b4ee11f4013fb6286f",
+ "started": "2026-11-07T21:22:46+11:00",
+ "finished": "2026-11-07T21:43:13+11:00",
+ "counts_before": {
+  "query_log": 83,
+  "answer_citation": 199,
+  "conversation": 3,
+  "content_chunk": 43
+ },
+ "counts_after": {
+  "query_log": 83,
+  "answer_citation": 199,
+  "conversation": 3,
+  "content_chunk": 43
+ },
+ "attempts": 31,
+ "ceiling_hits": 0,
+ "server_503": 1,
+ "cap_violations": 0,
+ "schema_violations": 3,
+ "answered_where_expected": "23/24",
+ "no_answer_where_expected": "3/7",
+ "expected_answer_match": "15/24",
+ "phrase_anywhere": "19/24",
+ "out_of_scope_citations": 0,
+ "completion_tokens_median": 347,
+ "completion_tokens_max": 415,
+ "attempt_seconds_median": 48.6,
+ "attempt_seconds_max": 61.7,
+ "ask_seconds_median": 35.3,
+ "ask_seconds_max": 163.7,
+ "statements_per_answer_max": 5
+}

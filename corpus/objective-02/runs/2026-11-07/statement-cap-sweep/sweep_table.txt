@@ -1,0 +1,53 @@
+| | baseline | N3 | N4 | N5 | N6 |
+|---|---|---|---|---|---|
+| ceiling_hits | 8 | 0 | 0 | 0 | 0 |
+| server_503 | 2 | 0 | 1 | 1 | 0 |
+| cap_violations | 0 | 0 | 0 | 0 | 0 |
+| answered_where_expected | 21/24 | 24/24 | 23/24 | 23/24 | 24/24 |
+| no_answer_where_expected | 6/7 | 3/7 | 3/7 | 3/7 | 5/7 |
+| expected_answer_match | 9/24 | 13/24 | 14/24 | 15/24 | 15/24 |
+| phrase_anywhere | 17/24 | 19/24 | 20/24 | 19/24 | 20/24 |
+| out_of_scope_citations | 0 | 0 | 0 | 0 | 0 |
+| completion_tokens_median | 109 | 208 | 283 | 347 | 245 |
+| completion_tokens_max | 800 | 259 | 369 | 415 | 507 |
+| attempt_seconds_median | 23.3 | 30.9 | 39.7 | 48.6 | 33.2 |
+| attempt_seconds_max | 117.4 | 42.7 | 53.1 | 61.7 | 75.3 |
+| ask_seconds_median | 19.9 | 30.6 | 39.5 | 35.3 | 31.7 |
+| ask_seconds_max | 350.7 | 43.2 | 154.8 | 163.7 | 75.7 |
+| statements_per_answer_max | 9 | 3 | 4 | 5 | 6 |
+| attempts | 35 | 29 | 31 | 31 | 29 |
+
+Per run: M matched, A answered without a match, - no answer, 503; * against expectation.
+| run | expects | baseline | N3 | N4 | N5 | N6 |
+|---|---|---|---|---|---|---|
+| d01 | answer | A | A | M | M | M |
+| d02 | answer | A | A | A | A | A |
+| d03 | answer | 503 | M | M | M | M |
+| d04 | answer | A | A | A | A | A |
+| d05 | answer | A | M | M | M | M |
+| d06 | answer | 503 | M | M | M | M |
+| d07 | answer | M | M | M | M | M |
+| d08 | answer | A | A | A | A | A |
+| d09 | answer | M | M | 503 | M | A |
+| d10 | answer | M | M | M | M | M |
+| d11@Administrator | answer | A | A | M | M | M |
+| d11@Employee | none | A* | A* | A* | A* | A* |
+| d12 | answer | M | M | M | M | M |
+| d13 | answer | A | A | A | A | A |
+| d14 | answer | M | M | M | M | M |
+| d15 | answer | M | M | M | M | M |
+| d16 | answer | A | A | A | A | A |
+| d17 | answer | M | M | M | M | M |
+| d18 | answer | A | A | A | A | A |
+| d19 | answer | A | A | A | A | A |
+| d20 | answer | M | M | M | M | M |
+| d21@Administrator | answer | -* | A | A | A | A |
+| d21@Employee | none | - | A* | A* | A* | A* |
+| d22@Administrator | answer | M | M | M | M | M |
+| d22@Employee | none | - | - | - | - | - |
+| d23 | answer | A | M | M | M | M |
+| d24 | none | - | A* | A* | A* | - |
+| d25 | none | - | A* | A* | A* | - |
+| d26 | none | - | - | - | - | - |
+| d27 | none | - | - | - | - | - |
+| d28 | answer | A | A | A | 503 | M |
