@@ -6250,3 +6250,17 @@ precondition, `docs/stage-5-item-8-walk.md`
   `C:\kmp-demo\2026-11-01\media.pre-d35`, which hold the 2 and 3 November walks' state. Deleting
   them is the user's call.
 - **The alpha itself:** it now holds the 6 November walk's state.
+
+**Dated note, 7 November 2026: the lecturer's words, and what follows from them.** The user
+corrected the reason above.
+
+- **The demonstration in class was unscripted,** and it did not run on the alpha. The lecturer was
+  satisfied with what he saw, and asked for a recorded demonstration only if there is anything
+  new.
+- **So no recording is owed for what was shown.** The "Why" above put it more broadly than that.
+- **A recording becomes due again for work shown after 7 November:** meeting deletion, live
+  meeting ingestion, and the NIT3004 work (FR-10, FR-16, FR-19).
+- **Record it on the build that carries that work,** following the demonstration script's
+  recording advice: OBS's Display Capture, under 2 GB.
+- **The server cannot confirm what the class demonstration showed.** The two onboarding
+  questions on the alpha on 7 November, at 10:52 and 10:54, came from a separate session.
