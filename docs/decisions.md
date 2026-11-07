@@ -3553,6 +3553,20 @@ build over HTTPS later is a `.env` change and not a code change:
 >     area, as it does in development.
 >   - **`npm ci` reports 5 advisories** (2 moderate, 3 high), which nobody has looked into.
 
+**Dated note, 7 November 2026: M8's hosting is decided.** This entry's scope was the M6 alpha
+only, and D-88 left "M8's hosting and database" open. The user has settled the hosting part.
+
+- **M8 is hosted on the NPU laptop, with FastFlowLM,** the same machine as the alpha. The
+  proposal's Google Cloud VM cannot run FastFlowLM, which needs the laptop's NPU, and there is no
+  budget for the Claude provider (D-35).
+- **FastFlowLM stays pinned at v0.9.39** (D-83). Newer releases are evaluated only after M8.
+- **Still open:**
+  - which database M8 serves;
+  - whether M8 stays on loopback as the alpha does, given that registration (FR-01) is open to
+    anyone who can reach it;
+  - how NFR-03's TLS scan is met. This entry put HTTPS out of scope for the alpha, and moved that
+    scan to round 2.
+
 ## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
 
 **Status:** Settled by the user · **Date:** 2026-10-05 · **Settles:** D-54 · **Stage:** 5
@@ -6249,3 +6263,17 @@ precondition, `docs/stage-5-item-8-walk.md`
   `C:\kmp-demo\2026-11-01\media.pre-d35`, which hold the 2 and 3 November walks' state. Deleting
   them is the user's call.
 - **The alpha itself:** it now holds the 6 November walk's state.
+
+**Dated note, 7 November 2026: the lecturer's words, and what follows from them.** The user
+corrected the reason above.
+
+- **The demonstration in class was unscripted,** and it did not run on the alpha. The lecturer was
+  satisfied with what he saw, and asked for a recorded demonstration only if there is anything
+  new.
+- **So no recording is owed for what was shown.** The "Why" above put it more broadly than that.
+- **A recording becomes due again for work shown after 7 November:** meeting deletion, live
+  meeting ingestion, and the NIT3004 work (FR-10, FR-16, FR-19).
+- **Record it on the build that carries that work,** following the demonstration script's
+  recording advice: OBS's Display Capture, under 2 GB.
+- **The server cannot confirm what the class demonstration showed.** The two onboarding
+  questions on the alpha on 7 November, at 10:52 and 10:54, came from a separate session.
