@@ -20,9 +20,9 @@ project. Functional requirements are referenced throughout this repo by ID
 raise it rather than building it.
 
 **Team.** Benjamin Morovan (BM, lead — AI & RAG pipeline, extraction, indexing,
-front-end build) · Sagarika Dey (SD — REST API layer, meeting intelligence,
-assistant, documentation) · Haseeb Malik (HM — database, auth & RBAC, retrieval
-scoping, security, NFR verification).
+front-end build, database, auth & RBAC, retrieval scoping, security, NFR
+verification) · Sagarika Dey (SD — REST API layer, meeting intelligence,
+assistant, documentation).
 
 ### Companion documents
 

@@ -510,7 +510,7 @@ export default function ComponentSheet() {
             name="transcript-demo"
             rows={4}
             hint={TEXT.transcriptVerbatim}
-            defaultValue={'[00:03:12] Sagarika: the dates hold.\n[00:03:20] Haseeb: agreed.'}
+            defaultValue={'[00:03:12] Sagarika: the dates hold.\n[00:03:20] Jordan: agreed.'}
           />
         </div>
         <p>
