@@ -2,15 +2,22 @@
 
 NFR-08's first run on 1 November 2026 had two 503s that could be bounded but not explained:
 nothing recorded a generation or embedding attempt. ``apps/ai/attempt_log.py`` logs each
-failed attempt; these tests pin what a line says, that a success logs nothing, and that
+failed attempt; these tests pin what a line says, that a success logs no warning, and that
 logging changes no attempt count. The view's 503 line is tested from both roles in
 ``apps/api/tests/test_ask.py``, and the file it lands in in
 ``apps/core/tests/test_logging_config.py``.
+
+**7 November 2026, step 7 phase 1.** Every generation attempt now records what its reply
+reported (``finish_reason``, completion and prompt tokens) and the ``max_tokens`` sent, and
+a parsed attempt is an INFO line. The tests for that are at the end of this file; the
+Anthropic provider's are in ``apps/ai/tests/test_anthropic.py``.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 
 import httpx2  # the openai SDK's HTTP layer, as apps/ai/tests/test_flm.py imports it
 import openai
@@ -19,8 +26,9 @@ from django.conf import settings
 
 import apps.ai
 from apps.ai import attempt_log
-from apps.ai.base import EmbeddingResult, ProviderUnavailable
-from apps.ai.generation import run_generation_attempts
+from apps.ai.base import EmbeddingResult, Passage, ProviderUnavailable
+from apps.ai.flm import FLMService
+from apps.ai.generation import GENERATION_MAX_TOKENS, run_generation_attempts
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS, MAXIMUM_GENERATION_ATTEMPTS
 from apps.retrieval.query_embedding import embed_question
 
@@ -76,7 +84,8 @@ def test_each_failed_generation_attempt_is_logged_with_its_cause_time_and_accoun
     assert "(account account-7): SchemaViolation: " in second
 
 
-def test_a_first_attempt_that_parses_logs_nothing(caplog):
+def test_a_first_attempt_that_parses_logs_no_warning(caplog):
+    """Its INFO line is tested at the end of this file; at WARNING there is nothing."""
     call_once, _ = _scripted(VALID_REPLY)
 
     with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
@@ -171,3 +180,171 @@ def test_an_unusable_embedding_reply_is_logged_before_its_503(caplog, monkeypatc
     (line,) = _attempt_lines(caplog)
     assert line.startswith(f"question embedding attempt 1 of {MAXIMUM_EMBED_ATTEMPTS} failed after ")
     assert ": unusable reply: " in line
+
+
+# --- What each generation attempt's reply reported (7 November 2026) ---------------------------
+#
+# Step 7 phase 1, at the user's order: "log each attempt's finish_reason and completion-token
+# count". Exercised through FLMService over the SDK's MockTransport, so each value travels the
+# real response parsing: FLM's JSON, the openai SDK's model, FLMService._chat_once, the loop and
+# the log line.
+
+FLM_BASE = "http://flm.test/v1"
+CHUNK_ID = "3f2a91c7-5e48-4d0b-9a16-7c8e2b4f6a03"
+PASSAGES = [Passage(chunk_id=CHUNK_ID, text="Twenty days of annual leave per year.")]
+QUESTION = "How much annual leave do I get?"
+CONFORMING = json.dumps({"statements": [{"text": "Twenty days.", "chunk_id": CHUNK_ID}]})
+# A reply that stops before its JSON closes, as every failed attempt in NFR-08's run 3 did.
+TRUNCATED = '{"statements": [{"text": "Twenty days.", "chunk_id": "3f2a91c7-5e48'
+
+
+@pytest.fixture
+def flm_settings(settings):
+    settings.FLM_BASE_URL = FLM_BASE
+    settings.FLM_API_KEY = "flm"
+    settings.FLM_CHAT_MODEL = "gemma3:4b"
+
+
+def _chat(content, *, finish_reason="stop", usage=None):
+    """One FLM chat completion. ``usage`` None leaves the usage block out entirely."""
+    body = {
+        "id": "fastflowlm-chat-completion",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "gemma3:4b",
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": finish_reason,
+            }
+        ],
+    }
+    if usage is not None:
+        body["usage"] = usage
+    return httpx2.Response(200, json=body)
+
+
+def _usage(prompt, completion):
+    # total_tokens differs from both, so reading the wrong field cannot pass.
+    return {"prompt_tokens": prompt, "completion_tokens": completion, "total_tokens": prompt + completion}
+
+
+def _flm(*steps):
+    """FLMService answering each request with the next step (a response, or an exception to
+    raise), and the JSON body of every request it sent."""
+    remaining = list(steps)
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        step = remaining.pop(0)
+        if isinstance(step, BaseException):
+            raise step
+        return step
+
+    client = openai.OpenAI(
+        base_url=FLM_BASE,
+        api_key="flm",
+        max_retries=0,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(handler)),
+    )
+    return FLMService(client=client), sent
+
+
+def _records(caplog):
+    return [r for r in caplog.records if r.name == attempt_log.ATTEMPT_LOGGER_NAME]
+
+
+def test_a_parsed_attempt_is_an_info_line_carrying_what_its_reply_reported(caplog, flm_settings):
+    service, sent = _flm(_chat(CONFORMING, finish_reason="stop", usage=_usage(412, 37)))
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with attempt_log.account("account-5"):
+            service.generate_statements(QUESTION, PASSAGES)
+
+    (record,) = _records(caplog)
+    assert record.levelno == logging.INFO
+    match = re.fullmatch(
+        rf"generation attempt 1 of {MAXIMUM_GENERATION_ATTEMPTS} parsed after \d+\.\d s "
+        r"\[finish_reason=stop completion_tokens=37 prompt_tokens=412 max_tokens=(\d+)\] "
+        r"\(account account-5\): 1 statement\(s\)",
+        record.getMessage(),
+    )
+    assert match, record.getMessage()
+    # The max_tokens logged is the max_tokens the request carried.
+    assert int(match.group(1)) == sent[0]["max_tokens"] == GENERATION_MAX_TOKENS
+
+
+def test_each_attempt_carries_its_own_reply_and_a_failed_call_reports_only_max_tokens(
+    caplog, flm_settings
+):
+    """A timeout, then a reply cut off at max_tokens, then a conforming one: three lines, each
+    with its own values, and the call that produced no reply reports nothing but what it sent."""
+    service, sent = _flm(
+        httpx2.ReadTimeout("timed out"),
+        _chat(TRUNCATED, finish_reason="length", usage=_usage(1500, 800)),
+        _chat(CONFORMING, finish_reason="stop", usage=_usage(1500, 41)),
+    )
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        service.generate_statements(QUESTION, PASSAGES)
+
+    records = _records(caplog)
+    assert [r.levelno for r in records] == [logging.WARNING, logging.WARNING, logging.INFO]
+    assert len(sent) == MAXIMUM_GENERATION_ATTEMPTS
+    first, second, third = (r.getMessage() for r in records)
+    assert re.fullmatch(
+        r"generation attempt 1 of 3 failed after \d+\.\d s \[finish_reason=unreported "
+        r"completion_tokens=unreported prompt_tokens=unreported "
+        rf"max_tokens={sent[0]['max_tokens']}\] \(account not set\): APITimeoutError: .+",
+        first,
+    ), first
+    assert re.fullmatch(
+        r"generation attempt 2 of 3 failed after \d+\.\d s \[finish_reason=length "
+        rf"completion_tokens=800 prompt_tokens=1500 max_tokens={sent[1]['max_tokens']}\] "
+        r"\(account not set\): SchemaViolation: unbalanced JSON object in the response",
+        second,
+    ), second
+    assert re.fullmatch(
+        r"generation attempt 3 of 3 parsed after \d+\.\d s \[finish_reason=stop "
+        rf"completion_tokens=41 prompt_tokens=1500 max_tokens={sent[2]['max_tokens']}\] "
+        r"\(account not set\): 1 statement\(s\)",
+        third,
+    ), third
+
+
+def test_a_reply_that_reports_no_usage_reads_unreported(caplog, flm_settings):
+    """FLM leaving the usage block out is logged as such, not as zero and not as a crash."""
+    service, _ = _flm(_chat(CONFORMING, finish_reason="stop", usage=None))
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        result = service.generate_statements(QUESTION, PASSAGES)
+
+    assert [s.chunk_id for s in result.statements] == [CHUNK_ID]
+    (line,) = [r.getMessage() for r in _records(caplog)]
+    assert (
+        "[finish_reason=stop completion_tokens=unreported prompt_tokens=unreported "
+        f"max_tokens={GENERATION_MAX_TOKENS}]"
+    ) in line
+
+
+def test_a_parsed_attempt_never_reaches_the_error_file(caplog, error_log_file, flm_settings):
+    """The brief's rule: a success is not a warning in errors.log. The failed attempt before it
+    is, which shows the file was being written; the parsed one is not, even with the logger
+    lowered to INFO the way an in-process observer lowers it."""
+    service, _ = _flm(
+        _chat(TRUNCATED, finish_reason="length", usage=_usage(1500, 800)),
+        _chat(CONFORMING, finish_reason="stop", usage=_usage(1500, 41)),
+    )
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        service.generate_statements(QUESTION, PASSAGES)
+
+    # Both were emitted...
+    assert [r.levelno for r in _records(caplog)] == [logging.WARNING, logging.INFO]
+    # ...and only the failure was written.
+    lines = error_log_file.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert " WARNING apps.ai.attempts generation attempt 1 of 3 failed after " in lines[0]
+    assert "parsed" not in error_log_file.read_text(encoding="utf-8")

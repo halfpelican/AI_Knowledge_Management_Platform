@@ -23,6 +23,30 @@ Nothing logged here quotes the question, a passage or the model's reply: the det
 the exception messages, which describe the failure (``not valid JSON: ...``, ``Request
 timed out.``), and they are cut at ``DETAIL_LIMIT`` characters.
 
+**What each generation attempt's reply reported (7 November 2026),** at the user's order
+for step 7: "log each attempt's finish_reason and completion-token count". D-82's notes of
+1 November could only call a reply cut off at ``GENERATION_MAX_TOKENS`` "the likely
+reading, not observed", because nothing recorded how a reply ended.
+
+- **Every generation attempt's line carries a bracket,** ``[finish_reason=stop
+  completion_tokens=800 prompt_tokens=1520 max_tokens=800]``: the reason the provider gave
+  for ending the reply, verbatim; the completion and prompt token counts it reported; and
+  the ``max_tokens`` the request sent. A value the provider did not report, or a call that
+  produced no reply, reads ``unreported``. The bracket sits between the time and the
+  account, so the detail stays at the end of the line. Question-embedding lines have no
+  bracket and are unchanged.
+- **A failed attempt is a WARNING, as before. A parsed attempt is an INFO,**
+  ``generation attempt 2 of 3 parsed after 58.1 s [...] (account ...): 3 statement(s)``.
+  It is not a warning, so it does not belong in the error file, and the error file's
+  handler for this logger is at WARNING. **Under the shipped LOGGING the logger itself is
+  at WARNING, so a running server drops the INFO line.** An in-process observer, or a
+  test, lowers the logger's level to read it. Writing it to a file of its own on the
+  server would be a change to LOGGING, and is not made here.
+- **FLM's ``finish_reason`` is recorded, not trusted.** On 7 November 2026 FLM v0.9.39
+  answered ``finish_reason: "stop"`` to a request whose reply stopped at exactly
+  ``max_tokens`` (20 of 20, mid-list). So the completion-token count against
+  ``max_tokens`` is logged beside it, and a reader compares the two.
+
 **It observes; it does not decide.** No attempt count, timeout or reply changes because
 of it. A logging call does not raise into its caller: a handler that fails reports through
 ``logging``'s own ``handleError``.
@@ -33,9 +57,14 @@ from __future__ import annotations
 import contextvars
 import logging
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 ATTEMPT_LOGGER_NAME = "apps.ai.attempts"
 DETAIL_LIMIT = 300
+# A provider's finish_reason is a short word ("stop", "length", "end_turn"). Anything
+# longer is cut, so a misbehaving server cannot write an arbitrary string into the line.
+FACT_LIMIT = 40
+UNREPORTED = "unreported"
 
 logger = logging.getLogger(ATTEMPT_LOGGER_NAME)
 
@@ -65,17 +94,82 @@ def _detail(text: str) -> str:
     return text if len(text) <= DETAIL_LIMIT else text[: DETAIL_LIMIT - 3] + "..."
 
 
-def failed_attempt(step: str, number: int, of: int, seconds: float, cause: str, detail: str) -> None:
-    """One failed attempt of ``step``, "generation" or "question embedding"."""
+@dataclass(frozen=True)
+class ReplyFacts:
+    """What one generation attempt sent, and what the provider reported about its reply.
+
+    ``max_tokens`` is the value the request carried. The other three are the provider's own
+    report, and None where it reported nothing or there was no reply: ``finish_reason``
+    verbatim (FLM's ``choices[0].finish_reason``; Anthropic's ``stop_reason``), and the
+    completion and prompt token counts from its usage block.
+    """
+
+    max_tokens: int | None = None
+    finish_reason: str | None = None
+    completion_tokens: int | None = None
+    prompt_tokens: int | None = None
+
+
+def _fact(value) -> str:
+    if value is None:
+        return UNREPORTED
+    return "_".join(str(value).split())[:FACT_LIMIT]
+
+
+def _bracket(reply: ReplyFacts | None) -> str:
+    """`` [finish_reason=... completion_tokens=... prompt_tokens=... max_tokens=...]``, or
+    nothing for a step that has no reply to describe."""
+    if reply is None:
+        return ""
+    return (
+        f" [finish_reason={_fact(reply.finish_reason)}"
+        f" completion_tokens={_fact(reply.completion_tokens)}"
+        f" prompt_tokens={_fact(reply.prompt_tokens)}"
+        f" max_tokens={_fact(reply.max_tokens)}]"
+    )
+
+
+def failed_attempt(
+    step: str,
+    number: int,
+    of: int,
+    seconds: float,
+    cause: str,
+    detail: str,
+    *,
+    reply: ReplyFacts | None = None,
+) -> None:
+    """One failed attempt of ``step``, "generation" or "question embedding".
+
+    ``reply`` is passed for a generation attempt, and adds the bracket.
+    """
     logger.warning(
-        "%s attempt %d of %d failed after %.1f s (account %s): %s: %s",
+        "%s attempt %d of %d failed after %.1f s%s (account %s): %s: %s",
         step,
         number,
         of,
         seconds,
+        _bracket(reply),
         _account.get() or "not set",
         cause,
         _detail(detail),
+    )
+
+
+def parsed_attempt(number: int, of: int, seconds: float, statements: int, *, reply: ReplyFacts) -> None:
+    """One generation attempt whose reply parsed into STATEMENT_LIST_SCHEMA, at INFO.
+
+    Not a warning: nothing went wrong. Under the shipped LOGGING it is dropped at the
+    logger, which is at WARNING; see the module docstring.
+    """
+    logger.info(
+        "generation attempt %d of %d parsed after %.1f s%s (account %s): %d statement(s)",
+        number,
+        of,
+        seconds,
+        _bracket(reply),
+        _account.get() or "not set",
+        statements,
     )
 
 

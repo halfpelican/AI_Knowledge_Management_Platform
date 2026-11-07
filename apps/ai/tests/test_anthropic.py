@@ -6,6 +6,8 @@ openai SDK's MockTransport, as the FLM tests do.
 """
 
 import json
+import logging
+from types import SimpleNamespace
 
 import anthropic as anthropic_sdk
 import httpx2
@@ -13,6 +15,7 @@ import openai
 import pytest
 from django.test import override_settings
 
+from apps.ai import attempt_log
 from apps.ai.anthropic import AnthropicService
 from apps.ai.base import Passage, ProviderHealth, ProviderUnavailable
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
@@ -308,3 +311,40 @@ def test_every_attempt_is_reported_to_on_attempt():
     )
 
     assert [attempt.outcome for attempt in recorded] == ["schema-violation", "parsed"]
+
+
+def _claude_reply(text, *, stop_reason, input_tokens, output_tokens):
+    """A Claude message carrying the stop reason and usage block the SDK documents."""
+    message = FakeMessage([FakeTextBlock(text)])
+    message.stop_reason = stop_reason
+    message.usage = SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
+    return message
+
+
+def test_claudes_stop_reason_and_usage_reach_the_attempt_log(caplog):
+    """7 November 2026, step 7 phase 1 (apps/ai/attempt_log.py). The loop is shared, so Claude's
+    replies are described the same way FLM's are: ``stop_reason`` verbatim as the finish reason,
+    ``output_tokens`` as the completion count, ``input_tokens`` as the prompt count, and the
+    ``max_tokens`` the request carried."""
+    truncated = '{"statements": [{"text": "Twenty days.", "chunk_id": "3f2a'
+    client = FakeGeneratingClient(
+        _claude_reply(truncated, stop_reason="max_tokens", input_tokens=900, output_tokens=800),
+        _claude_reply(CONFORMING, stop_reason="end_turn", input_tokens=900, output_tokens=25),
+    )
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    records = [r for r in caplog.records if r.name == attempt_log.ATTEMPT_LOGGER_NAME]
+    assert [r.levelno for r in records] == [logging.WARNING, logging.INFO]
+    sent = [call["max_tokens"] for call in client.messages.calls]
+    assert sent == [GENERATION_MAX_TOKENS, GENERATION_MAX_TOKENS]
+    failed, parsed = (r.getMessage() for r in records)
+    assert (
+        f"[finish_reason=max_tokens completion_tokens=800 prompt_tokens=900 max_tokens={sent[0]}]"
+        " (account not set): SchemaViolation: unbalanced JSON object in the response"
+    ) in failed
+    assert (
+        f"[finish_reason=end_turn completion_tokens=25 prompt_tokens=900 max_tokens={sent[1]}]"
+        " (account not set): 1 statement(s)"
+    ) in parsed

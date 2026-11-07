@@ -42,6 +42,8 @@ here would write once per attempt into a real run's output for a fault that cann
 the answer.
 """
 
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
 from typing import Callable
@@ -79,32 +81,62 @@ class GenerationAttempt:
     statements: int | None = None
 
 
+@dataclass(frozen=True)
+class ChatReply:
+    """One provider call's reply text, and what the provider reported about it.
+
+    Returned by each provider's ``call_once`` (7 November 2026), so the attempt log can
+    record how every reply ended (apps/ai/attempt_log.py). Only ``text`` is parsed; the
+    other three are logged and nothing branches on them. None means the provider did not
+    report the value.
+    """
+
+    text: str
+    finish_reason: str | None = None  # verbatim: FLM's finish_reason, Anthropic's stop_reason
+    completion_tokens: int | None = None
+    prompt_tokens: int | None = None
+
+
 def run_generation_attempts(
     *,
-    call_once: Callable[[], str],
+    call_once: Callable[[], str | ChatReply],
     label: str,
     on_attempt: Callable[[GenerationAttempt], None] | None = None,
+    max_tokens: int | None = None,
 ) -> StatementList:
     """Call ``call_once`` until it returns a conforming reply, or give up loudly.
 
-    ``call_once`` returns the model's raw reply text and raises ProviderUnavailable for a
-    retryable transport failure; anything else it raises propagates untouched.
+    ``call_once`` returns the model's reply, as a ChatReply or as bare text, and raises
+    ProviderUnavailable for a retryable transport failure; anything else it raises
+    propagates untouched. Bare text is a reply the provider reported nothing about: both
+    providers return a ChatReply, and the suite's scripted fakes return text.
     ``label`` names the provider and endpoint in the final message, so a 503 says which
-    provider could not answer.
+    provider could not answer. ``max_tokens`` is the value the provider's request carries,
+    passed so each attempt's line can record it; it changes nothing here.
     """
     last_detail = "no attempt was made"
     for number in range(1, MAXIMUM_GENERATION_ATTEMPTS + 1):  # 1 initial call + 2 retries
         started = time.perf_counter()
         try:
-            raw = call_once()
+            reply = call_once()
         except ProviderUnavailable as exc:
             last_detail = f"call failed: {exc}"
             _record(on_attempt, number, "call-failed", started, detail=str(exc))
             attempt_log.failed_attempt(
                 "generation", number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
                 attempt_log.cause_of(exc), str(exc),
+                reply=attempt_log.ReplyFacts(max_tokens=max_tokens),
             )
             continue
+        if not isinstance(reply, ChatReply):
+            reply = ChatReply(text=reply)
+        raw = reply.text
+        facts = attempt_log.ReplyFacts(
+            max_tokens=max_tokens,
+            finish_reason=reply.finish_reason,
+            completion_tokens=reply.completion_tokens,
+            prompt_tokens=reply.prompt_tokens,
+        )
         try:
             parsed = parse_statement_list(raw)
         except SchemaViolation as exc:
@@ -114,6 +146,7 @@ def run_generation_attempts(
             attempt_log.failed_attempt(
                 "generation", number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
                 "SchemaViolation", str(exc),
+                reply=facts,
             )
             continue
         _record(
@@ -123,6 +156,10 @@ def run_generation_attempts(
             started,
             raw=raw,
             statements=len(parsed.statements),
+        )
+        attempt_log.parsed_attempt(
+            number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
+            len(parsed.statements), reply=facts,
         )
         return parsed
     raise ProviderUnavailable(
