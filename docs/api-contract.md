@@ -252,7 +252,8 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 |---|---|---|---|---|
 | POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
-| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text` | `401`; `404` no such meeting, or one outside the caller's scope |
+| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope |
+| DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body (D-99; not in the proposal, see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission; `403` the meeting is in scope and the role lacks `manage_meetings` |
 
 The meeting object:
 
@@ -911,6 +912,38 @@ status. The client links to this route, never to a `/media/` path, which nothing
   negotiates as usual and answers 406 to an `Accept` that excludes JSON; here that would refuse
   `Accept: application/pdf` before the view ran. The route's 401 and 404 are JSON whatever the
   client asked for.
+
+### Meeting deletion (D-99)
+
+**Not in the proposal.** FR-09 gives Meetings Create, Read and Update status only, and FR-15's
+permissioned deletion covers documents. The lead asked for meeting deletion on 7 November 2026.
+It mirrors the document delete (D-73) clause for clause, under a permission of its own,
+`manage_meetings`, seeded by accounts 0006 and held by Administrator only. `manage_documents` does
+not grant it, and it does not grant `manage_documents`.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/meetings/{id}` | session | `200` the meeting object **with** `transcript_text` and `can_delete` (below) | `401`; `404` no such meeting, or one outside the caller's scope |
+| DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body. The meeting, its attendees, its chunks and its tag links are deleted in one transaction (*convention*: the document delete's code) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission, with the **same body** for both; `403` the meeting is in scope and the role lacks `manage_meetings` |
+
+```json
+{
+  "...meeting object with transcript_text...": "...",
+  "can_delete": false
+}
+```
+
+- **`can_delete`** says whether the caller's role holds `manage_meetings`. It is a hint for showing
+  the delete control. The server checks the permission on every `DELETE` whatever the screen did
+  (invariant 4). Only the detail carries it: `GET /api/meetings`, `POST /api/meetings` and the
+  dashboard's `recent_meetings` return the meeting object without it.
+- **There is no file to remove.** A transcript uploaded as a file is read for its text and not
+  stored, so unlike the document delete nothing waits for the commit.
+- **After a delete,** the meeting is gone from `GET /api/meetings`, the detail and the dashboard,
+  and a question only it answered takes no-answer path A from `POST /api/ask`, because its chunks
+  are gone. Answers that cited it keep their `QueryLog` and `AnswerCitation` rows, with the
+  citation's chunk null (D-67), and a reopened turn renders them as D-67 describes. The users who
+  attended are not touched.
 
 ## Stage 5 item 5 — throttles, the in-flight ask and empty threads
 

@@ -12,6 +12,7 @@ with its permissions revoked (so every route guarded by a permission is a 403). 
 resolver gives an unknown path, a CSRF refusal and a path outside ``/api/`` are tested on their own.
 """
 
+import datetime
 import uuid
 
 import pytest
@@ -23,6 +24,7 @@ from apps.accounts.models import Role, RolePermission
 from apps.api.tests.dual_role_matrix import enumerate_endpoints
 from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME
 from apps.documents.models import Document
+from apps.meetings.models import Meeting
 
 pytestmark = pytest.mark.django_db
 
@@ -34,7 +36,8 @@ OPEN_ROUTES = {"auth-register", "auth-login"}
 
 # Routes guarded by a role permission, checked before anything else on the request: with the
 # role's permissions revoked, each must answer 403. document-detail's DELETE checks its permission
-# AFTER the scoped lookup (D-73), so it is tested on a document in scope, below.
+# AFTER the scoped lookup (D-73), so it is tested on a document in scope, below; meeting-detail's
+# DELETE likewise (D-99), on a meeting in scope.
 PERMISSION_GUARDED = {
     ("api/users", "GET"),  # manage_roles
     ("api/users/<uuid:pk>/role", "PATCH"),  # manage_roles
@@ -131,6 +134,21 @@ def test_a_delete_refused_for_want_of_manage_documents_is_never_cached(session_c
 
     assert response.status_code == 403
     assert_never_cached(response, "DELETE in scope without manage_documents")
+
+
+def test_a_delete_refused_for_want_of_manage_meetings_is_never_cached(session_client):
+    """meeting-detail's DELETE answers 403 only for a meeting in scope (D-99). The Administrator
+    holds manage_meetings, so it is revoked from the role here."""
+    meeting = Meeting.objects.create(
+        title="In scope for both roles", meeting_date=datetime.date(2026, 10, 20),
+        transcript_text="Transcript.", visible_to_roles=[EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME],
+    )
+    RolePermission.objects.filter(role__role_name=session_client.role_name).delete()
+
+    response = session_client.client.delete(f"/api/meetings/{meeting.id}")
+
+    assert response.status_code == 403
+    assert_never_cached(response, "DELETE in scope without manage_meetings")
 
 
 def test_the_role_route_is_never_cached_when_its_user_is_unknown(administrator_client):

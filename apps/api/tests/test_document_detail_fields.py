@@ -215,12 +215,14 @@ def test_can_delete_follows_the_roles_permission_not_the_role_name(
     assert detail(administrator_client, document).json()["can_delete"] is False
 
 
-def test_a_meeting_has_none_of_the_detail_fields(session_client):
-    """FR-15's detail clause is about documents (D-63's not-covered list): the meeting object is
-    unchanged."""
+def test_a_meeting_has_none_of_the_document_only_detail_fields(session_client):
+    """FR-15's detail clause is about documents (D-63's not-covered list): the meeting detail has
+    no ``extracted_text`` and no ``tags``. It has carried ``can_delete`` since D-99 added meeting
+    deletion; ``apps/api/tests/test_meeting_delete.py`` tests that field."""
     meeting = Meeting.objects.create(
         title="All-hands", meeting_date=datetime(2026, 9, 1).date(),
         transcript_text="Transcript.", visible_to_roles=BOTH_ROLES,
     )
     body = session_client.client.get(f"/api/meetings/{meeting.id}").json()
-    assert not DETAIL_FIELDS & set(body)
+    assert not (DETAIL_FIELDS - {"can_delete"}) & set(body)
+    assert "can_delete" in body

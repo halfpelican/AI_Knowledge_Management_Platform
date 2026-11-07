@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ApiError } from '../api/client.js'
 import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
 import { ingestMeeting, listMeetings } from '../api/meetings.js'
@@ -95,6 +95,9 @@ export function MeetingTable({ meetings }) {
 export default function Meetings() {
   useDocumentTitle('Meeting transcripts')
   const { user } = useAuth()
+  const location = useLocation()
+  // A successful delete returns here with the title it removed (MeetingDetail).
+  const deletedTitle = typeof location.state?.deleted === 'string' ? location.state.deleted : null
   const meetingsResource = useApiResource(listMeetings)
   const meetings = meetingsResource.data ?? []
 
@@ -119,10 +122,18 @@ export default function Meetings() {
   // The error summary. Focus moves here when a submission is refused, so a
   // keyboard user is taken to the reason instead of being left on the button.
   const errorSummaryRef = useRef(null)
+  const headingRef = useRef(null)
 
   useEffect(() => {
     if (formError) errorSummaryRef.current?.focus()
   }, [formError])
+
+  // Arriving from a delete: the dialogue and the button that opened it are gone,
+  // so focus starts at the top of the list it returned to, with the notice under
+  // the heading.
+  useEffect(() => {
+    if (deletedTitle) headingRef.current?.focus()
+  }, [deletedTitle])
 
   const visibilityOptions = visibilityOptionsFor(user?.role)
 
@@ -300,7 +311,10 @@ export default function Meetings() {
 
   return (
     <div className="repository-page">
-      <h1>Meeting transcripts</h1>
+      <h1 ref={headingRef} tabIndex={-1}>
+        Meeting transcripts
+      </h1>
+      {deletedTitle ? <Notice variant="info">{TEXT.meetingsDeleted(deletedTitle)}</Notice> : null}
 
       <section aria-labelledby="meeting-form-heading" className="meeting-form">
         <h2 id="meeting-form-heading">Add a transcript</h2>
