@@ -19,9 +19,12 @@ names to the installed Waitress, so an upgrade that renames them fails here and 
 a run.
 """
 
+import json
 import logging
 import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import django.db.backends.base.base as database_backend_base
@@ -34,6 +37,7 @@ from waitress import wasyncore
 import config.settings as settings_module
 from apps.ai import attempt_log
 from apps.core.logging_config import (
+    ATTEMPTS_FILE_HANDLER,
     ERROR_FILE_HANDLER,
     PROVIDER_ATTEMPTS_FILE_HANDLER,
     PROVIDER_ATTEMPTS_LOGGER,
@@ -54,6 +58,7 @@ def _paths(tmp_path):
         "audit_path": tmp_path / "audit.log",
         "error_path": tmp_path / "errors.log",
         "waitress_path": tmp_path / "waitress.log",
+        "attempts_path": tmp_path / "attempts.log",
     }
 
 
@@ -90,15 +95,17 @@ def test_the_error_handler_is_on_the_root_logger_and_filters_at_error(tmp_path):
     assert config["root"] == {"handlers": [ERROR_FILE_HANDLER]}
 
 
-def test_settings_build_logging_from_the_three_environment_driven_paths():
+def test_settings_build_logging_from_the_four_environment_driven_paths():
     """config/settings.py, as imported, before any test overrides it."""
     assert settings_module.LOGGING == platform_logging(
         audit_path=settings_module.AUDIT_LOG_PATH,
         error_path=settings_module.ERROR_LOG_PATH,
         waitress_path=settings_module.WAITRESS_LOG_PATH,
+        attempts_path=settings_module.ATTEMPTS_LOG_PATH,
     )
     assert settings_module.ERROR_LOG_PATH.parent.is_dir()
     assert settings_module.WAITRESS_LOG_PATH.parent.is_dir()
+    assert settings_module.ATTEMPTS_LOG_PATH.parent.is_dir()
 
 
 def test_the_error_log_path_is_configured_from_settings():
@@ -174,20 +181,73 @@ def test_a_provider_attempt_warning_is_written_to_the_error_file_once_with_a_tim
     assert [r.name for r in caplog.records] == [PROVIDER_ATTEMPTS_LOGGER]
 
 
-def test_the_provider_attempts_handler_writes_the_error_file_at_warning(tmp_path):
+def test_the_provider_attempts_logger_writes_warnings_to_the_error_file_and_info_to_its_own(tmp_path):
+    """Step 7 phase 2a (7 November 2026): the logger is at INFO with two handlers. The error
+    file's stays at WARNING, so only failures land there; the attempts file's is at INFO, so
+    every attempt does."""
     paths = _paths(tmp_path)
     config = platform_logging(**paths)
 
     assert config["loggers"][PROVIDER_ATTEMPTS_LOGGER] == {
-        "handlers": [PROVIDER_ATTEMPTS_FILE_HANDLER],
-        "level": "WARNING",
+        "handlers": [PROVIDER_ATTEMPTS_FILE_HANDLER, ATTEMPTS_FILE_HANDLER],
+        "level": "INFO",
         "propagate": True,
     }
     handler = config["handlers"][PROVIDER_ATTEMPTS_FILE_HANDLER]
     assert handler["filename"] == str(paths["error_path"])
     assert handler["level"] == "WARNING"
+    attempts = config["handlers"][ATTEMPTS_FILE_HANDLER]
+    assert attempts["filename"] == str(paths["attempts_path"])
+    assert attempts["level"] == "INFO"
+    assert attempts["delay"] is True
     # The root's handler stays at ERROR, so a django.request 4xx WARNING stays out.
     assert config["handlers"][ERROR_FILE_HANDLER]["level"] == "ERROR"
+
+
+def test_the_attempts_log_path_is_configured_from_settings():
+    """config/settings.py as imported, not the copy conftest.py's ``log_files`` overrides for
+    each test: that override builds both from one temporary path, so it would agree with
+    itself whatever settings.py did."""
+    handler = settings_module.LOGGING["handlers"][ATTEMPTS_FILE_HANDLER]
+    assert handler["filename"] == str(settings_module.ATTEMPTS_LOG_PATH)
+    assert handler["filename"] != str(settings_module.ERROR_LOG_PATH)
+
+
+def _settings_in_a_fresh_process(tmp_path, attempts_log_path):
+    """config/settings.py imported in a new interpreter, with ATTEMPTS_LOG_PATH set to
+    ``attempts_log_path`` or removed when it is None. Returns (ATTEMPTS_LOG_PATH, the attempts
+    handler's filename) as that process saw them. A fresh process, because settings are read
+    once at import and this one's were read long ago."""
+    environment = {k: v for k, v in os.environ.items() if k != "ATTEMPTS_LOG_PATH"}
+    if attempts_log_path is not None:
+        environment["ATTEMPTS_LOG_PATH"] = str(attempts_log_path)
+    script = (
+        "import json, config.settings as s; "
+        "print(json.dumps([str(s.ATTEMPTS_LOG_PATH), s.LOGGING['handlers']['attempts_file']['filename']]))"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", script], cwd=settings_module.BASE_DIR, env=environment,
+        capture_output=True, text=True, timeout=120,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return json.loads(completed.stdout.strip().splitlines()[-1])
+
+
+def test_attempts_log_path_sets_the_attempts_file(tmp_path):
+    """The environment variable names the file, and the handler writes there."""
+    wanted = tmp_path / "elsewhere" / "attempts.log"
+    seen_path, seen_filename = _settings_in_a_fresh_process(tmp_path, wanted)
+    assert Path(seen_path) == wanted
+    assert Path(seen_filename) == wanted
+    assert wanted.parent.is_dir()  # settings create the folder, as they do for errors.log
+
+
+def test_attempts_log_path_defaults_to_logs_beside_the_error_file(tmp_path):
+    default = settings_module.BASE_DIR / "logs" / "attempts.log"
+    seen_path, seen_filename = _settings_in_a_fresh_process(tmp_path, None)
+    assert Path(seen_path) == default
+    assert Path(seen_filename) == default
+    assert default.parent == (settings_module.BASE_DIR / "logs" / "errors.log").parent
 
 
 # --- Waitress's file (D-87 section 3) ----------------------------------------------------------

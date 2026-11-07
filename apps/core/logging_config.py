@@ -20,6 +20,8 @@ WAITRESS_FILE_HANDLER = "waitress_file"
 # config/settings.py imports, stays free of apps/ imports. A test holds the two equal.
 PROVIDER_ATTEMPTS_LOGGER = "apps.ai.attempts"
 PROVIDER_ATTEMPTS_FILE_HANDLER = "provider_attempts_file"
+# Every attempt, parsed or failed, at INFO, in a file of its own (step 7 phase 2a).
+ATTEMPTS_FILE_HANDLER = "attempts_file"
 
 
 def audit_logging(path) -> dict:
@@ -42,7 +44,7 @@ def audit_logging(path) -> dict:
     }
 
 
-def platform_logging(*, audit_path, error_path, waitress_path) -> dict:
+def platform_logging(*, audit_path, error_path, waitress_path, attempts_path) -> dict:
     """LOGGING for the platform: the audit logger exactly as ``audit_logging`` builds it, an
     ERROR-level handler on the ROOT logger appending to ``error_path`` (D-75), and the
     ``waitress`` logger at INFO appending to ``waitress_path`` (D-87 section 3).
@@ -122,9 +124,23 @@ def platform_logging(*, audit_path, error_path, waitress_path) -> dict:
         "encoding": "utf-8",
         "delay": True,
     }
+    # Every provider attempt, parsed or failed, at INFO, in ``attempts_path`` (step 7 phase 2a,
+    # the user's decision of 7 November 2026). A parsed attempt is an INFO line
+    # (apps/ai/attempt_log.py), and it belongs in neither the error file nor nowhere: until this
+    # handler, the logger sat at WARNING and a running server dropped it. The logger is now at
+    # INFO; the error file's handler above stays at WARNING, so a success never lands there, and
+    # the root's handler drops the INFO it propagates. The file is opened on its first record.
+    config["handlers"][ATTEMPTS_FILE_HANDLER] = {
+        "class": "logging.FileHandler",
+        "level": "INFO",
+        "filename": str(attempts_path),
+        "formatter": "errors",
+        "encoding": "utf-8",
+        "delay": True,
+    }
     config["loggers"][PROVIDER_ATTEMPTS_LOGGER] = {
-        "handlers": [PROVIDER_ATTEMPTS_FILE_HANDLER],
-        "level": "WARNING",
+        "handlers": [PROVIDER_ATTEMPTS_FILE_HANDLER, ATTEMPTS_FILE_HANDLER],
+        "level": "INFO",
         "propagate": True,
     }
     return config

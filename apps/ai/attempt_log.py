@@ -38,10 +38,15 @@ reading, not observed", because nothing recorded how a reply ended.
 - **A failed attempt is a WARNING, as before. A parsed attempt is an INFO,**
   ``generation attempt 2 of 3 parsed after 58.1 s [...] (account ...): 3 statement(s)``.
   It is not a warning, so it does not belong in the error file, and the error file's
-  handler for this logger is at WARNING. **Under the shipped LOGGING the logger itself is
-  at WARNING, so a running server drops the INFO line.** An in-process observer, or a
-  test, lowers the logger's level to read it. Writing it to a file of its own on the
-  server would be a change to LOGGING, and is not made here.
+  handler for this logger is at WARNING.
+- **Every attempt goes to the attempts file (step 7 phase 2a, the user's decision of
+  7 November 2026).** ``platform_logging`` gives this logger a second handler, at INFO,
+  writing ``ATTEMPTS_LOG_PATH`` (default ``logs/attempts.log``), and sets the logger to INFO.
+  So the attempts file holds every generation attempt, parsed or failed, and the 503 lines;
+  the error file still holds the WARNINGs only. Until this, the INFO line was dropped at the
+  logger on a running server.
+- **The bracket also carries ``max_statements``,** the statement cap the attempt's prompt
+  asked for (apps/ai/generation.py), so a reader sees when a retry asked for fewer.
 - **FLM's ``finish_reason`` is recorded, not trusted.** On 7 November 2026 FLM v0.9.39
   answered ``finish_reason: "stop"`` to a request whose reply stopped at exactly
   ``max_tokens`` (20 of 20, mid-list). So the completion-token count against
@@ -108,6 +113,9 @@ class ReplyFacts:
     finish_reason: str | None = None
     completion_tokens: int | None = None
     prompt_tokens: int | None = None
+    # The statement cap the attempt's prompt asked for (step 7 phase 2a): what the request
+    # sent, like max_tokens, not something the provider reports.
+    max_statements: int | None = None
 
 
 def _fact(value) -> str:
@@ -117,15 +125,16 @@ def _fact(value) -> str:
 
 
 def _bracket(reply: ReplyFacts | None) -> str:
-    """`` [finish_reason=... completion_tokens=... prompt_tokens=... max_tokens=...]``, or
-    nothing for a step that has no reply to describe."""
+    """`` [finish_reason=... completion_tokens=... prompt_tokens=... max_tokens=...
+    max_statements=...]``, or nothing for a step that has no reply to describe."""
     if reply is None:
         return ""
     return (
         f" [finish_reason={_fact(reply.finish_reason)}"
         f" completion_tokens={_fact(reply.completion_tokens)}"
         f" prompt_tokens={_fact(reply.prompt_tokens)}"
-        f" max_tokens={_fact(reply.max_tokens)}]"
+        f" max_tokens={_fact(reply.max_tokens)}"
+        f" max_statements={_fact(reply.max_statements)}]"
     )
 
 
@@ -159,8 +168,8 @@ def failed_attempt(
 def parsed_attempt(number: int, of: int, seconds: float, statements: int, *, reply: ReplyFacts) -> None:
     """One generation attempt whose reply parsed into STATEMENT_LIST_SCHEMA, at INFO.
 
-    Not a warning: nothing went wrong. Under the shipped LOGGING it is dropped at the
-    logger, which is at WARNING; see the module docstring.
+    Not a warning: nothing went wrong. It reaches the attempts file and not the error file;
+    see the module docstring.
     """
     logger.info(
         "generation attempt %d of %d parsed after %.1f s%s (account %s): %d statement(s)",

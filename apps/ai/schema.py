@@ -26,10 +26,17 @@ import json
 import re
 
 from apps.ai.base import Statement, StatementList
+from apps.core.constants import MAXIMUM_STATEMENTS
 
 # docs/ai-provider.md section 5. Expressed as JSON Schema so it can be handed to a
 # constrained-decoding option if FLM ever exposes one; validated by hand below,
 # since the project takes no jsonschema dependency for one small shape.
+#
+# ``maxItems`` (step 7 phase 2a, 7 November 2026) is the statement cap. A reply with more
+# statements than the attempt asked for is a violation like any other: retried, never
+# trimmed to fit (invariant 10). An attempt after a reply that hit max_tokens or broke the
+# cap asks for fewer than MAXIMUM_STATEMENTS (apps/ai/generation.py), and its reply is held
+# to the number it was asked for, which is never more than this.
 STATEMENT_LIST_SCHEMA = {
     "type": "object",
     "required": ["statements"],
@@ -37,6 +44,7 @@ STATEMENT_LIST_SCHEMA = {
     "properties": {
         "statements": {
             "type": "array",
+            "maxItems": MAXIMUM_STATEMENTS,
             "items": {
                 "type": "object",
                 "required": ["text", "chunk_id"],
@@ -56,6 +64,14 @@ class SchemaViolation(Exception):
 
     Treated as no response at all: retried, then 503 after
     MAXIMUM_GENERATION_ATTEMPTS (CLAUDE.md invariant 10). Never a partial answer.
+    """
+
+
+class StatementCapExceeded(SchemaViolation):
+    """The reply holds more statements than the attempt asked for.
+
+    A SchemaViolation, so it is retried and never trimmed. Its own class because the attempt
+    loop asks the next attempt for fewer statements after it (apps/ai/generation.py).
     """
 
 
@@ -104,7 +120,7 @@ def _outermost_json_object(text: str) -> str:
     raise SchemaViolation("unbalanced JSON object in the response")
 
 
-def parse_statement_list(raw: str) -> StatementList:
+def parse_statement_list(raw: str, *, max_statements: int | None = None) -> StatementList:
     """Parse a raw model reply into a StatementList, or raise SchemaViolation.
 
     Tolerant of the malformations a small model commonly produces — a markdown
@@ -117,7 +133,12 @@ def parse_statement_list(raw: str) -> StatementList:
     for exactly it when the passages do not answer the question, and the no-answer
     path that follows from it is FR-12's second one, reached through verification
     (invariant 7), not through a retry.
+
+    ``max_statements`` is the cap the attempt asked for, MAXIMUM_STATEMENTS when it is not
+    given. More statements than that raises StatementCapExceeded, whatever the statements
+    say: the whole reply is rejected, and none of it is kept (invariant 10).
     """
+    limit = MAXIMUM_STATEMENTS if max_statements is None else max_statements
     if not isinstance(raw, str) or not raw.strip():
         raise SchemaViolation("empty response")
     candidate = _outermost_json_object(_strip_code_fences(raw))
@@ -138,6 +159,8 @@ def parse_statement_list(raw: str) -> StatementList:
     items = decoded["statements"]
     if not isinstance(items, list):
         raise SchemaViolation(f"'statements' is {type(items).__name__}, not an array")
+    if len(items) > limit:
+        raise StatementCapExceeded(f"{len(items)} statements, more than the {limit} asked for")
     statements: list[Statement] = []
     for position, item in enumerate(items):
         if not isinstance(item, dict):

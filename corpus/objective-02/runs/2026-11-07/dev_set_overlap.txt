@@ -1,0 +1,55 @@
+dev set: 28 questions, 31 runs; harness validation problems: none
+dev set status: DEVELOPMENT SET, NOT FROZEN. Drafted on 7 November 2026 for ...
+frozen questions compared: 56 (30 from questions.json, 26 from threads.json)
+pairs compared: 1568; flagged (exact, Jaccard >= 0.5, difflib >= 0.8 or cosine >= 0.9): 0
+
+top 5 by jaccard:
+  0.333  d23 'How is Project Atlas delivered, and who reviews each phase?'  vs  questions.json s01 'Who is the sponsor of Project Atlas?'
+  0.300  d24 'How much is the annual staff bonus?'  vs  threads.json t01 turn 1 'How much annual leave do full-time staff build up each month?'
+  0.250  d08 'What equipment and security rules apply when working from home?'  vs  threads.json t02 turn 1 'What do I need before I can start working from home?'
+  0.250  d12 'What was decided at the product planning workshop?'  vs  threads.json t05 turn 1 'What date did the planning workshop set for the feature freeze?'
+  0.250  d15 'How is consent to use personal information recorded?'  vs  questions.json q18 'Can I use a pool car for a personal trip?'
+
+top 5 by difflib:
+  0.629  d25 'Is there staff parking at the new office building?'  vs  questions.json n03 'What is the dress code for staff working in the office?'
+  0.622  d27 'What salary does the head of digital services earn?'  vs  questions.json q17 'What hours is the IT service desk open?'
+  0.593  d20 'What does the fourth quarter training program cover?'  vs  threads.json t09 turn 2 'What do they have to approve?'
+  0.584  d12 'What was decided at the product planning workshop?'  vs  threads.json t05 turn 1 'What date did the planning workshop set for the feature freeze?'
+  0.581  d26 'What is the policy on smoking at work?'  vs  questions.json n03 'What is the dress code for staff working in the office?'
+
+top 5 by cosine:
+  0.781  d28 'Summarise the rules for using a fleet vehicle.'  vs  threads.json t04 turn 1 'Who is allowed to drive the fleet vehicles?'
+  0.748  d03 'How are records managed and retained?'  vs  threads.json t04 turn 2 'What records do they need to keep?'
+  0.717  d08 'What equipment and security rules apply when working from home?'  vs  threads.json t02 turn 1 'What do I need before I can start working from home?'
+  0.716  d09 'Summarise what staff need to know about the office relocation.'  vs  threads.json t07 turn 1 'What gets published on the intranet about the office move?'
+  0.711  d07 'How are customer complaints escalated when they cannot be resolved straight away?'  vs  questions.json q07 'How quickly do we have to acknowledge a customer complaint?'
+
+per dev question, its nearest frozen question by cosine:
+  d01 0.459 (Jaccard 0.00, difflib 0.40) vs threads.json t02 turn 1: 'What do I need before I can start working from home?'
+  d02 0.440 (Jaccard 0.07, difflib 0.30) vs questions.json q09: "How many goals should a manager set for a new starter's first three months?"
+  d03 0.748 (Jaccard 0.20, difflib 0.54) vs threads.json t04 turn 2: 'What records do they need to keep?'
+  d04 0.456 (Jaccard 0.00, difflib 0.41) vs threads.json t09 turn 2: 'What do they have to approve?'
+  d05 0.369 (Jaccard 0.00, difflib 0.55) vs threads.json t09 turn 2: 'What do they have to approve?'
+  d06 0.468 (Jaccard 0.00, difflib 0.25) vs threads.json t06 turn 1: 'How often are our suppliers reviewed?'
+  d07 0.711 (Jaccard 0.22, difflib 0.37) vs questions.json q07: 'How quickly do we have to acknowledge a customer complaint?'
+  d08 0.717 (Jaccard 0.25, difflib 0.57) vs threads.json t02 turn 1: 'What do I need before I can start working from home?'
+  d09 0.716 (Jaccard 0.10, difflib 0.53) vs threads.json t07 turn 1: 'What gets published on the intranet about the office move?'
+  d10 0.461 (Jaccard 0.00, difflib 0.51) vs threads.json t03 turn 2: 'How do I place an order with them?'
+  d11 0.368 (Jaccard 0.00, difflib 0.41) vs questions.json s04: 'How many staff entered their password in the last phishing test?'
+  d12 0.602 (Jaccard 0.25, difflib 0.58) vs threads.json t05 turn 1: 'What date did the planning workshop set for the feature freeze?'
+  d13 0.410 (Jaccard 0.11, difflib 0.48) vs threads.json t08 turn 1: 'What was the customer satisfaction score last quarter?'
+  d14 0.354 (Jaccard 0.00, difflib 0.34) vs threads.json t09 turn 2: 'What do they have to approve?'
+  d15 0.539 (Jaccard 0.18, difflib 0.53) vs questions.json q11: 'How long do we have to respond when someone asks to see the personal information we hold about them?'
+  d16 0.616 (Jaccard 0.20, difflib 0.42) vs questions.json q16: 'Do I need approval to book a meeting room for thirty people?'
+  d17 0.384 (Jaccard 0.00, difflib 0.32) vs questions.json q19: 'Do I need to pack up my computer for the office move?'
+  d18 0.501 (Jaccard 0.12, difflib 0.37) vs questions.json q07: 'How quickly do we have to acknowledge a customer complaint?'
+  d19 0.526 (Jaccard 0.10, difflib 0.25) vs questions.json n01: 'How many weeks of paid parental leave can I take?'
+  d20 0.342 (Jaccard 0.11, difflib 0.45) vs threads.json t08 turn 1: 'What was the customer satisfaction score last quarter?'
+  d21 0.468 (Jaccard 0.10, difflib 0.34) vs threads.json t08 turn 1: 'What was the customer satisfaction score last quarter?'
+  d22 0.520 (Jaccard 0.09, difflib 0.38) vs questions.json s02: "How much of each project's budget is held back as contingency?"
+  d23 0.622 (Jaccard 0.33, difflib 0.42) vs questions.json s01: 'Who is the sponsor of Project Atlas?'
+  d24 0.612 (Jaccard 0.20, difflib 0.47) vs questions.json q01: 'How much annual leave does a full-time employee earn each month?'
+  d25 0.550 (Jaccard 0.25, difflib 0.63) vs questions.json n03: 'What is the dress code for staff working in the office?'
+  d26 0.580 (Jaccard 0.14, difflib 0.58) vs questions.json n03: 'What is the dress code for staff working in the office?'
+  d27 0.362 (Jaccard 0.00, difflib 0.62) vs questions.json q17: 'What hours is the IT service desk open?'
+  d28 0.781 (Jaccard 0.12, difflib 0.52) vs threads.json t04 turn 1: 'Who is allowed to drive the fleet vehicles?'

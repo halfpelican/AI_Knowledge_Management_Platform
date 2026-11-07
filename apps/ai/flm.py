@@ -59,11 +59,15 @@ class FLMService:
             # threshold — so an empty list here is a caller's bug, not an outage, and it
             # must not be spent as an NPU call that can only invite invention.
             raise ValueError("generate_statements() needs at least one passage")
-        messages = build_generation_messages(question, passages)
         # One value for the request and for the attempt log's record of it.
         max_tokens = GENERATION_MAX_TOKENS
+        # The messages are built per attempt, because each attempt's prompt states the
+        # statement cap the loop asks it for (apps/ai/generation.py).
         return run_generation_attempts(
-            call_once=lambda: self._chat_once(messages, max_tokens=max_tokens),
+            call_once=lambda max_statements: self._chat_once(
+                build_generation_messages(question, passages, max_statements=max_statements),
+                max_tokens=max_tokens,
+            ),
             label=f"FLM at {settings.FLM_BASE_URL}",
             on_attempt=on_attempt,
             max_tokens=max_tokens,

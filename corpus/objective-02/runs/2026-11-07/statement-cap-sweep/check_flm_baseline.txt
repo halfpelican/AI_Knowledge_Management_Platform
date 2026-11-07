@@ -1,0 +1,71 @@
+FLM connectivity check
+  FLM_BASE_URL    = http://127.0.0.1:8625/v1  (environment)
+  FLM_CHAT_MODEL  = gemma3:4b  (default)
+  FLM_EMBED_MODEL = embed-gemma  (default)
+  python          = 3.12.13
+  flm version     = v0.9.39  (required v0.9.39, D-83)
+  server version  = v0.9.39  (GET /v1/version)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (2.8s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (1.0s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1297
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+Summary
+  FLM version : v0.9.39 (flm version), server v0.9.39
+  PASS  GET /models              33 models advertised, gemma3:4b among them
+  PASS  POST /chat/completions   replied 'pong' in 2.8s
+  PASS  POST /embeddings         3 vectors of 768 dimensions
+
+RESULT: PASS  (all 3 checks passed against http://127.0.0.1:8625/v1)

@@ -225,8 +225,19 @@ ERROR_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 WAITRESS_LOG_PATH = Path(env.str("WAITRESS_LOG_PATH", default=str(BASE_DIR / "logs" / "waitress.log")))
 WAITRESS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+# --- The provider attempts log (step 7 phase 2a, 7 November 2026) ------------------------
+# Every generation attempt, parsed or failed, with what its reply reported, at INFO
+# (apps/ai/attempt_log.py). The error file keeps only the failures. Beside errors.log by
+# default, and gitignored with it (logs/).
+
+ATTEMPTS_LOG_PATH = Path(env.str("ATTEMPTS_LOG_PATH", default=str(BASE_DIR / "logs" / "attempts.log")))
+ATTEMPTS_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 LOGGING = platform_logging(
-    audit_path=AUDIT_LOG_PATH, error_path=ERROR_LOG_PATH, waitress_path=WAITRESS_LOG_PATH
+    audit_path=AUDIT_LOG_PATH,
+    error_path=ERROR_LOG_PATH,
+    waitress_path=WAITRESS_LOG_PATH,
+    attempts_path=ATTEMPTS_LOG_PATH,
 )
 
 # --- Uploaded files (FR-08, docs/decisions.md D-05) ------------------------------

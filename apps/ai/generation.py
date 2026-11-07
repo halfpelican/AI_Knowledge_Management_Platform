@@ -21,6 +21,15 @@ The policy, exactly:
 - An EMPTY statement list that parses is a successful attempt and is returned as-is. It
   is the model correctly reporting that the passages do not answer the question, and
   FR-12's second no-answer path depends on receiving it rather than retrying it.
+- **The statement cap (step 7 phase 2a, 7 November 2026).** Each attempt asks for at most
+  a number of statements, passed to ``call_once`` and held against the reply by the
+  parser. The first attempt asks for MAXIMUM_STATEMENTS. After a reply that hit the token
+  ceiling (``completion_tokens`` at or above the ``max_tokens`` sent) or held more
+  statements than asked for, the next attempt asks for ``fewer_statements`` of the last
+  number. Phase 1 showed that repeating the identical request never recovered a reply cut
+  off at the ceiling (D-82's note of 7 November 2026). After any other failure the number
+  stays. The attempt COUNT is unchanged: three in total, whatever each one asks for, and a
+  reply over its cap is rejected whole, never trimmed (invariant 10).
 
 ``on_attempt`` is an observer on this loop, declared in the contract in
 docs/ai-provider.md section 1 and in ``AIService`` itself. It is keyword-only, optional,
@@ -50,8 +59,8 @@ from typing import Callable
 
 from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable, StatementList
-from apps.ai.schema import SchemaViolation, parse_statement_list
-from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS
+from apps.ai.schema import SchemaViolation, StatementCapExceeded, parse_statement_list
+from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS, MAXIMUM_STATEMENTS
 
 # A single chat call's ceiling and timeout. Generous: a long passage set can justify
 # several statements, and a truncated reply would be scored as a schema failure that the
@@ -79,6 +88,30 @@ class GenerationAttempt:
     raw: str | None = None  # the reply text, or None where the call itself failed
     detail: str | None = None  # the violation message or the failure description
     statements: int | None = None
+    max_statements: int | None = None  # the statement cap this attempt asked for
+
+
+def fewer_statements(max_statements: int) -> int:
+    """What the next attempt asks for after a ceiling hit or a cap violation: half, at least 1.
+
+    With MAXIMUM_STATEMENTS at 6, the three attempts can ask for 6, 3 and 1. Once at 1 the
+    number stays at 1: an answer of one cited statement is still an answer.
+    """
+    return max(1, max_statements // 2)
+
+
+def _hit_ceiling(reply: ChatReply, max_tokens: int | None) -> bool:
+    """The reply used every token it was allowed: ``completion_tokens`` >= ``max_tokens``.
+
+    Read from the reported count, because FLM v0.9.39 answers ``finish_reason`` "stop" for a
+    reply cut off at the ceiling (D-82's note of 7 November 2026). Unreported counts are
+    never a ceiling hit.
+    """
+    return (
+        reply.completion_tokens is not None
+        and max_tokens is not None
+        and reply.completion_tokens >= max_tokens
+    )
 
 
 @dataclass(frozen=True)
@@ -99,33 +132,40 @@ class ChatReply:
 
 def run_generation_attempts(
     *,
-    call_once: Callable[[], str | ChatReply],
+    call_once: Callable[[int], str | ChatReply],
     label: str,
     on_attempt: Callable[[GenerationAttempt], None] | None = None,
     max_tokens: int | None = None,
 ) -> StatementList:
     """Call ``call_once`` until it returns a conforming reply, or give up loudly.
 
-    ``call_once`` returns the model's reply, as a ChatReply or as bare text, and raises
-    ProviderUnavailable for a retryable transport failure; anything else it raises
-    propagates untouched. Bare text is a reply the provider reported nothing about: both
-    providers return a ChatReply, and the suite's scripted fakes return text.
+    ``call_once(max_statements)`` makes one provider call whose prompt asks for at most
+    ``max_statements`` statements. It returns the model's reply, as a ChatReply or as bare
+    text, and raises ProviderUnavailable for a retryable transport failure; anything else it
+    raises propagates untouched. Bare text is a reply the provider reported nothing about:
+    both providers return a ChatReply, and the suite's scripted fakes return text.
     ``label`` names the provider and endpoint in the final message, so a 503 says which
-    provider could not answer. ``max_tokens`` is the value the provider's request carries,
-    passed so each attempt's line can record it; it changes nothing here.
+    provider could not answer. ``max_tokens`` is the value the provider's request carries:
+    each attempt's line records it, and a reply that reaches it makes the next attempt ask
+    for fewer statements.
     """
     last_detail = "no attempt was made"
+    # Read here, at call time, rather than bound as a default: the one name the first
+    # attempt's cap comes from.
+    max_statements = MAXIMUM_STATEMENTS
     for number in range(1, MAXIMUM_GENERATION_ATTEMPTS + 1):  # 1 initial call + 2 retries
         started = time.perf_counter()
         try:
-            reply = call_once()
+            reply = call_once(max_statements)
         except ProviderUnavailable as exc:
+            # A transport failure says nothing about the reply's length: the number stays.
             last_detail = f"call failed: {exc}"
-            _record(on_attempt, number, "call-failed", started, detail=str(exc))
+            _record(on_attempt, number, "call-failed", started, detail=str(exc),
+                    max_statements=max_statements)
             attempt_log.failed_attempt(
                 "generation", number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
                 attempt_log.cause_of(exc), str(exc),
-                reply=attempt_log.ReplyFacts(max_tokens=max_tokens),
+                reply=attempt_log.ReplyFacts(max_tokens=max_tokens, max_statements=max_statements),
             )
             continue
         if not isinstance(reply, ChatReply):
@@ -136,18 +176,25 @@ def run_generation_attempts(
             finish_reason=reply.finish_reason,
             completion_tokens=reply.completion_tokens,
             prompt_tokens=reply.prompt_tokens,
+            max_statements=max_statements,
         )
         try:
-            parsed = parse_statement_list(raw)
+            parsed = parse_statement_list(raw, max_statements=max_statements)
         except SchemaViolation as exc:
-            # Invariant 10: a reply that does not conform is no reply at all.
+            # Invariant 10: a reply that does not conform is no reply at all. One that broke
+            # the cap is rejected whole too, never trimmed to fit.
             last_detail = f"schema violation: {exc}"
-            _record(on_attempt, number, "schema-violation", started, raw=raw, detail=str(exc))
+            _record(on_attempt, number, "schema-violation", started, raw=raw, detail=str(exc),
+                    max_statements=max_statements)
             attempt_log.failed_attempt(
                 "generation", number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
                 "SchemaViolation", str(exc),
                 reply=facts,
             )
+            if isinstance(exc, StatementCapExceeded) or _hit_ceiling(reply, max_tokens):
+                # Too long, by count or by tokens: the next attempt asks for fewer, instead
+                # of repeating a request phase 1 saw never recover.
+                max_statements = fewer_statements(max_statements)
             continue
         _record(
             on_attempt,
@@ -156,6 +203,7 @@ def run_generation_attempts(
             started,
             raw=raw,
             statements=len(parsed.statements),
+            max_statements=max_statements,
         )
         attempt_log.parsed_attempt(
             number, MAXIMUM_GENERATION_ATTEMPTS, time.perf_counter() - started,
@@ -168,7 +216,8 @@ def run_generation_attempts(
     )
 
 
-def _record(on_attempt, number, outcome, started, *, raw=None, detail=None, statements=None):
+def _record(on_attempt, number, outcome, started, *, raw=None, detail=None, statements=None,
+            max_statements=None):
     """Hand one attempt to the observer, and let nothing it does reach the caller."""
     if on_attempt is None:
         return
@@ -181,6 +230,7 @@ def _record(on_attempt, number, outcome, started, *, raw=None, detail=None, stat
                 raw=raw,
                 detail=detail,
                 statements=statements,
+                max_statements=max_statements,
             )
         )
     except Exception:  # noqa: BLE001 - deliberately every exception; see the module docstring

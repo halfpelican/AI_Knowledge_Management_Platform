@@ -97,11 +97,12 @@ def no_live_provider(monkeypatch):
 
 @dataclass
 class LogFiles:
-    """The three log files one test's logging writes."""
+    """The four log files one test's logging writes."""
 
     audit: Path
     errors: Path
     waitress: Path
+    attempts: Path
 
 
 def _configure_logging(config):
@@ -123,23 +124,26 @@ def _configure_logging(config):
 
 @pytest.fixture(autouse=True)
 def log_files(tmp_path, settings):
-    """The FR-05 audit file, D-75's error file and D-87's Waitress file for this test:
-    AUDIT_LOG_PATH, ERROR_LOG_PATH, WAITRESS_LOG_PATH and LOGGING are overridden to
-    temporary paths and logging is reconfigured from them exactly as config/settings.py
-    builds it, so no test ever appends to logs/audit.log, logs/errors.log or
-    logs/waitress.log."""
+    """The FR-05 audit file, D-75's error file, D-87's Waitress file and the provider
+    attempts file for this test: AUDIT_LOG_PATH, ERROR_LOG_PATH, WAITRESS_LOG_PATH,
+    ATTEMPTS_LOG_PATH and LOGGING are overridden to temporary paths and logging is
+    reconfigured from them exactly as config/settings.py builds it, so no test ever appends
+    to logs/audit.log, logs/errors.log, logs/waitress.log or logs/attempts.log."""
     original = settings.LOGGING
     audit_path = tmp_path / "audit.log"
     error_path = tmp_path / "errors.log"
     waitress_path = tmp_path / "waitress.log"
+    attempts_path = tmp_path / "attempts.log"
     settings.AUDIT_LOG_PATH = audit_path
     settings.ERROR_LOG_PATH = error_path
     settings.WAITRESS_LOG_PATH = waitress_path
+    settings.ATTEMPTS_LOG_PATH = attempts_path
     settings.LOGGING = platform_logging(
-        audit_path=audit_path, error_path=error_path, waitress_path=waitress_path
+        audit_path=audit_path, error_path=error_path, waitress_path=waitress_path,
+        attempts_path=attempts_path,
     )
     _configure_logging(settings.LOGGING)
-    yield LogFiles(audit=audit_path, errors=error_path, waitress=waitress_path)
+    yield LogFiles(audit=audit_path, errors=error_path, waitress=waitress_path, attempts=attempts_path)
     _configure_logging(original)
 
 
@@ -159,6 +163,12 @@ def error_log_file(log_files):
 def waitress_log_file(log_files):
     """D-87's Waitress file this test's logging writes (see ``log_files``)."""
     return log_files.waitress
+
+
+@pytest.fixture
+def attempts_log_file(log_files):
+    """The provider attempts file this test's logging writes (see ``log_files``)."""
+    return log_files.attempts
 
 
 @pytest.fixture

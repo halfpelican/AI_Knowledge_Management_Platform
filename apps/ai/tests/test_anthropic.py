@@ -18,9 +18,9 @@ from django.test import override_settings
 from apps.ai import attempt_log
 from apps.ai.anthropic import AnthropicService
 from apps.ai.base import Passage, ProviderHealth, ProviderUnavailable
-from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
-from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
-from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS
+from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS, fewer_statements
+from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt, statement_cap_sentence
+from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS, MAXIMUM_STATEMENTS
 
 VOYAGE_URL = "https://voyage.test/v1"
 VOYAGE_MODEL = "voyage-4"
@@ -340,11 +340,27 @@ def test_claudes_stop_reason_and_usage_reach_the_attempt_log(caplog):
     sent = [call["max_tokens"] for call in client.messages.calls]
     assert sent == [GENERATION_MAX_TOKENS, GENERATION_MAX_TOKENS]
     failed, parsed = (r.getMessage() for r in records)
+    first, second = MAXIMUM_STATEMENTS, fewer_statements(MAXIMUM_STATEMENTS)
     assert (
-        f"[finish_reason=max_tokens completion_tokens=800 prompt_tokens=900 max_tokens={sent[0]}]"
-        " (account not set): SchemaViolation: unbalanced JSON object in the response"
+        f"[finish_reason=max_tokens completion_tokens=800 prompt_tokens=900 max_tokens={sent[0]} "
+        f"max_statements={first}] (account not set): SchemaViolation: unbalanced JSON object in the response"
     ) in failed
     assert (
-        f"[finish_reason=end_turn completion_tokens=25 prompt_tokens=900 max_tokens={sent[1]}]"
-        " (account not set): 1 statement(s)"
+        f"[finish_reason=end_turn completion_tokens=25 prompt_tokens=900 max_tokens={sent[1]} "
+        f"max_statements={second}] (account not set): 1 statement(s)"
     ) in parsed
+
+
+def test_claude_is_asked_for_fewer_statements_after_a_reply_over_the_cap():
+    """Step 7 phase 2a: the shared loop's retry reaches Claude's prompt the same way."""
+    over = json.dumps(
+        {"statements": [{"text": f"S{n}.", "chunk_id": CHUNK_ID} for n in range(MAXIMUM_STATEMENTS + 1)]}
+    )
+    client = FakeGeneratingClient(over, CONFORMING)
+
+    result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    assert [s.text for s in result.statements] == ["Twenty days."]
+    prompts = [call["messages"][0]["content"] for call in client.messages.calls]
+    assert statement_cap_sentence(MAXIMUM_STATEMENTS) in prompts[0]
+    assert statement_cap_sentence(fewer_statements(MAXIMUM_STATEMENTS)) in prompts[1]

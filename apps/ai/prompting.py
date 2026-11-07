@@ -52,6 +52,7 @@ that no transformation of any delimiter can close.
 import re
 
 from apps.ai.base import Passage
+from apps.core.constants import MAXIMUM_STATEMENTS
 
 # Strict instructions, then two worked examples.
 #
@@ -113,6 +114,8 @@ Rules, all of them mandatory:
    passages, write it as two statements.
 7. If the passages do not answer the question, reply with exactly
    {"statements": []}. An empty array is a correct and expected answer.
+8. Give no more statements than the number stated after the question. If more
+   could be written, keep the ones that answer the question most directly.
 
 Two worked examples. The identifier below is an EXAMPLE value and appears nowhere in
 the real passages, and neither does its subject: never reuse it, never copy its shape
@@ -305,7 +308,9 @@ def build_conversational_question(question: str, prior_questions: list[str]) -> 
     return f"{PRIOR_QUESTIONS_HEADING}\n{history}\n\n{QUESTION_LEAD_IN}{question}"
 
 
-def build_user_prompt(question: str, passages: list[Passage]) -> str:
+def build_user_prompt(
+    question: str, passages: list[Passage], *, max_statements: int | None = None
+) -> str:
     """The passage block, the question, and the instruction to reply with JSON only.
 
     Each passage is labelled with the chunk identifier that citation verification will
@@ -402,8 +407,15 @@ def build_user_prompt(question: str, passages: list[Passage]) -> str:
       ``[chunk_id:`` is a sequence no prose contains by accident.
     - Escaping them any other way means rewording the prompt, and that invalidates the
       measured rates for the same reason the nonce does.
+
+    **The statement cap (step 7 phase 2a, 7 November 2026)** is the one sentence that varies
+    from attempt to attempt: ``statement_cap_sentence(max_statements)``, after the question
+    and before the reply instruction, where rule 8 of SYSTEM_PROMPT says the number is.
+    ``max_statements`` is what the attempt loop asks for (apps/ai/generation.py), and
+    MAXIMUM_STATEMENTS when a caller gives none.
     """
     question = neutralise_passage_delimiter(question)
+    cap = MAXIMUM_STATEMENTS if max_statements is None else max_statements
     blocks = [
         f"[chunk_id: {passage.chunk_id}]\n{neutralise_passage_delimiter(passage.text.strip())}"
         for passage in passages
@@ -412,11 +424,20 @@ def build_user_prompt(question: str, passages: list[Passage]) -> str:
         "Passages:\n"
         + "\n\n".join(blocks)
         + f"\n\nQuestion: {question}\n\n"
-        + "Reply with the JSON object only, using only the chunk_id values above."
+        + statement_cap_sentence(cap)
+        + " Reply with the JSON object only, using only the chunk_id values above."
     )
 
 
-def build_generation_messages(question: str, passages: list[Passage]) -> list[dict]:
+def statement_cap_sentence(max_statements: int) -> str:
+    """The sentence "Give at most N statements.": the number an attempt asks for, in the user turn."""
+    noun = "statement" if max_statements == 1 else "statements"
+    return f"Give at most {max_statements} {noun}."
+
+
+def build_generation_messages(
+    question: str, passages: list[Passage], *, max_statements: int | None = None
+) -> list[dict]:
     """The chat messages for one grounded-generation call, in the OpenAI wire shape.
 
     The passage block carries the retrieved passages and nothing else, each labelled with
@@ -432,5 +453,5 @@ def build_generation_messages(question: str, passages: list[Passage]) -> list[di
     """
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": build_user_prompt(question, passages)},
+        {"role": "user", "content": build_user_prompt(question, passages, max_statements=max_statements)},
     ]
