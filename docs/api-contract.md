@@ -495,11 +495,12 @@ endpoints use.
   threshold, above a lower floor of its own.** It is taken from the output of ranking
   *before* `RELEVANCE_THRESHOLD` is applied, so an item that came close is offered whether
   or not it cleared the threshold, provided its best passage reaches `PARTIAL_MATCH_FLOOR`
-  (`apps/core/constants.py`, D-56's floor, set in step 7 phase 2b from the development set).
-  The floor is below the threshold, so every item a path-B reply admitted is offered, and a
-  path-A reply offers only items in the band between the two. A question nothing in the
-  caller's scope comes near is offered `[]`, which therefore says path A ran; a non-empty
-  list is consistent with either path. The
+  (`apps/core/constants.py`, D-56's floor). **It is 0.0, so there is no floor, and D-56 stays
+  open:** at the 0.30 threshold kept in step 7, the margin rule could not set one. Any floor is
+  below the threshold, so every item a path-B reply admitted is offered, and a path-A reply
+  offers only items in the band between the two. With a floor above zero, a question nothing
+  in the caller's scope comes near is offered `[]`, which says path A ran; with none, `[]`
+  means the scope held nothing rankable. A non-empty list is consistent with either path. The
   scope is not in question and is not applied twice: the candidate set was restricted in the
   query before it was ranked (invariant 1), so every item named is one the asking role may
   read, and a second filter here could only disagree with the first. A test asserts that an

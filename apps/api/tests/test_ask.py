@@ -704,17 +704,20 @@ def test_the_key_is_present_and_empty_when_there_is_nothing_to_rank(session_clie
 def test_nothing_is_offered_when_every_passage_is_below_the_floor(session_client, service):
     """D-56's floor on the reply (step 7 phase 2b), from an Employee and an Administrator session.
 
-    The case the floor was owed for (D-93): a question nothing in the corpus answers used to
-    be offered the five nearest titles however weak. 0.397550 is the highest score of any
-    no-answer question the threshold declines in the development set (d24, the leave policy);
-    the floor was set the margin above it. The reply is path A's with an empty offer, and no
-    title reaches the body.
+    The case a floor is for (D-93): a question nothing in the corpus answers is offered the
+    nearest titles however weak. Both passages are placed below the floor relative to the
+    constant, so the mechanism stays tested whatever floor is set. At the shipped 0.0 (no
+    floor, D-56 open) they are negative cosines. The reply is path A's with an empty offer, and
+    no title reaches the body.
     """
     user = session_client.user
-    nearest = 0.397550
+    nearest = PARTIAL_MATCH_FLOOR - 0.05
     assert nearest < PARTIAL_MATCH_FLOOR
     make_document(user, title="Nearly", roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=nearest)
-    make_meeting(title="Far off", roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT, cosine=BELOW)
+    make_meeting(
+        title="Far off", roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT,
+        cosine=PARTIAL_MATCH_FLOOR - 0.1,
+    )
 
     response = ask(session_client.client)
 

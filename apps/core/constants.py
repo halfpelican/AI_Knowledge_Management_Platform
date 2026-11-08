@@ -142,37 +142,35 @@ TOP_K = 25
 
 # Cosine-similarity floor for admitting a passage (apps/retrieval/ranking.py admit(), ``>=``).
 # Below it on every in-scope passage, the question takes no-answer path A and generation is
-# never called (invariant 7a). It was 0.3 from D-37 (22 September 2026, a 6-chunk corpus).
-# TUNED in step 7 phase 2b (8 November 2026) on corpus/objective-02/dev-set.json, never on
-# questions.json or threads.json (D-93), by the user's rule with a margin m = 0.006 fixed in
-# advance (twice the query-vector drift D-40 recorded): decline the most no-answer runs WITH
-# MARGIN (top in-scope score <= T - m, so path A and no generation) while every answerable run
-# keeps its expected source WITH MARGIN (its best expected-source score >= T + m). On
-# kmp_obj02_20261101 (43 chunks, FLM v0.9.39) the bound is d17's 0.448714 - m = 0.442714, and
-# the most declinable is 5 of 7 (d22@Employee, d27, d11@Employee, d21@Employee, d24): every T
-# in [0.397550 + m, 0.442714] = [0.403550, 0.442714] declines those 5 and keeps all 24. Its
-# middle, 0.423132, rounded to the nearest four places, is 0.4231: 0.025550 above d24's
-# 0.397550 and 0.025614 below d17's 0.448714. d26 (0.439129) and d25 (0.445715) score above it
-# and reach generation; path B is what declines them, when it does. 0.3 declined 2.
-# The rule without a margin gave 0.4472, 0.0015 from a run each side, inside that drift, so the
-# user set it aside. The frozen sets measure this and do not tune it. Re-tune with the corpus
-# or the embedding model, as before. The scores: corpus/objective-02/runs/2026-11-08/
-# threshold-floor.md.
-RELEVANCE_THRESHOLD = 0.4231
+# never called (invariant 7a).
+# 0.30 is D-37's value (22 September 2026), KEPT by the user's decision of 8 November 2026,
+# after step 7 tried twice to tune it with a margin rule (m = 0.006):
+# - Phase 2b, on corpus/objective-02/dev-set.json, gave 0.4231. Those questions share their
+#   documents' wording, and score higher than users' questions do. On users' wording 0.4231
+#   lost answerable questions: 14 of dev-set-v2's 32 score below it, and the frozen thirty's
+#   "after" put seven on path A (corpus/objective-02/runs/2026-11-08/after/).
+# - Phase 2c, on corpus/objective-02/dev-set-v2.json (users' wording), gave 0.24, which did
+#   worse end to end than 0.30: 3 of 8 no-answer runs declined against 7 of 8, and 15 of 32
+#   expected-answer matches against 22 (corpus/objective-02/runs/2026-11-08/dev-set-v2.md).
+# At 0.30, three of dev-set-v2's answerable runs lose their expected source (u07, u24, u27), and
+# most no-answer questions reach generation. Generation, capped at MAXIMUM_STATEMENTS, carries
+# most of the declining (path B). On users' wording no threshold separates answerable from
+# unanswerable questions (D-37's finding). Re-measure with the corpus or the embedding model.
+RELEVANCE_THRESHOLD = 0.30
 
 # Cosine-similarity floor for OFFERING an item as one of FR-12's partial matches beside a
-# no-answer (D-56; apps/retrieval/partial_matches.py, ``>=``). An item is offered only if its
-# best ranked passage reaches this. Before it, the five nearest were offered however weak, so
-# a question the corpus cannot answer was shown five unrelated titles (D-93).
-# TUNED in the same pass, on the same development set and nothing else, by the same margin
-# rule: the lowest value at least m above the highest-scoring partial match the real offer path
-# gave any no-answer run that path A declines at the threshold, and at most
-# RELEVANCE_THRESHOLD - m. That match is d24's D01 at 0.397550, so 0.403550, rounded UP to four
-# places: 0.4036, which is 0.006050 above it and 0.0135 under the 0.4171 ceiling. It stays
-# BELOW RELEVANCE_THRESHOLD, so path A offers items scoring in [0.4036, 0.4231), a band 0.0195
-# wide; on path B every admitted item clears it. The rule without a margin gave 0.4458, only
-# 0.0014 under its threshold, which would all but retire the offer on path A.
-PARTIAL_MATCH_FLOOR = 0.4036
+# no-answer (D-56; apps/retrieval/partial_matches.py, ``>=``). 0.0: NO FLOOR, and D-56 STAYS
+# OPEN. The margin rule (m = 0.006) at T = 0.30, on dev-set-v2.json's measured scores, cannot set
+# one. The runs path A declines at 0.30 are u30@Employee, u31@Employee, u07 and u24; the highest
+# partial match offered to any of them is u24's D20 at 0.292898. So F would have to be at least
+# 0.298898 (0.2989 rounded up), above the ceiling T - m = 0.294.
+# No floor is D-56's behaviour before step 7 phase 2b: the five nearest in-scope items are
+# offered beside a no-answer, whatever their score. 0.0 is the simplest form the code allows.
+# It differs only in not offering a passage with a negative cosine, which no development run's
+# offer had. Counting only the no-answer runs, as phase 2b's wording did, would give 0.2936,
+# under the ceiling, but it would also remove the offers that point u07 and u24 at their
+# expected sources (D02 at 0.280085, T03 at 0.291925).
+PARTIAL_MATCH_FLOOR = 0.0
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in
 # Stage 4 once the prompt and the model's context window are measured.

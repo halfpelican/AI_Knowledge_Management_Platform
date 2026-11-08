@@ -28,6 +28,15 @@ with like. Imports no AI vendor SDK. Never prints DATABASE_URL. Usage, from anyw
     python threshold_floor_e2e.py --out <folder>
     python threshold_floor_e2e.py --out <folder> --label T4231_F4036_N6 \\
         --expect-threshold 0.4231 --expect-floor 0.4036
+
+Phase 2c added ``--set`` (a file in corpus/objective-02/, default dev-set.json) and, for its 0.30
+baseline over dev-set-v2.json, ``--patch-threshold`` and ``--patch-floor``: they reassign
+``apps.retrieval.ranking.RELEVANCE_THRESHOLD`` and ``apps.retrieval.partial_matches.
+PARTIAL_MATCH_FLOOR`` in this process only, the two names the pipeline reads at call time, and
+the summary records the values used (``threshold_used``, ``floor_used``, ``patched``):
+
+    python threshold_floor_e2e.py --out <folder> --set dev-set-v2.json --label v2_T3000_nofloor_N6 \\
+        --expect-threshold 0.4231 --expect-floor 0.4036 --patch-threshold 0.3 --patch-floor=-inf
 """
 
 from __future__ import annotations
@@ -69,6 +78,12 @@ def main() -> int:
     parser.add_argument("--label", default="T4472_F4458_N6")
     parser.add_argument("--expect-threshold", type=float, default=0.4472)
     parser.add_argument("--expect-floor", type=float, default=0.4458)
+    parser.add_argument("--set", default="dev-set.json", help="a file in corpus/objective-02/")
+    parser.add_argument("--patch-threshold", type=float,
+                        help="phase 2c baseline: the threshold admit() uses, in this process only")
+    parser.add_argument("--patch-floor", type=float,
+                        help="phase 2c baseline: the partial-match floor, in this process only "
+                             "(-inf for none)")
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -136,7 +151,20 @@ def main() -> int:
             print(f"refusing: {name} is {in_force[name]!r}, not {value!r}", flush=True)
             return 2
 
-    set_path = REPO / "corpus/objective-02/dev-set.json"
+    # Phase 2c's baseline: the 0.30 threshold with no floor, over the same set, on the same code.
+    # The two names the pipeline reads at call time are reassigned in this process only, as
+    # phase 2a's sweep reassigned MAXIMUM_STATEMENTS; nothing on disk changes. Recorded in meta.
+    import apps.retrieval.partial_matches as partial_matches_module
+    import apps.retrieval.ranking as ranking_module
+    if args.patch_threshold is not None:
+        ranking_module.RELEVANCE_THRESHOLD = args.patch_threshold
+    if args.patch_floor is not None:
+        partial_matches_module.PARTIAL_MATCH_FLOOR = args.patch_floor
+    in_force["threshold_used"] = ranking_module.RELEVANCE_THRESHOLD
+    in_force["floor_used"] = partial_matches_module.PARTIAL_MATCH_FLOOR
+    in_force["patched"] = args.patch_threshold is not None or args.patch_floor is not None
+
+    set_path = REPO / "corpus/objective-02" / args.set
     _, questions = question_set.load(set_path)
     runs = question_set.expand_runs(questions, (ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME))
     manifest = json.loads((REPO / "corpus/objective-02/manifest.json").read_text(encoding="utf-8"))

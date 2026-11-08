@@ -1,0 +1,63 @@
+dev-set-v2: 37 questions, 40 runs, SHA-256 cb7e2815a36820d62e876265622c9763c6eb4c027f42cab281e7e9cdb69c1efd; harness validation problems: none
+frozen questions compared: 56 (30 from questions.json, 26 from threads.json). Their text is not printed.
+pairs compared: 2072; flagged (exact, Jaccard >= 0.5, difflib >= 0.8 or cosine >= 0.9): 0
+
+top 5 by jaccard:
+  0.444  u32  vs  questions.json s04
+  0.400  u05  vs  threads.json t01 turn 1
+  0.400  u30  vs  questions.json s01
+  0.375  u18  vs  questions.json q16
+  0.286  u05  vs  threads.json t01 turn 2
+
+top 5 by difflib:
+  0.727  u09  vs  questions.json q06
+  0.718  u05  vs  threads.json t01 turn 1
+  0.696  u32  vs  questions.json s04
+  0.654  u23  vs  questions.json q20
+  0.627  u12  vs  threads.json t04 turn 2
+
+top 5 by cosine:
+  0.812  u32  vs  questions.json s04
+  0.772  u09  vs  questions.json q06
+  0.769  u37  vs  questions.json n01
+  0.758  u30  vs  questions.json s01
+  0.756  u11  vs  threads.json t02 turn 1
+
+per dev question, its nearest frozen question by cosine (identifier only):
+  u01 0.451 (Jaccard 0.06, difflib 0.41) vs questions.json q09
+  u02 0.449 (Jaccard 0.12, difflib 0.37) vs threads.json t02 turn 1
+  u03 0.543 (Jaccard 0.09, difflib 0.50) vs questions.json q04
+  u04 0.613 (Jaccard 0.18, difflib 0.35) vs questions.json q19
+  u05 0.719 (Jaccard 0.40, difflib 0.72) vs threads.json t01 turn 1
+  u06 0.385 (Jaccard 0.11, difflib 0.46) vs threads.json t02 turn 1
+  u07 0.359 (Jaccard 0.00, difflib 0.26) vs questions.json s04
+  u08 0.402 (Jaccard 0.00, difflib 0.45) vs questions.json q03
+  u09 0.772 (Jaccard 0.27, difflib 0.73) vs questions.json q06
+  u10 0.609 (Jaccard 0.10, difflib 0.23) vs questions.json q07
+  u11 0.756 (Jaccard 0.22, difflib 0.45) vs threads.json t02 turn 1
+  u12 0.669 (Jaccard 0.12, difflib 0.46) vs threads.json t02 turn 1
+  u13 0.503 (Jaccard 0.10, difflib 0.35) vs questions.json q10
+  u14 0.615 (Jaccard 0.08, difflib 0.46) vs questions.json q11
+  u15 0.570 (Jaccard 0.25, difflib 0.49) vs threads.json t03 turn 2
+  u16 0.423 (Jaccard 0.00, difflib 0.26) vs questions.json q13
+  u17 0.532 (Jaccard 0.09, difflib 0.23) vs questions.json q19
+  u18 0.707 (Jaccard 0.38, difflib 0.48) vs questions.json q16
+  u19 0.629 (Jaccard 0.00, difflib 0.31) vs questions.json q02
+  u20 0.362 (Jaccard 0.00, difflib 0.32) vs questions.json q19
+  u21 0.516 (Jaccard 0.10, difflib 0.49) vs questions.json q18
+  u22 0.676 (Jaccard 0.00, difflib 0.41) vs threads.json t09 turn 1
+  u23 0.599 (Jaccard 0.29, difflib 0.65) vs questions.json q20
+  u24 0.424 (Jaccard 0.00, difflib 0.47) vs threads.json t07 turn 2 spelled_out
+  u25 0.445 (Jaccard 0.14, difflib 0.43) vs questions.json q07
+  u26 0.698 (Jaccard 0.15, difflib 0.39) vs questions.json q16
+  u27 0.451 (Jaccard 0.00, difflib 0.30) vs questions.json q19
+  u28 0.750 (Jaccard 0.25, difflib 0.45) vs questions.json s02
+  u29 0.577 (Jaccard 0.22, difflib 0.29) vs questions.json s03
+  u30 0.758 (Jaccard 0.40, difflib 0.54) vs questions.json s01
+  u31 0.337 (Jaccard 0.17, difflib 0.41) vs threads.json t09 turn 2 spelled_out
+  u32 0.812 (Jaccard 0.44, difflib 0.70) vs questions.json s04
+  u33 0.534 (Jaccard 0.14, difflib 0.47) vs questions.json q02
+  u34 0.470 (Jaccard 0.00, difflib 0.21) vs questions.json q01
+  u35 0.450 (Jaccard 0.11, difflib 0.51) vs questions.json n03
+  u36 0.436 (Jaccard 0.20, difflib 0.49) vs questions.json s04
+  u37 0.769 (Jaccard 0.29, difflib 0.58) vs questions.json n01
