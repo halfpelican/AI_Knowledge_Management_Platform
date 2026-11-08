@@ -6628,3 +6628,65 @@ generation, with verification behind it.
   resolves), and spelled out from 3 of 9 to 6 of 9. Schema conformance reached 100%.
   - The HTTP check: WIRED 3 of 3, 0 leaks. t04's second turn was correct through the server.
   - FR-13 stays partial: most follow-ups that need the earlier turn still fail.
+
+## D-103 · FR-13's follow-up options 1 and 2 were built, measured and not adopted; a single-run delta on these sets sits inside a measured ±1–2-run band
+
+**9 November 2026 · Step 7 phase 3 · Evidence: `corpus/objective-02/runs/2026-11-08/fr13-phase3-dev/`
+and `runs/2026-11-09/fr13-phase3/` · Branch `fix/FR-13-follow-up-focus`, commits `b2ebba8`, `d19a027`.**
+
+**What was tried,** against D-91's open failure (follow-ups restate turn 1), approved 8 November:
+
+- **Option 1:** a conversational-block instruction to answer only the question asked and not restate
+  facts that answer the earlier questions. Single-turn prompts stayed byte-identical, under test.
+- **Option 2:** rank each in-scope candidate by the larger of its score against the composed
+  retrieval string and against the follow-up alone. Scope filtering untouched, before ranking.
+
+**The rule, fixed before any run:** adopt only what raises with-history matching on a new
+development thread set without lowering first-turn, spelled-out, correct declines, conformance, or
+the zero out-of-scope count. Tuning ran on `corpus/objective-02/dev-threads.json` (12 user-worded
+threads, t20–t31; automated overlap against both frozen sets at phase 2a's thresholds, 0 of 1,960
+pairs flagged), never on the frozen sets (D-93).
+
+| config | with-history | first-turn | spelled-out | cold | declines | schema | out-of-scope |
+|---|---|---|---|---|---|---|---|
+| main | 8/12 | 8/14 | 9/12 | 6/12 | 3/6 | 52/52 | 0 |
+| option 1 | 8/12 | 8/14 | 9/12 | 6/12 | 3/6 | 52/52 | 0 |
+| option 2 | 7/12 | 7/14 | 9/12 | 7/12 | 3/6 | 52/52 | 0 |
+| both | 6/12 | 8/14 | 9/12 | 7/12 | 3/6 | 52/52 | 0 |
+
+**Decision: neither is adopted.** `apps/` and `scripts/` stay byte-identical to `711fcda`. The full
+candidate — both options, their 11 break-tested tests, the harness and HTTP-check updates — is
+preserved at `runs/2026-11-08/fr13-phase3-dev/candidate_code.diff`, one `git apply` from returning.
+
+- **Option 1 moved nothing:** 8/12 against 8/12 — two threads gained, two lost, each by a single run.
+- **Option 2 admitted more passages at 0.30** (t21, t22, t24, t27), and the extra passages correlated
+  with lost matches — the direction D-102 measured at 0.24. Where it worked exactly as designed
+  (t28-admin: the right source from unsupplied to rank 2, supplied), generation still answered from
+  turn 1's material. The restatement failure is in generation's use of the context, not in what
+  retrieval supplies.
+- **For D-102's open decline problem:** correct declines sat at 3/6 in every configuration — the
+  option 1 instruction did not move the scoped answering behaviour at all — and t29-admin cited D14
+  over the supplied D15 in all four configurations, giving the wrong-passage problem a reproducible
+  case. Any retrieval change that admits more passages at 0.30 should be expected to push declines
+  further down.
+
+**The variance band, now measured rather than suspected.** The frozen nine were re-run on code
+byte-identical to the 8 November "after": with-history came back **3/9 against 2/9**, exactly one of
+44 runs flipped — on an identical supplied passage set — and after-030's four cold fabrications did
+not recur. On sets of 9–12 threads, a single-pass delta of ±1–2 runs is noise. After-030's "1/9 →
+2/9" and this run's 3/9 are the same number inside that band, and no future FR-13 delta may be read
+as an effect unless it clears it.
+
+**Why the development set could not detect the fix it was built to tune:** 8 of its 10 answerable
+follow-ups keep their source inside turn 1's item, so retrieving turn 1's material still supplies
+the right passage and the frozen failure mode — cross-source follow-ups — does not reproduce
+(main: 8/12 with history on the development threads, 3/9 frozen).
+
+**Before any further attempt:** a cross-source development thread set, and repeated draws per
+configuration so the rule compares means, not single passes. Until then FR-13 stays partial (D-91)
+and D-56 stays open.
+
+**Disclosure (under D-93):** the builder read `runs/2026-11-07/dev_set_overlap.txt` — phase 2a's
+console record, which quotes ~25 frozen questions — while studying the overlap method, before
+drafting. The drafts avoided those topics and the identifier-only automated check is the control.
+On the record; whether that console file should be redacted from the repository is open.
