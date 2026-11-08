@@ -15,7 +15,7 @@ the work or lose it.
 from dataclasses import fields
 from uuid import uuid4
 
-from apps.core.constants import SOURCE_TYPES
+from apps.core.constants import PARTIAL_MATCH_FLOOR, RELEVANCE_THRESHOLD, SOURCE_TYPES
 from apps.retrieval.partial_matches import (
     MAXIMUM_PARTIAL_MATCHES,
     PartialMatch,
@@ -51,8 +51,8 @@ def test_the_items_are_offered_in_rank_order():
     best, middle, worst = uuid4(), uuid4(), uuid4()
     ranked = [
         passage(source_id=best, score=0.91),
-        passage(source_id=middle, score=0.44),
-        passage(source_id=worst, score=0.02),
+        passage(source_id=middle, score=0.70),
+        passage(source_id=worst, score=0.50),
     ]
 
     offered = partial_matches(ranked)
@@ -70,10 +70,10 @@ def test_one_entry_per_source_however_many_of_its_chunks_were_ranked():
     """
     crowded, other = uuid4(), uuid4()
     ranked = [
-        passage(source_id=crowded, score=0.50),
-        passage(source_id=other, score=0.40),
-        passage(source_id=crowded, score=0.30),
-        passage(source_id=crowded, score=0.20),
+        passage(source_id=crowded, score=0.90),
+        passage(source_id=other, score=0.80),
+        passage(source_id=crowded, score=0.70),
+        passage(source_id=crowded, score=0.60),
     ]
 
     offered = partial_matches(ranked)
@@ -91,8 +91,8 @@ def test_a_document_and_a_meeting_sharing_an_id_are_two_items():
     """
     shared = uuid4()
     ranked = [
-        passage(source_id=shared, score=0.50, source_type=DOCUMENT_SOURCE_TYPE),
-        passage(source_id=shared, score=0.40, source_type=MEETING_SOURCE_TYPE),
+        passage(source_id=shared, score=0.90, source_type=DOCUMENT_SOURCE_TYPE),
+        passage(source_id=shared, score=0.80, source_type=MEETING_SOURCE_TYPE),
     ]
 
     offered = partial_matches(ranked)
@@ -165,3 +165,67 @@ def test_the_passage_text_of_a_ranked_chunk_does_not_reach_the_offer():
     offered = partial_matches(ranked)
 
     assert "must not be offered" not in repr(offered)
+
+
+# --- D-56's floor (step 7 phase 2b): PARTIAL_MATCH_FLOOR -----------------------------------
+#
+# Every reduction test above uses scores of 0.50 or more, above the floor, so what they test
+# is the reduction and not the floor. These test the floor, relative to the constant rather
+# than to its value, so a re-tune keeps them meaningful; the value itself is pinned in
+# apps/core/tests/test_constants.py.
+
+
+def test_a_source_below_the_floor_is_not_offered():
+    """Only items whose best passage reaches the floor are offered (D-56, D-93).
+
+    Before the floor the five nearest were offered however weak, so a question the corpus
+    holds nothing about was shown five unrelated titles under the no-answer notice.
+    """
+    near, weak = uuid4(), uuid4()
+    ranked = [
+        passage(source_id=near, score=PARTIAL_MATCH_FLOOR + 0.01),
+        passage(source_id=weak, score=PARTIAL_MATCH_FLOOR - 0.0001),
+    ]
+
+    offered = partial_matches(ranked)
+
+    assert [match.source_id for match in offered] == [near]
+
+
+def test_a_source_exactly_at_the_floor_is_offered():
+    """``>=``, as ``admit`` compares against RELEVANCE_THRESHOLD: on the floor is offered."""
+    on_the_floor = uuid4()
+
+    offered = partial_matches([passage(source_id=on_the_floor, score=PARTIAL_MATCH_FLOOR)])
+
+    assert [match.source_id for match in offered] == [on_the_floor]
+
+
+def test_nothing_is_offered_when_the_best_passage_is_below_the_floor():
+    """The case the floor exists for: a ranked list of nothing related offers nothing.
+
+    These are the development set's own scores, the best passages of the three highest
+    no-answer runs the threshold declines at path A: d24 (D01), d21@Employee (D06) and
+    d11@Employee (T01). The floor was set the margin above the first.
+    """
+    ranked = [
+        passage(source_id=uuid4(), score=score) for score in (0.397550, 0.390036, 0.339343)
+    ]
+
+    assert partial_matches(ranked) == ()
+
+
+def test_the_floor_sits_below_the_threshold_so_path_a_can_still_offer():
+    """A source between the floor and the threshold is offered: path A's only offers.
+
+    ``partial_matches`` never sees the threshold, so this is the floor's relation to it,
+    tested where the floor is applied: if it were raised to the threshold or above, path A
+    (where every passage is below the threshold) could never offer anything.
+    """
+    in_band = uuid4()
+    score = (PARTIAL_MATCH_FLOOR + RELEVANCE_THRESHOLD) / 2
+    assert score < RELEVANCE_THRESHOLD
+
+    offered = partial_matches([passage(source_id=in_band, score=score)])
+
+    assert [match.source_id for match in offered] == [in_band]

@@ -7,10 +7,28 @@ speculative answer. **Any partially related items found are offered, clearly lab
 partial matches.**"
 
 **What "partially related items found" is taken to mean.** The items the ranked scoped
-candidate set found, irrespective of the floor. ``partial_matches`` below is given
-``rank``'s output — scored, ordered best first, capped at TOP_K — **before ``admit``
-applies RELEVANCE_THRESHOLD**. That is the whole derivation, and the ordering of those two
+candidate set found whose best passage reaches PARTIAL_MATCH_FLOOR, irrespective of
+RELEVANCE_THRESHOLD. ``partial_matches`` below is given ``rank``'s output — scored, ordered
+best first, capped at TOP_K — **before ``admit`` applies RELEVANCE_THRESHOLD**, and it
+applies its own, lower floor. That is the whole derivation, and the ordering of those two
 calls in ``apps/retrieval/pipeline.py`` is what makes the rest of this docstring true.
+
+**PARTIAL_MATCH_FLOOR is D-56's missing floor, chosen in step 7 phase 2b** (D-93, from the
+development set alone; ``apps/core/constants.py`` has the rule and the numbers). Until then
+the list was the five nearest in-scope sources whatever their score, so a question the
+corpus holds nothing about was offered five titles related to nothing. The comparison is
+``>=``, as ``admit``'s is. The floor sits below RELEVANCE_THRESHOLD, so every item a path-B
+reply admitted is still offered, and path A offers only items scoring in the band between
+the two.
+
+**What the floor costs the identical replies, stated rather than left to be found.** Path B
+admitted at least one passage at or above RELEVANCE_THRESHOLD, which is above this floor, so
+a path-B offer is never empty. An EMPTY offer therefore now says path A ran: nothing in the
+caller's own scope came within the band. Before the floor, an empty offer said the same
+thing, but only when the scope held nothing rankable at all. A non-empty offer is still
+consistent with either path. Everything this can tell a caller is about passages they may
+read: the candidate set was scoped in the query, so it says nothing about out-of-scope
+material (invariant 1).
 
 **It is derived identically on both no-answer paths, and that is a disclosure property
 rather than a convenience.** Path A (nothing cleared the threshold, generation never
@@ -76,6 +94,7 @@ than left unused, and with it one HTTP request and one ``SearchLog`` row per no-
 from dataclasses import dataclass
 from uuid import UUID
 
+from apps.core.constants import PARTIAL_MATCH_FLOOR
 from apps.retrieval.ranking import RankedPassage
 
 # How many partially related items are offered. Five.
@@ -117,23 +136,29 @@ class PartialMatch:
 
 
 def partial_matches(ranked: list[RankedPassage]) -> tuple[PartialMatch, ...]:
-    """The best MAXIMUM_PARTIAL_MATCHES sources of ``ranked``, one entry each, in rank order.
+    """The best MAXIMUM_PARTIAL_MATCHES sources of ``ranked`` reaching PARTIAL_MATCH_FLOOR.
 
-    ``ranked`` is ``ranking.rank``'s output and must be passed BEFORE ``ranking.admit`` —
-    the threshold is irrelevant to this list, which is the point of it: on no-answer path A
-    nothing cleared the floor and these are the items that came closest, and on path B some
-    did clear it and nothing could be cited from them. One derivation, one value, two
-    identical replies.
+    One entry each, in rank order. ``ranked`` is ``ranking.rank``'s output and must be
+    passed BEFORE ``ranking.admit``: RELEVANCE_THRESHOLD is irrelevant to this list, which
+    is the point of it. On no-answer path A nothing cleared the threshold and these are the
+    items that came within the band below it; on path B some did clear it and nothing could
+    be cited from them. One derivation, one value, two identical replies.
 
     An empty input gives an empty tuple, which is an ordinary outcome: a role whose scope
     holds no indexed chunk at all, or a corpus awaiting ``manage.py reindex`` under another
     embedding model, has no near miss to offer and the field is present and empty rather
-    than absent. Nothing here draws a conclusion from emptiness; the no-answer message is
-    the pipeline's, and it is the same message either way.
+    than absent. So does a ranked list whose best passage is below the floor, which is the
+    case the floor exists for. Nothing here draws a conclusion from emptiness; the no-answer
+    message is the pipeline's, and it is the same message either way.
     """
     offered: list[PartialMatch] = []
     seen: set[tuple[str, UUID]] = set()
     for passage in ranked:  # already ordered best first
+        if passage.score < PARTIAL_MATCH_FLOOR:
+            # Everything after this scores no higher, so nothing further can reach the
+            # floor. A source whose best passage is below it is not partially related to
+            # the question in any sense the clause means (D-56, D-93).
+            break
         key = (passage.source_type, passage.source_id)
         if key in seen:
             # A second near-miss chunk of an item already offered. One entry per source:

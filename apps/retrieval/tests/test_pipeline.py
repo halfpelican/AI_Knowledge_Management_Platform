@@ -41,6 +41,7 @@ from apps.core.constants import (
     NO_ANSWER_REASONS,
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
+    PARTIAL_MATCH_FLOOR,
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
@@ -61,6 +62,26 @@ ABOVE = 0.80
 NEAREST = 0.99  # what a restricted chunk scores, so it would lead the ranking
 assert BELOW < RELEVANCE_THRESHOLD < ABOVE < NEAREST
 
+# Step 7 phase 2b. A near miss: in the band between PARTIAL_MATCH_FLOOR and
+# RELEVANCE_THRESHOLD, so it is NOT admitted (path A) and IS offered as a partial match.
+# BELOW is under both, so it is neither admitted nor offered. The band is asserted inside
+# each test that uses it, not here, so that a deliberate break of either constant fails
+# those tests one by one instead of stopping the module from being collected.
+NEAR_MISS = (PARTIAL_MATCH_FLOOR + RELEVANCE_THRESHOLD) / 2
+
+
+def in_the_band(score: float) -> bool:
+    """Whether ``score`` is offered as a partial match but not admitted."""
+    return PARTIAL_MATCH_FLOOR <= score < RELEVANCE_THRESHOLD
+
+# The development set's two boundary scores under the margin rule (corpus/objective-02/runs/
+# 2026-11-08/threshold-floor.md): the highest top score of a no-answer run path A declines
+# (d24, whose best passage is D01) and the lowest at which an answerable run's expected source
+# was found (d17, D18). The threshold sits at least the margin from each, and the floor at
+# least the margin above the first.
+HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.397550
+LOWEST_ANSWERABLE_SCORE = 0.448714
+
 
 # --- Vectors and rows ------------------------------------------------------------------
 
@@ -73,12 +94,10 @@ def wide(*components) -> list[float]:
 
 QUERY = wide(1.0)
 
-# A query vector orthogonal to every chunk ``at_cosine`` builds, so each scores 0.0 against
-# it: still a candidate, still ranked, below any floor. It is how no-answer path A is reached
-# over the same corpus path B is reached over — which matters for the partial matches, since
-# they are derived from the corpus and a test that changed the corpus between the two would
-# not be comparing the two paths.
-ELSEWHERE = wide(0.0, 0.0, 1.0)
+# ELSEWHERE, a query vector orthogonal to every chunk, used to be how path A was reached over
+# the corpus path B is reached over. It scored every passage 0.0, which since step 7's floor
+# offers no partial match, so test_the_offer_is_identical_on_both_no_answer_paths now points
+# path B's query at a NEAR_MISS passage instead, and ELSEWHERE is gone.
 
 
 def at_cosine(value: float) -> list[float]:
@@ -612,9 +631,11 @@ def test_the_prompt_carries_the_passages_in_rank_order_and_nothing_else(document
     best-first by the context budget, and the model is more likely to draw on what it reads
     first.
     """
+    # All three clear RELEVANCE_THRESHOLD; "worst" was 0.35 until step 7 raised it to 0.4231.
+    assert RELEVANCE_THRESHOLD < 0.50
     best = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.90, text="Best.")
     middle = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.60, text="Middle.")
-    worst = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=3, cosine=0.35, text="Worst.")
+    worst = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=3, cosine=0.50, text="Worst.")
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
 
@@ -858,7 +879,13 @@ def test_the_two_no_answer_paths_are_one_reply_and_two_reasons(document, monkeyp
     """
     from dataclasses import asdict, fields
 
-    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW, text="Too far.")
+    # A NEAR_MISS rather than BELOW since step 7's floor (D-56): below the floor, path A
+    # offers no partial match while path B always offers the item it admitted, so an empty
+    # offer now says path A ran. apps/retrieval/partial_matches.py states that, and why it
+    # discloses nothing outside the caller's scope. In the band, both paths offer this
+    # document and the replies are identical, which is what this test pins.
+    assert in_the_band(NEAR_MISS)
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=NEAR_MISS, text="Too far.")
     path_a_double = install(monkeypatch, ControlledService())
 
     path_a = answer_question(question=QUESTION, user=document.uploaded_by)
@@ -1187,21 +1214,28 @@ def test_the_offer_is_identical_on_both_no_answer_paths(document, monkeypatch):
 
     The reply is byte-identical on the two paths by design (invariant 7), and this field is
     the one most able to break that, because it is the only caller-visible thing derived from
-    the ranked list. Path A is reached with a query vector orthogonal to the only passage and
-    path B with the ordinary one plus a fabricated citation, so the CORPUS is held constant
-    and the path is the only difference. A derivation taken from the admitted set, the
-    supplied set or the rejected statements would give an empty tuple on path A and a
-    populated one on path B — which is exactly the distinction the log is for and the reply
-    is not.
-    """
-    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    the ranked list. Path A is reached with the ordinary query vector, against which the only
+    passage is a NEAR_MISS (offered, not admitted), and path B with a query vector pointing
+    straight at that passage plus a fabricated citation, so the CORPUS is held constant and
+    the path is the only difference. A derivation taken from the admitted set, the supplied
+    set or the rejected statements would give an empty tuple on path A and a populated one on
+    path B — which is exactly the distinction the log is for and the reply is not.
 
-    install(monkeypatch, ControlledService(vector=ELSEWHERE))
+    Until step 7's floor, path A was reached with a vector orthogonal to the passage (score
+    0.0). Below PARTIAL_MATCH_FLOOR that now offers nothing, by design.
+    """
+    assert in_the_band(NEAR_MISS)
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=NEAR_MISS)
+
+    install(monkeypatch, ControlledService())
     path_a = answer_question(question=QUESTION, user=document.uploaded_by)
 
     install(
         monkeypatch,
-        ControlledService(statements=[Statement(text="Invented.", chunk_id="not-supplied")]),
+        ControlledService(
+            vector=at_cosine(NEAR_MISS),  # the passage's own direction: it scores 1.0
+            statements=[Statement(text="Invented.", chunk_id="not-supplied")],
+        ),
     )
     path_b = answer_question(question=QUESTION, user=document.uploaded_by)
 
@@ -1215,17 +1249,19 @@ def test_the_offer_is_identical_on_both_no_answer_paths(document, monkeypatch):
 def test_the_offer_is_taken_before_the_threshold_and_not_from_the_admitted_set(
     document, service_with
 ):
-    """A source whose only passage scored below the floor is still offered.
+    """A source whose only passage scored below the threshold is still offered.
 
     This is the "irrespective of the threshold" clause as a test. The admitted set here holds
     one passage and the supplied set holds one passage, and the offer holds TWO items — so it
     cannot have been built from either, and the sub-threshold item is the one that proves it.
     It also fixes the order: the nearer source leads, because ``rank`` ordered the list before
-    anything narrowed it.
+    anything narrowed it. The far item is a NEAR_MISS: below the threshold, at or above
+    PARTIAL_MATCH_FLOOR (step 7).
     """
+    assert in_the_band(NEAR_MISS)
     near = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
     far = second_document(document.uploaded_by)
-    make_chunk(far, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW)
+    make_chunk(far, [EMPLOYEE_ROLE_NAME], index=1, cosine=NEAR_MISS)
     double = service_with(statements=[Statement(text="Invented.", chunk_id="not-supplied")])
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
@@ -1264,8 +1300,10 @@ def test_a_restricted_source_is_not_offered_as_a_partial_match(document, service
     it is nearer the question than anything visible, so an offer built from an unscoped list
     would put it first. The candidate set was restricted in the query, so it is not in the
     ranked list to be offered, and its title, id and text are unreachable from the outcome.
+    The visible passage is a NEAR_MISS, so it is offered on path A (step 7's floor).
     """
-    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW, text="Barely related.")
+    assert in_the_band(NEAR_MISS)
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=NEAR_MISS, text="Barely related.")
     restricted_source = second_document(document.uploaded_by, title="Board remuneration")
     restricted_source.visible_to_roles = [ADMINISTRATOR_ROLE_NAME]
     restricted_source.save(update_fields=["visible_to_roles"])
@@ -1296,3 +1334,93 @@ def test_a_scope_with_no_indexed_chunk_offers_nothing(document, service):
     assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
     assert outcome.message == NO_ANSWER_MESSAGE
     assert outcome.partial_matches == ()
+
+
+# --- Step 7 phase 2b: the tuned threshold and D-56's floor, through answer_question -------
+#
+# The two constants were chosen on the Objective 02 development set (D-93), and these tests
+# pin the pipeline's behaviour at the scores they were chosen from, so that moving either
+# constant out of the interval the rule chose fails here by name. The values and types are
+# pinned in apps/core/tests/test_constants.py; the reduction in test_partial_matches.py.
+
+
+@pytest.mark.django_db
+def test_path_a_at_the_tuned_threshold_for_the_highest_declined_no_answer_score(
+    document, service
+):
+    """d24's 0.397550, the highest no-answer score the threshold declines, is path A.
+
+    Generation is never called, the reason is NO_RELEVANT_PASSAGE, and because the score is
+    also below PARTIAL_MATCH_FLOOR — set the margin above it — nothing is offered. Under
+    the old 0.3 this passage was admitted and the model was asked; that is what the tuning
+    changed. (d25 and d26 score above the threshold and reach generation: the margin rule
+    could not decline them, and path B is what does.)
+    """
+    make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=1, cosine=HIGHEST_DECLINED_NO_ANSWER_SCORE
+    )
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert service.generate_calls == []
+    assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert outcome.answered is False
+    assert outcome.partial_matches == ()
+
+
+@pytest.mark.django_db
+def test_the_lowest_answerable_score_still_reaches_generation(document, service):
+    """d17's 0.448714, the lowest expected-source score of any answerable run, is admitted.
+
+    The rule's other half: the threshold may decline no-answer questions only while losing no
+    answerable one. A passage at this score must reach the prompt and be citable.
+    """
+    chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=LOWEST_ANSWERABLE_SCORE)
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    [(_, supplied)] = service.generate_calls
+    assert [passage.chunk_id for passage in supplied] == [str(chunk.id)]
+    assert outcome.answered is True
+
+
+@pytest.mark.django_db
+def test_a_partial_match_below_the_floor_is_not_offered_and_one_above_it_is(document, service):
+    """Path A, two near misses either side of PARTIAL_MATCH_FLOOR: only the upper is offered.
+
+    Both are below the threshold, so this is path A and generation is not called. The offer
+    holds the source at the floor plus 0.0001 and not the one at the floor minus 0.0001,
+    though the second ranked right behind it. (The exact-floor case is tested on
+    ``RankedPassage`` objects in test_partial_matches.py: the vector column is single
+    precision, so a stored vector cannot be relied on to score exactly the floor.)
+    """
+    upper, lower = PARTIAL_MATCH_FLOOR + 0.0001, PARTIAL_MATCH_FLOOR - 0.0001
+    assert in_the_band(upper) and lower < PARTIAL_MATCH_FLOOR
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=upper)
+    below_floor = second_document(document.uploaded_by)
+    make_chunk(below_floor, [EMPLOYEE_ROLE_NAME], index=1, cosine=lower)
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert service.generate_calls == []
+    assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert [match.source_id for match in outcome.partial_matches] == [document.id]
+    assert str(below_floor.id) not in repr(outcome)
+
+
+@pytest.mark.django_db
+def test_path_b_offers_its_admitted_item_and_not_one_below_the_floor(document, service_with):
+    """Path B: the admitted item is offered, a below-floor item is not.
+
+    The floor applies on both no-answer paths, because the offer is derived once above both.
+    On path B the admitted item always clears it, since the floor is below the threshold.
+    """
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
+    far = second_document(document.uploaded_by)
+    make_chunk(far, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW)
+    service_with(statements=[Statement(text="Invented.", chunk_id="not-supplied")])
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.no_answer_reason == NO_STATEMENT_VERIFIED
+    assert [match.source_id for match in outcome.partial_matches] == [document.id]

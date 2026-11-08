@@ -1,0 +1,46 @@
+source: threshold_scores.json, measured 2026-11-07T23:57:56+11:00, 43 chunks, TOP_K 25, 3 embeddings per run, set 19a0639a
+
+Answerable runs: best score of an expected source's passage in the ranked list (min / max over repeats)
+  d17                Emp sources=D18  expected_best min=0.448714 max=0.448714  top=0.448714..0.448714 top_item=D18
+  d21@Administrator  Adm sources=D16  expected_best min=0.469345 max=0.469345  top=0.469345..0.469345 top_item=D16
+  d22@Administrator  Adm sources=T02  expected_best min=0.483432 max=0.483432  top=0.483432..0.483432 top_item=T02
+  d18                Emp sources=D01  expected_best min=0.506587 max=0.506587  top=0.506587..0.506587 top_item=D01
+  d19                Emp sources=D01  expected_best min=0.51517 max=0.51517  top=0.51517..0.51517 top_item=D01
+  d08                Emp sources=D07  expected_best min=0.5267 max=0.5267  top=0.5267..0.5267 top_item=D07
+  d15                Emp sources=D11  expected_best min=0.534027 max=0.534027  top=0.534027..0.534027 top_item=D11
+  d20                Emp sources=D13  expected_best min=0.543487 max=0.543487  top=0.543487..0.543487 top_item=D13
+  d12                Emp sources=T03  expected_best min=0.564212 max=0.564212  top=0.564212..0.564212 top_item=T03
+  d11@Administrator  Adm sources=T05  expected_best min=0.583942 max=0.583942  top=0.583942..0.583942 top_item=T05
+  d23                Adm sources=D09  expected_best min=0.594494 max=0.594494  top=0.594494..0.594494 top_item=D09
+  d03                Emp sources=D04  expected_best min=0.595959 max=0.595959  top=0.595959..0.595959 top_item=D04
+  d13                Emp sources=T04  expected_best min=0.599559 max=0.599559  top=0.599559..0.599559 top_item=T04
+  d01                Emp sources=D08  expected_best min=0.605865 max=0.605865  top=0.605865..0.605865 top_item=D08
+  d14                Emp sources=T01  expected_best min=0.614274 max=0.614274  top=0.614274..0.614274 top_item=T01
+  d10                Emp sources=D10  expected_best min=0.628999 max=0.628999  top=0.628999..0.628999 top_item=D10
+  d07                Emp sources=D06  expected_best min=0.633837 max=0.633837  top=0.633837..0.633837 top_item=D06
+  d02                Emp sources=D08  expected_best min=0.643146 max=0.643146  top=0.643146..0.643146 top_item=D08
+  d16                Emp sources=D17  expected_best min=0.649443 max=0.649443  top=0.649443..0.649443 top_item=D17
+  d05                Emp sources=D03  expected_best min=0.651671 max=0.651671  top=0.651671..0.651671 top_item=D03
+  d28                Emp sources=D19  expected_best min=0.670014 max=0.670014  top=0.670014..0.670014 top_item=D19
+  d04                Emp sources=D02  expected_best min=0.678356 max=0.678356  top=0.678356..0.678356 top_item=D02
+  d09                Emp sources=D20  expected_best min=0.709477 max=0.709477  top=0.709477..0.709477 top_item=D20
+  d06                Emp sources=D05  expected_best min=0.718767 max=0.718767  top=0.718767..0.718767 top_item=D05
+
+No-answer runs: top in-scope score (min / max over repeats), and the partial matches offered
+  d22@Employee       Emp top min=0.250707 max=0.250707  offered (repeat 1): D05 0.250707, D04 0.238189, T03 0.210895, T01 0.193208, D17 0.190302
+  d27                Adm top min=0.270264 max=0.270264  offered (repeat 1): D04 0.270264, D15 0.254218, D16 0.241790, D01 0.235657, D12 0.230814
+  d11@Employee       Emp top min=0.339343 max=0.339343  offered (repeat 1): T01 0.339343, D02 0.310289, D08 0.292167, D04 0.278571, T03 0.257940
+  d21@Employee       Emp top min=0.390036 max=0.390036  offered (repeat 1): D06 0.390036, T04 0.343443, T01 0.286846, D18 0.255977, D13 0.245434
+  d24                Emp top min=0.39755 max=0.39755  offered (repeat 1): D01 0.397550, D10 0.297211, D08 0.286551, D05 0.280163, D06 0.270541
+  d26                Emp top min=0.439129 max=0.439129  offered (repeat 1): D01 0.439129, D03 0.376840, D02 0.375677, D07 0.349547, D05 0.292846
+  d25                Emp top min=0.445715 max=0.445715  offered (repeat 1): D20 0.445715, D01 0.316821, D03 0.289582, D14 0.288633, D17 0.276240
+
+At the current 0.3: lost [], declined ['d22@Employee', 'd27']
+Upper bound (the lowest answerable expected-source score kept): 0.448714 (d17)
+Declined at the upper bound: 7 of 7: ['d22@Employee', 'd27', 'd11@Employee', 'd21@Employee', 'd24', 'd26', 'd25']
+Tie interval: (0.445715, 0.448714]  -> middle 0.447214, margin 0.001500 each side
+  T=0.45: lost ['d17']  declined 7: ['d22@Employee', 'd27', 'd11@Employee', 'd21@Employee', 'd24', 'd26', 'd25']
+  T=0.447: lost []  declined 7: ['d22@Employee', 'd27', 'd11@Employee', 'd21@Employee', 'd24', 'd26', 'd25']
+  T=0.44721449999999996: lost []  declined 7: ['d22@Employee', 'd27', 'd11@Employee', 'd21@Employee', 'd24', 'd26', 'd25']
+
+Highest-scoring partial match offered to any no-answer run: 0.445715 (d25, D20, repeat 3)

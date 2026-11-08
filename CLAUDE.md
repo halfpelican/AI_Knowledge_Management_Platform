@@ -172,7 +172,8 @@ set during evaluation, not guessed in a code review.
 | `CHUNK_SIZE` | 500 tokens |
 | `CHUNK_OVERLAP` | 50 tokens |
 | `TOP_K` | 25 initially, *tune* |
-| `RELEVANCE_THRESHOLD` | *tune* — cosine similarity floor for admitting a passage |
+| `RELEVANCE_THRESHOLD` | **0.4231**, *tune* — cosine similarity floor for admitting a passage; chosen on the development set with a 0.006 margin (D-101) |
+| `PARTIAL_MATCH_FLOOR` | **0.4036**, *tune* — a near miss is offered as a partial match only at or above this (D-56, D-101) |
 | `MAXIMUM_CONTEXT_TOKENS` | *tune* — ceiling on grounding context per call |
 | `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
