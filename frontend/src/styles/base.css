@@ -77,8 +77,16 @@ textarea {
 
 /* At narrow widths a data table scrolls sideways instead of breaking the page.
    Give the wrapper role="region", an accessible name and tabIndex={0} so keyboard
-   users can scroll it. */
+   users can scroll it.
+
+   `position: relative` anchors the .visually-hidden descendants (the sortable
+   heading's ", sorted descending", the table's caption): they are absolutely
+   positioned, and without a positioned ancestor their containing block was the
+   page, so their static position escaped this clip and the whole page gained a
+   phantom sideways scroll — measured as 70px of two-dimensional scrolling on
+   /documents at 320 CSS px, which WCAG 2.1 SC 1.4.10 forbids (Stage 5 item 7). */
 .table-scroll {
+  position: relative;
   overflow-x: auto;
 }
 
