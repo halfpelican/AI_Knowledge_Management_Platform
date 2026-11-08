@@ -3,8 +3,10 @@ import { messageForStatus } from '../api/client.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { SOURCE_TYPE, TEXT } from '../constants.js'
 import { contrastRatio } from '../utils/contrast.js'
+import { CONTRAST_PAIRS } from './contrastPairs.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
 import { AnswerBody, PartialMatches, SourcesPanel } from './Answer.jsx'
+import AttendeePicker from './AttendeePicker.jsx'
 import { ActiveFilterList, FacetGroup, SortHeader } from './Browse.jsx'
 import Button from './Button.jsx'
 import DashboardPanel from './DashboardPanel.jsx'
@@ -56,25 +58,6 @@ const FOCUS_TOKENS = ['--color-focus', '--focus-ring-width', '--focus-ring-offse
 
 const LAYER_TOKENS = ['--z-skip-link', '--z-dialog', '--duration-spinner']
 
-/* Text/background pairs the interface uses. AA: 4.5:1 for text, 3:1 for non-text boundaries. */
-const CONTRAST_PAIRS = [
-  { label: 'Body text on surface', fg: '--color-text', bg: '--color-surface', minimum: 4.5 },
-  { label: 'Body text on alt surface', fg: '--color-text', bg: '--color-surface-alt', minimum: 4.5 },
-  { label: 'Muted text on surface', fg: '--color-text-muted', bg: '--color-surface', minimum: 4.5 },
-  { label: 'Muted text on alt surface', fg: '--color-text-muted', bg: '--color-surface-alt', minimum: 4.5 },
-  { label: 'Link text on surface', fg: '--color-primary', bg: '--color-surface', minimum: 4.5 },
-  { label: 'Button text on primary', fg: '--color-primary-text', bg: '--color-primary', minimum: 4.5 },
-  { label: 'Button text on primary hover', fg: '--color-primary-text', bg: '--color-primary-hover', minimum: 4.5 },
-  { label: 'Danger text on surface', fg: '--color-danger', bg: '--color-surface', minimum: 4.5 },
-  { label: 'Danger text on danger surface', fg: '--color-danger', bg: '--color-danger-surface', minimum: 4.5 },
-  { label: 'Success text on surface', fg: '--color-success', bg: '--color-surface', minimum: 4.5 },
-  { label: 'Success text on success surface', fg: '--color-success', bg: '--color-success-surface', minimum: 4.5 },
-  { label: 'Warning text on warning surface', fg: '--color-warning', bg: '--color-warning-surface', minimum: 4.5 },
-  { label: 'Control border on surface (non-text)', fg: '--color-border-strong', bg: '--color-surface', minimum: 3 },
-  // FR-15's browse values sit in a panel on the alt surface.
-  { label: 'Control border on alt surface (non-text)', fg: '--color-border-strong', bg: '--color-surface-alt', minimum: 3 },
-  { label: 'Focus ring on surface (non-text)', fg: '--color-focus', bg: '--color-surface', minimum: 3 },
-]
 
 /* Components for the M6 screens, in build order. Named here so the sheet stays the index of the design system. */
 const BUILT = [
@@ -200,8 +183,12 @@ export default function ComponentSheet() {
   const [values] = useState(() => readTokenValues(ALL_TOKENS))
   // Live demonstrations, so the sheet shows behaviour and not only markup.
   const [demoPassword, setDemoPassword] = useState('')
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // Which confirmation dialogue is open: FR-05's role change, or D-99's
+  // meeting deletion. One at a time, as on the screens themselves.
+  const [dialogOpen, setDialogOpen] = useState(null)
   const demoRequirementsId = useId()
+  // FR-09's attendee picker (usability finding 5), working against local state.
+  const [demoAttendees, setDemoAttendees] = useState(['sheet-ada'])
   // FR-15's browse controls, working against local state here; the repository
   // keeps the same values in the address instead.
   const [demoDepartment, setDemoDepartment] = useState('Finance')
@@ -456,22 +443,45 @@ export default function ComponentSheet() {
           Open it below and try the keyboard.
         </p>
         <div className="demo-row">
-          <Button variant="secondary" onClick={() => setDialogOpen(true)}>
+          <Button variant="secondary" onClick={() => setDialogOpen('role')}>
             Show the example dialogue
           </Button>
         </div>
-        {dialogOpen ? (
+        {dialogOpen === 'role' ? (
           <Dialog
             title={'Change Jane Doe’s role to Administrator?'}
             confirmLabel="Change role"
             busyLabel="Changing…"
-            onConfirm={() => setDialogOpen(false)}
-            onCancel={() => setDialogOpen(false)}
+            onConfirm={() => setDialogOpen(null)}
+            onCancel={() => setDialogOpen(null)}
           >
             <p>
               Jane Doe (jane@example.com) currently has the Employee role. The change takes effect on their
               next request and is recorded in the audit log.
             </p>
+          </Dialog>
+        ) : null}
+        <p>
+          Deletion uses the same dialogue. FR-15&apos;s document delete and the meeting delete the lead asked
+          for (D-99) each show their control only when the detail says <code>can_delete</code> — usability
+          only, since the server checks the permission on every call — and the confirmation says what goes
+          and that it cannot be undone. Nothing is sent until the confirmation.
+        </p>
+        <div className="demo-row">
+          <Button variant="secondary" onClick={() => setDialogOpen('delete')}>
+            {TEXT.meetingDelete}
+          </Button>
+        </div>
+        {dialogOpen === 'delete' ? (
+          <Dialog
+            title={TEXT.meetingDeleteConfirm('Q3 Planning Sync')}
+            confirmLabel={TEXT.meetingDelete}
+            busyLabel={TEXT.meetingDeleting}
+            cancelLabel={TEXT.meetingDeleteCancel}
+            onConfirm={() => setDialogOpen(null)}
+            onCancel={() => setDialogOpen(null)}
+          >
+            <p>{TEXT.meetingDeleteBody}</p>
           </Dialog>
         ) : null}
       </section>
@@ -526,6 +536,7 @@ export default function ComponentSheet() {
           hint={TEXT.uploadDropHint}
           accept={FILE_INPUT_ACCEPT}
           multiple
+          status={TEXT.dropZoneAdded(['leave-policy.pdf'], 0)}
           onFiles={() => {}}
         />
         <p>
@@ -534,6 +545,47 @@ export default function ComponentSheet() {
           attribute and the format check that follows are conveniences — the server identifies the format from
           the file signature and refuses anything else with a 415.
         </p>
+        <p>
+          The zone reports its own state where the pointer was released (usability findings 1 to 4): the
+          sentence above is the confirmation a drop lands with, in a polite live region as well as on the
+          screen. The native input is visually hidden — its &quot;No file chosen&quot; label contradicted the
+          queue the moment a choice was made — so its label is drawn as the control and carries the focus ring
+          while the input holds keyboard focus. While uploads are in flight the zone is disabled and says why,
+          and a drop made meanwhile is refused out loud rather than vanishing:
+        </p>
+        <FileDropZone
+          label="Choose files"
+          hint={TEXT.uploadDropHint}
+          accept={FILE_INPUT_ACCEPT}
+          multiple
+          disabled
+          disabledReason={TEXT.dropZoneBusy}
+          onFiles={() => {}}
+        />
+      </section>
+
+      <section aria-labelledby="sheet-attendees">
+        <h2 id="sheet-attendees">Attendee picker (FR-09)</h2>
+        <p>
+          One person at a time into a visible list, with no modifier keys (usability finding 5: the
+          multi-select listbox this replaces needed Ctrl+click, said nothing about it, and silently lost the
+          first choice). A native select finds a name by typing and does not stop working at 500 staff; each
+          addition and removal is announced in the words the list shows, and each entry&apos;s Remove names its
+          person. Attendance is a participation record, never an access control (D-16).
+        </p>
+        <div className="demo-stack">
+          <AttendeePicker
+            legend="Attendees (optional)"
+            hint={TEXT.attendeesHint}
+            options={[
+              { id: 'sheet-ada', name: 'Ada Admin', email: 'ada@example.com' },
+              { id: 'sheet-erin', name: 'Erin Employee', email: 'erin@example.com' },
+              { id: 'sheet-sam', name: 'Sam Scheduler', email: 'sam@example.com' },
+            ]}
+            value={demoAttendees}
+            onChange={setDemoAttendees}
+          />
+        </div>
       </section>
 
       <section aria-labelledby="sheet-progress">
