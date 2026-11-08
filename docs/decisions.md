@@ -6528,5 +6528,4 @@ expecting an answer and 7 not. The evidence is in
 
 - **An empty partial-match offer now implies the question never reached generation.** It discloses
   nothing outside the caller's scope (`partial_matches.py`, `docs/api-contract.md`).
-- **CLAUDE.md §5** still shows `RELEVANCE_THRESHOLD` as *tune*, with no value, and has no row for
-  the floor.
+- **CLAUDE.md §5** now shows both values, with the user's approval of 8 November.
