@@ -13,22 +13,22 @@ best first, capped at TOP_K — **before ``admit`` applies RELEVANCE_THRESHOLD**
 applies its own, lower floor. That is the whole derivation, and the ordering of those two
 calls in ``apps/retrieval/pipeline.py`` is what makes the rest of this docstring true.
 
-**PARTIAL_MATCH_FLOOR is D-56's missing floor, chosen in step 7 phase 2b** (D-93, from the
-development set alone; ``apps/core/constants.py`` has the rule and the numbers). Until then
-the list was the five nearest in-scope sources whatever their score, so a question the
-corpus holds nothing about was offered five titles related to nothing. The comparison is
-``>=``, as ``admit``'s is. The floor sits below RELEVANCE_THRESHOLD, so every item a path-B
-reply admitted is still offered, and path A offers only items scoring in the band between
-the two.
+**PARTIAL_MATCH_FLOOR is D-56's floor, and it is 0.0: none. D-56 stays open.** Step 7 phase
+2b chose a floor from the development set (D-93). At the 0.30 threshold the user kept, the
+same margin rule cannot set one (``apps/core/constants.py`` has the derivation). So a
+question the corpus holds nothing about is offered the nearest titles, however weak, as it
+was before step 7. The mechanism stays, and is tested relative to the constant: the
+comparison is ``>=``, as ``admit``'s is. A floor below RELEVANCE_THRESHOLD keeps every item
+a path-B reply admitted, and path A offers only items scoring in the band between the two.
 
-**What the floor costs the identical replies, stated rather than left to be found.** Path B
-admitted at least one passage at or above RELEVANCE_THRESHOLD, which is above this floor, so
-a path-B offer is never empty. An EMPTY offer therefore now says path A ran: nothing in the
-caller's own scope came within the band. Before the floor, an empty offer said the same
-thing, but only when the scope held nothing rankable at all. A non-empty offer is still
-consistent with either path. Everything this can tell a caller is about passages they may
-read: the candidate set was scoped in the query, so it says nothing about out-of-scope
-material (invariant 1).
+**What a floor above zero costs the identical replies, stated rather than left to be
+found.** Path B admitted at least one passage at or above RELEVANCE_THRESHOLD, which is
+above any such floor, so a path-B offer is never empty. An EMPTY offer would then say path
+A ran: nothing in the caller's own scope came within the band. With no floor, an empty offer
+says the same thing only when the scope holds nothing rankable at all, as before step 7. A
+non-empty offer is consistent with either path. Everything this can tell a caller is about
+passages they may read: the candidate set was scoped in the query, so it says nothing about
+out-of-scope material (invariant 1).
 
 **It is derived identically on both no-answer paths, and that is a disclosure property
 rather than a convenience.** Path A (nothing cleared the threshold, generation never

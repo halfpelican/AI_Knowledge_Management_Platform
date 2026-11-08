@@ -130,7 +130,7 @@ UNATTENDED_MEETING_TEXT = "The committee noted the audit timetable and closed th
 # (D-37 calls the value provisional) fails this file loudly instead of silently changing
 # which exit each test takes. It did, at step 7 phase 2b: the threshold rose from 0.3 to
 # 0.4231, above the 0.40 this file used, so ABOVE moved to 0.60 and every exit is unchanged.
-# Phase 2c lowered it to 0.24, still between BELOW and ABOVE.
+# The user then kept D-37's 0.30 (8 November 2026), still between BELOW and ABOVE.
 BELOW = 0.10
 ABOVE = 0.60
 NEAREST = 0.95

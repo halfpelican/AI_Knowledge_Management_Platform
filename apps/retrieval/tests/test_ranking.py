@@ -338,7 +338,7 @@ def build_corpus(document, *, role_name, restricted_roles):
     question — so if the permission boundary were applied after ranking, or not at all,
     it would be the first passage in the answer rather than a marginal one.
     """
-    # "middle" must clear RELEVANCE_THRESHOLD: 0.40 did at 0.3, 0.60 does at 0.4231 and at 0.24.
+    # "middle" must clear RELEVANCE_THRESHOLD: 0.60 does at 0.30, at 0.4231 and at 0.24.
     assert 0.10 < RELEVANCE_THRESHOLD < 0.60
     return {
         "best": make_chunk(document, [role_name], index=1, cosine=0.80, text="Best permitted."),

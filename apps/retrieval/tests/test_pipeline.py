@@ -74,13 +74,11 @@ def in_the_band(score: float) -> bool:
     """Whether ``score`` is offered as a partial match but not admitted."""
     return PARTIAL_MATCH_FLOOR <= score < RELEVANCE_THRESHOLD
 
-# dev-set-v2's two boundary scores under the margin rule (corpus/objective-02/runs/2026-11-08/
-# dev-set-v2.md): the highest top score of a no-answer run path A declines (u30@Employee,
-# whose best passage is D04) and the lowest at which an answerable run's expected source was
-# found (u07, D02). The threshold sits at least the margin from each, and the floor at least
-# the margin above the first.
-HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.199907
-LOWEST_ANSWERABLE_SCORE = 0.280085
+# dev-set-v2's two scores either side of the shipped 0.30 (corpus/objective-02/runs/2026-11-08/
+# dev-set-v2.md): the highest top score of a no-answer run path A declines (u31@Employee,
+# whose best passage is T01) and the lowest expected-source score 0.30 keeps (u06, D01).
+HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.287538
+LOWEST_KEPT_ANSWERABLE_SCORE = 0.324485
 
 
 # --- Vectors and rows ------------------------------------------------------------------
@@ -1336,24 +1334,25 @@ def test_a_scope_with_no_indexed_chunk_offers_nothing(document, service):
     assert outcome.partial_matches == ()
 
 
-# --- Step 7 phase 2b: the tuned threshold and D-56's floor, through answer_question -------
+# --- Step 7: the shipped threshold and D-56's floor, through answer_question ----------------
 #
-# The two constants were chosen on the Objective 02 development set (D-93), and these tests
-# pin the pipeline's behaviour at the scores they were chosen from, so that moving either
-# constant out of the interval the rule chose fails here by name. The values and types are
-# pinned in apps/core/tests/test_constants.py; the reduction in test_partial_matches.py.
+# RELEVANCE_THRESHOLD is D-37's 0.30, kept by the user's decision, and PARTIAL_MATCH_FLOOR is
+# 0.0, no floor (D-56 open). These tests pin the pipeline's behaviour at dev-set-v2's scores
+# either side of 0.30, and the floor's mechanism relative to the constant, so that it keeps
+# working if a floor is set later. The values and types are pinned in
+# apps/core/tests/test_constants.py; the reduction in test_partial_matches.py.
 
 
 @pytest.mark.django_db
-def test_path_a_at_the_tuned_threshold_for_the_highest_declined_no_answer_score(
+def test_path_a_at_the_threshold_for_the_highest_no_answer_score_it_declines(
     document, service
 ):
-    """u30@Employee's 0.199907, the one no-answer score the threshold declines, is path A.
+    """u31@Employee's 0.287538, the highest no-answer score 0.30 declines, is path A.
 
-    Generation is never called, the reason is NO_RELEVANT_PASSAGE, and because the score is
-    also below PARTIAL_MATCH_FLOOR — set the margin above it — nothing is offered. (The other
-    seven no-answer runs of dev-set-v2 score above the threshold and reach generation: the
-    margin rule could not decline them, and path B is what does.)
+    Generation is never called and the reason is NO_RELEVANT_PASSAGE. With no floor (D-56
+    open), the item is still offered as a partial match, as it was before step 7. (Six of
+    dev-set-v2's eight no-answer runs score above 0.30 and reach generation: path B is what
+    declines them, when it does.)
     """
     make_chunk(
         document, [EMPLOYEE_ROLE_NAME], index=1, cosine=HIGHEST_DECLINED_NO_ANSWER_SCORE
@@ -1364,17 +1363,21 @@ def test_path_a_at_the_tuned_threshold_for_the_highest_declined_no_answer_score(
     assert service.generate_calls == []
     assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
     assert outcome.answered is False
-    assert outcome.partial_matches == ()
+    assert [match.source_id for match in outcome.partial_matches] == [document.id]
 
 
 @pytest.mark.django_db
-def test_the_lowest_answerable_score_still_reaches_generation(document, service):
-    """u07's 0.280085, the lowest expected-source score of any answerable run, is admitted.
+def test_the_lowest_expected_source_score_kept_at_the_threshold_reaches_generation(
+    document, service
+):
+    """u06's 0.324485, the lowest expected-source score 0.30 keeps in dev-set-v2, is admitted.
 
-    The rule's other half: the threshold may decline no-answer questions only while losing no
-    answerable one. A passage at this score must reach the prompt and be citable.
+    A passage at this score must reach the prompt and be citable. (Three answerable runs
+    score lower and lose their source at 0.30: u07, u24 and u27, the cost the user accepted.)
     """
-    chunk = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=LOWEST_ANSWERABLE_SCORE)
+    chunk = make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=1, cosine=LOWEST_KEPT_ANSWERABLE_SCORE
+    )
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)
 
@@ -1412,11 +1415,13 @@ def test_path_b_offers_its_admitted_item_and_not_one_below_the_floor(document, s
     """Path B: the admitted item is offered, a below-floor item is not.
 
     The floor applies on both no-answer paths, because the offer is derived once above both.
-    On path B the admitted item always clears it, since the floor is below the threshold.
+    On path B the admitted item always clears it, since the floor is below the threshold. The
+    far item is placed below the floor relative to the constant (with no floor, 0.0, that is a
+    negative cosine), so the mechanism stays tested if a floor is set later.
     """
     make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=ABOVE)
     far = second_document(document.uploaded_by)
-    make_chunk(far, [EMPLOYEE_ROLE_NAME], index=1, cosine=BELOW)
+    make_chunk(far, [EMPLOYEE_ROLE_NAME], index=1, cosine=PARTIAL_MATCH_FLOOR - 0.05)
     service_with(statements=[Statement(text="Invented.", chunk_id="not-supplied")])
 
     outcome = answer_question(question=QUESTION, user=document.uploaded_by)

@@ -31,11 +31,11 @@ runs found more (before the prompt fix, 2 ordinary questions where the model dec
 passages in front of it and 3 where verification rejected every statement; after the fix,
 6 declined). A rising rate of this path is the project's main quality signal: it means
 retrieval is admitting passages that score above the floor but do not answer the question.
-Step 7 phase 2c (8 November 2026) set the threshold to 0.24, by a rule keeping a margin of
-0.006 on both sides, on a development set worded as users ask. That declines 1 of its 8
-no-answer runs at path A: the other 7 score above the lowest answerable run less the margin,
-so no threshold with that margin separates them, and path B is what declines them. D-37's
-finding stands, more starkly than on the 6-chunk corpus.
+Step 7 (8 November 2026) tried twice to set the threshold by a rule keeping a margin of 0.006
+on both sides: 0.4231 on questions sharing their documents' wording, 0.24 on questions
+worded as users ask. The user kept 0.30. On users' wording, six of the development set's
+eight no-answer questions score above it, and path B is what declines them. D-37's finding
+stands, more starkly than on the 6-chunk corpus.
 
 **The query record (7.10 step 11) is item 8's, and it is here.** Every one of the three
 exits calls ``record_query`` (``apps/retrieval/query_log.py``) before returning, as 7.10
@@ -473,8 +473,9 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
     # (invariant 7, apps/retrieval/partial_matches.py). Every item named is in the asking
     # role's scope because ``candidates`` was (invariant 1), and none of them carries passage
     # text. Only items whose best passage reaches PARTIAL_MATCH_FLOOR are named (D-56's
-    # floor, step 7 phase 2b), so an EMPTY offer now implies path A: that module says why
-    # this discloses nothing outside the caller's scope.
+    # floor; 0.0, none, since step 7: D-56 stays open). With a floor above zero an EMPTY
+    # offer implies path A; that module says why this discloses nothing outside the
+    # caller's scope.
     offered = partial_matches(ranked)
 
     admitted = admit(ranked)

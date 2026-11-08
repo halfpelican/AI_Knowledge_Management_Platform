@@ -7,12 +7,13 @@ Step 7, phase 2c, of the user's post-M6 order. The work, in order:
    rule (m = 0.006);
 3. run it end to end against a 0.30 baseline.
 
-**The rule's result:**
+**The values, in order:**
 
 | | `RELEVANCE_THRESHOLD` | `PARTIAL_MATCH_FLOOR` |
 |---|---|---|
 | phase 2b, on `dev-set.json` (on `main`, `a53c5de`) | 0.4231 | 0.4036 |
-| **phase 2c, on `dev-set-v2.json` (this commit)** | **0.2400** | **0.2060** |
+| phase 2c, on `dev-set-v2.json` (`2ea9e95`), not shipped | 0.2400 | 0.2060 |
+| **shipped, by the user's decision (see "What ships")** | **0.30** (D-37's) | **0.0**: none, D-56 open |
 
 **Read this first: on dev-set-v2, the rule's values do worse end to end than the 0.30 baseline.**
 
@@ -24,8 +25,67 @@ Step 7, phase 2c, of the user's post-M6 order. The work, in order:
 
 Lowering the threshold admits more passages. The model then cites the wrong items more often, and
 it answers no-answer questions from loosely related ones. The rule could not see that, because it
-weighs scores, not answers. The values are committed as the brief asks, with this result beside
-them. Whether they ship is the user's decision.
+weighs scores, not answers. The values were committed (`2ea9e95`) as the brief asked, with this
+result beside them, for the user to decide.
+
+## What ships
+
+**The user's decision (8 November 2026): `RELEVANCE_THRESHOLD = 0.30`, D-37's value, with the cap
+of 6. The floor is set by the same margin rule at T = 0.30, from dev-set-v2's measured scores
+alone, with no new model runs.**
+
+- **0.4231**, chosen on `dev-set.json`, lost answerable questions on users' wording: 14 of
+  dev-set-v2's 32 score below it, and the frozen thirty's after put seven on path A.
+- **0.24**, the margin rule on dev-set-v2, did worse end to end than 0.30 (the table above).
+- **So 0.30 ships, and generation, now capped, carries most of the declining.**
+- **The answers at 0.30 are those of the baseline pass** in `dev-set-v2/e2e-baseline/`. A floor
+  changes only the partial-match offer, so that pass stands for them.
+
+**The floor's derivation (m = 0.006):**
+
+1. **The runs path A declines at 0.30** (top score below 0.30), from `dev-set-v2/scores_v2.json`:
+   - u30@Employee: 0.199907;
+   - u31@Employee: 0.287538;
+   - **u07: 0.287909, answerable** (its top item D18 outranks D02);
+   - **u24: 0.292898, answerable** (its top item D20 outranks T03).
+2. **The highest partial match offered to any of them** is u24's D20, at 0.292898.
+3. **F ≥ 0.292898 + 0.006 = 0.298898**, which rounds up to 0.2989.
+4. **F ≤ T − m = 0.294.** 0.2989 exceeds 0.294, so **the rule cannot set a floor.**
+
+**So no floor is set:** `PARTIAL_MATCH_FLOOR = 0.0`, and **D-56 stays open.** This is D-56's
+behaviour before phase 2b: the five nearest in-scope items are offered beside a no-answer, whatever
+their score. 0.0 differs from "none" only in not offering a negative-cosine passage, which no
+development run's offer had.
+
+**What a different reading would have done.** Counting only the no-answer runs, as phase 2b's
+wording did, the highest offer is u31@Employee's T01 at 0.287538. That gives F ≥ 0.293538, or
+0.2936, under the ceiling. It would also remove the offers pointing u07 and u24 at their expected
+sources: D02 at 0.280085 and T03 at 0.291925, each ranked second. The brief's wording ("any
+dev-set-v2 run that path A declines") decided it, and the alternative's cost points the same way.
+
+**What no floor does to partial matches, from the scores alone:**
+
+- **Every dev-set-v2 no-answer run that ends in no-answer is still offered its five nearest
+  items.**
+  - **u30@Employee and u31@Employee** take path A at 0.30 on every pass, so they are always
+    offered:
+    - u30@E: D04 0.199907; T03 0.187338; T01 0.177938; D14 0.147205; D11 0.133782.
+    - u31@E: T01 0.287538; T03 0.262941; D14 0.249229; D05 0.202338; T04 0.193479.
+  - **The other six reach generation** and are offered their five nearest only if they end on path
+    B. Their lists are the no-answer table's, with scores from 0.200248 to 0.487314.
+  - In the 0.30 pass, u32@E, u33, u34, u35 and u36 ended on path B and were offered theirs. u37 was
+    answered and was offered nothing.
+  - **Unrelated items are therefore still offered to questions the corpus cannot answer.** That is
+    D-56's open gap, unchanged.
+- **The floor's cost to answerable runs: none.** No floor removes nothing.
+  - u07 and u24 (path A at 0.30) are offered their expected sources, D02 and T03, second in each
+    list.
+  - u17, which ended on path B in the 0.30 pass, is offered D14, its expected source, first.
+
+**The evidence for this section:**
+
+- the scores in `dev-set-v2/scores_v2.json`;
+- the answers in `dev-set-v2/e2e-baseline/`.
 
 ## Why v2, and the contamination it carries
 
