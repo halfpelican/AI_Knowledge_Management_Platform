@@ -391,20 +391,22 @@ export default function Meetings() {
               onChange={handleChange}
             />
           ) : (
-            <>
-              <FileDropZone
-                label="Transcript file"
-                hint={TEXT.uploadDropHint}
-                accept={FILE_INPUT_ACCEPT}
-                disabled={submitting}
-                error={fieldErrors.file}
-                onFiles={(files) => {
-                  setFile(files[0])
-                  setFieldErrors((current) => ({ ...current, file: undefined }))
-                }}
-              />
-              {file ? <p className="meeting-form__file">Selected: {file.name}</p> : null}
-            </>
+            // The zone states the chosen file itself (usability finding 2), and the
+            // whole page takes a dropped file while it is shown (finding 3).
+            <FileDropZone
+              label="Transcript file"
+              hint={TEXT.uploadDropHint}
+              accept={FILE_INPUT_ACCEPT}
+              disabled={submitting}
+              disabledReason={TEXT.meetingFileBusy}
+              error={fieldErrors.file}
+              status={file ? TEXT.meetingFileChosen(file.name) : TEXT.meetingFileNone}
+              pageDrop
+              onFiles={(files) => {
+                setFile(files[0])
+                setFieldErrors((current) => ({ ...current, file: undefined }))
+              }}
+            />
           )}
 
           {attendeeControl}
