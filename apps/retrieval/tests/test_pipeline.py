@@ -74,13 +74,13 @@ def in_the_band(score: float) -> bool:
     """Whether ``score`` is offered as a partial match but not admitted."""
     return PARTIAL_MATCH_FLOOR <= score < RELEVANCE_THRESHOLD
 
-# The development set's two boundary scores under the margin rule (corpus/objective-02/runs/
-# 2026-11-08/threshold-floor.md): the highest top score of a no-answer run path A declines
-# (d24, whose best passage is D01) and the lowest at which an answerable run's expected source
-# was found (d17, D18). The threshold sits at least the margin from each, and the floor at
-# least the margin above the first.
-HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.397550
-LOWEST_ANSWERABLE_SCORE = 0.448714
+# dev-set-v2's two boundary scores under the margin rule (corpus/objective-02/runs/2026-11-08/
+# dev-set-v2.md): the highest top score of a no-answer run path A declines (u30@Employee,
+# whose best passage is D04) and the lowest at which an answerable run's expected source was
+# found (u07, D02). The threshold sits at least the margin from each, and the floor at least
+# the margin above the first.
+HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.199907
+LOWEST_ANSWERABLE_SCORE = 0.280085
 
 
 # --- Vectors and rows ------------------------------------------------------------------
@@ -631,7 +631,7 @@ def test_the_prompt_carries_the_passages_in_rank_order_and_nothing_else(document
     best-first by the context budget, and the model is more likely to draw on what it reads
     first.
     """
-    # All three clear RELEVANCE_THRESHOLD; "worst" was 0.35 until step 7 raised it to 0.4231.
+    # All three clear RELEVANCE_THRESHOLD; "worst" was 0.35 until step 7 phase 2b raised it.
     assert RELEVANCE_THRESHOLD < 0.50
     best = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=0.90, text="Best.")
     middle = make_chunk(document, [EMPLOYEE_ROLE_NAME], index=2, cosine=0.60, text="Middle.")
@@ -1348,13 +1348,12 @@ def test_a_scope_with_no_indexed_chunk_offers_nothing(document, service):
 def test_path_a_at_the_tuned_threshold_for_the_highest_declined_no_answer_score(
     document, service
 ):
-    """d24's 0.397550, the highest no-answer score the threshold declines, is path A.
+    """u30@Employee's 0.199907, the one no-answer score the threshold declines, is path A.
 
     Generation is never called, the reason is NO_RELEVANT_PASSAGE, and because the score is
-    also below PARTIAL_MATCH_FLOOR — set the margin above it — nothing is offered. Under
-    the old 0.3 this passage was admitted and the model was asked; that is what the tuning
-    changed. (d25 and d26 score above the threshold and reach generation: the margin rule
-    could not decline them, and path B is what does.)
+    also below PARTIAL_MATCH_FLOOR — set the margin above it — nothing is offered. (The other
+    seven no-answer runs of dev-set-v2 score above the threshold and reach generation: the
+    margin rule could not decline them, and path B is what does.)
     """
     make_chunk(
         document, [EMPLOYEE_ROLE_NAME], index=1, cosine=HIGHEST_DECLINED_NO_ANSWER_SCORE
@@ -1370,7 +1369,7 @@ def test_path_a_at_the_tuned_threshold_for_the_highest_declined_no_answer_score(
 
 @pytest.mark.django_db
 def test_the_lowest_answerable_score_still_reaches_generation(document, service):
-    """d17's 0.448714, the lowest expected-source score of any answerable run, is admitted.
+    """u07's 0.280085, the lowest expected-source score of any answerable run, is admitted.
 
     The rule's other half: the threshold may decline no-answer questions only while losing no
     answerable one. A passage at this score must reach the prompt and be citable.

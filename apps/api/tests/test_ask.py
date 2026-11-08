@@ -705,13 +705,13 @@ def test_nothing_is_offered_when_every_passage_is_below_the_floor(session_client
     """D-56's floor on the reply (step 7 phase 2b), from an Employee and an Administrator session.
 
     The case the floor was owed for (D-93): a question nothing in the corpus answers used to
-    be offered the five nearest titles however weak. 0.397550 is the highest score of any
-    no-answer question the threshold declines in the development set (d24, the leave policy);
-    the floor was set the margin above it. The reply is path A's with an empty offer, and no
-    title reaches the body.
+    be offered the five nearest titles however weak. 0.199907 is the score of the one
+    no-answer question the threshold declines in dev-set-v2 (u30@Employee, whose nearest is
+    the records handbook); the floor was set the margin above it. The reply is path A's with
+    an empty offer, and no title reaches the body.
     """
     user = session_client.user
-    nearest = 0.397550
+    nearest = 0.199907
     assert nearest < PARTIAL_MATCH_FLOOR
     make_document(user, title="Nearly", roles=BOTH_ROLES, text=PASSAGE_TEXT, cosine=nearest)
     make_meeting(title="Far off", roles=BOTH_ROLES, text=MEETING_PASSAGE_TEXT, cosine=BELOW)

@@ -67,7 +67,7 @@ def cosine(a, b) -> float:
     )
 
 
-def measure(out: Path, repeats: int) -> int:
+def measure(out: Path, repeats: int, set_name: str = "dev-set.json", unfloored: bool = False) -> int:
     scratch_logs = out.parent / "server_logs"
     scratch_logs.mkdir(parents=True, exist_ok=True)
     os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
@@ -103,6 +103,7 @@ def measure(out: Path, repeats: int) -> int:
     from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, RELEVANCE_THRESHOLD, TOP_K
     from apps.documents.models import ContentChunk, Document
     from apps.meetings.models import Meeting
+    import apps.retrieval.partial_matches as partial_matches_module
     from apps.retrieval.partial_matches import partial_matches
     from apps.retrieval.query_embedding import embed_question
     from apps.retrieval.ranking import cosine_similarity, rank
@@ -112,7 +113,13 @@ def measure(out: Path, repeats: int) -> int:
         print(f"refusing: connected to {connection.settings_dict['NAME']!r}", flush=True)
         return 2
 
-    set_path = REPO / "corpus/objective-02/dev-set.json"
+    # --unfloored (phase 2c): the real offer path with PARTIAL_MATCH_FLOOR lifted, so the offers
+    # are the five nearest items whatever their score, as they were before the floor existed
+    # (the 7 November measurement ran on code with no floor). Recorded in the output.
+    floor_in_code = getattr(partial_matches_module, "PARTIAL_MATCH_FLOOR", None)
+    if unfloored and floor_in_code is not None:
+        partial_matches_module.PARTIAL_MATCH_FLOOR = float("-inf")
+    set_path = REPO / "corpus/objective-02" / set_name
     _, questions = question_set.load(set_path)
     runs = question_set.expand_runs(questions, (ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME))
     manifest = json.loads((REPO / "corpus/objective-02/manifest.json").read_text(encoding="utf-8"))
@@ -190,6 +197,9 @@ def measure(out: Path, repeats: int) -> int:
         "chunk_count": ContentChunk.objects.count(),
         "top_k": TOP_K,
         "relevance_threshold_in_code": RELEVANCE_THRESHOLD,
+        "partial_match_floor_in_code": floor_in_code,
+        "offers_unfloored": bool(unfloored),
+        "set": set_name,
         "repeats": repeats,
         "runs": rows,
     }
@@ -285,16 +295,33 @@ def derive_with_margin(path: Path, m: float) -> int:
     """
     data = json.loads(path.read_text(encoding="utf-8"))
     runs = data["runs"]
+    print(f"source: {path.name}, set {data.get('set', 'dev-set.json')}, measured {data['measured']}, "
+          f"offers unfloored: {data.get('offers_unfloored', 'n/a (no floor in code)')}")
     answerable = [r for r in runs if r["expects_answer"]]
     unanswerable = [r for r in runs if not r["expects_answer"]]
-    lows = sorted((min(x["expected_best"] for x in r["repeats"]), r["run"]) for r in answerable)
+    # Phase 2c: an answerable run whose expected source is not in the ranked list at all (beyond
+    # TOP_K) has no score; it is lost at every threshold, and the rule cannot keep it.
+    missing = [r["run"] for r in answerable if any(x["expected_best"] is None for x in r["repeats"])]
+    if missing:
+        print(f"ANSWERABLE RUNS WHOSE EXPECTED SOURCE IS NOT IN THE RANKED LIST: {missing}")
+        print("  lost at every threshold; the bound is taken over the rest")
+    lows = sorted((min(x["expected_best"] for x in r["repeats"]), r["run"]) for r in answerable
+                  if r["run"] not in missing)
     highs = sorted((max(x["top"] for x in r["repeats"]), r["run"]) for r in unanswerable)
     print(f"margin m = {m}")
     upper = lows[0][0] - m
     print(f"T <= {lows[0][0]} ({lows[0][1]}) - m = {upper:.6f}")
     declinable = [(value, run) for value, run in highs if value + m <= upper]
     if not declinable:
-        print("no no-answer run can be declined with margin; T is anywhere up to the bound")
+        print("No no-answer run can be declined with margin: no middle is taken (phase 2c's instruction).")
+        print(f"  the lowest no-answer top is {highs[0][0]} ({highs[0][1]}); declining it needs T >= "
+              f"{highs[0][0] + m:.6f}, above the bound {upper:.6f}")
+        proposal = min(0.30, lows[0][0] - m)
+        print(f"Proposed T = min(0.30, {lows[0][0]} - m) = {proposal:.6f}")
+        at = [run for value, run in highs if value < proposal]
+        print(f"  no-answer runs that would take path A at the proposal: {at or 'none'}")
+        if not at:
+            print("F: no run is declined at path A, so the rule sets nothing for F.")
         return 0
     lower = max(value for value, _ in declinable) + m
     print(f"Declinable with margin: {len(declinable)} of {len(highs)}: {[run for _, run in declinable]}")
@@ -305,16 +332,22 @@ def derive_with_margin(path: Path, m: float) -> int:
     print(f"T = {t} (the middle rounded to the nearest four-place value; |T - middle| = {abs(t - middle):.7f})")
     print(f"  distance to the highest declined no-answer top ({max(declinable)[1]}): {t - max(declinable)[0]:.6f}")
     print(f"  distance to the lowest answerable expected-source score ({lows[0][1]}): {lows[0][0] - t:.6f}")
-    path_a = [r for r in unanswerable if max(x["top"] for x in r["repeats"]) < t]
+    path_a = [r for r in runs if max(x["top"] for x in r["repeats"]) < t]
+    if not path_a:
+        print("F: no run is declined at path A at T, so the rule sets nothing for F.")
+        return 0
     offered = [(m_["score"], r["run"], m_["item"]) for r in path_a for x in r["repeats"]
                for m_ in x["partial_matches"]]
     top_offer = max(offered)
     bound = top_offer[0] + m
     f = math.ceil(round(bound * 10_000, 6)) / 10_000
-    print(f"Path-A no-answer runs at T: {[r['run'] for r in path_a]}")
+    print(f"Runs path A declines at T: {[r['run'] for r in path_a]}")
     print(f"Highest partial match offered to them: {top_offer[0]} ({top_offer[1]}, {top_offer[2]})")
     print(f"F >= {top_offer[0]} + m = {bound:.6f} -> rounded up to four places: {f}")
-    print(f"F <= T - m = {t - m:.4f}: {'holds' if f <= t - m else 'FAILS: stop and report'}")
+    if f > t - m:
+        print(f"F <= T - m = {t - m:.4f}: FAILS. The rule sets nothing for F; stop and report.")
+        return 0
+    print(f"F <= T - m = {t - m:.4f}: holds")
     print(f"  band offered on path A: [{f}, {t}), {t - f:.4f} wide; F is {f - top_offer[0]:.6f} above "
           f"{top_offer[1]}'s {top_offer[2]}")
     return 0
@@ -326,12 +359,15 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--derive")
     parser.add_argument("--margin", type=float, help="with --derive: the revised rule's m")
+    parser.add_argument("--set", default="dev-set.json", help="a file in corpus/objective-02/")
+    parser.add_argument("--unfloored", action="store_true",
+                        help="lift PARTIAL_MATCH_FLOOR for the measurement (phase 2c)")
     args = parser.parse_args()
     if args.derive and args.margin is not None:
         return derive_with_margin(Path(args.derive), args.margin)
     if args.derive:
         return derive(Path(args.derive))
-    return measure(Path(args.out), args.repeats)
+    return measure(Path(args.out), args.repeats, args.set, args.unfloored)
 
 
 if __name__ == "__main__":

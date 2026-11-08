@@ -151,27 +151,27 @@ def test_relevance_threshold_is_a_cosine_similarity():
     assert 0.0 <= constants.RELEVANCE_THRESHOLD <= 1.0
 
 
-# Step 7 phase 2b (8 November 2026): both tuned on corpus/objective-02/dev-set.json alone
-# (D-93), by the user's rule with a margin fixed in advance; the scores are in
-# corpus/objective-02/runs/2026-11-08/threshold-floor.md. Pinned exactly, as TOP_K is, so
-# that a change is a decision with evidence rather than an edit nobody notices.
+# Step 7 phase 2c (8 November 2026): both tuned on corpus/objective-02/dev-set-v2.json alone
+# (questions in users' wording; D-93), by the user's rule with a margin fixed in advance; the
+# scores are in corpus/objective-02/runs/2026-11-08/dev-set-v2.md. Pinned exactly, as TOP_K
+# is, so that a change is a decision with evidence rather than an edit nobody notices.
 # The margin, and the development set's boundary scores the two values were chosen from.
 MARGIN = 0.006  # twice the query-vector drift D-40 recorded
-HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.397550  # d24, Employee, its best passage D01
-LOWEST_UNDECLINED_NO_ANSWER_SCORE = 0.439129  # d26: within 2m of d17, so not declinable
-LOWEST_ANSWERABLE_SCORE = 0.448714  # d17, Employee, its expected source D18
+HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.199907  # u30@Employee, its best passage D04
+LOWEST_UNDECLINED_NO_ANSWER_SCORE = 0.287538  # u31@Employee: within 2m of u07, so not declinable
+LOWEST_ANSWERABLE_SCORE = 0.280085  # u07, Employee, its expected source D02
 
 
 def test_the_tuned_relevance_threshold_is_the_middle_of_the_margin_rules_interval():
     assert isinstance(constants.RELEVANCE_THRESHOLD, float)
-    assert constants.RELEVANCE_THRESHOLD == 0.4231
+    assert constants.RELEVANCE_THRESHOLD == 0.24
     # Every answerable run keeps its expected source with the margin to spare...
     assert constants.RELEVANCE_THRESHOLD + MARGIN <= LOWEST_ANSWERABLE_SCORE
     # ...and the declined no-answer runs are declined with the margin to spare.
     assert HIGHEST_DECLINED_NO_ANSWER_SCORE <= constants.RELEVANCE_THRESHOLD - MARGIN
-    # d26 could not be declined with margin by any T that keeps d17 with margin.
+    # u31@Employee could not be declined with margin by any T that keeps u07 with margin.
     assert LOWEST_UNDECLINED_NO_ANSWER_SCORE + MARGIN > LOWEST_ANSWERABLE_SCORE - MARGIN
-    # The tie interval is [0.403550, 0.442714]; the value is its middle, to the nearest four
+    # The tie interval is [0.205907, 0.274085]; the value is its middle, to the nearest four
     # places.
     middle = (HIGHEST_DECLINED_NO_ANSWER_SCORE + MARGIN + LOWEST_ANSWERABLE_SCORE - MARGIN) / 2
     assert round(middle, 4) == constants.RELEVANCE_THRESHOLD
@@ -179,7 +179,7 @@ def test_the_tuned_relevance_threshold_is_the_middle_of_the_margin_rules_interva
 
 def test_the_partial_match_floor_is_the_margin_above_the_highest_declined_offer():
     assert isinstance(constants.PARTIAL_MATCH_FLOOR, float)
-    assert constants.PARTIAL_MATCH_FLOOR == 0.4036
+    assert constants.PARTIAL_MATCH_FLOOR == 0.206
     # At least the margin above the highest-scoring partial match offered to a no-answer run
     # path A declines, and the lowest four-place value that is: rounded up.
     assert constants.PARTIAL_MATCH_FLOOR >= HIGHEST_DECLINED_NO_ANSWER_SCORE + MARGIN

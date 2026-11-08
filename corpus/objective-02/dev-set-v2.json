@@ -1,0 +1,306 @@
+{
+  "name": "Objective 02 development set, v2 (users' wording)",
+  "status": "DEVELOPMENT SET, NOT FROZEN. Drafted on 8 November 2026 for step 7 phase 2c, to re-choose RELEVANCE_THRESHOLD and PARTIAL_MATCH_FLOOR by the margin rule. It replaces dev-set.json for tuning; dev-set.json stays as the record of phases 2a and 2b. It is not a test set: corpus/objective-02/questions.json and threads.json are, and nothing is tuned against them (D-93).",
+  "corpus": "The Objective 02 verification corpus: the 20 documents and 5 transcripts listed in corpus/objective-02/manifest.json. Five items are Administrator-only: D09, D15, D16, T02 and T05.",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Why v2. The step 7 'after' on the frozen thirty (corpus/objective-02/runs/2026-11-08/after/, PR #57) found answerable questions whose right source ranked first but scored under 0.4231. dev-set.json's questions were written from the documents and share their wording, so they score higher than questions phrased as users ask them. The user chose to rebuild the dev set in users' wording (8 November 2026).",
+    "Contamination, kept small and stated. The frozen sets have now informed this choice, so they no longer test the threshold independently (recorded as a D-101 note). To keep it small: questions.json, threads.json and the after's per-question results were not read; the only contact with the frozen sets is the automated overlap check (corpus/objective-02/runs/2026-11-08/dev-set-v2/overlap_v2.py), which prints frozen identifiers and scores, never frozen text. No question here was aimed at the documents the after found missing: which they were was not read, and the questions are spread across the corpus, one or two per item.",
+    "How the questions were written. From the goal a person has, as they would type it: short, everyday, some vague or indirect, some with typos or shorthand. No sentence or distinctive phrase was lifted from a document. The drafting read the indexed chunk text of kmp_obj02_20261101 only to know what is answerable and to set expected_answer.",
+    "Required by the order: two onboarding questions (u01, u02), a records-retention question (u03) and an IT-equipment question (u04), all in users' wording.",
+    "Field names follow questions.json and dev-set.json, so scripts/question_set.py validates this file and expand_runs reads it. sources lists the manifest items any of which counts as a correct cited source. expected_answer and accepted are the document's own words for the fact, because they are matched against the ANSWER, not the question; the question is in users' words. As in dev-set.json, accepted may list other key facts of a longer answer, and an answer matches when it states any one of them, cited to an expected source.",
+    "kind=scoped, role=both: the answer is only in an Administrator-only item. Asked once per role: the Administrator should get the answer, the Employee the no-answer state.",
+    "kind=no-answer: nothing in the corpus answers it, for any role. u37 (parental leave) shares vocabulary with D01 without being answerable from it.",
+    "One edit after the overlap check, 8 November 2026. The first u35 ('can i bring my dog into the office?') was flagged at cosine 0.937 against questions.json n04. It was replaced by a question on another subject, without n04 being read, and the check was re-run with nothing flagged (dev-set-v2/overlap_v2.txt). The first run's output is beside it as overlap_v2_first.txt."
+  ],
+  "questions": [
+    {
+      "id": "u01", "kind": "ordinary", "role": "Employee", "source": "D08", "sources": ["D08"],
+      "question": "I start next week, what should I expect in my first few days?",
+      "expected_answer": "buddy",
+      "accepted": ["access badge", "mandatory training", "Saffron Trail", "meet their team", "contract and payroll"],
+      "answer": "In the first week new starters meet their team, complete mandatory training, get their access badge and are paired with a Saffron Trail buddy; before day one HR sends the contract and payroll forms and IT sets up the laptop.",
+      "location": "D08_onboarding_checklist.docx, 'Before day one' and 'First week'"
+    },
+    {
+      "id": "u02", "kind": "ordinary", "role": "Employee", "source": "D08", "sources": ["D08"],
+      "question": "new hire here - how does onboarding work?",
+      "expected_answer": "ninety",
+      "accepted": ["buddy", "Saffron Trail", "first week", "three clear goals", "access badge"],
+      "answer": "Before day one, first week (team, training, badge, buddy), first month (three goals, weekly one-to-ones, security and safety modules), and a ninety-day review.",
+      "location": "D08_onboarding_checklist.docx, every section"
+    },
+    {
+      "id": "u03", "kind": "ordinary", "role": "Employee", "source": "D04", "sources": ["D04"],
+      "question": "how long do we have to hang on to old invoices and finance paperwork?",
+      "expected_answer": "seven years",
+      "accepted": ["7 years", "Juniper Ledger"],
+      "answer": "Financial records are kept for seven years after the end of the financial year they relate to (Juniper Ledger retention schedule).",
+      "location": "D04_records_management_handbook.pdf, 'Chapter 13'"
+    },
+    {
+      "id": "u04", "kind": "ordinary", "role": "Employee", "source": "D02", "sources": ["D02"],
+      "question": "does my work laptop need anything special set up on it?",
+      "expected_answer": "encryption",
+      "accepted": ["Copper Finch", "endpoint protection", "operating system"],
+      "answer": "Company laptops must meet the Copper Finch device standard: full-disk encryption, an up-to-date operating system and the IT team's endpoint protection agent.",
+      "location": "D02_it_acceptable_use.pdf, 'Approved devices'"
+    },
+    {
+      "id": "u05", "kind": "ordinary", "role": "Employee", "source": "D01", "sources": ["D01"],
+      "question": "how much holiday do I build up each month?",
+      "expected_answer": "1.67",
+      "accepted": ["Harbour Light", "pro-rata"],
+      "answer": "Full-time staff earn 1.67 days of annual leave per month of service (Harbour Light accrual); part-time staff pro rata.",
+      "location": "D01_leave_policy_2026.pdf, 'Annual leave'"
+    },
+    {
+      "id": "u06", "kind": "ordinary", "role": "Employee", "source": "D01", "sources": ["D01"],
+      "question": "im sick tmrw, do i need a drs note?",
+      "expected_answer": "two consecutive days",
+      "accepted": ["2 consecutive days", "medical certificate"],
+      "answer": "A medical certificate is needed only for absences longer than two consecutive days.",
+      "location": "D01_leave_policy_2026.pdf, 'Personal and carer's leave'"
+    },
+    {
+      "id": "u07", "kind": "ordinary", "role": "Employee", "source": "D02", "sources": ["D02"],
+      "question": "I think I clicked a dodgy link in an email, what now?",
+      "expected_answer": "service desk",
+      "accepted": ["immediately", "security team"],
+      "answer": "Report suspected phishing to the service desk immediately, so the security team can disable accounts and limit the harm.",
+      "location": "D02_it_acceptable_use.pdf, 'Reporting incidents'"
+    },
+    {
+      "id": "u08", "kind": "ordinary", "role": "Employee", "source": "D03", "sources": ["D03"],
+      "question": "where are we meant to go if the fire alarm goes off?",
+      "expected_answer": "courtyard",
+      "accepted": ["Amber Corridor", "north stairwell", "nearest exit", "lifts"],
+      "answer": "Leave by the nearest exit without using the lifts; the Amber Corridor route on level three leads to the north stairwell and the assembly point in the courtyard.",
+      "location": "D03_health_safety_induction.pdf, 'Emergency evacuation'"
+    },
+    {
+      "id": "u09", "kind": "ordinary", "role": "Employee", "source": "D05", "sources": ["D05"],
+      "question": "hw many quotes do i need to buy something for about 10k?",
+      "expected_answer": "three quotes",
+      "accepted": ["3 quotes", "three written quotes"],
+      "answer": "Between five thousand and fifty thousand dollars, three quotes.",
+      "location": "D05_procurement_guidelines.pdf, 'Quotes and tenders'"
+    },
+    {
+      "id": "u10", "kind": "ordinary", "role": "Employee", "source": "D06", "sources": ["D06"],
+      "question": "a customer is really unhappy and I can't sort it out, who do I hand it to?",
+      "expected_answer": "team leader",
+      "accepted": ["Willow Bridge", "service manager", "customer experience director"],
+      "answer": "It goes up the Willow Bridge escalation ladder: team leader within two days, then service manager, then the customer experience director.",
+      "location": "D06_complaints_procedure.pdf, 'Escalation'"
+    },
+    {
+      "id": "u11", "kind": "ordinary", "role": "Employee", "source": "D07", "sources": ["D07"],
+      "question": "am I allowed to work from home a couple of days a week?",
+      "expected_answer": "probation",
+      "accepted": ["Blue Heron", "safe workspace", "reliable internet"],
+      "answer": "A Blue Heron remote arrangement is open to employees who have finished probation, whose role can be done away from the office, and who have a safe workspace with reliable internet.",
+      "location": "D07_remote_work_agreement.docx, 'Eligibility'"
+    },
+    {
+      "id": "u12", "kind": "ordinary", "role": "Employee", "source": "D07", "sources": ["D07"],
+      "question": "wfh - what hours do I actually need to be online?",
+      "expected_answer": "ten in the morning",
+      "accepted": ["three in the afternoon", "core hours", "10am", "3pm"],
+      "answer": "Normal contracted hours, and reachable during core hours of ten in the morning to three in the afternoon.",
+      "location": "D07_remote_work_agreement.docx, 'Working hours and availability'"
+    },
+    {
+      "id": "u13", "kind": "ordinary", "role": "Employee", "source": "D10", "sources": ["D10"],
+      "question": "how do I get my money back for a work lunch?",
+      "expected_answer": "finance portal",
+      "accepted": ["receipt", "seventy-five dollars", "thirty days"],
+      "answer": "Claim in the finance portal within thirty days with an itemised receipt; meals are reimbursed up to seventy-five dollars a day.",
+      "location": "D10_expense_claims_guide.docx, 'Limits' and 'How to claim'"
+    },
+    {
+      "id": "u14", "kind": "ordinary", "role": "Employee", "source": "D11", "sources": ["D11"],
+      "question": "can I find out what personal info the company keeps about me?",
+      "expected_answer": "thirty days",
+      "accepted": ["30 days", "corrected"],
+      "answer": "Yes: individuals may ask to see the personal information held about them and have errors corrected; requests are answered within thirty days.",
+      "location": "D11_data_privacy_notice.docx, 'Access and correction'"
+    },
+    {
+      "id": "u15", "kind": "ordinary", "role": "Employee", "source": "D12", "sources": ["D12"],
+      "question": "who do we order pens and paper from?",
+      "expected_answer": "Lantern Grove",
+      "accepted": [],
+      "answer": "Lantern Grove Supplies, the preferred vendor for stationery and office consumables.",
+      "location": "D12_vendor_register_2026.xlsx"
+    },
+    {
+      "id": "u16", "kind": "ordinary", "role": "Employee", "source": "D13", "sources": ["D13"],
+      "question": "any training on giving feedback coming up?",
+      "expected_answer": "Feedback that works",
+      "accepted": ["S. Patel", "2026-11-17"],
+      "answer": "'Feedback that works', 17 November 2026, with S. Patel in Room 3.1.",
+      "location": "D13_training_schedule_q4.xlsx, sheet 'Data'"
+    },
+    {
+      "id": "u17", "kind": "ordinary", "role": "Employee", "source": "D14", "sources": ["D14"],
+      "question": "is there a spare laptop lying around in the Melbourne office?",
+      "expected_answer": "MEL-0103",
+      "accepted": ["Spare"],
+      "answer": "MEL-0103, a Tin Sparrow batch laptop on level 3, is marked spare.",
+      "location": "D14_asset_inventory_melbourne.xlsx, sheet 'Data'"
+    },
+    {
+      "id": "u18", "kind": "ordinary", "role": "Employee", "source": "D17", "sources": ["D17"],
+      "question": "how do i book one of the meeting rooms?",
+      "expected_answer": "calendar",
+      "accepted": ["cancel promptly"],
+      "answer": "Through the shared calendar; book only the time you need and cancel promptly.",
+      "location": "D17_meeting_room_rules.txt, 'Booking'"
+    },
+    {
+      "id": "u19", "kind": "ordinary", "role": "Employee", "source": "D18", "sources": ["D18"],
+      "question": "forgot my pw, how do I get back in?",
+      "expected_answer": "self-service",
+      "accepted": ["Nickel Bay", "seven in the morning", "service desk"],
+      "answer": "Reset it on the self-service page, open seven in the morning to eight in the evening on working days (Nickel Bay window); otherwise contact the service desk.",
+      "location": "D18_helpdesk_faq.txt, 'I forgot my password'"
+    },
+    {
+      "id": "u20", "kind": "ordinary", "role": "Employee", "source": "D18", "sources": ["D18"],
+      "question": "how do I print something from my laptop?",
+      "expected_answer": "staff card",
+      "accepted": ["nearest printer", "release"],
+      "answer": "Pick the nearest printer from the list on the laptop and enter your staff card number at the printer to release the job.",
+      "location": "D18_helpdesk_faq.txt, 'How do I connect to the printer?'"
+    },
+    {
+      "id": "u21", "kind": "ordinary", "role": "Employee", "source": "D19", "sources": ["D19"],
+      "question": "can I take the company car home over the weekend?",
+      "expected_answer": "exception",
+      "accepted": ["department head", "private trips", "private use"],
+      "answer": "Not for private trips, unless the department head has approved a written exception.",
+      "location": "D19_fleet_vehicle_notes.txt, 'Private use'"
+    },
+    {
+      "id": "u22", "kind": "ordinary", "role": "Employee", "source": "D20", "sources": ["D20"],
+      "question": "when are we moving offices?",
+      "expected_answer": "second weekend of November",
+      "accepted": ["Driftwood Lane", "following Monday"],
+      "answer": "On the Driftwood Lane move weekend, the second weekend of November; the office reopens the following Monday.",
+      "location": "D20_office_relocation_notice.txt, 'The move'"
+    },
+    {
+      "id": "u23", "kind": "ordinary", "role": "Employee", "source": "T01", "sources": ["T01"],
+      "question": "what's the latest on the database migration?",
+      "expected_answer": "Opal Junction",
+      "accepted": ["rollback plan", "dry run", "last weekend of the month"],
+      "answer": "On track; the Opal Junction cutover is the main risk, scheduled for the last weekend of the month, with a rollback plan due Wednesday and a Thursday night dry run.",
+      "location": "T01_weekly_ops_standup.txt"
+    },
+    {
+      "id": "u24", "kind": "ordinary", "role": "Employee", "source": "T03", "sources": ["T03"],
+      "question": "is the new mobile app design going out in the next release?",
+      "expected_answer": "defer",
+      "accepted": ["too big", "not in the next release", "waits"],
+      "answer": "No: the mobile redesign was judged too big for this cycle and deferred.",
+      "location": "T03_product_planning_workshop.txt"
+    },
+    {
+      "id": "u25", "kind": "ordinary", "role": "Employee", "source": "T04", "sources": ["T04"],
+      "question": "why do customers end up cancelling?",
+      "expected_answer": "sixty days",
+      "accepted": ["60 days", "logged in", "Marlin Point"],
+      "answer": "The Marlin Point churn review found most cancelled accounts had not logged in for sixty days before cancelling.",
+      "location": "T04_customer_success_retro.txt"
+    },
+    {
+      "id": "u26", "kind": "ordinary", "role": "Employee", "source": "D17", "sources": ["D17"],
+      "question": "need a room for 30 ppl one evening, anything I should know?",
+      "expected_answer": "facilities team",
+      "accepted": ["one week", "week in advance"],
+      "answer": "Bookings of more than twenty people, or running past six in the evening, need the facilities team's approval at least one week ahead.",
+      "location": "D17_meeting_room_rules.txt, 'Large events'"
+    },
+    {
+      "id": "u27", "kind": "ordinary", "role": "Employee", "source": "D03", "sources": ["D03"],
+      "question": "my back hurts from sitting at my desk all day, is there anything I can ask for?",
+      "expected_answer": "ergonomic assessment",
+      "accepted": ["ergonomic", "short break"],
+      "answer": "Adjust chair and screen, take a short screen break at least hourly, and ask your manager for an ergonomic assessment.",
+      "location": "D03_health_safety_induction.pdf, 'Ergonomics'"
+    },
+    {
+      "id": "u28", "kind": "ordinary", "role": "Administrator", "source": "D15", "sources": ["D15", "T02"],
+      "question": "how much have we put aside in case projects go over budget?",
+      "expected_answer": "ten percent",
+      "accepted": ["160000", "Maple Quay", "steering group", "two million", "Fernwood"],
+      "answer": "The Maple Quay contingency line holds ten percent of each project budget (160,000 in the tracker), released only by the steering group. (T02's Fernwood reserve of two million also counts.)",
+      "location": "D15_project_budget_tracker_fy27.xlsx; T02_board_risk_committee.txt"
+    },
+    {
+      "id": "u29", "kind": "ordinary", "role": "Administrator", "source": "T02", "sources": ["T02"],
+      "question": "did the board flag any new big risks for us to watch?",
+      "expected_answer": "regulatory change",
+      "accepted": ["fourth"],
+      "answer": "Yes: regulatory change was added as a fourth top risk.",
+      "location": "T02_board_risk_committee.txt, Ingrid's risks register item"
+    },
+    {
+      "id": "u30", "kind": "scoped", "role": "both", "source": "D09", "sources": ["D09"],
+      "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+      "question": "what's project atlas actually for?",
+      "expected_answer": "intranet",
+      "accepted": ["knowledge platform", "searchable"],
+      "answer": "It replaces the ageing intranet with a searchable knowledge platform.",
+      "location": "D09_project_atlas_kickoff.docx, 'Project summary'",
+      "note": "D09 is Administrator-only, and nothing an Employee can read mentions Atlas."
+    },
+    {
+      "id": "u31", "kind": "scoped", "role": "both", "source": "D16", "sources": ["D16"],
+      "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+      "question": "who in the team is strongest at crunching data?",
+      "expected_answer": "Ada Lim",
+      "accepted": ["Dev Mehta"],
+      "answer": "Ada Lim and Dev Mehta, each rated four in data analysis.",
+      "location": "D16_team_skills_matrix.xlsx, sheet 'Data'",
+      "note": "D16 is Administrator-only."
+    },
+    {
+      "id": "u32", "kind": "scoped", "role": "both", "source": "T05", "sources": ["T05"],
+      "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+      "question": "how did staff go in the last fake phishing test?",
+      "expected_answer": "twenty-three",
+      "accepted": ["sixty-one", "Cobalt Reef", "ninety"],
+      "answer": "Of four hundred staff, sixty-one clicked and twenty-three entered credentials; ninety reported it.",
+      "location": "T05_security_incident_debrief.txt",
+      "note": "T05 is Administrator-only. D02 (Employee-readable) says how to report phishing but gives no results."
+    },
+    {
+      "id": "u33", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "what's the guest wifi password?",
+      "expected_answer": null, "answer": null, "location": null
+    },
+    {
+      "id": "u34", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "do we get paid extra for working overtime?",
+      "expected_answer": null, "answer": null, "location": null
+    },
+    {
+      "id": "u35", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "is there a staff discount at the gym next door?",
+      "expected_answer": null, "answer": null, "location": null
+    },
+    {
+      "id": "u36", "kind": "no-answer", "role": "Administrator", "source": null, "sources": [],
+      "question": "how many people did we hire last year?",
+      "expected_answer": null, "answer": null, "location": null
+    },
+    {
+      "id": "u37", "kind": "no-answer", "role": "Employee", "source": null, "sources": [],
+      "question": "how do I apply for parental leave?",
+      "expected_answer": null, "answer": null, "location": null,
+      "note": "D01 covers annual, personal and carer's leave and says nothing about parental leave."
+    }
+  ]
+}

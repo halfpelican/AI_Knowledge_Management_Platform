@@ -31,11 +31,11 @@ runs found more (before the prompt fix, 2 ordinary questions where the model dec
 passages in front of it and 3 where verification rejected every statement; after the fix,
 6 declined). A rising rate of this path is the project's main quality signal: it means
 retrieval is admitting passages that score above the floor but do not answer the question.
-Step 7 phase 2b (8 November 2026) raised the threshold to 0.4231, with a margin of 0.006 kept
-on both sides. On the 31-run development set that declines 5 of the 7 no-answer runs at path
-A. The other two (0.439129 and 0.445715) sit within 0.003 of the lowest answerable run
-(0.448714), so no threshold with that margin separates them, and path B is what declines
-them. D-37's finding stands.
+Step 7 phase 2c (8 November 2026) set the threshold to 0.24, by a rule keeping a margin of
+0.006 on both sides, on a development set worded as users ask. That declines 1 of its 8
+no-answer runs at path A: the other 7 score above the lowest answerable run less the margin,
+so no threshold with that margin separates them, and path B is what declines them. D-37's
+finding stands, more starkly than on the 6-chunk corpus.
 
 **The query record (7.10 step 11) is item 8's, and it is here.** Every one of the three
 exits calls ``record_query`` (``apps/retrieval/query_log.py``) before returning, as 7.10

@@ -35,7 +35,9 @@ def main() -> int:
     lost_label = f"lost at {t}" + (f" with margin {m}" if m else "")
     declined_label = f"declined at {t}" + (f" with margin {m}" if m else "")
 
-    print("Answerable runs (24): the best score of a passage of an expected source, in the ranked list.")
+    answerable = [r for r in runs if r["expects_answer"]]
+    unanswerable = [r for r in runs if not r["expects_answer"]]
+    print(f"Answerable runs ({len(answerable)}): the best score of a passage of an expected source, in the ranked list.")
     print()
     print(f"| run | role | expected source | its best score | top item | lost at 0.3 | {lost_label} | admitted at 0.3 / at {t} |")
     print("|---|---|---|---|---|---|---|---|")
@@ -49,7 +51,7 @@ def main() -> int:
               f"{sum(s >= OLD_THRESHOLD for s in scores)} / {sum(s >= t for s in scores)} |")
 
     print()
-    print("No-answer runs (7): the top in-scope score, and the five items offered as partial matches before the floor.")
+    print(f"No-answer runs ({len(unanswerable)}): the top in-scope score, and the five items offered as partial matches before the floor.")
     print()
     print(f"| run | role | top score | declined at 0.3 | {declined_label} | path A at {t} | offered before the floor (item score) | offered at {f} |")
     print("|---|---|---|---|---|---|---|---|")
