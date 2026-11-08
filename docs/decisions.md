@@ -6455,3 +6455,78 @@ the uncapped baseline.
 - **One scoped question answered for the Employee (d11) grew with the cap,** from 1 statement to 6.
   None of its citations was out of scope.
 - **The evidence:** `corpus/objective-02/runs/2026-11-07/statement-cap-sweep.md`.
+
+## D-101 · `RELEVANCE_THRESHOLD` is 0.4231 and partial matches have a floor of 0.4036, chosen on the development set with a margin
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-12, D-37, D-40, D-56,
+D-93, D-100 · **Stage:** step 7 of the post-M6 order, phase 2b · **Supersedes:** D-37's 0.30
+
+**The order:** "Choose the D-56 floor, and any threshold change, from the dev set alone." The frozen
+sets stay test sets (D-93). The development set is `corpus/objective-02/dev-set.json`: 31 runs, 24
+expecting an answer and 7 not. The evidence is in
+`corpus/objective-02/runs/2026-11-08/threshold-floor.md`.
+
+**The rule the user approved first, and why its values were set aside.**
+
+- **The rule:** the threshold that declines the most no-answer runs before generation without losing
+  an answerable run, and the lowest floor at which no no-answer run is offered a partial match. On
+  a tie, the middle of the tied interval.
+- **It gave a threshold of 0.4472 and a floor of 0.4458** (commit `3c839bb`). On the development
+  set, every answerable run was answered and every no-answer run was declined.
+- **But the margins were 0.0015 for the threshold and 0.000085 for the floor.** Both are smaller
+  than the query-vector drift D-40 recorded (about 0.003), which phase 1 also saw move mid-run.
+- **And a floor 0.0014 under the threshold would almost never offer a partial match,** so FR-12's
+  partial-match offer would rarely appear.
+- **The perfect score was measured on the runs the values were chosen from.**
+
+**The rule the user then approved, fixed before any new run: the same rule, with a margin of
+`m = 0.006`,** twice D-40's drift.
+
+- **Threshold:** declines a no-answer run only if its top score is at most T − m, and every
+  answerable run's lowest expected-source score must be at least T + m.
+  - The tied interval is [0.403550, 0.442714]. Its middle, rounded to four places, is **0.4231**.
+  - That leaves **0.0256** on each side: 0.025550 above the highest declined no-answer score, d24
+    at 0.397550, and 0.025614 below the lowest answerable expected-source score, d17 at 0.448714.
+- **Floor:** at least the highest partial match offered to a run that path A declines, plus m (d24's
+  D01, 0.397550), and at most T − m.
+  - That gives **0.4036**, rounded up, and 0.006050 above D01.
+  - Path A can offer partial matches in a band from 0.4036 to 0.4231.
+
+**On the development set** (one pass, cap 6, every ask rolled back):
+
+| | phase 2a (T 0.30, no floor) | literal rule (0.4472, 0.4458) | **margin rule (0.4231, 0.4036)** |
+|---|---|---|---|
+| 503s / cut-offs | 0 / 0 | 0 / 0 | **0 / 0** |
+| answered where expected | 24/24 | 24/24 | **24/24** |
+| declined where expected | 5/7 | 7/7 | **5/7**, all before generation |
+| match with an expected source | 15/24 | 24/24 | **23/24** |
+| out-of-scope citations | 0 | 0 | **0** |
+| seconds per ask, median / max | 31.7 / 75.7 | 23.5 / 50.7 | **25.7 / 55.4** |
+
+**What it costs:**
+
+- **The two no-answer runs that score highest are answered wrongly:** d25, parking at the new
+  office, and d26, the smoking policy. Each scores just above the threshold, so one passage reaches
+  the model, which answers from it with a real, in-scope citation.
+  - Verification cannot catch this, because it checks identifiers, not support (invariant 5's
+    conceded limit).
+  - Phase 2a missed two other runs, d11 and d21 for the Employee. Both are now declined before
+    generation.
+- **One answerable run lost its match** (d13): a second passage was admitted, and a statement cited
+  the wrong one of the two.
+- **Most answers now draw on one passage.** At 0.30 the median was five. Questions that need several
+  sources are untested beyond this set.
+
+**Not yet measured, and therefore the real test:**
+
+- the frozen thirty questions and the nine threads (the step 7 "after");
+- the demonstration script's D-40 screen, which required a top score of 0.35 when the threshold was
+  0.30;
+- the alpha. It is not redeployed with these values until they are re-scored.
+
+**Open:**
+
+- **An empty partial-match offer now implies the question never reached generation.** It discloses
+  nothing outside the caller's scope (`partial_matches.py`, `docs/api-contract.md`).
+- **CLAUDE.md §5** still shows `RELEVANCE_THRESHOLD` as *tune*, with no value, and has no row for
+  the floor.
