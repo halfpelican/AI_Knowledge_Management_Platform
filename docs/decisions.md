@@ -6607,3 +6607,24 @@ generation, with verification behind it.
   the cap at 0.30 on held-out questions), the nine threads, the HTTP check and NFR-08.
 - **D-56** (partial-match relevance) and wrong-passage citations remain.
 - **`CLAUDE.md` §5's two rows are corrected,** under the user's approval of keeping that table true.
+
+**Dated note, 8 November 2026: the step 7 "after" on these values.** All four runs were made on
+`19c98a8`. The evidence is in `corpus/objective-02/runs/2026-11-08/after-030/after.md`.
+
+- **The frozen thirty:**
+  - ordinary questions answered correctly rose to 19 of 22, from 16 of 22 on 1 November;
+  - none was left unanswered;
+  - 100% first-attempt conformance, and no leaks.
+  - **But correct declines fell from 6 of 8 to 2 of 8.** Three scoped questions asked by the
+    Employee, and three no-answer questions, were answered from material the asker may see.
+  - **No out-of-scope chunk was used**, so invariant 1 holds. Still, those questions should get the
+    no-answer reply.
+  - For the cap, this is a held-out result. Whether the cap sentence, prompt rule 8 or D-40's
+    variance causes it is not isolated. **Open.**
+- **NFR-08 (D-95):** 0 503s, against run 3's 3, and 25 of 25 answered. The p90 was 350,407 ms, a
+  valid FAIL against 4,000 ms: still a local-model baseline. The 503s D-82 traced are gone under
+  load.
+- **FR-13 (D-91):** follow-ups answered correctly with history rose from 1 of 9 to 2 of 9 (t04 now
+  resolves), and spelled out from 3 of 9 to 6 of 9. Schema conformance reached 100%.
+  - The HTTP check: WIRED 3 of 3, 0 leaks. t04's second turn was correct through the server.
+  - FR-13 stays partial: most follow-ups that need the earlier turn still fail.
