@@ -1,0 +1,303 @@
+{
+  "name": "FR-13 development thread set (step 7 phase 3)",
+  "status": "DEVELOPMENT SET, NOT FROZEN. Drafted 8 November 2026 for step 7 phase 3 (D-93): the set the follow-up-focus changes are TUNED on, so it is never a test set and no result from it is reported as a measurement of FR-13. Drafted from the corpus files and the indexed chunks only; the frozen sets' files were not read, and the identifier-only overlap check (runs/2026-11-08/fr13-phase3-dev/) is the evidence of separation. Worded as users talk, with pronouns and ellipsis that need the earlier question.",
+  "corpus": "The Objective 02 corpus, exactly as indexed from corpus/objective-02/manifest.json on kmp_obj02_20261101: 20 documents and 5 transcripts in 43 chunks. The scoped threads turn to D15 and D16, deliberately not the frozen set's D09 and T02.",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Two turns per thread: scripts/thread_set.py validates exactly two (D-86), so the brief's '2 to 3 turns' resolves to two.",
+    "Twelve threads: eight ordinary, two scoped asked by both roles, one topic change, one previous-answer follow-up (expected to fail with history, D-86 decision 2).",
+    "Thread ids start at t20 so no run id can be mistaken for the frozen set's t01-t09.",
+    "The previous-answer follow-up refers to a fact the first ANSWER introduces (inactivity), not the first question; under D-42 the reference should not resolve.",
+    "http_check entries exist because validation requires them; this set is run in-process only and the HTTP check stays on the frozen set."
+  ],
+  "scoring_rule": {
+    "version": 2,
+    "applies_to": "Every run of every thread, all four ways, scored by the same rule as the frozen set.",
+    "parts": [
+      "The rule is version 2 as implemented in scripts/thread_set.py, the same code path the frozen set is scored with: one outcome class per run; the expected-answer match is a listed phrase (substring, whitespace collapsed, case folded) or an accepted alternative (whole tokens), plus a cited listed source; a leak is an out-of-scope chunk, an out-of-scope partial match, or a restricted phrase in a role's verified statements. The canonical prose of the rule is frozen with corpus/objective-02/threads.json and is not restated here; this set exists to be scored by the same functions, not to redefine them."
+    ],
+    "changes": []
+  },
+  "http_check": [
+    {"thread": "t21", "role": "Employee"},
+    {"thread": "t28", "role": "Administrator"}
+  ],
+  "threads": [
+    {
+      "id": "t20",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "Do I need a doctor's certificate when I'm off sick?",
+          "expected": "answer",
+          "expected_answer": ["two consecutive days"],
+          "accepted": ["two days"],
+          "sources": ["D01"]
+        },
+        {
+          "question": "And does time off looking after my kid come out of the same balance?",
+          "spelled_out": "Is carer's leave deducted from the same balance as personal leave?",
+          "depends_on": "'the same balance' is the sick-leave balance the first turn is about; cold there is no balance to refer to.",
+          "expected": "answer",
+          "expected_answer": ["same balance"],
+          "accepted": ["personal leave"],
+          "sources": ["D01"]
+        }
+      ]
+    },
+    {
+      "id": "t21",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What do I have to attach when I claim back travel costs?",
+          "expected": "answer",
+          "expected_answer": ["itemised receipt"],
+          "accepted": ["receipt"],
+          "sources": ["D10"]
+        },
+        {
+          "question": "And when do I need sign-off before I pay for something?",
+          "spelled_out": "For a work expense, when do I need a department head's approval before spending the money?",
+          "depends_on": "'sign-off before I pay' only reads as an expenses question through the first turn; cold it could as easily be procurement.",
+          "expected": "answer",
+          "expected_answer": ["five hundred", "department head"],
+          "accepted": ["500"],
+          "sources": ["D10"]
+        }
+      ]
+    },
+    {
+      "id": "t22",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What hours do I have to be contactable when I'm working from home?",
+          "expected": "answer",
+          "expected_answer": ["ten in the morning to three in the afternoon", "core hours"],
+          "accepted": [],
+          "sources": ["D07"]
+        },
+        {
+          "question": "How much notice does either side have to give to end it?",
+          "spelled_out": "How many weeks of written notice does it take for an employee or the manager to bring a working-from-home arrangement to an end?",
+          "depends_on": "'it' is the remote arrangement from the first turn; cold there is nothing to end.",
+          "expected": "answer",
+          "expected_answer": ["four weeks"],
+          "accepted": [],
+          "sources": ["D07"]
+        }
+      ]
+    },
+    {
+      "id": "t23",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "Where do we write down that a customer agreed to us using their details?",
+          "expected": "answer",
+          "expected_answer": ["Cedar Vault", "consent register"],
+          "accepted": [],
+          "sources": ["D11"]
+        },
+        {
+          "question": "What happens if they change their mind later?",
+          "spelled_out": "What happens when someone withdraws their consent to the use of their personal information?",
+          "depends_on": "'they' are the consenting customers of the first turn, and 'change their mind' is withdrawing that consent.",
+          "expected": "answer",
+          "expected_answer": ["withdrawn at any time", "same day"],
+          "accepted": ["withdraw"],
+          "sources": ["D11"]
+        }
+      ]
+    },
+    {
+      "id": "t24",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "Which way do we go out from level three when the fire alarm goes off?",
+          "expected": "answer",
+          "expected_answer": ["north stairwell", "Amber Corridor"],
+          "accepted": ["courtyard"],
+          "sources": ["D03"]
+        },
+        {
+          "question": "And who checks everyone has actually got out?",
+          "spelled_out": "Who confirms each area is clear during a fire evacuation?",
+          "depends_on": "'got out' is the evacuation of the first turn; cold the question could be about leaving anything.",
+          "expected": "answer",
+          "expected_answer": ["floor wardens"],
+          "accepted": ["warden"],
+          "sources": ["D03"]
+        }
+      ]
+    },
+    {
+      "id": "t25",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "What's the biggest risk the infrastructure team flagged at the standup?",
+          "expected": "answer",
+          "expected_answer": ["Opal Junction"],
+          "accepted": ["cutover"],
+          "sources": ["T01"]
+        },
+        {
+          "question": "Who's on call over that weekend?",
+          "spelled_out": "Who is on call on the Saturday and the Sunday of the Opal Junction cutover weekend?",
+          "depends_on": "'that weekend' is the cutover weekend the first turn surfaced; cold no weekend is named.",
+          "expected": "answer",
+          "expected_answer": ["Lena", "Tomas"],
+          "accepted": [],
+          "sources": ["T01"]
+        }
+      ]
+    },
+    {
+      "id": "t26",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "How many quotes do I need for a twenty thousand dollar purchase?",
+          "expected": "answer",
+          "expected_answer": ["three quotes", "three written quotes"],
+          "accepted": [],
+          "sources": ["D05"]
+        },
+        {
+          "question": "And at what point does it have to go out to tender instead?",
+          "spelled_out": "At what purchase value must a formal open tender be issued?",
+          "depends_on": "'it' is the purchase from the first turn; cold there is no purchase on the table.",
+          "expected": "answer",
+          "expected_answer": ["fifty thousand", "50,000"],
+          "accepted": ["Slate Meridian"],
+          "sources": ["D05"]
+        }
+      ]
+    },
+    {
+      "id": "t27",
+      "kind": "ordinary",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "Which room is the writing clear reports session held in?",
+          "expected": "answer",
+          "expected_answer": ["2.4"],
+          "accepted": [],
+          "sources": ["D13"]
+        },
+        {
+          "question": "And who's running it?",
+          "spelled_out": "Who facilitates the Writing clear reports training session?",
+          "depends_on": "'it' is the session named in the first turn; cold there is no session at all.",
+          "expected": "answer",
+          "expected_answer": ["Fischer"],
+          "accepted": [],
+          "sources": ["D13"]
+        }
+      ]
+    },
+    {
+      "id": "t28",
+      "kind": "scoped",
+      "role": "both",
+      "turns": [
+        {
+          "question": "How do we handle a customer complaint the first person can't sort out on the spot?",
+          "expected": "answer",
+          "expected_answer": ["Willow Bridge", "team leader"],
+          "accepted": ["escalation"],
+          "sources": ["D06"]
+        },
+        {
+          "question": "And who on the team is strongest at that side of things?",
+          "spelled_out": "Who on the team holds the top rating for customer service in the skills matrix?",
+          "depends_on": "'that side of things' is customer service, the subject of the first turn; cold there is no side of anything.",
+          "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+          "expected_answer": ["Chloe Dubois", "Grace Tan", "Hugo Silva"],
+          "accepted": [],
+          "sources": ["D16"]
+        }
+      ]
+    },
+    {
+      "id": "t29",
+      "kind": "scoped",
+      "role": "both",
+      "turns": [
+        {
+          "question": "When is the Melbourne office actually moving to the new building?",
+          "expected": "answer",
+          "expected_answer": ["second weekend of November"],
+          "accepted": ["Driftwood Lane"],
+          "sources": ["D20"]
+        },
+        {
+          "question": "And how much has been put aside to pay for it?",
+          "spelled_out": "What is the budget for the office relocation project in the FY27 tracker?",
+          "depends_on": "'it' is the office move from the first turn; cold there is nothing to pay for.",
+          "expected_by_role": {"Administrator": "answer", "Employee": "no-answer"},
+          "expected_answer": ["350,000", "350000"],
+          "accepted": [],
+          "sources": ["D15"]
+        }
+      ]
+    },
+    {
+      "id": "t30",
+      "kind": "topic-change",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "How long do our passwords have to be these days?",
+          "expected": "answer",
+          "expected_answer": ["twelve characters"],
+          "accepted": ["12 characters"],
+          "sources": ["D02"]
+        },
+        {
+          "question": "What should I do if the room I reserved is occupied when I arrive?",
+          "spelled_out": "What should I do if the room I reserved is occupied when I arrive?",
+          "depends_on": null,
+          "expected": "answer",
+          "expected_answer": ["check the calendar"],
+          "accepted": [],
+          "sources": ["D17"]
+        }
+      ]
+    },
+    {
+      "id": "t31",
+      "kind": "previous-answer",
+      "role": "Employee",
+      "turns": [
+        {
+          "question": "Why had customers been cancelling before we could step in?",
+          "expected": "answer",
+          "expected_answer": ["sixty days", "not logged in"],
+          "accepted": ["60 days"],
+          "sources": ["T04"]
+        },
+        {
+          "question": "And how early do we now get in touch about that?",
+          "spelled_out": "At how many days of inactivity does the team now reach out to customers?",
+          "depends_on": "'that' is the inactivity signal, which only the previous ANSWER introduces - the first question asks about cancellations. Under D-42 the reference should not resolve, which is what this thread measures.",
+          "expected": "answer",
+          "expected_answer": ["forty-five", "45 days"],
+          "accepted": [],
+          "sources": ["T04"]
+        }
+      ]
+    }
+  ]
+}
