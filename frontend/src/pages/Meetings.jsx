@@ -5,6 +5,7 @@ import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
 import { ingestMeeting, listMeetings } from '../api/meetings.js'
 import { listUserDirectory } from '../api/users.js'
 import useAuth from '../auth/useAuth.js'
+import AttendeePicker from '../components/AttendeePicker.jsx'
 import Button from '../components/Button.jsx'
 import FileDropZone from '../components/FileDropZone.jsx'
 import Notice from '../components/Notice.jsx'
@@ -280,22 +281,17 @@ export default function Meetings() {
       </p>
     )
   } else if (candidates.length > 0) {
+    // One person at a time into a visible list, no modifier keys (usability
+    // finding 5: the Ctrl+click listbox this replaces lost selections silently).
     attendeeControl = (
-      <SelectInput
-        label="Attendees (optional)"
+      <AttendeePicker
+        legend="Attendees (optional)"
         hint={TEXT.attendeesHint}
-        multiple
-        size={Math.min(6, candidates.length)}
-        options={candidates.map((candidate) => ({
-          value: candidate.id,
-          label: `${candidate.name} (${candidate.email})`,
-        }))}
+        options={candidates}
         value={attendees}
         error={fieldErrors.attendees}
         disabled={submitting}
-        onChange={(event) =>
-          setAttendees(Array.from(event.target.selectedOptions, (option) => option.value))
-        }
+        onChange={setAttendees}
       />
     )
   } else {
