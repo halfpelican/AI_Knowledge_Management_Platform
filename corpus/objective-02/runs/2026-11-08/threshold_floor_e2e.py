@@ -1,8 +1,11 @@
 """Step 7 phase 2b (8 November 2026): one end-to-end pass of the development set at the new values.
 
 The same pass as phase 2a's (``corpus/objective-02/runs/2026-11-07/sweep_statement_cap.py``),
-on this commit's code: RELEVANCE_THRESHOLD 0.4472, PARTIAL_MATCH_FLOOR 0.4458 and
-MAXIMUM_STATEMENTS 6, all read from ``apps/core/constants.py`` with NOTHING patched. Every run of
+on the code as it stands: RELEVANCE_THRESHOLD, PARTIAL_MATCH_FLOOR and MAXIMUM_STATEMENTS are all
+read from ``apps/core/constants.py`` with NOTHING patched, and the script refuses to run unless
+they equal ``--expect-threshold``, ``--expect-floor`` and 6. The defaults, 0.4472 and 0.4458,
+are the literal rule's values, which the first pass (``e2e/``, commit 3c839bb) ran at; the margin
+rule's pass (``e2e-margin/``) ran with ``--expect-threshold 0.4231 --expect-floor 0.4036``. Every run of
 ``corpus/objective-02/dev-set.json`` is asked through the shipped ``answer_question``,
 in-process, against kmp_obj02_20261101, inside ``transaction.atomic()`` and rolled back, so no
 row is committed; the row counts are checked before and after. Employee runs are asked as
@@ -23,6 +26,8 @@ Scored with phase 2a's own ``summarise`` (imported from its script), so the tabl
 with like. Imports no AI vendor SDK. Never prints DATABASE_URL. Usage, from anywhere:
 
     python threshold_floor_e2e.py --out <folder>
+    python threshold_floor_e2e.py --out <folder> --label T4231_F4036_N6 \\
+        --expect-threshold 0.4231 --expect-floor 0.4036
 """
 
 from __future__ import annotations
@@ -62,6 +67,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--label", default="T4472_F4458_N6")
+    parser.add_argument("--expect-threshold", type=float, default=0.4472)
+    parser.add_argument("--expect-floor", type=float, default=0.4458)
     args = parser.parse_args()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -122,7 +129,8 @@ def main() -> int:
         "MAXIMUM_STATEMENTS": apps.ai.generation.MAXIMUM_STATEMENTS,
         "TOP_K": constants.TOP_K,
     }
-    expected_values = {"RELEVANCE_THRESHOLD": 0.4472, "PARTIAL_MATCH_FLOOR": 0.4458, "MAXIMUM_STATEMENTS": 6}
+    expected_values = {"RELEVANCE_THRESHOLD": args.expect_threshold,
+                       "PARTIAL_MATCH_FLOOR": args.expect_floor, "MAXIMUM_STATEMENTS": 6}
     for name, value in expected_values.items():
         if in_force[name] != value:
             print(f"refusing: {name} is {in_force[name]!r}, not {value!r}", flush=True)

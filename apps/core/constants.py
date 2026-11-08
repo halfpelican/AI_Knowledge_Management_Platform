@@ -144,30 +144,35 @@ TOP_K = 25
 # Below it on every in-scope passage, the question takes no-answer path A and generation is
 # never called (invariant 7a). It was 0.3 from D-37 (22 September 2026, a 6-chunk corpus).
 # TUNED in step 7 phase 2b (8 November 2026) on corpus/objective-02/dev-set.json, never on
-# questions.json or threads.json (D-93), by the user's rule set in advance: decline the most
-# no-answer runs without losing any answerable one. A no-answer run is declined at T when no
-# in-scope passage scores >= T; an answerable run is lost when none of its expected sources'
-# passages scores >= T. On kmp_obj02_20261101 (43 chunks, FLM v0.9.39), the lowest answerable
-# run kept is d17 at 0.448714 and the highest no-answer run is d25 at 0.445715, so every T in
-# (0.445715, 0.448714] declines all 7 no-answer runs and loses none of the 24; 0.3 declined 2.
-# The rule takes the middle of that interval, 0.4472145, here to four places: a margin of
-# about 0.0015 each side, which is NARROW. It holds on these 31 runs; the frozen sets measure
-# it and do not tune it. Re-tune with the corpus or the embedding model, as before.
-# The scores: corpus/objective-02/runs/2026-11-08/threshold-floor.md.
-RELEVANCE_THRESHOLD = 0.4472
+# questions.json or threads.json (D-93), by the user's rule with a margin m = 0.006 fixed in
+# advance (twice the query-vector drift D-40 recorded): decline the most no-answer runs WITH
+# MARGIN (top in-scope score <= T - m, so path A and no generation) while every answerable run
+# keeps its expected source WITH MARGIN (its best expected-source score >= T + m). On
+# kmp_obj02_20261101 (43 chunks, FLM v0.9.39) the bound is d17's 0.448714 - m = 0.442714, and
+# the most declinable is 5 of 7 (d22@Employee, d27, d11@Employee, d21@Employee, d24): every T
+# in [0.397550 + m, 0.442714] = [0.403550, 0.442714] declines those 5 and keeps all 24. Its
+# middle, 0.423132, rounded to the nearest four places, is 0.4231: 0.025550 above d24's
+# 0.397550 and 0.025614 below d17's 0.448714. d26 (0.439129) and d25 (0.445715) score above it
+# and reach generation; path B is what declines them, when it does. 0.3 declined 2.
+# The rule without a margin gave 0.4472, 0.0015 from a run each side, inside that drift, so the
+# user set it aside. The frozen sets measure this and do not tune it. Re-tune with the corpus
+# or the embedding model, as before. The scores: corpus/objective-02/runs/2026-11-08/
+# threshold-floor.md.
+RELEVANCE_THRESHOLD = 0.4231
 
 # Cosine-similarity floor for OFFERING an item as one of FR-12's partial matches beside a
 # no-answer (D-56; apps/retrieval/partial_matches.py, ``>=``). An item is offered only if its
 # best ranked passage reaches this. Before it, the five nearest were offered however weak, so
 # a question the corpus cannot answer was shown five unrelated titles (D-93).
-# TUNED in the same pass, on the same development set and nothing else, by the user's rule:
-# the lowest value at which no no-answer run is offered a partial match, i.e. just above the
-# highest-scoring partial match the real offer path gave any no-answer run. That is d25's
-# D20 at 0.445715, so 0.4458, at the threshold's precision. It must stay BELOW
-# RELEVANCE_THRESHOLD, or path A, where every passage is below the threshold, could never
-# offer anything. It is only 0.0014 below it, so on path A an item is offered only from that
-# narrow band; on path B every admitted item clears it. The scores are in the same file.
-PARTIAL_MATCH_FLOOR = 0.4458
+# TUNED in the same pass, on the same development set and nothing else, by the same margin
+# rule: the lowest value at least m above the highest-scoring partial match the real offer path
+# gave any no-answer run that path A declines at the threshold, and at most
+# RELEVANCE_THRESHOLD - m. That match is d24's D01 at 0.397550, so 0.403550, rounded UP to four
+# places: 0.4036, which is 0.006050 above it and 0.0135 under the 0.4171 ceiling. It stays
+# BELOW RELEVANCE_THRESHOLD, so path A offers items scoring in [0.4036, 0.4231), a band 0.0195
+# wide; on path B every admitted item clears it. The rule without a margin gave 0.4458, only
+# 0.0014 under its threshold, which would all but retire the offer on path A.
+PARTIAL_MATCH_FLOOR = 0.4036
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in
 # Stage 4 once the prompt and the model's context window are measured.

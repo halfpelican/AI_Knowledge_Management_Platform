@@ -1,0 +1,13 @@
+margin m = 0.006
+T <= 0.448714 (d17) - m = 0.442714
+Declinable with margin: 5 of 7: ['d22@Employee', 'd27', 'd11@Employee', 'd21@Employee', 'd24']
+Not declinable: [('d26', 0.439129), ('d25', 0.445715)]
+Tie interval: [0.403550, 0.442714] -> middle 0.4231320
+T = 0.4231 (the middle rounded to the nearest four-place value; |T - middle| = 0.0000320)
+  distance to the highest declined no-answer top (d24): 0.025550
+  distance to the lowest answerable expected-source score (d17): 0.025614
+Path-A no-answer runs at T: ['d11@Employee', 'd21@Employee', 'd22@Employee', 'd24', 'd27']
+Highest partial match offered to them: 0.39755 (d24, D01)
+F >= 0.39755 + m = 0.403550 -> rounded up to four places: 0.4036
+F <= T - m = 0.4171: holds
+  band offered on path A: [0.4036, 0.4231), 0.0195 wide; F is 0.006050 above d24's D01

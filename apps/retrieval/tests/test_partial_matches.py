@@ -204,11 +204,12 @@ def test_a_source_exactly_at_the_floor_is_offered():
 def test_nothing_is_offered_when_the_best_passage_is_below_the_floor():
     """The case the floor exists for: a ranked list of nothing related offers nothing.
 
-    These are the development set's own no-answer scores: d25's best (D20) and d26's best
-    (D01), the two highest any no-answer run reached, and d22's (D05) for the Employee.
+    These are the development set's own scores, the best passages of the three highest
+    no-answer runs the threshold declines at path A: d24 (D01), d21@Employee (D06) and
+    d11@Employee (T01). The floor was set the margin above the first.
     """
     ranked = [
-        passage(source_id=uuid4(), score=score) for score in (0.445715, 0.439129, 0.250707)
+        passage(source_id=uuid4(), score=score) for score in (0.397550, 0.390036, 0.339343)
     ]
 
     assert partial_matches(ranked) == ()

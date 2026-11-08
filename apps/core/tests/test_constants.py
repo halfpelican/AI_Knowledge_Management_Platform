@@ -152,37 +152,45 @@ def test_relevance_threshold_is_a_cosine_similarity():
 
 
 # Step 7 phase 2b (8 November 2026): both tuned on corpus/objective-02/dev-set.json alone
-# (D-93), by the user's rule; the scores are in corpus/objective-02/runs/2026-11-08/
-# threshold-floor.md. Pinned exactly, as TOP_K is, so that a change is a decision with
-# evidence rather than an edit nobody notices.
-# The development set's boundary scores the two values were chosen from.
-HIGHEST_NO_ANSWER_SCORE = 0.445715  # d25, Employee, its best passage D20
+# (D-93), by the user's rule with a margin fixed in advance; the scores are in
+# corpus/objective-02/runs/2026-11-08/threshold-floor.md. Pinned exactly, as TOP_K is, so
+# that a change is a decision with evidence rather than an edit nobody notices.
+# The margin, and the development set's boundary scores the two values were chosen from.
+MARGIN = 0.006  # twice the query-vector drift D-40 recorded
+HIGHEST_DECLINED_NO_ANSWER_SCORE = 0.397550  # d24, Employee, its best passage D01
+LOWEST_UNDECLINED_NO_ANSWER_SCORE = 0.439129  # d26: within 2m of d17, so not declinable
 LOWEST_ANSWERABLE_SCORE = 0.448714  # d17, Employee, its expected source D18
 
 
-def test_the_tuned_relevance_threshold_is_the_middle_of_the_rules_interval():
+def test_the_tuned_relevance_threshold_is_the_middle_of_the_margin_rules_interval():
     assert isinstance(constants.RELEVANCE_THRESHOLD, float)
-    assert constants.RELEVANCE_THRESHOLD == 0.4472
-    # The rule's tie interval was (0.445715, 0.448714]: every no-answer run declined, no
-    # answerable run lost. The value is its middle, to four places.
-    assert HIGHEST_NO_ANSWER_SCORE < constants.RELEVANCE_THRESHOLD <= LOWEST_ANSWERABLE_SCORE
-    middle = (HIGHEST_NO_ANSWER_SCORE + LOWEST_ANSWERABLE_SCORE) / 2
+    assert constants.RELEVANCE_THRESHOLD == 0.4231
+    # Every answerable run keeps its expected source with the margin to spare...
+    assert constants.RELEVANCE_THRESHOLD + MARGIN <= LOWEST_ANSWERABLE_SCORE
+    # ...and the declined no-answer runs are declined with the margin to spare.
+    assert HIGHEST_DECLINED_NO_ANSWER_SCORE <= constants.RELEVANCE_THRESHOLD - MARGIN
+    # d26 could not be declined with margin by any T that keeps d17 with margin.
+    assert LOWEST_UNDECLINED_NO_ANSWER_SCORE + MARGIN > LOWEST_ANSWERABLE_SCORE - MARGIN
+    # The tie interval is [0.403550, 0.442714]; the value is its middle, to the nearest four
+    # places.
+    middle = (HIGHEST_DECLINED_NO_ANSWER_SCORE + MARGIN + LOWEST_ANSWERABLE_SCORE - MARGIN) / 2
     assert round(middle, 4) == constants.RELEVANCE_THRESHOLD
 
 
-def test_the_partial_match_floor_is_just_above_the_highest_no_answer_offer():
+def test_the_partial_match_floor_is_the_margin_above_the_highest_declined_offer():
     assert isinstance(constants.PARTIAL_MATCH_FLOOR, float)
-    assert constants.PARTIAL_MATCH_FLOOR == 0.4458
-    # Just above the highest-scoring partial match offered to any no-answer run, at the
-    # threshold's precision: the smallest four-place value above it.
-    assert HIGHEST_NO_ANSWER_SCORE < constants.PARTIAL_MATCH_FLOOR
-    assert round(constants.PARTIAL_MATCH_FLOOR - 0.0001, 4) <= HIGHEST_NO_ANSWER_SCORE
+    assert constants.PARTIAL_MATCH_FLOOR == 0.4036
+    # At least the margin above the highest-scoring partial match offered to a no-answer run
+    # path A declines, and the lowest four-place value that is: rounded up.
+    assert constants.PARTIAL_MATCH_FLOOR >= HIGHEST_DECLINED_NO_ANSWER_SCORE + MARGIN
+    assert round(constants.PARTIAL_MATCH_FLOOR - 0.0001, 4) < HIGHEST_DECLINED_NO_ANSWER_SCORE + MARGIN
 
 
-def test_the_partial_match_floor_is_a_cosine_similarity_below_the_threshold():
-    # At or above the threshold, path A (every passage below the threshold) could never
-    # offer a partial match, and the rule says stop rather than ship that.
-    assert 0.0 <= constants.PARTIAL_MATCH_FLOOR < constants.RELEVANCE_THRESHOLD <= 1.0
+def test_the_partial_match_floor_is_the_margin_below_the_threshold():
+    # A real band of partial matches survives on path A, below the threshold: the floor is at
+    # most the threshold less the margin, and the rule says stop rather than ship otherwise.
+    assert 0.0 <= constants.PARTIAL_MATCH_FLOOR <= constants.RELEVANCE_THRESHOLD - MARGIN
+    assert constants.RELEVANCE_THRESHOLD <= 1.0
 
 
 def test_the_statement_cap_is_a_positive_whole_number():

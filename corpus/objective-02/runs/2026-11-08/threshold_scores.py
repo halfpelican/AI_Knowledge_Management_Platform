@@ -272,12 +272,63 @@ def derive(path: Path) -> int:
     return 0
 
 
+def derive_with_margin(path: Path, m: float) -> int:
+    """The user's revised rule (8 November 2026), the same rule with a margin m fixed in advance.
+
+    Added after the measurement; ``measure`` is unchanged, and this reads the same JSON.
+
+    1. T: maximise the no-answer runs declined with margin (top in-scope score <= T - m),
+       subject to every answerable run's lowest expected-source score being >= T + m. On a
+       tie, the middle of the tied interval.
+    2. F: the lowest value with F >= (the highest partial-match score offered to any no-answer
+       run path A declines at T) + m, and F <= T - m. If F would exceed T - m, stop.
+    """
+    data = json.loads(path.read_text(encoding="utf-8"))
+    runs = data["runs"]
+    answerable = [r for r in runs if r["expects_answer"]]
+    unanswerable = [r for r in runs if not r["expects_answer"]]
+    lows = sorted((min(x["expected_best"] for x in r["repeats"]), r["run"]) for r in answerable)
+    highs = sorted((max(x["top"] for x in r["repeats"]), r["run"]) for r in unanswerable)
+    print(f"margin m = {m}")
+    upper = lows[0][0] - m
+    print(f"T <= {lows[0][0]} ({lows[0][1]}) - m = {upper:.6f}")
+    declinable = [(value, run) for value, run in highs if value + m <= upper]
+    if not declinable:
+        print("no no-answer run can be declined with margin; T is anywhere up to the bound")
+        return 0
+    lower = max(value for value, _ in declinable) + m
+    print(f"Declinable with margin: {len(declinable)} of {len(highs)}: {[run for _, run in declinable]}")
+    print(f"Not declinable: {[(run, value) for value, run in highs if value + m > upper]}")
+    middle = (lower + upper) / 2
+    print(f"Tie interval: [{lower:.6f}, {upper:.6f}] -> middle {middle:.7f}")
+    t = round(middle, 4)
+    print(f"T = {t} (the middle rounded to the nearest four-place value; |T - middle| = {abs(t - middle):.7f})")
+    print(f"  distance to the highest declined no-answer top ({max(declinable)[1]}): {t - max(declinable)[0]:.6f}")
+    print(f"  distance to the lowest answerable expected-source score ({lows[0][1]}): {lows[0][0] - t:.6f}")
+    path_a = [r for r in unanswerable if max(x["top"] for x in r["repeats"]) < t]
+    offered = [(m_["score"], r["run"], m_["item"]) for r in path_a for x in r["repeats"]
+               for m_ in x["partial_matches"]]
+    top_offer = max(offered)
+    bound = top_offer[0] + m
+    f = math.ceil(round(bound * 10_000, 6)) / 10_000
+    print(f"Path-A no-answer runs at T: {[r['run'] for r in path_a]}")
+    print(f"Highest partial match offered to them: {top_offer[0]} ({top_offer[1]}, {top_offer[2]})")
+    print(f"F >= {top_offer[0]} + m = {bound:.6f} -> rounded up to four places: {f}")
+    print(f"F <= T - m = {t - m:.4f}: {'holds' if f <= t - m else 'FAILS: stop and report'}")
+    print(f"  band offered on path A: [{f}, {t}), {t - f:.4f} wide; F is {f - top_offer[0]:.6f} above "
+          f"{top_offer[1]}'s {top_offer[2]}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out")
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--derive")
+    parser.add_argument("--margin", type=float, help="with --derive: the revised rule's m")
     args = parser.parse_args()
+    if args.derive and args.margin is not None:
+        return derive_with_margin(Path(args.derive), args.margin)
     if args.derive:
         return derive(Path(args.derive))
     return measure(Path(args.out), args.repeats)
