@@ -1,0 +1,1467 @@
+{
+  "record": {
+    "recorded_at": "2026-11-08T17:47:30+11:00",
+    "commit_sha": "19c98a824694f5e14b4b815550148e4c0fc9cc5d",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+    "database": "kmp_obj02_20261101",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "recorded": true,
+    "server": {
+      "via": "in-process",
+      "server": null,
+      "version": null,
+      "threads": null,
+      "note": "scripts/citation_harness.py calls the pipeline's functions in its own process; no HTTP server is involved"
+    },
+    "question_set": "corpus\\objective-02\\questions.json",
+    "question_set_sha256": "9a059d1a273c992e4c3cfc3d2d1a4803ad81f6e88d40b8420875701278c028f2",
+    "question_set_status": "FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.",
+    "corpus_problems": []
+  },
+  "mode": "scores-only",
+  "constants": {
+    "TOP_K": 25,
+    "RELEVANCE_THRESHOLD": 0.3,
+    "threshold_used": 0.3,
+    "MAXIMUM_CONTEXT_TOKENS": 4000,
+    "MAXIMUM_GENERATION_ATTEMPTS": 3
+  },
+  "results": [
+    {
+      "id": "q01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D01",
+      "top_score": 0.5580898319612073,
+      "source_rank": 1,
+      "source_score": 0.5580898319612073,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.5580898319612073
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.273654664956273
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.27195232323052343
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.25979635559176795
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2515558098577753
+        }
+      ]
+    },
+    {
+      "id": "q02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D02",
+      "top_score": 0.43453215135973,
+      "source_rank": 1,
+      "source_score": 0.43453215135973,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.43453215135973
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3366111572044701
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.25136157589827196
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2156761504328018
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.21115529039335032
+        }
+      ]
+    },
+    {
+      "id": "q03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D03",
+      "top_score": 0.4406482835030981,
+      "source_rank": 1,
+      "source_score": 0.4406482835030981,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.4406482835030981
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.28974968389005595
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.2851899211354861
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.2760197111321951
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.2528513735370053
+        }
+      ]
+    },
+    {
+      "id": "q04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D04",
+      "top_score": 0.5242992435992555,
+      "source_rank": 1,
+      "source_score": 0.5242992435992555,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.5242992435992555
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.3238981269536547
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2787702602446349
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.27068431457605013
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.249265404273454
+        }
+      ]
+    },
+    {
+      "id": "q05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D04",
+      "top_score": 0.5118011021415585,
+      "source_rank": 1,
+      "source_score": 0.5118011021415585,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.5118011021415585
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.34641222898219426
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.284461497093803
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.25668162016959734
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.25288629505920995
+        }
+      ]
+    },
+    {
+      "id": "q06",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D05",
+      "top_score": 0.41679551599828185,
+      "source_rank": 1,
+      "source_score": 0.41679551599828185,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.41679551599828185
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.22635552685032959
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.21060229182010548
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2021764702862722
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.1797411025866827
+        }
+      ]
+    },
+    {
+      "id": "q07",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D06",
+      "top_score": 0.6180998002071285,
+      "source_rank": 1,
+      "source_score": 0.6180998002071285,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.6180998002071285
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3356489165981678
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.32539045121925936
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.29418857818293853
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.29179053757972256
+        }
+      ]
+    },
+    {
+      "id": "q08",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D07",
+      "top_score": 0.5630282467548942,
+      "source_rank": 1,
+      "source_score": 0.5630282467548942,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.5630282467548942
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3832130529301347
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3502666931648569
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.259697262127528
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.25265575721202654
+        }
+      ]
+    },
+    {
+      "id": "q09",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D08",
+      "top_score": 0.5211983421300053,
+      "source_rank": 1,
+      "source_score": 0.5211983421300053,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.5211983421300053
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.33197639503257803
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.316838929797592
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3009081060407559
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2894928833489705
+        }
+      ]
+    },
+    {
+      "id": "q10",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D10",
+      "top_score": 0.5032309673491907,
+      "source_rank": 1,
+      "source_score": 0.5032309673491907,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.5032309673491907
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.34011237767187114
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.2959155278421723
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2933108476953909
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.2753824036254233
+        }
+      ]
+    },
+    {
+      "id": "q11",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D11",
+      "top_score": 0.4652775231150886,
+      "source_rank": 1,
+      "source_score": 0.4652775231150886,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.4652775231150886
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3211465132263814
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3174382903376484
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.31136040320223296
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2786822792634162
+        }
+      ]
+    },
+    {
+      "id": "q12",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D12",
+      "top_score": 0.4542146113892565,
+      "source_rank": 1,
+      "source_score": 0.4542146113892565,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.4542146113892565
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.3375108787592614
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2950191997043208
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27180837838982086
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.2670275886501076
+        }
+      ]
+    },
+    {
+      "id": "q13",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D13",
+      "top_score": 0.41582160396704654,
+      "source_rank": 1,
+      "source_score": 0.41582160396704654,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.41582160396704654
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.37233069707628474
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.28443142180530484
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27152680167143106
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.25814078293525183
+        }
+      ]
+    },
+    {
+      "id": "q14",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D14",
+      "top_score": 0.44515741590178426,
+      "source_rank": 1,
+      "source_score": 0.44515741590178426,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.44515741590178426
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.2775062670908611
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.277251754770928
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.25240836021192
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.25172727175136944
+        }
+      ]
+    },
+    {
+      "id": "q15",
+      "kind": "ordinary",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "D16",
+      "top_score": 0.3309042079100944,
+      "source_rank": 1,
+      "source_score": 0.3309042079100944,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.3309042079100944
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.21194169197358412
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.19437078828746768
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.17822292719239868
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.15174512570895987
+        }
+      ]
+    },
+    {
+      "id": "q16",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D17",
+      "top_score": 0.6047305156796584,
+      "source_rank": 1,
+      "source_score": 0.6047305156796584,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.6047305156796584
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.3210297495707724
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3067613830983815
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.29856296933571674
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2811621689229124
+        }
+      ]
+    },
+    {
+      "id": "q17",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D18",
+      "top_score": 0.6092790606386583,
+      "source_rank": 1,
+      "source_score": 0.6092790606386583,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.6092790606386583
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.38472980478393404
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3319015766570471
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.32060787163948046
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3082610101833321
+        }
+      ]
+    },
+    {
+      "id": "q18",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D19",
+      "top_score": 0.3828773192585756,
+      "source_rank": 1,
+      "source_score": 0.3828773192585756,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.3828773192585756
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.25007557372599964
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.24418048438649895
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.19480441692784006
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.17372188701967958
+        }
+      ]
+    },
+    {
+      "id": "q19",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D20",
+      "top_score": 0.5726907690454731,
+      "source_rank": 1,
+      "source_score": 0.5726907690454731,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.5726907690454731
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.35986980731123663
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3447191787794212
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.32750529075061907
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.327279080328924
+        }
+      ]
+    },
+    {
+      "id": "q20",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "T01",
+      "top_score": 0.4680077157592841,
+      "source_rank": 1,
+      "source_score": 0.4680077157592841,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.4680077157592841
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3315902613777759
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.27360223698470937
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.26805733155314304
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.24178449723095377
+        }
+      ]
+    },
+    {
+      "id": "q21",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "T03",
+      "top_score": 0.3713709223661558,
+      "source_rank": 1,
+      "source_score": 0.3713709223661558,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.3713709223661558
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.26537902005018876
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.2534812742317198
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.23511131507536173
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.23087581370248844
+        }
+      ]
+    },
+    {
+      "id": "q22",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "T04",
+      "top_score": 0.4045744376929185,
+      "source_rank": 2,
+      "source_score": 0.3872905896449315,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.4045744376929185
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.3872905896449315
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.34804529812720836
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.34703435705737035
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.2923939768199545
+        }
+      ]
+    },
+    {
+      "id": "s01@Administrator",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "D09",
+      "top_score": 0.5012797995003647,
+      "source_rank": 1,
+      "source_score": 0.5012797995003647,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.5012797995003647
+        },
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.32464969724884013
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.19153313216057224
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.1905041769359873
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.1873371642085563
+        }
+      ]
+    },
+    {
+      "id": "s01@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D09",
+      "top_score": 0.1905041769359873,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.1905041769359873
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.1873371642085563
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.1691199677174299
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.16864694074450876
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.16680851209156067
+        }
+      ]
+    },
+    {
+      "id": "s02@Administrator",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "D15",
+      "top_score": 0.5298769677073293,
+      "source_rank": 1,
+      "source_score": 0.5298769677073293,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.5298769677073293
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.33753269186713025
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2788768154772058
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.2771888223939649
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.2385432042338067
+        }
+      ]
+    },
+    {
+      "id": "s02@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D15",
+      "top_score": 0.33753269186713025,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.33753269186713025
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2788768154772058
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.2208284997885669
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2177307975873552
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.20530501911499668
+        }
+      ]
+    },
+    {
+      "id": "s03@Administrator",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "T02",
+      "top_score": 0.4049315586569417,
+      "source_rank": 1,
+      "source_score": 0.4049315586569417,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.4049315586569417
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3061964858692489
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.282364756397221
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.28045527433389117
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.25592068873004775
+        }
+      ]
+    },
+    {
+      "id": "s03@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T02",
+      "top_score": 0.3061964858692489,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3061964858692489
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.28045527433389117
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.23461495156458362
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.22360489974922507
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2117698462363525
+        }
+      ]
+    },
+    {
+      "id": "s04@Administrator",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "T05",
+      "top_score": 0.45858058426340337,
+      "source_rank": 1,
+      "source_score": 0.45858058426340337,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "e6a8cb0c-3b1e-4da0-bca6-6ad9939844d8",
+          "item": "T05",
+          "score": 0.45858058426340337
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.39229760382423445
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.31745446731721916
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.27456491730833715
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.2696726887803188
+        }
+      ]
+    },
+    {
+      "id": "s04@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T05",
+      "top_score": 0.39229760382423445,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.39229760382423445
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.31745446731721916
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.26338304147778235
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.24498914531809152
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.23782095393813005
+        }
+      ]
+    },
+    {
+      "id": "n01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "top_score": 0.4644484512870558,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.4644484512870558
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.27061609141795523
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.25458434402363045
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2310598136345306
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.2086056008362971
+        }
+      ]
+    },
+    {
+      "id": "n02",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "top_score": 0.2511963873593367,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2511963873593367
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.22239413543775552
+        },
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.2144824310297927
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "e6a8cb0c-3b1e-4da0-bca6-6ad9939844d8",
+          "item": "T05",
+          "score": 0.21251485968621694
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.1953916438575683
+        }
+      ]
+    },
+    {
+      "id": "n03",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "top_score": 0.42099493813245964,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.42099493813245964
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.36122430097415426
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.35829789703340115
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3572988559313977
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.3428017573269811
+        }
+      ]
+    },
+    {
+      "id": "n04",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "top_score": 0.4122937530354441,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.4122937530354441
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3911069622987097
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3590950033718374
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.32827388102698596
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.31130845399133633
+        }
+      ]
+    }
+  ]
+}

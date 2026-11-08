@@ -1,0 +1,3752 @@
+{
+  "record": {
+    "recorded_at": "2026-11-08T17:47:59+11:00",
+    "commit_sha": "19c98a824694f5e14b4b815550148e4c0fc9cc5d",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+    "database": "kmp_obj02_20261101",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "recorded": true,
+    "server": {
+      "via": "in-process",
+      "server": null,
+      "version": null,
+      "threads": null,
+      "note": "scripts/citation_harness.py calls the pipeline's functions in its own process; no HTTP server is involved"
+    },
+    "question_set": "corpus\\objective-02\\questions.json",
+    "question_set_sha256": "9a059d1a273c992e4c3cfc3d2d1a4803ad81f6e88d40b8420875701278c028f2",
+    "question_set_status": "FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.",
+    "corpus_problems": []
+  },
+  "mode": "full",
+  "constants": {
+    "TOP_K": 25,
+    "RELEVANCE_THRESHOLD": 0.3,
+    "threshold_used": 0.3,
+    "MAXIMUM_CONTEXT_TOKENS": 4000,
+    "MAXIMUM_GENERATION_ATTEMPTS": 3
+  },
+  "provider": "flm",
+  "chat_model": "gemma3:4b",
+  "embed_model": "embed-gemma",
+  "embedding_dimension": 768,
+  "question_set": "corpus\\objective-02\\questions.json",
+  "with_history": false,
+  "canned_prior_questions": [],
+  "elapsed_seconds": 745.8987077000202,
+  "summary": {
+    "questions": 34,
+    "responses": 32,
+    "schema_conformance": [
+      32,
+      32
+    ],
+    "first_attempt_conformance": [
+      32,
+      32
+    ],
+    "fabricated_identifiers": [
+      0,
+      56
+    ],
+    "statements_verified": 56,
+    "empty_answer_ordinary": [
+      0,
+      22
+    ],
+    "scoped_empty": [
+      1,
+      4
+    ],
+    "scoped_answered": [
+      4,
+      4
+    ],
+    "scoping_shown": [
+      1,
+      4
+    ],
+    "no_answer_empty": [
+      1,
+      4
+    ],
+    "expected_answer_match": [
+      19,
+      22
+    ],
+    "expected_answer_match_scoped": [
+      4,
+      4
+    ],
+    "path_a": 2,
+    "call_failures": 0,
+    "leaks": 0,
+    "timing_seconds": {
+      "per_attempt": {
+        "n": 32,
+        "min": 12.8,
+        "median": 21.1,
+        "mean": 22.784375,
+        "p90": 26.0,
+        "max": 65.6
+      },
+      "per_question": {
+        "n": 34,
+        "min": 0.48728059997665696,
+        "median": 21.46121830001357,
+        "mean": 21.938095582353792,
+        "p90": 26.429311800020514,
+        "max": 66.12616060001892
+      },
+      "per_answered_question": {
+        "n": 32,
+        "min": 13.299321200000122,
+        "median": 21.528554599994095,
+        "mean": 23.260704634376452,
+        "p90": 26.429311800020514,
+        "max": 66.12616060001892
+      }
+    }
+  },
+  "misses": [
+    {
+      "id": "q04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D04",
+      "source_rank": 1,
+      "source_score": 0.5241047818016423,
+      "threshold": 0.3,
+      "above_threshold": true,
+      "ended": "answered, expected answer not shown"
+    },
+    {
+      "id": "q15",
+      "kind": "ordinary",
+      "role": "Administrator",
+      "source": "D16",
+      "source_rank": 1,
+      "source_score": 0.3309042079100944,
+      "threshold": 0.3,
+      "above_threshold": true,
+      "ended": "answered, expected answer not shown"
+    },
+    {
+      "id": "q17",
+      "kind": "ordinary",
+      "role": "Employee",
+      "source": "D18",
+      "source_rank": 1,
+      "source_score": 0.6092790606386583,
+      "threshold": 0.3,
+      "above_threshold": true,
+      "ended": "answered, expected answer not shown"
+    },
+    {
+      "id": "s02@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "source": "D15",
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "s03@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "source": "T02",
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "s04@Employee",
+      "kind": "scoped",
+      "role": "Employee",
+      "source": "T05",
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "n01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "n03",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "n04",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    }
+  ],
+  "results": [
+    {
+      "id": "q01",
+      "base_id": "q01",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D01",
+      "question": "How much annual leave does a full-time employee earn each month?",
+      "prompt_question": "How much annual leave does a full-time employee earn each month?",
+      "top_score": 0.5591470251893895,
+      "source_rank": 1,
+      "source_score": 0.5591470251893895,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.5591470251893895
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.2733314694090882
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.27294550678792134
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.26046876173338024
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.251929007940056
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.5591470251893895,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 17.7,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "1.67 days",
+      "accepted": [
+        "1.67"
+      ],
+      "expected_answer_form": "1.67 days",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 18.07745949999662
+    },
+    {
+      "id": "q02",
+      "base_id": "q02",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D02",
+      "question": "How many characters does my password need to have?",
+      "prompt_question": "How many characters does my password need to have?",
+      "top_score": 0.4360017570794077,
+      "source_rank": 1,
+      "source_score": 0.4360017570794077,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.4360017570794077
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.33653979022071046
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.251661884502374
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.21618586458715905
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.21185470534538833
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.4360017570794077,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.33653979022071046,
+          "item": "D18"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 22.7,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Passwords must be at least twelve characters and may not be reused across systems.\",\n      \"chunk_id\": \"68446b83-9a1e-4af9-b311-42613f1fc961\"\n    },\n    {\n      \"text\": \"Passwords must be at least twelve characters and may not be reused across systems.\",\n      \"chunk_id\": \"aaf92567-7cc2-4388-80e6-e3253322edef\"\n    }\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Passwords must be at least twelve characters and may not be reused across systems.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961"
+        },
+        {
+          "text": "Passwords must be at least twelve characters and may not be reused across systems.",
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Passwords must be at least twelve characters and may not be reused across systems.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "item": "D18"
+        },
+        {
+          "text": "Passwords must be at least twelve characters and may not be reused across systems.",
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "item": "D02"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "twelve characters",
+      "accepted": [
+        "12 characters",
+        "12-character",
+        "twelve-character",
+        "12 or more characters",
+        "twelve or more characters"
+      ],
+      "expected_answer_form": "twelve characters",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 23.147281400015345
+    },
+    {
+      "id": "q03",
+      "base_id": "q03",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D03",
+      "question": "Where can I find out who the trained first aiders are?",
+      "prompt_question": "Where can I find out who the trained first aiders are?",
+      "top_score": 0.44252947463026604,
+      "source_rank": 1,
+      "source_score": 0.44252947463026604,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.44252947463026604
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.29156481264376205
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.28764095777096643
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.2770976487082044
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.2539504768940679
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.44252947463026604,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 14.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Trained first aiders are listed on the noticeboard beside each kitchen.\",\n      \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Trained first aiders are listed on the noticeboard beside each kitchen.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Trained first aiders are listed on the noticeboard beside each kitchen.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "noticeboard",
+      "accepted": [
+        "notice board",
+        "notice-board"
+      ],
+      "expected_answer_form": "noticeboard",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 14.526672600011807
+    },
+    {
+      "id": "q04",
+      "base_id": "q04",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D04",
+      "question": "How long do we need to keep project records after a project has closed?",
+      "prompt_question": "How long do we need to keep project records after a project has closed?",
+      "top_score": 0.5241047818016423,
+      "source_rank": 1,
+      "source_score": 0.5241047818016423,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.5241047818016423
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.32376327828879686
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.27941527028324525
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2708100105018502
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.24889985836543957
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.5241047818016423,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4432b7b7-268b-4bba-8de2-af9c8f7ccf71",
+          "score": 0.47096495234874053,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "6ccb904d-43d2-478f-8b6b-656cbfdf70cd",
+          "score": 0.4129338118678636,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5d45c7af-8012-418e-97aa-e1d9a0295805",
+          "score": 0.39631439601426427,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "score": 0.3882482720622878,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.38203487754639526,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5ca125d8-632b-4959-b7e0-e29417e2e83e",
+          "score": 0.3740612875512309,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.36737976012055934,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 21.8,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"At the end of the period, the record owner confirms that no legal hold applies before disposal is authorised.\",\n      \"chunk_id\": \"4d4c1949-7906-4067-8abe-512165b65490\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "At the end of the period, the record owner confirms that no legal hold applies before disposal is authorised.",
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "At the end of the period, the record owner confirms that no legal hold applies before disposal is authorised.",
+          "chunk_id": "4d4c1949-7906-4067-8abe-512165b65490",
+          "item": "D04"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "five years",
+      "accepted": [
+        "5 years",
+        "5-year",
+        "five-year"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 22.371224599977722
+    },
+    {
+      "id": "q05",
+      "base_id": "q05",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D04",
+      "question": "How far from the main site do backups of our vital records have to be stored?",
+      "prompt_question": "How far from the main site do backups of our vital records have to be stored?",
+      "top_score": 0.5133931331128438,
+      "source_rank": 1,
+      "source_score": 0.5133931331128438,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.5133931331128438
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.3485194776010469
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.28445675410149807
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.25636681434641334
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.25306182413506473
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.5133931331128438,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "60158103-4599-45e5-ac6c-e09f5ac04a8b",
+          "score": 0.4513702747541353,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "c37ca375-9214-4056-a030-1a8a5ca3cf57",
+          "score": 0.42158247188407766,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.39591204244369854,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4432b7b7-268b-4bba-8de2-af9c8f7ccf71",
+          "score": 0.3907054944746925,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.382471205423095,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "score": 0.3683929489885998,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "6b2b2e9f-a017-4c75-8e04-972963706c9f",
+          "score": 0.3485194776010469,
+          "item": "D11"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 21.3,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Backups of these records are tested every quarter and stored in a second location at least fifty kilometres from the primary site.\",\n      \"chunk_id\": \"60158103-4599-45e5-ac6c-e09f5ac04a8b\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Backups of these records are tested every quarter and stored in a second location at least fifty kilometres from the primary site.",
+          "chunk_id": "60158103-4599-45e5-ac6c-e09f5ac04a8b"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Backups of these records are tested every quarter and stored in a second location at least fifty kilometres from the primary site.",
+          "chunk_id": "60158103-4599-45e5-ac6c-e09f5ac04a8b",
+          "item": "D04"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "fifty kilometres",
+      "accepted": [
+        "50 kilometres",
+        "50 kilometers",
+        "fifty kilometers",
+        "50 km",
+        "50km",
+        "50-kilometre"
+      ],
+      "expected_answer_form": "fifty kilometres",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 21.81918210000731
+    },
+    {
+      "id": "q06",
+      "base_id": "q06",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D05",
+      "question": "How many quotes do I need to get for a purchase of about $12,000?",
+      "prompt_question": "How many quotes do I need to get for a purchase of about $12,000?",
+      "top_score": 0.41679551599828185,
+      "source_rank": 1,
+      "source_score": 0.41679551599828185,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.41679551599828185
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.22635552685032959
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.21060229182010548
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2021764702862722
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.1797411025866827
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.41679551599828185,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 21.1,
+          "raw": "```json\n{\n\"statements\": [\n{\"text\": \"Purchases between five thousand and fifty thousand dollars need three quotes.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"},\n{\"text\": \"Since $12,000 falls between $5,000 and $50,000, you need three quotes.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"}\n]}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Purchases between five thousand and fifty thousand dollars need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Since $12,000 falls between $5,000 and $50,000, you need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Purchases between five thousand and fifty thousand dollars need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Since $12,000 falls between $5,000 and $50,000, you need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "three quotes",
+      "accepted": [
+        "3 quotes",
+        "three written quotes",
+        "3 written quotes",
+        "three quotations",
+        "3 quotations"
+      ],
+      "expected_answer_form": "three quotes",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 21.528554599994095
+    },
+    {
+      "id": "q07",
+      "base_id": "q07",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D06",
+      "question": "How quickly do we have to acknowledge a customer complaint?",
+      "prompt_question": "How quickly do we have to acknowledge a customer complaint?",
+      "top_score": 0.6180998002071285,
+      "source_rank": 1,
+      "source_score": 0.6180998002071285,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.6180998002071285
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3356489165981678
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.32539045121925936
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.29418857818293853
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.29179053757972256
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf",
+          "score": 0.6180998002071285,
+          "item": "D06"
+        },
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3356489165981678,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "score": 0.32539045121925936,
+          "item": "T04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 15.5,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"A complaint is logged, acknowledged within one working day and investigated fairly.\",\n      \"chunk_id\": \"d43c263f-c838-44c6-9c18-4b9b8aa71dbf\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "A complaint is logged, acknowledged within one working day and investigated fairly.",
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "A complaint is logged, acknowledged within one working day and investigated fairly.",
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf",
+          "item": "D06"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "one working day",
+      "accepted": [
+        "1 working day",
+        "one business day",
+        "1 business day"
+      ],
+      "expected_answer_form": "one working day",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 15.987094300013268
+    },
+    {
+      "id": "q08",
+      "base_id": "q08",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D07",
+      "question": "How much notice is needed to end a work-from-home arrangement?",
+      "prompt_question": "How much notice is needed to end a work-from-home arrangement?",
+      "top_score": 0.5630282467548942,
+      "source_rank": 1,
+      "source_score": 0.5630282467548942,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.5630282467548942
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3832130529301347
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3502666931648569
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.259697262127528
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.25265575721202654
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.5630282467548942,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.3832130529301347,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3502666931648569,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 15.9,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Either party may end the arrangement with four weeks written notice.\",\n      \"chunk_id\": \"f75351f0-ae0c-4ebf-93a0-b71041d0485e\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Either party may end the arrangement with four weeks written notice.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Either party may end the arrangement with four weeks written notice.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "four weeks",
+      "accepted": [
+        "4 weeks",
+        "four-week",
+        "4-week"
+      ],
+      "expected_answer_form": "four weeks",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 16.432817200024147
+    },
+    {
+      "id": "q09",
+      "base_id": "q09",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D08",
+      "question": "How many goals should a manager set for a new starter's first three months?",
+      "prompt_question": "How many goals should a manager set for a new starter's first three months?",
+      "top_score": 0.5211983421300053,
+      "source_rank": 1,
+      "source_score": 0.5211983421300053,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.5211983421300053
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.33197639503257803
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.316838929797592
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3009081060407559
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2894928833489705
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.5211983421300053,
+          "item": "D08"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.33197639503257803,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "score": 0.316838929797592,
+          "item": "D13"
+        },
+        {
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "score": 0.3009081060407559,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 16.2,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The manager sets three clear goals for the first ninety days.\",\n      \"chunk_id\": \"a839910b-12ec-4aab-af59-9d79ba072334\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The manager sets three clear goals for the first ninety days.",
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The manager sets three clear goals for the first ninety days.",
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "item": "D13"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "three clear goals",
+      "accepted": [
+        "3 clear goals",
+        "three goals",
+        "3 goals"
+      ],
+      "expected_answer_form": "three clear goals",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 16.768554699985543
+    },
+    {
+      "id": "q10",
+      "base_id": "q10",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D10",
+      "question": "What is the daily limit for meals when I'm travelling for work?",
+      "prompt_question": "What is the daily limit for meals when I'm travelling for work?",
+      "top_score": 0.5032309673491907,
+      "source_rank": 1,
+      "source_score": 0.5032309673491907,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.5032309673491907
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.34011237767187114
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.2959155278421723
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2933108476953909
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.2753824036254233
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.5032309673491907,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.34011237767187114,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 20.3,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"You may claim reasonable costs incurred for business purposes, including travel, accommodation, meals while travelling and approved training.\", \"chunk_id\": \"e149a71c-2c74-46cf-a5ec-b9d0d831ea87\"},\n    {\"text\": \"Meals are reimbursed up to seventy-five dollars per day.\", \"chunk_id\": \"e149a71c-2c74-46cf-a5ec-b9d0d831ea87\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "You may claim reasonable costs incurred for business purposes, including travel, accommodation, meals while travelling and approved training.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87"
+        },
+        {
+          "text": "Meals are reimbursed up to seventy-five dollars per day.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "You may claim reasonable costs incurred for business purposes, including travel, accommodation, meals while travelling and approved training.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        },
+        {
+          "text": "Meals are reimbursed up to seventy-five dollars per day.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "seventy-five dollars",
+      "accepted": [
+        "$75",
+        "75 dollars",
+        "seventy five dollars",
+        "aud 75",
+        "a$75"
+      ],
+      "expected_answer_form": "seventy-five dollars",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 20.751032800006215
+    },
+    {
+      "id": "q11",
+      "base_id": "q11",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D11",
+      "question": "How long do we have to respond when someone asks to see the personal information we hold about them?",
+      "prompt_question": "How long do we have to respond when someone asks to see the personal information we hold about them?",
+      "top_score": 0.4652775231150886,
+      "source_rank": 1,
+      "source_score": 0.4652775231150886,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.4652775231150886
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3211465132263814
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3174382903376484
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.31136040320223296
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2786822792634162
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "6b2b2e9f-a017-4c75-8e04-972963706c9f",
+          "score": 0.4652775231150886,
+          "item": "D11"
+        },
+        {
+          "chunk_id": "c37ca375-9214-4056-a030-1a8a5ca3cf57",
+          "score": 0.3211465132263814,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "5fe9ff24-2080-4ef1-99d2-f9621a204e08",
+          "score": 0.3184334606697693,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.3174382903376484,
+          "item": "D18"
+        },
+        {
+          "chunk_id": "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "score": 0.31615526040607755,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.31136040320223296,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.305696098788293,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "4432b7b7-268b-4bba-8de2-af9c8f7ccf71",
+          "score": 0.3004173248578274,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 21.0,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Individuals may ask to see the personal information we hold about them and to have errors corrected. Requests are answered within thirty days.\",\n      \"chunk_id\": \"6b2b2e9f-a017-4c75-8e04-972963706c9f\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Individuals may ask to see the personal information we hold about them and to have errors corrected. Requests are answered within thirty days.",
+          "chunk_id": "6b2b2e9f-a017-4c75-8e04-972963706c9f"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Individuals may ask to see the personal information we hold about them and to have errors corrected. Requests are answered within thirty days.",
+          "chunk_id": "6b2b2e9f-a017-4c75-8e04-972963706c9f",
+          "item": "D11"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "thirty days",
+      "accepted": [
+        "30 days",
+        "30-day",
+        "thirty-day"
+      ],
+      "expected_answer_form": "thirty days",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 21.46121830001357
+    },
+    {
+      "id": "q12",
+      "base_id": "q12",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D12",
+      "question": "When does the contract with our catering supplier end?",
+      "prompt_question": "When does the contract with our catering supplier end?",
+      "top_score": 0.4542146113892565,
+      "source_rank": 1,
+      "source_score": 0.4542146113892565,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.4542146113892565
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.3375108787592614
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2950191997043208
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27180837838982086
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.2670275886501076
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.4542146113892565,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.3375108787592614,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 21.9,
+          "raw": "```json\n{\n\"statements\": [\n{\"text\": \"Lantern Grove Supplies has a contract end date of 2027-06-30.\", \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"},\n{\"text\": \"Ridgeline Catering has a contract end date of 2027-01-31.\", \"chunk_id\": \"db6d9ae4-24e3-4663-8cb5-78636692dcc3\"}\n]}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Lantern Grove Supplies has a contract end date of 2027-06-30.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+        },
+        {
+          "text": "Ridgeline Catering has a contract end date of 2027-01-31.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Lantern Grove Supplies has a contract end date of 2027-06-30.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        },
+        {
+          "text": "Ridgeline Catering has a contract end date of 2027-01-31.",
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "item": "D12"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "2027-01-31",
+      "accepted": [
+        "31 january 2027",
+        "january 31, 2027",
+        "january 31 2027",
+        "31/01/2027",
+        "31 jan 2027",
+        "jan 31, 2027",
+        "31st january 2027",
+        "31st of january 2027",
+        "31 january, 2027"
+      ],
+      "expected_answer_form": "2027-01-31",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 22.359977899992373
+    },
+    {
+      "id": "q13",
+      "base_id": "q13",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D13",
+      "question": "Who is running the time management workshop?",
+      "prompt_question": "Who is running the time management workshop?",
+      "top_score": 0.41582160396704654,
+      "source_rank": 1,
+      "source_score": 0.41582160396704654,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.41582160396704654
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.37233069707628474
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.28443142180530484
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27152680167143106
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.25814078293525183
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "score": 0.41582160396704654,
+          "item": "D13"
+        },
+        {
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "score": 0.37233069707628474,
+          "item": "T03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 12.8,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"A. Nguyen is running the managing your time workshop.\", \"chunk_id\": \"dcb441b1-1f4f-4529-864d-ee6aa42c2639\"}\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "A. Nguyen is running the managing your time workshop.",
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "A. Nguyen is running the managing your time workshop.",
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "item": "T03"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "Nguyen",
+      "accepted": [],
+      "expected_answer_form": "Nguyen",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 13.299321200000122
+    },
+    {
+      "id": "q14",
+      "base_id": "q14",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D14",
+      "question": "Which items have to have an asset tag attached?",
+      "prompt_question": "Which items have to have an asset tag attached?",
+      "top_score": 0.44515741590178426,
+      "source_rank": 1,
+      "source_score": 0.44515741590178426,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.44515741590178426
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.2775062670908611
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.277251754770928
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.25240836021192
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.25172727175136944
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.44515741590178426,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 14.9,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Asset tags must be attached to every item over five hundred dollars.\",\n      \"chunk_id\": \"06f5ef26-0a78-4c07-93f8-38919962cb3e\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Asset tags must be attached to every item over five hundred dollars.",
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Asset tags must be attached to every item over five hundred dollars.",
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "item": "D14"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "five hundred dollars",
+      "accepted": [
+        "$500",
+        "500 dollars",
+        "five hundred dollar",
+        "aud 500",
+        "a$500"
+      ],
+      "expected_answer_form": "five hundred dollars",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 15.382484499976272
+    },
+    {
+      "id": "q15",
+      "base_id": "q15",
+      "kind": "ordinary",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "D16",
+      "question": "What is Femi Adeyemi's role on the team?",
+      "prompt_question": "What is Femi Adeyemi's role on the team?",
+      "top_score": 0.3309042079100944,
+      "source_rank": 1,
+      "source_score": 0.3309042079100944,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.3309042079100944
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.21194169197358412
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.19437078828746768
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.17822292719239868
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.15174512570895987
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "b868d740-9d56-4046-96e4-8e40f24ce014",
+          "score": 0.3309042079100944,
+          "item": "D16"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 22.2,
+          "raw": "```json\n{\n\"statements\": [\n{\"text\": \"Name | Role | Data analysis | Project management | Customer service\\nAda Lim | Analyst | 4 | 2 | 3\", \"chunk_id\": \"b868d740-9d56-4046-96e4-8e40f24ce014\"},\n{\"text\": \"Dev Mehta | Analyst | 4 | 1 | 2\", \"chunk_id\": \"b868d740-9d56-4046-96e4-8e40f24ce014\"}\n]}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Name | Role | Data analysis | Project management | Customer service\nAda Lim | Analyst | 4 | 2 | 3",
+          "chunk_id": "b868d740-9d56-4046-96e4-8e40f24ce014"
+        },
+        {
+          "text": "Dev Mehta | Analyst | 4 | 1 | 2",
+          "chunk_id": "b868d740-9d56-4046-96e4-8e40f24ce014"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Name | Role | Data analysis | Project management | Customer service\nAda Lim | Analyst | 4 | 2 | 3",
+          "chunk_id": "b868d740-9d56-4046-96e4-8e40f24ce014",
+          "item": "D16"
+        },
+        {
+          "text": "Dev Mehta | Analyst | 4 | 1 | 2",
+          "chunk_id": "b868d740-9d56-4046-96e4-8e40f24ce014",
+          "item": "D16"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "Developer",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 22.70742109999992
+    },
+    {
+      "id": "q16",
+      "base_id": "q16",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D17",
+      "question": "Do I need approval to book a meeting room for thirty people?",
+      "prompt_question": "Do I need approval to book a meeting room for thirty people?",
+      "top_score": 0.6047305156796584,
+      "source_rank": 1,
+      "source_score": 0.6047305156796584,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.6047305156796584
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.3210297495707724
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3067613830983815
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.29856296933571674
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2811621689229124
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "6c3088c1-141c-49e5-a004-f2a5d48be1a5",
+          "score": 0.6047305156796584,
+          "item": "D17"
+        },
+        {
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "score": 0.3210297495707724,
+          "item": "D13"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.3067613830983815,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.30531404440174653,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "b0798a19-d1c9-44da-b63c-fa7b82155711",
+          "score": 0.30123087572068313,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 17.5,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Bookings of more than twenty people must be approved by the facilities team at least one week in advance.\",\n      \"chunk_id\": \"a839910b-12ec-4aab-af59-9d79ba072334\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Bookings of more than twenty people must be approved by the facilities team at least one week in advance.",
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Bookings of more than twenty people must be approved by the facilities team at least one week in advance.",
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "item": "D13"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "one week in advance",
+      "accepted": [
+        "a week in advance",
+        "1 week in advance",
+        "one week's notice",
+        "a week's notice",
+        "one week ahead",
+        "a week ahead",
+        "seven days in advance",
+        "7 days in advance"
+      ],
+      "expected_answer_form": "one week in advance",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 17.98874299999443
+    },
+    {
+      "id": "q17",
+      "base_id": "q17",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D18",
+      "question": "What hours is the IT service desk open?",
+      "prompt_question": "What hours is the IT service desk open?",
+      "top_score": 0.6092790606386583,
+      "source_rank": 1,
+      "source_score": 0.6092790606386583,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.6092790606386583
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.38472980478393404
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3319015766570471
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.32060787163948046
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3082610101833321
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.6092790606386583,
+          "item": "D18"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.38472980478393404,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.3319015766570471,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.32060787163948046,
+          "item": "D14"
+        },
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.3082610101833321,
+          "item": "D20"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 22.7,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Everyone will work from home on the Friday before the move.\", \"chunk_id\": \"f75351f0-ae0c-4ebf-93a0-b71041d0485e\"},\n    {\"text\": \"The service desk will be available by phone as usual.\", \"chunk_id\": \"f75351f0-ae0c-4ebf-93a0-b71041d0485e\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Everyone will work from home on the Friday before the move.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e"
+        },
+        {
+          "text": "The service desk will be available by phone as usual.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Everyone will work from home on the Friday before the move.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        },
+        {
+          "text": "The service desk will be available by phone as usual.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "seven in the morning to six in the evening",
+      "accepted": [
+        "7 am to 6 pm",
+        "7am to 6pm",
+        "7:00 am to 6:00 pm",
+        "7:00am to 6:00pm",
+        "7 a.m. to 6 p.m.",
+        "7am-6pm",
+        "7 am - 6 pm",
+        "7am \u2013 6pm",
+        "7 am \u2013 6 pm",
+        "07:00 to 18:00",
+        "7:00 to 18:00",
+        "7 am until 6 pm",
+        "7am until 6pm",
+        "7.00 am to 6.00 pm",
+        "seven am to six pm"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 23.169808899983764
+    },
+    {
+      "id": "q18",
+      "base_id": "q18",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D19",
+      "question": "Can I use a pool car for a personal trip?",
+      "prompt_question": "Can I use a pool car for a personal trip?",
+      "top_score": 0.3828773192585756,
+      "source_rank": 1,
+      "source_score": 0.3828773192585756,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.3828773192585756
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.25007557372599964
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.24418048438649895
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.19480441692784006
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.17372188701967958
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "score": 0.3828773192585756,
+          "item": "D19"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 25.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Only employees with a current license who have completed the driver induction may use a fleet vehicle.\",\n      \"chunk_id\": \"da414d14-176b-4cb1-bb22-231cef9d70cc\"\n    },\n    {\n      \"text\": \"Fleet vehicles may not be used for private trips except where a written exception has been approved by the department head.\",\n      \"chunk_id\": \"da414d14-176b-4cb1-bb22-231cef9d70cc\"\n    }\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Only employees with a current license who have completed the driver induction may use a fleet vehicle.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc"
+        },
+        {
+          "text": "Fleet vehicles may not be used for private trips except where a written exception has been approved by the department head.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Only employees with a current license who have completed the driver induction may use a fleet vehicle.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "item": "D19"
+        },
+        {
+          "text": "Fleet vehicles may not be used for private trips except where a written exception has been approved by the department head.",
+          "chunk_id": "da414d14-176b-4cb1-bb22-231cef9d70cc",
+          "item": "D19"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "written exception",
+      "accepted": [
+        "exception in writing"
+      ],
+      "expected_answer_form": "written exception",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 25.603041800000938
+    },
+    {
+      "id": "q19",
+      "base_id": "q19",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "D20",
+      "question": "Do I need to pack up my computer for the office move?",
+      "prompt_question": "Do I need to pack up my computer for the office move?",
+      "top_score": 0.5726907690454731,
+      "source_rank": 1,
+      "source_score": 0.5726907690454731,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.5726907690454731
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.35986980731123663
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.3447191787794212
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.32750529075061907
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.327279080328924
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.5726907690454731,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.35986980731123663,
+          "item": "D14"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.3447191787794212,
+          "item": "D18"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.32750529075061907,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.327279080328924,
+          "item": "D07"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 16.3,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The IT team will move and reconnect computers during the office move.\",\n      \"chunk_id\": \"68446b83-9a1e-4af9-b311-42613f1fc961\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The IT team will move and reconnect computers during the office move.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The IT team will move and reconnect computers during the office move.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "item": "D18"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "reconnect",
+      "accepted": [
+        "re-connect"
+      ],
+      "expected_answer_form": "reconnect",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 16.838608699996257
+    },
+    {
+      "id": "q20",
+      "base_id": "q20",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "T01",
+      "question": "Who is on call on the Sunday of the database migration weekend?",
+      "prompt_question": "Who is on call on the Sunday of the database migration weekend?",
+      "top_score": 0.4680077157592841,
+      "source_rank": 1,
+      "source_score": 0.4680077157592841,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.4680077157592841
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.3315902613777759
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.27360223698470937
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.26805733155314304
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.24178449723095377
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.4680077157592841,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.3315902613777759,
+          "item": "D20"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 20.0,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Marcus said that they need a named person on call for the whole weekend.\", \"chunk_id\": \"c0aa1caf-0c17-45ae-adab-747ac3b27bd7\"},\n    {\"text\": \"Lena offered to take Saturday and Tomas offered to take Sunday as the named person on call.\", \"chunk_id\": \"c0aa1caf-0c17-45ae-adab-747ac3b27bd7\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Marcus said that they need a named person on call for the whole weekend.",
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7"
+        },
+        {
+          "text": "Lena offered to take Saturday and Tomas offered to take Sunday as the named person on call.",
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Marcus said that they need a named person on call for the whole weekend.",
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "item": "T01"
+        },
+        {
+          "text": "Lena offered to take Saturday and Tomas offered to take Sunday as the named person on call.",
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "item": "T01"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "Tomas",
+      "accepted": [
+        "tom\u00e1s"
+      ],
+      "expected_answer_form": "Tomas",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 20.41529360000277
+    },
+    {
+      "id": "q21",
+      "base_id": "q21",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "T03",
+      "question": "How long does the build pipeline take at the moment?",
+      "prompt_question": "How long does the build pipeline take at the moment?",
+      "top_score": 0.3713709223661558,
+      "source_rank": 1,
+      "source_score": 0.3713709223661558,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.3713709223661558
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.26537902005018876
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.2534812742317198
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.23511131507536173
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.23087581370248844
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "score": 0.3713709223661558,
+          "item": "T03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 14.7,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The build pipeline is slow, around forty minutes.\",\n      \"chunk_id\": \"dcb441b1-1f4f-4529-864d-ee6aa42c2639\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The build pipeline is slow, around forty minutes.",
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The build pipeline is slow, around forty minutes.",
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "item": "T03"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "forty minutes",
+      "accepted": [
+        "40 minutes",
+        "40-minute",
+        "forty-minute",
+        "40 mins",
+        "forty mins"
+      ],
+      "expected_answer_form": "forty minutes",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 15.210867299989332
+    },
+    {
+      "id": "q22",
+      "base_id": "q22",
+      "kind": "ordinary",
+      "role": "Employee",
+      "expects_answer": true,
+      "source": "T04",
+      "question": "After how many days without logging in will the team start contacting customers?",
+      "prompt_question": "After how many days without logging in will the team start contacting customers?",
+      "top_score": 0.4045744376929185,
+      "source_rank": 2,
+      "source_score": 0.3872905896449315,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.4045744376929185
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.3872905896449315
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.34804529812720836
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.34703435705737035
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.2923939768199545
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "d43c263f-c838-44c6-9c18-4b9b8aa71dbf",
+          "score": 0.4045744376929185,
+          "item": "D06"
+        },
+        {
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "score": 0.3872905896449315,
+          "item": "T04"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.34804529812720836,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.34703435705737035,
+          "item": "D08"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 26.0,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Rania: We can build a simple report and have the team reach out at forty-five days.\", \"chunk_id\": \"91cb0be0-af6d-4e0b-b0b3-25f42263523f\"},\n    {\"text\": \"Rania: Yes. We can build a simple report and have the team reach out at forty-five days.\", \"chunk_id\": \"91cb0be0-af6d-4e0b-b0b3-25f42263523f\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Rania: We can build a simple report and have the team reach out at forty-five days.",
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f"
+        },
+        {
+          "text": "Rania: Yes. We can build a simple report and have the team reach out at forty-five days.",
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Rania: We can build a simple report and have the team reach out at forty-five days.",
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "item": "T04"
+        },
+        {
+          "text": "Rania: Yes. We can build a simple report and have the team reach out at forty-five days.",
+          "chunk_id": "91cb0be0-af6d-4e0b-b0b3-25f42263523f",
+          "item": "T04"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "forty-five days",
+      "accepted": [
+        "45 days",
+        "forty five days",
+        "45-day",
+        "forty-five-day"
+      ],
+      "expected_answer_form": "forty-five days",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 26.429311800020514
+    },
+    {
+      "id": "s01@Administrator",
+      "base_id": "s01",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "D09",
+      "question": "Who is the sponsor of Project Atlas?",
+      "prompt_question": "Who is the sponsor of Project Atlas?",
+      "top_score": 0.5012797995003647,
+      "source_rank": 1,
+      "source_score": 0.5012797995003647,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.5012797995003647
+        },
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.32464969724884013
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.19153313216057224
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.1905041769359873
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.1873371642085563
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "score": 0.5012797995003647,
+          "item": "D09"
+        },
+        {
+          "chunk_id": "39b04a74-a095-4d07-a70e-5a35f44bd777",
+          "score": 0.32464969724884013,
+          "item": "D15"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 24.0,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The sponsor is the chief operating officer.\",\n      \"chunk_id\": \"90a0f686-5d8f-474d-a75e-a873d4be4bd3\"\n    },\n    {\n      \"text\": \"The project manager is the head of digital services.\",\n      \"chunk_id\": \"90a0f686-5d8f-474d-a75e-a873d4be4bd3\"\n    }\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The sponsor is the chief operating officer.",
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3"
+        },
+        {
+          "text": "The project manager is the head of digital services.",
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The sponsor is the chief operating officer.",
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "item": "D09"
+        },
+        {
+          "text": "The project manager is the head of digital services.",
+          "chunk_id": "90a0f686-5d8f-474d-a75e-a873d4be4bd3",
+          "item": "D09"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "chief operating officer",
+      "accepted": [],
+      "expected_answer_form": "chief operating officer",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 24.40354960001423
+    },
+    {
+      "id": "s01@Employee",
+      "base_id": "s01",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D09",
+      "question": "Who is the sponsor of Project Atlas?",
+      "prompt_question": "Who is the sponsor of Project Atlas?",
+      "top_score": 0.1905041769359873,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.1905041769359873
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.1873371642085563
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.1691199677174299
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.16864694074450876
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.16680851209156067
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 0.48728059997665696
+    },
+    {
+      "id": "s02@Administrator",
+      "base_id": "s02",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "D15",
+      "question": "How much of each project's budget is held back as contingency?",
+      "prompt_question": "How much of each project's budget is held back as contingency?",
+      "top_score": 0.5298769677073293,
+      "source_rank": 1,
+      "source_score": 0.5298769677073293,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.5298769677073293
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.33753269186713025
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2788768154772058
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.2771888223939649
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.2385432042338067
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "39b04a74-a095-4d07-a70e-5a35f44bd777",
+          "score": 0.5298769677073293,
+          "item": "D15"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.33753269186713025,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 15.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The Maple Quay contingency line holds ten percent of each project budget.\",\n      \"chunk_id\": \"39b04a74-a095-4d07-a70e-5a35f44bd777\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The Maple Quay contingency line holds ten percent of each project budget.",
+          "chunk_id": "39b04a74-a095-4d07-a70e-5a35f44bd777"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The Maple Quay contingency line holds ten percent of each project budget.",
+          "chunk_id": "39b04a74-a095-4d07-a70e-5a35f44bd777",
+          "item": "D15"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "ten percent",
+      "accepted": [
+        "10%",
+        "10 percent",
+        "10 per cent",
+        "ten per cent"
+      ],
+      "expected_answer_form": "ten percent",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 16.006653499993263
+    },
+    {
+      "id": "s02@Employee",
+      "base_id": "s02",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D15",
+      "question": "How much of each project's budget is held back as contingency?",
+      "prompt_question": "How much of each project's budget is held back as contingency?",
+      "top_score": 0.33753269186713025,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.33753269186713025
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.2788768154772058
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.2208284997885669
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2177307975873552
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.20530501911499668
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.33753269186713025,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 62.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Purchases up to five thousand dollars need one written quote.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    },\n    {\n      \"text\": \"Purchases between five thousand and fifty thousand dollars need three quotes.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    },\n    {\n      \"text\": \"The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    },\n    {\n      \"text\": \"Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    },\n    {\n      \"text\": \"Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    },\n    {\n      \"text\": \"Suppliers are reviewed annually, and poor performance is recorded in the vendor register.\",\n      \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"\n    }\n  ]\n}\n```",
+          "statements": 6
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Purchases up to five thousand dollars need one written quote.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Purchases between five thousand and fifty thousand dollars need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Purchases up to five thousand dollars need one written quote.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Purchases between five thousand and fifty thousand dollars need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Suppliers are reviewed annually, and poor performance is recorded in the vendor register.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 63.05542140000034
+    },
+    {
+      "id": "s03@Administrator",
+      "base_id": "s03",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "T02",
+      "question": "What new risk was added to the risk register?",
+      "prompt_question": "What new risk was added to the risk register?",
+      "top_score": 0.4049315586569417,
+      "source_rank": 1,
+      "source_score": 0.4049315586569417,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.4049315586569417
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3061964858692489
+        },
+        {
+          "source_type": "document",
+          "source_id": "0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99",
+          "item": "D09",
+          "score": 0.282364756397221
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.28045527433389117
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.25592068873004775
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+          "score": 0.4049315586569417,
+          "item": "T02"
+        },
+        {
+          "chunk_id": "5ca125d8-632b-4959-b7e0-e29417e2e83e",
+          "score": 0.3061964858692489,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "score": 0.30551141157748346,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 16.9,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Regulatory change was added as a fourth risk to the risk register.\",\n      \"chunk_id\": \"f8b31e5e-5a97-4ad7-9303-155ff0c1777c\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Regulatory change was added as a fourth risk to the risk register.",
+          "chunk_id": "f8b31e5e-5a97-4ad7-9303-155ff0c1777c"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Regulatory change was added as a fourth risk to the risk register.",
+          "chunk_id": "f8b31e5e-5a97-4ad7-9303-155ff0c1777c",
+          "item": "T02"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "regulatory change",
+      "accepted": [
+        "change in regulation",
+        "changes in regulation"
+      ],
+      "expected_answer_form": "regulatory change",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 17.416712700010976
+    },
+    {
+      "id": "s03@Employee",
+      "base_id": "s03",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T02",
+      "question": "What new risk was added to the risk register?",
+      "prompt_question": "What new risk was added to the risk register?",
+      "top_score": 0.3061964858692489,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3061964858692489
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.28045527433389117
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.23461495156458362
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.22360489974922507
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2117698462363525
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "5ca125d8-632b-4959-b7e0-e29417e2e83e",
+          "score": 0.3061964858692489,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "score": 0.30551141157748346,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 23.4,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"New starters receive guidance on contracts and agreements during induction and a refresher is offered every two years.\", \"chunk_id\": \"2ad2f78b-e0f4-4aaf-b243-74697d99471b\"},\n    {\"text\": \"Exceptions to the rules on contracts and agreements require written approval from the records manager and are logged in the exceptions register.\", \"chunk_id\": \"2ad2f78b-e0f4-4aaf-b243-74697d99471b\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "New starters receive guidance on contracts and agreements during induction and a refresher is offered every two years.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b"
+        },
+        {
+          "text": "Exceptions to the rules on contracts and agreements require written approval from the records manager and are logged in the exceptions register.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "New starters receive guidance on contracts and agreements during induction and a refresher is offered every two years.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        },
+        {
+          "text": "Exceptions to the rules on contracts and agreements require written approval from the records manager and are logged in the exceptions register.",
+          "chunk_id": "2ad2f78b-e0f4-4aaf-b243-74697d99471b",
+          "item": "D04"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 23.960587100009434
+    },
+    {
+      "id": "s04@Administrator",
+      "base_id": "s04",
+      "kind": "scoped",
+      "role": "Administrator",
+      "expects_answer": true,
+      "source": "T05",
+      "question": "How many staff entered their password in the last phishing test?",
+      "prompt_question": "How many staff entered their password in the last phishing test?",
+      "top_score": 0.45858058426340337,
+      "source_rank": 1,
+      "source_score": 0.45858058426340337,
+      "partial_matches": [
+        {
+          "source_type": "meeting",
+          "source_id": "e6a8cb0c-3b1e-4da0-bca6-6ad9939844d8",
+          "item": "T05",
+          "score": 0.45858058426340337
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.39229760382423445
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.31745446731721916
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.27456491730833715
+        },
+        {
+          "source_type": "document",
+          "source_id": "054d33f3-c2cd-4476-8ad3-6b054886a7ba",
+          "item": "D16",
+          "score": 0.2696726887803188
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "822a4e1b-52af-4c5c-8123-2f6fcbdec7de",
+          "score": 0.45858058426340337,
+          "item": "T05"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.39229760382423445,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.31745446731721916,
+          "item": "D18"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 23.2,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Sixty-one clicked the link and twenty-three entered credentials on the fake page.\", \"chunk_id\": \"822a4e1b-52af-4c5c-8123-2f6fcbdec7de\"},\n    {\"text\": \"Beth reported that sixty-one staff clicked the link and twenty-three entered credentials on the fake page.\", \"chunk_id\": \"822a4e1b-52af-4c5c-8123-2f6fcbdec7de\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Sixty-one clicked the link and twenty-three entered credentials on the fake page.",
+          "chunk_id": "822a4e1b-52af-4c5c-8123-2f6fcbdec7de"
+        },
+        {
+          "text": "Beth reported that sixty-one staff clicked the link and twenty-three entered credentials on the fake page.",
+          "chunk_id": "822a4e1b-52af-4c5c-8123-2f6fcbdec7de"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Sixty-one clicked the link and twenty-three entered credentials on the fake page.",
+          "chunk_id": "822a4e1b-52af-4c5c-8123-2f6fcbdec7de",
+          "item": "T05"
+        },
+        {
+          "text": "Beth reported that sixty-one staff clicked the link and twenty-three entered credentials on the fake page.",
+          "chunk_id": "822a4e1b-52af-4c5c-8123-2f6fcbdec7de",
+          "item": "T05"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "twenty-three",
+      "accepted": [
+        "23",
+        "twenty three"
+      ],
+      "expected_answer_form": "twenty-three",
+      "expected_answer_found": true,
+      "error": null,
+      "seconds": 23.700621700001648
+    },
+    {
+      "id": "s04@Employee",
+      "base_id": "s04",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T05",
+      "question": "How many staff entered their password in the last phishing test?",
+      "prompt_question": "How many staff entered their password in the last phishing test?",
+      "top_score": 0.39229760382423445,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.39229760382423445
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.31745446731721916
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.26338304147778235
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.24498914531809152
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.23782095393813005
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.39229760382423445,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.31745446731721916,
+          "item": "D18"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 30.0,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Passwords must be at least twelve characters and may not be reused across systems. Multi-factor authentication is mandatory for email, the document repository and any system holding personal information.\",\n      \"chunk_id\": \"68446b83-9a1e-4af9-b311-42613f1fc961\"\n    },\n    {\n      \"text\": \"Lost or stolen devices, suspected phishing messages and any unexpected access to files must be reported to the service desk immediately. Early reporting allows the security team to disable accounts and limit the harm.\",\n      \"chunk_id\": \"68446b83-9a1e-4af9-b311-42613f1fc961\"\n    }\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Passwords must be at least twelve characters and may not be reused across systems. Multi-factor authentication is mandatory for email, the document repository and any system holding personal information.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961"
+        },
+        {
+          "text": "Lost or stolen devices, suspected phishing messages and any unexpected access to files must be reported to the service desk immediately. Early reporting allows the security team to disable accounts and limit the harm.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Passwords must be at least twelve characters and may not be reused across systems. Multi-factor authentication is mandatory for email, the document repository and any system holding personal information.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "item": "D18"
+        },
+        {
+          "text": "Lost or stolen devices, suspected phishing messages and any unexpected access to files must be reported to the service desk immediately. Early reporting allows the security team to disable accounts and limit the harm.",
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "item": "D18"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 30.481796000007307
+    },
+    {
+      "id": "n01",
+      "base_id": "n01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "How many weeks of paid parental leave can I take?",
+      "prompt_question": "How many weeks of paid parental leave can I take?",
+      "top_score": 0.4644484512870558,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.4644484512870558
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.27061609141795523
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.25458434402363045
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.2310598136345306
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.2086056008362971
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.4644484512870558,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 65.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Employee Leave Policy 2026 sets out the leave entitlements available to all permanent and fixed-term employees of the organisation.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"Unused leave carries over to the next year up to a maximum of thirty days.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"Leave requests are submitted through the human resources portal at least two weeks before the intended start date.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"The line manager approves or declines leave requests within three working days and records the reason for any refusal.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"This policy does not specify the number of weeks of paid parental leave available.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    }\n  ]\n}\n```",
+          "statements": 6
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Employee Leave Policy 2026 sets out the leave entitlements available to all permanent and fixed-term employees of the organisation.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "Unused leave carries over to the next year up to a maximum of thirty days.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "Leave requests are submitted through the human resources portal at least two weeks before the intended start date.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "The line manager approves or declines leave requests within three working days and records the reason for any refusal.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "This policy does not specify the number of weeks of paid parental leave available.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Employee Leave Policy 2026 sets out the leave entitlements available to all permanent and fixed-term employees of the organisation.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "Unused leave carries over to the next year up to a maximum of thirty days.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "Leave requests are submitted through the human resources portal at least two weeks before the intended start date.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "The line manager approves or declines leave requests within three working days and records the reason for any refusal.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "This policy does not specify the number of weeks of paid parental leave available.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 66.12616060001892
+    },
+    {
+      "id": "n02",
+      "base_id": "n02",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "How much did the latest penetration test cost?",
+      "prompt_question": "How much did the latest penetration test cost?",
+      "top_score": 0.2511963873593367,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2511963873593367
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "6504d9cd-e73d-45f5-8a58-9bceb80f6d49",
+          "item": "T02",
+          "score": 0.22239413543775552
+        },
+        {
+          "source_type": "document",
+          "source_id": "862c2739-c8a8-45b2-8d24-4e8434266333",
+          "item": "D15",
+          "score": 0.2144824310297927
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "e6a8cb0c-3b1e-4da0-bca6-6ad9939844d8",
+          "item": "T05",
+          "score": 0.21251485968621694
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.1953916438575683
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.0654209000058472
+    },
+    {
+      "id": "n03",
+      "base_id": "n03",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "What is the dress code for staff working in the office?",
+      "prompt_question": "What is the dress code for staff working in the office?",
+      "top_score": 0.42099493813245964,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.42099493813245964
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.36122430097415426
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.35829789703340115
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.3572988559313977
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.3428017573269811
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.42099493813245964,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.36122430097415426,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.35829789703340115,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.3572988559313977,
+          "item": "D03"
+        },
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.3428017573269811,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "6c3088c1-141c-49e5-a004-f2a5d48be1a5",
+          "score": 0.3357156116484674,
+          "item": "D17"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.3349880575475087,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.3264573472622898,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3187937357501604,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "68446b83-9a1e-4af9-b311-42613f1fc961",
+          "score": 0.31337521430853776,
+          "item": "D18"
+        },
+        {
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "score": 0.31327626472055087,
+          "item": "D14"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 21.5,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"New starters are introduced to asset inventory melbourne office during induction, and a reminder is issued whenever the arrangements change.\",\n      \"chunk_id\": \"06f5ef26-0a78-4c07-93f8-38919962cb3e\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "New starters are introduced to asset inventory melbourne office during induction, and a reminder is issued whenever the arrangements change.",
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "New starters are introduced to asset inventory melbourne office during induction, and a reminder is issued whenever the arrangements change.",
+          "chunk_id": "06f5ef26-0a78-4c07-93f8-38919962cb3e",
+          "item": "D14"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 21.869827999995323
+    },
+    {
+      "id": "n04",
+      "base_id": "n04",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "Are staff allowed to bring their dogs to the office?",
+      "prompt_question": "Are staff allowed to bring their dogs to the office?",
+      "top_score": 0.4122937530354441,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.4122937530354441
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.3911069622987097
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3590950033718374
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.32827388102698596
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.31130845399133633
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.4122937530354441,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.3911069622987097,
+          "item": "D02"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3590950033718374,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "0116bb02-fdbf-43e6-9af4-7aaf9bc15450",
+          "score": 0.32827388102698596,
+          "item": "D07"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.31130845399133633,
+          "item": "D05"
+        },
+        {
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "score": 0.30327992202425497,
+          "item": "D03"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 24.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Every new starter completes a health and safety induction within their first week.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"},\n    {\"text\": \"New starters are introduced to health and safety induction guide during induction, and a reminder is issued whenever the arrangements change.\", \"chunk_id\": \"ae71359f-32c5-417c-a68f-1e9e007a84a6\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Every new starter completes a health and safety induction within their first week.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6"
+        },
+        {
+          "text": "New starters are introduced to health and safety induction guide during induction, and a reminder is issued whenever the arrangements change.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Every new starter completes a health and safety induction within their first week.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        },
+        {
+          "text": "New starters are introduced to health and safety induction guide during induction, and a reminder is issued whenever the arrangements change.",
+          "chunk_id": "ae71359f-32c5-417c-a68f-1e9e007a84a6",
+          "item": "D03"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 25.0452457999927
+    }
+  ]
+}
