@@ -1,0 +1,169 @@
+Question set: corpus\objective-02\questions.json, 30 question(s) valid, 4 asked by both roles, so 34 run(s)
+FLM gate: scripts/check_flm.py's checks, before any question is asked (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (1.3s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (0.8s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1289
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+FLM gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : a53c5de6b3ef82343b1f62f84fb2f0b4ce389012
+  FLM version     : v0.9.39 (flm version), server v0.9.39
+  dump sha256     : 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59
+  database        : kmp_obj02_20261101
+  provider        : flm (FLMService)
+  endpoint        : http://127.0.0.1:8625/v1
+  chat model      : gemma3:4b
+  embed model     : embed-gemma, dimension 768
+  health          : True — FLM at http://127.0.0.1:8625/v1 advertises 33 model(s)
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-02\questions.json  (30 question(s), 34 run(s)), sha256 9a059d1a273c992e
+  set status      : FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.
+  indexed chunks  : 43, recorded embedding model(s): ['embed-gemma']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.4231, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/34] q01 ...
+[2/34] q02 ...
+[3/34] q03 ...
+[4/34] q04 ...
+[5/34] q05 ...
+[6/34] q06 ...
+[7/34] q07 ...
+[8/34] q08 ...
+[9/34] q09 ...
+[10/34] q10 ...
+[11/34] q11 ...
+[12/34] q12 ...
+[13/34] q13 ...
+[14/34] q14 ...
+[15/34] q15 ...
+[16/34] q16 ...
+[17/34] q17 ...
+[18/34] q18 ...
+[19/34] q19 ...
+[20/34] q20 ...
+[21/34] q21 ...
+[22/34] q22 ...
+[23/34] s01@Administrator ...
+[24/34] s01@Employee ...
+[25/34] s02@Administrator ...
+[26/34] s02@Employee ...
+[27/34] s03@Administrator ...
+[28/34] s03@Employee ...
+[29/34] s04@Administrator ...
+[30/34] s04@Employee ...
+[31/34] n01 ...
+[32/34] n02 ...
+[33/34] n03 ...
+[34/34] n04 ...
+
+====================================================================================================
+TOP-SCORE DISTRIBUTION BY QUESTION KIND
+====================================================================================================
+
+ordinary  (n=22)
+  min 0.3309   median 0.4680   max 0.6181
+  all: 0.331 0.371 0.383 0.405 0.416 0.417 0.434 0.443 0.445 0.454 0.465 0.468 0.503 0.513 0.521 0.524 0.559 0.563 0.573 0.605 0.609 0.618
+
+scoped  (n=4)
+  min 0.1905   median 0.3375   max 0.3923
+  all: 0.191 0.306 0.338 0.392
+
+scoped, asked by a role that can see it  (n=4)
+  min 0.4049   median 0.5013   max 0.5299
+  all: 0.405 0.459 0.501 0.530
+
+no-answer  (n=4)
+  min 0.2512   median 0.4210   max 0.4644
+  all: 0.251 0.412 0.421 0.464
+
+expected source's best chunk, answerable runs (n=26):
+  ranked first 25/26; not a candidate 0
+  score min 0.3309   median 0.4680   max 0.6181
+
+----------------------------------------------------------------------------------------------------
+SEPARATION — a threshold should admit the answerable and reject the rest
+----------------------------------------------------------------------------------------------------
+  answerable (expects an answer)   : min 0.3309, median 0.4680
+  unanswerable (expects none)      : max 0.4644, median 0.3923
+
+  candidate thresholds:
+    0.20  admits 26/26 answerable,  7/8 unanswerable
+    0.22  admits 26/26 answerable,  7/8 unanswerable
+    0.24  admits 26/26 answerable,  7/8 unanswerable
+    0.26  admits 26/26 answerable,  6/8 unanswerable
+    0.28  admits 26/26 answerable,  6/8 unanswerable
+    0.30  admits 26/26 answerable,  6/8 unanswerable
+    0.32  admits 26/26 answerable,  5/8 unanswerable
+    0.34  admits 25/26 answerable,  4/8 unanswerable
+    0.36  admits 25/26 answerable,  4/8 unanswerable
+    0.38  admits 24/26 answerable,  4/8 unanswerable
+    0.40  admits 23/26 answerable,  3/8 unanswerable
+    0.42  admits 19/26 answerable,  2/8 unanswerable
+    0.44  admits 18/26 answerable,  1/8 unanswerable
+    0.46  admits 14/26 answerable,  1/8 unanswerable
+    0.48  admits 12/26 answerable,  0/8 unanswerable
+    0.50  admits 12/26 answerable,  0/8 unanswerable
+    0.52  admits  9/26 answerable,  0/8 unanswerable
+    0.54  admits  6/26 answerable,  0/8 unanswerable
+    0.56  admits  5/26 answerable,  0/8 unanswerable
+    0.58  admits  3/26 answerable,  0/8 unanswerable
+    0.60  admits  3/26 answerable,  0/8 unanswerable
+
+full record written to corpus\objective-02\runs\2026-11-08\after\scores.json

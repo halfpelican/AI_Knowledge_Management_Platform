@@ -1,0 +1,510 @@
+Question set: corpus\objective-02\questions.json, 30 question(s) valid, 4 asked by both roles, so 34 run(s)
+FLM gate: scripts/check_flm.py's checks, before any question is asked (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (1.3s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (0.8s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1295
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+FLM gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : a53c5de6b3ef82343b1f62f84fb2f0b4ce389012
+  FLM version     : v0.9.39 (flm version), server v0.9.39
+  dump sha256     : 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59
+  database        : kmp_obj02_20261101
+  provider        : flm (FLMService)
+  endpoint        : http://127.0.0.1:8625/v1
+  chat model      : gemma3:4b
+  embed model     : embed-gemma, dimension 768
+  health          : True — FLM at http://127.0.0.1:8625/v1 advertises 33 model(s)
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-02\questions.json  (30 question(s), 34 run(s)), sha256 9a059d1a273c992e
+  set status      : FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.
+  indexed chunks  : 43, recorded embedding model(s): ['embed-gemma']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.4231, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/34] q01 (ordinary, Employee) ...
+[2/34] q02 (ordinary, Employee) ...
+[3/34] q03 (ordinary, Employee) ...
+[4/34] q04 (ordinary, Employee) ...
+[5/34] q05 (ordinary, Employee) ...
+[6/34] q06 (ordinary, Employee) ...
+[7/34] q07 (ordinary, Employee) ...
+[8/34] q08 (ordinary, Employee) ...
+[9/34] q09 (ordinary, Employee) ...
+[10/34] q10 (ordinary, Employee) ...
+[11/34] q11 (ordinary, Employee) ...
+[12/34] q12 (ordinary, Employee) ...
+[13/34] q13 (ordinary, Employee) ...
+[14/34] q14 (ordinary, Employee) ...
+[15/34] q15 (ordinary, Administrator) ...
+[16/34] q16 (ordinary, Employee) ...
+[17/34] q17 (ordinary, Employee) ...
+[18/34] q18 (ordinary, Employee) ...
+[19/34] q19 (ordinary, Employee) ...
+[20/34] q20 (ordinary, Employee) ...
+[21/34] q21 (ordinary, Employee) ...
+[22/34] q22 (ordinary, Employee) ...
+[23/34] s01@Administrator (scoped, Administrator) ...
+[24/34] s01@Employee (scoped, Employee) ...
+[25/34] s02@Administrator (scoped, Administrator) ...
+[26/34] s02@Employee (scoped, Employee) ...
+[27/34] s03@Administrator (scoped, Administrator) ...
+[28/34] s03@Employee (scoped, Employee) ...
+[29/34] s04@Administrator (scoped, Administrator) ...
+[30/34] s04@Employee (scoped, Employee) ...
+[31/34] n01 (no-answer, Employee) ...
+[32/34] n02 (no-answer, Administrator) ...
+[33/34] n03 (no-answer, Employee) ...
+[34/34] n04 (no-answer, Administrator) ...
+
+====================================================================================================
+PER-QUESTION DETAIL
+====================================================================================================
+
+[q01] ordinary / as Employee (expects an answer)
+  question    : How much annual leave does a full-time employee earn each month?
+  top score   : 0.5591   retrieved: 1  [D01:25a78c27]
+  source      : D01, rank 1, score 0.5591
+  partial     : D01 0.559
+  attempts    : 1:parsed
+  parsed      : True
+    - [D01:25a78c27] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.
+  expected    : '1.67 days' -> FOUND
+  seconds     : 12.90
+
+[q02] ordinary / as Employee (expects an answer)
+  question    : How many characters does my password need to have?
+  top score   : 0.4360   retrieved: 1  [D02:aaf92567]
+  source      : D02, rank 1, score 0.4360
+  partial     : D02 0.436
+  attempts    : 1:parsed
+  parsed      : True
+    - [D02:aaf92567] Passwords must be at least twelve characters.
+  expected    : 'twelve characters' -> FOUND
+  seconds     : 9.67
+
+[q03] ordinary / as Employee (expects an answer)
+  question    : Where can I find out who the trained first aiders are?
+  top score   : 0.4425   retrieved: 1  [D03:ae71359f]
+  source      : D03, rank 1, score 0.4425
+  partial     : D03 0.443
+  attempts    : 1:parsed
+  parsed      : True
+    - [D03:ae71359f] Trained first aiders are listed on the noticeboard beside each kitchen.
+  expected    : 'noticeboard' -> FOUND
+  seconds     : 10.46
+
+[q04] ordinary / as Employee (expects an answer)
+  question    : How long do we need to keep project records after a project has closed?
+  top score   : 0.5241   retrieved: 2  [D04:7f675205, D04:4432b7b7]
+  source      : D04, rank 1, score 0.5241
+  partial     : D04 0.524
+  attempts    : 1:parsed
+  parsed      : True
+    - [D04:4432b7b7] Financial records are kept for seven years after the end of the financial year to which they relate, personnel records for seven years after employment ends, and project records for five years after project closure.
+  expected    : 'five years' -> FOUND
+  seconds     : 12.56
+
+[q05] ordinary / as Employee (expects an answer)
+  question    : How far from the main site do backups of our vital records have to be stored?
+  top score   : 0.5134   retrieved: 2  [D04:5fe9ff24, D04:60158103]
+  source      : D04, rank 1, score 0.5134
+  partial     : D04 0.513
+  attempts    : 1:parsed
+  parsed      : True
+    - [D04:60158103] Backups of these records are tested every quarter and stored in a second location at least fifty kilometres from the primary site.
+  expected    : 'fifty kilometres' -> FOUND
+  seconds     : 12.07
+
+[q06] ordinary / as Employee (expects an answer)
+  question    : How many quotes do I need to get for a purchase of about $12,000?
+  top score   : 0.4168   retrieved: 0  [(none above threshold)]
+  source      : D05, rank 1, score 0.4168
+  partial     : D05 0.417
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'three quotes' -> not found
+  seconds     : 0.34
+
+[q07] ordinary / as Employee (expects an answer)
+  question    : How quickly do we have to acknowledge a customer complaint?
+  top score   : 0.6181   retrieved: 1  [D06:d43c263f]
+  source      : D06, rank 1, score 0.6181
+  partial     : D06 0.618
+  attempts    : 1:parsed
+  parsed      : True
+    - [D06:d43c263f] Every complaint is logged, acknowledged within one working day and investigated fairly.
+  expected    : 'one working day' -> FOUND
+  seconds     : 10.39
+
+[q08] ordinary / as Employee (expects an answer)
+  question    : How much notice is needed to end a work-from-home arrangement?
+  top score   : 0.5630   retrieved: 1  [D07:0116bb02]
+  source      : D07, rank 1, score 0.5630
+  partial     : D07 0.563
+  attempts    : 1:parsed
+  parsed      : True
+    - [D07:0116bb02] Remote employees keep their normal contracted hours and must be reachable during core hours of ten in the morning to three in the afternoon.
+    - [D07:0116bb02] Either party may end the arrangement with four weeks written notice.
+  expected    : 'four weeks' -> FOUND
+  seconds     : 16.74
+
+[q09] ordinary / as Employee (expects an answer)
+  question    : How many goals should a manager set for a new starter's first three months?
+  top score   : 0.5212   retrieved: 1  [D08:9fe4800b]
+  source      : D08, rank 1, score 0.5212
+  partial     : D08 0.521
+  attempts    : 1:parsed
+  parsed      : True
+    - [D08:9fe4800b] The manager sets three clear goals for the first ninety days.
+  expected    : 'three clear goals' -> FOUND
+  seconds     : 9.31
+
+[q10] ordinary / as Employee (expects an answer)
+  question    : What is the daily limit for meals when I'm travelling for work?
+  top score   : 0.5032   retrieved: 1  [D10:e149a71c]
+  source      : D10, rank 1, score 0.5032
+  partial     : D10 0.503
+  attempts    : 1:parsed
+  parsed      : True
+    - [D10:e149a71c] You may claim reasonable costs incurred for business purposes, including travel, accommodation, meals while travelling and approved training.
+    - [D10:e149a71c] Meals are reimbursed up to seventy-five dollars per day.
+  expected    : 'seventy-five dollars' -> FOUND
+  seconds     : 17.25
+
+[q11] ordinary / as Employee (expects an answer)
+  question    : How long do we have to respond when someone asks to see the personal information we hold about them?
+  top score   : 0.4653   retrieved: 1  [D11:6b2b2e9f]
+  source      : D11, rank 1, score 0.4653
+  partial     : D11 0.465
+  attempts    : 1:parsed
+  parsed      : True
+    - [D11:6b2b2e9f] Individuals may ask to see the personal information we hold about them and to have errors corrected. Requests are answered within thirty days.
+  expected    : 'thirty days' -> FOUND
+  seconds     : 10.24
+
+[q12] ordinary / as Employee (expects an answer)
+  question    : When does the contract with our catering supplier end?
+  top score   : 0.4542   retrieved: 1  [D12:db6d9ae4]
+  source      : D12, rank 1, score 0.4542
+  partial     : D12 0.454
+  attempts    : 1:parsed
+  parsed      : True
+    - [D12:db6d9ae4] The contract with Ridgeline Catering ends on 2027-01-31.
+  expected    : '2027-01-31' -> FOUND
+  seconds     : 11.09
+
+[q13] ordinary / as Employee (expects an answer)
+  question    : Who is running the time management workshop?
+  top score   : 0.4158   retrieved: 0  [(none above threshold)]
+  source      : D13, rank 1, score 0.4158
+  partial     : D13 0.416
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'Nguyen' -> not found
+  seconds     : 0.29
+
+[q14] ordinary / as Employee (expects an answer)
+  question    : Which items have to have an asset tag attached?
+  top score   : 0.4452   retrieved: 1  [D14:06f5ef26]
+  source      : D14, rank 1, score 0.4452
+  partial     : D14 0.445
+  attempts    : 1:parsed
+  parsed      : True
+    - [D14:06f5ef26] Asset tags must be attached to every item over five hundred dollars.
+  expected    : 'five hundred dollars' -> FOUND
+  seconds     : 10.54
+
+[q15] ordinary / as Administrator (expects an answer)
+  question    : What is Femi Adeyemi's role on the team?
+  top score   : 0.3309   retrieved: 0  [(none above threshold)]
+  source      : D16, rank 1, score 0.3309
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'Developer' -> not found
+  seconds     : 0.30
+
+[q16] ordinary / as Employee (expects an answer)
+  question    : Do I need approval to book a meeting room for thirty people?
+  top score   : 0.6047   retrieved: 1  [D17:6c3088c1]
+  source      : D17, rank 1, score 0.6047
+  partial     : D17 0.605
+  attempts    : 1:parsed
+  parsed      : True
+    - [D17:6c3088c1] Bookings of more than twenty people must be approved by the facilities team at least one week in advance.
+  expected    : 'one week in advance' -> FOUND
+  seconds     : 9.92
+
+[q17] ordinary / as Employee (expects an answer)
+  question    : What hours is the IT service desk open?
+  top score   : 0.6093   retrieved: 1  [D18:68446b83]
+  source      : D18, rank 1, score 0.6093
+  partial     : D18 0.609
+  attempts    : 1:parsed
+  parsed      : True
+    - [D18:68446b83] The service desk is open from seven in the morning to six in the evening.
+    - [D18:68446b83] Urgent faults outside those hours can be reported by email and will be triaged the next working morning.
+  expected    : 'seven in the morning to six in the evening' -> FOUND
+  seconds     : 17.36
+
+[q18] ordinary / as Employee (expects an answer)
+  question    : Can I use a pool car for a personal trip?
+  top score   : 0.3829   retrieved: 0  [(none above threshold)]
+  source      : D19, rank 1, score 0.3829
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'written exception' -> not found
+  seconds     : 0.34
+
+[q19] ordinary / as Employee (expects an answer)
+  question    : Do I need to pack up my computer for the office move?
+  top score   : 0.5727   retrieved: 1  [D20:f75351f0]
+  source      : D20, rank 1, score 0.5727
+  partial     : D20 0.573
+  attempts    : 1:parsed
+  parsed      : True
+    - [D20:f75351f0] Pack your personal belongings into the crates delivered to each desk by the Thursday before the move.
+    - [D20:f75351f0] Do not pack computers; the IT team will move and reconnect them.
+  expected    : 'reconnect' -> FOUND
+  seconds     : 16.97
+
+[q20] ordinary / as Employee (expects an answer)
+  question    : Who is on call on the Sunday of the database migration weekend?
+  top score   : 0.4680   retrieved: 1  [T01:c0aa1caf]
+  source      : T01, rank 1, score 0.4680
+  partial     : T01 0.468
+  attempts    : 1:parsed
+  parsed      : True
+    - [T01:c0aa1caf] Marcus said that we need a named person on call for the whole weekend.
+    - [T01:c0aa1caf] Lena volunteered to cover Sunday.
+    - [T01:c0aa1caf] Tomas will take Sunday.
+  expected    : 'Tomas' -> FOUND
+  seconds     : 19.94
+
+[q21] ordinary / as Employee (expects an answer)
+  question    : How long does the build pipeline take at the moment?
+  top score   : 0.3714   retrieved: 0  [(none above threshold)]
+  source      : T03, rank 1, score 0.3714
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'forty minutes' -> not found
+  seconds     : 0.32
+
+[q22] ordinary / as Employee (expects an answer)
+  question    : After how many days without logging in will the team start contacting customers?
+  top score   : 0.4046   retrieved: 0  [(none above threshold)]
+  source      : T04, rank 2, score 0.3873
+  partial     : D06 0.405
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'forty-five days' -> not found
+  seconds     : 0.30
+
+[s01@Administrator] scoped / as Administrator (expects an answer)
+  question    : Who is the sponsor of Project Atlas?
+  top score   : 0.5013   retrieved: 1  [D09:90a0f686]
+  source      : D09, rank 1, score 0.5013
+  partial     : D09 0.501
+  attempts    : 1:parsed
+  parsed      : True
+    - [D09:90a0f686] Project Atlas replaces the organisation's ageing intranet with a searchable knowledge platform.
+  expected    : 'chief operating officer' -> not found
+  seconds     : 10.28
+
+[s01@Employee] scoped / as Employee (expects no answer)
+  question    : Who is the sponsor of Project Atlas?
+  top score   : 0.1905   retrieved: 0  [(none above threshold)]
+  source      : D09, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.32
+
+[s02@Administrator] scoped / as Administrator (expects an answer)
+  question    : How much of each project's budget is held back as contingency?
+  top score   : 0.5299   retrieved: 1  [D15:39b04a74]
+  source      : D15, rank 1, score 0.5299
+  partial     : D15 0.530
+  attempts    : 1:parsed
+  parsed      : True
+    - [D15:39b04a74] The Maple Quay contingency line holds ten percent of each project budget.
+  expected    : 'ten percent' -> FOUND
+  seconds     : 10.27
+
+[s02@Employee] scoped / as Employee (expects no answer)
+  question    : How much of each project's budget is held back as contingency?
+  top score   : 0.3375   retrieved: 0  [(none above threshold)]
+  source      : D15, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.32
+
+[s03@Administrator] scoped / as Administrator (expects an answer)
+  question    : What new risk was added to the risk register?
+  top score   : 0.4049   retrieved: 0  [(none above threshold)]
+  source      : T02, rank 1, score 0.4049
+  partial     : T02 0.405
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  expected    : 'regulatory change' -> not found
+  seconds     : 0.28
+
+[s03@Employee] scoped / as Employee (expects no answer)
+  question    : What new risk was added to the risk register?
+  top score   : 0.3062   retrieved: 0  [(none above threshold)]
+  source      : T02, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.28
+
+[s04@Administrator] scoped / as Administrator (expects an answer)
+  question    : How many staff entered their password in the last phishing test?
+  top score   : 0.4586   retrieved: 1  [T05:822a4e1b]
+  source      : T05, rank 1, score 0.4586
+  partial     : T05 0.459
+  attempts    : 1:parsed
+  parsed      : True
+    - [T05:822a4e1b] Sixty-one clicked the link and twenty-three entered credentials on the fake page.
+  expected    : 'twenty-three' -> FOUND
+  seconds     : 10.42
+
+[s04@Employee] scoped / as Employee (expects no answer)
+  question    : How many staff entered their password in the last phishing test?
+  top score   : 0.3923   retrieved: 0  [(none above threshold)]
+  source      : T05, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.30
+
+[n01] no-answer / as Employee (expects no answer)
+  question    : How many weeks of paid parental leave can I take?
+  top score   : 0.4644   retrieved: 1  [D01:25a78c27]
+  partial     : D01 0.464
+  attempts    : 1:parsed
+  parsed      : True
+    - [D01:25a78c27] Employee Leave Policy 2026 sets out the leave entitlements available to all permanent and fixed-term employees of the organisation.
+    - [D01:25a78c27] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service.
+    - [D01:25a78c27] Personal leave is available when employees are unwell or must care for an immediate family member.
+    - [D01:25a78c27] Leave requests are submitted through the human resources portal at least two weeks before the intended start date.
+    - [D01:25a78c27] Periods of high operational demand, such as the end of the financial year, may limit the number of people who can be away at once.
+  seconds     : 40.13
+
+[n02] no-answer / as Administrator (expects no answer)
+  question    : How much did the latest penetration test cost?
+  top score   : 0.2512   retrieved: 0  [(none above threshold)]
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.32
+
+[n03] no-answer / as Employee (expects no answer)
+  question    : What is the dress code for staff working in the office?
+  top score   : 0.4210   retrieved: 0  [(none above threshold)]
+  partial     : D20 0.421
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.30
+
+[n04] no-answer / as Administrator (expects no answer)
+  question    : Are staff allowed to bring their dogs to the office?
+  top score   : 0.4123   retrieved: 0  [(none above threshold)]
+  partial     : D20 0.412
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.29
+
+====================================================================================================
+SUMMARY
+====================================================================================================
+questions              : 34  (ordinary 22, scoped 8, no-answer 4)
+generation calls made  : 20  over 20 question(s); 14 question(s) took no-answer path A
+transport failures     : 0  (not counted as schema failures)
+
+schema conformance rate            : 100.0%  (20/20)   [responses that parsed into STATEMENT_LIST_SCHEMA]
+  first-attempt conformance        : 100.0%  (20/20)
+  questions answered within 3 tries : 100.0%  (20/20)
+
+fabricated-identifier rate         : 0.0%  (0/30)   [identifiers not supplied in that prompt, per statement]
+  questions with any fabrication   : 0.0%  (0/34)
+  statements proposed / verified   : 30 / 30   [verify_citations() removed the difference]
+
+empty-answer rate where an answer was available (ordinary only) : 27.3%  (6/22)
+  reported separately, because an empty answer is the CORRECT outcome here:
+    scoped questions empty (correct)    : 100.0%  (4/4)
+    no-answer questions empty (correct) : 75.0%  (3/4)
+  scoped questions asked by a role that CAN see the source:
+    answered (correct)                  : 75.0%  (3/4)
+    expected-answer match (diagnostic)  : 50.0%  (2/4)
+  scoping shown (both roles as expected): 75.0%  (3/4)
+
+expected-answer match (ordinary)   : 72.7%  (16/22)   [diagnostic, not one of the three rates]
+out-of-scope chunks in any prompt or answer : 0  (must be 0; the harness checks every question)
+
+timing, seconds, this one sequential process (nearest-rank percentiles):
+  per generation attempt  : n=20  min 9.00  median 10.30  mean 13.62  p90 17.00  max 39.90   [the 8.90 s baseline's measure]
+  per question, all       : n=34  min 0.28  median 9.92  mean 8.32  p90 17.25  max 40.13   [embed, rank, generate, verify]
+  per question, answered  : n=20  min 9.31  median 10.54  mean 13.93  p90 17.36  max 40.13
+
+misses (9): where the expected source stood, and where each run ended
+  q06                path A                                   D05 rank 1, score 0.4168 < threshold 0.4231
+  q13                path A                                   D13 rank 1, score 0.4158 < threshold 0.4231
+  q15                path A                                   D16 rank 1, score 0.3309 < threshold 0.4231
+  q18                path A                                   D19 rank 1, score 0.3829 < threshold 0.4231
+  q21                path A                                   T03 rank 1, score 0.3714 < threshold 0.4231
+  q22                path A                                   T04 rank 2, score 0.3873 < threshold 0.4231
+  s01@Administrator  answered, expected answer not shown      D09 rank 1, score 0.5013 >= threshold 0.4231
+  s03@Administrator  path A                                   T02 rank 1, score 0.4049 < threshold 0.4231
+  n01                answered, where no answer was expected   no expected source
+
+elapsed: 4.7 minutes
+full record written to corpus\objective-02\runs\2026-11-08\after\harness.json
+
+RESULT: schema conformance meets the 95% bar.
