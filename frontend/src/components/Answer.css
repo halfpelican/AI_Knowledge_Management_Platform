@@ -71,6 +71,9 @@
   margin: 0 0 var(--space-3);
   padding: var(--space-3);
   overflow: auto;
+  /* A keyboard-focusable scrolling region, bounded like the transcript and the
+     extracted text are (SC 1.4.11, and one pattern for the three, NFR-14). */
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-sm);
   background-color: var(--color-surface);
   white-space: pre-wrap;

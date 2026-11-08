@@ -98,6 +98,9 @@
   --layout-panel-min-width: 20rem;
   --layout-figure-min-width: 7rem;
   --layout-field-max-width: 28rem;
+  /* FR-08's drop zone: tall enough to be a target rather than a strip
+     (usability finding 3). */
+  --dropzone-min-height: 10rem;
   --opacity-disabled: 0.55;
 
   /* Stacking: the skip link sits above the page, the modal scrim above both. */

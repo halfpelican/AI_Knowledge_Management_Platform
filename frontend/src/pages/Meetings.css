@@ -31,7 +31,6 @@
   min-height: var(--control-min-height);
 }
 
-.meeting-form__file,
 .meeting-form__note {
   margin: 0 0 var(--space-4);
   color: var(--color-text-muted);

@@ -79,7 +79,10 @@
 }
 
 /* Previous conversations. Each is a button because it changes what is on the
-   screen rather than navigating anywhere: the thread is not a route of its own. */
+   screen rather than navigating anywhere: the thread is not a route of its own.
+   Its boundary is border-strong: the border is the only thing that marks it as a
+   control, and --color-border is 1.47:1 on the surface — a separator, never the
+   sole boundary of a control (tokens.css; WCAG 2.1 SC 1.4.11). */
 .ask-threads__list {
   margin: 0;
   padding: 0;
@@ -93,7 +96,7 @@
   width: 100%;
   min-height: var(--control-min-height);
   padding: var(--space-2) var(--space-3);
-  border: var(--border-width) solid var(--color-border);
+  border: var(--border-width) solid var(--color-border-strong);
   border-radius: var(--radius-md);
   margin-bottom: var(--space-2);
   background-color: var(--color-surface);

@@ -1,0 +1,68 @@
+/* FR-09's attendee picker (usability finding 5). Shares .field classes with
+   TextInput.css through the SelectInput it composes. The fieldset takes the same
+   boundary the transcript-source group has, so the two groups on the form read
+   as one pattern (NFR-14). */
+
+.attendee-picker {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.attendee-picker legend {
+  padding: 0 var(--space-2);
+  font-weight: var(--weight-medium);
+}
+
+.attendee-picker__hint {
+  margin: 0 0 var(--space-3);
+}
+
+/* The select and its Add button, on one line where there is room. The button
+   sits at the bottom of the row, level with the select rather than its label. */
+.attendee-picker__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.attendee-picker__select {
+  flex: 1 1 var(--layout-card-min-width);
+  min-width: 0;
+}
+
+.attendee-picker__add {
+  flex: none;
+}
+
+.attendee-picker__list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.attendee-picker__person {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.attendee-picker__person:last-child {
+  border-bottom: 0;
+}
+
+.attendee-picker__name {
+  word-break: break-word;
+}
+
+.attendee-picker__empty {
+  margin: var(--space-3) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
