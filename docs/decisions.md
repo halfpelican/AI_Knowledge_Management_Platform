@@ -6529,3 +6529,22 @@ expecting an answer and 7 not. The evidence is in
 - **An empty partial-match offer now implies the question never reached generation.** It discloses
   nothing outside the caller's scope (`partial_matches.py`, `docs/api-contract.md`).
 - **CLAUDE.md §5** now shows both values, with the user's approval of 8 November.
+
+**Dated note, 8 November 2026: the threshold does not carry over to the frozen thirty.** The step 7
+"after" ran the frozen question set on `a53c5de`, `main` after #56. The evidence is in
+`corpus/objective-02/runs/2026-11-08/after/after-thirty.md`.
+
+- **Seven answerable questions took path A,** where 1 November had two: q06, q13, q15, q18, q21,
+  q22, and s03 for the Administrator.
+  - The right source was retrieved for each, ranked first in six of the seven and second in q22.
+    It scored 0.33 to 0.42, under 0.4231.
+  - The expected-answer match stayed at 16 of 22. The misses moved from wrong answers to no answer.
+- **What held:** 100% first-attempt conformance, no 503s, no fabricated identifiers and no leaks.
+- **Why:** the development set's questions were written from the documents, so they score higher
+  than questions phrased as users ask them. The threshold suited the development set and does not
+  carry over.
+- **The user's decision:** rebuild the development set in users' wording, and re-choose the
+  threshold and floor by the same margin rule.
+- **Disclosed:** any value chosen from now on has been informed by this frozen result, so the frozen
+  thirty no longer independently tests the threshold.
+- **The rest of the "after"** (the threads, the HTTP check and NFR-08) waits for the re-chosen values.
