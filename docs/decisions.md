@@ -6548,3 +6548,62 @@ expecting an answer and 7 not. The evidence is in
 - **Disclosed:** any value chosen from now on has been informed by this frozen result, so the frozen
   thirty no longer independently tests the threshold.
 - **The rest of the "after"** (the threads, the HTTP check and NFR-08) waits for the re-chosen values.
+
+## D-102 · `RELEVANCE_THRESHOLD` stays at 0.30 and there is no partial-match floor; retrieval scores cannot separate answerable from unanswerable questions in users' wording
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-12, D-37, D-56, D-93,
+D-100 · **Supersedes:** D-101's values (0.4231, 0.4036) · **Stage:** step 7 of the post-M6 order,
+phase 2c
+
+**What was tried, in order:**
+
+1. **D-101: 0.4231 and 0.4036,** chosen with a margin on `dev-set.json`. That set's questions were
+   written from the documents.
+2. **The frozen thirty on `main`** (D-101's note, PR #57) turned 7 answerable questions away. The
+   right source was retrieved for each, but scored 0.33 to 0.42.
+3. **The user rebuilt the development set in users' wording** (`corpus/objective-02/dev-set-v2.json`:
+   37 questions in 40 runs, 32 answerable and 8 not). Its questions share half as much of the
+   documents' wording as the first set's (median 0.33, against 0.67). It does not overlap the frozen
+   sets.
+4. **The same margin rule on v2 gave 0.24 and a floor of 0.206** (`2ea9e95`). Only 1 no-answer run
+   could be declined with a margin, because the lowest answerable score is 0.28.
+
+**What v2 showed:** no threshold separates the two groups. Five no-answer runs outscore three
+answerable ones, and "how do I apply for parental leave?" outscores 22 of them. End to end on v2,
+with the cap of 6 and every ask rolled back:
+
+| | **0.30, no floor** | 0.24, floor 0.206 |
+|---|---|---|
+| declined where no answer is expected | **7/8** (2 before generation, 5 by generation) | 3/8 |
+| match with an expected source | **22/32** | 15/32 |
+| answerable runs ending in no answer | 3 | 2 |
+| 503s / out-of-scope citations | 0 / 0 | 0 / 0 |
+
+- **0.24 did worse:** up to 13 passages reached the prompt, with more wrong-passage citations and
+  more unanswerable questions answered.
+- **0.4231 loses answerable questions phrased as users phrase them.** 14 of v2's 32 answerable runs
+  score below it, and the frozen thirty lost 7.
+
+**Decision (the user's):**
+
+- **`RELEVANCE_THRESHOLD` stays at 0.30,** D-37's value.
+- **The cap of 6 stays** (D-100). At 0.30, generation does most of the declining, and the cap keeps
+  its replies short enough to finish.
+- **No partial-match floor:** `PARTIAL_MATCH_FLOOR = 0.0`. The margin rule cannot set one at 0.30.
+  Its lower bound, u24's offer at 0.292898 + 0.006 → 0.2989, is above its ceiling, T − 0.006 =
+  0.294. Counting only no-answer runs would fit (0.2936), but it would also remove the offers that
+  point u07 and u24, two answerable runs, at their expected sources. So D-56's gap stays open:
+  unrelated items are still offered to unanswerable questions.
+
+**What this establishes:** a threshold chosen from retrieval scores alone cannot decide whether a
+question is answerable, once questions are worded as users word them. That decision falls to
+generation, with verification behind it.
+
+**Open:**
+
+- **The frozen thirty no longer independently tests the threshold** (D-101's note). It still tests
+  the cap, which no frozen result informed.
+- **The "after" continues on the build with these values:** the frozen thirty again (the first run of
+  the cap at 0.30 on held-out questions), the nine threads, the HTTP check and NFR-08.
+- **D-56** (partial-match relevance) and wrong-passage citations remain.
+- **`CLAUDE.md` §5's two rows are corrected,** under the user's approval of keeping that table true.
