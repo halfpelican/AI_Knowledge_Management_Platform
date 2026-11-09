@@ -6860,3 +6860,223 @@ commit SHA, the dump hash and the FLM version, as every measurement does (D-84).
 transcripts as the development set, which are all one kind.
 
 **Not covered:** Objective 06, whose decisions follow.
+
+## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19, FR-14 (D-69), invariants 1
+and 4, D-13, D-14, D-66, D-99, docs/schema-v1.md §2 · **Stage:** Objective 06, due 13 November 2026
+
+**The tables** (`retrieval 0004`, additive and reversible; placed in `apps/retrieval` because the logs
+they aggregate live there, D-13):
+
+- **`KnowledgeGap`**, the proposal's table: `gap_id`, `subject`, `occurrence_count`, `status` (`Open` or
+  `Addressed`, a fixed vocabulary in `apps/core/constants.py`), `last_seen_at`; plus `first_seen_at`,
+  and `embedding` with `embedding_model` for D-109's grouping. The embedding columns follow
+  `ContentChunks`' rule (risk R10): a gap is a join candidate only for an item embedded by the same
+  model, and a provider switch starts new gaps rather than comparing vectors that cannot be compared.
+  `subject` is the first member's wording, verbatim: no model writes it, so no model-generated text
+  enters the record, and the Administrator reads what was actually asked.
+- **`KnowledgeGapItem`**: `gap`, and exactly one of `query` (a `QueryLog` row) or `search` (a
+  `SearchLog` row), each unique, with `added_at`. A log row is therefore counted once across every
+  cycle, and `occurrence_count` is a column the proposal names that a test can check against a count
+  of items.
+- **`KnowledgeGapCycle`**: `started_at`, `finished_at`, `triggered_by` (null for the command),
+  `queries_considered`, `searches_considered`, `entries_created`, `entries_updated`. It is the
+  evidence for "within one aggregation cycle", and it bounds the next cycle's window. **No count of
+  rows left out is stored or returned anywhere.**
+
+**FR-19 reads `QueryLog` and `SearchLogs` and writes neither.** Its CRUD line says Read, and the
+membership table is how a row is remembered without a column on it.
+
+**The cycle** (`apps/retrieval/gaps.py::run_cycle`, one transaction):
+
+1. The window is `[previous cycle's started_at − CYCLE_GRACE_SECONDS, this cycle's started_at)`,
+   over `QueryLog.answered_at` where `answered = False` and over `SearchLog.searched_at` where
+   `result_count = 0`; the first cycle has no lower bound. The grace of 60 seconds covers a row whose
+   timestamp was set before the previous cycle started and committed after it read; re-scanning is
+   harmless, because a row already a member is skipped by the unique constraint and a row left out on
+   permission grounds is left out again by the same rule. Windows timestamps tick at about 15.6 ms,
+   so no rule here depends on two timestamps differing.
+2. Each row is tested by D-108's rule. A row the asker's permissions explain is left out, and nothing
+   records that it was.
+3. Each remaining row is embedded (one batched call per cycle) and grouped by D-109's rule into an
+   Open gap or a new one; `occurrence_count` and `last_seen_at` move with it.
+4. The cycle row is written last, with its counts.
+
+**Trigger and surface.** "On a scheduled basis" is `manage.py aggregate_knowledge_gaps`, which a
+scheduler runs (Task Scheduler on the laptop); `POST /api/knowledge-gaps/cycles` runs one cycle
+synchronously for the demonstration and answers 201 with the cycle row. `GET /api/knowledge-gaps`
+lists entries, Open first by `occurrence_count` then `last_seen_at`, then Addressed, each as
+`{gap_id, subject, occurrence_count, status, first_seen_at, last_seen_at}`. `PATCH
+/api/knowledge-gaps/{id}` with `{"status": "Addressed"}` or `"Open"` is the proposal's "mark an entry
+as addressed"; 404 for an unknown id. **No asker, no role and no reason appears in any payload.**
+
+**The permission is a code, `review_knowledge_gaps`,** seeded for Administrator by `accounts 0007`,
+D-99's pattern, and checked on every one of the four routes: 401 without a session, 403 for a role
+that lacks it (invariant 4). *Declined:* testing the role name directly, which every other
+Administrator-only route does not do.
+
+**FR-14's panel** (closes D-69): the dashboard payload gains `knowledge_gaps`, `{open_count, top}`
+with up to `DASHBOARD_RECENT_ITEMS` Open entries, **present only for a caller whose role holds
+`review_knowledge_gaps` and absent otherwise**, so an Employee's payload keeps today's shape. The
+dashboard's date and department filters do not narrow it: a gap has no department and its dates are
+its own.
+
+**Not covered:** FR-18, which does not exist; a gap's department or asker breakdown ("asked repeatedly
+across departments" is visible only as the count); deleting a gap.
+
+## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
+invariant 1, FR-11, D-37, D-66, D-102 · **Builds on:** D-107
+
+**The clause.** "Queries that returned nothing because the user lacked access are excluded, since
+these represent a permission boundary rather than a documentation gap, and including them would both
+distort the list and imply the existence of restricted content." Objective 06 tests it from both
+sides: every genuinely unanswerable query must appear, and "no query returning nothing on permission
+grounds may appear in the log at all".
+
+**The constraint.** Deciding that a no-answer was caused by scope means checking the question against
+content the asker cannot see. That check runs only inside the Administrator-only cycle (D-107), on
+the server, after the fact. It never runs in the asker's request, so no reply, count, partial-match
+offer or timing differs from today for any user (invariant 1), and nothing is written that says why a
+row was left out.
+
+**The rule for a question** (an unanswered `QueryLog` row, FR-13 turns included):
+
+1. The asker's role is read from the user row now. (A role changed since the ask is a known
+   limitation: the log holds no role of its own, and FR-19 may not write one.)
+2. The question is embedded with the query prefix, as retrieval embeds it. A conversation turn is
+   embedded on its own wording, not composed with its earlier turns as the pipeline did (D-42); the
+   simpler form was chosen for the five days, and the row is aggregated either way.
+3. It is ranked over `candidate_chunks(role_name="Administrator", ...)`: the whole corpus, through the
+   one scoping helper, with no new unscoped query shape. D-66 makes the Administrator's scope every
+   chunk, so this is "what an Administrator would have found".
+4. The ranked list is admitted at `RELEVANCE_THRESHOLD`. If nothing is admitted, nobody could have
+   been answered: the row is a gap. If the **top admitted passage** is one the asker's role cannot
+   read (its `visible_to_roles` has no overlap with the asker's effective roles), the row is
+   permission-affected and left out. Otherwise the best match was readable by the asker, so their
+   no-answer was not a permission matter: the row is a gap.
+
+**The rule for a search** (a `SearchLog` row with `result_count` 0): the same keyword search is
+counted again as the Administrator, through a non-logging total in `apps/retrieval/search.py`. More
+than zero means the asker's role withheld it; zero means nobody could find it, and it is a gap.
+Keyword matching is deterministic, so this side has no error.
+
+**Why rank one, and not the alternatives.** *Any withheld passage above the threshold* would leave out
+more genuine gaps: D-102 found that in users' wording unrelated passages often clear 0.30. *A margin
+between the best withheld and the best readable score* is the most discriminating rule, costs one more
+tuned constant, and is the fallback. *Re-running generation as the Administrator* is the most literal
+reading, but it spends one model call per logged row per cycle and lets a model that over-answers
+(D-102's 8 November note) decide the exclusion.
+
+**The known risk, and how it is checked before the frozen run.** A genuine gap whose best spurious
+match over the whole corpus happens to be an Administrator-only chunk is wrongly left out. The rule is
+checked first on development material, `corpus/objective-02/dev-set-v2.json`'s no-answer and scoped
+questions and `dev-set.json`'s, asked as the Employee: scoped questions should be left out and
+no-answer questions kept. If that check fails, the margin rule is chosen on the same material before
+the thirty are run. The thirty are never used to choose.
+
+**What the Administrator can and cannot learn.** The list shows questions Employees asked, verbatim,
+without who asked them; that is FR-19's design and the proposal's example. An Administrator already
+reads every document (D-66), so a subject in the list discloses no content. An absent row is
+indistinguishable from a question nobody asked.
+
+**Not covered:** FR-13 composition in the cycle; a role recorded at ask time; re-evaluating rows when
+a document's visibility later changes.
+
+## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
+Objective 06's second clause, D-38, D-40, D-93 · **Builds on:** D-107, D-108
+
+**The clause.** "Entries are grouped by similarity rather than exact wording, so that differently
+phrased questions about one subject aggregate into a single entry", tested as "differently worded
+questions on a single subject must group into one entry with an accurate occurrence count".
+
+**The rule.** Each item that survives D-108, a question or a search term, is embedded with
+`embed-gemma`'s query prefix (D-38), the same way a question is embedded for retrieval. In timestamp
+order, each item is compared with every **Open** gap whose `embedding_model` matches: it joins the
+nearest one whose centroid cosine is at least `GAP_GROUPING_THRESHOLD`, and that gap's centroid
+becomes the normalised mean of its members' vectors, its count rises by one and `last_seen_at` moves;
+otherwise it starts a new gap with its own wording as the subject and its vector as the centroid.
+An Addressed gap is not a candidate: a subject that recurs after being addressed opens a new entry,
+which is what an Administrator needs to see.
+
+**Why a centroid and not single linkage.** Joining on any one member chains: over several cycles two
+unrelated subjects can meet through an intermediate wording. A centroid moves slowly and keeps a gap
+about one thing. *Exact normalised text* was declined because it fails the clause by construction.
+
+**How the threshold is chosen: on `corpus/objective-06/dev-paraphrases.json`, never on the thirty.**
+Twelve subjects the corpus can answer, each in two differently phrased questions and one search-style
+term; the within-subject pairs are the positives and every cross-subject pair is a negative, with six
+hard pairs (same document or shared vocabulary) reported on their own. If the lowest positive
+similarity exceeds the highest negative, the threshold is their midpoint; otherwise the value with the
+best pairwise F1. The gap between the two, against D-40's drift of 0.003, is reported either way. The
+set shares no subject with the thirty seeded queries, so the thirty remain a test set (D-93). The
+result replaces the PROVISIONAL value in `apps/core/constants.py`, with the sweep under
+`corpus/objective-06/runs/`.
+
+**Known limits.** Greedy order dependence: an item that arrives before a gap it would better fit
+starts its own. A search term of two words and a full question on one subject may sit further apart
+than two questions do; the development set includes a search term in every subject so the threshold
+accounts for it.
+
+**Not covered:** merging or splitting gaps by hand; a model-written subject; re-grouping existing
+entries after the threshold changes.
+
+## D-110 · Objective 06's thirty are frozen, with the unanswerable asks screened on retrieval scores; FR-12's decline weakness stays open
+
+**Status:** Settled by the user · **Date:** 2026-11-09 · **Concerns:** Objective 06, FR-12, FR-19,
+D-93, D-102, D-107 to D-109 · **Evidence:** `corpus/objective-06/runs/2026-11-08/pre-measurement/`,
+`corpus/objective-06/runs/2026-11-09/screening.md`
+
+**The risk the brief named, measured.** A question that FR-12 answers wrongly is logged as answered and
+never reaches the gap log, so Objective 06's first clause ("every genuinely unanswerable query … must
+appear in the log within one aggregation cycle") can fail for FR-12's reason alone. The pre-measurement
+ran the draft's 8 unanswerable and 6 permission-only asks through the shipped pipeline twice, at
+`711fcda`, with nothing written: **2 of 8 unanswerable asks reached a no-answer**, the other six were
+answered from readable material scoring 0.32 to 0.42 with real in-scope citations (a salary question
+cited the onboarding checklist). 4 of 6 permission-only asks reached path A. The two runs agreed on every
+question; a third was cut off by the session ending.
+
+**The user's decision: screen the ask wordings on retrieval scores, then freeze.**
+
+- **Method.** Candidate wordings for the same four genuinely unanswerable subjects (salary review,
+  corporate card, christmas shutdown, jury duty), each scored by `citation_harness.py --scores-only`:
+  embed and rank over the asking role's scope, no generation. Kept: per subject, the two
+  lowest-scoring wordings with a top in-scope score **at most 0.25**, one per role where the scores
+  allow. The floor is 0.25, not 0.28: embeddings are deterministic on FLM v0.9.39, but a re-chunk or a
+  corpus edit moves scores, and 0.05 of headroom under `RELEVANCE_THRESHOLD` (0.30) costs nothing
+  today.
+- **Three rounds,** 53 wordings in all. Round 1 (24) gave four; round 2 (17) two more; round 3 (12),
+  approved for the two subjects still short with a replacement subject as the fallback, completed the
+  eight.
+- **The kept eight and their scores:** U01 0.2125 (Employee), U02 0.2173 (Administrator), U04 0.2413
+  (Employee), U05 0.2447 (Administrator), U07 0.1913 (Employee), U08 0.2304 (Administrator), U10
+  0.2421 (Employee), U11 0.2387 (Administrator). Wordings and nearest items are in `screening.md`
+  and in `queries.json`'s `screened_top_score`.
+- **Unchanged from the lead's approval of 8 November:** the ten answerable queries (each ask clears
+  0.30 with its expected source ranked first), the four zero-result search terms (no chunk contains
+  them), and the eight permission-only queries, which were not screened.
+- **Frozen:** `corpus/objective-06/queries.json`, SHA-256
+  `e78314b71b0096b95640939374b803d19e05f3f55e5fca273637f414c66e34b7`. Nothing is tuned against it
+  from here (D-93).
+
+**What this is, and what it is not.**
+
+- **A verification choice, not a fix.** Objective 06 then tests FR-19's aggregation, exclusion and
+  grouping on queries that reach a no-answer on the shipped build. It does not show that FR-12 declines
+  the questions it should.
+- **FR-12's decline weakness stays an open finding** (D-102's 8 November note; the item 10 audit ruled
+  it carriable, not an FR breach). The screening makes the cause visible: a wording that shares the
+  corpus's vocabulary pulls a readable passage over 0.30 and generation answers from it. **In real use
+  the gap log will under-capture unanswerable questions that sit near the corpus's subject matter**
+  until generation declines reliably.
+- **The acceptance test for any future decline fix** is an unscreened re-run of the draft's original
+  eight wordings (`pre-measurement-asks.json`) and of these thirty. The thirty stay frozen either way.
+
+**Not covered:** the permission-only asks P04 and P07, answered from readable material in the
+pre-measurement, which therefore do not exercise the exclusion; the exclusion is exercised by P01,
+P02, P06, P08, the two permission-only searches and the database's five pre-existing Employee searches
+for Administrator-only phrases.

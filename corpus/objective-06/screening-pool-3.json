@@ -1,0 +1,24 @@
+{
+  "name": "Objective 06 screening pool, round 3",
+  "status": "DEVELOPMENT MATERIAL (D-110). The lead's decision of 9 November 2026 after round 2: one more round for the two subjects still one wording short (salary review, christmas shutdown), same rule and same 0.25 floor, scores only. If either is still short, a replacement subject is proposed rather than a fourth round.",
+  "corpus": "corpus/objective-02, the 1 November snapshot",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Built on the lowest-scoring wordings so far: S1f 'Are pay rises linked to inflation here?' (0.219) and S3g 'Does everything stop over Christmas?' (0.191). 'Christmas and New Year', 'remuneration review' and 'pay rise' alone pulled D01 over 0.30.",
+    "Administrator wordings are preferred, because the kept S1f and S3g are both Employee."
+  ],
+  "questions": [
+    {"id": "S1l", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Are salaries indexed to inflation?", "expected_answer": null, "note": "subject 1, salary review"},
+    {"id": "S1m", "kind": "no-answer", "role": "Administrator", "source": null, "question": "How often are salaries benchmarked against inflation?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1n", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What percentage increase did salaries get this year?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1o", "kind": "no-answer", "role": "Employee", "source": null, "question": "Will my salary rise with inflation?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1p", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there a cost-of-living adjustment to salaries?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1q", "kind": "no-answer", "role": "Administrator", "source": null, "question": "How is the size of a salary increase decided?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S3o", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Does work stop over Christmas?", "expected_answer": null, "note": "subject 3, christmas shutdown"},
+    {"id": "S3p", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Do operations pause over Christmas?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3q", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there a Christmas shutdown?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3r", "kind": "no-answer", "role": "Employee", "source": null, "question": "Is everything shut over Christmas?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3s", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What stops running over the Christmas period?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3t", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Do we pause for Christmas?", "expected_answer": null, "note": "subject 3"}
+  ]
+}
