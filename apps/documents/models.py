@@ -1,11 +1,12 @@
-"""Documents: Documents, ExtractedContent, ContentChunks, Tags and ContentTags
-(docs/schema-v1.md section 1).
+"""Documents: Documents, ExtractedContent, ContentChunks, Tags, ContentTags and, since
+migration v2's ``0008``, DocumentAnalysis (docs/schema-v1.md section 1).
 
 The original file is stored separately from its extracted text so the text is
 reusable without re-parsing (FR-08, docs/decisions.md D-05). Chunks reference their
 source polymorphically, with no database foreign key (D-07), and record the model
 and dimension of every stored vector (D-08, risk R10). Tags and ContentTags are in
-v1 because FR-15's browse mode queries them, although FR-10 fills them later.
+v1 because FR-15's browse mode queries them; FR-10 fills them through
+apps/documents/classification.py (D-105), which also writes DocumentAnalysis.
 """
 
 from django.conf import settings
@@ -15,9 +16,11 @@ from pgvector.django import VectorField
 
 from apps.core.constants import (
     ACCEPTED_FORMATS,
+    ASSIGNMENT_OUTCOMES,
     CLASSIFICATION_DIMENSIONS,
     DEFAULT_DOCUMENT_STATUS,
     DOCUMENT_STATUS_VALUES,
+    DOCUMENT_TYPES,
     SOURCE_TYPES,
     TAG_APPLIED_BY_VALUES,
 )
@@ -176,6 +179,81 @@ class ContentTag(models.Model):
     source_id = models.UUIDField()  # keyed on source type and identifier, like ContentChunks
     applied_by = vocabulary_field(TAG_APPLIED_BY_VALUES)  # provenance
     confirmed = models.BooleanField(default=False)  # a confirmed tag is not altered by reprocessing
+    # FR-10 (D-105), migration v2 (``0008``). ``confidence`` is what the model reported for an
+    # AI-applied link, to three places; null for a link a person applied. ``provisional`` marks
+    # an AI link whose confidence was below CLASSIFICATION_CONFIDENCE_THRESHOLD: it is HELD for
+    # confirmation and is not a tag of the document until ``confirm_tag`` clears it (FR-10:
+    # "presented for confirmation rather than applied silently"). FR-15's readers in
+    # apps/api/repository.py must exclude a provisional link; that change follows this one.
+    confidence = models.DecimalField(max_digits=4, decimal_places=3, null=True, blank=True)
+    provisional = models.BooleanField(default=False)
 
     class Meta:
         db_table = "content_tags"
+
+
+class DocumentAnalysis(models.Model):
+    """FR-10's record of one document's classification: one row per document (D-105).
+
+    The proposal's field table gives DocumentAnalysis ``doc_type``, ``department``, one
+    ``confidence`` and ``user_edited``. This departs from it in four places, each for a clause
+    of FR-10's own text (docs/schema-v1.md section 1 records the same list):
+
+    - **Two machine assignments, each with its own confidence.** "A confidence value is
+      recorded with each assignment", and the type and the department are two assignments.
+      The ``machine_*`` columns are what the model said, overwritten by every run and kept
+      whatever a person decides afterwards: "the machine assignment is retained alongside it
+      so that classification accuracy can be measured over time rather than being overwritten
+      and lost".
+    - **The effective department is ``Documents.department`` and is not duplicated here.**
+      D-72 made that column the one source FR-14's and FR-15's department filters read, so the
+      department FR-10 applies is written there. The effective type has no other home, so
+      ``doc_type`` lives here; it is null while a provisional suggestion awaits confirmation.
+    - **An outcome per assignment**, from ASSIGNMENT_OUTCOMES: how
+      apps/documents/classification.py disposed of each suggestion (applied, provisional,
+      discarded, confirmed), stated rather than inferred from which columns are null.
+    - **Two JSON lists for suggestions that may not be tags yet.** A Topic outside the scheme
+      "may be proposed ... and requires user confirmation before it is created", so no Tag row
+      may exist for it while it waits in ``proposed_topics``. A Project or Process outside the
+      scheme is "discarded"; ``discarded_suggestions`` keeps the discard as evidence of that
+      clause, and nothing reads it as a tag.
+
+    ``user_edited`` protects a person's decision from reprocessing ("any value a user edits
+    [is] retained and is not overwritten by later reprocessing"): once set, a re-run writes the
+    ``machine_*`` columns, ``model``, ``input_truncated`` and ``classified_at``, and nothing
+    else on this row or on ``Documents.department``.
+    """
+
+    id = uuid_primary_key("analysis_id")
+    document = models.OneToOneField(
+        Document, on_delete=models.CASCADE, db_column="doc_id", related_name="analysis"
+    )
+    # What the model said, overwritten by every run.
+    machine_doc_type = vocabulary_field(DOCUMENT_TYPES, null=True, blank=True)
+    machine_doc_type_confidence = models.DecimalField(
+        max_digits=4, decimal_places=3, null=True, blank=True
+    )
+    machine_department = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
+    machine_department_confidence = models.DecimalField(
+        max_digits=4, decimal_places=3, null=True, blank=True
+    )
+    # The effective type. Null while a provisional suggestion awaits confirmation.
+    doc_type = vocabulary_field(DOCUMENT_TYPES, null=True, blank=True)
+    doc_type_outcome = vocabulary_field(ASSIGNMENT_OUTCOMES, null=True, blank=True)
+    department_outcome = vocabulary_field(ASSIGNMENT_OUTCOMES, null=True, blank=True)
+    user_edited = models.BooleanField(default=False)
+    # [{"value": <normalised name>, "confidence": <float>}], replaced by each run.
+    proposed_topics = models.JSONField(default=list, blank=True)
+    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run.
+    discarded_suggestions = models.JSONField(default=list, blank=True)
+    model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
+    input_truncated = models.BooleanField(default=False)
+    # Set explicitly by each run, never auto_now: a confirmation edits the row without
+    # reclassifying it, and the timestamp must keep saying when the machine last ran.
+    classified_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "document_analysis"
+
+    def __str__(self):
+        return f"analysis of {self.document_id}"

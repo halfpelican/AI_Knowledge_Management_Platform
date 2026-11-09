@@ -538,6 +538,44 @@ MANAGE_MEETINGS_PERMISSION = "manage_meetings"
 
 # Provenance of a ContentTags row (FR-10, FR-15).
 TAG_APPLIED_BY_VALUES = ("ai", "user")
+AI_APPLIED, USER_APPLIED = TAG_APPLIED_BY_VALUES
+
+# --- Classification (FR-10; docs/decisions.md D-104, D-105, D-106) ------------------------
+# FR-10 Front-End: "an automatically assigned type (Policy, Procedure, Report, Meeting Paper)",
+# and Server-End Validation: "the type must be selected from a fixed list rather than
+# generated freely". The classification reply's doc_type must be one of these or the reply is
+# a schema violation (apps/ai/classification.py); DocumentAnalysis.doc_type is a vocabulary
+# field over the same tuple.
+DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
+
+# How much of a document the classification call reads: its title and this many whitespace
+# tokens (D-31's token) from the START of the extracted text. The opening of a document is
+# where its kind is stated; FR-10's sectioned summarising of long documents is deferred, and
+# this is said in the DocumentAnalysis record rather than hidden. 1,500 is about five pages,
+# well inside the 4B model's window beside the prompt, and larger than every corpus document
+# but D04 (8,357 words), whose first chapter already says it holds procedures.
+CLASSIFICATION_INPUT_TOKENS = 1500
+
+# PROVISIONAL (D-106): an assignment whose confidence is below this is marked provisional and
+# held for confirmation rather than applied (FR-10 Business logic, confidence). The value is
+# chosen on the development documents under corpus/objective-05/dev-documents/, never on the
+# twenty reference documents (D-93), by the rule D-106 fixes in advance; until that sweep runs
+# this placeholder stands, and the sweep's record replaces this comment with the measurement.
+CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.70
+
+# How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
+# recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):
+#   applied      at or above CLASSIFICATION_CONFIDENCE_THRESHOLD and written to the effective
+#                field, still marked AI-generated and editable;
+#   provisional  below the threshold: held and presented for confirmation, not written
+#                (FR-10 Business logic, confidence);
+#   discarded    outside the established scheme (the department only: the type is always in
+#                DOCUMENT_TYPES because the parser refuses anything else), FR-10's controlled
+#                taxonomy growth clause;
+#   confirmed    a person confirmed or edited it; later reprocessing leaves it alone.
+ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
+(ASSIGNMENT_APPLIED, ASSIGNMENT_PROVISIONAL, ASSIGNMENT_DISCARDED,
+ ASSIGNMENT_CONFIRMED) = ASSIGNMENT_OUTCOMES
 
 # --- Sessions (FR-04, docs/decisions.md D-10) -----------------------------------------
 # Inactivity expiry; config/settings.py derives SESSION_COOKIE_AGE from it.

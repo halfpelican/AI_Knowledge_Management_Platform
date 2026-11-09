@@ -1,9 +1,11 @@
 """The AI service contract: docs/ai-provider.md section 1.
 
-Three operations, deliberately. Every AI call in the system goes through an
-AIService obtained from apps.ai.get_ai_service(); no module outside apps/ai imports
-a vendor SDK (CLAUDE.md section 4). Classification (FR-10) and summarisation
-(FR-16) are NIT3004 work and get their own methods then, not speculatively now.
+The operations are exactly the ones listed on ``AIService`` below, and the list is the
+source of truth, not a count. Every AI call in the system goes through an AIService
+obtained from apps.ai.get_ai_service(); no module outside apps/ai imports a vendor SDK
+(CLAUDE.md section 4). ``classify_document`` arrived with FR-10 on 9 November 2026
+(docs/decisions.md D-104), when NIT3004 asked for it and not before. Summarisation (FR-16)
+gets its own method the same way, then, not speculatively now.
 """
 
 from dataclasses import dataclass
@@ -46,12 +48,70 @@ class ProviderHealth:
     detail: str
 
 
+# --- FR-10 classification (D-104) -------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TagScheme:
+    """The established scheme one document is classified against (FR-10).
+
+    Built by apps/documents/classification.py for the document's own audience, every role
+    in its ``visible_to_roles`` (D-105): a value linked only to documents some member of that
+    audience cannot read is left out, so a suggestion can never name a restricted project to
+    a reader who may not know it exists (invariant 1). A value with no links at all is
+    vocabulary only and is always in. ``doc_types`` is DOCUMENT_TYPES; ``departments`` are
+    distinct non-blank ``Documents.department`` values; ``tags`` maps each of Project,
+    Process and Topic to its active tag names.
+    """
+
+    doc_types: tuple[str, ...]
+    departments: tuple[str, ...]
+    tags: dict[str, tuple[str, ...]]
+
+
+@dataclass(frozen=True)
+class Assignment:
+    """One suggested value and the confidence the model reported for it, in [0, 1]."""
+
+    value: str
+    confidence: float
+
+
+@dataclass(frozen=True)
+class TagSuggestion:
+    """One suggested tag: its dimension (Project, Process or Topic), value and confidence."""
+
+    dimension: str
+    value: str
+    confidence: float
+
+
+@dataclass(frozen=True)
+class DocumentClassification:
+    """What ``classify_document`` returns: a conforming reply, and nothing else (invariant 10).
+
+    ``doc_type.value`` is one of the scheme's ``doc_types``; the parser rejects any other reply.
+    ``department`` and ``tags`` are the model's suggestions AS MADE: whether a value is in the
+    scheme, provisional or applied is decided by application code afterwards
+    (apps/documents/classification.py, D-105), never here. ``model`` names the chat model, for
+    the DocumentAnalysis record. ``input_truncated`` says the text was cut at
+    CLASSIFICATION_INPUT_TOKENS before it was sent, which the record keeps rather than hides.
+    """
+
+    doc_type: Assignment
+    department: Assignment
+    tags: tuple[TagSuggestion, ...]
+    model: str
+    input_truncated: bool
+
+
 class ProviderUnavailable(Exception):
     """The provider could not be reached or did not respond usably.
 
-    Raised by embed() on transport failures and server errors, and by
-    generate_statements() after MAXIMUM_GENERATION_ATTEMPTS. The view layer turns it
-    into 503 with the NFR-19 notice.
+    Raised by embed() on transport failures and server errors, by
+    generate_statements() after MAXIMUM_GENERATION_ATTEMPTS, and by classify_document()
+    after MAXIMUM_CLASSIFY_ATTEMPTS. The view layer turns it into 503 with the NFR-19
+    notice; ingestion catches it and leaves the document unclassified (invariant 8, D-33).
     """
 
 
@@ -84,3 +144,17 @@ class AIService(Protocol):
         ...
 
     def health(self) -> ProviderHealth: ...
+
+    def classify_document(
+        self, title: str, text: str, scheme: TagScheme
+    ) -> DocumentClassification:
+        """FR-10: the type, department and tags of one document, in one structured call.
+
+        The prompt shows the model the scheme's fixed types, departments and tag values and
+        the document's title and opening text (apps/ai/classification.py). A reply that does
+        not conform to CLASSIFICATION_SCHEMA, including a ``doc_type`` outside the four, is
+        no reply: retried to MAXIMUM_CLASSIFY_ATTEMPTS (1 initial call + 2 retries), then
+        ProviderUnavailable. The scheme rule, the provisional rule and provenance are
+        application code over the returned suggestions, not the model's judgement (D-105).
+        """
+        ...

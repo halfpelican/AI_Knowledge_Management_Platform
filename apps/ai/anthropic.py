@@ -19,7 +19,23 @@ import anthropic as anthropic_sdk
 from django.conf import settings
 
 from apps.ai import _openai_compat
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
+from apps.ai.base import (
+    DocumentClassification,
+    EmbeddingResult,
+    Passage,
+    ProviderHealth,
+    ProviderUnavailable,
+    StatementList,
+    TagScheme,
+)
+from apps.ai.classification import (
+    CLASSIFICATION_MAX_TOKENS,
+    CLASSIFICATION_SYSTEM_PROMPT,
+    CLASSIFICATION_TIMEOUT_SECONDS,
+    build_classification_user_prompt,
+    classification_input,
+    run_classification_attempts,
+)
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
@@ -99,13 +115,22 @@ class AnthropicService:
             max_tokens=max_tokens,
         )
 
-    def _claude_once(self, user_prompt: str, *, max_tokens: int) -> ChatReply:
+    def _claude_once(
+        self,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+        system: str = SYSTEM_PROMPT,
+        timeout: int = GENERATION_TIMEOUT_SECONDS,
+    ) -> ChatReply:
         """One messages.create call. Returns the reply text and what Claude reported about it.
 
         The system prompt goes in the SDK's own ``system`` parameter rather than as a
         message, which is this API's shape; the string is the one FLM receives as its
-        system message. Transport failures become ProviderUnavailable and 4xx surfaces
-        unchanged, the same division the embed path makes. ``stop_reason`` and the usage
+        system message — generation's unless the caller passes its own, as classification
+        does with CLASSIFICATION_SYSTEM_PROMPT and CLASSIFICATION_TIMEOUT_SECONDS (FR-10).
+        Transport failures become ProviderUnavailable and 4xx surfaces unchanged, the same
+        division the embed path makes. ``stop_reason`` and the usage
         counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
         the reply leaves them out.
         """
@@ -114,9 +139,9 @@ class AnthropicService:
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
                 temperature=0.0,
-                system=SYSTEM_PROMPT,
+                system=system,
                 messages=[{"role": "user", "content": user_prompt}],
-                timeout=GENERATION_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
             raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc
@@ -137,6 +162,34 @@ class AnthropicService:
             finish_reason=getattr(response, "stop_reason", None),
             completion_tokens=getattr(usage, "output_tokens", None),
             prompt_tokens=getattr(usage, "input_tokens", None),
+        )
+
+    def classify_document(
+        self, title: str, text: str, scheme: TagScheme
+    ) -> DocumentClassification:
+        """FR-10 classification through Claude (D-104): the same prompt, schema and loop as FLM.
+
+        Mocked, never live, like generation (D-35). ``_claude_once`` carries the
+        classification system prompt in the SDK's own parameter and the classification
+        timeout; everything else is apps/ai/classification.py's, shared with the FLM
+        provider, which is what keeps the two symmetrical.
+        """
+        body, truncated = classification_input(text)
+        user_prompt = build_classification_user_prompt(title, body, scheme)
+        # One value for the request and for the attempt log's record of it.
+        max_tokens = CLASSIFICATION_MAX_TOKENS
+        return run_classification_attempts(
+            lambda: self._claude_once(
+                user_prompt,
+                max_tokens=max_tokens,
+                system=CLASSIFICATION_SYSTEM_PROMPT,
+                timeout=CLASSIFICATION_TIMEOUT_SECONDS,
+            ),
+            scheme=scheme,
+            label=f"Claude ({settings.ANTHROPIC_MODEL})",
+            model=settings.ANTHROPIC_MODEL,
+            input_truncated=truncated,
+            max_tokens=max_tokens,
         )
 
     def health(self) -> ProviderHealth:

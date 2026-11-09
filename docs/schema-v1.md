@@ -231,12 +231,69 @@ cascade deleted the row.
 | `source_id` | UUID | |
 | `applied_by` | text | `ai` or `user` — provenance |
 | `confirmed` | boolean | a user-confirmed tag is not altered by reprocessing |
+| `confidence` | decimal(4,3), nullable | **v2** — the model's confidence for an AI-applied link, to three places; null for a link a person applied (FR-10, D-105; `documents 0008`) |
+| `provisional` | boolean | **v2** — an AI link whose confidence was below `CLASSIFICATION_CONFIDENCE_THRESHOLD`: held for confirmation and not a tag of the document until confirmed (FR-10, D-105; `documents 0008`) |
 
 **Tags and ContentTags are in v1 even though FR-10 is NIT3004 work.** FR-15 is a
 MUST-HAVE and its browse mode queries `ContentTags` directly. The tables will be
 sparsely populated until FR-10 lands — browse by tag will simply return little — but
 the schema and the query path must exist at M6, and adding them later means a
 migration during the most congested week of the project.
+
+**The two v2 columns (8 November 2026, D-105).** FR-10: "a confidence value is recorded with
+each assignment. Assignments below the configured threshold are marked provisional and
+presented for confirmation rather than applied silently." A provisional link is therefore not
+a tag of the document: FR-15's readers in `apps/api/repository.py` (`tags_of`, the facets and
+the tag filters) must exclude `provisional=True`, a change that follows the apply layer. A
+confirmation (`confirm_tag`) sets `confirmed=True, provisional=False` and leaves `applied_by`
+as `ai`, so provenance survives the confirmation; a rejection deletes the link.
+
+### DocumentAnalysis — FR-10
+
+Added on 8 November 2026 by `documents 0008_fr10_document_analysis` (migration v2; D-105),
+when FR-10 was built. One row per document; written by `apps/documents/classification.py` and
+by nothing else.
+
+| Field | Type | Notes |
+|---|---|---|
+| `analysis_id` | UUID PK | |
+| `doc_id` | UUID FK → Documents, unique | one-to-one; cascade delete |
+| `machine_doc_type` | text, nullable | the model's type, one of `DOCUMENT_TYPES`; overwritten by every run |
+| `machine_doc_type_confidence` | decimal(4,3), nullable | |
+| `machine_department` | text | the model's department as suggested, stripped; blank for none |
+| `machine_department_confidence` | decimal(4,3), nullable | |
+| `doc_type` | text, nullable | the **effective** type, one of `DOCUMENT_TYPES`; null while a provisional suggestion awaits confirmation |
+| `doc_type_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` — see §3 |
+| `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
+| `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
+| `proposed_topics` | jsonb | out-of-scheme Topic suggestions awaiting confirmation, `[{"value", "confidence"}]`, deduplicated by normalised value; replaced by each run |
+| `discarded_suggestions` | jsonb | out-of-scheme Project and Process suggestions, `[{"dimension", "value", "confidence"}]`; evidence of the scheme clause, never shown as tags; replaced by each run |
+| `model` | text | the chat model that produced the run |
+| `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
+| `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
+
+**Departures from the proposal's field table**, which gives `doc_type`, `department`, one
+`confidence` and `user_edited`:
+
+- **Two confidences, not one.** FR-10: "a confidence value is recorded with each assignment".
+  The type and the department are two assignments, so each keeps its own, beside the machine
+  value it belongs to.
+- **The effective department is `Documents.department`**, not a column here. D-72 made that
+  column the one source FR-14's and FR-15's department filters read, so the department FR-10
+  applies is written there and there stays one source. The machine's suggestion stays in
+  `machine_department`, so "the machine assignment is retained alongside it so that
+  classification accuracy can be measured over time rather than being overwritten and lost".
+- **An outcome per assignment** — `applied`, `provisional`, `discarded` or `confirmed` — so the
+  record states how the rule disposed of each suggestion rather than leaving it to be inferred
+  from which columns are null.
+- **Two JSON lists.** A Topic outside the scheme "may be proposed only in the Topic dimension
+  and requires user confirmation before it is created", so no `Tags` row may exist for it while
+  it waits; a Project or Process outside the scheme is "discarded", and the discard is kept as
+  evidence of that clause.
+
+No column holds a summary or key points: FR-10's front-end clause names them, but
+summarisation is a separate AI operation not yet built (`apps/ai/base.py` reserves it for
+FR-16), and its columns come with it.
 
 ---
 
@@ -245,12 +302,16 @@ migration during the most congested week of the project.
 | Table | Requirement | Tier |
 |---|---|---|
 | `LoginAttempts` | FR-03 account lockout interface | SHOULD |
-| `DocumentAnalysis` | FR-10 classification, summary, confidence | SHOULD |
 | `MFARecoveryCodes`, `Users.mfa_enabled`, `Users.mfa_secret` | FR-07 | COULD |
 | `KnowledgeGaps` | FR-19 gap log | COULD |
 
 Add these in migration v2 when their requirement is built. Do not create empty tables
 now for work that may be descoped.
+
+> **8 November 2026.** `DocumentAnalysis` (FR-10 classification, confidence) left this table
+> for §1 when FR-10 was built: `documents 0008_fr10_document_analysis` creates it and adds
+> `confidence` and `provisional` to `ContentTags` (D-105). The summary the row was deferred
+> with is not in it; see the §1 entry.
 
 ---
 
@@ -265,10 +326,23 @@ CLASSIFICATION_DIMENSIONS = ("Department", "Project", "Process", "Topic")
 SOURCE_TYPES = ("document", "meeting")
 NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESHOLD
                      "no_statement_verified")   # retrieved, but verification stripped all
+# FR-10 (D-105), 8 November 2026:
+DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
+ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
 so a status can be filtered on and its meaning does not drift.
+
+`DOCUMENT_TYPES` is FR-10's fixed list: "the type must be selected from a fixed list rather
+than generated freely, so that filtering remains consistent". `ASSIGNMENT_OUTCOMES` is how the
+apply layer disposed of one assignment (`DocumentAnalysis.doc_type_outcome`,
+`department_outcome`): **applied**, at or above `CLASSIFICATION_CONFIDENCE_THRESHOLD` and
+written to the effective field, still marked AI-generated and editable; **provisional**, below
+the threshold, held for confirmation and not written; **discarded**, outside the established
+scheme (the department only — the type is always in the fixed list because the parser refuses
+anything else); **confirmed**, a person confirmed or edited it, after which reprocessing leaves
+it alone.
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
@@ -368,6 +442,8 @@ rather than of filenames.
 Migrate in dependency order: Roles → Permissions → RolePermissions → Users →
 Documents → ExtractedContent → Meetings → MeetingAttendees → ContentChunks →
 Conversations → QueryLog → SearchLogs → AnswerCitations → Tags → ContentTags.
+`DocumentAnalysis` (v2, `documents 0008`) follows Documents and ContentTags; the executor
+plans it immediately after `documents 0007`.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.
