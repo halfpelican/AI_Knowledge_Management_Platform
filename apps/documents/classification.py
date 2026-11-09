@@ -241,9 +241,14 @@ def apply_classification(
     3. **Department**, unless ``user_edited``: compared with ``scheme.departments`` after
        stripping, exactly in case because the column is not case-normalised. Outside the scheme
        is discarded and nothing is written; inside and below the threshold is provisional and
-       ``Documents.department`` is untouched; inside and at or above it is applied and
-       ``Documents.department`` takes the value (D-72: one source), saved with
-       ``update_fields=["department"]``.
+       ``Documents.department`` is untouched. Inside and at or above it, **the machine fills only
+       a blank department** (the user's decision of 10 November 2026, D-105's note): a blank
+       column takes the value (D-72: one source), saved with ``update_fields=["department"]``,
+       and the outcome is applied; a column that already holds the suggested value is left as it
+       is, and the outcome is applied; a column holding a different value is left as it is, and
+       the suggestion is provisional, held for a person to accept. That value was typed by the
+       uploader, confirmed, or written by an earlier run, and FR-10 says a value a person gives
+       "is not overwritten by later reprocessing".
     4. **Tags**, for each suggestion whose dimension is one of REPOSITORY_TAG_DIMENSIONS, by its
        normalised name. In ``scheme.tags[dimension]`` and still an active Tag: a link that a
        person applied or confirmed is left alone; an unconfirmed AI link takes the new confidence
@@ -294,6 +299,13 @@ def apply_classification(
             if department_value not in scheme.departments:
                 analysis.department_outcome = ASSIGNMENT_DISCARDED
             elif _is_provisional(classification.department.confidence):
+                analysis.department_outcome = ASSIGNMENT_PROVISIONAL
+            elif (locked.department or "").strip() == department_value:
+                # Already the document's department: nothing to write.
+                analysis.department_outcome = ASSIGNMENT_APPLIED
+            elif (locked.department or "").strip():
+                # A department is already there and it is not the machine's to replace: held for
+                # a person to accept (FR-10's correction clause; D-105's note of 10 November).
                 analysis.department_outcome = ASSIGNMENT_PROVISIONAL
             else:
                 analysis.department_outcome = ASSIGNMENT_APPLIED

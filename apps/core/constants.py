@@ -556,12 +556,18 @@ DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
 # but D04 (8,357 words), whose first chapter already says it holds procedures.
 CLASSIFICATION_INPUT_TOKENS = 1500
 
-# PROVISIONAL (D-106): an assignment whose confidence is below this is marked provisional and
-# held for confirmation rather than applied (FR-10 Business logic, confidence). The value is
-# chosen on the development documents under corpus/objective-05/dev-documents/, never on the
-# twenty reference documents (D-93), by the rule D-106 fixes in advance; until that sweep runs
-# this placeholder stands, and the sweep's record replaces this comment with the measurement.
-CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.70
+# An assignment whose confidence is below this is marked provisional and held for confirmation
+# rather than applied (FR-10 Business logic, confidence; compared with ``<`` in one place,
+# apps/documents/classification.py). Chosen on the development documents under
+# corpus/objective-05/dev-documents/, never on the twenty reference documents (D-93), by the rule
+# D-106 fixed before any run. TUNED, 10 November 2026: the second sweep (b40dc0f, after the one
+# prompt revision) found the type's confidence does not separate right from wrong on gemma3:4b
+# (right 0.95 to 0.98, wrong 0.95), so the rule's own fallback applies: the lowest confidence
+# seen on a correct assignment, 0.95. At 0.95 no type is held; on that sweep 24 of 36 department
+# and 71 of 84 tag suggestions fall below it. An FLM-configuration value: re-derived on the same
+# development documents before the anthropic provider is relied on (D-113). The evidence is in
+# corpus/objective-05/runs/2026-11-09/dev-sweep/ and corpus/objective-05/runs/2026-11-10/dev-sweep-2/.
+CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95
 
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
 # recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):

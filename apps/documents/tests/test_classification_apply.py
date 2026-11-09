@@ -140,6 +140,68 @@ def test_the_department_is_compared_after_stripping(document):
     assert document.department == "Finance"
 
 
+# --- Rule 3, continued: the machine fills only a blank department (D-105's note, 10 November) ------
+
+
+def test_a_department_the_uploader_gave_is_kept_and_a_different_suggestion_is_held(document):
+    document.department = "Operations"
+    document.save(update_fields=["department"])
+    analysis = apply_classification(
+        document,
+        classification(department="Finance", department_confidence=ABOVE_THRESHOLD),
+        scheme=scheme(departments=["Finance", "Operations"]),
+    )
+    document.refresh_from_db()
+    assert document.department == "Operations"
+    assert analysis.machine_department == "Finance"
+    assert analysis.department_outcome == ASSIGNMENT_PROVISIONAL
+
+
+def test_a_suggestion_matching_the_department_already_there_is_applied_with_nothing_written(document):
+    document.department = "Finance"
+    document.save(update_fields=["department"])
+    analysis = apply_classification(
+        document,
+        classification(department="Finance", department_confidence=AT_THRESHOLD),
+        scheme=scheme(departments=["Finance"]),
+    )
+    document.refresh_from_db()
+    assert document.department == "Finance"
+    assert analysis.department_outcome == ASSIGNMENT_APPLIED
+
+
+def test_a_department_an_earlier_run_wrote_is_not_replaced_by_a_later_run(document):
+    departments = ["Finance", "Operations"]
+    apply_classification(
+        document,
+        classification(department="Finance", department_confidence=ABOVE_THRESHOLD),
+        scheme=scheme(departments=departments),
+    )
+    analysis = apply_classification(
+        document,
+        classification(department="Operations", department_confidence=ABOVE_THRESHOLD),
+        scheme=scheme(departments=departments),
+    )
+    document.refresh_from_db()
+    assert document.department == "Finance"
+    assert analysis.machine_department == "Operations"
+    assert analysis.department_outcome == ASSIGNMENT_PROVISIONAL
+
+
+def test_confirming_a_suggestion_held_against_a_given_department_replaces_it(document):
+    document.department = "Operations"
+    document.save(update_fields=["department"])
+    apply_classification(
+        document,
+        classification(department="Finance", department_confidence=ABOVE_THRESHOLD),
+        scheme=scheme(departments=["Finance", "Operations"]),
+    )
+    analysis = confirm_classification(document)
+    document.refresh_from_db()
+    assert document.department == "Finance"
+    assert analysis.department_outcome == ASSIGNMENT_CONFIRMED
+
+
 # --- Rule 4: tags in the scheme ------------------------------------------------------------------
 
 

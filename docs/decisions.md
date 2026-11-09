@@ -6644,7 +6644,9 @@ hand-off to FR-10
 
 - **A fourth operation,** `classify_document(title: str, text: str, scheme: TagScheme) ->
   DocumentClassification`, on `AIService`, implemented by `FLMService`, `AnthropicService` and the
-  test stub. CLAUDE.md §4 now says four, with the date, and names `apps/ai/base.py`, the file the
+  test stub. CLAUDE.md §4, `docs/ai-provider.md` §1 and `apps/ai/base.py` now name the operations as a
+  list rather than a count ("exactly the operations listed here"), with the date, so the next
+  operation leaves no stale number behind. CLAUDE.md §4 also names `apps/ai/base.py`, the file the
   contract has always lived in (it said `apps/ai/provider.py`, which never existed).
 - **One structured request returns the type, the department and the tag suggestions together,**
   FR-10's Server-End clause: "a single structured request issued at upload returns the classification,
@@ -6809,6 +6811,30 @@ accepted as written):
   Lists and browse do not. `manage.py classify_documents --all|--document <uuid> --out <json>` is the
   Objective 05 instrument.
 
+**Dated note, 10 November 2026: two decisions after the routes were built** (the user's, on the
+django-backend agent's report).
+
+- **The machine fills only a blank department.** As first built, an in-scheme department suggestion
+  at or above the threshold replaced the department the uploader typed, on upload and on every
+  reprocess, until someone confirmed. FR-10 says a value a person gives "is not overwritten by later
+  reprocessing". Now: a blank `Documents.department` takes an applied suggestion; one that already
+  holds the suggested value stays and the outcome is applied; one holding a different value stays,
+  and the suggestion is provisional, held for a person to accept. The value already there may have
+  been typed by the uploader, confirmed, or written by an earlier run; none of them is replaced by a
+  later run. Out of scheme is still discarded, and below the threshold still provisional. On the
+  twenty, which all carry uploader departments, Objective 05's department outcomes stay measurable
+  and no department is changed. *Declined:* marking a typed department confirmed, which would show
+  no department behaviour on the reference set; keeping the overwrite.
+- **Classification stays at upload, and its cost is recorded.** Every upload and reprocess now waits
+  for one classification call, inside the ingestion transaction and holding the document's row lock,
+  where the proposal's 7.8 places it and where it cannot fail the document. On FLM one call took
+  7.6 to 21.2 s in D-106's sweeps, and up to `MAXIMUM_CLASSIFY_ATTEMPTS` are made. **An estimate,
+  not a measurement:** D04 (26 pages) ingested in 33.3 s on 1 November, so with classification about
+  41 to 55 s, and a retry could take a large document past Objective 02's 60-second bound for a
+  document of twenty pages or fewer. **Owed before M8:** re-time that bound with classification on,
+  on the host D-114's choice lands on. *Declined:* moving the call after the ingestion commit, which
+  does not shorten the upload; re-timing now on a throwaway database.
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
@@ -6860,3 +6886,56 @@ commit SHA, the dump hash and the FLM version, as every measurement does (D-84).
 transcripts as the development set, which are all one kind.
 
 **Not covered:** Objective 06, whose decisions follow.
+
+**Dated note, 10 November 2026: the threshold is 0.95, and on gemma3:4b the type's confidence does
+not separate right from wrong.** Two development sweeps ran, 12 documents three times each, on FLM
+v0.9.39 with nothing read from or written to a database. The evidence is
+`corpus/objective-05/runs/2026-11-09/dev-sweep/` and
+`corpus/objective-05/runs/2026-11-10/dev-sweep-2/`. The twenty reference documents were not
+consulted.
+
+| | First sweep, `fb9e18a` | Second sweep, `b40dc0f` |
+|---|---|---|
+| type matches | 24 of 33 (72.7%) | **33 of 36 (91.7%)** |
+| Meeting Paper suggested where expected | 0 of 9 | 6 of 9 |
+| classifications that failed | 3 (D21, every attempt) | 0 |
+| type confidence, right | 0.95 to 0.98 | 0.95 to 0.98 |
+| type confidence, wrong | 0.95 to 0.96 | 0.95 |
+| what the rule gives | 0.90 | **0.95** |
+
+- **One prompt revision between the two, by the user's decision of 9 November, on development
+  material only** (`b40dc0f`). The first sweep never suggested Meeting Paper. It also failed D21 on
+  every attempt, because the model gave a tag an empty value and temperature 0 repeated it. The
+  prompt now defines each type by its purpose, and it forbids an empty value, telling the model to
+  leave the dimension out instead.
+- **The rule's first branch, with the cap, on the first sweep.** The separating value was 0.98,
+  which held all 9 wrong types and 7 of 24 right ones. The cap, at the lowest right confidence minus
+  0.05, lowered it to 0.90, where nothing is held. The cap defeats any separation found at the top
+  of the range; that is a flaw in how the rule was drafted. The user kept the rule as fixed, cap
+  included, and applied it to the second sweep.
+- **The rule's second branch on the second sweep.** No threshold beats applying everything: all
+  three wrong types score 0.95, the same as the lowest right ones. So, as the rule fixed in advance
+  says, the confidences do not separate correct from wrong, and the threshold is the lowest
+  confidence seen on a correct assignment: **`CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95`**.
+- **What 0.95 does:**
+  - **No type is held.** Every type suggestion scored at least 0.95, so the type is always applied
+    as an AI suggestion that a person can confirm or edit.
+  - **Departments and tags are held.** On the second sweep, 24 of 36 department suggestions and 71
+    of 84 tag suggestions fall below 0.95 and would be held for confirmation, against 12 and 13
+    applied.
+  - **So Objective 05's provisional clause is exercised on departments and tags, not on types.** The
+    model's own confidence is close to a constant for the type, and that is recorded as a finding
+    about gemma3:4b, not hidden by the value.
+- **An FLM-configuration value** (D-113, D-114). The threshold was chosen on gemma3:4b's
+  self-reported confidences, and a threshold chosen on one model's confidences does not carry over
+  to another's. Before the `anthropic` provider is relied on, it is re-derived on the same
+  development documents by this rule. Claude is not deterministic on this path (no temperature,
+  D-115), so each development document is classified over repeated draws there, as D-103 measured
+  FLM's band. `scripts/classification_dev_sweep.py` gates on FLM today, so that run needs a
+  provider-aware gate, built when the re-derivation is.
+- **If M8 runs on `anthropic`,** Objective 05 is verified again on that configuration, its
+  type-match rate over repeated draws.
+- **Every Objective 05 result records its configuration** from now on: the provider, the chat model
+  and the embedding model. The two sweeps above ran on `flm`, `gemma3:4b`; classification calls no
+  embedding model.
+- **Not covered:** a confidence derived from anything but the model's own report.

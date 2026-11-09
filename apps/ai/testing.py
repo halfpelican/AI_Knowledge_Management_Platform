@@ -35,8 +35,15 @@ STUB_EMBEDDING_MODEL = "stub-embed"
 # fixed confidence for every assignment, and a department no scheme lists, returned when the
 # scheme has no departments so that a test of the scheme rule has an out-of-scheme value to
 # see without building one.
+#
+# STUB_CONFIDENCE is 1.0, the top of the range, so the stub's assignments are applied whatever
+# CLASSIFICATION_CONFIDENCE_THRESHOLD is. It was 0.9 until D-106's sweep moved the threshold to
+# 0.95 (10 November 2026), and six route, command and hook tests that classify through the
+# default stub then read their applied outcomes as held. A test of the provisional rule builds
+# its own classification, with confidences derived from the threshold
+# (apps/documents/tests/classification_builders.py), and never relies on this value.
 STUB_CHAT_MODEL = "stub-chat"
-STUB_CONFIDENCE = 0.9
+STUB_CONFIDENCE = 1.0
 STUB_OUT_OF_SCHEME_DEPARTMENT = "stub department"
 
 # Port 9 (discard) is closed on every development machine and CI runner, so a
