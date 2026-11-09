@@ -122,6 +122,9 @@ laptop: that laptop is the host. A provider switch is not an option, and nothing
 below should be planned around one. What remains open is how an assessor reaches the
 laptop — the same network, a tunnel, or the laptop itself — and that answer sets
 HTTPS, ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS for item 9. Record it as a decision.
+(Dated 10 November 2026: this paragraph's premise no longer holds for anything after M6. The
+anthropic provider is funded (D-113), and M8 can be hosted on any device with the platform in
+place (D-114). The M6 alpha's decision below is unchanged.)
 DECIDED 5 October, D-64: the laptop itself, over loopback, in production mode
 (DEBUG=False, the built SPA, Waitress), with ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS and
 the Secure cookie flags env-driven and defaulting to the loopback values. Scoped to

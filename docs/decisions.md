@@ -1281,6 +1281,12 @@ Mitigations, all of which cost nothing:
 - The AMD driver version the NPU depends on is recorded, after a
   `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
 
+**Dated note, 10 November 2026: superseded by D-113 and D-114.** The premise, "The team has no
+budget", no longer holds. The user's Max plan includes $100 of Claude API credits each billing
+cycle, so the `anthropic` provider is funded and brought into use (D-113). The demonstration is no
+longer tied to one machine: M8 can be hosted on any device with the platform in place (D-114). What
+this entry records about the past stays true where it was written.
+
 ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the implicit assumption that
@@ -3566,6 +3572,12 @@ only, and D-88 left "M8's hosting and database" open. The user has settled the h
     anyone who can reach it;
   - how NFR-03's TLS scan is met. This entry put HTTPS out of scope for the alpha, and moved that
     scan to round 2.
+
+**Dated note, 10 November 2026: the 7 November note's hosting is superseded by D-114.** M8 can be
+hosted on any device with the platform in place. The note's reason, that FastFlowLM needs this
+laptop's NPU and there is no budget for Claude, fell with D-113. The laptop with FLM remains one
+valid host. The three open points above stay open, and D-114 restates them. This entry's M6 alpha
+decision is unchanged.
 
 ## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
 
@@ -6806,3 +6818,118 @@ finding: generation's use of supplied context. Its next step is one experiment, 
 
 **Where it applies:** D-91 (a dated note), `M6-BUILD-PROMPT.md`'s Done line, and Stage 5 item 10's
 closing run.
+
+## D-113 · D-35 is superseded: the `anthropic` provider is funded by the Max plan's monthly Claude API credits, and is brought into use
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-35, D-03, D-04, D-36, D-67,
+D-83, D-102, D-112, `CLAUDE.md` §4, `docs/ai-provider.md` · **Supersedes:** D-35's "no external AI
+spend", and `CLAUDE.md` §4's "no budget … Plan nothing around a provider switch"
+
+**What changed.** D-35 rested on one premise: "The team has no budget, and no member funds it
+personally." The user's Claude Max plan includes Claude API credits, $100 USD per billing cycle. The
+user showed Anthropic's "API credits for Max, Ultra, and Team plans" page on 9 November.
+- **How they work:** they are claimed by linking a Claude Console organisation to the plan, with no
+  payment method. They cover the Claude API, not Claude Code. They expire each cycle, with no
+  rollover.
+- **Voyage is not covered.** It is a separate company. It has 200M free tokens, limited to 3 requests
+  and 10K tokens a minute until a payment method is added.
+
+**Decision (the user's):**
+
+- **The `anthropic` provider is funded and brought into use** for development, measurement and
+  demonstration: Claude for generation, Voyage for embeddings, the proposal's §9.2 configuration.
+  The user is implementing it. The live-call path was dormant until now, and its first fixes are on
+  `fix/FR-12-claude-live-call`.
+- **`flm` remains implemented, pinned at v0.9.39 (D-83), and available.** D-35's other half also
+  falls: the demonstration no longer depends on one machine. D-114 records what that means for M8.
+- **The keys:** a Console API key from the linked organisation, never the Max sign-in, plus a Voyage
+  key. Both live in `.env` only and are never committed or pasted into a chat. Adding a payment
+  method to Voyage, which NFR-08's load test and normal use need beyond the free rate limit, is the
+  user's to do.
+- **Spend stays within the monthly credit.** A run expected to exceed it needs the user's say-so
+  first.
+- **`CLAUDE.md` §4 and `docs/ai-provider.md` §1 are amended** to say this, with the user's approval
+  of 10 November.
+
+**Consequences, all following from rules already settled:**
+
+- **A provider switch is a full re-index (R10).** Voyage's vectors are not comparable with
+  `embed-gemma`'s 768 dimensions (D-03).
+  - If the chosen Voyage model does not output 768 dimensions, the pgvector column changes, and that
+    is a schema migration under `CLAUDE.md` §7.
+- **`manage.py reindex` deletes and recreates every chunk.** On a database with conversation history,
+  every `AnswerCitation.chunk` is then nulled (`SET_NULL`, D-67), and every reopened thread shows its
+  provenance as removed.
+  - So re-index a **new database restored from the snapshot.** Never re-index in place on
+    `kmp_obj02_20261101` (the FLM measurement baseline) or `kmp_demo_20261101` (the alpha). Creating
+    that database needs the user's word, as every database operation does.
+- **Every tuned value and baseline describes FLM's vectors and gemma3:4b:**
+  - `RELEVANCE_THRESHOLD = 0.30` is an `embed-gemma` cosine (D-102);
+  - D-100's cap was chosen against gemma3:4b's truncation;
+  - D-103's ±1–2-run band;
+  - the frozen thirty, the nine threads, NFR-08's p90.
+
+  Before `anthropic` is relied on, its threshold is re-derived on development material
+  (`dev-set-v2.json`). Then the frozen sets and NFR-08 are run on it under
+  `docs/measurement-runbook.md`, and FR-13 is measured again (D-112). `questions.json` and
+  `threads.json` stay frozen. Nothing is tuned against them.
+- **Document text and questions leave the machine** for Anthropic and Voyage while this provider is
+  selected. That is the proposal's production design, accepted with this decision.
+- **Records that cite D-35 for the past stay true where written:** the NFR-08 local-model baseline,
+  the M6 walk, the recording (D-98) and the code comments on the dormant path. The code comments are
+  for the session implementing the provider to update.
+- **Which provider is the default and which one M8 runs on are not decided here.** They are measured
+  first. D-114 decides only that the host is no longer tied to the NPU.
+
+**Where it applies:** D-35 (a dated note), `CLAUDE.md` §4, `docs/ai-provider.md` §1, and dated notes
+in `M6-BUILD-PROMPT.md` (the hosting paragraph) and `docs/stage-4-open-items.md` §2.3.
+
+## D-114 · M8 can be hosted on any device with the platform in place; the NPU laptop is no longer required
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-64 and its 7 November note,
+D-35, D-88, D-113, NFR-03, FR-01 · **Supersedes:** D-64's 7 November note, "M8 is hosted on the NPU
+laptop, with FastFlowLM"
+
+**Decision (the user's).** M8, the final deployment on 27 November, can be hosted on any device that
+has the platform in place:
+- PostgreSQL 16 with pgvector;
+- the Django back end under its WSGI server;
+- the built front end;
+- a `.env` naming the database and the provider.
+
+On the `anthropic` provider, generation and embedding run as API calls (D-113), so no NPU is needed.
+**The NPU laptop with FLM remains a valid host.**
+
+**What this changes:**
+
+- **The 7 November note's reason no longer holds.** It gave two: the proposal's Google Cloud VM
+  cannot run FastFlowLM, and there was no budget for Claude. The VM design (Gunicorn behind Nginx
+  terminating TLS, Ubuntu 22.04) is available again for M8, as are the team's other machines and the
+  laptop itself.
+- **The host device is chosen later,** with the provider, once `anthropic` has been measured
+  (D-113). FLM still needs the laptop (D-36).
+- **Gunicorn runs on Linux and macOS, Waitress anywhere.** On a non-Windows host, item 9's
+  Waitress-specific notes in `docs/alpha-deployment.md` need their Gunicorn equivalent. The
+  configuration itself is environment-driven and carries over:
+  - `DEBUG`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`;
+  - the cookie flags;
+  - WhiteNoise's single origin;
+  - nothing serving `MEDIA_ROOT`.
+
+**Still open, from the 7 November note, and sharper now:**
+
+- **Which database M8 serves.** On `anthropic` it must be a Voyage-indexed copy, re-indexed fresh
+  (D-113).
+- **Whether M8 stays on loopback.** A host reached over a network exposes open registration (FR-01),
+  and needs:
+  - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and the `*_COOKIE_SECURE` flags set;
+  - TLS in front;
+  - Postgres bound to loopback (PR #62's fix, which item 11's early pass found).
+
+  D-64 says exposing it is a new decision, with the registration question attached.
+- **NFR-03's TLS scan.** It needs a TLS-terminated deployment. Any host that is not loopback-only
+  makes it possible.
+- **Item 11's closing run reviews whichever host and configuration are chosen.** Its live checklist
+  was written for the loopback laptop and gains the network checks if the host is exposed.
+
+**Where it applies:** D-64 (a dated note) and `CLAUDE.md` §4's `anthropic` bullet.

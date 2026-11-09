@@ -103,12 +103,16 @@ class AIService(Protocol):
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:
 
-- `flm` — **the default for all development, testing and demonstration.**
-  FastFlowLM, local, on the NPU. Free, offline, no key.
-- `anthropic` — Claude + Voyage. The documented production configuration. Kept
-  working so the proposal's §9.2 remains true, but not used day to day — and not
-  available to this project in practice, because there is no budget for it. The
-  alpha and the demonstration run on `flm`. Plan nothing around a provider switch.
+- `flm` — **the default.** FastFlowLM, local, on the NPU. Free, offline, no key.
+  The M6 alpha and every measurement up to 10 November 2026 ran on it.
+- `anthropic` — Claude + Voyage, the proposal's §9.2 production configuration.
+  **Funded since 10 November 2026** by the Max plan's monthly Claude API credits
+  (D-113, superseding D-35's "no budget"); Voyage is separate, on its free tier. It
+  needs no NPU, so M8 can be hosted on any device with the platform in place
+  (D-114). Keys live in `.env` only. Which provider is the default, and which one M8
+  runs on, are decided by measurement: a switch is a full re-index (below), onto a
+  fresh database, and every tuned value is re-derived on the new vectors before it
+  is relied on.
 
 If you find yourself writing `import anthropic` or `from openai import OpenAI`
 anywhere outside `apps/ai/`, stop — that is the bug.
