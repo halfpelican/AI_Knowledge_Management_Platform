@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { TEXT } from '../constants.js'
 import './Button.css'
 import './TextInput.css'
@@ -69,9 +69,18 @@ export default function FileDropZone({
     [hint ? hintId : null, error ? errorId : null].filter(Boolean).join(' ') || undefined
 
   // The page-wide listeners read the current props through this, so they are
-  // added once per mount rather than on every render of the page.
+  // added once per mount rather than on every render of the page. receive()
+  // reads it too, for the input's change and the zone's own drop.
+  //
+  // A layout effect, not a passive one: it runs inside the commit, so the ref
+  // matches the committed props before the browser can deliver another event.
+  // A passive effect left a gap after an upload finished in which the zone was
+  // enabled on screen but receive() still read disabled, so a file chosen or
+  // dropped at once was refused and, the refusal clearing on the next render,
+  // silently lost. Two CI flakes showed it on 10 November (ingestionLimits'
+  // D-85 queue test and dropZone's finding 4).
   const latest = useRef({ disabled, multiple, onFiles })
-  useEffect(() => {
+  useLayoutEffect(() => {
     latest.current = { disabled, multiple, onFiles }
   })
 
