@@ -6,8 +6,11 @@ retry policy (apps/ai/generation.py) with the FLM provider — so "provider inde
 means the same prompt answered by a different model, not a second implementation.
 Embeddings go to Voyage, whose /embeddings endpoint speaks the OpenAI wire format,
 through the same openai client shape FLM uses (docs/ai-provider.md section 3).
-Kept working so the proposal's section 9.2 remains true; not used day to day, and never
-called live in the suite (D-35: no external AI spend).
+Dormant under D-35 until D-113 (10 November 2026) brought it into use: the Max plan's
+monthly Claude API credits fund it. FLM stays implemented and available, and which
+provider is the default is decided by measurement (D-113). The suite never calls it
+live: tests inject fake clients, and conftest.py points every provider at an
+unroutable address (docs/ai-provider.md section 6).
 """
 
 from typing import Callable
@@ -86,11 +89,12 @@ class AnthropicService:
         the 503 from apps/ai/generation.py. Only the transport differs, which is what
         keeps the proposal's section 9.2 claim of provider independence true.
 
-        Not exercised against the live API, by decision: D-35 rules out external AI
-        spend, so this path is tested against mocked SDK responses exactly as the Voyage
-        embedding path is. That is a real limitation and it is stated rather than
-        implied — the wire shape is taken from the SDK's documented types, and the first
-        live call will be the first live call.
+        Not yet exercised against the live API: the path was dormant under D-35 until
+        D-113 funded it. The suite tests it against mocked SDK responses, as it does the
+        Voyage embedding path, and binds every request against the real SDK's signature.
+        That is a real limitation and it is stated rather than implied: the wire shape is
+        taken from the SDK's documented types, and the first live call will be the first
+        live call.
         """
         if not passages:
             raise ValueError("generate_statements() needs at least one passage")

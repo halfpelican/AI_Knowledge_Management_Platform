@@ -1,8 +1,8 @@
 """AnthropicService: Voyage embeddings, Claude generation and health. No network.
 
-The anthropic SDK is never called for real. D-35 rules out external AI spend, so both the
-generation tests below and the health tests inject a fake client; the embed tests use the
-openai SDK's MockTransport, as the FLM tests do.
+The anthropic SDK is never called for real. The provider is funded since D-113, but the
+suite never spends: the generation tests below and the health tests inject a fake client,
+and the embed tests use the openai SDK's MockTransport, as the FLM tests do.
 """
 
 import inspect
@@ -142,10 +142,11 @@ def test_health_is_unavailable_and_does_not_raise_when_the_api_fails():
 
 # --- Generation through Claude (FR-12, Stage 4 item 5) ---------------------------------
 #
-# Mocked, never live: D-35 rules out external AI spend, so this path is tested exactly as
-# the Voyage embed path above is. The limitation is real and stated rather than implied —
-# the request shape below is taken from the SDK's documented parameters, and the first
-# live call will be the first live call. What the tests do establish is that the Anthropic
+# Mocked, never live: the suite spends nothing, even with the provider funded (D-113), so
+# this path is tested exactly as the Voyage embed path above is. The limitation is real and
+# stated rather than implied — the request shape below is checked against the real SDK's
+# signature but not against the API, and the first live call will be the first live call.
+# What the tests do establish is that the Anthropic
 # provider uses the SAME prompt, the SAME schema and the SAME retry policy as FLM, which
 # is what keeps the proposal's section 9.2 provider-independence claim true.
 
