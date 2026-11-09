@@ -370,7 +370,14 @@ Rules, all of them mandatory:
    markdown code fence, no text before or after the object.
 2. The object has exactly three keys: "doc_type", "department" and "tags".
 3. "doc_type" is an object with exactly two keys: "value", one of the document types
-   listed, copied exactly; and "confidence", a number from 0 to 1.
+   listed, copied exactly; and "confidence", a number from 0 to 1. Choose the type by the
+   document's purpose:
+   - Policy: states the organisation's rules or entitlements, what is allowed or required.
+   - Procedure: sets out the steps to follow to get something done.
+   - Report: presents information, figures or results, about a period, a register, an
+     inventory or an audit.
+   - Meeting Paper: is written for a committee, board or meeting, to put a proposal, a
+     decision or a briefing before it. It usually names the meeting or the decision sought.
 4. "department" is an object with the same two keys. Its "value" is one of the
    departments listed, copied exactly. Only if no department is listed, give the
    department the document itself names, or "Unknown" if it names none.
@@ -379,8 +386,9 @@ Rules, all of them mandatory:
 6. A tag's "value" is one of the values listed for its dimension, copied exactly. The
    one exception: when no listed Topic fits, you may propose a new Topic value of one
    to three words. Never propose a new Project, a new Process or a new department.
-7. Give a tag only where the document is clearly about it. An empty "tags" array is a
-   correct answer.
+7. Give a tag only where the document is clearly about it, and never with an empty
+   "value". If no listed value fits a dimension, and it is not a new Topic you are
+   proposing, leave that dimension out. An empty "tags" array is a correct answer.
 8. Every "confidence" is your honest estimate, from 0 (a guess) to 1 (certain), that the
    value is right for this document.
 
