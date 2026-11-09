@@ -54,10 +54,7 @@ SCHEMA_V1 = {
          "retrieved_chunk_ids", "answered", "no_answer_reason", "answered_at",
          # Post-v1, 24 September 2026: invariant 7 needs path B's two kinds
          # separable and no_answer_reason cannot do it alone (docs/schema-v1.md §1).
-         "rejected_count",
-         # Post-v1, step 7 phase 4 (9 November 2026): FR-13's follow-up rewrite, exactly
-         # as embedded for retrieval; record-only like the two above (docs/schema-v1.md §1).
-         "retrieval_rewrite"},
+         "rejected_count"},
     ),
     "search_logs": (
         ("search_id",),
@@ -209,10 +206,6 @@ SECTION_5_PLAN = [
     # Placed where the executor plans it, immediately after retrieval 0002, the rule D-51
     # records for documents 0007.
     ("retrieval", "0003_answercitation_chunk_set_null"),
-    # Step 7 phase 4 (D-103, FR-13): QueryLog.retrieval_rewrite, the follow-up rewrite as
-    # embedded. Nullable, additive, record-only; immediately after retrieval 0003, where
-    # its dependency puts it in the plan.
-    ("retrieval", "0004_querylog_retrieval_rewrite"),
 ]
 
 

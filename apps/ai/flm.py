@@ -11,14 +11,7 @@ import openai
 from django.conf import settings
 
 from apps.ai import _openai_compat
-from apps.ai.base import (
-    EmbeddingResult,
-    FollowupRewrite,
-    Passage,
-    ProviderHealth,
-    ProviderUnavailable,
-    StatementList,
-)
+from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
@@ -27,12 +20,6 @@ from apps.ai.generation import (
     run_generation_attempts,
 )
 from apps.ai.prompting import build_generation_messages
-from apps.ai.rewrite import (
-    REWRITE_MAX_TOKENS,
-    REWRITE_TIMEOUT_SECONDS,
-    build_rewrite_messages,
-    run_rewrite_attempt,
-)
 
 
 class FLMService:
@@ -86,27 +73,7 @@ class FLMService:
             max_tokens=max_tokens,
         )
 
-    def rewrite_followup(self, question: str, prior_questions: list[str]) -> FollowupRewrite:
-        """FR-13's standalone rewrite, for retrieval only. ONE attempt, no retry.
-
-        The prompt, the one-field schema, the length ceiling and the single-attempt
-        policy are apps/ai/rewrite.py's, shared with the Anthropic provider. A transport
-        failure or a non-conforming reply raises — ProviderUnavailable or
-        RewriteViolation — and the CALLER falls back to the composed join
-        (apps/retrieval/pipeline.py): the ask never fails because the rewrite did.
-        """
-        return run_rewrite_attempt(
-            call_once=lambda: self._chat_once(
-                build_rewrite_messages(question, prior_questions),
-                max_tokens=REWRITE_MAX_TOKENS,
-                timeout=REWRITE_TIMEOUT_SECONDS,
-            ),
-            label=f"FLM at {settings.FLM_BASE_URL}",
-        )
-
-    def _chat_once(
-        self, messages: list[dict], *, max_tokens: int, timeout: float = GENERATION_TIMEOUT_SECONDS
-    ) -> ChatReply:
+    def _chat_once(self, messages: list[dict], *, max_tokens: int) -> ChatReply:
         """One chat completion. Returns the reply text and what FLM reported about it.
 
         Raises ProviderUnavailable for a retryable transport failure, and lets a 4xx
@@ -118,9 +85,6 @@ class FLMService:
         (apps/ai/attempt_log.py), and None where FLM leaves them out. FLM v0.9.39 was seen
         on 7 November 2026 to answer "stop" for a reply cut off at ``max_tokens``, so the
         completion-token count is recorded beside it.
-
-        ``timeout`` defaults to the generation call's; the rewrite passes its own,
-        tighter one (apps/ai/rewrite.py says why).
         """
         try:
             response = self._client.chat.completions.create(
@@ -129,7 +93,7 @@ class FLMService:
                 temperature=0.0,  # the same reply for the same passages, run to run
                 max_tokens=max_tokens,
                 stream=False,
-                timeout=timeout,
+                timeout=GENERATION_TIMEOUT_SECONDS,
             )
         except (openai.APITimeoutError, openai.APIConnectionError) as exc:
             raise ProviderUnavailable(f"{settings.FLM_BASE_URL} unreachable: {exc}") from exc

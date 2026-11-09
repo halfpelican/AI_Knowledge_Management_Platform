@@ -19,14 +19,7 @@ import anthropic as anthropic_sdk
 from django.conf import settings
 
 from apps.ai import _openai_compat
-from apps.ai.base import (
-    EmbeddingResult,
-    FollowupRewrite,
-    Passage,
-    ProviderHealth,
-    ProviderUnavailable,
-    StatementList,
-)
+from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
@@ -35,12 +28,6 @@ from apps.ai.generation import (
     run_generation_attempts,
 )
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
-from apps.ai.rewrite import (
-    REWRITE_MAX_TOKENS,
-    REWRITE_TIMEOUT_SECONDS,
-    build_rewrite_messages,
-    run_rewrite_attempt,
-)
 
 
 class AnthropicService:
@@ -112,42 +99,12 @@ class AnthropicService:
             max_tokens=max_tokens,
         )
 
-    def rewrite_followup(self, question: str, prior_questions: list[str]) -> FollowupRewrite:
-        """FR-13's standalone rewrite, for retrieval only. ONE attempt, no retry.
-
-        The same prompt, schema and single-attempt policy as the FLM provider, from
-        apps/ai/rewrite.py. ``build_rewrite_messages`` composes the system and user
-        turns; this API carries the system string in its own parameter, so the two are
-        split here exactly as ``generate_statements`` splits its prompt. A failure
-        raises and the caller falls back to the composed join
-        (apps/retrieval/pipeline.py). As with everything on this provider, tested
-        against mocked SDK responses only (D-35).
-        """
-        system, user = build_rewrite_messages(question, prior_questions)
-        return run_rewrite_attempt(
-            call_once=lambda: self._claude_once(
-                user["content"],
-                max_tokens=REWRITE_MAX_TOKENS,
-                system=system["content"],
-                timeout=REWRITE_TIMEOUT_SECONDS,
-            ),
-            label=f"Claude ({settings.ANTHROPIC_MODEL})",
-        )
-
-    def _claude_once(
-        self,
-        user_prompt: str,
-        *,
-        max_tokens: int,
-        system: str = SYSTEM_PROMPT,
-        timeout: float = GENERATION_TIMEOUT_SECONDS,
-    ) -> ChatReply:
+    def _claude_once(self, user_prompt: str, *, max_tokens: int) -> ChatReply:
         """One messages.create call. Returns the reply text and what Claude reported about it.
 
         The system prompt goes in the SDK's own ``system`` parameter rather than as a
         message, which is this API's shape; the string is the one FLM receives as its
-        system message — generation's by default, the rewrite's where the caller passes
-        it. Transport failures become ProviderUnavailable and 4xx surfaces
+        system message. Transport failures become ProviderUnavailable and 4xx surfaces
         unchanged, the same division the embed path makes. ``stop_reason`` and the usage
         counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
         the reply leaves them out.
@@ -157,9 +114,9 @@ class AnthropicService:
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
                 temperature=0.0,
-                system=system,
+                system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
-                timeout=timeout,
+                timeout=GENERATION_TIMEOUT_SECONDS,
             )
         except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
             raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc

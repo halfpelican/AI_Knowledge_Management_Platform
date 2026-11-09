@@ -205,7 +205,6 @@ def record_query(
     outcome: "RetrievalOutcome",
     supplied_chunk_ids: Sequence[str],
     rejected_count: int | None,
-    retrieval_rewrite: str | None,
 ) -> QueryLog:
     """Write the QueryLog row for this question, and one AnswerCitation per verified
     statement, in one transaction.
@@ -241,14 +240,6 @@ def record_query(
     ``answered = True`` already carries that fact — inventing a third vocabulary value to
     say it twice would be a migration and a requirement nobody wrote.
 
-    ``retrieval_rewrite`` has no default, like the two parameters above, and for the
-    same reason: a silent NULL would read as "no rewrite was used" for a turn where one
-    was, and the HTTP check's WIRED comparison would then re-run the wrong retrieval.
-    It is the string the pipeline EMBEDDED where the model rewrite was used — never the
-    composed join, never the question — and None everywhere else: a one-off, a first
-    turn, or a follow-up whose rewrite fell back. Record-only (the model docstring).
-    The question column is unaffected: still the question as asked, never the rewrite.
-
     Raises whatever the database raises. See the module docstring: the answer is lost with
     the record rather than delivered untraceably.
     """
@@ -273,8 +264,6 @@ def record_query(
             no_answer_reason=outcome.no_answer_reason,
             # None only where the model was never asked. Never a stand-in for 0.
             rejected_count=rejected_count,
-            # The rewrite as embedded, or None where none was used. Record-only.
-            retrieval_rewrite=retrieval_rewrite,
         )
         # Only what survived verification (invariant 6), in the order it survived in.
         # ``chunk_id`` is set to the UUID directly rather than fetching the ContentChunk:

@@ -33,18 +33,13 @@ of ``corpus/objective-02/threads.json``::
         --threads corpus\\objective-02\\threads.json ^
         --dump-sha256 <the snapshot's SHA-256> --out <run folder>\\threads.json
 
-Each follow-up is run three ways: with history (what ``POST /api/ask`` sends on turn
-two), cold, and spelled out. Both composed strings of every run come from
+Each follow-up is run three ways: composed with the first turn's question (what ``POST
+/api/ask`` sends on turn two), cold, and spelled out. Both strings of every run come from
 ``apps.retrieval.conversation.compose``, the function the pipeline's own
-``conversation_context`` calls, and what a with-history run EMBEDS comes from
-``apps.retrieval.pipeline.resolve_retrieval_text`` (step 7 phase 4): the model's
-standalone rewrite of the follow-up, or the composed join where the rewrite fell back —
-the shipped resolution, so a with-history run costs one extra model call, as the server
-does. The block that is prompted is the shipped one, rewrite or no rewrite. Each first
-turn is run once. scripts/thread_set.py holds
+``conversation_context`` calls, so the join that is embedded and the block that is
+prompted are the shipped ones. Each first turn is run once. scripts/thread_set.py holds
 the validation and the frozen scoring rule, and this file reports what D-86 section 4
-lists, per follow-up and per way. The thread file's SHA-256 is recorded, and each run's
-record carries ``retrieval_rewrite`` so the fallback rate is readable afterwards.
+lists, per follow-up and per way. The thread file's SHA-256 is recorded.
 
 Both modes run IN-PROCESS: the pipeline's functions are called here, and no HTTP server is
 involved. The record says so (D-85 decision 4 asks for the server beside every result;
@@ -181,11 +176,6 @@ from apps.meetings.models import Meeting  # noqa: E402
 # FR-13's composition, the shipped function (D-86 decision 5). conversation_context() calls
 # it, and apps/retrieval/tests/test_compose.py pins the two together.
 from apps.retrieval.conversation import compose  # noqa: E402
-# Step 7 phase 4: what a with-history turn EMBEDS is resolved by the shipped function —
-# the model rewrite, or the composed join on any failure — so a --threads run measures
-# the pipeline's own resolution rather than a restatement of it. A thread run therefore
-# makes one rewrite model call per with-history run, exactly as POST /api/ask does.
-from apps.retrieval.pipeline import resolve_retrieval_text  # noqa: E402
 from apps.retrieval.query_embedding import embed_question  # noqa: E402
 
 # D-66: the role names whose content a role may read. The candidate set below applies it,
@@ -281,14 +271,8 @@ class QuestionResult:
     # out says which prompt produced these statements rather than leaving it to be assumed.
     prompt_question: str = ""
     # The string actually embedded: ``question`` on an ordinary run and under
-    # --with-history; on a --threads run with history, whatever the shipped
-    # resolve_retrieval_text() produced — the model rewrite, or compose()'s plain join
-    # where the rewrite fell back.
+    # --with-history, compose()'s plain join on a --threads run with history.
     retrieval_text: str = ""
-    # The model's standalone rewrite where one was used (equal to retrieval_text then),
-    # None otherwise — mirroring QueryLog.retrieval_rewrite, so a run record says which
-    # of the two strings above was embedded and the fallback rate can be read off a run.
-    retrieval_rewrite: str | None = None
     retrieved: list[RankedPassage] = field(default_factory=list)
     top_score: float | None = None
     # Where the expected source's best chunk sat in the full ranked list, 1-based, and its
@@ -1059,19 +1043,15 @@ def run_thread_run(
     threshold: float,
     sources: SourceIndex | None,
 ) -> QuestionResult:
-    """One run of the thread set: compose(), resolve the retrieval string, measure.
+    """One run of the thread set: compose() its two strings, then measure them.
 
     ``run["prior"]`` is the first turn's question for a follow-up asked with history, and
     empty otherwise, so ``compose`` returns exactly what conversation_context() returns on
-    that turn of a real thread. What is EMBEDDED is resolve_retrieval_text()'s — the
-    shipped resolution, step 7 phase 4: the model rewrite with history, the plain join
-    where the rewrite fell back or there is no history — and the labelled block is
-    prompted, as POST /api/ask does. The rewrite call goes through
-    apps.ai.get_ai_service(), the same lookup the pipeline makes.
+    that turn of a real thread. The plain join is embedded and the labelled block is
+    prompted, as POST /api/ask does.
     """
     started = time.perf_counter()
     composed = compose(run["question"], run["prior"])
-    resolved = resolve_retrieval_text(question=run["question"], context=composed)
     result = QuestionResult(
         question_id=run["run_id"],
         kind=run["kind"],
@@ -1084,8 +1064,7 @@ def run_thread_run(
         expected_answer=None,
     )
     result.prompt_question = composed.for_prompt
-    result.retrieval_rewrite = resolved.rewrite
-    return measure(result, resolved.text, chunks, service, threshold, sources, started)
+    return measure(result, composed.for_retrieval, chunks, service, threshold, sources, started)
 
 
 def thread_observation(result: QuestionResult, chunks: list[ContentChunk], sources: SourceIndex | None) -> dict:
@@ -1135,11 +1114,7 @@ def report_threads(results: list[QuestionResult], scored: list[dict], sources: S
               f"  {verdict}{flag}")
         print(f"                question : {result.question}")
         if result.retrieval_text != result.question:
-            # With history the embedded string is never the bare question, so every
-            # with-history run prints this line, labelled with WHICH string it was:
-            # the model rewrite, or the composed join after a rewrite fallback.
-            label = "rewrite" if result.retrieval_rewrite is not None else "join"
-            print(f"                embedded : ({label}) {result.retrieval_text}")
+            print(f"                embedded : {result.retrieval_text}")
         ids = ", ".join(item_label(sources, c.chunk_id) for c in result.retrieved) or "(none above threshold)"
         print(f"                supplied : {ids}")
         if result.attempts:
@@ -1159,13 +1134,6 @@ def report_threads(results: list[QuestionResult], scored: list[dict], sources: S
     responses = [a for r in results for a in r.attempts if a["outcome"] != "call-failed"]
     conforming = [a for a in responses if a["outcome"] == "parsed"]
     summary["schema_conformance"] = [len(conforming), len(responses)]
-    # Step 7 phase 4: how often the with-history runs actually embedded the model
-    # rewrite, against the composed-join fallback. A low ratio means the rewrite is
-    # quietly not happening and the arm under measurement is mostly the old path.
-    with_history = [r for r, s in zip(results, scored) if s["way"] == thread_set.WITH_HISTORY]
-    summary["rewrites_used"] = [
-        sum(r.retrieval_rewrite is not None for r in with_history), len(with_history)
-    ]
 
     print("\n" + "=" * 100)
     print("SUMMARY, PER WAY, ACROSS FOLLOW-UPS (scoring rule version "
@@ -1190,8 +1158,6 @@ def report_threads(results: list[QuestionResult], scored: list[dict], sources: S
         print(f"scoping shown, {entry['thread']}: {'YES' if entry['scoping_shown'] else 'NO'}")
     print(f"\nschema conformance, every response : {ratio_text(summary['schema_conformance'])}")
     print(f"out-of-scope, every run             : {summary['out_of_scope_total']}  (must be 0)")
-    print(f"follow-up rewrites used             : {ratio_text(summary['rewrites_used'])}"
-          " of the with-history runs (the rest fell back to the composed join)")
     return summary
 
 
@@ -1205,9 +1171,6 @@ def thread_run_record(run: dict, result: QuestionResult, score: dict, sources: S
                                      "expects_answer", "expected_answer", "sources")},
         "question": result.question,
         "retrieval_text": result.retrieval_text,
-        # The rewrite where one was embedded (equal to retrieval_text then), None where
-        # the composed join was: the record says which, as QueryLog.retrieval_rewrite does.
-        "retrieval_rewrite": result.retrieval_rewrite,
         "prompt_question": result.prompt_question,
         "top_score": result.top_score,
         "source_rank": result.source_rank,

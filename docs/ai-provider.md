@@ -48,10 +48,6 @@ class ProviderHealth:
     detail: str
 
 @dataclass(frozen=True)
-class FollowupRewrite:            # FR-13 step 7 phase 4 — one field, deliberately
-    question: str                 # the standalone question; used for retrieval ONLY
-
-@dataclass(frozen=True)
 class GenerationAttempt:          # apps/ai/generation.py — the observer's record
     number: int                   # 1-based; the last is MAXIMUM_GENERATION_ATTEMPTS
     outcome: str                  # "parsed" | "schema-violation" | "call-failed"
@@ -70,36 +66,10 @@ class AIService(Protocol):
         on_attempt: Callable[[GenerationAttempt], None] | None = None,
     ) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
-    def rewrite_followup(self, question: str, prior_questions: list[str]) -> FollowupRewrite: ...
 ```
 
-The operations are exactly the ones `AIService` enumerates — the list, not a count, is
-the source of truth. Nothing is added speculatively: summarisation (FR-16) is NIT3004
-work and gets its own method later.
-
-### `rewrite_followup` — FR-13's standalone question, for retrieval only
-
-Added at step 7 phase 4 (option 3, D-103). Given a follow-up and the conversation's
-earlier **questions** — never answers, D-42 — it returns ONE standalone question merging
-the referents (pronouns, ellipsis, "that", "they") into the follow-up, and the pipeline
-embeds that string as the retrieval query in place of the plain composed join.
-
-- **Retrieval only.** The rewrite never enters a generation prompt, a reply, a citation
-  or any user-visible text. The generation prompt still carries the original question
-  with the labelled history block, unchanged. The one record of it is
-  `QueryLog.retrieval_rewrite`, record-only, read back by
-  `scripts/conversation_http_check.py` so the WIRED comparison re-runs the server's own
-  string instead of a fresh rewrite that would vary (D-40).
-- **One attempt, no retry constant.** On ANY failure — transport, timeout,
-  non-conforming (invariant 10's shape: a reply off the one-field schema is no reply),
-  empty, or longer than `2 × MAXIMUM_QUESTION_LENGTH` — the pipeline falls back to the
-  composed join and the ask proceeds exactly as before the operation existed. The ask
-  must never fail because the rewrite did; what follows "no response" differs from
-  generation (fall back, not 503) because here a correct degraded path exists.
-- **Structured output per section 5's strategy:** a strict system prompt, one worked
-  example on the deliberately alien subject, a tolerant parser — all in
-  `apps/ai/rewrite.py`, shared by both implementations, with the single-attempt runner.
-  The prompt carries no identifiers, so nothing a rewrite says can become a citation.
+Three operations, deliberately. Classification (FR-10) and summarisation (FR-16) are
+NIT3004 work and get their own methods later — do not add them speculatively.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
@@ -127,13 +97,12 @@ retry loop, and a second retry loop beside the shipped one is exactly the duplic
 Stage 4 item 5 removed. `apps/ai/tests/test_observer_is_not_used_in_application_code.py`
 reads the source of every module under `apps/` and fails if one appears as a caller.
 
-The observer adds no operation to the list. The enumeration rule above means no method
-until a requirement asks for one; it is not a rule about keyword arguments, and an
-observer on an existing operation adds nothing to the interface a caller must
-implement — every implementation already computes what it reports. A parameter that
-changes what the model is asked is a different question, argued on its own merits when
-a requirement reaches it — as FR-13's history was at item 9 (folded into `question`,
-no parameter) and again at step 7 phase 4 (`rewrite_followup`, a new operation).
+This is still three operations. The sentence above means no classification method and no
+summarisation method until NIT3004 asks for them; it is not a rule about keyword
+arguments, and an observer on an existing operation adds nothing to the interface a
+caller must implement — every implementation already computes what it reports. A
+parameter that changed what the model is asked, such as FR-13's conversation history,
+would be a different question and is argued on its own merits when item 9 reaches it.
 
 It is declared in the Protocol signature itself, not only in the implementations: a
 contract and its implementations differing by a parameter is the defect this project keeps

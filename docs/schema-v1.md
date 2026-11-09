@@ -144,7 +144,6 @@ recorded model before ranking.
 | `no_answer_reason` | text, nullable | see §3 — the two paths are recorded distinctly |
 | `answered_at` | timestamp | |
 | `rejected_count` | integer, nullable | statements verification removed; null where generation was not called |
-| `retrieval_rewrite` | text, nullable | FR-13 step 7 phase 4: the model's standalone rewrite of a follow-up, exactly as embedded for retrieval; null where none was used (a one-off, a first turn, or a rewrite that fell back to the composed join). Record-only, like the two above; its one reader outside the tests is `scripts/conversation_http_check.py` |
 
 `no_answer_reason` is the one field in this table the proposal does not name
 explicitly, but FR-12 requires the two no-answer cases be "recorded separately", and

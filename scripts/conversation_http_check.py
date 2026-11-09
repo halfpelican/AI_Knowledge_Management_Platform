@@ -11,19 +11,13 @@ three threads named in ``threads.json``'s ``http_check``, and for each:
    ten asks a minute, and one ask in flight per user);
 3. ``GET /api/conversations/{id}``: two turns, holding the questions as asked;
 4. the two QueryLog rows, read here through the ORM: the passages the server supplied on
-   each turn (``retrieved_chunk_ids``), and turn two's ``retrieval_rewrite``;
-5. the same retrieval in this process, through the pipeline's own function
-   (``ranked_for_query_text``), for turn two's string WITH the history applied and for
-   the bare follow-up. **The with-history string is the server's STORED rewrite where
-   one was used (step 7 phase 4), else the composed join — never a fresh rewrite from
-   this process**, because the rewrite is a model call that varies run to run (D-40):
-   a fresh one would break WIRED on rewrite variance, not on wiring.
+   each turn (``retrieved_chunk_ids``);
+5. the same retrieval in this process, through the pipeline's own functions, for the
+   follow-up composed WITH the first question and WITHOUT it.
 
-The verdict is WIRED when turn two's supplied passages are the ones the server's own
-with-history string retrieves and not the ones the bare follow-up retrieves. That is the
-history, read from QueryLog, changing what was retrieved, which nothing else in the reply
-could show. A first-turn row carrying a rewrite is a FAILED thread: a first turn must not
-rewrite. The reply
+The verdict is WIRED when turn two's supplied passages are the ones the composed string
+retrieves and not the ones the bare follow-up retrieves. That is the history, read from
+QueryLog, changing what was retrieved, which nothing else in the reply could show. The reply
 to turn two is also scored with the frozen scoring rule, and checked for a leak (part 7e).
 
 Usage, with the measurement server and FLM running and the step 1 block of
@@ -217,18 +211,16 @@ def sign_in(session_class, base_url: str, email: str, password: str, role: str):
 def supplied_ids(text: str, role: str) -> list[str]:
     """What POST /api/ask would supply to generation for ``text``: pipeline steps 3 to 7.
 
-    Read-only, and steps 3 to 5 are THE PIPELINE'S OWN FUNCTION,
-    ``apps.retrieval.pipeline.ranked_for_query_text`` — not a copy of its sequence — so
-    the WIRED verdict keeps meaning "the server did what this process computes", and a
-    later change to those steps changes this comparison with it. ``text`` is a retrieval
-    string: compose()'s, or, for the with-history comparison since step 7 phase 4, the
-    server's own stored rewrite (see check_thread for why a fresh rewrite would not do).
+    The pipeline's own functions, in its order, read-only. ``text`` is a retrieval string
+    from compose(), so this is the server's turn reproduced up to the prompt.
     """
-    from apps.retrieval.pipeline import ranked_for_query_text
-    from apps.retrieval.ranking import admit, truncate_to_context
+    from apps.retrieval.query_embedding import embed_question
+    from apps.retrieval.ranking import admit, rank, truncate_to_context
+    from apps.retrieval.scoping import candidate_chunks
 
-    ranked = ranked_for_query_text(text, role_name=role)
-    return [p.chunk_id for p in truncate_to_context(admit(ranked))]
+    embedding = embed_question(text)
+    candidates = candidate_chunks(role_name=role, embedding_model=embedding.model)
+    return [p.chunk_id for p in truncate_to_context(admit(rank(candidates, embedding.vectors[0])))]
 
 
 def summarise_reply(body) -> dict:
@@ -288,7 +280,6 @@ def check_thread(entry, thread, session, user, pacer, context) -> dict:
     out["query_log"] = [
         {"question": row.question, "answered": row.answered, "no_answer_reason": row.no_answer_reason,
          "rejected_count": row.rejected_count, "same_user": row.user_id == user.pk,
-         "retrieval_rewrite": row.retrieval_rewrite,
          "retrieved_chunk_ids": [str(chunk_id) for chunk_id in row.retrieved_chunk_ids]}
         for row in rows
     ]
@@ -299,30 +290,18 @@ def check_thread(entry, thread, session, user, pacer, context) -> dict:
         problems.append("the QueryLog rows do not hold the two questions as asked (D-42: never composed)")
     if not all(row.user_id == user.pk for row in rows):
         problems.append("a QueryLog row of this thread belongs to another user")
-    if rows and rows[0].retrieval_rewrite is not None:
-        # The single-turn invariant, through the server: a thread's FIRST turn makes no
-        # rewrite call, so a rewrite on its row is the pipeline rewriting where it must not.
-        problems.append("the first turn's row carries a retrieval_rewrite; a first turn must not rewrite")
     if problems or len(rows) != 2:
         out.update(verdict=FAILED, problem="; ".join(problems) or f"{len(rows)} QueryLog row(s), not 2")
         return out
 
     composed, alone = compose(follow_up, [first]), compose(follow_up, [])
-    # The with-history comparison re-runs turn two's retrieval from the string the
-    # SERVER embedded: its stored rewrite where one was used (step 7 phase 4), else the
-    # composed join. Never a fresh rewrite from here — the rewrite is a model call and
-    # varies run to run (D-40), so a fresh one would break WIRED on rewrite variance
-    # rather than on wiring, which is the one thing this check exists to see.
-    stored_rewrite = rows[1].retrieval_rewrite
-    with_history_text = stored_rewrite if stored_rewrite is not None else composed.for_retrieval
     expected = {
         "first_turn": supplied_ids(compose(first, []).for_retrieval, role),
-        "with_history": supplied_ids(with_history_text, role),
+        "with_history": supplied_ids(composed.for_retrieval, role),
         "cold": supplied_ids(alone.for_retrieval, role),
     }
     served = out["query_log"][1]["retrieved_chunk_ids"]
-    out["in_process"] = {**expected, "with_history_retrieval_text": with_history_text,
-                         "server_rewrite_used": stored_rewrite is not None}
+    out["in_process"] = {**expected, "with_history_retrieval_text": composed.for_retrieval}
     out["verdict"] = verdict(server=served, with_history=expected["with_history"], cold=expected["cold"])
     out["same_order_as_compose"] = served == expected["with_history"]
     out["first_turn_matches_a_one_off"] = set(out["query_log"][0]["retrieved_chunk_ids"]) == set(expected["first_turn"])

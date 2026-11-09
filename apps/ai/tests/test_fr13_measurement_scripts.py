@@ -542,13 +542,7 @@ class RecordingService:
 
 @pytest.mark.django_db
 def test_a_thread_run_embeds_and_prompts_what_compose_returns(scripts, document, monkeypatch):
-    """D-86 decision 5: the harness composes with the shipped compose(), both strings.
-
-    Since step 7 phase 4 this provider, which has NO rewrite operation, exercises the
-    FALLBACK path: resolve_retrieval_text falls back to compose()'s join, so the
-    byte-exact assertions below now pin that the fallback is the pre-phase-4 retrieval.
-    The rewrite path has its own test beneath this one.
-    """
+    """D-86 decision 5: the harness composes with the shipped compose(), both strings."""
     from apps.documents.models import ContentChunk
 
     harness = scripts("citation_harness")
@@ -573,71 +567,6 @@ def test_a_thread_run_embeds_and_prompts_what_compose_returns(scripts, document,
     assert service.embed_calls == [[query_text(c.for_retrieval)] for c in expected]
     assert service.prompt_questions == [c.for_prompt for c in expected]
     assert first in expected[1].for_retrieval  # not vacuous: the history is in the join
-
-
-class RewritingRecordingService(RecordingService):
-    """RecordingService plus a scripted rewrite, so --threads exercises the used path."""
-
-    REWRITE = "A standalone rewrite of the follow-up for the harness test."
-
-    def __init__(self):
-        super().__init__()
-        self.rewrite_calls = []
-
-    def rewrite_followup(self, question, prior_questions):
-        from apps.ai.base import FollowupRewrite
-
-        self.rewrite_calls.append((question, list(prior_questions)))
-        return FollowupRewrite(question=self.REWRITE)
-
-
-@pytest.mark.django_db
-def test_a_thread_run_with_history_embeds_the_shipped_resolution(scripts, document, monkeypatch):
-    """Step 7 phase 4: the harness embeds what resolve_retrieval_text() resolves — the
-    rewrite on the with-history run, compose()'s own strings on every other way — and
-    the prompt stays compose()'s block on all four. The rewrite is called once, for the
-    with-history run only, with the prior QUESTIONS."""
-    from apps.documents.models import ContentChunk
-
-    harness = scripts("citation_harness")
-    thread_set = scripts("thread_set")
-    chunk = ContentChunk.objects.create(
-        source_type=SOURCE_TYPES[0], source_id=document.id, chunk_index=1, chunk_text="Ridgeline.",
-        embedding=unit_vector_at(0.8), embedding_model=STUB_EMBEDDING_MODEL,
-        embedding_dimension=settings.EMBEDDING_DIMENSION, visible_to_roles=[EMPLOYEE_ROLE_NAME],
-    )
-    service = RewritingRecordingService()
-    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
-    _, threads = thread_set.load(THREADS)
-    runs = thread_set.expand_runs([t for t in threads if t["id"] == "t03"], ROLES, readable_items())
-    by_way = {run["way"]: run for run in runs}
-
-    results = {way: harness.run_thread_run(by_way[way], [chunk], service, 0.3, None)
-               for way in thread_set.WAYS}
-
-    first, follow_up = threads[2]["turns"][0]["question"], threads[2]["turns"][1]["question"]
-    spelled = threads[2]["turns"][1]["spelled_out"]
-    # One rewrite call, for the one run that has history, with the questions only.
-    assert service.rewrite_calls == [(follow_up, [first])]
-    # The with-history run EMBEDDED the rewrite; the other three embedded compose()'s.
-    assert service.embed_calls == [
-        [query_text(compose(first, []).for_retrieval)],
-        [query_text(service.REWRITE)],
-        [query_text(compose(follow_up, []).for_retrieval)],
-        [query_text(compose(spelled, []).for_retrieval)],
-    ]
-    # The PROMPT is untouched by the rewrite on every way.
-    assert service.prompt_questions == [
-        compose(first, []).for_prompt,
-        compose(follow_up, [first]).for_prompt,
-        compose(follow_up, []).for_prompt,
-        compose(spelled, []).for_prompt,
-    ]
-    # And the result mirrors QueryLog.retrieval_rewrite: set where used, None elsewhere.
-    assert results[thread_set.WITH_HISTORY].retrieval_rewrite == service.REWRITE
-    assert results[thread_set.WITH_HISTORY].retrieval_text == service.REWRITE
-    for way in (thread_set.FIRST_TURN, thread_set.COLD, thread_set.SPELLED_OUT):
-        assert results[way].retrieval_rewrite is None
 
 
 @pytest.mark.django_db
@@ -667,11 +596,6 @@ def test_a_thread_run_reports_and_records_every_run(scripts, document, monkeypat
     with_history = next(r for r in written["runs"] if r["run_id"] == "t03@Employee/with-history")
     assert with_history["retrieval_text"] == compose(threads[2]["turns"][1]["question"],
                                                      [threads[2]["turns"][0]["question"]]).for_retrieval
-    # This provider has no rewrite operation, so every with-history run fell back: the
-    # record says so per run and the summary counts it, which is how a reader of a
-    # phase-2 record sees whether the arm measured was mostly the rewrite or the join.
-    assert with_history["retrieval_rewrite"] is None
-    assert written["summary"]["rewrites_used"] == [0, 3]  # t03 and t06 run as 3 role-pairs
     assert set(written["summary"]["per_way"]) == set(thread_set.WAYS)
     assert [entry["thread"] for entry in written["summary"]["scoping"]] == ["t06"]
     printed = capsys.readouterr().out
@@ -799,10 +723,6 @@ class FakeServer:
 
     lists: dict = {}
     supplied: dict = {}
-    # question -> the retrieval_rewrite the server "used" for that turn (step 7 phase
-    # 4); an unnamed question stores None, as a single turn or a fallback does. Tests
-    # set it through monkeypatch.setattr(FakeServer, "rewrites", ...) so it restores.
-    rewrites: dict = {}
     requests: list = []
 
     def __init__(self, base_url):
@@ -832,8 +752,7 @@ class FakeServer:
             earlier = QueryLog.objects.filter(conversation_id=json_body["conversation_id"]).count()
             row = QueryLog.objects.create(user=self.user, conversation_id=json_body["conversation_id"],
                                           question=json_body["question"], answer_text="x",
-                                          retrieved_chunk_ids=chunk_ids, answered=True, rejected_count=0,
-                                          retrieval_rewrite=self.rewrites.get(json_body["question"]))
+                                          retrieved_chunk_ids=chunk_ids, answered=True, rejected_count=0)
             # The real asks are 7 s apart. Here they are not, and Windows's clock ticks
             # every ~15.6 ms, so the rows are spaced explicitly rather than by the clock.
             QueryLog.objects.filter(pk=row.pk).update(answered_at=timezone.now() + timedelta(seconds=earlier))
@@ -895,99 +814,6 @@ def test_the_verdict_comes_from_the_rows_the_server_wrote(scripts, monkeypatch, 
     assert result["verdict"] == verdict
     assert [row["question"] for row in result["query_log"]] == [first, follow_up]
     assert result["thread_read"]["turn_questions"] == [first, follow_up]
-
-
-@pytest.mark.django_db
-def test_the_with_history_comparison_uses_the_servers_stored_rewrite(scripts, monkeypatch, employee):
-    """Step 7 phase 4: WIRED is decided from the retrieval string the SERVER embedded.
-
-    The ``by_text`` table below deliberately has NO entry for compose()'s join: if the
-    check re-ran the comparison from a fresh composition — or worse, a fresh rewrite,
-    which is a model call that varies run to run (D-40) — the lookup would fail and so
-    would this test. Only the stored ``retrieval_rewrite`` resolves, which is the whole
-    design: WIRED must break on wiring, never on rewrite variance.
-    """
-    check = scripts("conversation_http_check")
-    thread_set = scripts("thread_set")
-    _, threads = thread_set.load(THREADS)
-    thread = http_thread(check, threads, "t03")
-    first, follow_up = thread["turns"][0]["question"], thread["turns"][1]["question"]
-    stored_rewrite = "The standalone rewrite the server embedded on turn two."
-    with_history, cold, first_ids = [str(uuid4())], [str(uuid4())], [str(uuid4())]
-    by_text = {compose(first, []).for_retrieval: first_ids,
-               stored_rewrite: with_history,
-               compose(follow_up, []).for_retrieval: cold}
-    monkeypatch.setattr(check, "supplied_ids", lambda text, role: by_text[text])
-    FakeServer.supplied = {first: first_ids, follow_up: with_history}
-    monkeypatch.setattr(FakeServer, "rewrites", {follow_up: stored_rewrite})
-    session = FakeServer("http://127.0.0.1:8000")
-    session.user = employee
-    context = {"item_by_chunk": {with_history[0]: "D12"}, "readable": readable_items(),
-               "readable_chunks": {EMPLOYEE_ROLE_NAME: set(first_ids + with_history + cold)},
-               "forbidden": {EMPLOYEE_ROLE_NAME: {}}}
-
-    result = check.check_thread({"thread": "t03", "role": EMPLOYEE_ROLE_NAME}, thread, session,
-                                employee, check.Pacer(0.0), context)
-
-    assert result["verdict"] == check.WIRED
-    assert result["in_process"]["server_rewrite_used"] is True
-    assert result["in_process"]["with_history_retrieval_text"] == stored_rewrite
-    assert result["query_log"][1]["retrieval_rewrite"] == stored_rewrite
-    assert result["query_log"][0]["retrieval_rewrite"] is None
-
-
-@pytest.mark.django_db
-def test_a_fallback_turn_is_compared_against_the_composed_join(scripts, monkeypatch, employee):
-    """No stored rewrite on turn two means the server embedded the join: compare that."""
-    check = scripts("conversation_http_check")
-    thread_set = scripts("thread_set")
-    _, threads = thread_set.load(THREADS)
-    thread = http_thread(check, threads, "t03")
-    first, follow_up = thread["turns"][0]["question"], thread["turns"][1]["question"]
-    with_history, cold, first_ids = [str(uuid4())], [str(uuid4())], [str(uuid4())]
-    by_text = {compose(first, []).for_retrieval: first_ids,
-               compose(follow_up, [first]).for_retrieval: with_history,
-               compose(follow_up, []).for_retrieval: cold}
-    monkeypatch.setattr(check, "supplied_ids", lambda text, role: by_text[text])
-    FakeServer.supplied = {first: first_ids, follow_up: with_history}
-    monkeypatch.setattr(FakeServer, "rewrites", {})
-    session = FakeServer("http://127.0.0.1:8000")
-    session.user = employee
-    context = {"item_by_chunk": {with_history[0]: "D12"}, "readable": readable_items(),
-               "readable_chunks": {EMPLOYEE_ROLE_NAME: set(first_ids + with_history + cold)},
-               "forbidden": {EMPLOYEE_ROLE_NAME: {}}}
-
-    result = check.check_thread({"thread": "t03", "role": EMPLOYEE_ROLE_NAME}, thread, session,
-                                employee, check.Pacer(0.0), context)
-
-    assert result["verdict"] == check.WIRED
-    assert result["in_process"]["server_rewrite_used"] is False
-    assert result["in_process"]["with_history_retrieval_text"] == compose(follow_up, [first]).for_retrieval
-
-
-@pytest.mark.django_db
-def test_a_first_turn_carrying_a_rewrite_fails_the_thread(scripts, monkeypatch, employee):
-    """The single-turn invariant through the server: a first turn must not rewrite."""
-    check = scripts("conversation_http_check")
-    thread_set = scripts("thread_set")
-    _, threads = thread_set.load(THREADS)
-    thread = http_thread(check, threads, "t03")
-    first, follow_up = thread["turns"][0]["question"], thread["turns"][1]["question"]
-    ids = [str(uuid4())]
-    monkeypatch.setattr(check, "supplied_ids", lambda text, role: ids)
-    FakeServer.supplied = {first: ids, follow_up: ids}
-    monkeypatch.setattr(FakeServer, "rewrites", {first: "A rewrite where none may exist."})
-    session = FakeServer("http://127.0.0.1:8000")
-    session.user = employee
-    context = {"item_by_chunk": {}, "readable": readable_items(),
-               "readable_chunks": {EMPLOYEE_ROLE_NAME: set(ids)},
-               "forbidden": {EMPLOYEE_ROLE_NAME: {}}}
-
-    result = check.check_thread({"thread": "t03", "role": EMPLOYEE_ROLE_NAME}, thread, session,
-                                employee, check.Pacer(0.0), context)
-
-    assert result["verdict"] == check.FAILED
-    assert "a first turn must not rewrite" in result["problem"]
 
 
 def test_the_verdicts(scripts):

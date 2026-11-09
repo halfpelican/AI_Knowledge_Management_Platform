@@ -16,12 +16,7 @@ below ERROR, and lowering it would let in every 4xx WARNING from ``django.reques
   ``ValueError`` FLM's 200 carrying an error body) or ``SchemaViolation``;
 - each failed attempt to embed the question, the same way, and an embedding reply that
   cannot be used as a query vector;
-- the 503 ``POST /api/ask`` answers, with the message of the exception that caused it;
-- FR-13's follow-up rewrite, outcome only (step 7 phase 4): ``rewrite_used`` at INFO
-  where the model's standalone question became the retrieval string, and
-  ``rewrite_fell_back`` at WARNING with the failure's cause where retrieval proceeded
-  on the composed join instead. Neither line carries the question, the history or the
-  rewrite itself.
+- the 503 ``POST /api/ask`` answers, with the message of the exception that caused it.
 
 Each line names the account, by primary key, when the view has set it with ``account``.
 Nothing logged here quotes the question, a passage or the model's reply: the details are
@@ -194,38 +189,4 @@ def unavailable(exc: BaseException) -> None:
         _account.get() or "not set",
         cause_of(exc),
         _detail(str(exc)),
-    )
-
-
-def rewrite_used(seconds: float) -> None:
-    """FR-13's follow-up rewrite produced the retrieval string for this turn. INFO.
-
-    Operation name and outcome only, like every line here: NO question text, no rewrite
-    text — the rewrite is recorded in ``QueryLog.retrieval_rewrite`` for verification,
-    and this file stays free of question and passage text. Not a warning, because
-    nothing went wrong; it reaches the attempts file and not the error file.
-    """
-    logger.info(
-        "follow-up rewrite used after %.1f s (account %s)",
-        seconds,
-        _account.get() or "not set",
-    )
-
-
-def rewrite_fell_back(seconds: float, cause: str, detail: str) -> None:
-    """The rewrite failed and retrieval proceeded with the composed join. WARNING.
-
-    ``detail`` is the exception's message — a malformation description or a transport
-    error, never the question or the reply text (apps/ai/rewrite.py's parser keeps its
-    messages text-free) — and is cut at DETAIL_LIMIT like every other detail here. A
-    WARNING rather than an error: the ask continued correctly on the fallback, but a
-    rising rate of these is the rewrite quietly not happening, which a reader of the
-    error file should see.
-    """
-    logger.warning(
-        "follow-up rewrite fell back to the composed join after %.1f s (account %s): %s: %s",
-        seconds,
-        _account.get() or "not set",
-        cause,
-        _detail(detail),
     )

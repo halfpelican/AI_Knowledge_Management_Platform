@@ -1,10 +1,9 @@
 """The AI service contract: docs/ai-provider.md section 1.
 
-The operations are exactly the ones ``AIService`` declares below — the enumerated list
-is the source of truth, not a count. Every AI call in the system goes through an
+Three operations, deliberately. Every AI call in the system goes through an
 AIService obtained from apps.ai.get_ai_service(); no module outside apps/ai imports
-a vendor SDK (CLAUDE.md section 4). Nothing is added speculatively: summarisation
-(FR-16) is NIT3004 work and gets its own method then.
+a vendor SDK (CLAUDE.md section 4). Classification (FR-10) and summarisation
+(FR-16) are NIT3004 work and get their own methods then, not speculatively now.
 """
 
 from dataclasses import dataclass
@@ -47,20 +46,6 @@ class ProviderHealth:
     detail: str
 
 
-@dataclass(frozen=True)
-class FollowupRewrite:
-    """One standalone question, rewritten from a follow-up and its prior questions (FR-13).
-
-    USED FOR RETRIEVAL ONLY. The string is embedded as the query in place of the plain
-    composed join; it never enters a generation prompt, a reply, a citation or any
-    user-visible text, and apps/retrieval/pipeline.py is the one consumer. One field,
-    deliberately: anything else a rewrite could carry would be something a later reader
-    might surface.
-    """
-
-    question: str
-
-
 class ProviderUnavailable(Exception):
     """The provider could not be reached or did not respond usably.
 
@@ -99,20 +84,3 @@ class AIService(Protocol):
         ...
 
     def health(self) -> ProviderHealth: ...
-
-    def rewrite_followup(self, question: str, prior_questions: list[str]) -> FollowupRewrite:
-        """One standalone question merging the prior questions' referents into this one (FR-13).
-
-        The input is QUESTIONS ONLY, never answers (D-42), and the output is used for
-        RETRIEVAL ONLY: the pipeline embeds it in place of the plain composed join and
-        nothing else reads it. It never enters a prompt, a reply or a citation.
-
-        ONE attempt, no retry constant. A reply that does not conform to the one-field
-        rewrite schema is no reply at all (invariant 10's shape): the implementation
-        raises — RewriteViolation for a non-conforming or over-length reply,
-        ProviderUnavailable for a transport failure — and the CALLER falls back to the
-        composed join, so an ask can never fail because the rewrite did
-        (apps/retrieval/pipeline.py holds the fallback; apps/ai/rewrite.py the schema,
-        the prompt and the single-attempt runner both implementations share).
-        """
-        ...

@@ -336,11 +336,8 @@ def reply_for(
     )
 
 
-# The record-only columns, named once so a test can assert that neither the reply
+# The two record-only columns, named once so a test can assert that neither the reply
 # dataclass nor the rendered body carries them, and so that spelling them out in a test
-# file cannot drift from what QueryLog actually holds. ``retrieval_rewrite`` joined at
-# step 7 phase 4: the rewrite is retrieval's internal string, and a reply that carried
-# it — by name or by value — would hand the caller text the model wrote that no
-# verification stands behind.
-RECORD_ONLY_FIELDS = ("no_answer_reason", "rejected_count", "retrieval_rewrite")
+# file cannot drift from what QueryLog actually holds.
+RECORD_ONLY_FIELDS = ("no_answer_reason", "rejected_count")
 ANSWER_REPLY_FIELDS = tuple(field.name for field in fields(AnswerReply))

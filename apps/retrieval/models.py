@@ -91,16 +91,6 @@ class QueryLog(models.Model):
     # rejected. Record-only, like the reason above. See the class docstring for why the
     # null semantics matter and why this is a count rather than the claimed identifier.
     rejected_count = models.PositiveIntegerField(null=True, blank=True)
-    # FR-13 step 7 phase 4: the model's standalone rewrite of a follow-up, EXACTLY as it
-    # was embedded in place of the composed join (apps/retrieval/pipeline.py's
-    # resolve_retrieval_text). NULL where no rewrite was used: a one-off question, a
-    # thread's first turn, or a follow-up whose rewrite failed and fell back to the
-    # join. RECORD-ONLY, like the two columns above: no serializer exposes it, no view
-    # or prompt reads it, and its one reader outside the tests is
-    # scripts/conversation_http_check.py, which re-runs a server turn's retrieval from
-    # this value because a fresh rewrite is a model call that varies (D-40).
-    # ``retrieved_chunk_ids`` keeps meaning exactly what went into the prompt.
-    retrieval_rewrite = models.TextField(null=True, blank=True)
     answered_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
