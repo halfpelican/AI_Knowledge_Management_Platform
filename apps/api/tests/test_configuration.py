@@ -170,9 +170,11 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 
 
 # Every throttled (route, method) and the scope it is counted in: D-26's two anonymous routes and
-# D-79's five per-user ones, as docs/api-contract.md's Stage 5 item 5 table lists them. Every
-# other route and method is unthrottled, the GET beside each throttled POST included, and a
-# signed-in user browsing the repository is never rate limited.
+# D-79's five per-user ones, as docs/api-contract.md's Stage 5 item 5 table lists them, and FR-10's
+# classify in the ingestion scope (D-105: one provider call, like a reprocess). Every other route
+# and method is unthrottled, the GET beside each throttled POST included, FR-10's confirm, tag and
+# proposed-topic routes too (no provider call), and a signed-in user browsing the repository is
+# never rate limited.
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",
@@ -180,6 +182,7 @@ THROTTLED_ROUTES = {
     ("document-list", "POST"): "ingestion",
     ("meeting-list", "POST"): "ingestion",
     ("document-reprocess", "POST"): "ingestion",
+    ("document-classify", "POST"): "ingestion",
     ("conversation-list", "POST"): "conversation_create",
 }
 

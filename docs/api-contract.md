@@ -115,8 +115,8 @@ Every code below is quoted from the FR's own Responses clause unless marked
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id` | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest and reprocess (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
-| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed` | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
+| POST | `/api/documents` | session + `contribute_content` | `201` document object, carrying `doc_id`, and since FR-10 `classification` (the object or `null`; see NIT3004 — FR-10) | `400` no file, or an empty title, or a `visible_to_roles` that is empty or names an unknown role; `401`; `403` the role lacks `contribute_content`, or the list excludes the uploader's own role (*convention*, D-29); `409` a document with the same content already exists; `413` over 50 MB, or a DOCX or XLSX whose members declare more decompressed content than a parser may inflate (*convention*, Stage 4 item 12b — a size rejection of decompressed size, carrying its own message, not the 415); `415` the file signature is not one of the four accepted formats; `422` the document was stored but no text could be extracted, or it holds too little text to index, or it is too large to index (D-51; for a PDF, any of D-81's bounds), or every chunk failed to embed; `429` past `INGESTION_THROTTLE_RATE`, shared with meeting ingest, reprocess and, since FR-10, classify (D-79, D-105); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/documents/{id}/reprocess` | session + `contribute_content` | `201` the document object, now `Indexed` or `Partially indexed`, with `classification` since FR-10 (NIT3004 — FR-10) | `401`; `403` the role lacks `contribute_content`; `404` no such document, or one outside the caller's scope; `409` already indexed, or restoring its content hash collided with a copy indexed meanwhile; `422` the reprocess failed the same way the upload did, or the document has no stored original: its `file_path` is blank or names a file missing from disk or outside the media folder (`NO_STORED_ORIGINAL_MESSAGE`, D-75); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, the document left as it was (D-85) |
 | GET | `/api/documents` | session | `200 [document object, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/documents/{id}` | session | `200` document object, with the detail fields Stage 5 adds (`extracted_text`, `tags`, `can_delete`; see Stage 5 — FR-15) | `401`; `404` no such document, or one outside the caller's scope |
 
@@ -867,7 +867,8 @@ AND. `sort` is not a filter: it never causes a 204.
 - **`documents`** is the document object `GET /api/documents` returns, filtered and sorted, with
   no paging.
 
-**The detail object adds three fields** to the document object (D-63, D-73):
+**The detail object adds three fields** to the document object (D-63, D-73), and since FR-10 two
+more, `classification` and `tag_details` (NIT3004 — FR-10, at the end of this file):
 
 ```json
 {
@@ -961,7 +962,7 @@ not grant it, and it does not grant `manage_documents`.
 |---|---|---|
 | `auth` | `POST /api/auth/register`, `POST /api/auth/login`, per client address (D-26) | 20/min |
 | `ask` | `POST /api/ask` | 10/min |
-| `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, one shared budget | 60/hour |
+| `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess` and, since FR-10, `POST /api/documents/{id}/classify` (D-105), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
@@ -1048,3 +1049,72 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
   one reason the alpha runs with `DEBUG=False`.
 - **Nothing outside `/api/` is marked never-cache** by D-76's middleware: `index.html` is
   `no-cache` (stored, but revalidated on every load) and the assets are cached as above.
+
+## NIT3004 — FR-10 document classification (D-104, D-105)
+
+FR-10's server side, 8 and 9 November 2026. The AI operation is `AIService.classify_document`
+(D-104). What becomes of its suggestions is application code in `apps/documents/classification.py`
+(D-105): the type is **applied** at or above `CLASSIFICATION_CONFIDENCE_THRESHOLD` and
+**provisional** below it; the department likewise, and **discarded** outside the established
+scheme; a tag in the scheme is linked `applied_by: "ai"`, provisional below the threshold; a Topic
+outside the scheme is **proposed** and created only when a person confirms it; a Project or Process
+outside the scheme is discarded and recorded. The scheme is built for the document's own audience,
+so no suggestion names a value that exists only on material some reader of the document may not
+see (invariant 1). A person's decision (`user_edited`, a confirmed link) is never overwritten by a
+later run; the machine's values are recorded alongside it.
+
+Every route below: a session; the document resolved through the caller's scope **first**, so an
+unknown id and one outside the scope are the same `404 {"detail": "No Document matches the given
+query."}` (D-46); then `contribute_content`, held by both roles (D-105), `403` without it, checked
+after the 404 as D-73 orders it; then the body. No body says more than the 404 would: a link, a
+proposal or an analysis that is not this document's gets that same 404, word for word.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| POST | `/api/documents/{id}/classify` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}` after one provider call and the apply rules, in one transaction; a second call updates the one analysis | `401`; `404`; `403`; `422 {"detail": "..."}` no extracted text (FR-10: "where insufficient text was extracted"), before any provider call; `503 {"detail": "..."}` the provider failed after `MAXIMUM_CLASSIFY_ATTEMPTS` (NFR-19), nothing written; `429` past the ingestion rate, one budget with upload, meeting ingest and reprocess (D-79); no in-flight slot |
+| POST | `/api/documents/{id}/classification` | session + `contribute_content` | `200 {"classification": ..., "department": "Finance"}`, where `department` is the document's `department` column after the confirm or edit, so the client need not infer it from the outcome. Body `{"doc_type"?: string, "department"?: string}`: both omitted confirms as it stands (a provisional type is applied; a provisional department is written to `department`); `doc_type` must be one of `DOCUMENT_TYPES`; `department` may be blank, which clears it; `null` means omitted | `401`; `404`, also when the document has no classification yet; `403`; `400 {"doc_type": ["..."]}` or `{"department": ["..."]}` |
+| POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's; `403` |
+| DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the link is removed (FR-10: "accepted or removed in a single action"); the `Tags` row stays | `401`; `404`, also when the link is not this document's; `403` |
+| POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
+| POST | `/api/documents/{id}/proposed-topics/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created | the same |
+
+The classification object (`null` for a document never classified):
+
+```json
+{"doc_type": "Policy", "doc_type_outcome": "applied", "department_outcome": "provisional",
+ "machine_doc_type": "Policy", "machine_doc_type_confidence": 0.9,
+ "machine_department": "Finance", "machine_department_confidence": 0.6,
+ "user_edited": false, "proposed_topics": [{"value": "budget planning", "confidence": 0.8}],
+ "classified_at": "2026-11-09T10:00:00+11:00", "model": "gemma3:4b", "input_truncated": false}
+```
+
+- **The effective department is the document object's `department`** (D-72); `department_outcome`
+  says how it got there. `doc_type` is `null` while the type is provisional. The outcomes are
+  `applied`, `provisional`, `discarded` and `confirmed` (`docs/schema-v1.md` §3). Confidences are
+  numbers to three places. `discarded_suggestions` is not exposed: it is a record for the
+  Objective 05 measurement (D-106).
+
+A `tag_details` entry, one per `ContentTags` link in Project, Process or Topic, provisional
+included, sorted by dimension then name:
+
+```json
+{"content_tag_id": "uuid", "dimension": "Project", "name": "bridge maintenance",
+ "applied_by": "ai", "confirmed": false, "provisional": true, "confidence": 0.6}
+```
+
+**The detail** `GET /api/documents/{id}` carries both, `classification` and `tag_details`, beside
+FR-15's fields. `tags` is unchanged in shape and lists **applied** links only.
+
+**The 201 bodies** of `POST /api/documents` and `POST /api/documents/{id}/reprocess` carry
+`classification` (section 7.8 line 100): the object, or `null` when classification failed or the
+provider was unavailable, in which case the document is indexed and unclassified (invariant 8,
+D-33 part 1). A 422 body does not carry it, and neither do the list and browse routes.
+
+**FR-15's reads and provisional links (D-105).** A provisional link is held, not applied: it is not
+in the detail's `tags`, not a browse facet value and not a filter hit until it is confirmed.
+`tag_details` is where a held suggestion is seen.
+
+**The management command** `python manage.py classify_documents --all | --document <uuid>...
+[--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:
+database, commit, per-document values, outcomes, links, seconds or error). It refuses the
+database `kmp`.
