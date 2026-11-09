@@ -38,7 +38,7 @@ from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
 CLAUDE_MAX_TOKENS = 16000
 # How much the model thinks before answering. Low, because the task is extraction from
 # passages already supplied, not open reasoning, and every thinking token is paid for.
-# A starting value, not a measured one: tune it once the path has run live.
+# A starting value, not a measured one: tune it once the path has run live (D-115).
 CLAUDE_EFFORT = "low"
 
 

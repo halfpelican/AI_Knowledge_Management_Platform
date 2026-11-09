@@ -317,7 +317,7 @@ EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=768)
 
 # Claude + Voyage: the proposal's production configuration, funded since D-113.
 ANTHROPIC_API_KEY = env.str("ANTHROPIC_API_KEY", default="")
-# Sonnet by the user's choice (10 November 2026): half Opus 5.5's per-token price.
+# Sonnet 5.5, the configuration under test (D-115): half Opus 5.5's per-token price.
 ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-sonnet-5-5")
 VOYAGE_API_KEY = env.str("VOYAGE_API_KEY", default="")
 VOYAGE_MODEL = env.str("VOYAGE_MODEL", default="voyage-4")

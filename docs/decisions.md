@@ -6806,3 +6806,41 @@ finding: generation's use of supplied context. Its next step is one experiment, 
 
 **Where it applies:** D-91 (a dated note), `M6-BUILD-PROMPT.md`'s Done line, and Stage 5 item 10's
 closing run.
+
+## D-115 · Sonnet 5.5 is the `anthropic` provider's default generation model, as the configuration under test
+
+**Status:** Settled by the user (the model); provisional (the call parameters) · **Date:** 2026-11-10 ·
+**Concerns:** D-113, D-102, D-103, D-111, FR-12, FR-13, `config/settings.py`, `apps/ai/anthropic.py`
+
+**Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5` in
+`config/settings.py` and `.env.example`. It replaces `claude-opus-5`, which was a release behind.
+
+- **Why Sonnet:** it costs $2 / $10 per million tokens, against Opus 5.5's $4 / $20, so D-113's monthly
+  credit goes about twice as far. At roughly 5K tokens in and 1–2K out, a question costs 2–3 cents:
+  about 4,000 questions a month, fewer when attempts are retried.
+- **This is the configuration under test, not a verdict.** D-113 left the default provider and the M8
+  provider to measurement, and the model follows the same rule. The threshold re-derivation, the
+  frozen thirty, the nine threads and NFR-08 run on Sonnet 5.5 first. Moving to another model after
+  that is a new decision and a new run.
+- **Changing the generation model is not a re-index.** Embeddings come from Voyage, so the vectors do
+  not depend on the Claude model.
+- **A `.env` that sets `ANTHROPIC_MODEL` overrides the default.** The development `.env` was changed
+  to match on 10 November.
+
+**The call parameters.** The implementing session set these on 10 November (`apps/ai/anthropic.py`,
+3a706d9). They are provisional until measured:
+
+- **No `temperature`.** The pinned SDK (anthropic 1.5.0) has no sampling parameters, and current Claude
+  models refuse them. Generation on this path is therefore not deterministic run to run, unlike FLM at
+  temperature 0, so the noise band is measured on this provider, not carried over from D-103.
+- **`thinking` is left at the model's default.** Disabling it is a 400 on Sonnet 5.5.
+- **`effort` is `"low"`,** because the task is extraction from supplied passages. It is the first
+  value to tune if the declines (D-102) or the rank-1 misreadings (D-111) persist.
+- **`CLAUDE_MAX_TOKENS = 16000`** is Claude's own ceiling, because the thinking counts against
+  `max_tokens`. FLM's 800 would cut replies off.
+
+**Not adopted: Anthropic's server-side refusal fallback for Sonnet 5.5.** It needs the beta endpoint,
+and a refusal on policy documents is unlikely. A refusal reaches the shared loop as an empty reply,
+fails the schema, and counts as a failed attempt.
+
+**Where it applies:** `config/settings.py`, `.env.example`, `apps/ai/anthropic.py`.
