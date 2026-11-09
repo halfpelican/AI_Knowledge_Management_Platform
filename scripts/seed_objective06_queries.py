@@ -49,6 +49,18 @@ DEFAULT_QUERIES = REPOSITORY_ROOT / "corpus" / "objective-06" / "queries.json"
 ACCOUNTS = {"Administrator": "corpus.admin@example.com", "Employee": "corpus.employee@example.com"}
 
 
+def provider_record(settings) -> dict:
+    """The configuration this result belongs to (D-113): the provider, its chat model and its
+    embedding model. A value tuned, or a result measured, on one configuration does not carry
+    over to another, so every record names its own."""
+    provider = settings.AI_PROVIDER
+    if provider == "anthropic":
+        return {"ai_provider": provider, "chat_model": settings.ANTHROPIC_MODEL,
+                "embedding_model": settings.VOYAGE_MODEL}
+    return {"ai_provider": provider, "chat_model": settings.FLM_CHAT_MODEL,
+            "embedding_model": settings.FLM_EMBED_MODEL}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--queries", type=Path, default=DEFAULT_QUERIES)
@@ -102,6 +114,7 @@ def main() -> int:
         users[role] = user
 
     record = measurement_record.run_record(dump_sha256=arguments.dump_sha256, database=database, flm=version.as_record())
+    record["configuration"] = provider_record(settings)
     record.update({
         "kind": "Objective 06 seeding of the thirty queries (D-109)",
         "query_set": str(arguments.queries.relative_to(REPOSITORY_ROOT)) if arguments.queries.is_relative_to(REPOSITORY_ROOT) else str(arguments.queries),

@@ -7042,6 +7042,24 @@ cross-subject pairs; nothing read from or written to a database. The evidence is
   D-40's drift. Short search terms that share a word across subjects ("password …") are the
   near-miss case. Re-measure with the corpus, the embedding model or the prefix.
 
+**Dated note, 10 November 2026: an FLM-configuration value, and what a provider switch does to the
+log.** D-113 funds the `anthropic` provider (Claude with Voyage embeddings) and leaves the default to
+measurement.
+
+- **0.5256 is an `embed-gemma` cosine,** 0.0066 above the lowest within-subject pair. Voyage's
+  similarities are distributed differently, so before `anthropic` is relied on, the value is
+  re-derived on the same development paraphrase set by this rule, as D-113 requires for FR-12's
+  values. `scripts/grouping_dev_sweep.py` records the provider, the chat model and the embedding model
+  with its result from now on.
+- **Matching on `embedding_model` (R10) makes a switch safe but visible.** Open gaps written under
+  `embed-gemma` are never candidates for a Voyage vector, so a subject that recurs after a switch opens
+  a second entry beside the first. Two entries is the safe failure; vectors from two models are never
+  compared. An Administrator can mark the older entry addressed.
+- **FR-19 embeds only through `apps.retrieval.query_embedding`,** the one query-embedding path, and
+  never applies a query prefix itself, so a provider-specific encoding added there (Voyage's input type
+  in place of `embed-gemma`'s prefix) reaches the cycle without a change in `apps/retrieval/gaps.py`.
+  A test holds this.
+
 ## D-110 · Objective 06's thirty are frozen, with the unanswerable asks screened on retrieval scores; FR-12's decline weakness stays open
 
 **Status:** Settled by the user · **Date:** 2026-11-09 · **Concerns:** Objective 06, FR-12, FR-19,
@@ -7097,3 +7115,18 @@ question; a third was cut off by the session ending.
 pre-measurement, which therefore do not exercise the exclusion; the exclusion is exercised by P01,
 P02, P06, P08, the two permission-only searches and the database's five pre-existing Employee searches
 for Administrator-only phrases.
+
+**Dated note, 10 November 2026: the screening holds for the FLM configuration only** (D-113, D-114).
+
+- **The path-A guarantee is an `embed-gemma` fact.** The kept eight scored at most 0.25 on
+  `embed-gemma`, under `RELEVANCE_THRESHOLD` 0.30. Neither number carries over to Voyage and a
+  re-derived threshold. The thirty stay frozen, so on `anthropic` Objective 06's first clause becomes
+  an unscreened test, which is what this entry already names as the acceptance test for a decline fix.
+- **D-108's exclusion inherits the active provider's threshold,** because it admits at
+  `RELEVANCE_THRESHOLD`. Its development check (D-108's known-risk paragraph) is repeated on the new
+  configuration before the thirty are run there.
+- **If M8 runs on `anthropic`,** Objective 06 is verified again on that configuration. Generation on
+  Claude is not deterministic (no temperature, D-115), so the seeding is repeated and the outcome
+  reported per draw, as D-103 measured FLM's band.
+- **Every Objective 06 result records its configuration:** the provider, the chat model and the
+  embedding model, in the seeding, sweep and verification records.

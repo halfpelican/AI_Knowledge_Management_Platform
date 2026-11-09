@@ -84,6 +84,18 @@ def simulate(items: list[dict], threshold: float, cosine) -> list[dict]:
     return gaps
 
 
+def provider_record(settings) -> dict:
+    """The configuration this result belongs to (D-113): the provider, its chat model and its
+    embedding model. A value tuned, or a result measured, on one configuration does not carry
+    over to another, so every record names its own."""
+    provider = settings.AI_PROVIDER
+    if provider == "anthropic":
+        return {"ai_provider": provider, "chat_model": settings.ANTHROPIC_MODEL,
+                "embedding_model": settings.VOYAGE_MODEL}
+    return {"ai_provider": provider, "chat_model": settings.FLM_CHAT_MODEL,
+            "embedding_model": settings.FLM_EMBED_MODEL}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -160,6 +172,7 @@ def main() -> int:
 
     record = measurement_record.run_record(dump_sha256=None, database="none: nothing is read from or written to a database",
                                            flm=version.as_record())
+    record["configuration"] = provider_record(settings)
     record.update({"kind": "Objective 06 development sweep for GAP_GROUPING_THRESHOLD (D-109)",
                    "dev_set": str(DEV_SET.relative_to(REPOSITORY_ROOT)), "dev_set_sha256": measurement_record.file_sha256(DEV_SET),
                    "embedding_model": model, "items": len(items), "positive_pairs": len(positives), "negative_pairs": len(negatives),
