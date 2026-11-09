@@ -1281,6 +1281,12 @@ Mitigations, all of which cost nothing:
 - The AMD driver version the NPU depends on is recorded, after a
   `VIDEO_SCHEDULER_INTERNAL_ERROR` bugcheck under FLM load on 21 September 2026.
 
+**Dated note, 10 November 2026: superseded by D-113 and D-114.** The premise, "The team has no
+budget", no longer holds. The user's Max plan includes $100 of Claude API credits each billing
+cycle, so the `anthropic` provider is funded and brought into use (D-113). The demonstration is no
+longer tied to one machine: M8 can be hosted on any device with the platform in place (D-114). What
+this entry records about the past stays true where it was written.
+
 ## D-36 · FastFlowLM pinned to v0.9.39, and what the health check has to prove
 
 **Status:** Settled · **Date:** 2026-09-22 · **Closes:** the implicit assumption that
@@ -3566,6 +3572,12 @@ only, and D-88 left "M8's hosting and database" open. The user has settled the h
     anyone who can reach it;
   - how NFR-03's TLS scan is met. This entry put HTTPS out of scope for the alpha, and moved that
     scan to round 2.
+
+**Dated note, 10 November 2026: the 7 November note's hosting is superseded by D-114.** M8 can be
+hosted on any device with the platform in place. The note's reason, that FastFlowLM needs this
+laptop's NPU and there is no budget for Claude, fell with D-113. The laptop with FLM remains one
+valid host. The three open points above stay open, and D-114 restates them. This entry's M6 alpha
+decision is unchanged.
 
 ## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
 
@@ -6111,6 +6123,10 @@ stored.
   failure" this decision's table names.
 - **Step 7 starts from this baseline,** and its "after" runs the same threads again.
 
+**Dated note, 10 November 2026: settled by D-112.** Three measured attempts were not adopted (D-103,
+D-111). FR-13's follow-up clause is accepted as partial for NIT3003, as a recorded deviation, and the
+generation-side lever moves to NIT3004. "Work continuing" no longer describes it, for the FLM build.
+
 ## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,
@@ -6629,6 +6645,68 @@ generation, with verification behind it.
   - The HTTP check: WIRED 3 of 3, 0 leaks. t04's second turn was correct through the server.
   - FR-13 stays partial: most follow-ups that need the earlier turn still fail.
 
+## D-103 · FR-13's follow-up options 1 and 2 were built, measured and not adopted; a single-run delta on these sets sits inside a measured ±1–2-run band
+
+**9 November 2026 · Step 7 phase 3 · Evidence: `corpus/objective-02/runs/2026-11-08/fr13-phase3-dev/`
+and `runs/2026-11-09/fr13-phase3/` · Branch `fix/FR-13-follow-up-focus`, commits `b2ebba8`, `d19a027`.**
+
+**What was tried,** against D-91's open failure (follow-ups restate turn 1), approved 8 November:
+
+- **Option 1:** a conversational-block instruction to answer only the question asked and not restate
+  facts that answer the earlier questions. Single-turn prompts stayed byte-identical, under test.
+- **Option 2:** rank each in-scope candidate by the larger of its score against the composed
+  retrieval string and against the follow-up alone. Scope filtering untouched, before ranking.
+
+**The rule, fixed before any run:** adopt only what raises with-history matching on a new
+development thread set without lowering first-turn, spelled-out, correct declines, conformance, or
+the zero out-of-scope count. Tuning ran on `corpus/objective-02/dev-threads.json` (12 user-worded
+threads, t20–t31; automated overlap against both frozen sets at phase 2a's thresholds, 0 of 1,960
+pairs flagged), never on the frozen sets (D-93).
+
+| config | with-history | first-turn | spelled-out | cold | declines | schema | out-of-scope |
+|---|---|---|---|---|---|---|---|
+| main | 8/12 | 8/14 | 9/12 | 6/12 | 3/6 | 52/52 | 0 |
+| option 1 | 8/12 | 8/14 | 9/12 | 6/12 | 3/6 | 52/52 | 0 |
+| option 2 | 7/12 | 7/14 | 9/12 | 7/12 | 3/6 | 52/52 | 0 |
+| both | 6/12 | 8/14 | 9/12 | 7/12 | 3/6 | 52/52 | 0 |
+
+**Decision: neither is adopted.** `apps/` and `scripts/` stay byte-identical to `711fcda`. The full
+candidate — both options, their 11 break-tested tests, the harness and HTTP-check updates — is
+preserved at `runs/2026-11-08/fr13-phase3-dev/candidate_code.diff`, one `git apply` from returning.
+
+- **Option 1 moved nothing:** 8/12 against 8/12 — two threads gained, two lost, each by a single run.
+- **Option 2 admitted more passages at 0.30** (t21, t22, t24, t27), and the extra passages correlated
+  with lost matches — the direction D-102 measured at 0.24. Where it worked exactly as designed
+  (t28-admin: the right source from unsupplied to rank 2, supplied), generation still answered from
+  turn 1's material. The restatement failure is in generation's use of the context, not in what
+  retrieval supplies.
+- **For D-102's open decline problem:** correct declines sat at 3/6 in every configuration — the
+  option 1 instruction did not move the scoped answering behaviour at all — and t29-admin cited D14
+  over the supplied D15 in all four configurations, giving the wrong-passage problem a reproducible
+  case. Any retrieval change that admits more passages at 0.30 should be expected to push declines
+  further down.
+
+**The variance band, now measured rather than suspected.** The frozen nine were re-run on code
+byte-identical to the 8 November "after": with-history came back **3/9 against 2/9**, exactly one of
+44 runs flipped — on an identical supplied passage set — and after-030's four cold fabrications did
+not recur. On sets of 9–12 threads, a single-pass delta of ±1–2 runs is noise. After-030's "1/9 →
+2/9" and this run's 3/9 are the same number inside that band, and no future FR-13 delta may be read
+as an effect unless it clears it.
+
+**Why the development set could not detect the fix it was built to tune:** 8 of its 10 answerable
+follow-ups keep their source inside turn 1's item, so retrieving turn 1's material still supplies
+the right passage and the frozen failure mode — cross-source follow-ups — does not reproduce
+(main: 8/12 with history on the development threads, 3/9 frozen).
+
+**Before any further attempt:** a cross-source development thread set, and repeated draws per
+configuration so the rule compares means, not single passes. Until then FR-13 stays partial (D-91)
+and D-56 stays open.
+
+**Disclosure (under D-93):** the builder read `runs/2026-11-07/dev_set_overlap.txt` — phase 2a's
+console record, which quotes ~25 frozen questions — while studying the overlap method, before
+drafting. The drafts avoided those topics and the identifier-only automated check is the control.
+On the record; whether that console file should be redacted from the repository is open.
+
 ## D-104 · FR-10's classification is the fourth AI operation, `classify_document`, in its own module
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** CLAUDE.md §4,
@@ -6939,3 +7017,268 @@ consulted.
   and the embedding model. The two sweeps above ran on `flm`, `gemma3:4b`; classification calls no
   embedding model.
 - **Not covered:** a confidence derived from anything but the model's own report.
+
+## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,
+D-103 · **Evidence:** `corpus/objective-02/runs/2026-11-09/fr13-phase4-dev/phase4.md` and
+`runs/2026-11-09/fr13-phase4/` · **Commits:** `48c20cf` (the candidate), `9226b1b` (the
+measurement), `a1fb201` (the withdrawal), on `feat/FR-13-followup-rewrite`.
+
+**Why option 3.** D-103 found the restatement failure was in generation's use of the context, while
+the spelled-out arm answered 6 of 9 frozen follow-ups. Option 3 had the model rewrite a follow-up
+into a standalone question, embedded for retrieval only. The rewrite reached no prompt, reply or
+citation, and only questions entered it (D-42).
+
+**What was built** (`48c20cf`):
+- a fourth `AIService` operation, `rewrite_followup`, with one attempt and then the composed join as
+  a fallback, so an ask never failed because the rewrite did;
+- a record-only `QueryLog.retrieval_rewrite` column;
+- the measuring tools re-running the server's stored rewrite.
+
+It came with 21 break-tested tests, and the full suite passed 2,369.
+
+**The rule, fixed before any run.** The arms were means over three draws on the development threads.
+Those were extended with seven cross-source threads, t32 to t38: their overlap check against both
+frozen sets flagged 0 of 3,136 pairs. Option 3 would be adopted only if all of these held:
+- its mean with-history match beat `main`'s by **more than 2 runs**;
+- no guard arm's mean fell by more than 1;
+- conformance held;
+- 0 passages out of scope.
+
+| arm | with-history (/19) | first-turn (/22) | spelled-out (/19) | correct declines | out of scope |
+|---|---|---|---|---|---|
+| `main`, three draws | 10, 9, 9 (mean 9.33) | 14, 14, 14 | 12, 12, 12 | 5/9, 2/6, 2/6 | 0 |
+| option 3, three draws | 10, 10, 10 (mean 10.00) | 14, 14, 14 | 12, 12, 12 | 6/9, 3/6, 3/6 | 0 |
+
+**Decision (the user's): not adopted.** The gain was +0.67 runs, inside D-103's band.
+- **No guard fell.** Correct declines were a mean of 1 better under option 3.
+- **The code is withdrawn by `a1fb201`.** It reverts `48c20cf` except the development threads, so
+  `apps/`, `scripts/`, `CLAUDE.md` and `docs/` are as they were. Retrieval migration 0004 was never
+  pushed, and `kmp_obj02_20261101` ends at 0003, as checked.
+- **Kept:** t32 to t38, and the phase 4 evidence.
+- **Restoring it is reverting `a1fb201`.** The phase 4 runner scripts under `corpus/` need it to run.
+
+**What the measurement found.**
+- **The rewrite itself was reliable in form.** All 66 with-history runs used it, with no fallback.
+  The median call took 4.1 s, p90 5.3 s, and at most 6.7 s.
+- **But gemma3:4b often failed to merge the referent.** The rewrite redistributed which follow-ups
+  resolved, rather than adding to them:
+  - **Gained:** t36 and t38, the cross-source shape that fails on the frozen set; t28 for the
+    Administrator; and t22, where a wrong-passage citation was corrected.
+  - **Lost:** t23 and t24 to rewrites that dropped the referent, and t27, its one lucky draw.
+  - **t31's "match" under `main`** was an accident of join retrieval on a previous-answer thread.
+    Option 3 declines it, as D-42 and D-86's decision 2 predict.
+- **On t32, t34 and t35, the expected source was supplied at rank 1,** and generation still answered
+  from the turn-1-adjacent passage below it. D-103's reading is reproduced with retrieval clean.
+- **The frozen nine were run once, after the rule had decided, on `main`'s configuration.**
+  - With history: **2/9**, beside 2/9 (8 November) and 3/9 (9 November) on identical code.
+  - Spelled out 6/9, first turn 7/11, cold 1/9; schema 38/38; 0 leaks.
+  - Nothing was changed after this result.
+
+**If the generation model changes,** that is a separate decision. This one's premise was
+gemma3:4b's ability to rewrite, so option 3 is a cheap candidate to measure again on the new model:
+revert `a1fb201`, then run the same rule.
+
+## D-112 · FR-13's follow-up clause is accepted as partial for NIT3003, and Stage 5 may close with it as a recorded deviation
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-60, D-91, D-92,
+D-103, D-111, Stage 5 item 10 · **Supersedes:** D-91's "partial, with work continuing" status, for
+the FLM build
+
+**The clause.** FR-13, Server-End: "Maintains conversation context per session and passes prior
+turns alongside the new question so that pronouns and abbreviated references resolve correctly."
+
+**Its measured state on the shipped build** (FLM v0.9.39, gemma3:4b, the frozen nine threads):
+
+| | with history | spelled out | out of scope |
+|---|---|---|---|
+| 8 November (the step 7 "after") | 2/9 | 6/9 | 0 |
+| 9 November, phase 3, identical code | 3/9 | 6/9 | 0 |
+| 9 November, phase 4, identical code | 2/9 | 6/9 | 0 |
+
+- **What holds:** the history is wired (WIRED 3/3 through the server), it is re-scoped every turn,
+  and there were 0 leaks.
+- **What does not:** follow-ups that need the earlier turn mostly fail. The clause is half met: prior
+  turns are passed, but pronouns do not resolve reliably.
+
+**Three attempts, each measured under a rule fixed before it ran, and none adopted:**
+- option 1, a prompt instruction (D-103);
+- option 2, max-of-two retrieval scores (D-103);
+- option 3, a standalone rewrite for retrieval (D-111).
+
+**The evidence converges.** On several threads the right passage was supplied at rank 1, and
+generation answered from the turn-1-adjacent passage. That is the same lever as D-102's open decline
+finding: generation's use of supplied context. Its next step is one experiment, deferred:
+- isolate the cap sentence from prompt rule 8;
+- then try a prompt-level fix, under the same measurement rules.
+
+**Decision (the user's, 10 November):**
+
+- **FR-13's follow-up clause is accepted as partial for NIT3003.** The generation-side lever moves
+  to NIT3004.
+- **Stage 5's exit criterion is amended.** `M6-BUILD-PROMPT.md`'s Done line admitted only D-60's
+  decline. It now also admits this accepted deviation, with a dated amendment there.
+  - The set-level verdict can be COMPLETE with FR-13's clause presented as a deviation, giving its
+    reason and these numbers: in the closing audit, the demonstration script's deviations list, and
+    any assessment answer.
+  - It is never presented as a tick.
+- **This acceptance describes the FLM build.** If the generation or embedding provider changes
+  (that is pending as its own decision), FR-13 is measured again on the new provider under the same
+  rules. This record does not carry over to it.
+
+**Where it applies:** D-91 (a dated note), `M6-BUILD-PROMPT.md`'s Done line, and Stage 5 item 10's
+closing run.
+
+## D-113 · D-35 is superseded: the `anthropic` provider is funded by the Max plan's monthly Claude API credits, and is brought into use
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-35, D-03, D-04, D-36, D-67,
+D-83, D-102, D-112, `CLAUDE.md` §4, `docs/ai-provider.md` · **Supersedes:** D-35's "no external AI
+spend", and `CLAUDE.md` §4's "no budget … Plan nothing around a provider switch"
+
+**What changed.** D-35 rested on one premise: "The team has no budget, and no member funds it
+personally." The user's Claude Max plan includes Claude API credits, $100 USD per billing cycle. The
+user showed Anthropic's "API credits for Max, Ultra, and Team plans" page on 9 November.
+- **How they work:** they are claimed by linking a Claude Console organisation to the plan, with no
+  payment method. They cover the Claude API, not Claude Code. They expire each cycle, with no
+  rollover.
+- **Voyage is not covered.** It is a separate company. It has 200M free tokens, limited to 3 requests
+  and 10K tokens a minute until a payment method is added.
+
+**Decision (the user's):**
+
+- **The `anthropic` provider is funded and brought into use** for development, measurement and
+  demonstration: Claude for generation, Voyage for embeddings, the proposal's §9.2 configuration.
+  The user is implementing it. The live-call path was dormant until now, and its first fixes are on
+  `fix/FR-12-claude-live-call`.
+- **`flm` remains implemented, pinned at v0.9.39 (D-83), and available.** D-35's other half also
+  falls: the demonstration no longer depends on one machine. D-114 records what that means for M8.
+- **The keys:** a Console API key from the linked organisation, never the Max sign-in, plus a Voyage
+  key. Both live in `.env` only and are never committed or pasted into a chat. Adding a payment
+  method to Voyage, which NFR-08's load test and normal use need beyond the free rate limit, is the
+  user's to do.
+- **Spend stays within the monthly credit.** A run expected to exceed it needs the user's say-so
+  first.
+- **`CLAUDE.md` §4 and `docs/ai-provider.md` §1 are amended** to say this, with the user's approval
+  of 10 November.
+
+**Consequences, all following from rules already settled:**
+
+- **A provider switch is a full re-index (R10).** Voyage's vectors are not comparable with
+  `embed-gemma`'s 768 dimensions (D-03).
+  - If the chosen Voyage model does not output 768 dimensions, the pgvector column changes, and that
+    is a schema migration under `CLAUDE.md` §7.
+- **`manage.py reindex` deletes and recreates every chunk.** On a database with conversation history,
+  every `AnswerCitation.chunk` is then nulled (`SET_NULL`, D-67), and every reopened thread shows its
+  provenance as removed.
+  - So re-index a **new database restored from the snapshot.** Never re-index in place on
+    `kmp_obj02_20261101` (the FLM measurement baseline) or `kmp_demo_20261101` (the alpha). Creating
+    that database needs the user's word, as every database operation does.
+- **Every tuned value and baseline describes FLM's vectors and gemma3:4b:**
+  - `RELEVANCE_THRESHOLD = 0.30` is an `embed-gemma` cosine (D-102);
+  - D-100's cap was chosen against gemma3:4b's truncation;
+  - D-103's ±1–2-run band;
+  - the frozen thirty, the nine threads, NFR-08's p90.
+
+  Before `anthropic` is relied on, its threshold is re-derived on development material
+  (`dev-set-v2.json`). Then the frozen sets and NFR-08 are run on it under
+  `docs/measurement-runbook.md`, and FR-13 is measured again (D-112). `questions.json` and
+  `threads.json` stay frozen. Nothing is tuned against them.
+- **Document text and questions leave the machine** for Anthropic and Voyage while this provider is
+  selected. That is the proposal's production design, accepted with this decision.
+- **Records that cite D-35 for the past stay true where written:** the NFR-08 local-model baseline,
+  the M6 walk, the recording (D-98) and the code comments on the dormant path. The code comments are
+  for the session implementing the provider to update.
+- **Which provider is the default and which one M8 runs on are not decided here.** They are measured
+  first. D-114 decides only that the host is no longer tied to the NPU.
+
+**Where it applies:** D-35 (a dated note), `CLAUDE.md` §4, `docs/ai-provider.md` §1, and dated notes
+in `M6-BUILD-PROMPT.md` (the hosting paragraph) and `docs/stage-4-open-items.md` §2.3.
+
+## D-114 · M8 can be hosted on any device with the platform in place; the NPU laptop is no longer required
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-64 and its 7 November note,
+D-35, D-88, D-113, NFR-03, FR-01 · **Supersedes:** D-64's 7 November note, "M8 is hosted on the NPU
+laptop, with FastFlowLM"
+
+**Decision (the user's).** M8, the final deployment on 27 November, can be hosted on any device that
+has the platform in place:
+- PostgreSQL 16 with pgvector;
+- the Django back end under its WSGI server;
+- the built front end;
+- a `.env` naming the database and the provider.
+
+On the `anthropic` provider, generation and embedding run as API calls (D-113), so no NPU is needed.
+**The NPU laptop with FLM remains a valid host.**
+
+**What this changes:**
+
+- **The 7 November note's reason no longer holds.** It gave two: the proposal's Google Cloud VM
+  cannot run FastFlowLM, and there was no budget for Claude. The VM design (Gunicorn behind Nginx
+  terminating TLS, Ubuntu 22.04) is available again for M8, as are the team's other machines and the
+  laptop itself.
+- **The host device is chosen later,** with the provider, once `anthropic` has been measured
+  (D-113). FLM still needs the laptop (D-36).
+- **Gunicorn runs on Linux and macOS, Waitress anywhere.** On a non-Windows host, item 9's
+  Waitress-specific notes in `docs/alpha-deployment.md` need their Gunicorn equivalent. The
+  configuration itself is environment-driven and carries over:
+  - `DEBUG`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`;
+  - the cookie flags;
+  - WhiteNoise's single origin;
+  - nothing serving `MEDIA_ROOT`.
+
+**Still open, from the 7 November note, and sharper now:**
+
+- **Which database M8 serves.** On `anthropic` it must be a Voyage-indexed copy, re-indexed fresh
+  (D-113).
+- **Whether M8 stays on loopback.** A host reached over a network exposes open registration (FR-01),
+  and needs:
+  - `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and the `*_COOKIE_SECURE` flags set;
+  - TLS in front;
+  - Postgres bound to loopback (PR #62's fix, which item 11's early pass found).
+
+  D-64 says exposing it is a new decision, with the registration question attached.
+- **NFR-03's TLS scan.** It needs a TLS-terminated deployment. Any host that is not loopback-only
+  makes it possible.
+- **Item 11's closing run reviews whichever host and configuration are chosen.** Its live checklist
+  was written for the loopback laptop and gains the network checks if the host is exposed.
+
+**Where it applies:** D-64 (a dated note) and `CLAUDE.md` §4's `anthropic` bullet.
+
+## D-115 · Sonnet 5.5 is the `anthropic` provider's default generation model, as the configuration under test
+
+**Status:** Settled by the user (the model); provisional (the call parameters) · **Date:** 2026-11-10 ·
+**Concerns:** D-113, D-102, D-103, D-111, FR-12, FR-13, `config/settings.py`, `apps/ai/anthropic.py`
+
+**Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5` in
+`config/settings.py` and `.env.example`. It replaces `claude-opus-5`, which was a release behind.
+
+- **Why Sonnet:** it costs $2 / $10 per million tokens, against Opus 5.5's $4 / $20, so D-113's monthly
+  credit goes about twice as far. At roughly 5K tokens in and 1–2K out, a question costs 2–3 cents:
+  about 4,000 questions a month, fewer when attempts are retried.
+- **This is the configuration under test, not a verdict.** D-113 left the default provider and the M8
+  provider to measurement, and the model follows the same rule. The threshold re-derivation, the
+  frozen thirty, the nine threads and NFR-08 run on Sonnet 5.5 first. Moving to another model after
+  that is a new decision and a new run.
+- **Changing the generation model is not a re-index.** Embeddings come from Voyage, so the vectors do
+  not depend on the Claude model.
+- **A `.env` that sets `ANTHROPIC_MODEL` overrides the default.** The development `.env` was changed
+  to match on 10 November.
+
+**The call parameters.** The implementing session set these on 10 November (`apps/ai/anthropic.py`,
+3a706d9). They are provisional until measured:
+
+- **No `temperature`.** The pinned SDK (anthropic 1.5.0) has no sampling parameters, and current Claude
+  models refuse them. Generation on this path is therefore not deterministic run to run, unlike FLM at
+  temperature 0, so the noise band is measured on this provider, not carried over from D-103.
+- **`thinking` is left at the model's default.** Disabling it is a 400 on Sonnet 5.5.
+- **`effort` is `"low"`,** because the task is extraction from supplied passages. It is the first
+  value to tune if the declines (D-102) or the rank-1 misreadings (D-111) persist.
+- **`CLAUDE_MAX_TOKENS = 16000`** is Claude's own ceiling, because the thinking counts against
+  `max_tokens`. FLM's 800 would cut replies off.
+
+**Not adopted: Anthropic's server-side refusal fallback for Sonnet 5.5.** It needs the beta endpoint,
+and a refusal on policy documents is unlikely. A refusal reaches the shared loop as an empty reply,
+fails the schema, and counts as a failed attempt.
+
+**Where it applies:** `config/settings.py`, `.env.example`, `apps/ai/anthropic.py`.

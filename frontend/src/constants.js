@@ -271,6 +271,22 @@ export const TEXT = {
   uploadDropHint: `Accepted formats: ${ACCEPTED_FORMATS_LABEL}. Up to ${MAX_UPLOAD_LABEL} per file.`,
   uploadDropTarget: 'Drop files here',
   uploadQueueEmpty: 'No files chosen yet.',
+  // Usability findings 1 and 2: what the drop zone itself says after a pick or a
+  // drop, where the pointer was released, rather than the browser's own "No file
+  // chosen". Every file goes into the queue, a refused one with its reason, so the
+  // sentence counts what was added and says how many of those cannot be sent.
+  dropZoneAdded: (names, refused) => {
+    const what = names.length === 1 ? names[0] : `${names.length} files`
+    let tail = ''
+    if (refused > 0 && names.length === 1) tail = ' It cannot be uploaded; the reason is shown beside it.'
+    else if (refused > 0 && refused === names.length) tail = ' None of them can be uploaded; the reason is shown beside each.'
+    else if (refused > 0) tail = ` ${refused} of them cannot be uploaded; the reason is shown beside each.`
+    return `Added ${what} to the queue below.${tail}`
+  },
+  // Finding 4: while the queue is sending, the zone says why it takes nothing, and a
+  // drop made meanwhile is answered rather than vanishing.
+  dropZoneBusy: 'Uploading. You can add more files once these have finished.',
+  dropZoneRefused: 'Nothing was added, because files are still uploading. Add more once they have finished.',
   uploadTransferring: 'Uploading',
   // The transfer has finished and the server is extracting, chunking and
   // embedding. Ingestion is synchronous (FR-08), so this is the wait.
@@ -618,11 +634,27 @@ export const TEXT = {
   meetingSourceText: 'Paste the transcript text',
   meetingSourceFile: 'Upload a transcript file',
   meetingSourceLegend: 'How are you supplying the transcript?',
+  // The transcript file's drop zone states its own state (usability finding 2).
+  meetingFileNone: 'No file chosen yet.',
+  meetingFileChosen: (name) => `Chosen: ${name}`,
+  meetingFileBusy: 'Adding the transcript. The file cannot be changed until it has finished.',
   // FR-09: attendees are a participation record and never an access control
   // (D-16, CLAUDE.md §6, invariant 3).
   attendeesHint:
     'A record of who took part. Attendees do not control who can read the transcript; visibility does.',
   loadingAttendees: 'Loading the list of people…',
+  // Usability finding 5: the picker adds one person at a time to a visible list,
+  // with no modifier keys. These are its words.
+  attendeeAddLabel: 'Add an attendee',
+  attendeeChoosePrompt: 'Choose a person…',
+  attendeeAllAdded: 'Everyone in the directory has been added.',
+  attendeeAddButton: 'Add',
+  attendeeListLabel: 'Attendees to be recorded',
+  attendeeNoneYet: 'No attendees added yet.',
+  attendeeRemove: 'Remove',
+  attendeeRemoveLabel: (person) => `Remove ${person}`,
+  attendeeAdded: (person) => `${person} added to the attendees.`,
+  attendeeRemoved: (person) => `${person} removed from the attendees.`,
   // No longer "only an Administrator can do this": FR-09's association is open to
   // every role, and the picker reads the directory any session may read (D-34).
   // This is the note for having nobody to choose from — a failed read, or a

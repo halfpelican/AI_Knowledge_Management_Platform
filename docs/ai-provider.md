@@ -3,10 +3,12 @@
 Every AI call in this system goes through one interface with two implementations.
 Nothing else in the codebase knows which model is answering.
 
-- **`flm`** — FastFlowLM on the AMD Ryzen AI NPU. Local, free, offline. **Default for
-  all development, testing and demonstration.**
+- **`flm`** — FastFlowLM on the AMD Ryzen AI NPU. Local, free, offline. **The default.**
 - **`anthropic`** — Claude for generation, Voyage for embeddings. The production
-  configuration documented in the proposal. Kept working, not used day to day.
+  configuration documented in the proposal. **Funded and brought into use from
+  10 November 2026** by the Max plan's monthly Claude API credits (D-113); M8 can be
+  hosted on any device with the platform in place (D-114). The default and M8's
+  provider are chosen by measurement; a switch is a full re-index (§4).
 
 Two things are easy to confuse and worth separating once: **Claude Code is the tool
 building this repository; FLM is what the built application calls at runtime.**
@@ -393,8 +395,11 @@ or a 5xx is a failed attempt; a non-conforming reply is a failed attempt; a 4xx 
 one call and consumes no retry; after the last attempt, `ProviderUnavailable` naming the
 provider and the last failure. Every attempt is recorded through `apps/ai/attempt_log.py` under
 the step `classification`, at WARNING when it failed and INFO when it parsed, quoting nothing of
-the reply. `temperature` is 0.0, `max_tokens` is `CLASSIFICATION_MAX_TOKENS` (400) and every
-call carries `CLASSIFICATION_TIMEOUT_SECONDS` (300). Both providers call the one loop; `model` on
+the reply. On FLM, `temperature` is 0.0 and `max_tokens` is `CLASSIFICATION_MAX_TOKENS` (400).
+On Claude there is no sampling parameter, which current models refuse, and `max_tokens` is
+`CLAUDE_MAX_TOKENS`, generation's Claude ceiling, because thinking counts against it and 400 would
+cut the reply off before its JSON (#67, D-115). Every call carries
+`CLASSIFICATION_TIMEOUT_SECONDS` (300). Both providers call the one loop; `model` on
 the result is `FLM_CHAT_MODEL` or `ANTHROPIC_MODEL`, whichever answered.
 
 **The stub** (`StubAIService.classify_document`). Deterministic and derived from the scheme: the
