@@ -477,7 +477,7 @@ class ControlledService:
         self.fabricate = fabricate
         self.generate_calls = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         return EmbeddingResult(
             vectors=[list(self.vector)], model=STUB_EMBEDDING_MODEL,
             dimension=settings.EMBEDDING_DIMENSION,

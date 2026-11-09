@@ -32,7 +32,7 @@ Two failure classes, deliberately not the same thing:
 from django.conf import settings
 
 import apps.ai
-from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.base import INPUT_TYPE_DOCUMENT, EmbeddingResult, ProviderUnavailable
 from apps.ai.prefixes import document_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS, SOURCE_TYPES
 from apps.documents.models import ContentChunk
@@ -54,6 +54,8 @@ def embed_and_store_chunks(
     ``title`` is the owning Document's or Meeting's title, and it goes into the
     document task prefix the embedding model is sent (apps/ai/prefixes.py). The
     prefixed string is what the provider receives; ``chunk.text`` is what is stored.
+    Each request also says it is a passage (``input_type=INPUT_TYPE_DOCUMENT``,
+    D-116), which is how Voyage learns what EmbeddingGemma reads from the prefix.
 
     A chunk that exhausts MAXIMUM_EMBED_ATTEMPTS, or that the provider answers
     unusably for, is counted and gets no row. Every other chunk gets one. The caller
@@ -100,7 +102,7 @@ def _embed_one(service, text: str) -> EmbeddingResult | None:
     """
     for _attempt in range(MAXIMUM_EMBED_ATTEMPTS):
         try:
-            result = service.embed([text])
+            result = service.embed([text], input_type=INPUT_TYPE_DOCUMENT)
         except ProviderUnavailable:
             # A transient outage. Retry; the loop bound is the whole policy.
             continue

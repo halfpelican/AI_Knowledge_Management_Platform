@@ -120,7 +120,7 @@ class OneVectorService:
         self.embed_calls = []
         self.attempts = Counter()
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.embed_calls.append(list(texts))
         self.attempts[texts[0]] += 1
         if any(self.fail_for(text) for text in texts):

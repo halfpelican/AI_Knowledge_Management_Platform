@@ -16,7 +16,14 @@ import random
 
 from django.conf import settings
 
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, Statement, StatementList
+from apps.ai.base import (
+    EmbeddingResult,
+    InputType,
+    Passage,
+    ProviderHealth,
+    Statement,
+    StatementList,
+)
 
 STUB_EMBEDDING_MODEL = "stub-embed"
 
@@ -41,6 +48,9 @@ class StubAIService:
         self.available = available
         self.detail = detail
         self.embed_calls: list[list[str]] = []
+        # The input_type each embed() call carried (D-116), one entry per call, in step
+        # with embed_calls.
+        self.embed_input_types: list[InputType | None] = []
         self.generate_calls: list[tuple[str, list[Passage]]] = []
 
     def vector_for(self, text: str) -> list[float]:
@@ -50,10 +60,11 @@ class StubAIService:
         rng = random.Random(seed)
         return [rng.uniform(-1.0, 1.0) for _ in range(self.dimension)]
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
         if not texts:
             raise ValueError("embed() needs at least one text")
         self.embed_calls.append(list(texts))
+        self.embed_input_types.append(input_type)
         return EmbeddingResult(
             vectors=[self.vector_for(text) for text in texts],
             model=STUB_EMBEDDING_MODEL,

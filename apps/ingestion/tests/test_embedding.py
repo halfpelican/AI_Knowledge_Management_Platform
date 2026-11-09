@@ -11,7 +11,7 @@ import pytest
 from django.conf import settings
 from django.test import override_settings
 
-from apps.ai.base import ProviderUnavailable
+from apps.ai.base import INPUT_TYPE_DOCUMENT, ProviderUnavailable
 from apps.ai.prefixes import document_text
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import (
@@ -83,6 +83,14 @@ def test_every_chunk_is_stored_with_the_model_and_dimension_the_provider_returne
         assert row.embedding_model == STUB_EMBEDDING_MODEL
         assert row.embedding_dimension == stub_ai_service.dimension
         assert len(row.embedding) == settings.EMBEDDING_DIMENSION
+
+
+def test_every_chunk_is_embedded_as_a_passage(stub_ai_service):
+    """D-116: each chunk's request says it is a passage. That is how Voyage learns what
+    EmbeddingGemma reads from the document prefix."""
+    store()
+
+    assert stub_ai_service.embed_input_types == [INPUT_TYPE_DOCUMENT] * len(CHUNKS)
 
 
 def test_every_chunk_carries_the_sources_visible_to_roles():

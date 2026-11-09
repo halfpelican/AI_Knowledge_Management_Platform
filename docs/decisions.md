@@ -6857,6 +6857,9 @@ user showed Anthropic's "API credits for Max, Ultra, and Team plans" page on 9 N
   `embed-gemma`'s 768 dimensions (D-03).
   - If the chosen Voyage model does not output 768 dimensions, the pgvector column changes, and that
     is a schema migration under `CLAUDE.md` §7.
+    - **Dated note, 10 November 2026: corrected by D-117.** voyage-4 never outputs 768. No
+      migration can change the width either, because migration 0002 already sizes the column from
+      `EMBEDDING_DIMENSION`. The column is resized by `reindex --resize-column` instead.
 - **`manage.py reindex` deletes and recreates every chunk.** On a database with conversation history,
   every `AnswerCitation.chunk` is then nulled (`SET_NULL`, D-67), and every reopened thread shows its
   provenance as removed.
@@ -6971,3 +6974,117 @@ and a refusal on policy documents is unlikely. A refusal reaches the shared loop
 fails the schema, and counts as a failed attempt.
 
 **Where it applies:** `config/settings.py`, `.env.example`, `apps/ai/anthropic.py`.
+
+## D-116 · `AIService.embed()` takes a keyword-only `input_type`, so Voyage is told whether it is embedding a question or a passage
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, FR-08, FR-12, R10,
+`apps/ai/base.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/prefixes.py`,
+`docs/ai-provider.md` §1
+
+**What prompted it.** Voyage marks each text as a question or a passage with an `input_type` field
+on the request, and puts a different instruction in front of each side. Voyage documents better
+retrieval with it. `embed(texts)` had no way to say which side a text is on.
+- `apps/ai/prefixes.py` already said that Voyage is told on the request rather than by a prefix,
+  but nothing passed it.
+- `docs/ai-provider.md` §1 says a parameter that changes what the model is asked is argued on its
+  own merits. This one does, so it was put to the user.
+
+**Decision (the user's, 10 November):**
+
+- **`embed(texts, *, input_type=None)`,** on the Protocol and on every implementation. The values
+  are Voyage's own, `"query"` and `"document"`, named `INPUT_TYPE_QUERY` and
+  `INPUT_TYPE_DOCUMENT` in `apps/ai/base.py`.
+- **Retrieval passes `"query"`** (`embed_question`). **Ingestion passes `"document"`** for every
+  chunk, `reindex` included. The width probes in `apps/ai/checks.py` and `reindex` pass nothing,
+  because the width does not depend on it.
+- **Voyage sends it,** and sends nothing when it is `None`, which is Voyage's default.
+- **FLM accepts it and sends nothing.** EmbeddingGemma's task prefixes already carry the side. They
+  stay in the callers, because the document prefix needs the title, which `embed()` never sees.
+- **The test doubles take the keyword too,** about twenty of them, under `apps/ai/base.py`'s rule
+  that a contract and its implementations do not differ by a parameter.
+  `apps/ai/tests/test_embed_input_type.py` checks the Protocol, both providers and the stub.
+
+**Consequences:**
+
+- **It changes Voyage's document vectors, so it had to land before the first Voyage re-index.** No
+  Voyage chunk exists yet. Voyage says vectors made with and without it stay comparable, but the
+  threshold re-derived under D-113 will describe vectors made with it.
+- **FLM is unchanged.** No FLM request carries the field, so nothing on the FLM baseline moves.
+- **`CLAUDE.md` §4's `AIService` snippet does not show the keyword,** just as it does not show
+  `on_attempt`. `docs/ai-provider.md` §1 does.
+- **Branches that implement `AIService`** need the keyword in their stubs when they merge. FR-10's
+  `classify_document` touches the same files.
+
+**Where it applies:** `apps/ai/base.py`, `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`,
+`apps/ai/flm.py`, `apps/ai/testing.py`, `apps/retrieval/query_embedding.py`,
+`apps/ingestion/embedding.py`, `docs/ai-provider.md` §1.
+
+## D-117 · A new embedding width is applied by `reindex --resize-column <database>`, not by a migration
+
+**Status:** Settled by the user (the resize flag); proposed by the implementing session (the
+database name as confirmation) · **Date:** 2026-11-10 · **Concerns:** D-03, D-08, D-28, D-67, D-113,
+R10, FR-08, `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4 ·
+**Corrects:** D-113's "that is a schema migration under `CLAUDE.md` §7"
+
+**What prompted it.**
+
+- **voyage-4 never outputs 768.** It outputs 1024 dimensions by default, and 256, 512 or 2048 on
+  request (Voyage's API reference, checked 10 November 2026). Moving to Voyage changes the
+  column's width.
+- **D-113 said that change "is a schema migration". It cannot be.** Migration 0002 sizes the column
+  from `EMBEDDING_DIMENSION` when it first runs, and the model reads the same setting, so the
+  migration state always matches the model.
+  - With `EMBEDDING_DIMENSION=1024`, `makemigrations --check` reports "No changes detected"
+    (checked offline, 10 November), and `migrate` has nothing to apply.
+  - A database restored from the FLM snapshot therefore keeps `vector(768)`.
+- **`reindex`'s own refusal gave advice that did nothing.** It told the operator to "run
+  makemigrations and migrate to resize the column".
+
+**Options put to the user:**
+
+- the resize inside `reindex`, behind an explicit flag;
+- a fresh database built by `migrate` at 1024 and loaded by script rather than restored from the
+  snapshot. That needs no resize code, but it departs from D-113, and the rows would not match the
+  FLM baseline's;
+- an unsized `vector` column. Any width fits, but Postgres stops refusing a wrong width and
+  `CLAUDE.md` §4's rule changes.
+
+**Decision (the user's, 10 November): `reindex --resize-column`.**
+
+- **Without the flag,** when the stored column's width is not `EMBEDDING_DIMENSION`, `reindex`
+  refuses and says why `migrate` cannot help.
+- **With it,** one transaction deletes every chunk through the ORM and alters the column to
+  `vector(EMBEDDING_DIMENSION)`. Deleting through the ORM sets each `AnswerCitation.chunk` to null
+  (D-67). The rebuild then runs as before, one source per transaction.
+- **None of the old vectors survive,** because they cannot be cast to the new width.
+  - A source that fails to rebuild afterwards has no chunks left. Its status is set to
+    `Indexing failed` (for a meeting, `Processing failed`) rather than left at `Indexed`.
+  - Running `reindex` again without the flag rebuilds those sources. A run interrupted after the
+    resize is finished the same way.
+- **`--dry-run`** reports the resize and changes nothing.
+
+**The flag's value is the connected database's name.** This is the implementing session's proposal,
+from the coordinating session's suggestion, and the user can drop it.
+- Deleting every chunk nulls every citation, so the command must be told which database it is
+  connected to: `reindex --resize-column <database>`.
+- A name that does not match is refused even when no resize is needed. The caller then believes
+  they are connected somewhere else, and an ordinary re-index nulls citations too.
+- This is what keeps `kmp_obj02_20261101` and `kmp_demo_20261101` safe from a slip.
+
+**Consequences:**
+
+- **The switch on a restored copy:** set `AI_PROVIDER=anthropic`, `EMBEDDING_DIMENSION=1024` and the
+  two keys in `.env`. Then run
+  `python manage.py reindex --provider anthropic --resize-column <database>`. A database built by
+  `migrate` at 1024 needs no flag.
+- **Voyage's free tier cannot carry a re-index.** Each chunk is its own request (D-28). The free tier
+  allows 3 requests a minute, and a 429 is a 4xx, which fails the source rather than being retried.
+  The payment method D-113 leaves to the user comes first: Tier 1 allows 2,000 requests and 8M
+  tokens a minute.
+- **The schema is unchanged.** There is no migration and no model change, so `makemigrations --check`
+  still passes. Postgres still refuses a vector of the wrong width.
+- **Django's foreign keys are deferred,** so the delete leaves checks pending, and Postgres refuses
+  to alter a table while they are. The command runs them first, with `connection.check_constraints()`.
+
+**Where it applies:** `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4,
+`.env.example`, and a dated note on D-113.

@@ -310,7 +310,7 @@ def disagreement(administrator):
 class _CitingService:
     """A double: the query vector is QUERY, and the reply cites the first passage supplied."""
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         return EmbeddingResult(
             vectors=[list(QUERY)], model=STUB_EMBEDDING_MODEL, dimension=settings.EMBEDDING_DIMENSION
         )

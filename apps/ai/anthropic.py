@@ -22,7 +22,14 @@ import anthropic as anthropic_sdk
 from django.conf import settings
 
 from apps.ai import _openai_compat
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
+from apps.ai.base import (
+    EmbeddingResult,
+    InputType,
+    Passage,
+    ProviderHealth,
+    ProviderUnavailable,
+    StatementList,
+)
 from apps.ai.generation import (
     GENERATION_TIMEOUT_SECONDS,
     ChatReply,
@@ -68,11 +75,27 @@ class AnthropicService:
             )
         return self._anthropic_client
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
+        """Voyage embeddings, at voyage-4's default 1024 dimensions.
+
+        ``input_type`` goes on the request (D-116). Voyage puts a different instruction
+        in front of a question and a passage, and Voyage says retrieval improves with
+        it. None sends nothing, which is Voyage's default. The texts arrive unprefixed:
+        apps/ai/prefixes.py adds EmbeddingGemma's prefixes and nothing for Voyage.
+
+        No ``output_dimension`` is sent, so the width is the model's default. The
+        startup check and ``reindex`` compare it with EMBEDDING_DIMENSION, which must be
+        1024 for this provider. A database first built at FLM's 768 needs
+        ``reindex --resize-column`` (D-117).
+        """
         if not texts:
             raise ValueError("embed() needs at least one text")
         return _openai_compat.embed(
-            self._voyage(), settings.VOYAGE_MODEL, texts, endpoint=settings.VOYAGE_BASE_URL
+            self._voyage(),
+            settings.VOYAGE_MODEL,
+            texts,
+            endpoint=settings.VOYAGE_BASE_URL,
+            extra_body={"input_type": input_type} if input_type else None,
         )
 
     def generate_statements(

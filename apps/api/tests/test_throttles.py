@@ -149,7 +149,7 @@ class SecondTabProbe:
         self.second_tab = second_tab
         self.seen = seen
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         if "in flight" not in self.seen:
             self.seen["in flight"] = ask(self.second_tab)
         return EmbeddingResult(

@@ -16,12 +16,27 @@ def build_client(base_url: str, api_key: str) -> openai.OpenAI:
     return openai.OpenAI(base_url=base_url, api_key=api_key, max_retries=0)
 
 
-def embed(client: openai.OpenAI, model: str, texts: list[str], endpoint: str) -> EmbeddingResult:
-    """Embed ``texts`` with ``model`` through ``client``; ``endpoint`` labels messages."""
+def embed(
+    client: openai.OpenAI,
+    model: str,
+    texts: list[str],
+    endpoint: str,
+    *,
+    extra_body: dict | None = None,
+) -> EmbeddingResult:
+    """Embed ``texts`` with ``model`` through ``client``; ``endpoint`` labels messages.
+
+    ``extra_body`` adds fields the OpenAI shape does not have, such as Voyage's
+    ``input_type`` (D-116). FLM's requests never carry one.
+
+    The client asks for base64 by default and decodes it as float32. That matches what
+    Voyage documents for base64: a float32 NumPy array. A server that answers with plain
+    floats, as FLM does, is passed through unchanged.
+    """
     if not texts:
         raise ValueError("embed() needs at least one text")
     try:
-        response = client.embeddings.create(model=model, input=texts)
+        response = client.embeddings.create(model=model, input=texts, extra_body=extra_body)
     except (openai.APITimeoutError, openai.APIConnectionError) as exc:
         raise ProviderUnavailable(f"{endpoint} unreachable: {exc}") from exc
     except openai.APIStatusError as exc:

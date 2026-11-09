@@ -149,7 +149,7 @@ class ControlledService:
         self.embed_calls: list[list[str]] = []
         self.generate_calls: list[tuple] = []
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type=None) -> EmbeddingResult:
         self.embed_calls.append(list(texts))
         return EmbeddingResult(
             vectors=[list(self.vector)],
@@ -465,7 +465,7 @@ def test_a_provider_outage_is_not_converted_into_a_no_answer(employee, monkeypat
     """
 
     class DownService(ControlledService):
-        def embed(self, texts):
+        def embed(self, texts, *, input_type=None):
             self.embed_calls.append(list(texts))
             raise ProviderUnavailable("the provider is down")
 

@@ -11,7 +11,14 @@ import openai
 from django.conf import settings
 
 from apps.ai import _openai_compat
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
+from apps.ai.base import (
+    EmbeddingResult,
+    InputType,
+    Passage,
+    ProviderHealth,
+    ProviderUnavailable,
+    StatementList,
+)
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
@@ -29,7 +36,10 @@ class FLMService:
             settings.FLM_BASE_URL, settings.FLM_API_KEY
         )
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
+        # input_type is accepted and not sent (D-116). EmbeddingGemma learns whether a
+        # text is a question or a passage from the task prefix the caller has already
+        # put in the text (apps/ai/prefixes.py). FLM's /embeddings has no such field.
         return _openai_compat.embed(
             self._client, settings.FLM_EMBED_MODEL, texts, endpoint=settings.FLM_BASE_URL
         )

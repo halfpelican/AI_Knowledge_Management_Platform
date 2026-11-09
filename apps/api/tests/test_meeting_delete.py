@@ -90,7 +90,7 @@ class ControlledService:
         self.embed_calls = []
         self.generate_calls = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.embed_calls.append(list(texts))
         return EmbeddingResult(
             vectors=[list(QUERY)], model=STUB_EMBEDDING_MODEL, dimension=settings.EMBEDDING_DIMENSION

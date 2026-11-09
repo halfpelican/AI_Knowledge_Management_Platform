@@ -5,9 +5,11 @@ suite never spends: the generation tests below and the health tests inject a fak
 and the embed tests use the openai SDK's MockTransport, as the FLM tests do.
 """
 
+import base64
 import inspect
 import json
 import logging
+import struct
 from types import SimpleNamespace
 
 import anthropic as anthropic_sdk
@@ -18,7 +20,13 @@ from django.test import override_settings
 
 from apps.ai import attempt_log
 from apps.ai.anthropic import CLAUDE_EFFORT, CLAUDE_MAX_TOKENS, AnthropicService
-from apps.ai.base import Passage, ProviderHealth, ProviderUnavailable
+from apps.ai.base import (
+    INPUT_TYPE_DOCUMENT,
+    INPUT_TYPE_QUERY,
+    Passage,
+    ProviderHealth,
+    ProviderUnavailable,
+)
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS, fewer_statements
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt, statement_cap_sentence
 from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS, MAXIMUM_STATEMENTS
@@ -115,6 +123,72 @@ def test_embed_wraps_a_voyage_outage():
 def test_embed_without_a_voyage_key_is_unavailable_not_a_crash():
     with override_settings(VOYAGE_API_KEY=""), pytest.raises(ProviderUnavailable, match="VOYAGE_API_KEY"):
         AnthropicService().embed(["alpha"])
+
+
+@pytest.mark.parametrize("input_type", [INPUT_TYPE_QUERY, INPUT_TYPE_DOCUMENT])
+def test_embed_tells_voyage_whether_the_text_is_a_question_or_a_passage(input_type):
+    """D-116: Voyage is told on the request, not by a prefix in the text."""
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return voyage_response(request)
+
+    AnthropicService(embedding_client=voyage_client(handler)).embed(
+        ["alpha"], input_type=input_type
+    )
+
+    assert sent[0]["input_type"] == input_type
+    assert sent[0]["input"] == ["alpha"]  # the text goes as given, with no prefix added
+
+
+def test_embed_without_an_input_type_sends_none_and_no_width():
+    """A dimension probe passes no input_type, so Voyage's default (null) applies.
+
+    No output_dimension either: the width is voyage-4's default, and EMBEDDING_DIMENSION
+    is what has to match it (D-117).
+    """
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return voyage_response(request)
+
+    AnthropicService(embedding_client=voyage_client(handler)).embed(["probe"])
+
+    assert "input_type" not in sent[0]
+    assert "output_dimension" not in sent[0]
+
+
+def test_embed_decodes_the_base64_float32_vectors_it_asks_voyage_for():
+    """The openai client asks for base64 and decodes it as float32.
+
+    Voyage documents base64 as a float32 NumPy array, which is little-endian on the
+    machines both ends run on. These values are exact in float32, so the round trip is
+    exact too.
+    """
+    values = [0.5, -0.25, 1.0, 0.125]
+    encoded = base64.b64encode(struct.pack(f"<{len(values)}f", *values)).decode("ascii")
+    sent = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        sent.append(body)
+        return httpx2.Response(
+            200,
+            json={
+                "object": "list",
+                "data": [{"object": "embedding", "embedding": encoded, "index": 0}],
+                "model": body["model"],
+                "usage": {"total_tokens": 3},
+            },
+        )
+
+    result = AnthropicService(embedding_client=voyage_client(handler)).embed(["alpha"])
+
+    assert sent[0]["encoding_format"] == "base64"
+    assert result.vectors == [values]
+    assert result.dimension == len(values)
 
 
 def test_health_is_unavailable_when_the_anthropic_key_is_empty():

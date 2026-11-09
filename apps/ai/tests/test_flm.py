@@ -7,7 +7,13 @@ import openai
 import pytest
 from django.test import override_settings
 
-from apps.ai.base import EmbeddingResult, ProviderHealth, ProviderUnavailable
+from apps.ai.base import (
+    INPUT_TYPE_DOCUMENT,
+    INPUT_TYPE_QUERY,
+    EmbeddingResult,
+    ProviderHealth,
+    ProviderUnavailable,
+)
 from apps.ai.flm import FLMService
 
 BASE_URL = "http://flm.test/v1"
@@ -88,6 +94,22 @@ def test_embed_orders_vectors_by_index_not_by_response_order():
         ["a", "b", "c"]
     )
     assert [vector[0] for vector in result.vectors] == [1.0, 2.0, 3.0]
+
+
+@pytest.mark.parametrize("input_type", [None, INPUT_TYPE_QUERY, INPUT_TYPE_DOCUMENT])
+def test_embed_never_sends_an_input_type_to_flm(input_type):
+    """D-116: EmbeddingGemma reads the side from the task prefix already in the text
+    (apps/ai/prefixes.py), and FLM's /embeddings has no input_type field."""
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return embeddings_response(request)
+
+    make_service(handler).embed(["alpha"], input_type=input_type)
+
+    assert "input_type" not in sent[0]
+    assert sent[0]["input"] == ["alpha"]
 
 
 def test_embed_rejects_an_empty_list_without_calling_the_server():

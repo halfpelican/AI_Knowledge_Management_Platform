@@ -7,13 +7,19 @@ a vendor SDK (CLAUDE.md section 4). Classification (FR-10) and summarisation
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Literal, Protocol
 
 if TYPE_CHECKING:
     # The observer's record type. Imported for type checkers only: it lives beside the
     # attempt loop that builds it (apps/ai/generation.py), which imports this module, so
     # a runtime import here would be a cycle.
     from apps.ai.generation import GenerationAttempt
+
+# What the texts passed to embed() are (D-116): a question being asked, or a passage
+# being indexed. These are Voyage's own two values for its ``input_type`` field.
+INPUT_TYPE_QUERY = "query"
+INPUT_TYPE_DOCUMENT = "document"
+InputType = Literal["query", "document"]
 
 
 @dataclass(frozen=True)
@@ -56,7 +62,19 @@ class ProviderUnavailable(Exception):
 
 
 class AIService(Protocol):
-    def embed(self, texts: list[str]) -> EmbeddingResult: ...
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
+        """One vector per text, with the model and width that produced them.
+
+        ``input_type`` says what the texts are: INPUT_TYPE_QUERY for a question,
+        INPUT_TYPE_DOCUMENT for a passage being indexed, or None where it makes no
+        difference, as in a dimension probe. It is keyword-only and defaults to None.
+        Unlike ``on_attempt`` it does change what the model is asked, which is why it
+        has a decision of its own (D-116): Voyage puts a different instruction in
+        front of each side. EmbeddingGemma learns the same thing from the task prefix
+        in the text itself (apps/ai/prefixes.py), so the FLM provider accepts the
+        argument and sends nothing for it.
+        """
+        ...
 
     def generate_statements(
         self,
