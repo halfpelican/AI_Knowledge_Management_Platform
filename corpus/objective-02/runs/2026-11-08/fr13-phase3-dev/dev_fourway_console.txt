@@ -1,0 +1,308 @@
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (1.8s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (1.2s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1294
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+FLM v0.9.39 (flm version), server v0.9.39
+dev threads: 12 thread(s), 56 run(s) per configuration; set sha256 18d142f02c19fc19
+
+===== configuration main: prompt=old retrieval=single, 56 run(s) =====
+[1/56] t20@Employee/first-turn            answered         match=no  correct=no  leaks=0 (15.7s)
+[2/56] t20@Employee/with-history          answered         match=yes correct=yes leaks=0 (24.2s)
+[3/56] t20@Employee/cold                  answered         match=yes correct=yes leaks=0 (20.5s)
+[4/56] t20@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (31.2s)
+[5/56] t21@Employee/first-turn            answered         match=yes correct=yes leaks=0 (13.2s)
+[6/56] t21@Employee/with-history          answered         match=yes correct=yes leaks=0 (18.9s)
+[7/56] t21@Employee/cold                  answered         match=yes correct=yes leaks=0 (37.4s)
+[8/56] t21@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (17.0s)
+[9/56] t22@Employee/first-turn            answered         match=yes correct=yes leaks=0 (18.8s)
+[10/56] t22@Employee/with-history          answered         match=no  correct=no  leaks=0 (15.9s)
+[11/56] t22@Employee/cold                  answered         match=yes correct=yes leaks=0 (23.3s)
+[12/56] t22@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (21.6s)
+[13/56] t23@Employee/first-turn            answered         match=no  correct=no  leaks=0 (20.0s)
+[14/56] t23@Employee/with-history          answered         match=yes correct=yes leaks=0 (67.6s)
+[15/56] t23@Employee/cold                  path-A           match=no  correct=no  leaks=0 (0.4s)
+[16/56] t23@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (25.9s)
+[17/56] t24@Employee/first-turn            answered         match=no  correct=no  leaks=0 (16.2s)
+[18/56] t24@Employee/with-history          answered         match=yes correct=yes leaks=0 (23.8s)
+[19/56] t24@Employee/cold                  answered         match=no  correct=no  leaks=0 (56.0s)
+[20/56] t24@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (13.4s)
+[21/56] t25@Employee/first-turn            answered         match=yes correct=yes leaks=0 (16.7s)
+[22/56] t25@Employee/with-history          answered         match=yes correct=yes leaks=0 (19.4s)
+[23/56] t25@Employee/cold                  answered         match=yes correct=yes leaks=0 (18.4s)
+[24/56] t25@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (18.0s)
+[25/56] t26@Employee/first-turn            answered         match=yes correct=yes leaks=0 (12.2s)
+[26/56] t26@Employee/with-history          answered         match=yes correct=yes leaks=0 (21.9s)
+[27/56] t26@Employee/cold                  answered         match=yes correct=yes leaks=0 (23.4s)
+[28/56] t26@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (24.2s)
+[29/56] t27@Employee/first-turn            answered         match=yes correct=yes leaks=0 (17.5s)
+[30/56] t27@Employee/with-history          answered         match=yes correct=yes leaks=0 (29.7s)
+[31/56] t27@Employee/cold                  answered         match=no  correct=no  leaks=0 (35.0s)
+[32/56] t27@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (34.9s)
+[33/56] t28@Administrator/first-turn       answered         match=no  correct=no  leaks=0 (36.8s)
+[34/56] t28@Administrator/with-history     answered         match=no  correct=no  leaks=0 (61.3s)
+[35/56] t28@Administrator/cold             answered         match=no  correct=no  leaks=0 (20.2s)
+[36/56] t28@Administrator/spelled-out      answered         match=no  correct=no  leaks=0 (23.9s)
+[37/56] t28@Employee/first-turn            answered         match=no  correct=no  leaks=0 (31.9s)
+[38/56] t28@Employee/with-history          answered         match=no  correct=no  leaks=0 (66.1s)
+[39/56] t28@Employee/cold                  path-A           match=no  correct=yes leaks=0 (1.0s)
+[40/56] t28@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (58.8s)
+[41/56] t29@Administrator/first-turn       answered         match=yes correct=yes leaks=0 (43.9s)
+[42/56] t29@Administrator/with-history     answered         match=no  correct=no  leaks=0 (26.9s)
+[43/56] t29@Administrator/cold             answered         match=no  correct=no  leaks=0 (29.2s)
+[44/56] t29@Administrator/spelled-out      answered         match=yes correct=yes leaks=0 (62.3s)
+[45/56] t29@Employee/first-turn            answered         match=yes correct=yes leaks=0 (37.7s)
+[46/56] t29@Employee/with-history          answered         match=no  correct=no  leaks=0 (24.1s)
+[47/56] t29@Employee/cold                  path-A           match=no  correct=yes leaks=0 (1.2s)
+[48/56] t29@Employee/spelled-out           path-B-declined  match=no  correct=yes leaks=0 (30.1s)
+[49/56] t30@Employee/first-turn            answered         match=no  correct=no  leaks=0 (20.7s)
+[50/56] t30@Employee/with-history          answered         match=no  correct=no  leaks=0 (32.1s)
+[51/56] t30@Employee/cold                  answered         match=yes correct=yes leaks=0 (16.9s)
+[52/56] t30@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (57.9s)
+[53/56] t31@Employee/first-turn            answered         match=yes correct=yes leaks=0 (15.4s)
+[54/56] t31@Employee/with-history          answered         match=yes correct=yes leaks=0 (27.2s)
+[55/56] t31@Employee/cold                  path-A           match=no  correct=no  leaks=0 (1.2s)
+[56/56] t31@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (35.8s)
+
+main: with-history match [8, 12], first-turn [8, 14], spelled-out [9, 12], cold [6, 12], declines [3, 6], schema [52, 52], out-of-scope 0; 25.2 min
+record written to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-step4\corpus\objective-02\runs\2026-11-08\fr13-phase3-dev\dev_main.json
+
+===== configuration option1: prompt=new retrieval=single, 56 run(s) =====
+[1/56] t20@Employee/first-turn            answered         match=no  correct=no  leaks=0 (15.5s)
+[2/56] t20@Employee/with-history          answered         match=yes correct=yes leaks=0 (32.7s)
+[3/56] t20@Employee/cold                  answered         match=yes correct=yes leaks=0 (32.4s)
+[4/56] t20@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (43.5s)
+[5/56] t21@Employee/first-turn            answered         match=yes correct=yes leaks=0 (23.1s)
+[6/56] t21@Employee/with-history          answered         match=no  correct=no  leaks=0 (42.5s)
+[7/56] t21@Employee/cold                  answered         match=yes correct=yes leaks=0 (32.9s)
+[8/56] t21@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (32.6s)
+[9/56] t22@Employee/first-turn            answered         match=yes correct=yes leaks=0 (14.1s)
+[10/56] t22@Employee/with-history          answered         match=yes correct=yes leaks=0 (53.4s)
+[11/56] t22@Employee/cold                  answered         match=yes correct=yes leaks=0 (21.6s)
+[12/56] t22@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (17.6s)
+[13/56] t23@Employee/first-turn            answered         match=no  correct=no  leaks=0 (47.9s)
+[14/56] t23@Employee/with-history          answered         match=yes correct=yes leaks=0 (61.8s)
+[15/56] t23@Employee/cold                  path-A           match=no  correct=no  leaks=0 (1.2s)
+[16/56] t23@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (33.6s)
+[17/56] t24@Employee/first-turn            answered         match=no  correct=no  leaks=0 (53.3s)
+[18/56] t24@Employee/with-history          answered         match=yes correct=yes leaks=0 (37.3s)
+[19/56] t24@Employee/cold                  answered         match=no  correct=no  leaks=0 (57.0s)
+[20/56] t24@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (11.3s)
+[21/56] t25@Employee/first-turn            answered         match=yes correct=yes leaks=0 (14.1s)
+[22/56] t25@Employee/with-history          answered         match=yes correct=yes leaks=0 (14.4s)
+[23/56] t25@Employee/cold                  answered         match=yes correct=yes leaks=0 (15.2s)
+[24/56] t25@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (14.8s)
+[25/56] t26@Employee/first-turn            answered         match=yes correct=yes leaks=0 (9.9s)
+[26/56] t26@Employee/with-history          answered         match=yes correct=yes leaks=0 (18.3s)
+[27/56] t26@Employee/cold                  answered         match=yes correct=yes leaks=0 (23.7s)
+[28/56] t26@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (19.8s)
+[29/56] t27@Employee/first-turn            answered         match=yes correct=yes leaks=0 (14.1s)
+[30/56] t27@Employee/with-history          answered         match=no  correct=no  leaks=0 (11.1s)
+[31/56] t27@Employee/cold                  answered         match=no  correct=no  leaks=0 (26.3s)
+[32/56] t27@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (25.2s)
+[33/56] t28@Administrator/first-turn       answered         match=no  correct=no  leaks=0 (26.3s)
+[34/56] t28@Administrator/with-history     answered         match=no  correct=no  leaks=0 (44.3s)
+[35/56] t28@Administrator/cold             answered         match=no  correct=no  leaks=0 (14.7s)
+[36/56] t28@Administrator/spelled-out      answered         match=no  correct=no  leaks=0 (18.1s)
+[37/56] t28@Employee/first-turn            answered         match=no  correct=no  leaks=0 (26.9s)
+[38/56] t28@Employee/with-history          answered         match=no  correct=no  leaks=0 (49.7s)
+[39/56] t28@Employee/cold                  path-A           match=no  correct=yes leaks=0 (0.3s)
+[40/56] t28@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (44.3s)
+[41/56] t29@Administrator/first-turn       answered         match=yes correct=yes leaks=0 (18.5s)
+[42/56] t29@Administrator/with-history     answered         match=no  correct=no  leaks=0 (18.7s)
+[43/56] t29@Administrator/cold             answered         match=no  correct=no  leaks=0 (10.4s)
+[44/56] t29@Administrator/spelled-out      answered         match=yes correct=yes leaks=0 (19.1s)
+[45/56] t29@Employee/first-turn            answered         match=yes correct=yes leaks=0 (18.9s)
+[46/56] t29@Employee/with-history          answered         match=no  correct=no  leaks=0 (11.8s)
+[47/56] t29@Employee/cold                  path-A           match=no  correct=yes leaks=0 (0.3s)
+[48/56] t29@Employee/spelled-out           path-B-declined  match=no  correct=yes leaks=0 (3.9s)
+[49/56] t30@Employee/first-turn            answered         match=no  correct=no  leaks=0 (18.8s)
+[50/56] t30@Employee/with-history          answered         match=yes correct=yes leaks=0 (19.8s)
+[51/56] t30@Employee/cold                  answered         match=yes correct=yes leaks=0 (14.8s)
+[52/56] t30@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (15.9s)
+[53/56] t31@Employee/first-turn            answered         match=yes correct=yes leaks=0 (12.4s)
+[54/56] t31@Employee/with-history          answered         match=yes correct=yes leaks=0 (33.0s)
+[55/56] t31@Employee/cold                  path-A           match=no  correct=no  leaks=0 (0.4s)
+[56/56] t31@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (13.8s)
+
+option1: with-history match [8, 12], first-turn [8, 14], spelled-out [9, 12], cold [6, 12], declines [3, 6], schema [52, 52], out-of-scope 0; 22.1 min
+record written to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-step4\corpus\objective-02\runs\2026-11-08\fr13-phase3-dev\dev_option1.json
+
+===== configuration option2: prompt=old retrieval=max2, 56 run(s) =====
+[1/56] t20@Employee/first-turn            answered         match=no  correct=no  leaks=0 (10.1s)
+[2/56] t20@Employee/with-history          answered         match=yes correct=yes leaks=0 (19.7s)
+[3/56] t20@Employee/cold                  answered         match=yes correct=yes leaks=0 (18.5s)
+[4/56] t20@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (25.0s)
+[5/56] t21@Employee/first-turn            answered         match=yes correct=yes leaks=0 (11.8s)
+[6/56] t21@Employee/with-history          answered         match=no  correct=no  leaks=0 (29.5s)
+[7/56] t21@Employee/cold                  answered         match=yes correct=yes leaks=0 (31.5s)
+[8/56] t21@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (12.8s)
+[9/56] t22@Employee/first-turn            answered         match=yes correct=yes leaks=0 (12.1s)
+[10/56] t22@Employee/with-history          answered         match=no  correct=no  leaks=0 (11.9s)
+[11/56] t22@Employee/cold                  answered         match=yes correct=yes leaks=0 (18.2s)
+[12/56] t22@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (16.3s)
+[13/56] t23@Employee/first-turn            answered         match=no  correct=no  leaks=0 (14.8s)
+[14/56] t23@Employee/with-history          answered         match=yes correct=yes leaks=0 (53.2s)
+[15/56] t23@Employee/cold                  path-A           match=no  correct=no  leaks=0 (0.3s)
+[16/56] t23@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (20.1s)
+[17/56] t24@Employee/first-turn            answered         match=no  correct=no  leaks=0 (11.2s)
+[18/56] t24@Employee/with-history          answered         match=yes correct=yes leaks=0 (46.3s)
+[19/56] t24@Employee/cold                  answered         match=no  correct=no  leaks=0 (17.4s)
+[20/56] t24@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (11.0s)
+[21/56] t25@Employee/first-turn            answered         match=yes correct=yes leaks=0 (13.0s)
+[22/56] t25@Employee/with-history          answered         match=yes correct=yes leaks=0 (16.0s)
+[23/56] t25@Employee/cold                  answered         match=yes correct=yes leaks=0 (15.2s)
+[24/56] t25@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (14.9s)
+[25/56] t26@Employee/first-turn            answered         match=yes correct=yes leaks=0 (10.5s)
+[26/56] t26@Employee/with-history          answered         match=yes correct=yes leaks=0 (18.1s)
+[27/56] t26@Employee/cold                  answered         match=yes correct=yes leaks=0 (18.9s)
+[28/56] t26@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (19.8s)
+[29/56] t27@Employee/first-turn            answered         match=yes correct=yes leaks=0 (13.5s)
+[30/56] t27@Employee/with-history          answered         match=no  correct=no  leaks=0 (22.3s)
+[31/56] t27@Employee/cold                  answered         match=no  correct=no  leaks=0 (26.2s)
+[32/56] t27@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (44.4s)
+[33/56] t28@Administrator/first-turn       answered         match=no  correct=no  leaks=0 (26.2s)
+[34/56] t28@Administrator/with-history     answered         match=no  correct=no  leaks=0 (46.8s)
+[35/56] t28@Administrator/cold             answered         match=yes correct=yes leaks=0 (36.9s)
+[36/56] t28@Administrator/spelled-out      answered         match=no  correct=no  leaks=0 (19.0s)
+[37/56] t28@Employee/first-turn            answered         match=no  correct=no  leaks=0 (26.5s)
+[38/56] t28@Employee/with-history          answered         match=no  correct=no  leaks=0 (44.9s)
+[39/56] t28@Employee/cold                  path-A           match=no  correct=yes leaks=0 (0.3s)
+[40/56] t28@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (44.1s)
+[41/56] t29@Administrator/first-turn       answered         match=yes correct=yes leaks=0 (18.6s)
+[42/56] t29@Administrator/with-history     answered         match=no  correct=no  leaks=0 (18.5s)
+[43/56] t29@Administrator/cold             answered         match=no  correct=no  leaks=0 (10.5s)
+[44/56] t29@Administrator/spelled-out      answered         match=yes correct=yes leaks=0 (18.9s)
+[45/56] t29@Employee/first-turn            answered         match=yes correct=yes leaks=0 (18.8s)
+[46/56] t29@Employee/with-history          answered         match=no  correct=no  leaks=0 (12.1s)
+[47/56] t29@Employee/cold                  path-A           match=no  correct=yes leaks=0 (0.3s)
+[48/56] t29@Employee/spelled-out           path-B-declined  match=no  correct=yes leaks=0 (3.8s)
+[49/56] t30@Employee/first-turn            answered         match=no  correct=no  leaks=0 (18.0s)
+[50/56] t30@Employee/with-history          answered         match=yes correct=yes leaks=0 (20.4s)
+[51/56] t30@Employee/cold                  answered         match=yes correct=yes leaks=0 (15.3s)
+[52/56] t30@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (15.7s)
+[53/56] t31@Employee/first-turn            answered         match=no  correct=no  leaks=0 (11.7s)
+[54/56] t31@Employee/with-history          answered         match=yes correct=yes leaks=0 (26.9s)
+[55/56] t31@Employee/cold                  path-A           match=no  correct=no  leaks=0 (0.3s)
+[56/56] t31@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (19.6s)
+
+option2: with-history match [7, 12], first-turn [7, 14], spelled-out [9, 12], cold [7, 12], declines [3, 6], schema [52, 52], out-of-scope 0; 18.3 min
+record written to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-step4\corpus\objective-02\runs\2026-11-08\fr13-phase3-dev\dev_option2.json
+
+===== configuration both: prompt=new retrieval=max2, 56 run(s) =====
+[1/56] t20@Employee/first-turn            answered         match=no  correct=no  leaks=0 (10.3s)
+[2/56] t20@Employee/with-history          answered         match=yes correct=yes leaks=0 (19.7s)
+[3/56] t20@Employee/cold                  answered         match=yes correct=yes leaks=0 (18.3s)
+[4/56] t20@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (25.3s)
+[5/56] t21@Employee/first-turn            answered         match=yes correct=yes leaks=0 (11.4s)
+[6/56] t21@Employee/with-history          answered         match=no  correct=no  leaks=0 (45.3s)
+[7/56] t21@Employee/cold                  answered         match=yes correct=yes leaks=0 (31.7s)
+[8/56] t21@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (12.8s)
+[9/56] t22@Employee/first-turn            answered         match=yes correct=yes leaks=0 (11.9s)
+[10/56] t22@Employee/with-history          answered         match=no  correct=no  leaks=0 (11.8s)
+[11/56] t22@Employee/cold                  answered         match=yes correct=yes leaks=0 (18.6s)
+[12/56] t22@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (15.9s)
+[13/56] t23@Employee/first-turn            answered         match=no  correct=no  leaks=0 (14.6s)
+[14/56] t23@Employee/with-history          answered         match=no  correct=no  leaks=0 (53.0s)
+[15/56] t23@Employee/cold                  path-A           match=no  correct=no  leaks=0 (0.3s)
+[16/56] t23@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (20.5s)
+[17/56] t24@Employee/first-turn            answered         match=no  correct=no  leaks=0 (11.1s)
+[18/56] t24@Employee/with-history          answered         match=yes correct=yes leaks=0 (22.3s)
+[19/56] t24@Employee/cold                  answered         match=no  correct=no  leaks=0 (17.2s)
+[20/56] t24@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (10.6s)
+[21/56] t25@Employee/first-turn            answered         match=yes correct=yes leaks=0 (13.0s)
+[22/56] t25@Employee/with-history          answered         match=yes correct=yes leaks=0 (14.8s)
+[23/56] t25@Employee/cold                  answered         match=yes correct=yes leaks=0 (15.0s)
+[24/56] t25@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (14.5s)
+[25/56] t26@Employee/first-turn            answered         match=yes correct=yes leaks=0 (9.8s)
+[26/56] t26@Employee/with-history          answered         match=yes correct=yes leaks=0 (17.6s)
+[27/56] t26@Employee/cold                  answered         match=yes correct=yes leaks=0 (23.2s)
+[28/56] t26@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (19.8s)
+[29/56] t27@Employee/first-turn            answered         match=yes correct=yes leaks=0 (13.1s)
+[30/56] t27@Employee/with-history          answered         match=no  correct=no  leaks=0 (47.1s)
+[31/56] t27@Employee/cold                  answered         match=no  correct=no  leaks=0 (25.5s)
+[32/56] t27@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (37.6s)
+[33/56] t28@Administrator/first-turn       answered         match=no  correct=no  leaks=0 (25.7s)
+[34/56] t28@Administrator/with-history     answered         match=no  correct=no  leaks=0 (32.6s)
+[35/56] t28@Administrator/cold             answered         match=yes correct=yes leaks=0 (35.9s)
+[36/56] t28@Administrator/spelled-out      answered         match=no  correct=no  leaks=0 (18.4s)
+[37/56] t28@Employee/first-turn            answered         match=no  correct=no  leaks=0 (25.5s)
+[38/56] t28@Employee/with-history          answered         match=no  correct=no  leaks=0 (44.4s)
+[39/56] t28@Employee/cold                  path-A           match=no  correct=yes leaks=0 (0.3s)
+[40/56] t28@Employee/spelled-out           answered         match=no  correct=no  leaks=0 (43.2s)
+[41/56] t29@Administrator/first-turn       answered         match=yes correct=yes leaks=0 (18.0s)
+[42/56] t29@Administrator/with-history     answered         match=no  correct=no  leaks=0 (18.0s)
+[43/56] t29@Administrator/cold             answered         match=no  correct=no  leaks=0 (10.2s)
+[44/56] t29@Administrator/spelled-out      answered         match=yes correct=yes leaks=0 (18.2s)
+[45/56] t29@Employee/first-turn            answered         match=yes correct=yes leaks=0 (18.3s)
+[46/56] t29@Employee/with-history          answered         match=no  correct=no  leaks=0 (11.9s)
+[47/56] t29@Employee/cold                  path-A           match=no  correct=yes leaks=0 (0.3s)
+[48/56] t29@Employee/spelled-out           path-B-declined  match=no  correct=yes leaks=0 (3.6s)
+[49/56] t30@Employee/first-turn            answered         match=no  correct=no  leaks=0 (17.3s)
+[50/56] t30@Employee/with-history          answered         match=yes correct=yes leaks=0 (19.9s)
+[51/56] t30@Employee/cold                  answered         match=yes correct=yes leaks=0 (14.6s)
+[52/56] t30@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (14.4s)
+[53/56] t31@Employee/first-turn            answered         match=yes correct=yes leaks=0 (11.7s)
+[54/56] t31@Employee/with-history          answered         match=yes correct=yes leaks=0 (32.0s)
+[55/56] t31@Employee/cold                  path-A           match=no  correct=no  leaks=0 (0.3s)
+[56/56] t31@Employee/spelled-out           answered         match=yes correct=yes leaks=0 (12.6s)
+
+both: with-history match [6, 12], first-turn [8, 14], spelled-out [9, 12], cold [7, 12], declines [3, 6], schema [52, 52], out-of-scope 0; 18.0 min
+record written to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-step4\corpus\objective-02\runs\2026-11-08\fr13-phase3-dev\dev_both.json
+
+===== four-way table (expected-answer match; declines are correct declines) =====
+main     with-history [8, 12]  first-turn [8, 14]  spelled-out [9, 12]  cold [6, 12]  declines [3, 6]  schema [52, 52]  out-of-scope 0
+option1  with-history [8, 12]  first-turn [8, 14]  spelled-out [9, 12]  cold [6, 12]  declines [3, 6]  schema [52, 52]  out-of-scope 0
+option2  with-history [7, 12]  first-turn [7, 14]  spelled-out [9, 12]  cold [7, 12]  declines [3, 6]  schema [52, 52]  out-of-scope 0
+both     with-history [6, 12]  first-turn [8, 14]  spelled-out [9, 12]  cold [7, 12]  declines [3, 6]  schema [52, 52]  out-of-scope 0

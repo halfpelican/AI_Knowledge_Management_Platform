@@ -9,7 +9,11 @@ services:
       POSTGRES_USER: kmp
       POSTGRES_PASSWORD: kmp
     ports:
-      - "5432:5432"
+      # Loopback only: an unqualified "5432:5432" binds 0.0.0.0, and this same
+      # container is the deployed alpha's data store (D-64 applied Waitress-side
+      # only; item 11's early pass, 9 November 2026). The dev credentials above
+      # must never be reachable from the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - kmp_pgdata:/var/lib/postgresql/data
     healthcheck:
