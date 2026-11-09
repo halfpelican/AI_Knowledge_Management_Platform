@@ -6,8 +6,11 @@ retry policy (apps/ai/generation.py) with the FLM provider — so "provider inde
 means the same prompt answered by a different model, not a second implementation.
 Embeddings go to Voyage, whose /embeddings endpoint speaks the OpenAI wire format,
 through the same openai client shape FLM uses (docs/ai-provider.md section 3).
-Kept working so the proposal's section 9.2 remains true; not used day to day, and never
-called live in the suite (D-35: no external AI spend).
+Dormant under D-35 until D-113 (10 November 2026) brought it into use: the Max plan's
+monthly Claude API credits fund it. FLM stays implemented and available, and which
+provider is the default is decided by measurement (D-113). The suite never calls it
+live: tests inject fake clients, and conftest.py points every provider at an
+unroutable address (docs/ai-provider.md section 6).
 """
 
 from typing import Callable
@@ -21,13 +24,22 @@ from django.conf import settings
 from apps.ai import _openai_compat
 from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
 from apps.ai.generation import (
-    GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
     ChatReply,
     GenerationAttempt,
     run_generation_attempts,
 )
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
+
+# Claude's own token ceiling, not FLM's GENERATION_MAX_TOKENS (800). Current Claude
+# models think before they answer and the thinking counts against max_tokens, so a
+# ceiling sized for the JSON reply alone cuts the reply off mid-object: three schema
+# failures, then the 503. It is a ceiling, not a target; the bill is for the tokens used.
+CLAUDE_MAX_TOKENS = 16000
+# How much the model thinks before answering. Low, because the task is extraction from
+# passages already supplied, not open reasoning, and every thinking token is paid for.
+# A starting value, not a measured one: tune it once the path has run live (D-115).
+CLAUDE_EFFORT = "low"
 
 
 class AnthropicService:
@@ -77,16 +89,18 @@ class AnthropicService:
         the 503 from apps/ai/generation.py. Only the transport differs, which is what
         keeps the proposal's section 9.2 claim of provider independence true.
 
-        Not exercised against the live API, by decision: D-35 rules out external AI
-        spend, so this path is tested against mocked SDK responses exactly as the Voyage
-        embedding path is. That is a real limitation and it is stated rather than
-        implied — the wire shape is taken from the SDK's documented types, and the first
-        live call will be the first live call.
+        Not yet exercised against the live API: the path was dormant under D-35 until
+        D-113 funded it. The suite tests it against mocked SDK responses, as it does the
+        Voyage embedding path, and binds every request against the real SDK's signature.
+        That is a real limitation and it is stated rather than implied: the wire shape is
+        taken from the SDK's documented types, and the first live call will be the first
+        live call.
         """
         if not passages:
             raise ValueError("generate_statements() needs at least one passage")
-        # One value for the request and for the attempt log's record of it.
-        max_tokens = GENERATION_MAX_TOKENS
+        # One value for the request and for the attempt log's record of it, and the
+        # shared loop's ceiling-hit test reads it too (apps/ai/generation.py).
+        max_tokens = CLAUDE_MAX_TOKENS
         # Built per attempt, because each attempt's prompt states the statement cap the
         # loop asks it for (apps/ai/generation.py).
         return run_generation_attempts(
@@ -108,12 +122,18 @@ class AnthropicService:
         unchanged, the same division the embed path makes. ``stop_reason`` and the usage
         counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
         the reply leaves them out.
+
+        No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
+        and current Claude models refuse them, so this path is not deterministic run to
+        run. ``thinking`` is left at the model's default, because disabling it is a 400 on
+        Sonnet 5.5 and Opus 5.5; ``effort`` is what keeps it short. ``output_tokens`` includes the
+        thinking, so the attempt log's completion count does too.
         """
         try:
             response = self._anthropic().messages.create(
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
-                temperature=0.0,
+                output_config={"effort": CLAUDE_EFFORT},
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
                 timeout=GENERATION_TIMEOUT_SECONDS,

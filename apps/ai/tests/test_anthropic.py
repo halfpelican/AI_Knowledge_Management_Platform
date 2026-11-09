@@ -1,10 +1,11 @@
 """AnthropicService: Voyage embeddings, Claude generation and health. No network.
 
-The anthropic SDK is never called for real. D-35 rules out external AI spend, so both the
-generation tests below and the health tests inject a fake client; the embed tests use the
-openai SDK's MockTransport, as the FLM tests do.
+The anthropic SDK is never called for real. The provider is funded since D-113, but the
+suite never spends: the generation tests below and the health tests inject a fake client,
+and the embed tests use the openai SDK's MockTransport, as the FLM tests do.
 """
 
+import inspect
 import json
 import logging
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ import pytest
 from django.test import override_settings
 
 from apps.ai import attempt_log
-from apps.ai.anthropic import AnthropicService
+from apps.ai.anthropic import CLAUDE_EFFORT, CLAUDE_MAX_TOKENS, AnthropicService
 from apps.ai.base import Passage, ProviderHealth, ProviderUnavailable
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS, fewer_statements
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt, statement_cap_sentence
@@ -141,10 +142,11 @@ def test_health_is_unavailable_and_does_not_raise_when_the_api_fails():
 
 # --- Generation through Claude (FR-12, Stage 4 item 5) ---------------------------------
 #
-# Mocked, never live: D-35 rules out external AI spend, so this path is tested exactly as
-# the Voyage embed path above is. The limitation is real and stated rather than implied —
-# the request shape below is taken from the SDK's documented parameters, and the first
-# live call will be the first live call. What the tests do establish is that the Anthropic
+# Mocked, never live: the suite spends nothing, even with the provider funded (D-113), so
+# this path is tested exactly as the Voyage embed path above is. The limitation is real and
+# stated rather than implied — the request shape below is checked against the real SDK's
+# signature but not against the API, and the first live call will be the first live call.
+# What the tests do establish is that the Anthropic
 # provider uses the SAME prompt, the SAME schema and the SAME retry policy as FLM, which
 # is what keeps the proposal's section 9.2 provider-independence claim true.
 
@@ -200,15 +202,19 @@ def status_error(status_code):
 def test_generate_statements_sends_the_shared_prompt_and_returns_statements():
     client = FakeGeneratingClient(CONFORMING)
 
-    with override_settings(ANTHROPIC_MODEL="claude-opus-5"):
+    with override_settings(ANTHROPIC_MODEL="claude-sonnet-5-5"):
         result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
     assert [statement.text for statement in result.statements] == ["Twenty days."]
     assert [statement.chunk_id for statement in result.statements] == [CHUNK_ID]
     (call,) = client.messages.calls
-    assert call["model"] == "claude-opus-5"
-    assert call["temperature"] == 0.0
-    assert call["max_tokens"] == GENERATION_MAX_TOKENS
+    assert call["model"] == "claude-sonnet-5-5"
+    # No sampling parameters: the pinned SDK has none, and current models refuse them.
+    assert "temperature" not in call
+    # Thinking is left at the model's default; {"type": "disabled"} is a 400 on Sonnet 5.5 and Opus 5.5.
+    assert "thinking" not in call
+    assert call["output_config"] == {"effort": CLAUDE_EFFORT}
+    assert call["max_tokens"] == CLAUDE_MAX_TOKENS
     assert call["timeout"] == GENERATION_TIMEOUT_SECONDS
     # The system prompt goes in the SDK's own parameter, and it is the same string FLM
     # receives as a system message.
@@ -216,6 +222,29 @@ def test_generate_statements_sends_the_shared_prompt_and_returns_statements():
     assert [message["role"] for message in call["messages"]] == ["user"]
     assert call["messages"][0]["content"] == build_user_prompt(QUESTION, PASSAGES)
     assert f"[chunk_id: {CHUNK_ID}]" in call["messages"][0]["content"]
+
+
+def test_every_argument_sent_is_one_the_real_sdk_accepts():
+    """The fake client takes any keyword, so on its own it cannot catch a request the real
+    SDK would refuse. Until 10 November 2026 the call sent ``temperature=0.0``, which the
+    pinned SDK (anthropic 1.5.0) has no parameter for, so the first live call would have
+    raised TypeError before reaching the network. Binding the recorded call against the
+    real ``messages.create`` signature catches that kind of fault without a network call;
+    the client is built against the suite's unroutable base URL and never sends."""
+    client = FakeGeneratingClient(CONFORMING)
+
+    AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    real_create = anthropic_sdk.Anthropic(api_key="sk-ant-test").messages.create
+    (call,) = client.messages.calls
+    inspect.signature(real_create).bind(**call)  # TypeError on a keyword the SDK lacks
+
+
+def test_claudes_token_ceiling_leaves_room_for_thinking():
+    """Current Claude models think before they answer, and the thinking counts against
+    ``max_tokens``. FLM's 800 was sized for the JSON reply alone, so Claude needs its own
+    ceiling, or a reply is cut off mid-JSON, fails the schema three times and becomes a 503."""
+    assert CLAUDE_MAX_TOKENS > 10 * GENERATION_MAX_TOKENS
 
 
 def test_generation_joins_only_the_text_blocks_of_the_reply():
@@ -261,7 +290,7 @@ def test_three_malformed_replies_raise_provider_unavailable_after_exactly_three_
     """The same NFR-19 total as the FLM path, because it is the same loop (D-19)."""
     client = FakeGeneratingClient("prose", "more prose", "still prose")
 
-    with override_settings(ANTHROPIC_MODEL="claude-opus-5"):
+    with override_settings(ANTHROPIC_MODEL="claude-sonnet-5-5"):
         with pytest.raises(ProviderUnavailable, match="STATEMENT_LIST_SCHEMA"):
             AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
@@ -328,7 +357,9 @@ def test_claudes_stop_reason_and_usage_reach_the_attempt_log(caplog):
     ``max_tokens`` the request carried."""
     truncated = '{"statements": [{"text": "Twenty days.", "chunk_id": "3f2a'
     client = FakeGeneratingClient(
-        _claude_reply(truncated, stop_reason="max_tokens", input_tokens=900, output_tokens=800),
+        _claude_reply(
+            truncated, stop_reason="max_tokens", input_tokens=900, output_tokens=CLAUDE_MAX_TOKENS
+        ),
         _claude_reply(CONFORMING, stop_reason="end_turn", input_tokens=900, output_tokens=25),
     )
 
@@ -338,11 +369,11 @@ def test_claudes_stop_reason_and_usage_reach_the_attempt_log(caplog):
     records = [r for r in caplog.records if r.name == attempt_log.ATTEMPT_LOGGER_NAME]
     assert [r.levelno for r in records] == [logging.WARNING, logging.INFO]
     sent = [call["max_tokens"] for call in client.messages.calls]
-    assert sent == [GENERATION_MAX_TOKENS, GENERATION_MAX_TOKENS]
+    assert sent == [CLAUDE_MAX_TOKENS, CLAUDE_MAX_TOKENS]
     failed, parsed = (r.getMessage() for r in records)
     first, second = MAXIMUM_STATEMENTS, fewer_statements(MAXIMUM_STATEMENTS)
     assert (
-        f"[finish_reason=max_tokens completion_tokens=800 prompt_tokens=900 max_tokens={sent[0]} "
+        f"[finish_reason=max_tokens completion_tokens={CLAUDE_MAX_TOKENS} prompt_tokens=900 max_tokens={sent[0]} "
         f"max_statements={first}] (account not set): SchemaViolation: unbalanced JSON object in the response"
     ) in failed
     assert (
