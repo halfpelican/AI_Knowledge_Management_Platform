@@ -7025,6 +7025,23 @@ accounts for it.
 **Not covered:** merging or splitting gaps by hand; a model-written subject; re-grouping existing
 entries after the threshold changes.
 
+**Dated note, 9 November 2026: the sweep ran, and `GAP_GROUPING_THRESHOLD` is 0.5256.** Commit
+`4a1ed3d`, FLM v0.9.39, `embed-gemma` with the query prefix, 36 items, 36 within-subject and 594
+cross-subject pairs; nothing read from or written to a database. The evidence is
+`corpus/objective-06/runs/2026-11-09/grouping-sweep/`.
+
+- **Pairwise similarities do not separate.** The lowest within-subject pair is 0.5322 ("For how many
+  years must finance records be retained?" / "When can old accounting paperwork be destroyed?"); the
+  highest cross-subject pair is 0.5876 ("password length" / "password reset window"), one of the
+  six hard pairs. A second hard pair, the two D04 subjects, reaches 0.5788. So the rule's second
+  branch applies: the best pairwise F1, **0.5256**.
+- **Centroid grouping, simulated at 0.5256 in the set's order,** forms exactly 12 entries of 3 from
+  the 36 items, none mixing subjects. The centroid does better than any single pairwise cut, because
+  a search term and a question on one subject both move towards the subject's mean.
+- **The margin is thin:** the lowest within-subject pair is 0.0066 above the threshold, about twice
+  D-40's drift. Short search terms that share a word across subjects ("password …") are the
+  near-miss case. Re-measure with the corpus, the embedding model or the prefix.
+
 ## D-110 · Objective 06's thirty are frozen, with the unanswerable asks screened on retrieval scores; FR-12's decline weakness stays open
 
 **Status:** Settled by the user · **Date:** 2026-11-09 · **Concerns:** Objective 06, FR-12, FR-19,
