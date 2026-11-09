@@ -6111,6 +6111,10 @@ stored.
   failure" this decision's table names.
 - **Step 7 starts from this baseline,** and its "after" runs the same threads again.
 
+**Dated note, 10 November 2026: settled by D-112.** Three measured attempts were not adopted (D-103,
+D-111). FR-13's follow-up clause is accepted as partial for NIT3003, as a recorded deviation, and the
+generation-side lever moves to NIT3004. "Work continuing" no longer describes it, for the FLM build.
+
 ## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,
@@ -6690,3 +6694,115 @@ and D-56 stays open.
 console record, which quotes ~25 frozen questions — while studying the overlap method, before
 drafting. The drafts avoided those topics and the identifier-only automated check is the control.
 On the record; whether that console file should be redacted from the repository is open.
+
+## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,
+D-103 · **Evidence:** `corpus/objective-02/runs/2026-11-09/fr13-phase4-dev/phase4.md` and
+`runs/2026-11-09/fr13-phase4/` · **Commits:** `48c20cf` (the candidate), `9226b1b` (the
+measurement), `a1fb201` (the withdrawal), on `feat/FR-13-followup-rewrite`.
+
+**Why option 3.** D-103 found the restatement failure was in generation's use of the context, while
+the spelled-out arm answered 6 of 9 frozen follow-ups. Option 3 had the model rewrite a follow-up
+into a standalone question, embedded for retrieval only. The rewrite reached no prompt, reply or
+citation, and only questions entered it (D-42).
+
+**What was built** (`48c20cf`):
+- a fourth `AIService` operation, `rewrite_followup`, with one attempt and then the composed join as
+  a fallback, so an ask never failed because the rewrite did;
+- a record-only `QueryLog.retrieval_rewrite` column;
+- the measuring tools re-running the server's stored rewrite.
+
+It came with 21 break-tested tests, and the full suite passed 2,369.
+
+**The rule, fixed before any run.** The arms were means over three draws on the development threads.
+Those were extended with seven cross-source threads, t32 to t38: their overlap check against both
+frozen sets flagged 0 of 3,136 pairs. Option 3 would be adopted only if all of these held:
+- its mean with-history match beat `main`'s by **more than 2 runs**;
+- no guard arm's mean fell by more than 1;
+- conformance held;
+- 0 passages out of scope.
+
+| arm | with-history (/19) | first-turn (/22) | spelled-out (/19) | correct declines | out of scope |
+|---|---|---|---|---|---|
+| `main`, three draws | 10, 9, 9 (mean 9.33) | 14, 14, 14 | 12, 12, 12 | 5/9, 2/6, 2/6 | 0 |
+| option 3, three draws | 10, 10, 10 (mean 10.00) | 14, 14, 14 | 12, 12, 12 | 6/9, 3/6, 3/6 | 0 |
+
+**Decision (the user's): not adopted.** The gain was +0.67 runs, inside D-103's band.
+- **No guard fell.** Correct declines were a mean of 1 better under option 3.
+- **The code is withdrawn by `a1fb201`.** It reverts `48c20cf` except the development threads, so
+  `apps/`, `scripts/`, `CLAUDE.md` and `docs/` are as they were. Retrieval migration 0004 was never
+  pushed, and `kmp_obj02_20261101` ends at 0003, as checked.
+- **Kept:** t32 to t38, and the phase 4 evidence.
+- **Restoring it is reverting `a1fb201`.** The phase 4 runner scripts under `corpus/` need it to run.
+
+**What the measurement found.**
+- **The rewrite itself was reliable in form.** All 66 with-history runs used it, with no fallback.
+  The median call took 4.1 s, p90 5.3 s, and at most 6.7 s.
+- **But gemma3:4b often failed to merge the referent.** The rewrite redistributed which follow-ups
+  resolved, rather than adding to them:
+  - **Gained:** t36 and t38, the cross-source shape that fails on the frozen set; t28 for the
+    Administrator; and t22, where a wrong-passage citation was corrected.
+  - **Lost:** t23 and t24 to rewrites that dropped the referent, and t27, its one lucky draw.
+  - **t31's "match" under `main`** was an accident of join retrieval on a previous-answer thread.
+    Option 3 declines it, as D-42 and D-86's decision 2 predict.
+- **On t32, t34 and t35, the expected source was supplied at rank 1,** and generation still answered
+  from the turn-1-adjacent passage below it. D-103's reading is reproduced with retrieval clean.
+- **The frozen nine were run once, after the rule had decided, on `main`'s configuration.**
+  - With history: **2/9**, beside 2/9 (8 November) and 3/9 (9 November) on identical code.
+  - Spelled out 6/9, first turn 7/11, cold 1/9; schema 38/38; 0 leaks.
+  - Nothing was changed after this result.
+
+**If the generation model changes,** that is a separate decision. This one's premise was
+gemma3:4b's ability to rewrite, so option 3 is a cheap candidate to measure again on the new model:
+revert `a1fb201`, then run the same rule.
+
+## D-112 · FR-13's follow-up clause is accepted as partial for NIT3003, and Stage 5 may close with it as a recorded deviation
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-60, D-91, D-92,
+D-103, D-111, Stage 5 item 10 · **Supersedes:** D-91's "partial, with work continuing" status, for
+the FLM build
+
+**The clause.** FR-13, Server-End: "Maintains conversation context per session and passes prior
+turns alongside the new question so that pronouns and abbreviated references resolve correctly."
+
+**Its measured state on the shipped build** (FLM v0.9.39, gemma3:4b, the frozen nine threads):
+
+| | with history | spelled out | out of scope |
+|---|---|---|---|
+| 8 November (the step 7 "after") | 2/9 | 6/9 | 0 |
+| 9 November, phase 3, identical code | 3/9 | 6/9 | 0 |
+| 9 November, phase 4, identical code | 2/9 | 6/9 | 0 |
+
+- **What holds:** the history is wired (WIRED 3/3 through the server), it is re-scoped every turn,
+  and there were 0 leaks.
+- **What does not:** follow-ups that need the earlier turn mostly fail. The clause is half met: prior
+  turns are passed, but pronouns do not resolve reliably.
+
+**Three attempts, each measured under a rule fixed before it ran, and none adopted:**
+- option 1, a prompt instruction (D-103);
+- option 2, max-of-two retrieval scores (D-103);
+- option 3, a standalone rewrite for retrieval (D-111).
+
+**The evidence converges.** On several threads the right passage was supplied at rank 1, and
+generation answered from the turn-1-adjacent passage. That is the same lever as D-102's open decline
+finding: generation's use of supplied context. Its next step is one experiment, deferred:
+- isolate the cap sentence from prompt rule 8;
+- then try a prompt-level fix, under the same measurement rules.
+
+**Decision (the user's, 10 November):**
+
+- **FR-13's follow-up clause is accepted as partial for NIT3003.** The generation-side lever moves
+  to NIT3004.
+- **Stage 5's exit criterion is amended.** `M6-BUILD-PROMPT.md`'s Done line admitted only D-60's
+  decline. It now also admits this accepted deviation, with a dated amendment there.
+  - The set-level verdict can be COMPLETE with FR-13's clause presented as a deviation, giving its
+    reason and these numbers: in the closing audit, the demonstration script's deviations list, and
+    any assessment answer.
+  - It is never presented as a tick.
+- **This acceptance describes the FLM build.** If the generation or embedding provider changes
+  (that is pending as its own decision), FR-13 is measured again on the new provider under the same
+  rules. This record does not carry over to it.
+
+**Where it applies:** D-91 (a dated note), `M6-BUILD-PROMPT.md`'s Done line, and Stage 5 item 10's
+closing run.

@@ -441,6 +441,12 @@ two items into one commit to save a round trip.
 §8 condition 4 for FR-11, FR-12 and FR-13.** Not before, and not on anyone's assurance that it
 is basically there.
 
+> **Amended 10 November 2026 (D-112).** It is now also apart from FR-13's follow-up clause
+> ("…so that pronouns and abbreviated references resolve correctly"). That clause is accepted as
+> partial for NIT3003, on the FLM build, after three measured attempts (D-103, D-111). It counts
+> toward COMPLETE only as a recorded deviation, with its reason and numbers. It is never a tick. A
+> provider change is measured again, not carried over.
+
 ---
 
 ## Gate checklist — 1 November
