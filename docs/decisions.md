@@ -7018,6 +7018,27 @@ indistinguishable from a question nobody asked.
 **Not covered:** FR-13 composition in the cycle; a role recorded at ask time; re-evaluating rows when
 a document's visibility later changes.
 
+**Dated note, 10 November 2026: the development check passes, so the rank-one rule stands and no margin
+is chosen.** `scripts/exclusion_dev_check.py` called the cycle's own decision
+(`_question_explained_by_permissions`) with the cycle's Administrator scope and `embed_question`, on
+commit `3ee2d43`, FLM v0.9.39 (`embed-gemma`), `kmp_obj0506_20261101`, `RELEVANCE_THRESHOLD` 0.30,
+every question asked as the Employee; nothing was written. The evidence is
+`corpus/objective-06/runs/2026-11-10/exclusion-dev-check/`.
+
+- **Scoped questions left out: 6 of 6** (u30, u31, u32, d11, d21, d22).
+- **No-answer questions kept: 9 of 9** (u33 to u37, d24 to d27), with top passages from 0.30 to 0.49,
+  every one readable by the Employee.
+- **Ordinary questions, for information: 46 of 50 kept.** Three of the four left out are right: u28,
+  u29 and d23 have Administrator-only sources (D15, T02, D09), so for an Employee they are permission
+  boundaries. **One is the known risk, observed:** u07, "I clicked a dodgy link in an email, what
+  now?", whose answer is in D02, which the Employee can read, ranks the Administrator-only phishing
+  debrief (T05) first at 0.3485. Had an Employee's u07 gone unanswered, it would have been left out
+  of the log. That is a retrieval miss rather than a documentation gap, since the answer exists where
+  the asker can read it, so the cost is small, but it is a real false exclusion and it is recorded
+  as one.
+- **An FLM-configuration result,** like D-109's and D-110's values: repeated on the new configuration
+  before the thirty are run there (D-110's note).
+
 ## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
