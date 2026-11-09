@@ -46,6 +46,8 @@ VOCABULARIES = [
     # FR-10 (D-105), 8 November 2026: the fixed type list and the per-assignment outcomes.
     "DOCUMENT_TYPES",
     "ASSIGNMENT_OUTCOMES",
+    # FR-19 (D-107), 9 November 2026: a knowledge-gap entry's status.
+    "KNOWLEDGE_GAP_STATUS_VALUES",
 ]
 
 
@@ -240,6 +242,25 @@ def test_vocabulary_values_are_distinct_strings_that_fit_the_column(name):
     for value in values:
         assert isinstance(value, str) and value
         assert len(value) <= VOCABULARY_MAX_LENGTH
+
+
+def test_the_knowledge_gap_constants_are_d107s_and_d109s():
+    """FR-19 (D-107 to D-109). The status vocabulary and its default, the grace of the window, the
+    permission code and the panel size are the decisions' values; the grouping threshold is a
+    cosine similarity chosen by D-109's sweep on the development paraphrase set (9 November 2026,
+    corpus/objective-06/runs/2026-11-09/grouping-sweep/), and pinned so a change is a decision."""
+    assert constants.KNOWLEDGE_GAP_STATUS_VALUES == ("Open", "Addressed")
+    assert constants.KNOWLEDGE_GAP_OPEN == "Open"
+    assert constants.KNOWLEDGE_GAP_ADDRESSED == "Addressed"
+    assert constants.DEFAULT_KNOWLEDGE_GAP_STATUS == constants.KNOWLEDGE_GAP_OPEN
+    assert isinstance(constants.GAP_GROUPING_THRESHOLD, float)
+    assert 0.0 < constants.GAP_GROUPING_THRESHOLD <= 1.0
+    assert constants.GAP_GROUPING_THRESHOLD == 0.5256
+    # The sweep's own margin: its lowest within-subject pair, 0.5322, is above the value.
+    assert constants.GAP_GROUPING_THRESHOLD < 0.5322
+    assert constants.CYCLE_GRACE_SECONDS == 60
+    assert constants.REVIEW_KNOWLEDGE_GAPS_PERMISSION == "review_knowledge_gaps"
+    assert constants.DASHBOARD_GAP_ITEMS == constants.DASHBOARD_RECENT_ITEMS
 
 
 def test_session_inactivity_is_sixty_minutes():

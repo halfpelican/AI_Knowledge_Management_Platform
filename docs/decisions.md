@@ -6925,6 +6925,39 @@ its own.
 **Not covered:** FR-18, which does not exist; a gap's department or asker breakdown ("asked repeatedly
 across departments" is visible only as the count); deleting a gap.
 
+**Build notes, 10 November 2026** (the django-backend agent's choices where this entry was silent or,
+in the first case, was overtaken; accepted as written):
+
+- **One `embed_question` call per item, not step 3's "one batched call per cycle".** D-108 needs a
+  question's vector before it can decide whether the row stays, and says it is embedded as retrieval
+  embeds it; and D-113's Voyage work encodes queries inside `embed_question`, so FR-19 follows it only
+  by calling it (D-109's note of 10 November). A source-level test holds this.
+- **What the cycle counts mean.** `queries_considered` and `searches_considered` count the rows added
+  to the log, the survivors, not the rows read: the rows read minus the rows added would be exactly
+  the number this entry says is stored nowhere. `entries_updated` counts entries that existed before
+  the cycle and gained a member; one created and joined in the same cycle counts once, as created.
+- **The centroid** stores the members' mean, updated as `(n*mean + v)/(n+1)`. Its direction is D-109's
+  normalised mean and cosine ignores length, so every join decision is the same; normalising would
+  lose the length the exact update needs.
+- **On a join,** `last_seen_at` is the later and `first_seen_at` the earlier of the entry's and the
+  item's, because the grace window can deliver a row older than an entry's newest member.
+- **Cycles are serialised** by a PostgreSQL advisory transaction lock, and `started_at` is taken after
+  it is acquired; two concurrent cycles would otherwise meet the one-to-one constraint as a 500. The
+  cycle locks the Open entries it may join, and PATCH locks its own row, so a status change made
+  during a cycle waits for it.
+- **An item's foreign keys to `QueryLog` and `SearchLogs` are PROTECT,** so `occurrence_count` cannot
+  fall behind its items.
+- **The cycle's 503 carries its own text,** not the ask's, and is logged on the attempts logger.
+- **A role missing from `EFFECTIVE_ROLES`** has every one of its rows left out: the exclusion fails
+  closed.
+- **`search_total(role_name=...)`** departs from `search.py`'s user-only convention, because it has no
+  user and writes no row; the module says so.
+- **Existing tests amended because of the new code and routes:** the two whole-payload dashboard tests
+  expect `knowledge_gaps` for the Administrator only; the seed tests follow accounts 0007; and
+  `test_rbac`'s new check that each permissioned route checks its own code found
+  `document-reprocess` missing from its list of permissioned routes, a gap older than this work,
+  now added.
+
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,

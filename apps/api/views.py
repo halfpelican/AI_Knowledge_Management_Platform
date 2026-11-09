@@ -33,18 +33,21 @@ from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
+    DASHBOARD_GAP_ITEMS,
     DASHBOARD_RECENT_ITEMS,
     DOWNLOAD_CONTENT_TYPES,
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
     DOCUMENT_INDEXED,
+    KNOWLEDGE_GAP_OPEN,
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MAX_UPLOAD_BYTES,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
 )
 from apps.core.models import NAME_MAX_LENGTH
@@ -62,7 +65,8 @@ from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.deletion import delete_meeting
-from apps.retrieval.models import Conversation, QueryLog
+from apps.retrieval.gaps import ordered_gaps, run_cycle
+from apps.retrieval.models import Conversation, KnowledgeGap, QueryLog
 from apps.retrieval.pipeline import (
     QuestionLengthOutOfRange,
     answer_question,
@@ -79,7 +83,7 @@ from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
-from .permissions import HasRolePermission
+from .permissions import HasRolePermission, role_holds
 from .repository import RepositoryFilters, browse, repository_documents
 from .serializers import (
     AnswerSerializer,
@@ -93,6 +97,9 @@ from .serializers import (
     DocumentDetailSerializer,
     DocumentSerializer,
     DocumentUploadSerializer,
+    KnowledgeGapCycleSerializer,
+    KnowledgeGapSerializer,
+    KnowledgeGapStatusSerializer,
     LoginSerializer,
     MeetingDetailSerializer,
     MeetingIngestSerializer,
@@ -233,6 +240,13 @@ INGESTION_IN_FLIGHT_CODE = "ingestion_in_flight"
 # until it has a turn (D-80), so the placeholder appears there only on a thread whose first
 # question left nothing to name it with.
 NEW_CONVERSATION_TITLE = "New conversation"
+# NFR-19's informative notice for POST /api/knowledge-gaps/cycles (D-107): the embedding provider
+# was unreachable after MAXIMUM_EMBED_ATTEMPTS, and the cycle rolled back. Its own text rather than
+# KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE, which tells the reader their question was not recorded.
+KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE = (
+    "The knowledge service is temporarily unavailable, so the aggregation cycle did not run and "
+    "nothing was changed. Please try again shortly."
+)
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -244,6 +258,10 @@ CanManageDocuments = HasRolePermission.for_code(MANAGE_DOCUMENTS_PERMISSION)
 # Meeting deletion (D-99), which mirrors D-73 and is not in the proposal. The same rule: never a
 # permission_classes entry, because MeetingDetailView.delete must resolve the scope first.
 CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
+# FR-19's log (D-107): a permission_classes entry on every knowledge-gap route, so the 403 comes
+# before anything else. Nothing on those routes is scoped, so there is nothing for a 403 to
+# disclose by preceding a 404: an entry's existence is the Administrator's to know.
+CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -1589,6 +1607,12 @@ class DashboardView(APIView):
 
     **``ContentChunks`` is not read** (D-70). Ingestion is atomic (invariant 9), so a source's
     ``Indexed`` status already says its chunks exist.
+
+    **The knowledge-gap panel is FR-19's, and only for a role holding ``review_knowledge_gaps``**
+    (D-107, which closes D-69). For that role the payload gains ``knowledge_gaps``: the number of
+    Open entries and up to ``DASHBOARD_GAP_ITEMS`` of them in the list's order. For any other role
+    the key is absent, so an Employee's payload is exactly what it was before FR-19. The filters
+    do not narrow it.
     """
 
     def get(self, request):
@@ -1641,18 +1665,99 @@ class DashboardView(APIView):
             "question", "answered_at", "conversation_id"
         )[:DASHBOARD_RECENT_ITEMS]
 
-        return Response(
-            {
-                # The filters applied, after validation, with null for any not applied.
-                "filters": query.data,
-                "departments": departments,
-                "indexed_totals": {
-                    "documents": indexed_documents,
-                    "meetings": indexed_meetings,
-                    "total": indexed_documents + indexed_meetings,
-                },
-                "recent_documents": DocumentSerializer(recent_documents, many=True).data,
-                "recent_meetings": MeetingListSerializer(recent_meetings, many=True).data,
-                "recent_questions": RecentQuestionSerializer(recent_questions, many=True).data,
+        payload = {
+            # The filters applied, after validation, with null for any not applied.
+            "filters": query.data,
+            "departments": departments,
+            "indexed_totals": {
+                "documents": indexed_documents,
+                "meetings": indexed_meetings,
+                "total": indexed_documents + indexed_meetings,
+            },
+            "recent_documents": DocumentSerializer(recent_documents, many=True).data,
+            "recent_meetings": MeetingListSerializer(recent_meetings, many=True).data,
+            "recent_questions": RecentQuestionSerializer(recent_questions, many=True).data,
+        }
+        # FR-19's panel (D-107, closing D-69): present only for a role holding
+        # review_knowledge_gaps, read from role_permissions on this request, and absent
+        # otherwise, so an Employee's payload keeps its shape. Not narrowed by the date or
+        # department filters: an entry has no department, and its dates are its own.
+        if role_holds(request.user.role_id, REVIEW_KNOWLEDGE_GAPS_PERMISSION):
+            open_gaps = ordered_gaps().filter(status=KNOWLEDGE_GAP_OPEN)
+            payload["knowledge_gaps"] = {
+                "open_count": open_gaps.count(),
+                "top": KnowledgeGapSerializer(open_gaps[:DASHBOARD_GAP_ITEMS], many=True).data,
             }
-        )
+        return Response(payload)
+
+
+# --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) -----------------------------
+
+
+class KnowledgeGapListView(APIView):
+    """``GET /api/knowledge-gaps`` — FR-19's list: "questions the system could not answer and
+    searches returning no results, grouped by subject with an occurrence count".
+
+    ``IsAuthenticated`` and ``review_knowledge_gaps`` (D-107): 401 without a session, 403 for a
+    role that lacks the code. Every entry, Open first by ``occurrence_count`` then
+    ``last_seen_at``, then Addressed in the same order (``gaps.ordered_gaps``). No pagination.
+    Each entry carries six fields and no asker, role or reason (``KnowledgeGapSerializer``).
+    """
+
+    permission_classes = [IsAuthenticated, CanReviewKnowledgeGaps]
+
+    def get(self, request):
+        return Response(KnowledgeGapSerializer(ordered_gaps(), many=True).data)
+
+
+class KnowledgeGapCyclesView(APIView):
+    """``POST /api/knowledge-gaps/cycles`` — run one aggregation cycle now (D-107).
+
+    The scheduled trigger is ``manage.py aggregate_knowledge_gaps``. This route runs the same
+    ``run_cycle`` synchronously for the demonstration, and answers 201 with the cycle row. A
+    provider outage after the embedding retries rolls the cycle back and is NFR-19's 503 with an
+    informative notice, never a partial cycle.
+    """
+
+    permission_classes = [IsAuthenticated, CanReviewKnowledgeGaps]
+
+    def post(self, request):
+        # Every failed embedding attempt inside is logged naming this account (attempt_log).
+        with attempt_log.account(request.user.pk):
+            try:
+                cycle = run_cycle(triggered_by=request.user)
+            except ProviderUnavailable as exc:
+                # On the attempts logger, beside the failed attempts it ended, as the ask's 503
+                # is; the reply's notice stays the fixed one.
+                logging.getLogger(attempt_log.ATTEMPT_LOGGER_NAME).warning(
+                    "POST /api/knowledge-gaps/cycles answered 503 (account %s): %s: %s",
+                    request.user.pk,
+                    attempt_log.cause_of(exc),
+                    exc,
+                )
+                return Response(
+                    {"detail": KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+        return Response(KnowledgeGapCycleSerializer(cycle).data, status=status.HTTP_201_CREATED)
+
+
+class KnowledgeGapDetailView(APIView):
+    """``PATCH /api/knowledge-gaps/{id}`` — FR-19's "mark an entry as addressed", and back.
+
+    Body ``{"status": "Addressed"}`` or ``{"status": "Open"}``; 200 with the entry. The entry is
+    looked up first, so an unknown id is 404 whatever the body, and then the body is validated:
+    any other value is 400 keyed on ``status``. The row is locked, so a change arriving while a
+    cycle runs waits for it and returns the entry as the cycle left it.
+    """
+
+    permission_classes = [IsAuthenticated, CanReviewKnowledgeGaps]
+
+    def patch(self, request, pk):
+        with transaction.atomic():
+            gap = get_object_or_404(KnowledgeGap.objects.select_for_update(), pk=pk)
+            serializer = KnowledgeGapStatusSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            gap.status = serializer.validated_data["status"]
+            gap.save(update_fields=["status"])
+        return Response(KnowledgeGapSerializer(gap).data)

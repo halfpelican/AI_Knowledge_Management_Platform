@@ -474,6 +474,12 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ),
     ("api/conversations", "GET"): "The caller's own threads: titles they wrote or asked.",
     ("api/conversations", "POST"): "The new thread.",
+    # FR-19 (D-107). An entry's subject is a question someone typed, not a source row, and no
+    # route here reads Document or Meeting rows; the cycle reads chunks only through
+    # candidate_chunks and search_total, which are the scoped helpers.
+    ("api/knowledge-gaps", "GET"): "Gap entries: a subject, a count, a status and two dates.",
+    ("api/knowledge-gaps/cycles", "POST"): "The cycle row: its times and four counts.",
+    ("api/knowledge-gaps/<uuid:pk>", "PATCH"): "The updated gap entry.",
 }
 
 

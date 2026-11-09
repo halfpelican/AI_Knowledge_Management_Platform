@@ -35,6 +35,12 @@ something a view has to remember to wire up. It also gets 7.10 step 2 for free: 
 re-read from the user row on every request, so a role changed mid-session takes effect on
 the next search rather than at the next sign-in.
 
+> **One function here takes a role, on purpose (9 November 2026, FR-19, D-108).**
+> ``search_total`` counts what a named role would find, writes no row and returns to no user: it is
+> the knowledge-gap cycle's recount of a zero-result search as the Administrator. There is no user
+> beside the role for a caller to mismatch, which is the failure the paragraph above designs out,
+> and it shares ``search``'s term checks and match, so its number is ``search``'s. No route calls it.
+
 The role scope is then a condition on the query in every one of the three querysets below,
 so out-of-scope rows are never fetched:
 
@@ -479,6 +485,82 @@ def search(*, query_text: str, user) -> SearchResults:
     runs and before any row is written. Two exceptions rather than one because they are two
     different things to tell the user; see SearchQueryContainsNullCharacter.
     """
+    _check_term(query_text)
+
+    role_name = permission_scope(user)
+    match = _match(role_name=role_name, query_text=query_text)
+
+    results = SearchResults(
+        query_text=query_text,
+        documents=_group(
+            source_type=DOCUMENT_SOURCE_TYPE,
+            sources=match.documents,
+            snippets=match.snippets,
+            role_name=role_name,
+            title_of=lambda source: source.title,
+            # D-09: a document's department may be blank, and blank is "" already.
+            department_of=lambda source: source.department,
+            date_of=lambda source: source.uploaded_at,
+        ),
+        meetings=_group(
+            source_type=MEETING_SOURCE_TYPE,
+            sources=match.meetings,
+            snippets=match.snippets,
+            role_name=role_name,
+            title_of=lambda source: source.title,
+            # Meetings model no department. See SearchResult's docstring for why this is
+            # an empty string and not an invented value.
+            department_of=lambda source: "",
+            date_of=lambda source: source.meeting_date,
+        ),
+    )
+
+    SearchLog.objects.create(
+        user=user,
+        query_text=query_text,  # verbatim, as typed
+        result_count=results.total_count,  # the post-filter total, the same one returned
+    )
+    return results
+
+
+def search_total(*, role_name: str, query_text: str) -> int:
+    """The post-filter total ``search`` would report for ``query_text`` under ``role_name``,
+    with no ``SearchLog`` row written (FR-19, D-108).
+
+    **For one caller: the knowledge-gap cycle's recount of a zero-result search** as the
+    Administrator (``apps/retrieval/gaps.py``). Above zero means the asker's role withheld what
+    the Administrator would have found, so the search marks a permission boundary rather than a
+    documentation gap and is left out of the log. Zero means nobody could find it.
+
+    **The same number, from the same code.** ``search`` and this function share the term checks
+    (``_check_term``) and the scoped match (``_match``), so the total here is the count of the
+    very querysets ``search`` builds its two groups from. ``SearchResults.total_count`` is the
+    length of those groups, one result per source, so ``.count()`` on the same querysets is
+    the same integer, without building the snippets nobody reads.
+
+    **Why this one takes a role name, when ``search`` refuses to.** ``search``'s module docstring
+    argues that a ``role_name`` beside a ``user`` lets a view pass one person's identity with
+    another's role and log the result under the wrong person. Here there is no user and no
+    row: nothing is returned to anybody but the cycle, and nothing is written. The question
+    asked is counterfactual by construction ("what would this role find?"), so the role is the
+    argument. It is still resolved through ``scoped_documents``, ``scoped_meetings`` and
+    ``scoped_chunks``, so an unknown role counts nothing (fails closed). No request handler
+    calls it, and it must not be wired to a route: a count over a scope wider than the caller's
+    is the disclosure invariant 1 forbids.
+
+    Raises SearchQueryTooShort and SearchQueryContainsNullCharacter exactly as ``search`` does,
+    before any query runs.
+    """
+    _check_term(query_text)
+    match = _match(role_name=role_name, query_text=query_text)
+    return match.documents.count() + match.meetings.count()
+
+
+def _check_term(query_text: str) -> None:
+    """FR-12's two refusals of a search term, raised before any query runs.
+
+    Shared by ``search`` and ``search_total`` so the two cannot accept different terms.
+    """
     if len(query_text) < MINIMUM_SEARCH_LENGTH:
         raise SearchQueryTooShort(
             f"A search term must be at least {MINIMUM_SEARCH_LENGTH} characters."
@@ -492,7 +574,23 @@ def search(*, query_text: str, user) -> SearchResults:
             "A search term cannot contain a null character."
         )
 
-    role_name = permission_scope(user)
+
+@dataclass(frozen=True)
+class _Match:
+    """The scoped matching sources for one term: the snippet map and the two ordered querysets."""
+
+    snippets: dict[tuple[str, str], str]
+    documents: object  # QuerySet[Document]
+    meetings: object  # QuerySet[Meeting]
+
+
+def _match(*, role_name: str, query_text: str) -> _Match:
+    """Every in-scope document and meeting whose title or chunk text contains the term.
+
+    The one implementation of the match, shared by ``search`` (which groups and logs it) and
+    ``search_total`` (which counts it). ``query_text`` is the term as typed; it is collapsed
+    here for matching (D-71) and nowhere else.
+    """
     # D-71: matched with whitespace runs collapsed on both sides. ``query_text`` itself is kept
     # as typed for the SearchLog row and the reply's ``query``.
     term = collapse_whitespace(query_text)
@@ -519,35 +617,4 @@ def search(*, query_text: str, user) -> SearchResults:
         .filter(Q(id__in=matched_ids[MEETING_SOURCE_TYPE]) | Q(collapsed_title__icontains=term))
         .order_by("-meeting_date", "-created_at", "pk")
     )
-
-    results = SearchResults(
-        query_text=query_text,
-        documents=_group(
-            source_type=DOCUMENT_SOURCE_TYPE,
-            sources=documents,
-            snippets=snippets,
-            role_name=role_name,
-            title_of=lambda source: source.title,
-            # D-09: a document's department may be blank, and blank is "" already.
-            department_of=lambda source: source.department,
-            date_of=lambda source: source.uploaded_at,
-        ),
-        meetings=_group(
-            source_type=MEETING_SOURCE_TYPE,
-            sources=meetings,
-            snippets=snippets,
-            role_name=role_name,
-            title_of=lambda source: source.title,
-            # Meetings model no department. See SearchResult's docstring for why this is
-            # an empty string and not an invented value.
-            department_of=lambda source: "",
-            date_of=lambda source: source.meeting_date,
-        ),
-    )
-
-    SearchLog.objects.create(
-        user=user,
-        query_text=query_text,  # verbatim, as typed
-        result_count=results.total_count,  # the post-filter total, the same one returned
-    )
-    return results
+    return _Match(snippets=snippets, documents=documents, meetings=meetings)

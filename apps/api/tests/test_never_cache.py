@@ -44,6 +44,9 @@ PERMISSION_GUARDED = {
     ("api/documents", "POST"),  # contribute_content
     ("api/documents/<uuid:pk>/reprocess", "POST"),  # contribute_content
     ("api/meetings", "POST"),  # contribute_content
+    ("api/knowledge-gaps", "GET"),  # review_knowledge_gaps (D-107)
+    ("api/knowledge-gaps/cycles", "POST"),  # review_knowledge_gaps
+    ("api/knowledge-gaps/<uuid:pk>", "PATCH"),  # review_knowledge_gaps
 }
 
 
@@ -104,10 +107,14 @@ def test_every_api_route_is_never_cached_from_both_roles_and_its_unknown_ids_are
     # checked above like every other response. The role route validates its body first, so the
     # empty one is a 400 for the Administrator and a 403 for the Employee; its 404 is below.
     role_route = ("api/users/<uuid:pk>/role", "PATCH")
-    for key in routes_naming_an_id() - {role_route}:
+    # FR-19's entry route checks review_knowledge_gaps before the lookup (D-107), so the Employee
+    # meets its 403 and the Administrator its 404.
+    gap_route = ("api/knowledge-gaps/<uuid:pk>", "PATCH")
+    for key in routes_naming_an_id() - {role_route, gap_route}:
         assert statuses[key] == 404, key
     expected_role_status = 400 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403
     assert statuses[role_route] == expected_role_status
+    assert statuses[gap_route] == (404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403)
 
 
 def test_every_permission_guarded_route_is_never_cached_when_it_answers_403(session_client):

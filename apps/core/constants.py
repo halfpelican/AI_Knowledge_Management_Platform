@@ -514,8 +514,9 @@ EFFECTIVE_ROLES = {
 }
 
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
-# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006; a test asserts
-# the constants and the seed agree.
+# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, and 0007 for
+# REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below); a test asserts the constants
+# and the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -580,3 +581,44 @@ ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
 # --- Sessions (FR-04, docs/decisions.md D-10) -----------------------------------------
 # Inactivity expiry; config/settings.py derives SESSION_COOKIE_AGE from it.
 SESSION_INACTIVITY_MINUTES = 60
+
+# --- Knowledge gaps (FR-19; docs/decisions.md D-107, D-108, D-109) --------------------------
+# A KnowledgeGap's status (FR-19 Front-End: "the ability to mark an entry as addressed"). Every
+# entry starts Open; PATCH /api/knowledge-gaps/{id} moves it either way. Only an Open entry is a
+# join candidate for D-109's grouping, so a subject that recurs after being addressed opens a new
+# entry rather than disappearing into one the Administrator has already dealt with.
+KNOWLEDGE_GAP_STATUS_VALUES = ("Open", "Addressed")
+(KNOWLEDGE_GAP_OPEN, KNOWLEDGE_GAP_ADDRESSED) = KNOWLEDGE_GAP_STATUS_VALUES
+DEFAULT_KNOWLEDGE_GAP_STATUS = KNOWLEDGE_GAP_OPEN
+
+# The cosine similarity, against an Open entry's centroid, at or above which an unanswered
+# question or zero-result search joins that entry instead of starting its own (D-109;
+# apps/retrieval/gaps.py, ``>=``). CHOSEN on the development paraphrase set,
+# corpus/objective-06/dev-paraphrases.json, by D-109's rule fixed in advance, and never on the
+# thirty seeded queries (D-93). The pairwise similarities do not separate: the lowest within-subject
+# pair is 0.5322 and the highest cross-subject pair 0.5876 ("password length" against "password
+# reset window"), so the rule takes the value with the best pairwise F1, 0.5256. Centroid grouping
+# simulated at that value forms exactly 12 entries of 3 from the 36 items, none mixed. The lowest
+# within-subject pair sits only 0.0066 above it, about twice D-40's query-vector drift (0.003), so
+# a re-measurement after any change of corpus, embedding model, prefix or FLM build is owed. The
+# evidence is corpus/objective-06/runs/2026-11-09/grouping-sweep/ (9 November 2026, FLM v0.9.39,
+# commit 4a1ed3d), and D-109's dated note of the same day records it.
+GAP_GROUPING_THRESHOLD = 0.5256
+
+# How far before the previous cycle's start an aggregation cycle's window reaches back, in seconds
+# (D-107). It covers a QueryLog or SearchLog row whose timestamp was set before the previous cycle
+# started and that committed after that cycle read. Re-scanning is harmless: a row already in the
+# log is skipped by its unique membership, and a row left out on permission grounds is left out
+# again by the same rule. A presentation of time, not a tuned value.
+CYCLE_GRACE_SECONDS = 60
+
+# FR-19's permission code (D-107), checked by every knowledge-gap route and by the dashboard's
+# knowledge_gaps panel. Held by Administrator only, seeded by accounts migration 0007, D-99's
+# pattern; a test asserts the constant and the seed agree. Declined: testing the role name, which
+# no other Administrator-only route does.
+REVIEW_KNOWLEDGE_GAPS_PERMISSION = "review_knowledge_gaps"
+
+# How many Open entries the dashboard's knowledge-gap panel lists (D-107, closing D-69): the same
+# presentation constant as the other recent panels, named for this panel so that changing one does
+# not silently change the other.
+DASHBOARD_GAP_ITEMS = DASHBOARD_RECENT_ITEMS

@@ -29,10 +29,12 @@ from apps.api.permissions import HasRolePermission
 from apps.api.tests.dual_role_matrix import enumerate_endpoints
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
     EMPLOYEE_ROLE_NAME,
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 from conftest import PASSWORD
 
@@ -55,7 +57,9 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
                     "dashboard",  # Stage 5 item 3: FR-14
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
-                    "document-download"}  # Stage 5 item 2a: FR-15's download link (D-75)
+                    "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
+                    # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
+                    "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -67,7 +71,18 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
 # (D-73). apps/api/tests/test_document_delete.py proves the 403 and the 404 before it.
 # meeting-detail is absent for the same reason: its DELETE checks manage_meetings inside the
 # method, after the scoped lookup (D-99). apps/api/tests/test_meeting_delete.py proves both.
-PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE_ROLES_PERMISSION}
+PERMISSIONED_ROUTES = {
+    "user-list": MANAGE_ROLES_PERMISSION,
+    "user-role": MANAGE_ROLES_PERMISSION,
+    # D-32: reprocess declares contribute_content on the class. Listed on 9 November 2026, when
+    # test_each_permissioned_route_checks_its_own_code began reading every route's classes and
+    # found it absent from this table, though the route has checked the code since Stage 3.
+    "document-reprocess": CONTRIBUTE_CONTENT_PERMISSION,
+    # FR-19 (D-107): review_knowledge_gaps, a permission_classes entry on all three.
+    "knowledge-gap-list": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    "knowledge-gap-cycles": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    "knowledge-gap-detail": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+}
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {
     MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
@@ -99,6 +114,20 @@ def test_the_url_conf_is_exactly_the_contract():
             assert endpoint.permission_classes == (AllowAny,), endpoint
         else:
             assert endpoint.permission_classes[0] is IsAuthenticated, endpoint
+
+
+def test_each_permissioned_route_checks_its_own_code():
+    """The code each route's permission classes check is the one PERMISSIONED_ROUTES names, and
+    every other protected route checks none, so a code cannot be dropped from or added to a route
+    without this table changing with it."""
+    for endpoint in enumerate_endpoints():
+        codes = {
+            permission.permission_name
+            for permission in endpoint.permission_classes
+            if isinstance(permission, type) and issubclass(permission, HasRolePermission)
+        }
+        expected = {PERMISSIONED_ROUTES[endpoint.name]} if endpoint.name in PERMISSIONED_ROUTES else set()
+        assert codes == expected, endpoint
 
 
 def test_every_endpoint_has_a_method_and_a_drf_view():
@@ -321,3 +350,5 @@ def test_every_permission_code_in_use_is_seeded():
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_ROLES_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_DOCUMENTS_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_MEETINGS_PERMISSION).exists()
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()

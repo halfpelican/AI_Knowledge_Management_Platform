@@ -21,6 +21,7 @@ from apps.core.constants import (
     DEFAULT_DOCUMENT_SORT,
     DOCUMENT_SORT_VALUES,
     DOCUMENT_STATUS_VALUES,
+    KNOWLEDGE_GAP_STATUS_VALUES,
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
     ROLE_NAMES,
@@ -28,7 +29,7 @@ from apps.core.constants import (
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import Document, normalise_tag_name
 from apps.meetings.models import Meeting
-from apps.retrieval.models import Conversation
+from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
 
@@ -1210,3 +1211,57 @@ class DocumentBrowseQuerySerializer(serializers.Serializer):
 
     def validate_sort(self, value):
         return value or DEFAULT_DOCUMENT_SORT
+
+
+# --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) ----------------------------
+
+
+class KnowledgeGapSerializer(serializers.ModelSerializer):
+    """One entry of the gap log, in ``GET /api/knowledge-gaps``, ``PATCH``'s reply and the
+    dashboard's ``knowledge_gaps.top`` (D-107).
+
+    **Exactly six fields, and a test asserts the key set.** No asker, no role, no department and no
+    reason appears, because none is stored (D-107, D-108), and the entry's vector and model name
+    are internal to the grouping. ``subject`` is the first member's wording, verbatim.
+    """
+
+    gap_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = KnowledgeGap
+        fields = ("gap_id", "subject", "occurrence_count", "status", "first_seen_at", "last_seen_at")
+        read_only_fields = fields
+
+
+class KnowledgeGapStatusSerializer(serializers.Serializer):
+    """``PATCH /api/knowledge-gaps/{id}``'s body: ``{"status": "Addressed"}`` or ``"Open"``.
+
+    FR-19's "the ability to mark an entry as addressed", and back. Any other value, or none, is
+    DRF's 400 keyed on ``status``.
+    """
+
+    status = serializers.ChoiceField(choices=KNOWLEDGE_GAP_STATUS_VALUES)
+
+
+class KnowledgeGapCycleSerializer(serializers.ModelSerializer):
+    """``POST /api/knowledge-gaps/cycles``'s 201: the cycle row (D-107).
+
+    The four counts are of rows that entered the log and entries created or updated, never of
+    rows left out (``KnowledgeGapCycle``'s docstring). ``triggered_by`` is not returned: the caller
+    is the one who triggered it.
+    """
+
+    cycle_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = KnowledgeGapCycle
+        fields = (
+            "cycle_id",
+            "started_at",
+            "finished_at",
+            "queries_considered",
+            "searches_considered",
+            "entries_created",
+            "entries_updated",
+        )
+        read_only_fields = fields
