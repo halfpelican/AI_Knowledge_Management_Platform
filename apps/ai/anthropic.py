@@ -21,13 +21,22 @@ from django.conf import settings
 from apps.ai import _openai_compat
 from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, ProviderUnavailable, StatementList
 from apps.ai.generation import (
-    GENERATION_MAX_TOKENS,
     GENERATION_TIMEOUT_SECONDS,
     ChatReply,
     GenerationAttempt,
     run_generation_attempts,
 )
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
+
+# Claude's own token ceiling, not FLM's GENERATION_MAX_TOKENS (800). Current Claude
+# models think before they answer and the thinking counts against max_tokens, so a
+# ceiling sized for the JSON reply alone cuts the reply off mid-object: three schema
+# failures, then the 503. It is a ceiling, not a target; the bill is for the tokens used.
+CLAUDE_MAX_TOKENS = 16000
+# How much the model thinks before answering. Low, because the task is extraction from
+# passages already supplied, not open reasoning, and every thinking token is paid for.
+# A starting value, not a measured one: tune it once the path has run live.
+CLAUDE_EFFORT = "low"
 
 
 class AnthropicService:
@@ -85,8 +94,9 @@ class AnthropicService:
         """
         if not passages:
             raise ValueError("generate_statements() needs at least one passage")
-        # One value for the request and for the attempt log's record of it.
-        max_tokens = GENERATION_MAX_TOKENS
+        # One value for the request and for the attempt log's record of it, and the
+        # shared loop's ceiling-hit test reads it too (apps/ai/generation.py).
+        max_tokens = CLAUDE_MAX_TOKENS
         # Built per attempt, because each attempt's prompt states the statement cap the
         # loop asks it for (apps/ai/generation.py).
         return run_generation_attempts(
@@ -108,12 +118,18 @@ class AnthropicService:
         unchanged, the same division the embed path makes. ``stop_reason`` and the usage
         counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
         the reply leaves them out.
+
+        No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
+        and current Claude models refuse them, so this path is not deterministic run to
+        run. ``thinking`` is left at the model's default, because disabling it is a 400 on
+        Opus 5.5; ``effort`` is what keeps it short. ``output_tokens`` includes the
+        thinking, so the attempt log's completion count does too.
         """
         try:
             response = self._anthropic().messages.create(
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
-                temperature=0.0,
+                output_config={"effort": CLAUDE_EFFORT},
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_prompt}],
                 timeout=GENERATION_TIMEOUT_SECONDS,
