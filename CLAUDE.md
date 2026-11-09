@@ -92,13 +92,19 @@ embedding are written in the same ACID transaction (NFR-21).
 ## 4. AI provider — the most important rule in this file
 
 **No application code may import an AI vendor SDK directly.** Every AI call goes
-through `apps/ai/provider.py`, which exposes exactly three operations:
+through the `AIService` protocol in `apps/ai/`, which exposes exactly the operations
+enumerated here — the list, not a count, is the source of truth:
 
 ```python
 class AIService(Protocol):
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
     def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
+    # FR-13 (step 7 phase 4): one standalone question from a follow-up and the thread's
+    # prior QUESTIONS (never answers, D-42). USED FOR RETRIEVAL ONLY — embedded in place
+    # of the composed join, never in any prompt, reply or citation. ONE attempt; on any
+    # failure the pipeline falls back to the composed join and the ask proceeds.
+    def rewrite_followup(self, question: str, prior_questions: list[str]) -> FollowupRewrite: ...
 ```
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:

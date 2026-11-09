@@ -60,6 +60,19 @@ unchanged, so a statement citing something that appeared only among the earlier 
 is rejected by set membership like any other fabricated identifier. The
 composed strings do not outlive the call; the row records the question as asked.
 
+**The follow-up rewrite (FR-13, step 7 phase 4, option 3) is here, and it touches
+retrieval only.** D-103 measured that retrieval often supplies the right passage and
+generation still restates turn 1, while the spelled-out arm scored 6/9 against
+with-history's 2/9 — so a follow-up's retrieval string is now the model's own
+spelled-out form: ``resolve_retrieval_text`` asks ``rewrite_followup`` (one attempt,
+prior QUESTIONS only, D-42) for one standalone question and embeds that instead of the
+plain join. On ANY failure it embeds the join, exactly as before, and the ask proceeds;
+a single-turn question makes no rewrite call at all and is byte-identical to the
+pre-phase-4 path. The generation prompt, the reply, the citations and every serializer
+are untouched — the rewrite's only trace outside this module is
+``QueryLog.retrieval_rewrite``, record-only, which is what lets the HTTP check re-run a
+server turn's retrieval without a fresh (varying) model call.
+
 Still not here: 7.10's ``composeAnswerWithInlineCitations`` and ``resolveSourceDetails``
 (the presentation layer, item 10) and the view (item 11). FR-13's endpoints, serializers
 and Conversation CRUD are the view layer's too: this function is the engine a conversation
@@ -168,10 +181,13 @@ record-only, like ``no_answer_reason``: no serializer exposes either, or the ide
 no-answer reply stops being identical.
 """
 
+import time
 from dataclasses import dataclass
 
 import apps.ai
+from apps.ai import attempt_log
 from apps.ai.base import Passage, Statement
+from apps.ai.rewrite import MAXIMUM_REWRITE_LENGTH, RewriteViolation
 from apps.core.constants import (
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
@@ -179,13 +195,113 @@ from apps.core.constants import (
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
 )
-from apps.retrieval.conversation import conversation_context
+from apps.retrieval.conversation import ConversationContext, conversation_context
 from apps.retrieval.query_embedding import embed_question
 from apps.retrieval.partial_matches import PartialMatch, partial_matches
 from apps.retrieval.query_log import record_query
 from apps.retrieval.ranking import RankedPassage, admit, rank, truncate_to_context
 from apps.retrieval.scoping import candidate_chunks, permission_scope
 from apps.retrieval.verification import VerificationResult, verify_citations
+
+
+@dataclass(frozen=True)
+class ResolvedRetrieval:
+    """The one string this turn embeds, and the rewrite where the model produced it.
+
+    ``text`` is what ``ranked_for_query_text`` is given: the model's standalone rewrite
+    where one was used, otherwise the composed join (or the bare question on a single
+    turn, where the two are the same string). ``rewrite`` is the rewrite exactly as
+    embedded, or None where none was used — the value ``QueryLog.retrieval_rewrite``
+    records, so the HTTP check can re-run this turn's retrieval from the row rather
+    than from a fresh model call that would vary (D-40's variance, applied to the
+    rewrite). Frozen like every other object a record is read off.
+    """
+
+    text: str
+    rewrite: str | None
+
+
+def resolve_retrieval_text(*, question: str, context: ConversationContext) -> ResolvedRetrieval:
+    """What this turn embeds: the model rewrite with history, the composed join without it.
+
+    FR-13, step 7 phase 4, option 3 (D-103). With history, ``rewrite_followup`` is asked
+    for ONE standalone question merging the prior questions' referents into this one —
+    questions only, never answers (D-42) — and that string becomes the retrieval query.
+    The generation prompt is untouched: ``context.for_prompt`` still carries the original
+    question with the labelled history block, so the rewrite never reaches a prompt, a
+    reply or a citation. ``scripts/citation_harness.py --threads`` calls THIS function,
+    not a restatement of it, so the harness measures the shipped resolution.
+
+    **Single turn: no rewrite call, byte-identical behaviour.** With no prior questions
+    the provider is not looked up at all and the text is ``context.for_retrieval``,
+    which is the question itself — the one-off path docs/flm-baseline.md describes,
+    unchanged. Under test.
+
+    **One attempt, then fall back — the ask must never fail because the rewrite did.**
+    ANY failure — the provider unreachable or timing out, a non-conforming or empty
+    reply, a rewrite over MAXIMUM_REWRITE_LENGTH, even an implementation missing the
+    operation — is caught HERE, logged by outcome (operation name and used/fell-back
+    only, no question text: apps/ai/attempt_log.py), and retrieval proceeds with the
+    composed join exactly as it did before this function existed. This is deliberately
+    broader than the provider contract's own failure modes, because the fallback is
+    correct for every one of them and a degraded retrieval string is strictly better
+    than a 503 for a feature the turn can work without. The one thing NOT caught is
+    what ``except Exception`` does not catch — a KeyboardInterrupt stays an interrupt.
+
+    The guards on the returned value sit here as well as in the providers' shared
+    parser, because this chokepoint is the one every implementation passes through,
+    stubs included: an empty or over-length rewrite falls back whatever produced it.
+    """
+    if not context.prior_questions:
+        return ResolvedRetrieval(text=context.for_retrieval, rewrite=None)
+    started = time.perf_counter()
+    try:
+        # Looked up on the module at call time, as every provider call is, so the
+        # suite's stub applies (docs/ai-provider.md section 6).
+        proposed = apps.ai.get_ai_service().rewrite_followup(
+            question, list(context.prior_questions)
+        )
+        rewritten = proposed.question.strip()
+        if not rewritten:
+            raise RewriteViolation("the rewrite is empty")
+        if len(rewritten) > MAXIMUM_REWRITE_LENGTH:
+            raise RewriteViolation(
+                f"the rewrite is {len(rewritten)} characters, over the "
+                f"{MAXIMUM_REWRITE_LENGTH} ceiling"
+            )
+    except Exception as exc:  # noqa: BLE001 — every failure falls back; see the docstring
+        attempt_log.rewrite_fell_back(
+            time.perf_counter() - started, attempt_log.cause_of(exc), str(exc)
+        )
+        return ResolvedRetrieval(text=context.for_retrieval, rewrite=None)
+    attempt_log.rewrite_used(time.perf_counter() - started)
+    # What is recorded is what is embedded, exactly: the stripped string.
+    return ResolvedRetrieval(text=rewritten, rewrite=rewritten)
+
+
+def ranked_for_query_text(text: str, *, role_name: str) -> list[RankedPassage]:
+    """Steps 3 to 5 for one retrieval string: embed, restrict the candidate set, rank.
+
+    THE ORDER IS THE INVARIANT: both FR-11 predicates are conditions on the candidate
+    query, so no out-of-scope row and no row from another embedding model is ever
+    fetched, let alone scored — whatever ``text`` is, the bare question, the composed
+    join or a model rewrite (invariant 1; apps/retrieval/scoping.py). The model name
+    comes off the embedding result, never settings (risk R10), and the ranked list is
+    returned pre-threshold so the caller can derive partial matches before ``admit``
+    narrows it.
+
+    One function rather than three inline steps so that the measuring instruments can
+    run the SAME code: ``scripts/conversation_http_check.py`` reproduces a server
+    turn's retrieval through this, and a comparison that restated the sequence would
+    drift from it the day this changes.
+    """
+    # Step 3. The PLAIN retrieval string is what gets embedded; the labelling prose
+    # stays out of the vector (apps/retrieval/conversation.py).
+    embedding = embed_question(text)
+    # Step 4. Both FR-11 predicates as conditions on one query.
+    candidates = candidate_chunks(role_name=role_name, embedding_model=embedding.model)
+    # Step 5. Cosine in application code, best first, capped at TOP_K, floor NOT applied.
+    return rank(candidates, embedding.vectors[0])
 
 
 class QuestionLengthOutOfRange(ValueError):
@@ -452,21 +568,19 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
     # caller is refused before any row is read on their behalf.
     context = conversation_context(question=question, conversation=conversation, user=user)
 
-    # Step 3. The model name comes back on the result and is used as-is below: what the
-    # provider answered with, never what settings expected (risk R10). The PLAIN composed
-    # string is what gets embedded: a follow-up finds the right passages because its
-    # predecessors' nouns are in the vector, and the labelling prose is left out of it
-    # because every word of instruction in an embedded string dilutes the query.
-    embedding = embed_question(context.for_retrieval)
+    # FR-13 step 7 phase 4 (option 3, D-103). With history, the retrieval string is the
+    # model's standalone rewrite of the follow-up; on ANY rewrite failure it is the
+    # composed join, exactly as before; with no history no rewrite call is made at all
+    # and the string is the question. The rewrite is used for RETRIEVAL ONLY — the
+    # prompt below still carries ``context.for_prompt`` — and what was embedded is
+    # recorded in QueryLog.retrieval_rewrite at every exit, record-only.
+    resolved = resolve_retrieval_text(question=question, context=context)
 
-    # Step 4. Both FR-11 predicates are conditions on this query, so no out-of-scope row
-    # and no row from another embedding model is ever fetched, let alone ranked.
-    candidates = candidate_chunks(role_name=role_name, embedding_model=embedding.model)
-
-    # Step 5. Cosine in application code, best first, capped at TOP_K, then the floor.
+    # Steps 3 to 5: embed, restrict, rank — one function, shared with the measuring
+    # instruments, holding the scope-before-any-score order (invariant 1; risk R10).
     # The ranked list is NAMED rather than passed straight into ``admit`` because FR-12's
     # partial matches are derived from it before the floor narrows it (see below).
-    ranked = rank(candidates, embedding.vectors[0])
+    ranked = ranked_for_query_text(resolved.text, role_name=role_name)
 
     # FR-12's "partially related items", derived HERE — once, from the pre-threshold ranked
     # list, above the path-A branch — so that both no-answer paths are handed the same value
@@ -500,6 +614,7 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
             outcome=outcome,
             supplied_chunk_ids=(),
             rejected_count=None,
+            retrieval_rewrite=resolved.rewrite,
         )
         return outcome
 
@@ -557,6 +672,7 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
             outcome=outcome,
             supplied_chunk_ids=supplied_chunk_ids,
             rejected_count=verification.rejected_count,
+            retrieval_rewrite=resolved.rewrite,
         )
         return outcome
 
@@ -576,5 +692,6 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
         outcome=outcome,
         supplied_chunk_ids=supplied_chunk_ids,
         rejected_count=verification.rejected_count,
+        retrieval_rewrite=resolved.rewrite,
     )
     return outcome

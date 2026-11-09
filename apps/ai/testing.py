@@ -16,7 +16,14 @@ import random
 
 from django.conf import settings
 
-from apps.ai.base import EmbeddingResult, Passage, ProviderHealth, Statement, StatementList
+from apps.ai.base import (
+    EmbeddingResult,
+    FollowupRewrite,
+    Passage,
+    ProviderHealth,
+    Statement,
+    StatementList,
+)
 
 STUB_EMBEDDING_MODEL = "stub-embed"
 
@@ -42,6 +49,7 @@ class StubAIService:
         self.detail = detail
         self.embed_calls: list[list[str]] = []
         self.generate_calls: list[tuple[str, list[Passage]]] = []
+        self.rewrite_calls: list[tuple[str, list[str]]] = []
 
     def vector_for(self, text: str) -> list[float]:
         # Seeded from a content hash so the same text embeds to the same vector in
@@ -69,6 +77,23 @@ class StubAIService:
             statements=[
                 Statement(text=f"Stub statement answering {question!r}.", chunk_id=first.chunk_id)
             ]
+        )
+
+    def rewrite_followup(self, question: str, prior_questions: list[str]) -> FollowupRewrite:
+        """A deterministic standalone rewrite, recorded like every other call.
+
+        The shape is DISTINCT from apps/retrieval/conversation.py's plain join — marked,
+        question first — so a test can tell "the rewrite was embedded" from "the fallback
+        join was embedded" by the exact string, while still containing the question and
+        every prior question verbatim for substring assertions. A double without this
+        method is also a valid provider to test against: the pipeline falls back on the
+        AttributeError, which is the fallback path's own test hook.
+        """
+        self.rewrite_calls.append((question, list(prior_questions)))
+        if not prior_questions:
+            raise ValueError("rewrite_followup() needs at least one prior question")
+        return FollowupRewrite(
+            question=f"{question} (standalone, resolving: {' '.join(prior_questions)})"
         )
 
     def health(self) -> ProviderHealth:

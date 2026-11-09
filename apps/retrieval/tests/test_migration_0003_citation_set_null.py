@@ -7,9 +7,12 @@ executor itself, retrieval only, from 0002 to 0003 and back.
 **How it stays out of every other test's way.** It runs in the ordinary per-test transaction,
 not a transactional test: PostgreSQL's DDL is transactional, so the ALTERs, the
 ``django_migrations`` rows and the data are all rolled back when the test ends, pass or fail,
-and the seeded roles a transactional flush would wipe are never touched. It ends at 0003
-anyway, so that a reader of the test can see the schema the rest of the suite expects is the
-one it leaves.
+and the seeded roles a transactional flush would wipe are never touched. It ends at the
+retrieval leaf anyway — 0004 since step 7 phase 4 added ``QueryLog.retrieval_rewrite`` — so
+that a reader of the test can see the schema the rest of the suite expects is the one it
+leaves. The query row is written through the historical registry for the same reason the
+citation rows always were: at 0002 the live QueryLog model names a column the table does
+not hold yet.
 
 **``SET CONSTRAINTS ALL IMMEDIATE`` first, and why it is not a workaround for the migration.**
 Django creates PostgreSQL foreign keys ``DEFERRABLE INITIALLY DEFERRED``, so a row inserted
@@ -42,6 +45,9 @@ pytestmark = pytest.mark.django_db
 
 BEFORE = ("retrieval", "0002_querylog_rejected_count")
 AFTER = ("retrieval", "0003_answercitation_chunk_set_null")
+# The retrieval leaf, which the test returns to at its end so it leaves the schema the
+# rest of the suite expects (the transaction rollback would restore it regardless).
+LATEST = ("retrieval", "0004_querylog_retrieval_rewrite")
 
 
 def migrate_retrieval_to(node):
@@ -98,8 +104,14 @@ def test_0003_backfills_chunk_uuid_and_reverses_deleting_only_rows_whose_chunk_i
 
     kept_chunk = make_chunk(document, 0)
     lost_chunk = make_chunk(document, 1)
-    query = QueryLog.objects.create(
-        user=employee,
+    # Written through the HISTORICAL model, not the live QueryLog: the table is at 0002
+    # here, and the live model has gained a column since (retrieval 0004's
+    # retrieval_rewrite, step 7 phase 4), so an INSERT through the live model would name
+    # a column this state does not hold. The citation rows below were already written
+    # through the historical registry for the same reason.
+    OldQueryLog = old_apps.get_model("retrieval", "QueryLog")
+    query = OldQueryLog.objects.create(
+        user_id=employee.pk,
         question="How much annual leave do I accrue?",
         answer_text="Kept. Lost.",
         retrieved_chunk_ids=[kept_chunk.id, lost_chunk.id],
@@ -149,3 +161,7 @@ def test_0003_backfills_chunk_uuid_and_reverses_deleting_only_rows_whose_chunk_i
     assert list(Citation.objects.values_list("pk", "chunk_id", "chunk_uuid")) == [
         (kept.pk, kept_chunk.pk, kept_chunk.pk)
     ]
+
+    # Leave retrieval at its leaf (see the module docstring); the row survives 0004 too.
+    migrate_retrieval_to(LATEST)
+    assert QueryLog.objects.get(pk=query.pk).retrieval_rewrite is None
