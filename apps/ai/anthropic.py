@@ -126,7 +126,7 @@ class AnthropicService:
         No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
         and current Claude models refuse them, so this path is not deterministic run to
         run. ``thinking`` is left at the model's default, because disabling it is a 400 on
-        Opus 5.5; ``effort`` is what keeps it short. ``output_tokens`` includes the
+        Sonnet 5.5 and Opus 5.5; ``effort`` is what keeps it short. ``output_tokens`` includes the
         thinking, so the attempt log's completion count does too.
         """
         try:

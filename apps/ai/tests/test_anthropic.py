@@ -202,16 +202,16 @@ def status_error(status_code):
 def test_generate_statements_sends_the_shared_prompt_and_returns_statements():
     client = FakeGeneratingClient(CONFORMING)
 
-    with override_settings(ANTHROPIC_MODEL="claude-opus-5"):
+    with override_settings(ANTHROPIC_MODEL="claude-sonnet-5-5"):
         result = AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
     assert [statement.text for statement in result.statements] == ["Twenty days."]
     assert [statement.chunk_id for statement in result.statements] == [CHUNK_ID]
     (call,) = client.messages.calls
-    assert call["model"] == "claude-opus-5"
+    assert call["model"] == "claude-sonnet-5-5"
     # No sampling parameters: the pinned SDK has none, and current models refuse them.
     assert "temperature" not in call
-    # Thinking is left at the model's default; {"type": "disabled"} is a 400 on Opus 5.5.
+    # Thinking is left at the model's default; {"type": "disabled"} is a 400 on Sonnet 5.5 and Opus 5.5.
     assert "thinking" not in call
     assert call["output_config"] == {"effort": CLAUDE_EFFORT}
     assert call["max_tokens"] == CLAUDE_MAX_TOKENS
@@ -290,7 +290,7 @@ def test_three_malformed_replies_raise_provider_unavailable_after_exactly_three_
     """The same NFR-19 total as the FLM path, because it is the same loop (D-19)."""
     client = FakeGeneratingClient("prose", "more prose", "still prose")
 
-    with override_settings(ANTHROPIC_MODEL="claude-opus-5"):
+    with override_settings(ANTHROPIC_MODEL="claude-sonnet-5-5"):
         with pytest.raises(ProviderUnavailable, match="STATEMENT_LIST_SCHEMA"):
             AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
