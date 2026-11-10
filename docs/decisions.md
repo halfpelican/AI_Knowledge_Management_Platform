@@ -4884,6 +4884,40 @@ the Administrator's gap list (L2).
 - **A throttled search is DRF's 429 with `Retry-After`,** and the search page shows the client's
   rate-limit text with Try again.
 
+**Dated note, 10 November 2026 (night): applying a tag gets a scope, `tagging`, at 30 a minute.**
+The user's decision on finding 4 of the security review in D-105's dated note of the same night (the
+tag corrections). `POST /api/documents/{id}/tags` was unthrottled, and each new Topic name a person
+types there becomes a permanent `Tag`. The Topic is grown, so it joins the scheme of every document
+whose whole audience reads a source carrying it: every document, when it was typed on one every
+role reads. The scheme is what `apps/ai/classification.py` lists in each classification prompt,
+every value with no cap, and what the detail offers as `tag_options`.
+
+- **`TAGGING_THROTTLE_RATE = "30/min"`,** per user, through `ScopedRateThrottle` like the other
+  scopes, on that route alone (`DocumentTagsView`). As with search, the rate is not about the NPU,
+  since applying a tag calls no provider; it bounds how fast one user can grow the vocabulary. The
+  page sends one request per tag a person adds, so a person tagging by hand never meets it, and no
+  script or load test calls the route.
+- **Where the 429 sits.** DRF checks throttles in `initial()`, after authentication and the
+  permission classes and before the view's method runs. The route's one permission class is
+  `IsAuthenticated`, so an anonymous request is still 401, and past the rate the 429 comes before
+  the scoped 404 and `contribute_content`'s 403. It is the same answer for every id, so it
+  discloses nothing, as the search throttle answers before any query runs. Every request the
+  throttle admits counts, a 400, 403, 404 or 409 included, and a throttled apply writes nothing.
+- **The other tag routes stay unthrottled.** Confirming or removing a link and rejecting a proposal
+  create no `Tag`. Confirming a proposed Topic can create one, but only from a proposal the
+  classifier made, and classification is reached over HTTP only through upload, reprocess and
+  classify, which share the `ingestion` budget.
+- **What it does not do.** One user can still create 30 Topics a minute. Each stays in the scheme,
+  and so in every later prompt and `tag_options` its audience reaches, until an Administrator
+  retires it, and a person naming a retired Topic brings it back (D-105's finding 6, accepted).
+  Capping the Topics the prompt lists would change the classifier's input, so it stays deferred.
+- **Tested** in `apps/api/tests/test_throttles.py`, from both roles: past the rate an apply is
+  DRF's 429 with `Retry-After` and writes no `Tag` and no link; past it, an id naming nothing, an
+  Administrator-only document and a readable document the caller may not tag all get the same 429,
+  where below it they were told apart by 404 and 403; and one user's budget is not another's, each
+  way round. `test_configuration.py`'s walk of every route lists this one in the `tagging` scope.
+- **The interface's 429 text** is the lead's to change, after this branch.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -7262,9 +7296,13 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
     manifest's `visible_to_roles`, which `scripts/ingest_objective02.py` writes; not from the
     database. The recorded runs and verdicts stand as records of the old rule, and nothing re-runs
     them.
-  - **4: open.** An unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every
-    classification prompt. A throttle is the user's question, which the lead will put. Capping the
-    prompt would change the classification input, so it is deferred.
+  - **4 (low): the throttle half done, on `fix/FR-10-tag-throttle`; the prompt cap deferred.** An
+    unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every classification
+    prompt. The user decided the same night: a per-user throttle on that route, scope `tagging`, 30
+    a minute (`TAGGING_THROTTLE_RATE`), recorded in D-79's note on tagging. Capping the prompt would
+    change the classification input, so it is deferred, and one user can still create 30 Topics a
+    minute. *Until that branch this read "4: open", and "A throttle is the user's question, which
+    the lead will put."*
   - **5 (low): fixed in the following commit.** Reversing `documents 0009` kept removed AI links,
     which the 0008-era code shows as live tags again. 0009's reverse now deletes them, before it
     drops the column; live links are untouched. 0009 is edited in place rather than followed by a

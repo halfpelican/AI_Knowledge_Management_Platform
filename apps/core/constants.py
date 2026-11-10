@@ -391,6 +391,14 @@ CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
 # spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
 # reads (the security review's L1 and L2). The page sends one request per submitted term.
 SEARCH_THROTTLE_RATE = "30/min"
+# POST /api/documents/{id}/tags, scope "tagging" (the user's decision of 10 November 2026, night;
+# D-79's note on tagging, answering D-105's security review, finding 4). Each new Topic name a
+# person types there becomes a permanent Tag, which joins the scheme that later classification
+# prompts list with no cap (apps/ai/classification.py) and that tag_options offers. Like search's,
+# the rate is not about NPU time, since applying a tag calls no provider: it bounds how fast one
+# user can grow the vocabulary. The page sends one request per tag a person adds. The other tag
+# routes are not throttled, and D-79's note says why.
+TAGGING_THROTTLE_RATE = "30/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
