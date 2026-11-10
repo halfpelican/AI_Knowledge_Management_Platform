@@ -7114,6 +7114,11 @@ in the first case, was overtaken; accepted as written):
   `test_rbac`'s new check that each permissioned route checks its own code found
   `document-reprocess` missing from its list of permissioned routes, a gap older than this work,
   now added.
+- **`POST /api/knowledge-gaps/cycles` is not throttled** (decided on 10 November, when the merge with
+  main raised it). It is Administrator-only; the advisory lock already runs one cycle at a time; and a
+  cycle considers only rows logged since the previous one, plus the grace, so pressing it again costs
+  almost nothing. D-79's budgets exist to stop one user's asks and ingestions monopolising the NPU,
+  and a cycle adds no NPU work beyond embedding rows already logged.
 
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
