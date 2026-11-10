@@ -707,7 +707,9 @@ describe('FR-10: a document that has never been classified', () => {
     expect(screen.getByRole('status').textContent).toBe(TEXT.classifyingStatus)
     expect(screen.queryByText(TEXT.classificationNone)).toBeTruthy()
 
-    classify.release({ body: { classification: classificationOf(), tag_details: [AI_TAG] } })
+    classify.release({
+      body: { classification: classificationOf(), tag_details: [AI_TAG], department: LEAVE.department },
+    })
 
     await waitFor(() => expect(assignment(TEXT.classificationFieldType).value).toBe('Policy'))
     expect(screen.queryByText(TEXT.classificationNone)).toBeNull()
@@ -718,6 +720,44 @@ describe('FR-10: a document that has never been classified', () => {
     expect(metadata(TEXT.documentFieldProject)).toBe(AI_TAG.name)
     expect(screen.getByRole('status').textContent).toBe(TEXT.classifyDone)
     expect(requestsTo(answered, 'POST', `${DOC}/classify`)).toHaveLength(1)
+  })
+
+  it('shows the department the classify reply carries, filling a blank one, beside the AI label', async () => {
+    // A run fills a blank department with an applied suggestion (D-105), and the
+    // reply says what the department now is.
+    const answered = await renderDetail(detailOf({ department: '' }), {
+      [`POST ${DOC}/classify`]: {
+        body: {
+          classification: classificationOf({ machine_department: 'Finance', machine_department_confidence: 0.97 }),
+          tag_details: [],
+          department: 'Finance',
+        },
+      },
+    })
+    expect(metadata(TEXT.documentFieldDepartment)).toBe(TEXT.documentNotRecorded)
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Finance'))
+    expect(assignment(TEXT.classificationFieldDepartment).provenance).toBe(
+      `${TEXT.classificationSuggestedByAI}, ${TEXT.classificationConfidence(97)}`,
+    )
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Finance')
+    expect(requestsTo(answered, 'POST', `${DOC}/classify`)).toHaveLength(1)
+  })
+
+  it('keeps the department as it was when a classify reply carries none, as from a server before the field', async () => {
+    await renderDetail(detailOf({ department: 'Human Resources' }), {
+      // The classify reply before the field: `{classification, tag_details}`. Not the
+      // contract now; it is here only to defend the fallback.
+      [`POST ${DOC}/classify`]: { body: { classification: classificationOf(), tag_details: [] } },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldType).value).toBe('Policy'))
+    expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Human Resources')
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Human Resources')
   })
 
   it('says in words that there was no text to classify on a 422, never showing the backend text', async () => {

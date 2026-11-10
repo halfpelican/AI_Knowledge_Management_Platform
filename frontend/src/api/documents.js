@@ -223,8 +223,9 @@ export function reprocessDocument(docId, options = {}) {
  * `POST /api/documents/{id}/classify` — runs FR-10's classification over the
  * document's extracted text, which takes the AI service ten to sixty seconds.
  *
- * 200 `{classification, tag_details}`, both as the detail carries them, and no
- * `department`, although a run can fill a blank one (D-105); 422 no
+ * 200 `{classification, tag_details, department}`: the first two as the detail
+ * carries them, and `department` the document's `department` column after the
+ * run, which can fill a blank one (D-105), shown as it is; 422 no
  * text was extracted, so there is nothing to classify (FR-10's own code); 503
  * NFR-19's notice, after `MAXIMUM_CLASSIFY_ATTEMPTS`; 429 past the ingestion
  * rate it shares with upload, meeting ingestion and reprocess (D-79), with a

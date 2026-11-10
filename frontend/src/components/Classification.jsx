@@ -116,18 +116,21 @@ function provenanceFor(outcome, machineValue, confidence, effectiveValue, isDepa
 }
 
 /**
- * The document's department after a confirm or an edit: the reply's
- * `department`, the column the server stored (docs/api-contract.md, FR-10;
- * D-105's note of 10 November). It is taken as it is; nothing is worked out from
- * the outcome or from what was sent.
+ * The document's department after a classify run, a confirm or an edit: the
+ * reply's `department`, the column the server stored (docs/api-contract.md,
+ * FR-10; D-105's note of 10 November). It is taken as it is; nothing is worked
+ * out from the outcome or from what was sent.
  *
- * `inferForOlderServer` runs only when a reply carries no `department`, which
- * is a server from before 10 November, whose reply was `{classification}` alone.
- * Remove it once no such server is run against this front end.
+ * `fallbackForOlderServer` runs only when a reply carries no `department`, which
+ * is a server from before the field: its confirm reply was `{classification}` and
+ * its classify reply `{classification, tag_details}`. For a confirm or an edit
+ * the fallback is the inference below; for a classify run it is the department
+ * as it stood, unchanged. Remove both once no such server is run against this
+ * front end.
  */
-function departmentFromReply(reply, inferForOlderServer) {
+function departmentFromReply(reply, fallbackForOlderServer) {
   if (typeof reply?.department === 'string') return reply.department
-  return inferForOlderServer()
+  return fallbackForOlderServer()
 }
 
 /**
@@ -253,10 +256,10 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  *
  * **One click is one request, and the section re-reads from the reply.** The
  * routes return what changed — the classification, the tag links, the one link,
- * or the department a confirm or an edit stored — and `onChange` hands it to the
- * page, which holds the record. Nothing is assumed about the result beyond what
- * the reply says (`departmentFromReply` keeps one inference, for an older server
- * only).
+ * or the department a classify run, a confirm or an edit left stored — and
+ * `onChange` hands it to the page, which holds the record. Nothing is assumed
+ * about the result beyond what the reply says (`departmentFromReply` falls back,
+ * for an older server only).
  *
  * **A department already on the document is the current one** while a different
  * suggestion waits (D-105's note of 10 November): the value shown is the
@@ -403,12 +406,14 @@ export default function Classification({ docId, classification, tagDetails, depa
       KEY.classify,
       () => classifyDocument(docId),
       (body) => {
-        // Known gap: the classify reply carries no `department` (docs/api-contract.md),
-        // and a run fills a blank department with an applied suggestion (D-105), so
-        // the department shown stays blank until the page is read again. Raised with
-        // the lead for the reply to carry it, as the confirm reply does; nothing is
-        // inferred here meanwhile.
-        onChange({ classification: body?.classification ?? null, tag_details: body?.tag_details ?? [] })
+        onChange({
+          classification: body?.classification ?? null,
+          tag_details: body?.tag_details ?? [],
+          // A run fills a blank department with an applied suggestion (D-105), and
+          // the reply says what the department now is. Without it, as from an older
+          // server, the department stays as it was.
+          department: departmentFromReply(body, () => department),
+        })
         announce(TEXT.classifyDone)
       },
     )

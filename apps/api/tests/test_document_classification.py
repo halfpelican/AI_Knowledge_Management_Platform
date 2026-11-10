@@ -146,7 +146,9 @@ def test_classify_returns_the_classification_and_the_tag_details(session_client)
 
     assert response.status_code == 200, response.content
     body = response.json()
-    assert set(body) == {"classification", "tag_details"}
+    assert set(body) == {"classification", "tag_details", "department"}
+    # The suggestion equals the document's own department, so nothing was written and it stands.
+    assert body["department"] == "People"
     result = body["classification"]
     assert set(result) == CLASSIFICATION_KEYS
     assert (result["doc_type"], result["doc_type_outcome"]) == (POLICY, ASSIGNMENT_APPLIED)
@@ -168,6 +170,43 @@ def test_classify_returns_the_classification_and_the_tag_details(session_client)
     assert entry["confidence"] == STUB_CONFIDENCE
     assert uuid.UUID(entry["content_tag_id"]) == links_of(document).get().pk
     assert links_of(document).get().tag == tag
+
+
+def test_classify_replies_with_the_department_the_machine_filled(session_client):
+    """A blank department is filled by an applied in-scheme suggestion (D-105's note of 10
+    November), and the reply carries it, re-read from the row, so the page need not reload."""
+    # "Finance" is in the scheme because another document both roles can read carries it, and it
+    # is the scheme's only department, so it is what the stub suggests, at STUB_CONFIDENCE.
+    make_document(session_client.user, title="Budget memo", department="Finance")
+    document = make_document(session_client.user, department="")
+
+    response = classify(session_client.client, document.id)
+
+    assert response.status_code == 200, response.content
+    body = response.json()
+    result = body["classification"]
+    assert (result["machine_department"], result["department_outcome"]) == ("Finance", ASSIGNMENT_APPLIED)
+    assert body["department"] == "Finance"
+    document.refresh_from_db()
+    assert document.department == "Finance"
+
+
+def test_classify_keeps_a_different_department_and_replies_with_it(session_client):
+    """A department already on the document is not the machine's to replace: the suggestion is
+    held as provisional, and the reply's department is the one stored, not the suggestion."""
+    # The scheme is ("Finance", "People"), sorted, so the stub suggests "Finance".
+    make_document(session_client.user, title="Budget memo", department="Finance")
+    document = make_document(session_client.user, department="People")
+
+    response = classify(session_client.client, document.id)
+
+    assert response.status_code == 200, response.content
+    body = response.json()
+    result = body["classification"]
+    assert (result["machine_department"], result["department_outcome"]) == ("Finance", ASSIGNMENT_PROVISIONAL)
+    assert body["department"] == "People"
+    document.refresh_from_db()
+    assert document.department == "People"
 
 
 def test_classify_without_extracted_text_is_422(session_client, stub_ai_service):
