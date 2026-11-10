@@ -221,6 +221,11 @@ MAXIMUM_EMBED_ATTEMPTS = 3
 # raises ProviderUnavailable, which POST /api/documents/{id}/classify answers 503 and the
 # ingestion hook answers by leaving the document indexed and unclassified (invariant 8).
 MAXIMUM_CLASSIFY_ATTEMPTS = 3
+# Same policy for a recording segment's transcription (D-123): apps/ai/transcription.py
+# makes at most this many calls to FLM's speech endpoint (1 initial call + 2 retries), then
+# raises ProviderUnavailable, which POST /api/transcriptions answers 503. The page keeps the
+# segment and the draft, so the person can resume once FLM is back (invariant 8).
+MAXIMUM_TRANSCRIBE_ATTEMPTS = 3
 
 # --- Question bounds (FR-12, FR-13), in characters -----------------------------------
 MINIMUM_QUESTION_LENGTH = 10
@@ -350,6 +355,52 @@ DOWNLOAD_CONTENT_TYPES = {
     "txt": TEXT_CONTENT_TYPE,
 }
 
+# --- Recording transcription (D-123) --------------------------------------------
+# A meeting recording becomes a draft transcript in the browser, one segment at a time: the
+# page decodes the recording, cuts it into short WAV segments and posts each to
+# POST /api/transcriptions, which returns that segment's text. Nothing is indexed until a person
+# confirms the draft and submits it through FR-09's POST /api/meetings.
+#
+# The length the page aims each segment at, in seconds: 30 s is Whisper's own window. The page cuts
+# at the quietest tenth of a second in a segment's last third, so a cut rarely falls inside a word,
+# and lets its last segment run up to a second longer rather than send a sliver. The page reads
+# this from GET /api/transcriptions/status (``segment_seconds``), so there is no client copy to
+# drift.
+TRANSCRIPTION_SEGMENT_SECONDS = 30
+# The longest segment the server will transcribe, in seconds of audio. Above the page's own
+# segment length, so a final segment that absorbs a short tail is still accepted, and well below
+# what would make one request long: at FLM's measured 0.24-0.31x real time, 60 s of audio is
+# about 15-19 s of transcription.
+MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS = 60
+# The sample rate the page resamples a recording to before cutting it, in hertz: Whisper's own.
+# The server accepts a 16-bit PCM mono WAV at exactly this rate and nothing else: the page sends
+# nothing else, and a wider range only made a segment dearer to measure (the security review of
+# 11 November). frontend/src/constants.js copies it.
+TRANSCRIPTION_SAMPLE_RATE = 16_000
+# Silence never reaches Whisper, which invents text from it: on 6 November a silent track
+# (-90 dBFS) came back as "E ai E ai...". A segment whose loudest TRANSCRIPTION_SILENCE_WINDOW
+# is quieter than this, in dB relative to full scale, is answered "silent" without a provider
+# call. *tune*: -45 dBFS sits far above that silent track and well below ordinary speech, which
+# a laptop microphone records at around -30 to -15 dBFS in its loud moments. It is to be
+# checked on the user's real recordings in the end-to-end trial.
+TRANSCRIPTION_SILENCE_DBFS = -45.0
+TRANSCRIPTION_SILENCE_WINDOW_SECONDS = 0.5
+# How many segments the whole server sends to FLM at once, across every user. FLM has one NPU and
+# takes requests in turn, so more at once only queue there, each holding a Waitress thread, until
+# they meet TRANSCRIPTION_TIMEOUT_SECONDS. Two lets one segment wait behind another, at most one
+# segment's time, without many users' segments holding every thread (the security review of 11
+# November, finding 2). A segment past it is answered 429 "transcription_busy" with
+# TRANSCRIPTION_BUSY_RETRY_SECONDS in Retry-After, which the page waits out by itself.
+MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT = 2
+TRANSCRIPTION_BUSY_RETRY_SECONDS = 5
+# The largest recording the page will decode, in bytes. The recording never reaches the server,
+# only its segments do, and each of those is held to MAX_UPLOAD_BYTES; so this bounds the
+# page's memory, where the whole file and its decoded audio sit together, and only the client
+# enforces it. The value is set from what a browser tab can hold, not measured on every browser:
+# the decoded audio is resampled to 16 kHz, so it is far smaller than a video file of the same
+# meeting, and the file itself is the larger share. frontend/src/constants.js copies it.
+MAXIMUM_RECORDING_BYTES = 500 * 1024 * 1024  # 500 MB
+
 # --- Password complexity (FR-01) -----------------------------------------------------
 # FR-01 Server-End, Validation rules: "Password must meet complexity rules (min 8
 # chars, 1 uppercase, 1 number, 1 special character)." The four conditions are
@@ -413,6 +464,13 @@ SEARCH_THROTTLE_RATE = "30/min"
 # user can grow the vocabulary. The page sends one request per tag a person adds. The other tag
 # routes are not throttled, and D-79's note says why.
 TAGGING_THROTTLE_RATE = "30/min"
+# POST /api/transcriptions, scope "transcription" (D-123). The page posts one segment at a
+# time, each taking FLM 7-10 s for 30 s of audio, so a transcribing page sends about six a
+# minute. A silent segment is answered without a provider call and so returns at once; this rate
+# lets a long silent stretch through at that pace, and the page waits out a 429's Retry-After
+# and carries on. One transcription per user is in flight at once regardless
+# (apps/api/transcription_slot.py), so the rate bounds requests, not NPU time.
+TRANSCRIPTION_THROTTLE_RATE = "60/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times

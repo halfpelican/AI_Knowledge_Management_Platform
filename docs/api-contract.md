@@ -66,7 +66,8 @@ cannot drift.
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
 per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
 and thread creation are limited per user as well, and keyword search and a person applying a tag
-since 10 November 2026; "Stage 5 item 5" below lists every throttled route (D-79).
+since 10 November 2026, and a recording segment sent for transcription since D-123;
+"Stage 5 item 5" below lists every throttled route (D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -1012,6 +1013,7 @@ not grant it, and it does not grant `manage_documents`.
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
 | `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
 | `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
+| `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
@@ -1048,10 +1050,11 @@ user, another from the same user, on any of the three, answers at once:
   404, 409 and the 422 for a missing original. Those are answered as before. A 422 for content
   stored but not indexed is ingestion's own outcome, reached inside the slot. The rate is checked
   before the slot, so this 429 counts against the rate.
-- **It is separate from the ask's slot.** A user may have one question and one ingestion in
-  flight at once.
-- The client tells the three kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
-  and `ingestion_in_flight`. It does not parse `detail`.
+- **It is separate from the ask's slot.** A user may have a question and an ingestion in flight
+  at once, and since D-123 a recording segment in transcription as well.
+- The client tells the kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
+  `ingestion_in_flight` and, on the transcription route, `transcription_in_flight` and
+  `transcription_busy` (D-123). It does not parse `detail`.
 
 **The conversation list leaves out empty threads (D-80).** `GET /api/conversations` returns only
 threads with at least one turn, answered or not. It never filters on the title, or on what a turn
@@ -1350,3 +1353,63 @@ and exits 1 on a provider outage. The route runs the same cycle on demand.
    Open entry, embedded by the same model, whose centroid's cosine is at least
    `GAP_GROUPING_THRESHOLD`, or starts a new entry. An Addressed entry is never joined, so a
    subject that recurs after being addressed opens a new one.
+
+## Recording transcription (D-123)
+
+Not in the proposal: §1.9 puts live transcription and native recording capture out of scope, and
+FR-09 takes a transcript file or pasted text. The user decided on 10 November 2026 that a person
+with a meeting **recording** can have it transcribed into a **draft**, which they review before it
+is added. These routes, the status and the segment, turn the recording into the draft's text. **Neither stores anything**:
+no meeting, no chunk, no file and no row. The reviewed draft is added through FR-09's
+`POST /api/meetings` as `transcript_text`, exactly as pasted text is, which stays the one path
+into the index.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| GET | `/api/transcriptions/status` | session + `contribute_content` | `200 {"enabled": bool, "available": bool, "segment_seconds": 30, "maximum_segment_seconds": 60}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE`, one budget with the segments |
+| POST | `/api/transcriptions` | session + `contribute_content` | `200 {"status": "transcribed", "text": "...", "model": "whisper-v3:turbo", "duration_seconds": 29.6, "loudest_dbfs": -18.4}`, or `200 {"status": "silent", "text": "", "model": null, "duration_seconds": 30.0, "loudest_dbfs": -61.2}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE` (DRF's body, with `Retry-After`); `503 {"detail": "...", "code": "transcription_disabled"}` transcription is not enabled on this server; `413` a declared `Content-Length` over 50 MB, or a segment over it; `400 {"audio": ["..."]}` no `audio` part, a segment with no audio frames, or one longer than `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS`; `415` not a 16-bit PCM mono WAV at 16 kHz, or a body that is not multipart; `429 {"detail": "...", "code": "transcription_in_flight"}` another segment of this user's is with the provider; `429 {"detail": "...", "code": "transcription_busy"}` with `Retry-After` (5 s), the server is already transcribing `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) segments; `503 {"detail": "...", "code": "transcription_unavailable"}` the provider failed after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, or refused the segment (D-118) |
+
+**The request is `multipart/form-data`**, one field, `audio`: one segment of the recording as a
+16-bit PCM WAV. The page decodes the recording in the browser, resamples it to 16 kHz mono and cuts
+it into segments of at most `segment_seconds`, at the quietest tenth of a second in each segment's
+last third (the last may run up to a second longer), then sends them one at a time. The recording itself never reaches the server, so the
+50 MB ceiling bounds each segment, not the recording; the page bounds the recording at
+`MAXIMUM_RECORDING_BYTES` (500 MB), which only the client enforces. A cross-site multipart POST is
+refused for want of the CSRF token, as on the upload.
+
+**The rejection order** is fixed, each before any provider call: `401`, `403`, the `429` rate, the
+`503` `transcription_disabled`, the `413` on the declared length, the `400` for no `audio`, the `413`
+on the bytes received, the `415`, the `400` for an empty or over-long segment. Then a silent segment
+is answered `200` `silent`, then the in-flight `429`, then the busy `429`, then the provider.
+
+**The order is of the answers, not of the reading.** A session that sends its CSRF token, as the
+page does, has its whole multipart body parsed by DRF while authenticating, before any of these
+answers: DRF's CSRF check reads `request.POST`. What bounds the reading is the web server's own
+body limit. The document upload and the meeting ingest share this; D-123 records it as open.
+
+**Only what the page sends is accepted:** a 16-bit PCM mono WAV at 16 kHz.
+
+**Format is decided by the bytes.** A WAV is a RIFF file whose form type is `WAVE`; the filename
+and the part's declared type are never consulted.
+
+**Silence never reaches Whisper.** The server measures the segment's loudest half second, and below
+`TRANSCRIPTION_SILENCE_DBFS` (-45 dBFS) answers `silent` without calling the provider: Whisper
+invents text from silence. Every reply carries that level as `loudest_dbfs`, rounded to a tenth,
+and `null` for digital silence, so the threshold (*tune*) can be checked on real recordings. What is sent to the provider is a WAV rebuilt from exactly the frames
+measured, so a header that understates its data cannot carry more audio past the checks.
+
+**The 503s are told apart by `code`.** `transcription_disabled` means paste or upload the
+transcript instead; `transcription_unavailable` means nothing was stored and the same segment can
+be sent again. The page keeps the recording and the draft through either (invariant 8). After
+`transcription_unavailable` it resumes from the failed segment; after `transcription_disabled` there
+is nothing to resume until transcription is switched on again.
+
+**`available` means FLM answered, not that its speech model is loaded.** FLM's model list names
+its chat catalogue, not `whisper-v3:turbo`, so a server started without `--asr 1` reports
+available and fails the first segment, which the page shows as unavailable. No provider detail is
+returned: it names an internal address.
+
+**Transcription is off by default** (`TRANSCRIPTION_PROVIDER=none`), so a host without the NPU
+offers no control that cannot work (D-114). Such a host still ingests a transcript made elsewhere,
+saved from the page as a text file, through FR-09's file option.
+
