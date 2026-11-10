@@ -279,6 +279,22 @@ describe('FR-10: the type and department are shown with their provenance in word
   })
 })
 
+describe('D-119 finding 6: the notice that only the opening of a long document was read (D-104)', () => {
+  it('says so when the classification has input_truncated true', async () => {
+    await renderDetail(detailOf({ classification: classificationOf({ input_truncated: true }) }))
+
+    expect(within(section()).getByText(TEXT.classificationTruncated)).toBeTruthy()
+  })
+
+  it('says nothing about it when input_truncated is false', async () => {
+    await renderDetail(detailOf({ classification: classificationOf({ input_truncated: false }) }))
+
+    // The assignments rendered, so the notice's absence is not a section that never drew.
+    expect(assignment(TEXT.classificationFieldType).value).toBe('Policy')
+    expect(within(section()).queryByText(TEXT.classificationTruncated)).toBeNull()
+  })
+})
+
 describe('FR-10: confirming and editing the type and department', () => {
   it('Confirm sends one request with an empty body, and the view updates from the reply', async () => {
     const after = classificationOf({
