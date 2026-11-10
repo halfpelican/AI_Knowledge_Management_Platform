@@ -1,0 +1,1411 @@
+{
+  "record": {
+    "recorded_at": "2026-11-08T20:51:13+11:00",
+    "commit_sha": "711fcda5d4db4639daa198784d018f79b324c777",
+    "uncommitted_tracked_changes": true,
+    "uncommitted_tracked_files": [
+      "AD docs/~$oject_8-proposal_complete_V4.5.docx"
+    ],
+    "dump_sha256": "3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59",
+    "database": "kmp_obj0506_20261101",
+    "flm_version": {
+      "cli": "v0.9.39",
+      "cli_output": "FLM v0.9.39",
+      "server": "v0.9.39",
+      "required": "v0.9.39",
+      "notes": []
+    },
+    "recorded": true,
+    "server": {
+      "via": "in-process",
+      "server": null,
+      "version": null,
+      "threads": null,
+      "note": "scripts/citation_harness.py calls the pipeline's functions in its own process; no HTTP server is involved"
+    },
+    "question_set": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-obj0506\\corpus\\objective-06\\pre-measurement-asks.json",
+    "question_set_sha256": "db8b1d73bd4aa4f4f8bf422ee9b6edfd326bd481853c10bb5ec9b0ee9b969202",
+    "question_set_status": "DEVELOPMENT MATERIAL, 8 November 2026. The 8 unanswerable and 6 permission-only asks of the draft thirty (objective-06 queries.json), in scripts/citation_harness.py's question-set shape so the shipped pipeline measures them with nothing written. Run three times before the thirty are frozen, as the lead decided on 8 November. Not a frozen set; not tuned against.",
+    "corpus_problems": []
+  },
+  "mode": "full",
+  "constants": {
+    "TOP_K": 25,
+    "RELEVANCE_THRESHOLD": 0.3,
+    "threshold_used": 0.3,
+    "MAXIMUM_CONTEXT_TOKENS": 4000,
+    "MAXIMUM_GENERATION_ATTEMPTS": 3
+  },
+  "provider": "flm",
+  "chat_model": "gemma3:4b",
+  "embed_model": "embed-gemma",
+  "embedding_dimension": 768,
+  "question_set": "C:\\Users\\mozza\\Documents\\IT_Captone_Project_KMP\\KMP_Prototype\\KMP_Prototype-obj0506\\corpus\\objective-06\\pre-measurement-asks.json",
+  "with_history": false,
+  "canned_prior_questions": [],
+  "elapsed_seconds": 370.92371080000885,
+  "summary": {
+    "questions": 14,
+    "responses": 9,
+    "schema_conformance": [
+      9,
+      9
+    ],
+    "first_attempt_conformance": [
+      9,
+      9
+    ],
+    "fabricated_identifiers": [
+      0,
+      17
+    ],
+    "statements_verified": 17,
+    "empty_answer_ordinary": [
+      0,
+      0
+    ],
+    "scoped_empty": [
+      4,
+      6
+    ],
+    "scoped_answered": [
+      0,
+      0
+    ],
+    "scoping_shown": [
+      0,
+      0
+    ],
+    "no_answer_empty": [
+      2,
+      8
+    ],
+    "expected_answer_match": [
+      0,
+      0
+    ],
+    "expected_answer_match_scoped": [
+      0,
+      0
+    ],
+    "path_a": 5,
+    "call_failures": 0,
+    "leaks": 0,
+    "timing_seconds": {
+      "per_attempt": {
+        "n": 9,
+        "min": 16.1,
+        "median": 25.6,
+        "mean": 29.200000000000003,
+        "p90": 53.2,
+        "max": 53.2
+      },
+      "per_question": {
+        "n": 14,
+        "min": 1.2053692000044975,
+        "median": 24.333971900021425,
+        "mean": 26.49445752857303,
+        "p90": 50.54959469998721,
+        "max": 54.36247690001619
+      },
+      "per_answered_question": {
+        "n": 8,
+        "min": 23.581417000008514,
+        "median": 37.51096949999919,
+        "mean": 39.02316960000098,
+        "p90": 54.36247690001619,
+        "max": 54.36247690001619
+      }
+    }
+  },
+  "misses": [
+    {
+      "id": "U01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "U04",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "U05",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "U07",
+      "kind": "no-answer",
+      "role": "Employee",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "U08",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "U11",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "source": null,
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "P04",
+      "kind": "scoped",
+      "role": "Employee",
+      "source": "D16",
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    },
+    {
+      "id": "P07",
+      "kind": "scoped",
+      "role": "Employee",
+      "source": "T02",
+      "source_rank": null,
+      "source_score": null,
+      "threshold": 0.3,
+      "above_threshold": null,
+      "ended": "answered, where no answer was expected"
+    }
+  ],
+  "results": [
+    {
+      "id": "U01",
+      "base_id": "U01",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "When are salaries reviewed each year?",
+      "prompt_question": "When are salaries reviewed each year?",
+      "top_score": 0.34712423207326853,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.34712423207326853
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.34567534423349283
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.30745444201697975
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.3012718273047055
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.2988797355759895
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "5b84ad25-d3e3-4388-ba7f-54b9139ad29b",
+          "score": 0.34712423207326853,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.34567534423349283,
+          "item": "D01"
+        },
+        {
+          "chunk_id": "886a7e4a-d781-4427-ba1f-e999afe14602",
+          "score": 0.3084080700475523,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "db6d9ae4-24e3-4663-8cb5-78636692dcc3",
+          "score": 0.30745444201697975,
+          "item": "D12"
+        },
+        {
+          "chunk_id": "af45c907-c12e-4fdf-a1ca-193352a495ba",
+          "score": 0.3065204554289614,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "bfa0d3d8-72aa-4edb-b9e0-1d6335de7373",
+          "score": 0.30343155989258735,
+          "item": "D04"
+        },
+        {
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "score": 0.3012718273047055,
+          "item": "D08"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 16.1,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.\",\n      \"chunk_id\": \"9fe4800b-9e5f-4f9c-9330-29efccc0aa52\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.",
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The owner of onboarding checklist for new starters reviews it at least once a year and records any change, together with the date and the reason for the change.",
+          "chunk_id": "9fe4800b-9e5f-4f9c-9330-29efccc0aa52",
+          "item": "D08"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 39.02291430000332
+    },
+    {
+      "id": "U02",
+      "base_id": "U02",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "How do I ask for a pay rise?",
+      "prompt_question": "How do I ask for a pay rise?",
+      "top_score": 0.32770746102392295,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.32770746102392295
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2971168649764412
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.2964973495552055
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.269159579687531
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.25830628588691273
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.32770746102392295,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 23.1,
+          "raw": "```json\n{\n  \"statements\": []\n}\n```",
+          "statements": 0
+        }
+      ],
+      "parsed": true,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 24.333971900021425
+    },
+    {
+      "id": "U04",
+      "base_id": "U04",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "Can I get a corporate credit card for work purchases?",
+      "prompt_question": "Can I get a corporate credit card for work purchases?",
+      "top_score": 0.3278554967414218,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.3278554967414218
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.32518085069785135
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2933814457278103
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.2823924068719493
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.25966104648800353
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "score": 0.3278554967414218,
+          "item": "D10"
+        },
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.32518085069785135,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 22.4,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Exceptions to expense claims guide require written approval and are kept on file so that they can be checked during an audit.\",\n      \"chunk_id\": \"e149a71c-2c74-46cf-a5ec-b9d0d831ea87\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Exceptions to expense claims guide require written approval and are kept on file so that they can be checked during an audit.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Exceptions to expense claims guide require written approval and are kept on file so that they can be checked during an audit.",
+          "chunk_id": "e149a71c-2c74-46cf-a5ec-b9d0d831ea87",
+          "item": "D10"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 23.581417000008514
+    },
+    {
+      "id": "U05",
+      "base_id": "U05",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "Who is allowed to hold a company credit card?",
+      "prompt_question": "Who is allowed to hold a company credit card?",
+      "top_score": 0.31772517346046886,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.31772517346046886
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.285399008947736
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.2614599136168819
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.26061777956432847
+        },
+        {
+          "source_type": "document",
+          "source_id": "46f78870-1670-45fb-8a00-1d1b53f2cba1",
+          "item": "D06",
+          "score": 0.2514979516668441
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "score": 0.31772517346046886,
+          "item": "D02"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 31.5,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"IT Acceptable Use Policy covers every computer, phone, tablet and network service provided by the organisation, and any personal device that is used to reach organisational systems.\",\n      \"chunk_id\": \"aaf92567-7cc2-4388-80e6-e3253322edef\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "IT Acceptable Use Policy covers every computer, phone, tablet and network service provided by the organisation, and any personal device that is used to reach organisational systems.",
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "IT Acceptable Use Policy covers every computer, phone, tablet and network service provided by the organisation, and any personal device that is used to reach organisational systems.",
+          "chunk_id": "aaf92567-7cc2-4388-80e6-e3253322edef",
+          "item": "D02"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 32.67503499999293
+    },
+    {
+      "id": "U07",
+      "base_id": "U07",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "Is the office closed between Christmas and New Year?",
+      "prompt_question": "Is the office closed between Christmas and New Year?",
+      "top_score": 0.41273187936416134,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.41273187936416134
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3358076259638139
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.2800934891849403
+        },
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.2740741489662834
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27043573018143996
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "score": 0.41273187936416134,
+          "item": "D20"
+        },
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3358076259638139,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 36.3,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"The Melbourne office will relocate to a new building on the other side of the river.\", \"chunk_id\": \"f75351f0-ae0c-4ebf-93a0-b71041d0485e\"},\n    {\"text\": \"The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.\", \"chunk_id\": \"f75351f0-ae0c-4ebf-93a0-b71041d0485e\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "The Melbourne office will relocate to a new building on the other side of the river.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e"
+        },
+        {
+          "text": "The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "The Melbourne office will relocate to a new building on the other side of the river.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        },
+        {
+          "text": "The Driftwood Lane move weekend is scheduled for the second weekend of November, and the office will reopen on the following Monday.",
+          "chunk_id": "f75351f0-ae0c-4ebf-93a0-b71041d0485e",
+          "item": "D20"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 37.51713120000204
+    },
+    {
+      "id": "U08",
+      "base_id": "U08",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "Do we have a shutdown period over the Christmas holidays?",
+      "prompt_question": "Do we have a shutdown period over the Christmas holidays?",
+      "top_score": 0.3310863424064901,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.3310863424064901
+        },
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.2665029978525551
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.24667802080332732
+        },
+        {
+          "source_type": "document",
+          "source_id": "483170de-7f0f-4750-b259-3fb2f5c22c2b",
+          "item": "D20",
+          "score": 0.23970058364720692
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.23861192029133807
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.3310863424064901,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 35.7,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Employee Leave Policy 2026 applies to every department and every site.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    }\n  ]\n}\n```",
+          "statements": 1
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Employee Leave Policy 2026 applies to every department and every site.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Employee Leave Policy 2026 applies to every department and every site.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 36.965818199998466
+    },
+    {
+      "id": "U10",
+      "base_id": "U10",
+      "kind": "no-answer",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": null,
+      "question": "Do I still get paid if I'm called up for jury duty?",
+      "prompt_question": "Do I still get paid if I'm called up for jury duty?",
+      "top_score": 0.24910892430470438,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "f9621aa3-d664-44af-a25e-94734780119e",
+          "item": "D10",
+          "score": 0.24910892430470438
+        },
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.21790081515117007
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.20245108445553414
+        },
+        {
+          "source_type": "document",
+          "source_id": "49c56238-3aa7-465c-a426-de0bbc739a7d",
+          "item": "D19",
+          "score": 0.17488939722014937
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.17180100596928005
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 1.2053692000044975
+    },
+    {
+      "id": "U11",
+      "base_id": "U11",
+      "kind": "no-answer",
+      "role": "Administrator",
+      "expects_answer": false,
+      "source": null,
+      "question": "How much notice does someone need to give before taking jury service leave?",
+      "prompt_question": "How much notice does someone need to give before taking jury service leave?",
+      "top_score": 0.4067875182653196,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "910d0241-38de-4305-b901-a10bf40b8781",
+          "item": "D01",
+          "score": 0.4067875182653196
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.2915922630849627
+        },
+        {
+          "source_type": "document",
+          "source_id": "9862c3e2-bd78-4061-a535-2e6f8649d008",
+          "item": "D03",
+          "score": 0.28679901219695964
+        },
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.2861535199510344
+        },
+        {
+          "source_type": "document",
+          "source_id": "3899e26b-b3dd-4478-9845-093046a99ab8",
+          "item": "D07",
+          "score": 0.27658292149164565
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "score": 0.4067875182653196,
+          "item": "D01"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 25.6,
+          "raw": "```json\n{\n  \"statements\": [\n    {\n      \"text\": \"Leave requests are submitted through the human resources portal at least two weeks before the intended start date, except in emergencies.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"The line manager approves or declines leave requests within three working days.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    },\n    {\n      \"text\": \"Periods of high operational demand, such as the end of the financial year, may limit the number of people who can be away at once.\",\n      \"chunk_id\": \"25a78c27-fe57-4435-a2a3-bf9e7f7545b3\"\n    }\n  ]\n}\n```",
+          "statements": 3
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Leave requests are submitted through the human resources portal at least two weeks before the intended start date, except in emergencies.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "The line manager approves or declines leave requests within three working days.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        },
+        {
+          "text": "Periods of high operational demand, such as the end of the financial year, may limit the number of people who can be away at once.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Leave requests are submitted through the human resources portal at least two weeks before the intended start date, except in emergencies.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "The line manager approves or declines leave requests within three working days.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        },
+        {
+          "text": "Periods of high operational demand, such as the end of the financial year, may limit the number of people who can be away at once.",
+          "chunk_id": "25a78c27-fe57-4435-a2a3-bf9e7f7545b3",
+          "item": "D01"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": null,
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": null,
+      "error": null,
+      "seconds": 37.51096949999919
+    },
+    {
+      "id": "P01",
+      "base_id": "P01",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D09",
+      "question": "Who is the project manager for Project Atlas?",
+      "prompt_question": "Who is the project manager for Project Atlas?",
+      "top_score": 0.28476532299386553,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.28476532299386553
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.2596626937452438
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.2368490716959222
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.20233654702641385
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.19630008857769374
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "head of digital services",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 16.926680199976545
+    },
+    {
+      "id": "P02",
+      "base_id": "P02",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D09",
+      "question": "What gets decided at the Quartz Harbour milestone gate?",
+      "prompt_question": "What gets decided at the Quartz Harbour milestone gate?",
+      "top_score": 0.27516380239295796,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "2e101ba3-2d3f-4d92-82b9-53f4da8f2fae",
+          "item": "D17",
+          "score": 0.27516380239295796
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2544494180835756
+        },
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.23891192769698313
+        },
+        {
+          "source_type": "document",
+          "source_id": "9b5631b9-6175-4830-a353-56b2d0abb817",
+          "item": "D08",
+          "score": 0.23523754320378387
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.23000786447312288
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "steering group",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 1.2122621000162326
+    },
+    {
+      "id": "P04",
+      "base_id": "P04",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "D16",
+      "question": "Who on the team is rated four in project management?",
+      "prompt_question": "Who on the team is rated four in project management?",
+      "top_score": 0.38754968049155814,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "d703ccb2-c424-4dfe-8b0e-a78a6513b6c3",
+          "item": "D13",
+          "score": 0.38754968049155814
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.3772899822162485
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.3261996236429957
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.3258364872290948
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.2860396769391555
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "a839910b-12ec-4aab-af59-9d79ba072334",
+          "score": 0.38754968049155814,
+          "item": "D13"
+        },
+        {
+          "chunk_id": "dcb441b1-1f4f-4529-864d-ee6aa42c2639",
+          "score": 0.3772899822162485,
+          "item": "T03"
+        },
+        {
+          "chunk_id": "c0aa1caf-0c17-45ae-adab-747ac3b27bd7",
+          "score": 0.3261996236429957,
+          "item": "T01"
+        },
+        {
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "score": 0.3258364872290948,
+          "item": "D04"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 18.9,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Chapter 18: Project records\", \"chunk_id\": \"7f675205-b040-4768-9221-dd9f4d229a85\"},\n    {\"text\": \"Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.\", \"chunk_id\": \"7f675205-b040-4768-9221-dd9f4d229a85\"}\n  ]\n}\n```",
+          "statements": 2
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Chapter 18: Project records",
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85"
+        },
+        {
+          "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Chapter 18: Project records",
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "item": "D04"
+        },
+        {
+          "text": "Each business unit must document how project records is handled and name a responsible owner who reviews the arrangement at least once every twelve months.",
+          "chunk_id": "7f675205-b040-4768-9221-dd9f4d229a85",
+          "item": "D04"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "Ben Carter",
+      "accepted": [
+        "Grace Tan"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 50.54959469998721
+    },
+    {
+      "id": "P06",
+      "base_id": "P06",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T02",
+      "question": "How much is in the Fernwood contingency reserve?",
+      "prompt_question": "How much is in the Fernwood contingency reserve?",
+      "top_score": 0.25922661037723166,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.25922661037723166
+        },
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.23851320102369902
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.20316656529506272
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.19456969475081168
+        },
+        {
+          "source_type": "document",
+          "source_id": "ab0dcd1f-0bbf-43d4-8241-58e175a7336b",
+          "item": "D11",
+          "score": 0.19169988059150314
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "two million",
+      "accepted": [
+        "2 million",
+        "$2m",
+        "2,000,000"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 13.787773299991386
+    },
+    {
+      "id": "P07",
+      "base_id": "P07",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T02",
+      "question": "What did the risk committee decide to do about supplier concentration?",
+      "prompt_question": "What did the risk committee decide to do about supplier concentration?",
+      "top_score": 0.3607177443345233,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "937a4447-e94f-4c63-a025-0bd5afa94057",
+          "item": "D05",
+          "score": 0.3607177443345233
+        },
+        {
+          "source_type": "document",
+          "source_id": "6971af02-ec47-4a5f-b3ac-cd481571abdd",
+          "item": "D12",
+          "score": 0.2920456882567125
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "7adc38a7-5ac3-4c98-b850-eb4e922c9c03",
+          "item": "T03",
+          "score": 0.23943511777908597
+        },
+        {
+          "source_type": "document",
+          "source_id": "b17e1c8a-3f89-4b59-8740-06cec1913505",
+          "item": "D04",
+          "score": 0.22144245095341994
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.19815659353324191
+        }
+      ],
+      "retrieved": [
+        {
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "score": 0.3607177443345233,
+          "item": "D05"
+        }
+      ],
+      "generation_called": true,
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "parsed",
+          "seconds": 53.2,
+          "raw": "```json\n{\n  \"statements\": [\n    {\"text\": \"Purchasing decisions must deliver value for money, be transparent and be free of conflicts of interest.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"},\n    {\"text\": \"Every purchase above a minimal value must be supported by a written record of why the supplier was chosen.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"},\n    {\"text\": \"Purchases up to five thousand dollars need one written quote. Purchases between five thousand and fifty thousand dollars need three quotes.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"},\n    {\"text\": \"The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"},\n    {\"text\": \"Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"},\n    {\"text\": \"Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.\", \"chunk_id\": \"693da2bc-1aa7-4c5d-99dc-e229e36430dc\"}\n  ]\n}\n```",
+          "statements": 6
+        }
+      ],
+      "parsed": true,
+      "statements": [
+        {
+          "text": "Purchasing decisions must deliver value for money, be transparent and be free of conflicts of interest.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Every purchase above a minimal value must be supported by a written record of why the supplier was chosen.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Purchases up to five thousand dollars need one written quote. Purchases between five thousand and fifty thousand dollars need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        },
+        {
+          "text": "Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc"
+        }
+      ],
+      "verified_statements": [
+        {
+          "text": "Purchasing decisions must deliver value for money, be transparent and be free of conflicts of interest.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Every purchase above a minimal value must be supported by a written record of why the supplier was chosen.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Purchases up to five thousand dollars need one written quote. Purchases between five thousand and fifty thousand dollars need three quotes.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "The Slate Meridian tender threshold of fifty thousand dollars marks the point at which a formal open tender must be issued and evaluated by a panel of at least three staff.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Team leaders may approve purchases up to two thousand dollars, department heads up to twenty thousand, and the executive committee anything above that.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        },
+        {
+          "text": "Every contract is assigned a manager who tracks deliverables, invoices and renewal dates.",
+          "chunk_id": "693da2bc-1aa7-4c5d-99dc-e229e36430dc",
+          "item": "D05"
+        }
+      ],
+      "answered": true,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "alternatives",
+      "accepted": [],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 54.36247690001619
+    },
+    {
+      "id": "P08",
+      "base_id": "P08",
+      "kind": "scoped",
+      "role": "Employee",
+      "expects_answer": false,
+      "source": "T05",
+      "question": "How many people reported the Cobalt Reef phishing email to the service desk?",
+      "prompt_question": "How many people reported the Cobalt Reef phishing email to the service desk?",
+      "top_score": 0.26114331832941273,
+      "source_rank": null,
+      "source_score": null,
+      "partial_matches": [
+        {
+          "source_type": "document",
+          "source_id": "a3aee338-142e-4f4e-ba38-2d1b7408cb29",
+          "item": "D18",
+          "score": 0.26114331832941273
+        },
+        {
+          "source_type": "document",
+          "source_id": "e65ad9ac-df6b-4a48-9d41-9b11af281c3f",
+          "item": "D02",
+          "score": 0.2483908290652662
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "d02cbde1-72b7-47f0-8c01-62a8dfa50fe2",
+          "item": "T01",
+          "score": 0.22698052351148193
+        },
+        {
+          "source_type": "meeting",
+          "source_id": "eccf6beb-d436-4fc5-a20c-e72ddf4ee435",
+          "item": "T04",
+          "score": 0.20624683754483442
+        },
+        {
+          "source_type": "document",
+          "source_id": "fd77e898-d2f3-4af0-8f9f-3d44a52d91b2",
+          "item": "D14",
+          "score": 0.19939874932128715
+        }
+      ],
+      "retrieved": [],
+      "generation_called": false,
+      "attempts": [],
+      "parsed": false,
+      "statements": [],
+      "verified_statements": [],
+      "answered": false,
+      "fabricated_ids": [],
+      "out_of_scope_ids": [],
+      "expected_answer": "ninety",
+      "accepted": [
+        "90"
+      ],
+      "expected_answer_form": null,
+      "expected_answer_found": false,
+      "error": null,
+      "seconds": 1.2709919000044465
+    }
+  ]
+}

@@ -295,6 +295,78 @@ No column holds a summary or key points: FR-10's front-end clause names them, bu
 summarisation is a separate AI operation not yet built (`apps/ai/base.py` reserves it for
 FR-16), and its columns come with it.
 
+### KnowledgeGaps — FR-19, FR-14
+
+Added on 9 November 2026 by `retrieval 0004_fr19_knowledge_gaps` (migration v2; D-107), when
+FR-19 was built. In `apps/retrieval`, beside the logs it aggregates (D-13). Written by
+`apps/retrieval/gaps.py::run_cycle` and by `PATCH /api/knowledge-gaps/{id}`, and by nothing
+else.
+
+| Field | Type | Notes |
+|---|---|---|
+| `gap_id` | UUID PK | |
+| `subject` | text | the first member's wording, verbatim; no model writes it |
+| `occurrence_count` | integer | equals the entry's number of `KnowledgeGapItems` rows, always |
+| `status` | text | `Open` or `Addressed` — see §3; new entries are `Open` |
+| `first_seen_at` | timestamp | **v2** — the earliest member's time (not in the proposal's table) |
+| `last_seen_at` | timestamp | the newest member's time |
+| `embedding` | vector(`EMBEDDING_DIMENSION`), nullable | **v2** — the mean of the members' vectors; its direction is D-109's centroid |
+| `embedding_model` | text | **v2** — the model the members were embedded by; a join candidate only for an item from the same model (risk R10) |
+
+**Departures from the proposal's field table**, which gives `gap_id`, `subject`,
+`occurrence_count`, `status` and `last_seen_at`:
+
+- **`first_seen_at`**, so an entry says how long a subject has been asked about as well as when it
+  was last asked.
+- **`embedding` and `embedding_model`**, for D-109's grouping by similarity. They follow
+  `ContentChunks`' rule: a provider switch starts new entries instead of comparing vectors that
+  cannot be compared. **The column stores the mean of the members' vectors, not its normalised
+  form.** D-109 compares an item with "the normalised mean of its members' vectors" by cosine,
+  which ignores length, so the two give identical join decisions; the mean is kept because the
+  next member's exact update, `(n * mean + v) / (n + 1)`, needs the length normalising discards.
+
+No column holds an asker, a role, a department or a reason (D-107, D-108).
+
+### KnowledgeGapItems — FR-19
+
+Added by `retrieval 0004` with `KnowledgeGaps` (D-107). One row per log row in the gap log.
+
+| Field | Type | Notes |
+|---|---|---|
+| `gap_item_id` | UUID PK | |
+| `gap_id` | UUID FK → KnowledgeGaps | cascade delete |
+| `query_id` | UUID FK → QueryLog, unique, nullable | **protect** on delete |
+| `search_id` | UUID FK → SearchLogs, unique, nullable | **protect** on delete |
+| `added_at` | timestamp | |
+
+A check constraint, `knowledge_gap_item_exactly_one_source`, requires exactly one of `query_id`
+and `search_id`. Both are unique, so a log row is counted once across every cycle, and a row
+re-scanned in a later cycle's grace window is skipped. **FR-19 writes neither `QueryLog` nor
+`SearchLogs`** (its CRUD line says Read): this table is how a row's membership is remembered
+without a column on it. Both foreign keys **protect**, so `occurrence_count` cannot fall behind
+its items through a deleted log row; nothing in the product deletes one. Only rows that survived
+D-108's permission exclusion become members, and a row left out is recorded nowhere.
+
+### KnowledgeGapCycles — FR-19
+
+Added by `retrieval 0004` with `KnowledgeGaps` (D-107). One row per aggregation cycle, written last,
+in the cycle's transaction.
+
+| Field | Type | Notes |
+|---|---|---|
+| `cycle_id` | UUID PK | |
+| `started_at` | timestamp | bounds the next cycle's window, less `CYCLE_GRACE_SECONDS` |
+| `finished_at` | timestamp | |
+| `triggered_by` | UUID FK → Users, nullable | the Administrator behind `POST /api/knowledge-gaps/cycles`; null for `manage.py aggregate_knowledge_gaps`; **set NULL** if the user is deleted |
+| `queries_considered` | integer | `QueryLog` rows this cycle added to the log |
+| `searches_considered` | integer | `SearchLogs` rows this cycle added to the log |
+| `entries_created` | integer | entries this cycle started |
+| `entries_updated` | integer | entries that existed when the cycle began and gained a member |
+
+**The counts are of rows that entered the log, never of rows read.** D-107: "No count of rows
+left out is stored or returned anywhere." A count of the window's rows, less the rows added, would
+be that number, so no such count exists.
+
 ---
 
 ## 2. Deferred to NIT3004 — not in migration v1
@@ -303,7 +375,6 @@ FR-16), and its columns come with it.
 |---|---|---|
 | `LoginAttempts` | FR-03 account lockout interface | SHOULD |
 | `MFARecoveryCodes`, `Users.mfa_enabled`, `Users.mfa_secret` | FR-07 | COULD |
-| `KnowledgeGaps` | FR-19 gap log | COULD |
 
 Add these in migration v2 when their requirement is built. Do not create empty tables
 now for work that may be descoped.
@@ -312,6 +383,11 @@ now for work that may be descoped.
 > for §1 when FR-10 was built: `documents 0008_fr10_document_analysis` creates it and adds
 > `confidence` and `provisional` to `ContentTags` (D-105). The summary the row was deferred
 > with is not in it; see the §1 entry.
+
+> **9 November 2026.** `KnowledgeGaps` (FR-19 gap log) left this table for §1 when FR-19 was
+> built: `retrieval 0004_fr19_knowledge_gaps` creates it, with `KnowledgeGapItems` and
+> `KnowledgeGapCycles` (D-107). FR-14's `KnowledgeGaps (Read)`, deferred by D-69, is now the
+> dashboard's knowledge-gap panel.
 
 ---
 
@@ -329,6 +405,8 @@ NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESH
 # FR-10 (D-105), 8 November 2026:
 DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
 ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
+# FR-19 (D-107), 9 November 2026:
+KNOWLEDGE_GAP_STATUS_VALUES = ("Open", "Addressed")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -343,6 +421,11 @@ the threshold, held for confirmation and not written; **discarded**, outside the
 scheme (the department only — the type is always in the fixed list because the parser refuses
 anything else); **confirmed**, a person confirmed or edited it, after which reprocessing leaves
 it alone.
+
+`KNOWLEDGE_GAP_STATUS_VALUES` is FR-19's "the ability to mark an entry as addressed": an entry
+starts `Open`, and `PATCH /api/knowledge-gaps/{id}` moves it to `Addressed` and back. Only an `Open`
+entry is a join candidate for D-109's grouping, so a subject that recurs after being addressed
+opens a new entry.
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
@@ -444,6 +527,9 @@ Documents → ExtractedContent → Meetings → MeetingAttendees → ContentChun
 Conversations → QueryLog → SearchLogs → AnswerCitations → Tags → ContentTags.
 `DocumentAnalysis` (v2, `documents 0008`) follows Documents and ContentTags; the executor
 plans it immediately after `documents 0007`.
+`KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
+QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
+`accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

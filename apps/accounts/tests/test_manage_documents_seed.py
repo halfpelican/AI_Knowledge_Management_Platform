@@ -18,6 +18,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -45,12 +46,13 @@ def test_manage_documents_is_held_by_administrator_only(employee_role, administr
     assert MANAGE_DOCUMENTS_PERMISSION not in permission_names(employee_role)
 
 
-def test_the_seeded_permissions_are_exactly_the_four_codes(employee_role, administrator_role):
-    """Every seed so far, together: what each role holds after 0003, 0004, 0005 and 0006.
-    Three codes until 0006 added ``manage_meetings`` (D-99), Administrator's alone."""
+def test_the_seeded_permissions_are_exactly_the_five_codes(employee_role, administrator_role):
+    """Every seed so far, together: what each role holds after 0003 to 0007.
+    Three codes until 0006 added ``manage_meetings`` (D-99), and four until 0007 added
+    ``review_knowledge_gaps`` (D-107), both Administrator's alone."""
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
-        MANAGE_MEETINGS_PERMISSION,
+        MANAGE_MEETINGS_PERMISSION, REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
 
@@ -72,9 +74,11 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=MANAGE_DOCUMENTS_PERMISSION
     ).exists()
-    # 0003's, 0004's and 0006's seeds are untouched: unseeding one migration must not undo another.
+    # 0003's, 0004's, 0006's and 0007's seeds are untouched: unseeding one migration must not
+    # undo another.
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_MEETINGS_PERMISSION,
+        REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's

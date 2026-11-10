@@ -73,4 +73,15 @@ urlpatterns = [
          name="conversation-detail"),
     # Stage 5 item 3: FR-14's one aggregating endpoint, every dashboard panel in one request.
     path("dashboard", views.DashboardView.as_view(), name="dashboard"),
+    # NIT3004, Objective 06: FR-19's knowledge-gap log (D-107), every route behind
+    # review_knowledge_gaps. The list, sorted Open first by occurrence count.
+    path("knowledge-gaps", views.KnowledgeGapListView.as_view(), name="knowledge-gap-list"),
+    # One aggregation cycle, run now (D-107); the scheduled one is manage.py
+    # aggregate_knowledge_gaps. Before the <uuid:pk> route below; "cycles" is not a UUID, so the
+    # two cannot collide.
+    path("knowledge-gaps/cycles", views.KnowledgeGapCyclesView.as_view(),
+         name="knowledge-gap-cycles"),
+    # FR-19's "mark an entry as addressed" (D-107): PATCH {"status": "Addressed" | "Open"}.
+    path("knowledge-gaps/<uuid:pk>", views.KnowledgeGapDetailView.as_view(),
+         name="knowledge-gap-detail"),
 ] + router.urls

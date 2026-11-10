@@ -273,6 +273,37 @@ curl.exe -s -w ' %{http_code}\n' "$base/api/__nope__"
 
 When all five checks pass, open `http://127.0.0.1:8000` in the browser on this laptop and sign in.
 
+## 9. Schedule the knowledge-gap cycle (FR-19)
+
+FR-19 aggregates unanswered questions and zero-result searches "on a scheduled basis": once a day,
+by the user's decision of 10 November 2026 (D-107's note). Register it once on the host, from this
+worktree, in PowerShell:
+
+```powershell
+cd $root
+.\scripts\register_knowledge_gap_schedule.ps1 -LogDirectory C:\kmp-demo\2026-11-01
+```
+
+- **It registers a task for the current Windows user,** daily at 02:00. `-At` sets another time,
+  and running the script again replaces the task. The task runs `manage.py aggregate_knowledge_gaps`
+  with this worktree's `.venv` and `.env`, and appends its output to `knowledge-gaps.log` in the log
+  directory.
+- **No password is asked for or stored,** so the task runs while that user is logged on. If the
+  host must run it while logged off, set "Run whether user is logged on or not" in Task Scheduler
+  yourself; Windows asks for the password there.
+- **The provider must be reachable when it runs:** `flm serve` for `flm`, or the keys in `.env` for
+  `anthropic`. A run that cannot reach it exits 1 and changes nothing, and the next run takes the
+  rows it missed, because each cycle starts from the last committed one. A run missed while the
+  machine was off starts when it is next on.
+- **Check it** with `Get-ScheduledTask -TaskName "KMP knowledge-gap aggregation"`, and run one cycle
+  now with `Start-ScheduledTask` and the same name. **Remove it** with
+  `Unregister-ScheduledTask -TaskName "KMP knowledge-gap aggregation" -Confirm:$false`.
+- **On a Linux host,** one crontab line does the same:
+  `0 2 * * * cd /path/to/checkout && .venv/bin/python manage.py aggregate_knowledge_gaps >> logs/knowledge-gaps.log 2>&1`
+
+The Administrator's **Run aggregation now** button on the knowledge-gap page runs the same cycle on
+demand.
+
 ## Redeploying
 
 1. Ctrl+C in the server window, and close it.

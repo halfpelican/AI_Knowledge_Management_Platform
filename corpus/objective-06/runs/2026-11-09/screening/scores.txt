@@ -1,0 +1,118 @@
+Question set: corpus\objective-06\screening-pool.json, 24 question(s) valid, 0 asked by both roles, so 24 run(s)
+FLM gate: scripts/check_flm.py's checks, before any question is asked (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (7.1s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (1.2s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1300
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+
+FLM gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : fb9e18ad3c70eb89b1469fd18904cff7b91b5ce2 (tracked files have UNCOMMITTED changes)
+  FLM version     : v0.9.39 (flm version), server v0.9.39
+  dump sha256     : 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59
+  database        : kmp_obj0506_20261101
+  provider        : flm (FLMService)
+  endpoint        : http://127.0.0.1:8625/v1
+  chat model      : gemma3:4b
+  embed model     : embed-gemma, dimension 768
+  health          : True — FLM at http://127.0.0.1:8625/v1 advertises 33 model(s)
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-06\screening-pool.json  (24 question(s), 24 run(s)), sha256 d254b26c1e7553f2
+  set status      : DEVELOPMENT MATERIAL (D-110). Screened once on retrieval scores only (scripts/citation_harness.py --scores-only: embed and rank, no generation), on kmp_obj0506_20261101, when FLM is free. The eight kept are those with a top in-scope score of at most 0.25 for the asking role, two per subject; the rest are discarded. The kept eight replace U01, U02, U04, U05, U07, U08, U10, U11 in queries.json, which is then frozen. The lead's decision of 9 November 2026: screening is a verification choice and not a fix; FR-12's decline weakness stays an open finding (D-102's 8 November note), and an unscreened re-run of the frozen thirty is the acceptance test for any future decline fix.
+  indexed chunks  : 43, recorded embedding model(s): ['embed-gemma']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/24] S1a ...
+[2/24] S1b ...
+[3/24] S1c ...
+[4/24] S1d ...
+[5/24] S1e ...
+[6/24] S1f ...
+[7/24] S2a ...
+[8/24] S2b ...
+[9/24] S2c ...
+[10/24] S2d ...
+[11/24] S2e ...
+[12/24] S2f ...
+[13/24] S3a ...
+[14/24] S3b ...
+[15/24] S3c ...
+[16/24] S3d ...
+[17/24] S3e ...
+[18/24] S3f ...
+[19/24] S4a ...
+[20/24] S4b ...
+[21/24] S4c ...
+[22/24] S4d ...
+[23/24] S4e ...
+[24/24] S4f ...
+
+====================================================================================================
+TOP-SCORE DISTRIBUTION BY QUESTION KIND
+====================================================================================================
+
+no-answer  (n=24)
+  min 0.2187   median 0.3171   max 0.4142
+  all: 0.219 0.239 0.241 0.242 0.250 0.251 0.259 0.265 0.267 0.292 0.298 0.314 0.317 0.326 0.329 0.331 0.335 0.346 0.347 0.363 0.366 0.368 0.405 0.414
+
+----------------------------------------------------------------------------------------------------
+SEPARATION — a threshold should admit the answerable and reject the rest
+----------------------------------------------------------------------------------------------------
+
+full record written to corpus\objective-06\runs\2026-11-09\screening\scores.json

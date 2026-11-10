@@ -758,8 +758,9 @@ re-login, and asserts the second turn's answer changed with the role.
 ### FR-14 — dashboard
 
 One endpoint aggregates every panel, in one request (FR-14's Server-End clause). Decisions:
-D-68 (recent questions), D-69 (KnowledgeGaps deferred), D-70 (filters and totals), D-65 (how
-the query parameters are read), D-66 (what "scoped to the caller's role" means).
+D-68 (recent questions), D-69 (KnowledgeGaps deferred, closed by D-107 on 9 November 2026), D-70
+(filters and totals), D-65 (how the query parameters are read), D-66 (what "scoped to the caller's
+role" means).
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
@@ -797,6 +798,9 @@ All three parameters are optional, and an empty value for any of them (`date_fro
 - **`recent_questions`** holds up to 5 of the **caller's own** `QueryLog` rows, newest
   `answered_at` first: the question as asked, when, and its conversation if any. There is no
   answer text, no `answered` flag and no reason field (D-68).
+- **`knowledge_gaps`** is present **only** for a caller whose role holds
+  `review_knowledge_gaps`, and absent from every other payload, so an Employee's dashboard has
+  exactly the six keys above. Its shape is under FR-19 below (D-107).
 
 **What each filter narrows (D-70):**
 
@@ -1118,3 +1122,76 @@ in the detail's `tags`, not a browse facet value and not a filter hit until it i
 [--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:
 database, commit, per-document values, outcomes, links, seconds or error). It refuses the
 database `kmp`.
+
+## NIT3004 — FR-19, Objective 06
+
+### FR-19 — knowledge-gap log
+
+The Administrator's list of "questions the system could not answer and searches returning no
+results, grouped by subject with an occurrence count and the ability to mark an entry as
+addressed". Decisions: D-107 (the tables, the cycle, the routes, the permission and the dashboard
+panel), D-108 (the permission exclusion) and D-109 (similarity grouping). Every route needs a
+session **and** `review_knowledge_gaps`, which accounts 0007 gives the Administrator alone: `401`
+without a session, `403` for a role that lacks the code (invariant 4), checked before anything
+else on the request.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-gaps` | session + `review_knowledge_gaps` | `200` a list of entry objects (below): Open entries first, by `occurrence_count` descending then `last_seen_at` descending, then Addressed entries in the same order. `[]` before any cycle. No pagination | `401`; `403` |
+| POST | `/api/knowledge-gaps/cycles` | session + `review_knowledge_gaps` | `201` the cycle object (below). One aggregation cycle runs synchronously, in one transaction | `401`; `403`; `503 {"detail": "The knowledge service is temporarily unavailable, so the aggregation cycle did not run and nothing was changed. Please try again shortly."}` when embedding fails after `MAXIMUM_EMBED_ATTEMPTS` (NFR-19); the cycle rolls back |
+| PATCH | `/api/knowledge-gaps/{id}` | session + `review_knowledge_gaps` | `200` the updated entry object. Body `{"status": "Addressed"}` or `{"status": "Open"}`; only the status changes | `401`; `403`; `404` no entry with that id, checked before the body; `400 {"status": ["..."]}` any other value, or none |
+
+The entry object, in the list, in `PATCH`'s reply and in the dashboard's `knowledge_gaps.top`:
+
+```json
+{"gap_id": "uuid", "subject": "What is the WFH stipend policy?", "occurrence_count": 6,
+ "status": "Open", "first_seen_at": "2026-11-02T09:14:00+11:00",
+ "last_seen_at": "2026-11-09T09:25:00+11:00"}
+```
+
+The cycle object:
+
+```json
+{"cycle_id": "uuid", "started_at": "2026-11-09T21:40:02+11:00",
+ "finished_at": "2026-11-09T21:40:05+11:00", "queries_considered": 4,
+ "searches_considered": 1, "entries_created": 2, "entries_updated": 1}
+```
+
+The dashboard's addition, in `GET /api/dashboard` for a role holding `review_knowledge_gaps`
+only:
+
+```json
+"knowledge_gaps": {"open_count": 7, "top": [entry object, ...]}
+```
+
+- **`subject`** is the first member's wording, verbatim: no model writes it (D-107).
+- **`occurrence_count`** is the number of questions and searches grouped into the entry, and
+  equals its membership rows. **No payload names who asked, their role, or why a question went
+  unanswered**, and none counts the rows left out (D-107, D-108).
+- **The cycle's counts are of rows that entered the log:** `queries_considered` and
+  `searches_considered` are the `QueryLog` and `SearchLog` rows the cycle added, `entries_created`
+  the entries it started, and `entries_updated` the entries that already existed and gained a
+  member. A row left out on permission grounds appears in no count.
+- **`top`** holds up to `DASHBOARD_GAP_ITEMS` (5) **Open** entries, in the list's order, and
+  `open_count` counts every Open entry. The dashboard's `date_from`, `date_to` and `department`
+  filters do not narrow either: an entry has no department, and its dates are its own.
+
+**What a cycle does** (D-107 to D-109). The scheduled trigger is `python manage.py
+aggregate_knowledge_gaps`, which prints the database name, runs one cycle and prints its counts,
+and exits 1 on a provider outage. The route runs the same cycle on demand.
+
+1. **The window** is every unanswered `QueryLog` row (FR-13 turns included) and every `SearchLog`
+   row with `result_count` 0, timestamped from the previous cycle's start less
+   `CYCLE_GRACE_SECONDS` (60) up to this cycle's start, and not already in the log. The first
+   cycle takes everything before it.
+2. **A row is left out when the asker's role explains it** (D-108). A question is embedded on its
+   own wording and ranked over the Administrator's whole scope; if the top-ranked passage, whether
+   or not it clears `RELEVANCE_THRESHOLD`, is one the asker's role cannot read, the row is left
+   out, and otherwise it is kept, as it is when no passage of the question's embedding model
+   exists. A search is counted again as the Administrator, writing no `SearchLog` row; above zero,
+   it is left out. A kept search term longer than `MAXIMUM_QUESTION_LENGTH` is cut to that length
+   before it is embedded and stored as a subject. Nothing records a row that was left out.
+3. **Kept rows are grouped by similarity** (D-109): in timestamp order, each joins the nearest
+   Open entry, embedded by the same model, whose centroid's cosine is at least
+   `GAP_GROUPING_THRESHOLD`, or starts a new entry. An Addressed entry is never joined, so a
+   subject that recurs after being addressed opens a new one.

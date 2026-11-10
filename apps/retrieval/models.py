@@ -5,13 +5,24 @@ Models only. The retrieval logic itself is built in Stage 4 (FR-11, FR-12, FR-13
 Query and search logs are the project's main quality signal, so they survive
 deletions: a deleted conversation leaves its queries behind (D-12), and a deleted chunk
 leaves its citations behind with a NULL chunk and the identifier kept (D-67).
+
+FR-19's three tables live here too (retrieval 0004, D-107), because the logs they aggregate do:
+``KnowledgeGap``, ``KnowledgeGapItem`` and ``KnowledgeGapCycle``. FR-19 reads ``QueryLog`` and
+``SearchLog`` and writes neither; a row's membership of the gap log is a ``KnowledgeGapItem``,
+never a column on the log row.
 """
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.models import Q
+from pgvector.django import VectorField
 
-from apps.core.constants import NO_ANSWER_REASONS
+from apps.core.constants import (
+    DEFAULT_KNOWLEDGE_GAP_STATUS,
+    KNOWLEDGE_GAP_STATUS_VALUES,
+    NO_ANSWER_REASONS,
+)
 from apps.core.models import NAME_MAX_LENGTH, uuid_primary_key, vocabulary_field
 
 
@@ -152,3 +163,126 @@ class AnswerCitation(models.Model):
 
     class Meta:
         db_table = "answer_citations"
+
+
+class KnowledgeGap(models.Model):
+    """One entry of FR-19's knowledge-gap log: a subject people asked about and nobody could answer.
+
+    The proposal's table (``gap_id``, ``subject``, ``occurrence_count``, ``status``,
+    ``last_seen_at``) plus ``first_seen_at`` and the two embedding columns D-109's grouping needs
+    (D-107). Written by ``apps/retrieval/gaps.py::run_cycle`` and by the status route, and by
+    nothing else.
+
+    **``subject`` is the first member's wording, verbatim.** No model writes it, so no
+    model-generated text enters the record, and the Administrator reads what was actually asked.
+
+    **``occurrence_count`` equals the number of this entry's ``KnowledgeGapItem`` rows**, always.
+    The cycle raises it by one for every member it adds, and a test checks the two against each
+    other. It counts questions and searches, never people or departments.
+
+    **``embedding`` is the mean of the members' vectors, and its direction is the centroid**
+    (D-109). D-109 compares an item with "the normalised mean of its members' vectors" by cosine.
+    Cosine ignores length, so the stored mean and its normalised form make identical join
+    decisions. The mean is stored rather than its normalised form because the next member's exact
+    update needs the length that normalising throws away: ``mean' = (n * mean + v) / (n + 1)``,
+    with ``n`` the entry's ``occurrence_count``. Nullable, as D-107 specifies: an entry with no
+    vector is never a join candidate.
+
+    **``embedding_model`` follows ``ContentChunks``' rule (risk R10).** An entry is a join
+    candidate only for an item embedded by the same model, so a provider switch starts new entries
+    rather than comparing vectors that cannot be compared.
+
+    No asker, no role and no department is stored here or anywhere in FR-19 (D-107, D-108).
+    """
+
+    id = uuid_primary_key("gap_id")
+    subject = models.TextField()
+    occurrence_count = models.PositiveIntegerField()
+    status = vocabulary_field(KNOWLEDGE_GAP_STATUS_VALUES, default=DEFAULT_KNOWLEDGE_GAP_STATUS)
+    first_seen_at = models.DateTimeField()
+    last_seen_at = models.DateTimeField()
+    # Sized from settings, never a literal (D-03, D-08), as ContentChunk.embedding is.
+    embedding = VectorField(dimensions=settings.EMBEDDING_DIMENSION, null=True, blank=True)
+    embedding_model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True, default="")
+
+    class Meta:
+        db_table = "knowledge_gaps"
+
+    def __str__(self):
+        return self.subject
+
+
+class KnowledgeGapItem(models.Model):
+    """One log row's membership of one entry: exactly one of a ``QueryLog`` or a ``SearchLog`` row.
+
+    **Each log row is a member at most once, across every cycle** (D-107): ``query`` and ``search``
+    are one-to-one, so a row re-scanned in a later cycle's grace window cannot be counted twice,
+    and the check constraint makes a membership name exactly one of the two.
+
+    **``PROTECT`` on both, so ``occurrence_count`` cannot drift from the items.** Nothing in the
+    product deletes a log row; if something ever tried, a cascade would lower the item count and
+    leave the stored count behind it, and ``SET_NULL`` would break the constraint below. Refusing
+    the delete keeps the count a fact rather than a history.
+
+    Only rows that survived D-108's permission exclusion become members. A row left out is not
+    recorded anywhere, so its absence is indistinguishable from a question nobody asked.
+    """
+
+    id = uuid_primary_key("gap_item_id")
+    gap = models.ForeignKey(KnowledgeGap, on_delete=models.CASCADE, related_name="items")
+    query = models.OneToOneField(
+        QueryLog, on_delete=models.PROTECT, null=True, blank=True, related_name="gap_item"
+    )
+    search = models.OneToOneField(
+        SearchLog, on_delete=models.PROTECT, null=True, blank=True, related_name="gap_item"
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "knowledge_gap_items"
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (Q(query__isnull=False) & Q(search__isnull=True))
+                    | (Q(query__isnull=True) & Q(search__isnull=False))
+                ),
+                name="knowledge_gap_item_exactly_one_source",
+            ),
+        ]
+
+
+class KnowledgeGapCycle(models.Model):
+    """One aggregation cycle (D-107): the evidence for FR-19's "within one aggregation cycle".
+
+    Written once, last, by ``run_cycle``, in the same transaction as the entries and items it
+    reports. Its ``started_at`` bounds the next cycle's window. ``triggered_by`` is the
+    Administrator who ran it through ``POST /api/knowledge-gaps/cycles``, and null for the
+    scheduled command; it is set null if that user is ever deleted.
+
+    **The four counts describe what entered the log, never what was left out.**
+    ``queries_considered`` and ``searches_considered`` are the ``QueryLog`` and ``SearchLog`` rows
+    this cycle added to the log, which are the rows that survived D-108's exclusion.
+    ``entries_created`` is the entries this cycle started, and ``entries_updated`` the entries that
+    already existed when it began and gained a member. D-107: "No count of rows left out is
+    stored or returned anywhere." A count of rows read from the window would be exactly that
+    number once the rows added were subtracted from it, so no such count exists.
+    """
+
+    id = uuid_primary_key("cycle_id")
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField()
+    triggered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="triggered_by",
+        related_name="knowledge_gap_cycles",
+    )
+    queries_considered = models.PositiveIntegerField()
+    searches_considered = models.PositiveIntegerField()
+    entries_created = models.PositiveIntegerField()
+    entries_updated = models.PositiveIntegerField()
+
+    class Meta:
+        db_table = "knowledge_gap_cycles"

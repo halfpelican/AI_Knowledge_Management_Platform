@@ -84,11 +84,29 @@ SCHEMA_V1 = {
          "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
          "model", "input_truncated", "classified_at"},
     ),
+    # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
+    # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
+    # docs/schema-v1.md section 1's.
+    "knowledge_gaps": (
+        ("gap_id",),
+        {"gap_id", "subject", "occurrence_count", "status", "first_seen_at", "last_seen_at",
+         "embedding", "embedding_model"},
+    ),
+    "knowledge_gap_items": (
+        ("gap_item_id",),
+        {"gap_item_id", "gap_id", "query_id", "search_id", "added_at"},
+    ),
+    "knowledge_gap_cycles": (
+        ("cycle_id",),
+        {"cycle_id", "started_at", "finished_at", "triggered_by", "queries_considered",
+         "searches_considered", "entries_created", "entries_updated"},
+    ),
 }
 
 # schema-v1.md section 2: deferred to NIT3004, must not exist in v1. document_analysis left this
-# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105).
-SECTION_2_TABLES = {"login_attempts", "mfa_recovery_codes", "knowledge_gaps"}
+# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105), and knowledge_gaps on
+# 9 November 2026, when retrieval 0004 created it for FR-19 (D-107).
+SECTION_2_TABLES = {"login_attempts", "mfa_recovery_codes"}
 SECTION_2_USER_COLUMNS = {"mfa_enabled", "mfa_secret"}
 
 OUR_APPS = ("core", "accounts", "documents", "meetings", "retrieval")
@@ -195,6 +213,8 @@ SECTION_5_PLAN = [
     # D-99: the meeting delete permission, Administrator only. Placed where the executor plans
     # it, immediately after accounts 0005, the rule D-51 records.
     ("accounts", "0006_seed_manage_meetings"),
+    # FR-19 (D-107): the knowledge-gap permission, Administrator only, immediately after 0006.
+    ("accounts", "0007_seed_review_knowledge_gaps"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     ("documents", "0002_content_chunks"),
@@ -223,6 +243,9 @@ SECTION_5_PLAN = [
     # Placed where the executor plans it, immediately after retrieval 0002, the rule D-51
     # records for documents 0007.
     ("retrieval", "0003_answercitation_chunk_set_null"),
+    # FR-19 (D-107), 9 November 2026: the knowledge-gap log's three tables, immediately after
+    # retrieval 0003, where its dependency puts it.
+    ("retrieval", "0004_fr19_knowledge_gaps"),
 ]
 
 

@@ -24,6 +24,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 
 pytestmark = pytest.mark.django_db
@@ -84,9 +85,11 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=MANAGE_MEETINGS_PERMISSION
     ).exists()
-    # 0003's, 0004's and 0005's seeds are untouched: unseeding one migration must not undo another.
+    # 0003's, 0004's, 0005's and 0007's seeds are untouched: unseeding one migration must not
+    # undo another.
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
+        REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's
@@ -112,12 +115,14 @@ def migrate_accounts_to(node):
 
 def test_the_migration_reverses_through_the_executor(employee_role, administrator_role):
     """Migrating ``accounts`` back to 0005 runs ``unseed_permissions`` as Django would, and
-    forward again restores the seed. The executor plans the real graph, so this also proves
-    0006 is the leaf of ``accounts``: nothing later depends on it."""
-    leaves = [
-        key for key in MigrationExecutor(connection).loader.graph.leaf_nodes() if key[0] == "accounts"
-    ]
-    assert leaves == [THIS_MIGRATION]
+    forward again restores the seed. The executor plans the real graph.
+
+    0006 was the leaf of ``accounts`` until 0007 (D-107) followed it, so the test now checks
+    that 0006 is on the leaf's path and migrates forward to the leaf, which reapplies 0007 too.
+    """
+    graph = MigrationExecutor(connection).loader.graph
+    [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
+    assert THIS_MIGRATION in graph.forwards_plan(leaf)
 
     migrate_accounts_to(PREVIOUS_MIGRATION)
     assert not Permission.objects.filter(permission_name=MANAGE_MEETINGS_PERMISSION).exists()
@@ -125,6 +130,6 @@ def test_the_migration_reverses_through_the_executor(employee_role, administrato
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     }
 
-    migrate_accounts_to(THIS_MIGRATION)
+    migrate_accounts_to(leaf)
     assert MANAGE_MEETINGS_PERMISSION in permission_names(administrator_role)
     assert MANAGE_MEETINGS_PERMISSION not in permission_names(employee_role)
