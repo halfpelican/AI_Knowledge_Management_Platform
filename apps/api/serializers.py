@@ -337,6 +337,20 @@ def tag_details_payload(document) -> list[dict]:
     return TagDetailSerializer(tag_details_of(document), many=True).data
 
 
+class TagEntrySerializer(serializers.Serializer):
+    """One entry of ``GET /api/tags``, and the ``DELETE /api/tags/{id}`` 200 (D-119 finding 5): a
+    Tag with ``item_count``, which ``apps/documents/taxonomy.py`` sets on it, the number of sources
+    carrying it through a link that is neither provisional nor removed. Administrator-only
+    (``manage_tags``), so neither the names nor the counts are scoped: an Administrator reads every
+    source (D-66)."""
+
+    tag_id = serializers.UUIDField(source="id", read_only=True)
+    dimension = serializers.CharField(read_only=True)
+    tag_name = serializers.CharField(read_only=True)
+    active = serializers.BooleanField(read_only=True)
+    item_count = serializers.IntegerField(read_only=True)
+
+
 class ClassificationConfirmSerializer(serializers.Serializer):
     """``POST /api/documents/{id}/classification``: a person confirms as it stands (both omitted)
     or edits. ``doc_type`` is one of DOCUMENT_TYPES, read through a ChoiceField so the 400 is keyed

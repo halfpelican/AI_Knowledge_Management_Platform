@@ -220,6 +220,9 @@ SECTION_5_PLAN = [
     ("accounts", "0006_seed_manage_meetings"),
     # FR-19 (D-107): the knowledge-gap permission, Administrator only, immediately after 0006.
     ("accounts", "0007_seed_review_knowledge_gaps"),
+    # FR-10's tag administration (D-119 finding 5): manage_tags, Administrator only, immediately
+    # after 0007.
+    ("accounts", "0008_seed_manage_tags"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     ("documents", "0002_content_chunks"),

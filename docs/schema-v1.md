@@ -540,7 +540,8 @@ plans it immediately after `documents 0007`, and `documents 0009` (`ContentTags.
 `DocumentAnalysis.department_applied_by`) immediately after 0008.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
-`accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`.
+`accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and
+`accounts 0008` (the `manage_tags` seed, D-119 finding 5) immediately after `accounts 0007`.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

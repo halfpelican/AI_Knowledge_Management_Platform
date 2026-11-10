@@ -546,6 +546,11 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/knowledge-gaps", "GET"): "Gap entries: a subject, a count, a status and two dates.",
     ("api/knowledge-gaps/cycles", "POST"): "The cycle row: its times and four counts.",
     ("api/knowledge-gaps/<uuid:pk>", "PATCH"): "The updated gap entry.",
+    # FR-10's tag administration (D-119 finding 5), Administrator-only through manage_tags. Tag rows
+    # and counts of the sources carrying them, read by a role that reads every source (D-66); no
+    # Document or Meeting row is read or returned.
+    ("api/tags", "GET"): "Tags and their counts of sources, for the Administrator alone.",
+    ("api/tags/<uuid:pk>", "DELETE"): "The retired tag's entry, or nothing.",
 }
 
 

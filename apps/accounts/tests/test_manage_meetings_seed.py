@@ -24,6 +24,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 
@@ -85,11 +86,11 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=MANAGE_MEETINGS_PERMISSION
     ).exists()
-    # 0003's, 0004's, 0005's and 0007's seeds are untouched: unseeding one migration must not
-    # undo another.
+    # 0003's, 0004's, 0005's, 0007's and 0008's seeds are untouched: unseeding one migration must
+    # not undo another.
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
-        REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+        REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's
@@ -118,7 +119,8 @@ def test_the_migration_reverses_through_the_executor(employee_role, administrato
     forward again restores the seed. The executor plans the real graph.
 
     0006 was the leaf of ``accounts`` until 0007 (D-107) followed it, so the test now checks
-    that 0006 is on the leaf's path and migrates forward to the leaf, which reapplies 0007 too.
+    that 0006 is on the leaf's path and migrates forward to the leaf, which reapplies 0007 and,
+    since D-119 finding 5, 0008 too.
     """
     graph = MigrationExecutor(connection).loader.graph
     [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]

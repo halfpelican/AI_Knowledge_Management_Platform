@@ -34,6 +34,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 from conftest import PASSWORD
@@ -69,7 +70,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     # contribute_content inside the method too, after the scoped lookup.
                     "document-tags",
                     # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
-                    "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail"}
+                    "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail",
+                    # NIT3004: FR-10's tag administration, both routes behind manage_tags (D-119
+                    # finding 5; D-105's dated note of 10 November 2026, night)
+                    "tag-list", "tag-detail"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -92,6 +96,9 @@ PERMISSIONED_ROUTES = {
     "knowledge-gap-list": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     "knowledge-gap-cycles": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     "knowledge-gap-detail": REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    # FR-10's tag administration (D-119 finding 5): manage_tags, a permission_classes entry on both.
+    "tag-list": MANAGE_TAGS_PERMISSION,
+    "tag-detail": MANAGE_TAGS_PERMISSION,
 }
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {
@@ -363,3 +370,5 @@ def test_every_permission_code_in_use_is_seeded():
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_MEETINGS_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()

@@ -7051,6 +7051,39 @@ decision is recorded with its reason, and each build choice the brief left open 
     do this, because a removed AI link still counts as a link. Two changes would close the path:
     keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
     route). Neither is built as a rule; the decision is the lead's.
+- **An Administrator retires a tag (finding 5).** FR-10: "Tags are deactivated rather than deleted
+  where content still references them, preserving historical classification", and its CRUD line
+  gives Tags "Delete". Only the schema held either (`Tags.active`, and `PROTECT`, D-12).
+  - **`manage_tags`,** a new permission code (`MANAGE_TAGS_PERMISSION`), seeded to the Administrator
+    alone by `accounts 0008`, additive and reversible, as 0007 seeds `review_knowledge_gaps`. Its
+    test holds that every role given the code has the Administrator's scope, as FR-19's seed test
+    does (the security review's L3). *Declined:* `manage_documents`, so that granting one never
+    grants the other, D-99's reason.
+  - **`GET /api/tags`**: 401, then 403 without `manage_tags`, checked before anything else, because
+    nothing on the route is scoped. It lists every Tag in Project, Process and Topic, active or
+    not, ordered by dimension then name, each with `item_count`: the sources, documents and
+    meetings alike, with a link to it that is neither provisional nor removed, each counted once.
+    An Administrator reads every source (D-66), so no count tells them anything they could not
+    read. This is the Administrator's list of every value with its count; FR-15's facets, recorded
+    above as FR-10's tag browser, are unchanged.
+  - **`DELETE /api/tags/{id}`: deactivate versus delete.** 401, then 403, then 404 for an id that
+    names no tag in those three dimensions (a Department tag included, since nothing reads one,
+    D-72). A tag any `ContentTag` row references, in **any** state, is deactivated and kept, and
+    the route answers 200 with it in the list's shape; again for one already inactive. A tag
+    nothing references is deleted, 204. Any reference keeps it, a removed or held link included:
+    `PROTECT` refuses the delete, and a removed link exists precisely to keep the machine's
+    assignment, which needs its tag. The tag row is locked for the check and the delete.
+  - **What retiring does, and does not, do.** An inactive tag leaves `tag_scheme`, so neither the
+    machine nor a person can newly apply it by id, and it leaves every document's `tag_options`.
+    FR-15's reads keep their treatment of `active` unchanged: they do not consult it (D-72's
+    clarification of 7 October). So a retired tag still shows on the documents that carry it, in
+    `tags` and `tag_details`, as a facet value and as a filter. That is FR-10's "preserving
+    historical classification".
+  - **No reactivation route.** A retired Topic comes back the way `confirm_proposed_topic` has
+    always brought one back: a person names it, and `apply_tag` links and reactivates it, answered
+    as a new Topic would be (a retired value is in no scheme, so a 409 would disclose it). A
+    retired Project or Process tag stays retired. *Declined:* a route that only reactivates, which
+    nothing in FR-10 asks for.
 
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 

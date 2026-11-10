@@ -44,6 +44,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
     MAX_UPLOAD_BYTES,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
@@ -67,7 +68,8 @@ from apps.documents.classification import (
 )
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
-from apps.documents.models import Document
+from apps.documents.models import Document, Tag
+from apps.documents.taxonomy import retire_tag, tag_inventory
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.errors import (
@@ -128,6 +130,7 @@ from .serializers import (
     SearchResultsSerializer,
     TagApplySerializer,
     TagDetailSerializer,
+    TagEntrySerializer,
     UserSerializer,
     classification_payload,
     tag_details_payload,
@@ -246,6 +249,9 @@ TOPIC_ALREADY_OFFERED_MESSAGE = (
 # a GET for bytes that are not there is "not found", while reprocess is an action that cannot
 # proceed, and says so with a 422.
 DOCUMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Document._meta.object_name
+# DELETE /api/tags/{id} for an id that names no tag it acts on: get_object_or_404's own wording, as
+# DOCUMENT_NOT_FOUND_MESSAGE above restates it for documents.
+TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
 # FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
 # restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
 # exception (D-41).
@@ -300,6 +306,10 @@ CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
 # before anything else. Nothing on those routes is scoped, so there is nothing for a 403 to
 # disclose by preceding a 404: an entry's existence is the Administrator's to know.
 CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMISSION)
+# FR-10's tag administration (D-119 finding 5): the same arrangement as FR-19's, for the same
+# reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an unknown
+# tag; a tag's existence is the Administrator's to know, since they read every source (D-66).
+CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -1586,6 +1596,47 @@ class DocumentProposedTopicRejectView(_ProposedTopicView):
 
     def act(self, document, value):
         reject_proposed_topic(document, value)
+
+
+# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night) --
+
+
+class TagListView(APIView):
+    """``GET /api/tags`` — every Tag in Project, Process and Topic, active or not, ordered by dimension
+    then name, each with ``item_count`` (``apps/documents/taxonomy.py::tag_inventory``).
+
+    ``manage_tags`` is a permission class, so 401 and then 403 come before anything else, as on
+    FR-19's routes. The list is not scoped and needs no scope: its one reader, the Administrator,
+    reads every source (D-66), and the seed's test holds every holder of the code to that. 200 with a
+    bare list, ``[]`` for none.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def get(self, request):
+        return Response(TagEntrySerializer(tag_inventory(), many=True).data)
+
+
+class TagDetailView(APIView):
+    """``DELETE /api/tags/{id}`` — retire a tag (FR-10: "Tags are deactivated rather than deleted
+    where content still references them, preserving historical classification").
+
+    401, then 403 without ``manage_tags``, then 404 for an id naming no tag in the three dimensions.
+    A tag any link references, in any state, is deactivated and answered 200 with its entry, again
+    for one already inactive; an unreferenced tag is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_tag``). There is no route that reactivates a tag.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            tag = retire_tag(pk)
+        except Tag.DoesNotExist:
+            raise Http404(TAG_NOT_FOUND_MESSAGE)
+        if tag is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(TagEntrySerializer(tag).data)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------

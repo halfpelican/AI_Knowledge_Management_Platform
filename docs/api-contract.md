@@ -1169,6 +1169,40 @@ database only so that the machine's assignment is kept beside the person's decis
 database, commit, per-document values, outcomes, links, seconds or error). It refuses the
 database `kmp`.
 
+### Tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night)
+
+FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content still references
+them, preserving historical classification"; its CRUD line gives Tags "Delete". Both routes need a
+session **and** `manage_tags`, which accounts 0008 gives the Administrator alone: `401` without a
+session, `403` for a role that lacks the code (invariant 4), checked before anything else on the
+request, since nothing on these routes is scoped.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/tags` | session + `manage_tags` | `200` a list of tag entries (below): every Tag in Project, Process and Topic, active or not, ordered by dimension (alphabetically: Process, Project, Topic) then name. `[]` when there are none. No pagination | `401`; `403` |
+| DELETE | `/api/tags/{id}` | session + `manage_tags` | `200` the tag entry, now `active: false`, when any `ContentTags` row references the tag, in **any** state (held and removed links included); `200` again for a tag already inactive and still referenced. `204` no body when nothing references it: the tag is deleted | `401`; `403`, before the id is looked at; `404 {"detail": "No Tag matches the given query."}` no tag with that id in Project, Process or Topic (a Department tag included) |
+
+The tag entry, in the list and in the `DELETE`'s `200`:
+
+```json
+{"tag_id": "uuid", "dimension": "Project", "tag_name": "bridge maintenance", "active": true,
+ "item_count": 3}
+```
+
+- **`item_count`** is the number of sources, documents and meetings alike, with a link to the tag
+  that is neither provisional nor removed, each source counted once. It is not scoped: an
+  Administrator reads every source (D-66), so a count discloses nothing to the one role that may
+  ask for it, and a test holds that every role given `manage_tags` has the Administrator's scope.
+- **A retired tag** (`active: false`) leaves every document's `tag_options` and cannot be applied
+  by `tag_id` (the `400`). The classifier is no longer shown it, and a suggestion of it is never
+  linked: a Project or Process one is discarded, and a Topic one is proposed, which a person may
+  confirm. It stays on the documents that carry it: FR-15's reads do not consult `active`
+  (D-72), so it is still in their `tags` and `tag_details`, a facet value and a filter.
+- **There is no reactivation route.** A retired Topic comes back when a person types its name on
+  `POST /api/documents/{id}/tags`, where it is linked and reactivated and answered `201` exactly as
+  a new Topic would be, or confirms it as a proposed topic, which has always reactivated a retired
+  Topic. A retired Project or Process tag stays retired.
+
 ## NIT3004 — FR-19, Objective 06
 
 ### FR-19 — knowledge-gap log
