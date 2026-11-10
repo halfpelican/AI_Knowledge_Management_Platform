@@ -19,6 +19,11 @@ Now a tag that is not grown is vocabulary and in every scheme, and a grown one o
 audience role reads a source carrying it; ``documents 0011`` marks grown the tags only restricted
 material carries. Routes run from both roles wherever a route is involved; the stub answers
 classification and no provider is reached.
+
+The last two tests close the one exception found while building the rule: confirming a proposal
+made before its name became vocabulary grew the vocabulary Topic, so confirmed on restricted
+material it left every Employee's options. ``_bring_into_use`` now grows only a Topic it creates or
+reactivates (the lead's decision, D-105's dated note).
 """
 
 import importlib
@@ -36,8 +41,9 @@ from apps.core.constants import (
     TOPIC_DIMENSION,
     USER_APPLIED,
 )
-from apps.documents.models import ContentTag, Document, ExtractedContent, Tag
-from apps.documents.tests.classification_builders import BELOW_THRESHOLD, classification
+from apps.documents.classification import apply_classification, tag_scheme
+from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.tests.classification_builders import ABOVE_THRESHOLD, BELOW_THRESHOLD, classification
 
 pytestmark = pytest.mark.django_db
 
@@ -187,3 +193,54 @@ def test_a_backfilled_restricted_value_stays_out_of_an_employees_options_when_it
     assert not ContentTag.objects.filter(tag=value).exists()
 
     assert "atlas" not in names(options(employee_client, staff)[PROJECT_DIMENSION])
+
+
+# --- A proposal made before its name became vocabulary (the exception, closed) -------------------
+
+
+def propose(document, name):
+    """The machine proposes ``name`` for ``document`` while no Topic has it, as a classification run
+    before the seed script does: outside the scheme, a Topic goes to ``proposed_topics``."""
+    apply_classification(
+        document, classification(tags=[(TOPIC_DIMENSION, name, ABOVE_THRESHOLD)]),
+        scheme=tag_scheme(document),
+    )
+    proposals = DocumentAnalysis.objects.get(document=document).proposed_topics
+    assert [proposal["value"] for proposal in proposals] == [name]
+
+
+def test_confirming_a_stale_proposal_on_restricted_material_leaves_an_employees_options_unchanged(
+    employee, employee_client, administrator_client, restricted
+):
+    staff = make_document(employee, title="Staff handbook", roles=[EMPLOYEE_ROLE_NAME])
+    propose(restricted, "finance")
+    value = Tag.objects.create(tag_name="finance", dimension=TOPIC_DIMENSION)  # the seed, run after
+    before = options(employee_client, staff)
+    assert "finance" in names(before[TOPIC_DIMENSION])
+
+    response = administrator_client.post(
+        f"{DOCUMENTS_URL}/{restricted.id}/proposed-topics/confirm", {"value": "finance"}, format="json"
+    )
+
+    assert response.status_code == 200, response.content
+    assert ContentTag.objects.filter(tag=value, source_id=restricted.pk, confirmed=True).exists()
+    value.refresh_from_db()
+    assert value.grown is False  # vocabulary it was, and vocabulary it stays
+    assert options(employee_client, staff) == before
+
+
+def test_confirming_a_stale_proposal_on_a_document_every_role_reads_keeps_the_topic_vocabulary(
+    session_client,
+):
+    shared = make_document(session_client.user, title="Site notice")  # every role reads it
+    propose(shared, "finance")
+    value = Tag.objects.create(tag_name="finance", dimension=TOPIC_DIMENSION)  # the seed, run after
+
+    response = session_client.client.post(
+        f"{DOCUMENTS_URL}/{shared.id}/proposed-topics/confirm", {"value": "finance"}, format="json"
+    )
+
+    assert response.status_code == 200, response.content
+    assert ContentTag.objects.filter(tag=value, source_id=shared.pk, confirmed=True).exists()
+    value.refresh_from_db()
+    assert (value.grown, value.active) == (False, True)

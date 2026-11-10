@@ -139,10 +139,9 @@ def tag_scheme(document: Document) -> TagScheme:
     and therefore any suggestion it produces, can never name a grown value that exists only on
     material some reader of this document may not see (CLAUDE.md invariant 1: the existence of
     out-of-scope material "must not be disclosed"), and nothing a reader can see moves when links on
-    material they cannot read are made or destroyed, but for one open exception ``tag_options``
-    states. Whether a role can read a source is decided by ``scoped_documents`` and
-    ``scoped_meetings`` from apps/retrieval/scoping.py, the one place the FR-11 predicate is written
-    (D-53, D-66); nothing here tests ``visible_to_roles`` itself.
+    material they cannot read are made or destroyed. Whether a role can read a source is decided by
+    ``scoped_documents`` and ``scoped_meetings`` from apps/retrieval/scoping.py, the one place the
+    FR-11 predicate is written (D-53, D-66); nothing here tests ``visible_to_roles`` itself.
 
     - ``doc_types`` is DOCUMENT_TYPES: a fixed list that says nothing about the corpus.
     - ``departments`` is the intersection, across the audience, of the distinct non-blank
@@ -152,20 +151,20 @@ def tag_scheme(document: Document) -> TagScheme:
       the rule above.
     - **A tag that is not grown is vocabulary** and is in every scheme, unlinked, carried only by
       restricted material, or carried by readable material alike: its presence says nothing about
-      any source, and no link anyone makes or destroys moves it, but for one open exception
-      (``tag_options`` states it; D-105's dated note of 10 November 2026, night: the security
-      review of ``84b5771``). Until then the scheme read every link of a tag that was not grown,
-      links no reader of the document can see included, so a seeded value vanished from an
-      Employee's options exactly when Administrator-only material still carried it: when an
-      Employee removed its readable person links, when restricted material took it up, or, the
-      other way round, when an Administrator removed the only restricted links.
+      any source, and no link anyone makes or destroys moves it (D-105's dated note of 10 November
+      2026, night: the security review of ``84b5771``). Until then the scheme read every link of a
+      tag that was not grown, links no reader of the document can see included, so a seeded value
+      vanished from an Employee's options exactly when Administrator-only material still carried
+      it: when an Employee removed its readable person links, when restricted material took it up,
+      or, the other way round, when an Administrator removed the only restricted links.
     - **A grown tag is in only where every role in the audience reads a source carrying it**:
       documents through ``scoped_documents``, meetings through ``scoped_meetings``, since the join
       table admits both source types. Every link counts, provisional, unconfirmed and removed ones
       included: a held suggestion, or one a person removed, on a readable document is still a
-      carrier. ``grown`` is set on the Topic a person's name brings into use (``apply_tag``'s name
-      form, ``confirm_proposed_topic``: the lead's oracle review), and by ``documents 0011`` and
-      the seed script's linked mode on every tag carried only by material some role cannot read.
+      carrier. ``grown`` is set on a Topic a person's name creates or reactivates (``apply_tag``'s
+      name form, ``confirm_proposed_topic``: the lead's oracle review; an active Topic either one
+      fetches keeps its value, ``_bring_into_use``), and by ``documents 0011`` and the seed script's
+      linked mode on every tag carried only by material some role cannot read.
 
     **An empty audience gets the full scheme.** A document whose ``visible_to_roles`` is empty is
     readable by nobody (``scoped_*`` fail closed), so there is no reader to protect. D-29 refuses
@@ -268,18 +267,11 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
       **disappears** when the last such link is removed or that source is deleted. Links on
       material some reader cannot see neither add nor remove it.
     - **A tag that is not grown never moves** while it is active: no link anyone makes or destroys,
-      on readable material or restricted, changes whether it is offered. It leaves only when an
-      Administrator retires or deletes it (``DELETE /api/tags/{id}``), and a retired Topic a person
-      brings back by name returns grown (``apply_tag``, ``confirm_proposed_topic``).
-    - **One exception, open** (D-105's dated note): ``confirm_proposed_topic`` grows the Topic it
-      fetches even when it is active and not grown. That needs a proposal still pending for a name
-      that became vocabulary after it was proposed, since the machine links a vocabulary Topic
-      rather than proposing it, and no route of today's code makes one. The seed script creating
-      that Topic after the proposal does, and so does a Topic a person brought in by name on another
-      document before ``documents 0010``, which 0011 left as vocabulary because a source every role
-      reads carries it. Confirmed on restricted material, the Topic is grown, so it leaves an
-      audience's options once no source that whole audience reads carries it, where vocabulary
-      would have stayed.
+      on readable material or restricted, changes whether it is offered. That includes a person
+      confirming a proposal of its name made before it was vocabulary, which links it and leaves it
+      vocabulary (``_bring_into_use``). It leaves only when an Administrator retires or deletes it
+      (``DELETE /api/tags/{id}``), and a retired Topic a person brings back by name returns grown
+      (``apply_tag``, ``confirm_proposed_topic``).
     - So the names of every active tag that is not grown are offered to every reader: the values a
       database is seeded with, and those vocabulary values restricted material has taken up since.
       That is what vocabulary means here. The classification prompt lists the same names; before
@@ -665,12 +657,14 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       again. So it is linked as it stands, reactivated if it was inactive (as
       ``confirm_proposed_topic`` does), and answered exactly as a new Topic is. Only a name no Topic
       has creates a Tag.
-    - **The Topic the name form links is marked grown** (``Tag.grown``, D-105's dated note of 10
-      November 2026, night), whether it was created or fetched, so that once its link is removed it
-      is not vocabulary, whatever it was before. Without the mark, a retired, seeded, unlinked Topic
-      a person names would come back as vocabulary after the removal, and apply, remove and apply
-      again would answer 201, 204, 409 where a new name answers 201, 204, 201. The ``tag_id`` form
-      marks nothing: an offered tag is already readable or vocabulary.
+    - **The Topic the name form links is grown** (``Tag.grown``, D-105's dated note of 10 November
+      2026, night), whether it was created or fetched, so that once its link is removed it is not
+      vocabulary, whatever it was before. ``_bring_into_use`` marks one it creates or reactivates;
+      an active one it fetches is grown already, since an active Topic that is not grown is
+      vocabulary, offered, and answered 409 above. Without the mark, a retired, seeded, unlinked
+      Topic a person names would come back as vocabulary after the removal, and apply, remove and
+      apply again would answer 201, 204, 409 where a new name answers 201, 204, 201. The ``tag_id``
+      form marks nothing: an offered tag is already readable or vocabulary.
 
     Then the link (``_apply_link``): a new one is ``applied_by="user"``, ``confirmed=True`` (as the
     D-74 seed sets a person's links), not provisional, not removed, ``confidence`` null, and
@@ -696,15 +690,27 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
                 )
             if (TOPIC_DIMENSION, name) in offered:
                 raise TopicAlreadyOffered(offered[(TOPIC_DIMENSION, name)])
-            tag, _ = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
-            _bring_into_use(tag)
+            tag, created = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
+            _bring_into_use(tag, created)
         return _apply_link(locked, tag)
 
 
-def _bring_into_use(topic: Tag) -> None:
+def _bring_into_use(topic: Tag, created: bool) -> None:
     """A Topic a person brought into use by name (``apply_tag``'s name form, or
-    ``confirm_proposed_topic``), created or fetched: active, and grown, so that once nothing links
-    it, it is not vocabulary (``tag_scheme``; D-105's dated note of 10 November 2026, night)."""
+    ``confirm_proposed_topic``): one this call ``created``, or an inactive one it fetched, is made
+    active and grown, so that once nothing links it, it is not vocabulary (``tag_scheme``; D-105's
+    dated note of 10 November 2026, night).
+
+    **An active Topic it fetched keeps its value** (the lead's decision after the security review
+    of ``84b5771``, D-105's dated note). A grown one is grown already. One that is not grown is
+    vocabulary, in every scheme, and stays so: linking it changes nothing anyone is offered, where
+    growing it would take it out of every audience that reads no source carrying it, because of a
+    link on material that audience may not be able to read. The name form never fetches one, since
+    it is offered and the name form answers 409 first; ``confirm_proposed_topic`` does, for a
+    proposal made before the name became vocabulary.
+    """
+    if topic.active and not created:
+        return
     changed = []
     if not topic.active:
         topic.active = True
@@ -758,13 +764,15 @@ def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
     """A person confirms an out-of-scheme Topic, which is when, and only when, it is created.
 
     FR-10: a new value "may be proposed only in the Topic dimension and requires user
-    confirmation before it is created". The Topic Tag is fetched or created by normalised name
-    (reactivated if it had been deactivated, and marked grown either way, as ``apply_tag``'s name
-    form marks the Topic it links: a Topic a person brought in by name is not vocabulary once
-    nothing links it, D-105's dated note of 10 November 2026, night), the document's link is
-    created or confirmed with ``applied_by="ai"`` — the suggestion was the machine's — and the
-    proposal leaves ``proposed_topics``. Raises ``NotOnThisDocument`` when ``value`` is not proposed
-    on this document.
+    confirmation before it is created". The Topic Tag is fetched or created by normalised name. One
+    created, or reactivated because it had been deactivated, is marked grown, as ``apply_tag``'s
+    name form marks it: a Topic a person brought in by name is not vocabulary once nothing links it
+    (D-105's dated note of 10 November 2026, night). An active one fetched keeps its value
+    (``_bring_into_use``), so confirming a proposal made before its name became vocabulary links the
+    vocabulary Topic and leaves it vocabulary. The document's link is created or confirmed with
+    ``applied_by="ai"`` — the suggestion was the machine's — and the proposal leaves
+    ``proposed_topics``. Raises ``NotOnThisDocument`` when ``value`` is not proposed on this
+    document.
     """
     name = normalise_tag_name(value or "")
     with transaction.atomic():
@@ -772,8 +780,8 @@ def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
         proposal = _proposal(analysis, name)
         if len(name) > NAME_MAX_LENGTH:
             raise InvalidClassification(f"A tag name may not exceed {NAME_MAX_LENGTH} characters.")
-        tag, _ = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
-        _bring_into_use(tag)
+        tag, created = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
+        _bring_into_use(tag, created)
         confidence = proposal.get("confidence")
         confidence = None if confidence is None else _as_decimal(confidence)
         link = (

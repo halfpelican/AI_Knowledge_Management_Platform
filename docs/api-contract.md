@@ -1081,7 +1081,7 @@ proposal or an analysis that is not this document's gets that same 404, word for
 | POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
 | DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). An AI link (`applied_by: "ai"`, held or applied, confirmed or not) is **kept, marked removed**, with the confidence the machine gave it, and no read lists it again; a later classify or reprocess neither links it again nor alters it. A person's link (`applied_by: "user"`) is deleted. The `Tags` row stays either way | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
 | POST | `/api/documents/{id}/tags` | session + `contribute_content` | A person applies a tag (D-105's dated note of 10 November 2026, night). Body, exactly one of: `{"tag_id": "uuid"}`, an existing tag from the detail's `tag_options`; or `{"dimension": "Topic", "tag_name": string}`, a new Topic, matched after normalisation (trimmed, single spaces, lower case). `201 {"tag_details": [...]}` when a new link was made: `applied_by: "user"`, `confirmed: true`, `provisional: false`, `confidence: null`. `200` with the same shape when the tag was already on the document: a held AI link is confirmed, a removed one is restored and confirmed (its `applied_by` and confidence kept), and an applied or confirmed one is left as it is. `tag_details` is the document's whole current list | `401`; `404`; `403`; `400 {"tag_id": ["Choose a tag from this document's tag options."]}` for a `tag_id` that is unknown, inactive, a Department tag or not offered for this document, **one body for all of them**; `400 {"dimension": ["..."]}` a dimension other than `Topic` in the name form; `400 {"tag_name": ["..."]}` blank, over 255 characters or missing; `400 {"tag_id": ["..."]}` not a UUID; `400 {"non_field_errors": ["..."]}` neither form, or both; `409 {"detail": "A Topic with this name is already offered for this document. Choose it from the tag options.", "tag_id": "uuid"}` the name is a Topic already in `tag_options`, whose id this is |
-| POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
+| POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; a Topic it creates or reactivates is grown, and an active one it reuses keeps its state, so a vocabulary Topic stays vocabulary (D-105); the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
 | POST | `/api/documents/{id}/proposed-topics/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created | the same |
 
 The classification object (`null` for a document never classified):
@@ -1145,24 +1145,18 @@ dimension sorted by name and always present:
   night: the security review).
   - A tag that is not grown is vocabulary, offered to every reader: the Project, Process and Topic
     values a database is seeded with. Its being offered says nothing about any source.
-  - A grown tag is a Topic a person brought into use by name (typed on this route, or confirmed as a
-    proposed topic), or a value that only material some role cannot read carried when the database
-    was seeded or when `documents 0011` ran.
+  - A grown tag is a Topic a person's name created or brought back from retirement (typed on this
+    route, or confirmed as a proposed topic), or a value that only material some role cannot read
+    carried when the database was seeded or when `documents 0011` ran.
   - An inactive tag never is.
 - **What can appear or disappear.** Nothing here moves because a link on material the caller cannot
-  read was made or destroyed, but for the one exception below.
+  read was made or destroyed.
   - A grown tag appears when a source every role in the audience reads comes to carry it, and
     disappears when the last such link is removed or that source is deleted.
   - A tag that is not grown never moves while it is active: no link anyone makes or destroys changes
-    whether it is offered. It leaves only when an Administrator retires or deletes it, and a retired
-    Topic a person names again comes back grown.
-  - **One exception is open** (D-105's dated note of 10 November 2026, night). Confirming a proposed
-    topic grows the Topic it fetches, even one that is vocabulary. No route can bring that about
-    today, because the machine links a vocabulary Topic rather than proposing it, but a proposal
-    still pending from before its name became vocabulary can: when the seed script created the
-    Topic after the proposal, or when a person brought the name in on another document before
-    `documents 0010`. Confirmed on restricted material, the Topic then leaves an audience's options
-    once no source that whole audience reads carries it.
+    whether it is offered, a person confirming a proposal of its name made before it was vocabulary
+    included. It leaves only when an Administrator retires or deletes it, and a retired Topic a
+    person names again comes back grown.
 - **It includes tags already on the document,** held, applied or removed: applying one of those
   is the `200` above.
 - **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.

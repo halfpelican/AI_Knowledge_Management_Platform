@@ -7194,7 +7194,8 @@ decision is recorded with its reason, and each build choice the brief left open 
     `grown` now means "not vocabulary": a tag that is not grown is in every scheme whatever its
     links, and a grown one only where every audience role reads a source carrying it, every link
     counting as before. Nothing a reader can see moves when links on material they cannot read are
-    made or destroyed, but for one exception, the last item below.
+    made or destroyed. One exception, found while building the rule, was closed the same night: the
+    last item below.
   - **`documents 0011`** marks grown every Tag, of any dimension, with at least one link and no link
     on a source readable by every role. Documents and meetings both count; "readable by role r" is
     the source's `visible_to_roles` overlapping r's effective roles, as `_in_scope` reads it; and
@@ -7211,19 +7212,23 @@ decision is recorded with its reason, and each build choice the brief left open 
     source. Tests that model "a value only restricted material carries" now set `grown=True`, as
     the backfill and the seed do; a value on restricted material that is not grown is in, as
     vocabulary.
-  - **Objective 05.** Its scheme-only start is unchanged: fourteen unlinked values, none grown. What
-    differs is during a run. Under the rule it ran with, a seeded value first linked only on
-    material some audience role could not read dropped out of later documents' schemes; under this
-    rule it stays. It happened once in each recorded run:
+  - **Objective 05: a departure from the measured configuration.** Its scheme-only start is
+    unchanged, fourteen unlinked values and none grown; what differs is during a run. Under the
+    rule the runs used, a seeded value first linked only on material some audience role could not
+    read dropped out of later documents' schemes. It happened once in each recorded run:
     - in the first run, the ninth document, D09 (Administrator-only), applied `atlas` before any
       other document carried it, so `atlas` was out of the schemes of the nine later Employee-
       visible documents, D10 to D14 and D17 to D20;
     - in the re-run, the sixteenth, D16 (Administrator-only), held `people` first, so `people` was
       out of D17 to D20's schemes.
 
-    This is shown from the runs' `classify.json` records, in their processing order, and the
+    Under this rule both stay. The old rule's behaviour there was finding 2's leak, seen in the
+    measurement itself: the scheme an Employee-visible document's prompt received, the same scheme
+    its `tag_options` offers, changed because Administrator-only material had taken up a seeded
+    value. This is shown from the runs' `classify.json` records, in their processing order, and the
     manifest's `visible_to_roles`, which `scripts/ingest_objective02.py` writes; not from the
-    database. The recorded verdicts stand as records of the rule they ran under.
+    database. The recorded runs and verdicts stand as records of the old rule, and nothing re-runs
+    them.
   - **4: open.** An unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every
     classification prompt. A throttle is the user's question, which the lead will put. Capping the
     prompt would change the classification input, so it is deferred.
@@ -7233,30 +7238,55 @@ decision is recorded with its reason, and each build choice the brief left open 
     new migration. It is unpushed (CLAUDE.md §7 forbids editing a pushed migration's operations),
     its author applied it only to test databases, and the appended operation does nothing forwards,
     so a database that did apply it is in the state the edited migration reaches.
+  - **6, accepted residual.** An Employee holding `contribute_content` can undo an Administrator's
+    retirement: naming a retired Topic reactivates it (`_bring_into_use`). The oracle closure
+    depends on that, because linking without reactivating would make `tag_options` differ between
+    a retired name and a new one. Also, nothing records who removed a person's tag.
   - **7 (info): tested.** `tag_options`' guarantee needs EFFECTIVE_ROLES to be closed under
     generalisation. `apps/core/tests/test_constants.py` now asserts it.
   - **8 (info): fixed.** Topics confirmed before `documents 0010` read not grown. 0011 marks those
     that only restricted material carries; one a readable source carries is vocabulary, which
-    every reader of that source could already see. The exception in the last item below can still
-    reach such a Topic.
-  - **6, 9, 10 and 11: accepted residuals,** as the review records them. The review's wording for
-    them is not in this repository.
-  - **Found while building the rule, not one of the review's findings: one exception, open.**
-    `confirm_proposed_topic` grows the Topic it fetches: `_bring_into_use` marks it whether it was
-    created or fetched (the lead's oracle review), and that includes an active vocabulary Topic.
-    - No route of today's code can bring that about. A vocabulary Topic is in every scheme, so the
-      machine links it rather than proposing it, and the name form answers `409` for it.
-    - A proposal still pending from before its name became vocabulary can. Two ways make one:
+    every reader of that source could already see. Confirming a proposal of such a Topic's name
+    made before it existed leaves it vocabulary (the last item below).
+  - **9, accepted residual (integrity, not disclosure).** `normalise_tag_name` does no Unicode
+    normalisation (NFC/NFKC) or casefolding, and keeps zero-width and bidi characters, so
+    look-alike duplicate Topics get past FR-10's `409`. No `500` was found: DRF's `CharField`
+    rejects NUL and lone surrogates, and `apply_tag` re-checks the length after normalising.
+  - **10, accepted residual.** Races give rare `500`s and no corruption:
+    - a link racing `retire_tag`'s delete fails its deferred foreign-key check at commit
+      (`taxonomy.py` says so);
+    - `_bring_into_use`'s save on a tag deleted in the meantime raises `DatabaseError`;
+    - `Tag.objects.get` can miss after the offered check.
+
+    Applies on one document are serialised by the document lock, and `get_or_create` absorbs the
+    concurrent-create `IntegrityError`.
+  - **11, accepted residual.** Timing:
+    - The name form's first probe of a name does different database work: an insert plus an update
+      for a new name, an update for an inactive one, neither for an already-grown one. That is one
+      sample per name and sub-millisecond, and D-105 makes no timing claim.
+    - The detail's cost grows with the total number of tag links, restricted ones included. That
+      reveals volume only.
+  - **Found while building the rule, not one of the review's findings: one exception, fixed the
+    same night, two commits after the rule.** `confirm_proposed_topic` grew the Topic it fetched:
+    `_bring_into_use` marked it whether it was created or fetched (the lead's oracle review), and
+    that included an active vocabulary Topic.
+    - No route could bring that about. A vocabulary Topic is in every scheme, so the machine links
+      it rather than proposing it, and the name form answers `409` for it.
+    - A proposal still pending from before its name became vocabulary could. Two ways make one:
       `seed_objective02_tags.py` creating the Topic after the proposal; or a person bringing the
       name in on another document before `documents 0010`, when 0011 then left it as vocabulary
       because a source every role reads carries it.
-    - Confirmed on restricted material, the Topic is grown and leaves an audience's options once
-      no source that whole audience reads carries it. In the first case that is at once; in the
-      second, when its readable links go.
-    - **The fix proposed to the lead, not applied:** `_bring_into_use` grows a Topic only when it
-      creates it or reactivates it, leaving an active one that is not grown as vocabulary. The name
-      form never reaches it with one, so only confirmation would change.
-    - The seed script's docstring now says to run it before any document is classified.
+    - Confirmed on restricted material, the Topic was grown and left an audience's options once no
+      source that whole audience reads carried it: at once in the first case, and in the second
+      when its readable links went.
+    - **The fix (the lead's decision):** `_bring_into_use` grows a Topic only when it creates it or
+      reactivates it, and an active one keeps its value, so vocabulary stays vocabulary. The name
+      form never fetches an active vocabulary Topic, since it answers `409` first, so only
+      confirmation changed. A retired seeded Topic a person names is still grown, which 84b5771's
+      three-sequence test covers.
+    - The seed script's docstring says to run it before any document is classified, which is still
+      good advice: a document classified first holds its seeded suggestions as proposals or
+      discarded suggestions until a person acts or it is classified again.
 
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 

@@ -23,15 +23,15 @@ and no link on a document or meeting EVERY role may read is marked ``grown``, th
 ``documents 0011`` applies to an existing database, so ``tag_scheme`` withholds it from an audience
 that cannot read a carrier, as it always has. On the objective-02 manifest that is the Project value
 ``atlas``, carried by D09 and D15 alone. A value any such source carries stays vocabulary, offered to
-every reader whatever happens to its links later, but for the exception below. ``--scheme-only``
-links nothing, so it marks nothing: its values are unlinked vocabulary, as Objective 05 measured
-them.
+every reader whatever happens to its links later. ``--scheme-only`` links nothing, so it marks
+nothing: its values are unlinked vocabulary, as Objective 05 measured them.
 
-**Run it before any document is classified.** A Topic it creates after the machine proposed the same
-name for a document is vocabulary only until a person confirms that proposal:
-``confirm_proposed_topic`` grows the Topic it fetches. Confirmed on restricted material, the value is
-then offered only where every role in an audience reads a source carrying it. This is open (D-105's
-dated note of 10 November 2026, night).
+**Run it before any document is classified.** Classification sees the scheme as it stands, so a
+document classified before these values existed holds a seeded name it suggested in its
+``proposed_topics`` (a Topic) or ``discarded_suggestions`` (a Project or Process), not as a link. A
+proposal stays pending until a person confirms or rejects it or the document is classified again;
+confirming it links the seeded Topic and leaves it vocabulary (``_bring_into_use``; D-105's dated
+note of 10 November 2026, night).
 
 **Which database.** It writes wherever ``DATABASE_URL`` points, and prints the name first. Since
 1 November 2026 the alpha's database is ``kmp_demo_20261101``, restored from item 6's snapshot, and

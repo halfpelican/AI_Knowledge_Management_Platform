@@ -4,10 +4,9 @@ note of 10 November 2026, night: the security review of ``84b5771``).
 From this migration on, ``Tags.grown`` means "not vocabulary". ``tag_scheme`` admits a tag that is not
 grown into every scheme, whatever its links, and admits a grown tag only where every role in the
 audience reads a source carrying it. So nothing a reader can see moves when links on material they
-cannot read are made or destroyed, but for one exception D-105's note records: confirming a proposal
-still pending from before its name became vocabulary. Until now the scheme also read every link of a
-tag that was not grown, so a seeded value vanished from an Employee's options exactly when
-Administrator-only material still carried it (the review's findings 1 to 3).
+cannot read are made or destroyed. Until now the scheme also read every link of a tag that was not
+grown, so a seeded value vanished from an Employee's options exactly when Administrator-only material
+still carried it (the review's findings 1 to 3).
 
 **The backfill.** Every Tag, of any dimension, that has at least one ``ContentTags`` row and no row on
 a source readable by EVERY role is marked grown. Those are exactly the linked tags today's rule

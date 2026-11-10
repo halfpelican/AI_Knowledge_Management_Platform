@@ -220,7 +220,7 @@ cascade deleted the row.
 | `tag_name` | text | unique within a dimension, case- and whitespace-normalised |
 | `dimension` | text | `Department`, `Project`, `Process`, `Topic` |
 | `active` | boolean | deactivated rather than deleted while content references it |
-| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on the Topic a person's `POST /api/documents/{id}/tags` name form links, or a person's confirmation of a proposed topic links, created or fetched; by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. Never unset |
+| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. Never unset |
 
 ### ContentTags — FR-10, FR-15
 
