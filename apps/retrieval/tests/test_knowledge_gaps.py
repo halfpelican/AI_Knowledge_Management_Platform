@@ -40,6 +40,7 @@ from apps.core.constants import (
     CYCLE_GRACE_SECONDS,
     EMPLOYEE_ROLE_NAME,
     GAP_GROUPING_THRESHOLD,
+    GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_ADDRESSED,
     KNOWLEDGE_GAP_OPEN,
     MAXIMUM_EMBED_ATTEMPTS,
@@ -635,6 +636,44 @@ def test_an_entry_from_another_embedding_model_is_not_joined(designed, employee)
     assert gap_of(first).embedding_model == "model-a"
     assert gap_of(second).embedding_model == "model-b"
     assert gap_of(first).occurrence_count == 1
+
+
+BETWEEN_THE_TWO_VALUES = 0.515  # above voyage-4's 0.5054, below GAP_GROUPING_THRESHOLD's 0.5256
+
+
+def test_the_grouping_threshold_is_the_embedding_models_own():
+    """D-122: a listed model gets its value; any other model, EmbeddingGemma's included, the default."""
+    assert gaps.grouping_threshold("voyage-4") == GAP_GROUPING_THRESHOLD_BY_MODEL["voyage-4"]
+    assert gaps.grouping_threshold("embed-gemma") == GAP_GROUPING_THRESHOLD
+    assert gaps.grouping_threshold(STUB_EMBEDDING_MODEL) == GAP_GROUPING_THRESHOLD
+
+
+def test_voyage_wordings_between_the_two_values_join_one_entry(designed, employee):
+    """D-122: on voyage-4 a second wording at 0.515 joins, because voyage-4's value is 0.5054."""
+    second_vector = at_cosine(BETWEEN_THE_TWO_VALUES, axis=20, towards=21)
+    # The premise: the cosine sits between the two values, so the model alone decides.
+    assert (GAP_GROUPING_THRESHOLD_BY_MODEL["voyage-4"]
+            < cosine_similarity(unit(20), second_vector) < GAP_GROUPING_THRESHOLD)
+    designed({FIRST_WORDING: unit(20), SECOND_WORDING: second_vector}, model="voyage-4")
+    first = ask(employee, FIRST_WORDING, at=hours_ago(3))
+    second = ask(employee, SECOND_WORDING, at=hours_ago(1))
+
+    run_cycle()
+
+    assert gap_of(first) == gap_of(second)
+    assert gap_of(first).occurrence_count == 2
+
+
+def test_wordings_between_the_two_values_stay_apart_on_an_unlisted_model(designed, employee):
+    """D-122: the same pair on a model the map does not list is held to GAP_GROUPING_THRESHOLD."""
+    second_vector = at_cosine(BETWEEN_THE_TWO_VALUES, axis=20, towards=21)
+    designed({FIRST_WORDING: unit(20), SECOND_WORDING: second_vector})  # STUB_EMBEDDING_MODEL
+    first = ask(employee, FIRST_WORDING, at=hours_ago(3))
+    second = ask(employee, SECOND_WORDING, at=hours_ago(1))
+
+    run_cycle()
+
+    assert gap_of(first) != gap_of(second)
 
 
 def test_an_item_joins_the_nearest_of_two_entries_above_the_threshold(designed, employee):

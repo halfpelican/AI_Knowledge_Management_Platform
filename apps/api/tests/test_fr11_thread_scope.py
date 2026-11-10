@@ -764,8 +764,14 @@ MEETING_PASSAGE = "The group agreed the leave embargo ends in March."
 
 def order_after(earlier, later):
     """Force ``later``'s timestamp past ``earlier``'s: ``timezone.now()`` is about 15.6 ms
-    granular on this platform, and the read orders turns by it."""
+    granular on this platform, and the read orders turns by it.
+
+    ``later`` is refreshed, so that a chain — ``order_after(a, b)`` then ``order_after(b, c)``
+    — puts each turn a second past the one before. Without the refresh, ``c`` was put a second
+    past ``b``'s creation time, still in memory after ``b``'s UPDATE, so ``b`` and ``c`` tied
+    whenever ``a`` and ``b`` had been created in one step of the clock."""
     QueryLog.objects.filter(pk=later.pk).update(answered_at=earlier.answered_at + timedelta(seconds=1))
+    later.refresh_from_db(fields=["answered_at"])
 
 
 def path_b_turn(user, conversation, *, question, consulted):

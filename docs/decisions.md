@@ -7569,6 +7569,16 @@ user's decision, and disclosed, with the first run kept as the independent figur
 frozen and is not edited; this note supersedes its line. The prompt now shipped has no independent
 accuracy figure (the requirements audit, D-119, its finding 8).
 
+**Dated note, 10 November 2026: claude-haiku-5-5's own value is 0.72 (D-122).** D-106's rule ran on
+the development documents through the shipped `classify_document` on Haiku 5.5: 19 documents, three
+times each (`corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/`).
+
+- **Haiku typed all 57 right,** so nothing beat applying everything. The rule's fallback applies: the
+  lowest confidence seen on a correct assignment, **0.72**.
+- **The threshold is now per classifying model** (`CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL`),
+  keyed by the model the classification carries. gemma3:4b keeps 0.95.
+- **The development set had grown to 19 documents** (caf9e22) since 0.95 was chosen on twelve.
+
 ## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19, FR-14 (D-69), invariants 1
@@ -7906,6 +7916,17 @@ measurement.
   never applies a query prefix itself, so a provider-specific encoding added there (Voyage's input type
   in place of `embed-gemma`'s prefix) reaches the cycle without a change in `apps/retrieval/gaps.py`.
   A test holds this.
+
+**Dated note, 10 November 2026: voyage-4's own value is 0.5054 (D-122).** This rule, run on the same
+paraphrase set with Voyage's query embeddings (`corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/`):
+
+- **The pairs again do not separate.** The lowest within-subject pair is 0.5157 and the highest
+  cross-subject pair 0.5297, the same password pair. So the best pairwise F1 gives **0.5054**.
+- **Centroid grouping at 0.5054** forms 12 entries of 3, none mixed.
+- **The margin is wider than FLM's:** 0.0103, about twenty times Voyage's re-embedding jitter
+  (0.00047).
+- **The threshold is now per embedding model** (`GAP_GROUPING_THRESHOLD_BY_MODEL`, read through
+  `gaps.grouping_threshold`). embed-gemma keeps 0.5256.
 
 ## D-110 · Objective 06's thirty are frozen, with the unanswerable asks screened on retrieval scores; FR-12's decline weakness stays open
 
@@ -9236,3 +9257,82 @@ FR-10, FR-12, FR-13, `config/settings.py`, `.env.example`
 
 **Where it applies:** `config/settings.py`, `.env.example` and the development `.env`. D-115
 carries a dated note.
+
+## D-122 · `anthropic` (Claude Haiku 5.5 + Voyage `voyage-4`) is the default provider, after FR-10's and FR-19's tuned values were re-derived on it
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, D-114, D-117, D-120,
+D-121, D-106, D-109, FR-08, FR-10, FR-12, FR-13, FR-19, `config/settings.py`, `.env.example`,
+`.github/workflows/ci.yml`, `README.md`, `CLAUDE.md` §3 and §4
+
+**Decision (the user's, 10 November):** `AI_PROVIDER` defaults to `anthropic` and
+`EMBEDDING_DIMENSION` to 1024. This applies in `config/settings.py`, `.env.example` and CI. FLM stays
+as the offline alternative: `AI_PROVIDER=flm`, `EMBEDDING_DIMENSION=768`, and a database indexed by
+FLM.
+
+**A measured switch, as `CLAUDE.md` §4 requires.** Every tuned value was re-derived on this provider
+before the default moved:
+
+- **Answers and retrieval:**
+  - D-120's threshold and floor for voyage-4;
+  - the frozen thirty (34/34), the nine threads (9/9 with history) and the HTTP check (WIRED 3/3),
+    in #75 and #76;
+  - Haiku 5.5 matching Sonnet 5.5 on every bar, in D-121.
+- **The two values that were still FLM's, re-derived first by their own fixed rules (the user's
+  choice):**
+  - **FR-19's grouping threshold: 0.5054 for voyage-4,** where embed-gemma has 0.5256. This is
+    D-109's rule on the development paraphrases, with 12 entries of 3 and none mixed (D-109's dated
+    note).
+  - **FR-10's confidence threshold: 0.72 for claude-haiku-5-5,** where gemma3:4b has 0.95. This is
+    D-106's rule on the 19 development documents, with all 57 typed right (D-106's dated note).
+  - **Both are per model** (`..._BY_MODEL`), as D-120's are. The code reads the value for the
+    model that produced the vector or the classification, and FLM keeps its own values.
+
+**The local setup (the user's choice): a fresh database, `kmp_anthropic`.**
+
+- **How it was made:** restored from the 1 November snapshot (dump `3bf98403…`) with
+  `restore --into`, migrated, and re-indexed by Voyage with `--resize-column`: 25 sources rebuilt,
+  3 skipped as in every copy, 0 failed, 43 chunks.
+- **Its files:** media in `C:\kmp-dev\kmp_anthropic\media`, and its own snapshot (dump `8e79cb37…`)
+  in `C:\kmp-dev\kmp_anthropic\snapshot`, so it resets without a re-index.
+- **The development `.env`** now points at it, on the `anthropic` provider at 1024. `kmp` is
+  untouched and stays FLM-indexed at 768.
+
+**CI runs on the default too:** `AI_PROVIDER=anthropic`, `EMBEDDING_DIMENSION=1024`. It holds no key,
+so the startup check warns ("ANTHROPIC_API_KEY is not set") and calls nothing. The suite uses the
+stub provider and passed locally under that configuration.
+
+**What it costs, and what remains:**
+
+- **The spend:** about $0.02 for FR-10's sweep (57 Haiku calls). The Voyage embeddings fall within
+  its free allowance.
+- **FLM databases are not converted.** These stay at 768 and run with `AI_PROVIDER=flm` and
+  `EMBEDDING_DIMENSION=768`:
+  - the alpha, `kmp_demo_20261101`;
+  - the FLM measurement baseline, `kmp_obj02_20261101`;
+  - `kmp_obj0506_20261101`;
+  - `kmp`.
+
+  A database moves across with `reindex --resize-column` (D-117), onto a copy.
+- **`MAXIMUM_STATEMENTS` (6) was tuned on FLM's generation and is not re-swept.** On Claude, the
+  development set and the frozen sets show no ceiling hit, no cap violation and no 503 at 6, with
+  every expected answer matched. That is the rule's first test passing; caps 3 to 5 were not
+  compared.
+- **`MAXIMUM_CONTEXT_TOKENS` (4000, still PROVISIONAL) now binds on Voyage for broad questions.**
+  The HTTP check's t04 and t06 had 21 and 22 passages above the threshold, of which 8 and 9 fit.
+  Every result above was measured with it at 4000, so it stands. It is no longer untested merely
+  because it never binds.
+- **`TOP_K` (25) still does not bind.** The most passages seen above the threshold is 22.
+- **NFR-08 has not run on this provider.** Its rate limits depend on the Anthropic account's tier.
+- **Objectives 05 and 06 stay as verified, on FLM.** Re-running their verification on this provider
+  is separate work.
+- **Old gaps are not joined across the switch.** Open knowledge-gap entries written under
+  embed-gemma are never joined by a Voyage vector (R10), so a recurring subject opens a second entry
+  (D-109's note).
+
+**Where it applies:**
+
+- **Configuration:** `config/settings.py`, `.env.example`, `.github/workflows/ci.yml`.
+- **Code:** `apps/core/constants.py` (the two maps), `apps/retrieval/gaps.py`,
+  `apps/documents/classification.py`, `scripts/objective05_verify.py`.
+- **Documentation:** `README.md`, `CLAUDE.md` §3 and §4, `docs/ai-provider.md`. D-106 and D-109
+  carry dated notes.
