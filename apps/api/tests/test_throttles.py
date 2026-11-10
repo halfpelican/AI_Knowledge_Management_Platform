@@ -1,13 +1,15 @@
 """D-79's per-user rate throttles, D-80's create throttle, and ``NUM_PROXIES``.
 
-Four scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.py``:
+Five scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.py``:
 
 - ``ask`` on ``POST /api/ask``;
 - ``ingestion``, one budget shared by ``POST /api/documents``, ``POST /api/meetings``,
   ``POST /api/documents/{id}/reprocess`` and, since FR-10, ``POST /api/documents/{id}/classify``
   (D-105: one provider call, like a reprocess);
 - ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
-- ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026.
+- ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
+- ``tagging`` on ``POST /api/documents/{id}/tags``, since D-79's note on tagging of the same night
+  (D-105's security review, finding 4).
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -34,16 +36,24 @@ from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
 
 import apps.ai
+from apps.accounts.models import RolePermission
 from apps.ai.base import EmbeddingResult
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.api.views import ASK_IN_FLIGHT_CODE, ASK_IN_FLIGHT_MESSAGE
 from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
+    CONTRIBUTE_CONTENT_PERMISSION,
     CONVERSATION_CREATE_THROTTLE_RATE,
+    DOCUMENT_INDEXED,
+    EMPLOYEE_ROLE_NAME,
     INGESTION_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
+    TAGGING_THROTTLE_RATE,
+    TOPIC_DIMENSION,
 )
+from apps.documents.models import ContentTag, Document, Tag
 from apps.retrieval.models import Conversation, QueryLog, SearchLog
 
 pytestmark = pytest.mark.django_db
@@ -66,6 +76,7 @@ ASK_LIMIT = allowed(ASK_THROTTLE_RATE)
 INGESTION_LIMIT = allowed(INGESTION_THROTTLE_RATE)
 CREATE_LIMIT = allowed(CONVERSATION_CREATE_THROTTLE_RATE)
 SEARCH_LIMIT = allowed(SEARCH_THROTTLE_RATE)
+TAGGING_LIMIT = allowed(TAGGING_THROTTLE_RATE)
 
 
 def ask(client, question=QUESTION):
@@ -116,12 +127,14 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert INGESTION_THROTTLE_RATE == "60/hour"
     assert CONVERSATION_CREATE_THROTTLE_RATE == ASK_THROTTLE_RATE
     assert SEARCH_THROTTLE_RATE == "30/min"
+    assert TAGGING_THROTTLE_RATE == "30/min"
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "tagging": TAGGING_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -322,3 +335,86 @@ def test_one_users_search_budget_is_not_anothers(employee_client, administrator_
     assert_rate_throttled(employee_client.get(SEARCH_URL, {"q": "leave"}))
 
     assert administrator_client.get(SEARCH_URL, {"q": "leave"}).status_code == 200
+
+
+# --- tagging (D-79's note on tagging, 10 November 2026, night) ------------------------------------
+
+
+def make_document(uploader, roles):
+    return Document.objects.create(
+        title="Bridge works", file_type="txt", uploaded_by=uploader, status=DOCUMENT_INDEXED,
+        visible_to_roles=roles,
+    )
+
+
+def type_topic(client, doc_id, name):
+    """A person types a new Topic name: the form of ``POST /api/documents/{id}/tags`` that makes a
+    permanent Tag, which is why the route is throttled (D-105's security review, finding 4)."""
+    return client.post(
+        f"{DOCUMENTS_URL}/{doc_id}/tags", {"dimension": TOPIC_DIMENSION, "tag_name": name},
+        format="json",
+    )
+
+
+def test_the_tagging_scope_answers_429_past_its_rate_and_writes_nothing(session_client):
+    """Every apply below types a Topic name nothing has, so each writes one Tag and one link, and
+    the rows count the applies that ran. The one past the rate writes neither."""
+    client = session_client.client
+    document = make_document(session_client.user, [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+    tags_before = Tag.objects.count()
+    for number in range(1, TAGGING_LIMIT + 1):
+        assert type_topic(client, document.id, f"topic {number}").status_code == 201, number
+
+    assert_rate_throttled(type_topic(client, document.id, "one too many"))
+    assert ContentTag.objects.filter(source_id=document.pk).count() == TAGGING_LIMIT
+    assert Tag.objects.count() == tags_before + TAGGING_LIMIT
+    assert not Tag.objects.filter(tag_name="one too many").exists()
+
+
+def test_past_the_tagging_rate_every_document_gets_the_same_429_before_its_404_or_403(
+    session_client, administrator
+):
+    """DRF checks the throttle in ``initial()``, before ``post`` looks the document up, so past the
+    rate the answer is the same for every id and says nothing about any of them.
+
+    Below the rate, with ``contribute_content`` taken from the caller's role, three ids are told
+    apart: one naming nothing is the scoped 404; an Administrator-only document is that 404 for the
+    Employee and the 403 for the Administrator, who reads every source (D-66); a document both roles
+    read is the 403. Those three count, as every request the throttle admits does, the rest of the
+    budget is spent on ids naming nothing, and then the same three requests are three 429s."""
+    client = session_client.client
+    RolePermission.objects.filter(
+        role=session_client.user.role, permission__permission_name=CONTRIBUTE_CONTENT_PERMISSION
+    ).delete()
+    readable = make_document(session_client.user, [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+    restricted = make_document(administrator, [ADMINISTRATOR_ROLE_NAME])
+    ids = {"names nothing": uuid.uuid4(), "Administrator-only": restricted.id, "readable": readable.id}
+
+    below = {name: type_topic(client, doc_id, "night shifts").status_code for name, doc_id in ids.items()}
+    assert below == {
+        "names nothing": 404,
+        "Administrator-only": 404 if session_client.role_name == EMPLOYEE_ROLE_NAME else 403,
+        "readable": 403,
+    }
+    for number in range(len(ids), TAGGING_LIMIT):
+        assert type_topic(client, uuid.uuid4(), "night shifts").status_code == 404, number
+
+    for doc_id in ids.values():
+        assert_rate_throttled(type_topic(client, doc_id, "night shifts"))
+    assert not ContentTag.objects.filter(source_id__in=[readable.pk, restricted.pk]).exists()
+    assert not Tag.objects.filter(tag_name="night shifts").exists()
+
+
+@pytest.mark.parametrize("spender", [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+def test_one_users_tagging_budget_is_not_anothers(
+    employee, employee_client, administrator_client, spender
+):
+    """Each way round, so that each role is both the one held and the one still answered."""
+    clients = {EMPLOYEE_ROLE_NAME: employee_client, ADMINISTRATOR_ROLE_NAME: administrator_client}
+    [other] = set(clients) - {spender}
+    document = make_document(employee, [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+    for number in range(TAGGING_LIMIT):
+        assert type_topic(clients[spender], uuid.uuid4(), "night shifts").status_code == 404, number
+    assert_rate_throttled(type_topic(clients[spender], document.id, "night shifts"))
+
+    assert type_topic(clients[other], document.id, "night shifts").status_code == 201

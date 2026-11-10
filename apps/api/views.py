@@ -1396,7 +1396,9 @@ class DocumentReprocessView(APIView):
 # the body is validated; then apps/documents/classification.py does the work, in one transaction.
 # No body here says more than the 404 would: ``NotOnThisDocument`` (a link, a proposal or an
 # analysis that is not this document's) is answered with the scoped lookup's own 404 body, word
-# for word.
+# for word. Two of the routes are throttled, classify in the "ingestion" scope and a person's apply
+# in "tagging" (D-79 and its note on tagging). DRF checks a throttle before the method runs, so past
+# the rate their 429 comes before the 404, the same for every id.
 
 
 class DocumentClassifyView(APIView):
@@ -1514,9 +1516,27 @@ class DocumentTagsView(APIView):
     201 ``{"tag_details": [...]}`` when a new link was made; 200 with the same shape when the tag was
     already on the document and was confirmed, restored or left as it was. ``tag_details`` is the
     document's whole current list, as the classify reply carries it.
+
+    **Throttled per user, scope "tagging"** (``TAGGING_THROTTLE_RATE``, D-79's note on tagging of 10
+    November 2026, night, answering D-105's security review, finding 4). Each new Topic name typed
+    here becomes a permanent Tag, which joins the scheme that later classification prompts list with
+    no cap and that ``tag_options`` offers, so the rate bounds how fast one user can grow it. DRF
+    checks the throttle in ``initial()``, after authentication and the permission classes and before
+    ``post`` runs. This route's one permission class is ``IsAuthenticated``, so an anonymous request
+    is still 401, and past the rate the 429 comes before the scoped 404 and ``contribute_content``'s
+    403. It is the same answer for every id, so it discloses nothing, as the search throttle answers
+    before any query runs. Every request the throttle admits counts, whatever ``post`` then answers,
+    and a throttled one writes nothing.
+
+    **The other tag routes are not throttled.** Confirming or removing a link and rejecting a
+    proposal create no Tag. ``confirm_proposed_topic`` can create a Topic, but only from a proposal
+    the classifier made, and classification is reached over HTTP only through upload, reprocess and
+    classify, which share the "ingestion" budget.
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "tagging"
 
     def post(self, request, pk):
         document = scoped_document_or_404(request, pk)
