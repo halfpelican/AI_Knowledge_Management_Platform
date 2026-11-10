@@ -9541,3 +9541,17 @@ the user before any code.
 - **The silence threshold is a starting value.** `TRANSCRIPTION_SILENCE_DBFS` is *tune*: set from
   the -90 dBFS silent track above and ordinary speech levels, and to be checked on the user's real
   recordings in the end-to-end trial.
+
+**The end-to-end trial, 11 November 2026** (`docs/recording-transcription-trial.md`):
+
+- **The path worked end to end on real audio.** A narrated recording of between 9.3 and 14.5
+  minutes went from the page to a cited answer under the `anthropic` provider, transcribed by
+  Whisper on FLM.
+- **The transcription:** 28 segments in 2 min 45 s, every one answered 200, one skipped as silent,
+  and no invented text in the draft.
+- **The review did not stop the errors.** The person ticked the review and added the draft
+  uncorrected, so its errors went into the index: an inverted "cannot", a wrong upload limit and
+  garbled terms. That is this entry's conceded limitation of the tick, observed rather than
+  predicted.
+- **Not measured:** the per-segment levels, so the margin of `TRANSCRIPTION_SILENCE_DBFS` is
+  unchecked, and the recording's exact length and format.
