@@ -72,8 +72,10 @@ def main() -> int:
     from django.conf import settings
 
     from apps.core.constants import (
-        ASSIGNMENT_OUTCOMES, CLASSIFICATION_CONFIDENCE_THRESHOLD, REPOSITORY_TAG_DIMENSIONS, SOURCE_TYPES,
+        ASSIGNMENT_OUTCOMES, CLASSIFICATION_CONFIDENCE_THRESHOLD, CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
+        REPOSITORY_TAG_DIMENSIONS, SOURCE_TYPES,
     )
+    from apps.documents.classification import confidence_threshold
     from apps.documents.models import ContentTag, Document, DocumentAnalysis, normalise_tag_name
 
     applied, provisional, discarded, confirmed = ASSIGNMENT_OUTCOMES
@@ -97,6 +99,8 @@ def main() -> int:
         "reference_set_sha256": measurement_record.file_sha256(REFERENCE),
         "reference_set_status": reference.get("status"),
         "threshold": threshold,
+        # D-122: each analysis is judged by its own model's threshold; thresholds_used records them.
+        "threshold_by_model": dict(CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL),
         "verified_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         "classify_record": json.loads(arguments.classify_record.read_text(encoding="utf-8")) if arguments.classify_record else None,
     })
@@ -107,6 +111,8 @@ def main() -> int:
     clause3 = {"department_out_of_scheme": 0, "department_discarded": 0, "project_process_discarded": 0,
                "topic_proposed": 0, "out_of_scheme_links": 0, "violations": []}
     tag_hits = tag_suggested = tag_reference = 0
+    thresholds_used: dict[str, float] = {}
+    record["thresholds_used"] = thresholds_used  # filled per analysis below, before the record is written
 
     for entry in reference["documents"]:
         item = manifest[entry["id"]]
@@ -122,6 +128,9 @@ def main() -> int:
             row.update({"classified": False})
             rows.append(row)
             continue
+        # D-122: the threshold the apply layer used for this analysis is its model's own.
+        threshold = confidence_threshold(analysis.model)
+        thresholds_used[analysis.model] = threshold
         type_conf = float(analysis.machine_doc_type_confidence) if analysis.machine_doc_type_confidence is not None else None
         dept_conf = float(analysis.machine_department_confidence) if analysis.machine_department_confidence is not None else None
         row.update({
@@ -229,7 +238,8 @@ def main() -> int:
     (arguments.out_dir / "verification.json").write_text(json.dumps({"record": record, "rows": rows, "summary": summary}, indent=2, default=str), encoding="utf-8")
     lines = ["# Objective 05 verification (D-106)", "",
              f"Commit {record['commit_sha'][:7]}" + (" (uncommitted tracked changes)" if record["uncommitted_tracked_changes"] else "")
-             + f", database {database}, dump {record['dump_sha256'][:8]}…, FLM {version.summary()}, threshold {threshold}.", "",
+             + f", database {database}, dump {record['dump_sha256'][:8]}…, FLM {version.summary()}, "
+             f"threshold by model {thresholds_used or {'(none classified)': CLASSIFICATION_CONFIDENCE_THRESHOLD}}.", "",
              "| Id | Reference | Suggested | Conf | Type outcome | Dept suggested | Dept conf | Dept outcome | AI tags (provisional) | Proposed topics | Discarded |",
              "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:

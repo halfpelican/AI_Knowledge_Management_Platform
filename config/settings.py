@@ -309,23 +309,28 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # --- AI provider (CLAUDE.md section 4, docs/ai-provider.md) ---------------------
 # Application code never reads these directly; it calls apps.ai.get_ai_service().
 
-AI_PROVIDER = env.str("AI_PROVIDER", default="flm")
+# anthropic (Claude + Voyage) is the default since D-122, after every tuned value was measured on
+# it. flm (FastFlowLM on the NPU) is the local, offline alternative. The two embed at different
+# widths, so switching is a full re-index onto a database of the other width (D-117).
+AI_PROVIDER = env.str("AI_PROVIDER", default="anthropic")
 
-# FastFlowLM on the local NPU: the default for development, testing and demonstration.
+# FastFlowLM on the local NPU: the offline alternative, AI_PROVIDER=flm, pinned to v0.9.39 (D-83).
 FLM_BASE_URL = env.str("FLM_BASE_URL", default="http://127.0.0.1:52625/v1")
 FLM_API_KEY = env.str("FLM_API_KEY", default="flm")  # placeholder, not a credential
 FLM_CHAT_MODEL = env.str("FLM_CHAT_MODEL", default="gemma3:4b")
 FLM_EMBED_MODEL = env.str("FLM_EMBED_MODEL", default="embed-gemma")
 
 # Length of the vectors the configured embedding model returns (docs/decisions.md
-# D-03). The pgvector column is sized from this and the startup check verifies it.
-EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=768)
+# D-03): 1024 for voyage-4, the default since D-122, and 768 for FLM's embed-gemma. The pgvector
+# column is sized from this and the startup check verifies it.
+EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=1024)
 
-# Claude + Voyage: the proposal's production configuration, funded since D-113.
+# Claude + Voyage: the proposal's production configuration, funded since D-113 and the default
+# since D-122.
 ANTHROPIC_API_KEY = env.str("ANTHROPIC_API_KEY", default="")
 # Haiku 5.5 (D-121): it matched Sonnet 5.5 on every bar of the Haiku round, faster and at a
 # twentieth of the price. ANTHROPIC_MODEL=claude-sonnet-5-5 goes back to D-115's model. The same
-# setting selects FR-10's classification model, which is not yet measured on either.
+# setting selects FR-10's classification model; Haiku's confidence threshold is D-122's.
 ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-haiku-5-5")
 VOYAGE_API_KEY = env.str("VOYAGE_API_KEY", default="")
 VOYAGE_MODEL = env.str("VOYAGE_MODEL", default="voyage-4")

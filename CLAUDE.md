@@ -79,7 +79,7 @@ cut a requirement.
 | Backend | Django 5.x + Django REST Framework |
 | Database | PostgreSQL 16 + pgvector (via `pgvector-django`) |
 | Frontend | React + Vite |
-| Generation & embeddings | **FastFlowLM (FLM)** on the AMD Ryzen AI NPU — see §4 |
+| Generation & embeddings | **Claude Haiku 5.5 + Voyage `voyage-4`**, the `anthropic` provider, the default since D-122; **FastFlowLM (FLM)** on the AMD Ryzen AI NPU as the offline alternative — see §4 |
 | Extraction | `pypdf`, `python-docx`, `openpyxl`; TXT read directly |
 | Tests | `pytest-django`; Vitest + Testing Library + jsdom for `frontend/` (D-62) |
 | Python | **3.12** — matches the CI runner. Pinned in `.python-version` and CI. |
@@ -108,27 +108,35 @@ requirement is built, not before.
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:
 
-- `flm` — **the default.** FastFlowLM, local, on the NPU. Free, offline, no key.
-  The M6 alpha and every measurement up to 10 November 2026 ran on it.
 - `anthropic` — Claude + Voyage, the proposal's §9.2 production configuration.
-  **Funded since 10 November 2026** by the Max plan's monthly Claude API credits
-  (D-113, superseding D-35's "no budget"); Voyage is separate, on its free tier. It
-  needs no NPU, so M8 can be hosted on any device with the platform in place
-  (D-114). Keys live in `.env` only. Which provider is the default, and which one M8
-  runs on, are decided by measurement: a switch is a full re-index (below), onto a
-  fresh database, and every tuned value is re-derived on the new vectors before it
-  is relied on.
+  **The default since 10 November 2026 (D-122),** after every tuned value was
+  re-derived on it, each per model: the relevance threshold and partial-match floor
+  (D-120), FR-19's grouping threshold and FR-10's confidence threshold (D-122).
+  Generation and classification run on Claude Haiku 5.5 (D-121), embeddings on Voyage
+  `voyage-4` at 1024. **Funded since 10 November 2026** by the Max plan's monthly Claude
+  API credits (D-113, superseding D-35's "no budget"); Voyage is billed separately. It
+  needs no NPU, so M8 can be hosted on any device with the platform in place (D-114).
+  Keys live in `.env` only.
+- `flm` — FastFlowLM, local, on the NPU. Free, offline, no key. **The default until
+  10 November 2026:** the M6 alpha and every measurement up to then ran on it. Now the
+  offline alternative.
+
+Which provider is the default, and which one M8 runs on, are decided by measurement:
+a switch is a full re-index (below), onto a fresh database, and every tuned value is
+re-derived on the new vectors before it is relied on.
 
 If you find yourself writing `import anthropic` or `from openai import OpenAI`
 anywhere outside `apps/ai/`, stop — that is the bug.
 
 Full contract in `docs/ai-provider.md`.
 
-### FLM configuration
+### FLM configuration (the offline alternative)
 
 Development runs on **native Windows with PowerShell** — not WSL. The NPU is not
 visible from inside WSL2, so keeping everything on the Windows side means
-`127.0.0.1` genuinely is the same machine and there is no host-IP indirection.
+`127.0.0.1` genuinely is the same machine and there is no host-IP indirection. With
+the `anthropic` default nothing needs the NPU, but the scripts and runbooks still
+assume this setup. Running FLM also needs a database indexed at 768 (below).
 
 ```powershell
 # In its own PowerShell window, left running

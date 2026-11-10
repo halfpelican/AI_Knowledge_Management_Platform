@@ -18,6 +18,8 @@ from apps.core.constants import (
     ASSIGNMENT_CONFIRMED,
     ASSIGNMENT_DISCARDED,
     ASSIGNMENT_PROVISIONAL,
+    CLASSIFICATION_CONFIDENCE_THRESHOLD,
+    CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
     DEPARTMENT_DIMENSION,
     PROCESS_DIMENSION,
     PROJECT_DIMENSION,
@@ -225,6 +227,50 @@ def test_an_in_scheme_tag_is_linked_as_ai_applied_and_provisional_only_below_the
     assert link.confirmed is False
     assert link.provisional is provisional
     assert link.confidence == Decimal(str(confidence))
+
+
+# --- D-122: the threshold is the classifying model's own -----------------------------------------
+
+HAIKU = "claude-haiku-5-5"
+BETWEEN_THE_TWO_VALUES = 0.8  # at or above Haiku's 0.72, below CLASSIFICATION_CONFIDENCE_THRESHOLD
+
+
+def test_the_confidence_threshold_is_the_classifying_models_own():
+    """D-122: a listed model gets its value; any other, gemma3:4b and the stub included, the default."""
+    assert module.confidence_threshold(HAIKU) == CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU]
+    assert module.confidence_threshold("gemma3:4b") == CLASSIFICATION_CONFIDENCE_THRESHOLD
+    assert module.confidence_threshold("stub-chat") == CLASSIFICATION_CONFIDENCE_THRESHOLD
+
+
+@pytest.mark.parametrize(
+    ("model", "outcome", "effective", "provisional_tag"),
+    [(HAIKU, ASSIGNMENT_APPLIED, POLICY, False), ("gemma3:4b", ASSIGNMENT_PROVISIONAL, None, True)],
+    ids=["haiku", "unlisted"],
+)
+def test_assignments_between_the_two_values_follow_the_classifying_model(
+    document, model, outcome, effective, provisional_tag
+):
+    """D-122: at 0.80 the type, the department and a tag apply on Haiku's 0.72 and are held on 0.95."""
+    # The premise: 0.80 sits between the two values, so the model alone decides.
+    assert (CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU] <= BETWEEN_THE_TWO_VALUES
+            < CLASSIFICATION_CONFIDENCE_THRESHOLD)
+    make_tag(PROJECT_DIMENSION, "bridge maintenance")
+    analysis = apply_classification(
+        document,
+        classification(doc_type=POLICY, type_confidence=BETWEEN_THE_TWO_VALUES,
+                       department="Finance", department_confidence=BETWEEN_THE_TWO_VALUES,
+                       tags=[(PROJECT_DIMENSION, "bridge maintenance", BETWEEN_THE_TWO_VALUES)],
+                       model=model),
+        scheme=scheme(departments=["Finance"], project=["bridge maintenance"]),
+    )
+    analysis.refresh_from_db()
+    document.refresh_from_db()
+    assert analysis.model == model
+    assert analysis.doc_type_outcome == outcome
+    assert analysis.doc_type == effective
+    assert analysis.department_outcome == outcome
+    assert document.department == ("Finance" if effective else "")
+    assert links_of(document).get().provisional is provisional_tag
 
 
 def test_a_tag_a_person_applied_and_confirmed_is_not_altered_by_a_rerun(document):

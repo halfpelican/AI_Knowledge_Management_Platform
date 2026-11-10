@@ -8,7 +8,9 @@ model:
 
 - **confidence** — "a confidence value is recorded with each assignment. Assignments below the
   configured threshold are marked provisional and presented for confirmation rather than applied
-  silently." ``CLASSIFICATION_CONFIDENCE_THRESHOLD`` is compared in one place, ``_is_provisional``.
+  silently." The classifying model's threshold is compared in one place, ``_is_provisional``:
+  ``CLASSIFICATION_CONFIDENCE_THRESHOLD``, or the model's own value from
+  ``CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL`` (``confidence_threshold``, D-122).
 - **controlled taxonomy growth** — "suggested tags are matched against values already held in the
   scheme. A value that does not match may be proposed only in the Topic dimension and requires
   user confirmation before it is created; suggestions falling outside the scheme in the
@@ -58,6 +60,7 @@ from apps.core.constants import (
     ASSIGNMENT_DISCARDED,
     ASSIGNMENT_PROVISIONAL,
     CLASSIFICATION_CONFIDENCE_THRESHOLD,
+    CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
     DOCUMENT_TYPES,
     REPOSITORY_TAG_DIMENSIONS,
     SOURCE_TYPES,
@@ -393,7 +396,7 @@ def apply_classification(
 
         if not analysis.user_edited:
             # Rule 2: the type.
-            if _is_provisional(classification.doc_type.confidence):
+            if _is_provisional(classification.doc_type.confidence, classification.model):
                 analysis.doc_type = None
                 analysis.doc_type_outcome = ASSIGNMENT_PROVISIONAL
             else:
@@ -404,7 +407,7 @@ def apply_classification(
             machine_wrote = False
             if department_value not in scheme.departments:
                 analysis.department_outcome = ASSIGNMENT_DISCARDED
-            elif _is_provisional(classification.department.confidence):
+            elif _is_provisional(classification.department.confidence, classification.model):
                 analysis.department_outcome = ASSIGNMENT_PROVISIONAL
             elif current == department_value:
                 # Already the document's department: nothing to write. Whose value it is, the
@@ -446,7 +449,7 @@ def apply_classification(
                     dimension=suggestion.dimension, tag_name=name, active=True
                 ).first()
                 if tag is not None:
-                    _link_tag(document, tag, suggestion.confidence)
+                    _link_tag(document, tag, suggestion.confidence, classification.model)
                     continue
                 # Deactivated since the scheme was built: treated as outside it.
             if suggestion.dimension == TOPIC_DIMENSION:
@@ -475,9 +478,24 @@ def apply_classification(
     return analysis
 
 
-def _is_provisional(confidence: float) -> bool:
-    """FR-10's one confidence comparison: below the threshold is provisional; at it is applied."""
-    return confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD
+def confidence_threshold(model: str) -> float:
+    """FR-10's threshold for suggestions ``model`` made (D-122).
+
+    A model CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL lists gets its own value, chosen by
+    D-106's rule on that model's classifications. Any other, gemma3:4b included, gets
+    CLASSIFICATION_CONFIDENCE_THRESHOLD. ``model`` is the name the classification carries
+    (``DocumentClassification.model``, the provider's chat model). Both names are read at call
+    time, so a test that reassigns either is honoured.
+    """
+    return CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL.get(model, CLASSIFICATION_CONFIDENCE_THRESHOLD)
+
+
+def _is_provisional(confidence: float, model: str) -> bool:
+    """FR-10's one confidence comparison: below the threshold is provisional; at it is applied.
+
+    The threshold is the classifying model's own (``confidence_threshold``, D-122).
+    """
+    return confidence < confidence_threshold(model)
 
 
 def _as_decimal(confidence: float) -> Decimal:
@@ -514,7 +532,7 @@ def _department_provenance(previous: str | None, current: str, *, machine_wrote:
     return USER_APPLIED
 
 
-def _link_tag(document: Document, tag: Tag, confidence: float) -> ContentTag:
+def _link_tag(document: Document, tag: Tag, confidence: float, model: str) -> ContentTag:
     """Rule 4's in-scheme case: create the AI link, refresh an unconfirmed one, or leave a
     person's decision alone: a link a person removed, confirmed or applied."""
     link = (
@@ -529,7 +547,7 @@ def _link_tag(document: Document, tag: Tag, confidence: float) -> ContentTag:
             source_id=document.pk,
             applied_by=AI_APPLIED,
             confirmed=False,
-            provisional=_is_provisional(confidence),
+            provisional=_is_provisional(confidence, model),
             confidence=_as_decimal(confidence),
         )
     if link.removed:
@@ -539,7 +557,7 @@ def _link_tag(document: Document, tag: Tag, confidence: float) -> ContentTag:
     if link.confirmed or link.applied_by == USER_APPLIED:
         return link  # a person's decision: "not altered by later reprocessing"
     link.confidence = _as_decimal(confidence)
-    link.provisional = _is_provisional(confidence)
+    link.provisional = _is_provisional(confidence, model)
     link.save(update_fields=["confidence", "provisional"])
     return link
 

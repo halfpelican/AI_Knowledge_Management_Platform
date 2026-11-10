@@ -51,8 +51,10 @@ read: subtracting the first from the second would be the number D-107 forbids.
 
 **3. The grouping (D-109).** Survivors are taken in timestamp order. Each is compared, by
 ``ranking.cosine_similarity``, with every Open entry whose ``embedding_model`` matches its own,
-including entries this cycle started. It joins the nearest at or above ``GAP_GROUPING_THRESHOLD``,
-or else starts an entry whose subject is its own wording, verbatim.
+including entries this cycle started. It joins the nearest at or above its embedding model's
+threshold (``grouping_threshold``: ``GAP_GROUPING_THRESHOLD``, or the model's own value from
+``GAP_GROUPING_THRESHOLD_BY_MODEL``, D-122), or else starts an entry whose subject is its own
+wording, verbatim.
 
 **4. The cycle row is written last**, with its counts, in the same transaction.
 
@@ -83,6 +85,7 @@ from apps.core.constants import (
     MAXIMUM_QUESTION_LENGTH,
     CYCLE_GRACE_SECONDS,
     GAP_GROUPING_THRESHOLD,
+    GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_OPEN,
 )
 from apps.retrieval.models import (
@@ -275,6 +278,17 @@ def _question_explained_by_permissions(
     return not (set(roles[top.chunk_id]) & asker_roles)
 
 
+def grouping_threshold(embedding_model: str) -> float:
+    """The cosine at or above which an item joins an Open entry, for ``embedding_model`` (D-122).
+
+    A model GAP_GROUPING_THRESHOLD_BY_MODEL lists gets its own value, chosen by D-109's rule on
+    that model's vectors. Any other, EmbeddingGemma included, gets GAP_GROUPING_THRESHOLD. Both
+    names are read at call time, so a test that reassigns either is honoured. Only vectors from
+    one model are ever compared (risk R10), so an item's own model is the entry's too.
+    """
+    return GAP_GROUPING_THRESHOLD_BY_MODEL.get(embedding_model, GAP_GROUPING_THRESHOLD)
+
+
 def _group(items: list[_Item]) -> tuple[int, int]:
     """D-109: join each item to its nearest Open entry at or above the threshold, or start one.
 
@@ -294,6 +308,7 @@ def _group(items: list[_Item]) -> tuple[int, int]:
     changed: dict = {}
 
     for item in items:
+        threshold = grouping_threshold(item.model)  # the item's model is every candidate's (R10)
         nearest, nearest_score = None, None
         for candidate in candidates:
             if candidate.gap.embedding_model != item.model:
@@ -301,7 +316,7 @@ def _group(items: list[_Item]) -> tuple[int, int]:
             score = cosine_similarity(item.vector, candidate.centroid)
             # ">=": an item exactly on the threshold joins (D-109, "at least"). Strictly greater
             # to replace the nearest, so a tie keeps the older entry.
-            if score >= GAP_GROUPING_THRESHOLD and (nearest is None or score > nearest_score):
+            if score >= threshold and (nearest is None or score > nearest_score):
                 nearest, nearest_score = candidate, score
 
         if nearest is None:
