@@ -4862,6 +4862,28 @@ user's asks can hold: one Waitress thread.
 >   - **Where it does matter.** The record only matters when the user leaves the empty thread and
 >     then presses "Start a new topic". A test for that was added, and the break then failed it.
 
+**Dated note, 10 November 2026 (night): keyword search gets a scope, `search`, at 30 a minute, and a
+term an upper bound of 500 characters.** The user's decision on the FR-19 security review's L1 and
+L2 (D-107's note; D-119). Keyword search was unthrottled and bounded a term from below only. So one
+Employee could log terms as fast and as long as they liked into `SearchLog`, which FR-19's cycle
+reads. That opened a timing signal on the shared NPU (L1) and let them put chosen text at the top of
+the Administrator's gap list (L2).
+
+- **`SEARCH_THROTTLE_RATE = "30/min"`,** per user, through `ScopedRateThrottle` like the other
+  scopes. Search spends no NPU time, so the rate is not about the NPU, as the ask rate is; it bounds
+  how fast one user can fill the log. The page sends one request per submitted term, so a person
+  searching never meets it, and no load test calls search.
+- **`MAXIMUM_SEARCH_LENGTH = 500`,** the question's ceiling, refused with FR-12's 400 before any
+  query runs and before any row is written, and refused in the browser first with a message that
+  names it. `search` applies it and `search_total` does not: FR-19's cycle recounts terms logged
+  before the bound existed, and a refusal there would roll back that cycle and every later one. The
+  cycle's own cut to `MAXIMUM_QUESTION_LENGTH` (D-107's note, M1) stays for those rows.
+- **What it does not do:** a user can still repeat one term 30 times a minute. The rate slows L2 and
+  shrinks L1's signal, but does not remove either, and occurrence counts still count rows rather
+  than people, which Objective 06's "accurate occurrence count" requires.
+- **A throttled search is DRF's 429 with `Retry-After`,** and the search page shows the client's
+  rate-limit text with Try again.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -7441,6 +7463,10 @@ step, and D-114 has since let M8 run on any device. The user's decision: a daily
 - **Tests** pin the script's contract: it runs the command from the checkout's venv, daily, and
   takes no password; the runbook names it.
 
+**Dated note, 10 November 2026 (night): L1 and L2 are taken up** by a `search` throttle and an upper
+bound on a search term, on FR-12's route (D-79's note of the same night). Each is reduced, not
+removed: that note says what remains.
+
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
@@ -8449,3 +8475,75 @@ twelve.
 > - **Outside the FR text, not counted as gaps:** UC-09 E1's queue and A1's "undetermined" record; UC-10 E2 (sensitive questions kept verbatim), E3 (spurious questions), A2 (outdated knowledge) and A3 (partial answers). None of these is recorded.
 >
 > **One line:** FR-10 INCOMPLETE, FR-19 INCOMPLETE, Objective 05 NOT MET (clause 1), Objective 06 NOT MET on its independent run (clause 3).
+
+## D-120 · The relevance threshold and the partial-match floor are per embedding model: `voyage-4` gets 0.2687 and 0.2468, and EmbeddingGemma keeps 0.30 and no floor
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-12, D-37, D-56, D-101,
+D-102, D-113, D-117, R10, `apps/core/constants.py`, `apps/retrieval/ranking.py`,
+`apps/retrieval/partial_matches.py`, `apps/retrieval/pipeline.py`, `scripts/citation_harness.py`,
+`scripts/conversation_http_check.py`, `CLAUDE.md` §5
+
+**What prompted it.** D-113 requires the threshold to be re-derived on development material before
+the `anthropic` provider is relied on. `RELEVANCE_THRESHOLD = 0.30` and `PARTIAL_MATCH_FLOOR = 0.0`
+were chosen on EmbeddingGemma's scores (D-102). A cosine value means something only for the model
+whose scores it was chosen on (R10).
+
+**The measurement used D-101's and D-102's procedure, unchanged.** The evidence is in
+`corpus/objective-02/runs/2026-11-10/voyage-threshold/`.
+
+- **The database** is `kmp_voyage_20261110`, the 1 November snapshot re-indexed with Voyage (D-117,
+  PR #71).
+- **Scores:** dev-set-v2's 40 runs, each embedded three times, with D-101's margin rule
+  (`m = 0.006`).
+  - It gave T 0.2687 and F 0.2468.
+  - It declines 4 of 8 no-answer runs with margin (EmbeddingGemma: 1 of 8) and keeps all 32
+    answerable runs.
+  - The floor holds (F ≤ T − m), which it could not on EmbeddingGemma.
+- **End to end:** both values against 0.30 with no floor, on v2, with Claude Sonnet 5.5 (D-115)
+  and the cap of 6. Every ask was rolled back.
+
+| dev-set-v2 | EmbeddingGemma 0.30 (D-102) | Voyage 0.30 | **Voyage 0.2687 / 0.2468** |
+|---|---|---|---|
+| answered where expected | 29/32 | 31/32 | **32/32** |
+| declined where no answer is expected | 7/8 | 8/8 | **8/8** |
+| match with an expected source | 22/32 | 31/32 | **32/32** |
+| median seconds per ask | 16.1 | 2.8 | **2.6** |
+
+- **The difference between the two Voyage settings is u07,** whose expected source scores 0.2968.
+  0.30 declines it before generation.
+- **The floor stops unrelated offers.** At 0.30 with no floor, every no-answer run was offered its
+  five nearest items, down to 0.12. At 0.2468, the four runs declined before generation were offered
+  nothing.
+
+**Decision (the user's, 10 November): adopt Voyage's values, as values of the embedding model.**
+
+- **The tables:** `RELEVANCE_THRESHOLD_BY_MODEL = {"voyage-4": 0.2687}` and
+  `PARTIAL_MATCH_FLOOR_BY_MODEL = {"voyage-4": 0.2468}`, in `apps/core/constants.py`.
+- **The default:** a model not listed, EmbeddingGemma included, keeps `RELEVANCE_THRESHOLD = 0.30`
+  and `PARTIAL_MATCH_FLOOR = 0.0`. Both are unchanged, so FLM's behaviour and its measurements are
+  untouched.
+- **The code:** `ranking.admit()` and `partial_matches.partial_matches()` take the embedding model as
+  a required keyword and look the value up (`relevance_threshold`, `partial_match_floor`).
+  - The pipeline passes the model the question was embedded with, which is the model every
+    candidate chunk was recorded against (R10).
+  - The keyword is required, so a caller cannot forget it and quietly use EmbeddingGemma's value
+    for Voyage's scores.
+- **The measurement scripts:** the citation harness and the HTTP check pass the model too. The
+  harness's default threshold is now the model's own, and `--threshold` still overrides it.
+- **The key is the model name the provider answers with** (`settings.VOYAGE_MODEL`). Another Voyage
+  model falls back to the default until it is measured, because these values are `voyage-4`'s.
+
+**What it costs, and what remains:**
+
+- **A small, contaminated set.** It is 40 runs, and v2 was written after the frozen results were
+  seen (D-101's note). So the frozen thirty does not independently test this value.
+- **The scores still overlap.** Three no-answer runs score above an answerable one. Generation
+  declined them on this set.
+- **D-56 is narrowed on Voyage and stays open on EmbeddingGemma.**
+- **Next:** the frozen thirty, the nine threads, the HTTP check and NFR-08 on Voyage with these
+  values (D-113), within D-113's spend rule.
+- **FR-19's exclusion check** (`scripts/exclusion_dev_check.py`, on its branch) calls `admit`, and it
+  needs the model once the two branches meet.
+
+**Where it applies:** the modules under **Concerns**, `CLAUDE.md` §5 (both rows, with the user's
+adoption of 10 November) and `docs/ai-provider.md` §4.

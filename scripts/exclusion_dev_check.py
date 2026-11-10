@@ -100,7 +100,7 @@ def main() -> int:
             left_out = gaps._question_explained_by_permissions(row, embedding, scope)
             chunks, roles = scope.for_model(embedding.model)
             ranked = rank(chunks, embedding.vectors[0])
-            admitted = admit(ranked)
+            admitted = admit(ranked, embedding_model=embedding.model)  # the model's own threshold (D-120)
             # The top-ranked passage, whether or not it clears the threshold: what the rule decides
             # on since D-108's evening note. Until 10 November these columns showed the top
             # admitted passage, so a question decided below the threshold showed None.

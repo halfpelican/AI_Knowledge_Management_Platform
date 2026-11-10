@@ -1,12 +1,13 @@
 """D-79's per-user rate throttles, D-80's create throttle, and ``NUM_PROXIES``.
 
-Three scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.py``:
+Four scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.py``:
 
 - ``ask`` on ``POST /api/ask``;
 - ``ingestion``, one budget shared by ``POST /api/documents``, ``POST /api/meetings``,
   ``POST /api/documents/{id}/reprocess`` and, since FR-10, ``POST /api/documents/{id}/classify``
   (D-105: one provider call, like a reprocess);
-- ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget.
+- ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
+- ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026.
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -41,8 +42,9 @@ from apps.core.constants import (
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
     INGESTION_THROTTLE_RATE,
+    SEARCH_THROTTLE_RATE,
 )
-from apps.retrieval.models import Conversation, QueryLog
+from apps.retrieval.models import Conversation, QueryLog, SearchLog
 
 pytestmark = pytest.mark.django_db
 
@@ -51,6 +53,7 @@ CONVERSATIONS_URL = "/api/conversations"
 DOCUMENTS_URL = "/api/documents"
 MEETINGS_URL = "/api/meetings"
 LOGIN_URL = "/api/auth/login"
+SEARCH_URL = "/api/search"
 QUESTION = "How much annual leave do I get?"
 
 
@@ -62,6 +65,7 @@ def allowed(rate: str) -> int:
 ASK_LIMIT = allowed(ASK_THROTTLE_RATE)
 INGESTION_LIMIT = allowed(INGESTION_THROTTLE_RATE)
 CREATE_LIMIT = allowed(CONVERSATION_CREATE_THROTTLE_RATE)
+SEARCH_LIMIT = allowed(SEARCH_THROTTLE_RATE)
 
 
 def ask(client, question=QUESTION):
@@ -111,11 +115,13 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert ASK_THROTTLE_RATE == "10/min"
     assert INGESTION_THROTTLE_RATE == "60/hour"
     assert CONVERSATION_CREATE_THROTTLE_RATE == ASK_THROTTLE_RATE
+    assert SEARCH_THROTTLE_RATE == "30/min"
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
+        "search": SEARCH_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -294,3 +300,25 @@ def test_two_forwarded_for_values_from_one_address_share_one_login_limit(api_cli
     assert login("203.0.113.1, 198.51.100.99").status_code == 429
     # The connecting address is the key: another one is not held by this one's limit.
     assert login("203.0.113.1", REMOTE_ADDR="192.0.2.50").status_code == 401
+
+
+# --- search (D-79's note of 10 November 2026) -------------------------------------------------------
+
+
+def test_the_search_scope_answers_429_past_its_rate_and_logs_nothing_more(session_client):
+    """A throttled search writes no ``SearchLog`` row, so FR-19's cycle never sees it. With no
+    corpus every search is a quick zero-result one, and each writes one row."""
+    client = session_client.client
+    for number in range(1, SEARCH_LIMIT + 1):
+        assert client.get(SEARCH_URL, {"q": "leave"}).status_code == 200, number
+
+    assert_rate_throttled(client.get(SEARCH_URL, {"q": "leave"}))
+    assert SearchLog.objects.count() == SEARCH_LIMIT
+
+
+def test_one_users_search_budget_is_not_anothers(employee_client, administrator_client):
+    for _ in range(SEARCH_LIMIT):
+        employee_client.get(SEARCH_URL, {"q": "leave"})
+    assert_rate_throttled(employee_client.get(SEARCH_URL, {"q": "leave"}))
+
+    assert administrator_client.get(SEARCH_URL, {"q": "leave"}).status_code == 200

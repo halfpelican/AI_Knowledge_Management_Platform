@@ -168,6 +168,7 @@ from apps.core.constants import (  # noqa: E402
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
     RELEVANCE_THRESHOLD,
+    RELEVANCE_THRESHOLD_BY_MODEL,
     TOP_K,
 )
 from apps.documents.models import ContentChunk, Document  # noqa: E402
@@ -192,8 +193,13 @@ from apps.retrieval.partial_matches import partial_matches  # noqa: E402
 # verbatim at items 3 and 5, so importing them changes nothing the baseline measured and
 # removes three more definitions that could drift. The threshold is applied by this
 # module rather than by ranking.admit(), because --threshold sweeps it for tuning (D-37)
-# and admit() correctly reads the settled constant.
-from apps.retrieval.ranking import RankedPassage, rank, truncate_to_context  # noqa: E402
+# and admit() reads the embedding model's settled value (D-120); so does the default here.
+from apps.retrieval.ranking import (  # noqa: E402
+    RankedPassage,
+    rank,
+    relevance_threshold,
+    truncate_to_context,
+)
 
 # Citation verification, as the pipeline performs it: set membership against the
 # identifiers actually supplied to the prompt (apps/retrieval/verification.py, FR-12 step
@@ -280,6 +286,9 @@ class QuestionResult:
     # by an Employee) or the set names no source.
     source_rank: int | None = None
     source_score: float | None = None
+    # The admission floor this run applied: the embedding model's own (D-120), or --threshold
+    # where one was given. None until measure() has ranked. miss_rows judges the source by it.
+    threshold: float | None = None
     # What a no-answer reply would offer (D-56): the shipped derivation, plus each offered
     # source's best score. Recorded on every run, answered or not, so a floor can be chosen.
     offered: list[dict] = field(default_factory=list)
@@ -476,8 +485,12 @@ def best_ranked(ranked: list[RankedPassage], sources: SourceIndex | None, items)
     return min(placed) if placed else (None, None)
 
 
-def offered_record(ranked: list[RankedPassage], sources: SourceIndex | None) -> list[dict]:
+def offered_record(
+    ranked: list[RankedPassage], sources: SourceIndex | None, embedding_model: str
+) -> list[dict]:
     """partial_matches(ranked), each with its source's best score and manifest item.
+
+    ``embedding_model`` is the question's, so the floor is that model's own (D-120).
 
     The list is the shipped derivation's. The score is the first appearance of the source
     in ``ranked``, which is its best, because ``ranked`` is ordered best first.
@@ -492,7 +505,7 @@ def offered_record(ranked: list[RankedPassage], sources: SourceIndex | None) -> 
             "item": sources.item_of(match.source_id) if sources else None,
             "score": best[(match.source_type, str(match.source_id))],
         }
-        for match in partial_matches(ranked)
+        for match in partial_matches(ranked, embedding_model=embedding_model)
     ]
 
 
@@ -500,7 +513,7 @@ def run_question(
     question: dict,
     chunks: list[ContentChunk],
     service,
-    threshold: float = RELEVANCE_THRESHOLD,
+    threshold: float | None = None,
     with_history: bool = False,
     sources: SourceIndex | None = None,
 ) -> QuestionResult:
@@ -567,8 +580,11 @@ def measure(
     ranked = rank(candidates, query_vector)
     result.top_score = ranked[0].score if ranked else None
     result.source_rank, result.source_score = best_ranked(ranked, sources, result.source)
-    result.offered = offered_record(ranked, sources)
-    admitted = [candidate for candidate in ranked if candidate.score >= threshold]
+    result.offered = offered_record(ranked, sources, embedding.model)
+    # The embedding model's own threshold unless the caller overrides it (D-120).
+    floor = relevance_threshold(embedding.model) if threshold is None else threshold
+    result.threshold = floor
+    admitted = [candidate for candidate in ranked if candidate.score >= floor]
 
     # The chunks this role may NOT see. Computed only so the harness can assert
     # that none of them reached the prompt or the answer; never printed, never
@@ -671,18 +687,23 @@ def item_label(sources: SourceIndex | None, chunk_id: str) -> str:
     return f"{item}:{chunk_id[:8]}" if item else chunk_id[:8]
 
 
-def miss_rows(results: list[QuestionResult], threshold: float) -> list[dict]:
+def miss_rows(results: list[QuestionResult], threshold: float | None = None) -> list[dict]:
     """One row per miss, so the fixes after M6 aim at causes, not symptoms.
 
     A miss is a run that expected an answer and did not show the expected answer, or a run
     that expected no answer and was answered. Each row says whether the expected source was
-    a candidate for this role and at what rank, its best score against ``threshold``, and
+    a candidate for this role and at what rank, its best score against the threshold, and
     where the run ended: no-answer path A (nothing above the threshold, so generation was
     never called), path B (generation ran and no statement survived verification),
     unavailable, or answered without the expected answer.
+
+    The threshold is ``threshold`` where the caller gives one, and otherwise the one each run
+    applied (``QuestionResult.threshold``): the embedding model's own since D-120, which is
+    what main() means by passing --threshold's default of None.
     """
     rows = []
     for result in results:
+        applied = result.threshold if threshold is None else threshold
         if result.expects_answer:
             if result.expected_answer_found:
                 continue
@@ -705,9 +726,9 @@ def miss_rows(results: list[QuestionResult], threshold: float) -> list[dict]:
             "source": result.source,
             "source_rank": result.source_rank,
             "source_score": result.source_score,
-            "threshold": threshold,
-            "above_threshold": (None if result.source_score is None
-                                else result.source_score >= threshold),
+            "threshold": applied,
+            "above_threshold": (None if result.source_score is None or applied is None
+                                else result.source_score >= applied),
             "ended": ended,
         })
     return rows
@@ -948,7 +969,7 @@ def score_distribution(
             "top_score": ranked[0].score if ranked else None,
             "source_rank": source_rank,
             "source_score": source_score,
-            "partial_matches": offered_record(ranked, sources),
+            "partial_matches": offered_record(ranked, sources, embedding.model),
         })
 
     print("\n" + "=" * 100)
@@ -1175,6 +1196,7 @@ def thread_run_record(run: dict, result: QuestionResult, score: dict, sources: S
         "top_score": result.top_score,
         "source_rank": result.source_rank,
         "source_score": result.source_score,
+        "threshold": result.threshold,
         "partial_matches": result.offered,
         "retrieved": [{"chunk_id": c.chunk_id, "score": c.score, "item": item_of(c.chunk_id)}
                       for c in result.retrieved],
@@ -1270,8 +1292,9 @@ def main() -> int:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=RELEVANCE_THRESHOLD,
-        help=f"cosine floor for admitting a passage (default: RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD})",
+        default=None,
+        help=("cosine floor for admitting a passage (default: the embedding model's own, "
+              f"RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD} or RELEVANCE_THRESHOLD_BY_MODEL={RELEVANCE_THRESHOLD_BY_MODEL}, D-120)"),
     )
     parser.add_argument(
         "--scores-only",
@@ -1445,7 +1468,7 @@ def main() -> int:
     print(f"  schema          : apps/ai/schema.py, required key(s) "
           f"{STATEMENT_LIST_SCHEMA['required']}, per statement "
           f"{sorted(STATEMENT_LIST_SCHEMA['properties']['statements']['items']['required'])}")
-    if arguments.threshold != RELEVANCE_THRESHOLD:
+    if arguments.threshold is not None:
         print(f"  THRESHOLD       : {arguments.threshold} (overriding the constant, for tuning)")
     if arguments.with_history:
         # Printed in full, because a recorded run has to say exactly which block produced
@@ -1480,7 +1503,8 @@ def main() -> int:
     constants = {
         "TOP_K": TOP_K,
         "RELEVANCE_THRESHOLD": RELEVANCE_THRESHOLD,
-        "threshold_used": arguments.threshold,
+        "RELEVANCE_THRESHOLD_BY_MODEL": dict(RELEVANCE_THRESHOLD_BY_MODEL),
+        "threshold_used": arguments.threshold if arguments.threshold is not None else "the embedding model's own (D-120)",
         "MAXIMUM_CONTEXT_TOKENS": MAXIMUM_CONTEXT_TOKENS,
         "MAXIMUM_GENERATION_ATTEMPTS": MAXIMUM_GENERATION_ATTEMPTS,
     }
@@ -1544,6 +1568,7 @@ def main() -> int:
                     "top_score": r.top_score,
                     "source_rank": r.source_rank,
                     "source_score": r.source_score,
+                    "threshold": r.threshold,
                     "partial_matches": r.offered,
                     "retrieved": [
                         {"chunk_id": c.chunk_id, "score": c.score,

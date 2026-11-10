@@ -1,0 +1,463 @@
+Question set: corpus\objective-02\questions.json, 30 question(s) valid, 4 asked by both roles, so 34 run(s)
+Provider gate: anthropic (Voyage voyage-4 at 1024, Claude), the Voyage copy, D-120's values
+Provider gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : 54f15ccdc2e2d6fe3bedfdffac99cffccee825fb
+  FLM version     : none, FLM takes no part (D-113)
+  dump sha256     : 80ff46d482d7d36029060e4afa2646ee9f07683331d35dbdb17b97fb6fc0d1e4
+  database        : kmp_voyage_20261110
+  provider        : anthropic (AnthropicService)
+  endpoint        : the Anthropic API (Claude) and https://api.voyageai.com/v1 (Voyage)
+  chat model      : claude-sonnet-5-5
+  embed model     : voyage-4, dimension 1024
+  D-120 values    : threshold 0.2687, partial-match floor 0.2468
+  health          : True — Anthropic API reachable
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  question set    : corpus\objective-02\questions.json  (30 question(s), 34 run(s)), sha256 9a059d1a273c992e
+  set status      : FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-84 section 2, D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.
+  indexed chunks  : 43, recorded embedding model(s): ['voyage-4']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/34] q01 (ordinary, Employee) ...
+[2/34] q02 (ordinary, Employee) ...
+[3/34] q03 (ordinary, Employee) ...
+[4/34] q04 (ordinary, Employee) ...
+[5/34] q05 (ordinary, Employee) ...
+[6/34] q06 (ordinary, Employee) ...
+[7/34] q07 (ordinary, Employee) ...
+[8/34] q08 (ordinary, Employee) ...
+[9/34] q09 (ordinary, Employee) ...
+[10/34] q10 (ordinary, Employee) ...
+[11/34] q11 (ordinary, Employee) ...
+[12/34] q12 (ordinary, Employee) ...
+[13/34] q13 (ordinary, Employee) ...
+[14/34] q14 (ordinary, Employee) ...
+[15/34] q15 (ordinary, Administrator) ...
+[16/34] q16 (ordinary, Employee) ...
+[17/34] q17 (ordinary, Employee) ...
+[18/34] q18 (ordinary, Employee) ...
+[19/34] q19 (ordinary, Employee) ...
+[20/34] q20 (ordinary, Employee) ...
+[21/34] q21 (ordinary, Employee) ...
+[22/34] q22 (ordinary, Employee) ...
+[23/34] s01@Administrator (scoped, Administrator) ...
+[24/34] s01@Employee (scoped, Employee) ...
+[25/34] s02@Administrator (scoped, Administrator) ...
+[26/34] s02@Employee (scoped, Employee) ...
+[27/34] s03@Administrator (scoped, Administrator) ...
+[28/34] s03@Employee (scoped, Employee) ...
+[29/34] s04@Administrator (scoped, Administrator) ...
+[30/34] s04@Employee (scoped, Employee) ...
+[31/34] n01 (no-answer, Employee) ...
+[32/34] n02 (no-answer, Administrator) ...
+[33/34] n03 (no-answer, Employee) ...
+[34/34] n04 (no-answer, Administrator) ...
+
+====================================================================================================
+PER-QUESTION DETAIL
+====================================================================================================
+
+[q01] ordinary / as Employee (expects an answer)
+  question    : How much annual leave does a full-time employee earn each month?
+  top score   : 0.5120   retrieved: 2  [D01:c87d03d5, D10:2187cabc]
+  source      : D01, rank 1, score 0.5120
+  partial     : D01 0.512, D10 0.277, D08 0.249, D03 0.248
+  attempts    : 1:parsed
+  parsed      : True
+    - [D01:c87d03d5] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.
+  expected    : '1.67 days' -> FOUND
+  seconds     : 3.45
+
+[q02] ordinary / as Employee (expects an answer)
+  question    : How many characters does my password need to have?
+  top score   : 0.4085   retrieved: 2  [D02:4b8bf070, D18:9dac28cc]
+  source      : D02, rank 1, score 0.4085
+  partial     : D02 0.409, D18 0.334, T01 0.267
+  attempts    : 1:parsed
+  parsed      : True
+    - [D02:4b8bf070] Passwords must be at least twelve characters and may not be reused across systems.
+  expected    : 'twelve characters' -> FOUND
+  seconds     : 2.57
+
+[q03] ordinary / as Employee (expects an answer)
+  question    : Where can I find out who the trained first aiders are?
+  top score   : 0.4203   retrieved: 3  [D03:3eb8e59f, D04:ea4cbd19, D13:bfd22b0e]
+  source      : D03, rank 1, score 0.4203
+  partial     : D03 0.420, D04 0.293, D13 0.274
+  attempts    : 1:parsed
+  parsed      : True
+    - [D03:3eb8e59f] Trained first aiders are listed on the noticeboard beside each kitchen.
+  expected    : 'noticeboard' -> FOUND
+  seconds     : 1.73
+
+[q04] ordinary / as Employee (expects an answer)
+  question    : How long do we need to keep project records after a project has closed?
+  top score   : 0.5505   retrieved: 8  [D04:c8a7e5e3, D04:43eef2bf, D04:f5181d4f, D04:b9ffdcd6, D04:30971885, D11:0ce9f371, D04:3a1c6e0a, D04:782ac92d]
+  source      : D04, rank 1, score 0.5505
+  partial     : D04 0.551, D11 0.400, T01 0.263, D05 0.262, D01 0.248
+  attempts    : 1:parsed
+  parsed      : True
+    - [D04:c8a7e5e3] Project records are kept for five years after project closure.
+    - [D04:c8a7e5e3] At the end of the retention period, the record owner confirms that no legal hold applies before disposal is authorised.
+  expected    : 'five years' -> FOUND
+  seconds     : 2.88
+
+[q05] ordinary / as Employee (expects an answer)
+  question    : How far from the main site do backups of our vital records have to be stored?
+  top score   : 0.5358   retrieved: 8  [D04:04463dd5, D04:3a1c6e0a, D04:0d378a56, D04:b9ffdcd6, D04:7c7ac790, D04:c8a7e5e3, D11:0ce9f371, D04:ea4cbd19]
+  source      : D04, rank 1, score 0.5358
+  partial     : D04 0.536, D11 0.338, D03 0.273, D20 0.254
+  attempts    : 1:parsed
+  parsed      : True
+    - [D04:04463dd5] Backups of vital records are stored in a second location at least fifty kilometres from the primary site.
+  expected    : 'fifty kilometres' -> FOUND
+  seconds     : 2.32
+
+[q06] ordinary / as Employee (expects an answer)
+  question    : How many quotes do I need to get for a purchase of about $12,000?
+  top score   : 0.3433   retrieved: 1  [D05:85b5748e]
+  source      : D05, rank 1, score 0.3433
+  partial     : D05 0.343
+  attempts    : 1:parsed
+  parsed      : True
+    - [D05:85b5748e] Purchases between five thousand and fifty thousand dollars need three quotes.
+  expected    : 'three quotes' -> FOUND
+  seconds     : 3.39
+
+[q07] ordinary / as Employee (expects an answer)
+  question    : How quickly do we have to acknowledge a customer complaint?
+  top score   : 0.5857   retrieved: 10  [D06:94d67a03, T04:bfed770c, D18:9dac28cc, D04:0d378a56, D04:47564b41, D04:efa13187, D11:0ce9f371, D04:19283da2, D04:3a1c6e0a, D04:ea4cbd19]
+  source      : D06, rank 1, score 0.5857
+  partial     : D06 0.586, T04 0.343, D18 0.341, D04 0.315, D11 0.311
+  attempts    : 1:parsed
+  parsed      : True
+    - [D06:94d67a03] Every complaint is logged, acknowledged within one working day and investigated fairly.
+  expected    : 'one working day' -> FOUND
+  seconds     : 4.48
+
+[q08] ordinary / as Employee (expects an answer)
+  question    : How much notice is needed to end a work-from-home arrangement?
+  top score   : 0.5085   retrieved: 10  [D07:0fd9f0f6, D20:f4d89447, D17:c751047b, D01:c87d03d5, D04:b9ffdcd6, T01:fd6b36e5, D03:3eb8e59f, D11:0ce9f371, D04:3a1c6e0a, D04:43eef2bf]
+  source      : D07, rank 1, score 0.5085
+  partial     : D07 0.509, D20 0.414, D17 0.321, D01 0.313, D04 0.306
+  attempts    : 1:parsed
+  parsed      : True
+    - [D07:0fd9f0f6] Either party may end the remote work arrangement with four weeks written notice.
+  expected    : 'four weeks' -> FOUND
+  seconds     : 2.09
+
+[q09] ordinary / as Employee (expects an answer)
+  question    : How many goals should a manager set for a new starter's first three months?
+  top score   : 0.4388   retrieved: 2  [D08:f3014d68, D05:85b5748e]
+  source      : D08, rank 1, score 0.4388
+  partial     : D08 0.439, D05 0.293, D03 0.268, D13 0.257, D04 0.251
+  attempts    : 1:parsed
+  parsed      : True
+    - [D08:f3014d68] The manager sets three clear goals for the first ninety days and books weekly one-to-one meetings.
+  expected    : 'three clear goals' -> FOUND
+  seconds     : 2.68
+
+[q10] ordinary / as Employee (expects an answer)
+  question    : What is the daily limit for meals when I'm travelling for work?
+  top score   : 0.5134   retrieved: 8  [D10:2187cabc, D19:a6a4045b, D01:c87d03d5, D05:85b5748e, D07:0fd9f0f6, D17:c751047b, D03:3eb8e59f, D02:4b8bf070]
+  source      : D10, rank 1, score 0.5134
+  partial     : D10 0.513, D19 0.353, D01 0.319, D05 0.316, D07 0.297
+  attempts    : 1:parsed
+  parsed      : True
+    - [D10:2187cabc] Meals are reimbursed up to seventy-five dollars per day.
+  expected    : 'seventy-five dollars' -> FOUND
+  seconds     : 2.39
+
+[q11] ordinary / as Employee (expects an answer)
+  question    : How long do we have to respond when someone asks to see the personal information we hold about them?
+  top score   : 0.5482   retrieved: 8  [D11:0ce9f371, D04:c8a7e5e3, D04:3a1c6e0a, D04:0d378a56, D04:b9ffdcd6, D04:efa13187, D04:30971885, D04:f5181d4f]
+  source      : D11, rank 1, score 0.5482
+  partial     : D11 0.548, D04 0.308, D18 0.263, D01 0.250
+  attempts    : 1:parsed
+  parsed      : True
+    - [D11:0ce9f371] Requests from individuals to see the personal information the organisation holds about them are answered within thirty days.
+  expected    : 'thirty days' -> FOUND
+  seconds     : 2.88
+
+[q12] ordinary / as Employee (expects an answer)
+  question    : When does the contract with our catering supplier end?
+  top score   : 0.4662   retrieved: 1  [D12:5da258bd]
+  source      : D12, rank 1, score 0.4662
+  partial     : D12 0.466, D04 0.264, D05 0.254
+  attempts    : 1:parsed
+  parsed      : True
+    - [D12:5da258bd] The contract with Ridgeline Catering, the catering vendor, ends on 2027-01-31.
+  expected    : '2027-01-31' -> FOUND
+  seconds     : 2.15
+
+[q13] ordinary / as Employee (expects an answer)
+  question    : Who is running the time management workshop?
+  top score   : 0.4938   retrieved: 2  [D13:bfd22b0e, T03:7065d7a4]
+  source      : D13, rank 1, score 0.4938
+  partial     : D13 0.494, T03 0.271
+  attempts    : 1:parsed
+  parsed      : True
+    - [D13:bfd22b0e] The Managing your time session on 2026-11-10 is facilitated by A. Nguyen in Room 3.2.
+  expected    : 'Nguyen' -> FOUND
+  seconds     : 2.53
+
+[q14] ordinary / as Employee (expects an answer)
+  question    : Which items have to have an asset tag attached?
+  top score   : 0.4189   retrieved: 1  [D14:8ebfca34]
+  source      : D14, rank 1, score 0.4189
+  partial     : D14 0.419
+  attempts    : 1:parsed
+  parsed      : True
+    - [D14:8ebfca34] Asset tags must be attached to every item over five hundred dollars.
+  expected    : 'five hundred dollars' -> FOUND
+  seconds     : 1.80
+
+[q15] ordinary / as Administrator (expects an answer)
+  question    : What is Femi Adeyemi's role on the team?
+  top score   : 0.3690   retrieved: 1  [D16:6f067c5b]
+  source      : D16, rank 1, score 0.3690
+  partial     : D16 0.369
+  attempts    : 1:parsed
+  parsed      : True
+    - [D16:6f067c5b] Femi Adeyemi's role on the team is Developer.
+  expected    : 'Developer' -> FOUND
+  seconds     : 1.70
+
+[q16] ordinary / as Employee (expects an answer)
+  question    : Do I need approval to book a meeting room for thirty people?
+  top score   : 0.5460   retrieved: 7  [D17:c751047b, D13:bfd22b0e, D04:43eef2bf, D10:2187cabc, D04:8e8e8ce7, D05:85b5748e, D07:0fd9f0f6]
+  source      : D17, rank 1, score 0.5460
+  partial     : D17 0.546, D13 0.350, D04 0.323, D10 0.311, D05 0.287
+  attempts    : 1:parsed
+  parsed      : True
+    - [D17:c751047b] Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.
+    - [D17:c751047b] Meeting rooms are booked through the shared calendar.
+  expected    : 'one week in advance' -> FOUND
+  seconds     : 2.53
+
+[q17] ordinary / as Employee (expects an answer)
+  question    : What hours is the IT service desk open?
+  top score   : 0.5771   retrieved: 11  [D18:9dac28cc, D02:4b8bf070, T01:fd6b36e5, D20:f4d89447, D06:94d67a03, D07:0fd9f0f6, D04:3a1c6e0a, D14:8ebfca34, D12:5da258bd, D17:c751047b, D04:b9ffdcd6]
+  source      : D18, rank 1, score 0.5771
+  partial     : D18 0.577, D02 0.411, T01 0.407, D20 0.380, D06 0.350
+  attempts    : 1:parsed
+  parsed      : True
+    - [D18:9dac28cc] The service desk is open from seven in the morning to six in the evening.
+    - [D18:9dac28cc] Urgent faults outside those hours can be reported by email and will be triaged the next working morning.
+  expected    : 'seven in the morning to six in the evening' -> FOUND
+  seconds     : 2.15
+
+[q18] ordinary / as Employee (expects an answer)
+  question    : Can I use a pool car for a personal trip?
+  top score   : 0.4369   retrieved: 1  [D19:a6a4045b]
+  source      : D19, rank 1, score 0.4369
+  partial     : D19 0.437, D01 0.250
+  attempts    : 1:parsed
+  parsed      : True
+    - [D19:a6a4045b] Fleet vehicles may not be used for private trips except where a written exception has been approved by the department head.
+  expected    : 'written exception' -> FOUND
+  seconds     : 2.89
+
+[q19] ordinary / as Employee (expects an answer)
+  question    : Do I need to pack up my computer for the office move?
+  top score   : 0.5877   retrieved: 10  [D20:f4d89447, D14:8ebfca34, D07:0fd9f0f6, D02:4b8bf070, D04:3a1c6e0a, D04:c8a7e5e3, D04:0d378a56, D18:9dac28cc, D03:3eb8e59f, D17:c751047b]
+  source      : D20, rank 1, score 0.5877
+  partial     : D20 0.588, D14 0.391, D07 0.347, D02 0.346, D04 0.333
+  attempts    : 1:parsed
+  parsed      : True
+    - [D20:f4d89447] Staff should not pack computers for the office move, because the IT team will move and reconnect them.
+  expected    : 'reconnect' -> FOUND
+  seconds     : 3.07
+
+[q20] ordinary / as Employee (expects an answer)
+  question    : Who is on call on the Sunday of the database migration weekend?
+  top score   : 0.5585   retrieved: 1  [T01:fd6b36e5]
+  source      : T01, rank 1, score 0.5585
+  partial     : T01 0.559, D20 0.265
+  attempts    : 1:parsed
+  parsed      : True
+    - [T01:fd6b36e5] Tomas said he would take Sunday on call after Lena asked for someone else to cover it.
+    - [T01:fd6b36e5] Marcus said the Opal Junction cutover is scheduled for the last weekend of the month and that a named person is needed on call for the whole weekend.
+  expected    : 'Tomas' -> FOUND
+  seconds     : 2.61
+
+[q21] ordinary / as Employee (expects an answer)
+  question    : How long does the build pipeline take at the moment?
+  top score   : 0.3545   retrieved: 1  [T03:7065d7a4]
+  source      : T03, rank 1, score 0.3545
+  partial     : T03 0.354
+  attempts    : 1:parsed
+  parsed      : True
+    - [T03:7065d7a4] Jamal said the build pipeline is slow, taking around forty minutes.
+  expected    : 'forty minutes' -> FOUND
+  seconds     : 1.90
+
+[q22] ordinary / as Employee (expects an answer)
+  question    : After how many days without logging in will the team start contacting customers?
+  top score   : 0.4061   retrieved: 6  [T04:bfed770c, D18:9dac28cc, T01:fd6b36e5, D06:94d67a03, D08:f3014d68, D04:0d378a56]
+  source      : T04, rank 1, score 0.4061
+  partial     : T04 0.406, D18 0.370, T01 0.365, D06 0.364, D08 0.302
+  attempts    : 1:parsed
+  parsed      : True
+    - [T04:bfed770c] The team will reach out to customers at forty-five days of inactivity, using a simple report to identify them.
+  expected    : 'forty-five days' -> FOUND
+  seconds     : 5.21
+
+[s01@Administrator] scoped / as Administrator (expects an answer)
+  question    : Who is the sponsor of Project Atlas?
+  top score   : 0.4270   retrieved: 2  [D09:01d3887b, D15:fe8dfa92]
+  source      : D09, rank 1, score 0.4270
+  partial     : D09 0.427, D15 0.315
+  attempts    : 1:parsed
+  parsed      : True
+    - [D09:01d3887b] The sponsor of Project Atlas is the chief operating officer.
+  expected    : 'chief operating officer' -> FOUND
+  seconds     : 1.74
+
+[s01@Employee] scoped / as Employee (expects no answer)
+  question    : Who is the sponsor of Project Atlas?
+  top score   : 0.1517   retrieved: 0  [(none above threshold)]
+  source      : D09, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.99
+
+[s02@Administrator] scoped / as Administrator (expects an answer)
+  question    : How much of each project's budget is held back as contingency?
+  top score   : 0.4693   retrieved: 2  [D15:fe8dfa92, T02:814b2b19]
+  source      : D15, rank 1, score 0.4693
+  partial     : D15 0.469, T02 0.350
+  attempts    : 1:parsed
+  parsed      : True
+    - [D15:fe8dfa92] The Maple Quay contingency line holds ten percent of each project budget and may only be released by the steering group.
+  expected    : 'ten percent' -> FOUND
+  seconds     : 2.29
+
+[s02@Employee] scoped / as Employee (expects no answer)
+  question    : How much of each project's budget is held back as contingency?
+  top score   : 0.2285   retrieved: 0  [(none above threshold)]
+  source      : D15, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.46
+
+[s03@Administrator] scoped / as Administrator (expects an answer)
+  question    : What new risk was added to the risk register?
+  top score   : 0.3909   retrieved: 1  [T02:814b2b19]
+  source      : T02, rank 1, score 0.3909
+  partial     : T02 0.391
+  attempts    : 1:parsed
+  parsed      : True
+    - [T02:814b2b19] Regulatory change was added to the risk register as a fourth top risk after Ingrid proposed it and no one objected.
+  expected    : 'regulatory change' -> FOUND
+  seconds     : 3.03
+
+[s03@Employee] scoped / as Employee (expects no answer)
+  question    : What new risk was added to the risk register?
+  top score   : 0.2062   retrieved: 0  [(none above threshold)]
+  source      : T02, not a candidate for this role
+  partial     : (none)
+  generation  : NOT CALLED (no-answer path A: nothing above threshold)
+  seconds     : 0.42
+
+[s04@Administrator] scoped / as Administrator (expects an answer)
+  question    : How many staff entered their password in the last phishing test?
+  top score   : 0.5018   retrieved: 6  [T05:a0f9b36a, T02:814b2b19, D18:9dac28cc, D02:4b8bf070, T01:fd6b36e5, D13:bfd22b0e]
+  source      : T05, rank 1, score 0.5018
+  partial     : T05 0.502, T02 0.387, D18 0.323, D02 0.322, T01 0.314
+  attempts    : 1:parsed
+  parsed      : True
+    - [T05:a0f9b36a] The Cobalt Reef phishing drill sent a simulated email to four hundred staff, and twenty-three entered credentials on the fake page.
+  expected    : 'twenty-three' -> FOUND
+  seconds     : 5.73
+
+[s04@Employee] scoped / as Employee (expects no answer)
+  question    : How many staff entered their password in the last phishing test?
+  top score   : 0.3235   retrieved: 4  [D18:9dac28cc, D02:4b8bf070, T01:fd6b36e5, D13:bfd22b0e]
+  source      : T05, not a candidate for this role
+  partial     : D18 0.323, D02 0.322, T01 0.314, D13 0.273, T04 0.262
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 2.15
+
+[n01] no-answer / as Employee (expects no answer)
+  question    : How many weeks of paid parental leave can I take?
+  top score   : 0.5084   retrieved: 1  [D01:c87d03d5]
+  partial     : D01 0.508, D20 0.265, D07 0.254
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 2.76
+
+[n02] no-answer / as Administrator (expects no answer)
+  question    : How much did the latest penetration test cost?
+  top score   : 0.4117   retrieved: 2  [T02:814b2b19, D15:fe8dfa92]
+  partial     : T02 0.412, D15 0.293, T05 0.268
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 1.73
+
+[n03] no-answer / as Employee (expects no answer)
+  question    : What is the dress code for staff working in the office?
+  top score   : 0.4147   retrieved: 9  [D03:3eb8e59f, D07:0fd9f0f6, D02:4b8bf070, D20:f4d89447, D17:c751047b, D04:b9ffdcd6, D04:108db77b, D04:3a1c6e0a, D04:19283da2]
+  partial     : D03 0.415, D07 0.413, D02 0.396, D20 0.377, D17 0.375
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 2.64
+
+[n04] no-answer / as Administrator (expects no answer)
+  question    : Are staff allowed to bring their dogs to the office?
+  top score   : 0.3677   retrieved: 11  [D17:c751047b, D02:4b8bf070, D20:f4d89447, D07:0fd9f0f6, D01:c87d03d5, D19:a6a4045b, D03:3eb8e59f, D08:f3014d68, D04:b9ffdcd6, D18:9dac28cc, D10:2187cabc]
+  partial     : D17 0.368, D02 0.365, D20 0.364, D07 0.360, D01 0.346
+  attempts    : 1:parsed
+  parsed      : True
+    (empty statement list)
+  seconds     : 2.07
+
+====================================================================================================
+SUMMARY
+====================================================================================================
+questions              : 34  (ordinary 22, scoped 8, no-answer 4)
+generation calls made  : 31  over 31 question(s); 3 question(s) took no-answer path A
+transport failures     : 0  (not counted as schema failures)
+
+schema conformance rate            : 100.0%  (31/31)   [responses that parsed into STATEMENT_LIST_SCHEMA]
+  first-attempt conformance        : 100.0%  (31/31)
+  questions answered within 3 tries : 100.0%  (31/31)
+
+fabricated-identifier rate         : 0.0%  (0/30)   [identifiers not supplied in that prompt, per statement]
+  questions with any fabrication   : 0.0%  (0/34)
+  statements proposed / verified   : 30 / 30   [verify_citations() removed the difference]
+
+empty-answer rate where an answer was available (ordinary only) : 0.0%  (0/22)
+  reported separately, because an empty answer is the CORRECT outcome here:
+    scoped questions empty (correct)    : 100.0%  (4/4)
+    no-answer questions empty (correct) : 100.0%  (4/4)
+  scoped questions asked by a role that CAN see the source:
+    answered (correct)                  : 100.0%  (4/4)
+    expected-answer match (diagnostic)  : 100.0%  (4/4)
+  scoping shown (both roles as expected): 100.0%  (4/4)
+
+expected-answer match (ordinary)   : 100.0%  (22/22)   [diagnostic, not one of the three rates]
+out-of-scope chunks in any prompt or answer : 0  (must be 0; the harness checks every question)
+
+timing, seconds, this one sequential process (nearest-rank percentiles):
+  per generation attempt  : n=31  min 1.10  median 1.90  mean 2.03  p90 3.00  max 5.30   [the 8.90 s baseline's measure]
+  per question, all       : n=34  min 0.42  median 2.39  mean 2.51  p90 3.45  max 5.73   [embed, rank, generate, verify]
+  per question, answered  : n=26  min 1.70  median 2.53  mean 2.78  p90 4.48  max 5.73
+
+misses (0): where the expected source stood, and where each run ended
+  none
+
+elapsed: 1.4 minutes
+Claude usage    : 31 call(s), 129232 input and 2444 output tokens, about US$0.2829 at D-115's prices (0 call(s) without counts)
+full record written to corpus\objective-02\runs\2026-11-10\voyage-frozen\harness.json
+
+RESULT: schema conformance meets the 95% bar.

@@ -530,6 +530,109 @@ def test_postgres_errors_have_role_and_user_names_redacted(snapshot_module):
     assert '"<redacted>"' in snapshot_module.redact('FATAL:  role "kmp" does not exist')
 
 
+# --- restore --into: a copy for a provider switch (D-117) ------------------------------------
+#
+# The Voyage re-index needs a copy of the FLM measurement database, made from its snapshot,
+# that leaves the database itself untouched. Plain restore can only drop and recreate the
+# database the snapshot names, which here is the FLM baseline.
+
+
+def restore_into(module, folder, *, media_root, copy="kmp_voyage_test"):
+    return module.main(["restore", "--database", "kmp_obj02_test", "--into", copy,
+                        "--media-root", str(media_root), "--from-dir", str(folder)])
+
+
+@pytest.mark.parametrize("copy", ["kmp_obj02_test", "KMP_OBJ02_TEST", "kmp", "postgres", "bad-name"])
+def test_restore_into_refuses_the_snapshots_own_database_and_protected_names(
+    snapshot_module, tmp_path, copy, capsys
+):
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+
+    assert restore_into(snapshot_module, folder, copy=copy, media_root=tmp_path / "copy-media") == 2
+    assert "Nothing was run in the container." in capsys.readouterr().out
+    assert not (tmp_path / "copy-media").exists()
+
+
+def test_restore_into_refuses_a_media_root_that_already_holds_files(snapshot_module, tmp_path, capsys):
+    """Another database's media, such as the snapshot's own MEDIA_ROOT, are never replaced."""
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+    occupied = tmp_path / "baseline-media"
+    (occupied / "documents").mkdir(parents=True)
+    (occupied / "documents" / "kept.txt").write_bytes(b"the baseline's upload")
+
+    assert restore_into(snapshot_module, folder, media_root=occupied) == 2
+    assert "already holds files" in capsys.readouterr().out
+    assert (occupied / "documents" / "kept.txt").read_bytes() == b"the baseline's upload"
+
+
+def test_restore_into_still_verifies_the_snapshot(snapshot_module, tmp_path, capsys):
+    folder, record = make_snapshot(tmp_path, recorded_bytes=b"a different dump")
+    write_record(snapshot_module, folder, record)
+
+    assert restore_into(snapshot_module, folder, media_root=tmp_path / "copy-media") == 2
+    assert "it is not the snapshot" in capsys.readouterr().out
+
+
+@pytest.fixture
+def container(snapshot_module, monkeypatch):
+    """Records each container command, as (command, database), instead of running it.
+
+    Add a command to ``failing`` to make it fail the way in_container fails.
+    """
+    from types import SimpleNamespace
+
+    state = SimpleNamespace(calls=[], failing=set())
+
+    def fake_in_container(container_name, script, database, **kwargs):
+        state.calls.append((script, database))
+        if script in state.failing:
+            raise snapshot_module.Failed(f"`{script.split()[1]}` exited 1: scripted")
+        return subprocess.CompletedProcess([], 0, b"", b"")
+
+    monkeypatch.setattr(snapshot_module, "check_container", lambda container_name: None)
+    monkeypatch.setattr(snapshot_module, "in_container", fake_in_container)
+    return state
+
+
+def test_restore_into_creates_the_copy_and_never_names_the_snapshots_database(
+    snapshot_module, container, tmp_path, capsys
+):
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+    media_root = tmp_path / "copy-media"
+    media_root.mkdir()  # an empty folder is accepted, as a new one is
+
+    assert restore_into(snapshot_module, folder, media_root=media_root) == 0
+
+    # No dropdb at all, and every command names the copy: the snapshot's database is untouched.
+    assert container.calls == [
+        (snapshot_module.CREATEDB, "kmp_voyage_test"),
+        (snapshot_module.PG_RESTORE, "kmp_voyage_test"),
+    ]
+    assert snapshot_module.media_tree(media_root) == record["media"]
+    assert "kmp_obj02_test was not touched" in capsys.readouterr().out
+
+
+def test_a_failed_restore_into_removes_only_the_copy_it_created(
+    snapshot_module, container, tmp_path, capsys
+):
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+    container.failing.add(snapshot_module.PG_RESTORE)
+
+    assert restore_into(snapshot_module, folder, media_root=tmp_path / "copy-media") == 1
+
+    assert container.calls == [
+        (snapshot_module.CREATEDB, "kmp_voyage_test"),
+        (snapshot_module.PG_RESTORE, "kmp_voyage_test"),
+        (snapshot_module.DROPDB, "kmp_voyage_test"),
+    ]
+    assert "FAILED" in capsys.readouterr().out
+    assert not (tmp_path / "copy-media").exists()
+
+
 # --- accepted alternatives (1 November 2026, frozen with both sets) ---------------------------
 
 
@@ -631,3 +734,79 @@ def test_a_miss_says_where_the_source_stood_and_where_the_run_ended(scripts):
     assert rows["q01"]["ended"] == "path A" and rows["q01"]["above_threshold"] is False
     assert rows["q02"]["ended"] == "path B" and rows["q02"]["above_threshold"] is True
     assert rows["q03"]["source_rank"] is None and rows["q03"]["above_threshold"] is None
+
+
+def test_a_miss_row_is_judged_against_the_threshold_its_own_run_applied(scripts):
+    """D-120: with no --threshold, each row reads the floor its run applied, not None.
+
+    The CLI's --threshold has defaulted to None since D-120, meaning the embedding model's own
+    value. miss_rows compared each score with that None, which raised TypeError at the end of a
+    full run: after every question had been asked, and before the record was written.
+    """
+    harness = scripts("citation_harness")
+    voyage = harness.QuestionResult(question_id="q01", kind="ordinary", role="Employee",
+                                    question="How much leave?", source="D01",
+                                    expected_answer="1.67 days", source_rank=1,
+                                    source_score=0.28, threshold=0.2687)
+
+    (row,) = harness.miss_rows([voyage], None)  # what main() passes with no --threshold
+    assert row["threshold"] == 0.2687 and row["above_threshold"] is True
+
+    (row,) = harness.miss_rows([voyage], 0.30)  # an explicit override still governs
+    assert row["threshold"] == 0.30 and row["above_threshold"] is False
+
+
+class FixedVectorService:
+    """Embeds every question as the first axis, under STUB_EMBEDDING_MODEL; cites the first passage."""
+
+    def __init__(self, dimension):
+        self.dimension = dimension
+
+    def embed(self, texts, *, input_type=None):
+        from apps.ai.base import EmbeddingResult
+        from apps.ai.testing import STUB_EMBEDDING_MODEL
+
+        vector = [1.0] + [0.0] * (self.dimension - 1)
+        return EmbeddingResult(vectors=[vector for _ in texts], model=STUB_EMBEDDING_MODEL,
+                               dimension=self.dimension)
+
+    def generate_statements(self, question, passages, on_attempt=None):
+        from apps.ai.base import Statement, StatementList
+
+        return StatementList(statements=[Statement(text="Ridgeline.", chunk_id=passages[0].chunk_id)])
+
+
+def test_a_run_records_the_threshold_its_embedding_model_gets(scripts, monkeypatch):
+    """D-120: measure() records the floor it applied: the model's own, unless overridden."""
+    from uuid import uuid4
+
+    from django.conf import settings
+
+    import apps.ai
+    from apps.ai.testing import STUB_EMBEDDING_MODEL
+    from apps.core.constants import RELEVANCE_THRESHOLD, RELEVANCE_THRESHOLD_BY_MODEL
+    from apps.documents.models import ContentChunk
+
+    harness = scripts("citation_harness")
+    dimension = settings.EMBEDDING_DIMENSION
+    cosine = 0.25  # under the unlisted model's 0.30, over the value listed below
+    chunk = ContentChunk(
+        id=uuid4(), source_type="document", source_id=uuid4(), chunk_index=0,
+        chunk_text="Ridgeline.", embedding=[cosine, (1 - cosine * cosine) ** 0.5] + [0.0] * (dimension - 2),
+        embedding_model=STUB_EMBEDDING_MODEL, embedding_dimension=dimension,
+        visible_to_roles=[EMPLOYEE_ROLE_NAME],
+    )
+    service = FixedVectorService(dimension)
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
+    question = {"id": "q01", "kind": "ordinary", "role": EMPLOYEE_ROLE_NAME,
+                "question": "Who caters the offsite?"}
+
+    unlisted = harness.run_question(question, [chunk], service)
+    assert unlisted.threshold == RELEVANCE_THRESHOLD and not unlisted.generation_called
+
+    monkeypatch.setitem(RELEVANCE_THRESHOLD_BY_MODEL, STUB_EMBEDDING_MODEL, 0.2)
+    listed = harness.run_question(question, [chunk], service)
+    assert listed.threshold == 0.2 and listed.generation_called
+
+    overridden = harness.run_question(question, [chunk], service, 0.24)
+    assert overridden.threshold == 0.24 and overridden.generation_called

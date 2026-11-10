@@ -156,6 +156,8 @@ TOP_K = 25
 # most no-answer questions reach generation. Generation, capped at MAXIMUM_STATEMENTS, carries
 # most of the declining (path B). On users' wording no threshold separates answerable from
 # unanswerable questions (D-37's finding). Re-measure with the corpus or the embedding model.
+# This is EmbeddingGemma's value, and the default for any model RELEVANCE_THRESHOLD_BY_MODEL
+# below does not list. Voyage has its own (D-120).
 RELEVANCE_THRESHOLD = 0.30
 
 # Cosine-similarity floor for OFFERING an item as one of FR-12's partial matches beside a
@@ -171,6 +173,23 @@ RELEVANCE_THRESHOLD = 0.30
 # under the ceiling, but it would also remove the offers that point u07 and u24 at their
 # expected sources (D02 at 0.280085, T03 at 0.291925).
 PARTIAL_MATCH_FLOOR = 0.0
+
+# Per embedding model (D-120, 10 November 2026). A cosine value means something only for the
+# model whose scores it was chosen on (risk R10). Voyage's questions and passages score in a
+# different band from EmbeddingGemma's, so a model listed here uses its own threshold and
+# floor, and any other, EmbeddingGemma included, uses the two values above. The names are the
+# ones a provider answers with and every chunk records (settings.VOYAGE_MODEL for Voyage).
+# Read through apps/retrieval/ranking.relevance_threshold and
+# apps/retrieval/partial_matches.partial_match_floor, never directly.
+#
+# voyage-4: D-101's margin rule (m = 0.006) on dev-set-v2's Voyage scores gave T 0.2687 and
+# F 0.2468. It declines 4 of 8 no-answer runs with margin, against 1 of 8 on EmbeddingGemma,
+# and keeps all 32 answerable runs. End to end on the same set, with Claude Sonnet 5.5, it
+# answered 32/32, declined 8/8 and matched 32/32, where 0.30 lost u07 (0.2968) at path A. The
+# floor holds here (F <= T - m), so D-56's unrelated offers stop for runs declined at path A.
+# Evidence: corpus/objective-02/runs/2026-11-10/voyage-threshold/voyage-threshold.md.
+RELEVANCE_THRESHOLD_BY_MODEL = {"voyage-4": 0.2687}
+PARTIAL_MATCH_FLOOR_BY_MODEL = {"voyage-4": 0.2468}
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in
 # Stage 4 once the prompt and the model's context window are measured.
@@ -229,6 +248,12 @@ MAXIMUM_CONVERSATION_TURNS = 3
 # same requirement, not because the two paths share a bound: they do not, and a search
 # term is not a question.
 MINIMUM_SEARCH_LENGTH = 2
+# The upper bound on a search term (D-79's note of 10 November 2026, on the FR-19 security review's
+# L1 and L2). Keyword search bounded a term from below only, so one request could log a term of any
+# length for FR-19's cycle to embed and show. 500, the question's ceiling: a search term is not a
+# question, but no real one comes near it. Enforced by ``search`` alone and not by the check
+# ``search_total`` shares, so the cycle can still recount a term logged before the bound existed.
+MAXIMUM_SEARCH_LENGTH = 500
 
 # --- Dashboard (FR-14) ----------------------------------------------------------------
 # How many items each of the dashboard's recent panels shows: recent documents, recent
@@ -362,6 +387,10 @@ INGESTION_THROTTLE_RATE = "60/hour"
 # POST /api/conversations, scope "conversation_create": the ask rate in a budget of its own, so
 # creating a thread does not spend the ask budget (D-80).
 CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
+# GET /api/search, scope "search" (the user's decision of 10 November 2026, D-79's note). Search
+# spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
+# reads (the security review's L1 and L2). The page sends one request per submitted term.
+SEARCH_THROTTLE_RATE = "30/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times

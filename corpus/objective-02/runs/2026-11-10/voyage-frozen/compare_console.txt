@@ -1,0 +1,80 @@
+THE FROZEN THIRTY (34 runs)
+                                                               FLM, 8 Nov  Voyage + Claude
+  ordinary answered correctly (expected answer shown)               19/22            22/22
+  ordinary left unanswered                                           0/22             0/22
+  scoped, answered for the role that can see the source               4/4              4/4
+  scoped, declined for the role that cannot                           1/4              4/4
+  no-answer questions declined                                        1/4              4/4
+  first-attempt conformance (responses)                             32/32            31/31
+  schema conformance (responses)                                    32/32            31/31
+  fabricated identifiers (of statements)                             0/56             0/30
+  path A (nothing above the threshold)                                  2                3
+  generation responses                                                 32               31
+  call failures (503s)                                                  0                0
+  leaks (out-of-scope chunks)                                           0                0
+  answered question, median / p90                           21.5 / 26.4 s      2.5 / 4.5 s
+
+PER RUN, WHERE THE TWO DIFFER (right = expected answer shown, or declined where none was expected)
+  run                expects  FLM                           top   Voyage                        top
+  q04                answer   answered, not the answer    0.524   correct                     0.551
+  q15                answer   answered, not the answer    0.331   correct                     0.369
+  q17                answer   answered, not the answer    0.609   correct                     0.577
+  s02@Employee       none     answered (expected none)    0.338   path A                      0.229
+  s03@Employee       none     answered (expected none)    0.306   path A                      0.206
+  s04@Employee       none     answered (expected none)    0.392   path B                      0.323
+  n01                none     answered (expected none)    0.464   path B                      0.508
+  n02                none     path A                      0.251   path B                      0.412
+  n03                none     answered (expected none)    0.421   path B                      0.415
+  n04                none     answered (expected none)    0.412   path B                      0.368
+  10 run(s) differ; FLM right 25/34, Voyage right 34/34
+
+THE NINE THREADS (44 runs: 11 first turns, 11 follow-ups three ways)
+  way           measure                              FLM, 8 Nov  Voyage + Claude
+  first-turn    expected-answer match                      6/11            11/11
+  first-turn    correct (scoring rule)                     6/11            11/11
+  first-turn    first-attempt conformance                 11/11            11/11
+  first-turn    fabricated identifiers                     0/26             0/19
+  first-turn    path A                                        0                0
+  first-turn    out of scope                                  0                0
+  with-history  expected-answer match                       2/9              9/9
+  with-history  correct (scoring rule)                     2/11            11/11
+  with-history  first-attempt conformance                 11/11            11/11
+  with-history  fabricated identifiers                     0/31             0/14
+  with-history  path A                                        0                0
+  with-history  out of scope                                  0                0
+  cold          expected-answer match                       1/9              1/9
+  cold          correct (scoring rule)                     3/11             3/11
+  cold          first-attempt conformance                   5/5              4/4
+  cold          fabricated identifiers                     4/20              0/7
+  cold          path A                                        6                7
+  cold          out of scope                                  0                0
+  spelled-out   expected-answer match                       6/9              9/9
+  spelled-out   correct (scoring rule)                     6/11            11/11
+  spelled-out   first-attempt conformance                 11/11            11/11
+  spelled-out   fabricated identifiers                     0/27             0/19
+  spelled-out   path A                                        0                0
+  spelled-out   out of scope                                  0                0
+
+  READINGS PER FOLLOW-UP
+  t01@Employee           FLM:    not resolved with history
+                         Voyage: history works
+  t02@Employee           FLM:    not resolved with history
+                         Voyage: history works
+  t03@Employee           FLM:    not resolved with history; spelled-out not correct: a retrieval or generation limit, not history
+                         Voyage: history works
+  t04@Employee           FLM:    history works
+                         Voyage: history works
+  t05@Employee           FLM:    not resolved with history
+                         Voyage: history works
+  t06@Administrator      FLM:    not resolved with history; spelled-out not correct: a retrieval or generation limit, not history
+                         Voyage: history works
+  t06@Employee           FLM:    ANSWERED by a role that cannot see the source's item (check for a leak)
+                         Voyage: not answered by any way
+  t07@Administrator      FLM:    not resolved with history
+                         Voyage: history works
+  t07@Employee           FLM:    ANSWERED by a role that cannot see the source's item (check for a leak)
+                         Voyage: not answered by any way
+  t08@Employee           FLM:    cold-answerable: proves nothing about history
+                         Voyage: cold-answerable: proves nothing about history
+  t09@Employee           FLM:    not resolved with history; spelled-out not correct: a retrieval or generation limit, not history
+                         Voyage: history works
