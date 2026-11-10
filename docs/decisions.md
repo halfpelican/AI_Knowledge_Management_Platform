@@ -7188,6 +7188,23 @@ content, because only the Administrator reads the log and D-66 lets them read ev
   600 seconds applies to every embedding in the system. M1's cut removes the one input only the
   cycle could send; a provider that hangs affects asks and ingestion the same way.
 
+**Dated note, 10 November 2026 (night): the schedule is daily, and it is in the repository.** The
+requirements audit of that night (D-119, its finding 11) found "on a scheduled basis" unmet as built:
+"Trigger and surface" above names "Task Scheduler on the laptop" but no script, interval or set-up
+step, and D-114 has since let M8 run on any device. The user's decision: a daily run.
+
+- **`scripts/register_knowledge_gap_schedule.ps1`** registers `manage.py aggregate_knowledge_gaps`
+  in Windows Task Scheduler for the current user, daily at 02:00 by default, starting a missed run
+  when the machine is next on and stopping a run after two hours. No password is asked for or
+  stored, so the task runs while that user is logged on. `docs/alpha-deployment.md` section 9 gives
+  the steps and a crontab line for a Linux host.
+- **Registering it on the host is the user's step,** since it changes that machine's settings.
+- **A run that cannot reach the provider changes nothing,** and the next takes the rows it missed,
+  because each cycle's window starts at the last committed cycle.
+- **This supersedes "Task Scheduler on the laptop" above.**
+- **Tests** pin the script's contract: it runs the command from the checkout's venv, daily, and
+  takes no password; the runbook names it.
+
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
@@ -7476,6 +7493,15 @@ evidence is `corpus/objective-06/runs/2026-11-10/objective-06.md`, with `seed/`,
   input`), and the committed file, which the seeding read, hashes to
   `e40a589c91893be6cca1ccd77d175571df8090d51d9ebdcaadade95be4dc1462`. The two differ only in line
   endings.
+
+**Dated note, 10 November 2026 (night): the rule change is a departure from D-93, and is named as
+one.** The thirty's status line says "Never tuned against again (D-93)". Since `333be14` that is
+not true of the exclusion: the first cycle on the thirty chose the rule now shipped (D-108's evening
+note). D-93 settles that the frozen sets are not tuning sets, so this was a departure from it. It
+was made once, by the user's decision, and disclosed, with the first cycle kept as the independent
+result. The file is frozen and is not edited; this note supersedes its line. The rule now shipped
+has no independent figure (the requirements audit, D-119, its finding 8). The thirty remain the
+acceptance test for a decline fix, as above.
 
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 

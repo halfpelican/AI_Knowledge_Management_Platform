@@ -1,7 +1,8 @@
 """``python manage.py aggregate_knowledge_gaps``: run one FR-19 aggregation cycle (D-107).
 
 FR-19 aggregates unanswered questions and zero-result searches "on a scheduled basis". This command
-is that basis: a scheduler runs it (Task Scheduler on the laptop), and each run is one cycle,
+is that basis: a scheduler runs it once a day (``scripts/register_knowledge_gap_schedule.ps1``,
+D-107's note of 10 November 2026), and each run is one cycle,
 ``apps.retrieval.gaps.run_cycle``, in one transaction. ``POST /api/knowledge-gaps/cycles`` runs the
 same function for the demonstration.
 
