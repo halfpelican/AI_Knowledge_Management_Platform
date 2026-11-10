@@ -18,6 +18,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Role
 from apps.core.constants import (
+    CLASSIFICATION_DIMENSIONS,
     DEFAULT_DOCUMENT_SORT,
     DOCUMENT_SORT_VALUES,
     DOCUMENT_STATUS_VALUES,
@@ -26,8 +27,10 @@ from apps.core.constants import (
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
     ROLE_NAMES,
+    TOPIC_DIMENSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.classification import tag_options
 from apps.documents.models import ContentTag, Document, normalise_tag_name
 from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
@@ -200,6 +203,11 @@ class DocumentDetailSerializer(DocumentSerializer):
     keeps its shape and lists applied links only. The effective department is the
     ``department`` field already in the object (D-72).
 
+    **And ``tag_options``** (D-105's dated note of 10 November 2026, night): the tags a person may
+    apply to this document, ``{dimension: [{"tag_id", "tag_name"}]}``, which is the document's own
+    classification scheme. ``apps/documents/classification.py::tag_options`` says why every value
+    in it is readable by everyone who may read the document.
+
     The list routes keep ``DocumentSerializer``: a list of fifty documents should not carry
     fifty documents' whole text, as ``MeetingListSerializer`` leaves out the transcript.
     """
@@ -209,10 +217,11 @@ class DocumentDetailSerializer(DocumentSerializer):
     can_delete = serializers.SerializerMethodField()
     classification = serializers.SerializerMethodField()
     tag_details = serializers.SerializerMethodField()
+    tag_options = serializers.SerializerMethodField()
 
     class Meta(DocumentSerializer.Meta):
         fields = DocumentSerializer.Meta.fields + (
-            "extracted_text", "tags", "can_delete", "classification", "tag_details",
+            "extracted_text", "tags", "can_delete", "classification", "tag_details", "tag_options",
         )
         read_only_fields = fields
 
@@ -230,6 +239,9 @@ class DocumentDetailSerializer(DocumentSerializer):
 
     def get_tag_details(self, document):
         return tag_details_payload(document)
+
+    def get_tag_options(self, document):
+        return tag_options(document)
 
 
 class DocumentUploadSerializer(serializers.Serializer):
@@ -343,6 +355,53 @@ class ProposedTopicSerializer(serializers.Serializer):
     before it is matched, so case and spacing do not matter; blank, or over the column, is 400."""
 
     value = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+
+# The 400s of POST /api/documents/{id}/tags that are about the body's shape. None says anything
+# about which tags exist: that is decided after validation, by apply_tag against the scheme.
+EXACTLY_ONE_TAG_FORM_MESSAGE = 'Send either "tag_id", or "dimension" with "tag_name", and not both.'
+ONLY_A_TOPIC_GROWS_MESSAGE = (
+    "Only a new Topic can be created. Choose a Project or Process tag from the document's tag "
+    "options."
+)
+
+
+class TagApplySerializer(serializers.Serializer):
+    """``POST /api/documents/{id}/tags``: a person applies a tag (FR-10; D-105's dated note of 10
+    November 2026, night). Exactly one form:
+
+    - ``{"tag_id": "<uuid>"}``: an existing tag. Only its shape is checked here; whether it is
+      offered for this document is ``apply_tag``'s, so that an unknown, an inactive and a withheld
+      tag share one answer.
+    - ``{"dimension": "Topic", "tag_name": "..."}``: a new Topic, FR-10's "controlled taxonomy
+      growth", which lets only the Topic dimension grow, so any other dimension is a 400 keyed on
+      ``dimension``. ``tag_name`` is trimmed, refused blank or over the column, and returned
+      normalised as ``Tags`` normalises it (``normalise_tag_name``).
+
+    Neither, or both, is a 400 under ``non_field_errors``. A NUL byte in ``tag_name`` is refused by
+    ``CharField``'s own validator (D-65).
+    """
+
+    tag_id = serializers.UUIDField(required=False)
+    dimension = serializers.ChoiceField(choices=CLASSIFICATION_DIMENSIONS, required=False)
+    tag_name = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, allow_blank=False, trim_whitespace=True
+    )
+
+    def validate(self, attrs):
+        by_id = "tag_id" in attrs
+        by_name = "dimension" in attrs or "tag_name" in attrs
+        if by_id == by_name:
+            raise serializers.ValidationError(EXACTLY_ONE_TAG_FORM_MESSAGE)
+        if by_name:
+            if "dimension" not in attrs:
+                raise serializers.ValidationError({"dimension": ["This field is required."]})
+            if attrs["dimension"] != TOPIC_DIMENSION:
+                raise serializers.ValidationError({"dimension": [ONLY_A_TOPIC_GROWS_MESSAGE]})
+            if "tag_name" not in attrs:
+                raise serializers.ValidationError({"tag_name": ["This field is required."]})
+            attrs["tag_name"] = normalise_tag_name(attrs["tag_name"])
+        return attrs
 
 
 # --- FR-09 meeting transcript ingestion ------------------------------------------------

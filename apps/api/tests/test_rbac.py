@@ -65,6 +65,9 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "document-classify", "document-classification", "document-tag-confirm",
                     "document-tag", "document-proposed-topic-confirm",
                     "document-proposed-topic-reject",
+                    # A person applies a tag (D-105's dated note of 10 November 2026, night):
+                    # contribute_content inside the method too, after the scoped lookup.
+                    "document-tags",
                     # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
                     "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail"}
 # Routes that need more than a session, with the permission code they check.
@@ -94,7 +97,7 @@ PERMISSIONED_ROUTES = {
 IN_VIEW_PERMISSION_CODES = {
     MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
     MANAGE_MEETINGS_PERMISSION,  # MeetingDetailView.delete (D-99)
-    CONTRIBUTE_CONTENT_PERMISSION,  # FR-10's six classification routes (D-105)
+    CONTRIBUTE_CONTENT_PERMISSION,  # FR-10's seven document routes (D-105 and its dated notes)
 }
 
 USERS = reverse("user-list")

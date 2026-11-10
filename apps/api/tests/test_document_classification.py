@@ -134,6 +134,11 @@ ROUTES = {
     "DELETE tag": lambda client, doc_id, link_id: remove_tag(client, doc_id, link_id),
     "POST proposed-topics/confirm": lambda client, doc_id, link_id: confirm_topic(client, doc_id),
     "POST proposed-topics/reject": lambda client, doc_id, link_id: reject_topic(client, doc_id),
+    # A person applies a tag (D-105's dated note of 10 November 2026, night): the same guards.
+    "POST tags": lambda client, doc_id, link_id: client.post(
+        f"{DOCUMENTS_URL}/{doc_id}/tags", {"dimension": TOPIC_DIMENSION, "tag_name": "night shifts"},
+        format="json",
+    ),
 }
 
 

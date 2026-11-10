@@ -871,8 +871,8 @@ AND. `sort` is not a filter: it never causes a 204.
 - **`documents`** is the document object `GET /api/documents` returns, filtered and sorted, with
   no paging.
 
-**The detail object adds three fields** to the document object (D-63, D-73), and since FR-10 two
-more, `classification` and `tag_details` (NIT3004 — FR-10, at the end of this file):
+**The detail object adds three fields** to the document object (D-63, D-73), and since FR-10 three
+more, `classification`, `tag_details` and `tag_options` (NIT3004 — FR-10, at the end of this file):
 
 ```json
 {
@@ -1079,6 +1079,7 @@ proposal or an analysis that is not this document's gets that same 404, word for
 | POST | `/api/documents/{id}/classification` | session + `contribute_content` | `200 {"classification": ..., "department": "Finance"}`, where `department` is the document's `department` column after the confirm or edit, so the client need not infer it from the outcome. Body `{"doc_type"?: string, "department"?: string}`: both omitted confirms as it stands (a provisional type is applied; a provisional department is written to `department`); `doc_type` must be one of `DOCUMENT_TYPES`; `department` may be blank, which clears it; `null` means omitted | `401`; `404`, also when the document has no classification yet; `403`; `400 {"doc_type": ["..."]}` or `{"department": ["..."]}` |
 | POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
 | DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). An AI link (`applied_by: "ai"`, held or applied, confirmed or not) is **kept, marked removed**, with the confidence the machine gave it, and no read lists it again; a later classify or reprocess neither links it again nor alters it. A person's link (`applied_by: "user"`) is deleted. The `Tags` row stays either way | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
+| POST | `/api/documents/{id}/tags` | session + `contribute_content` | A person applies a tag (D-105's dated note of 10 November 2026, night). Body, exactly one of: `{"tag_id": "uuid"}`, an existing tag from the detail's `tag_options`; or `{"dimension": "Topic", "tag_name": string}`, a new Topic, matched after normalisation (trimmed, single spaces, lower case). `201 {"tag_details": [...]}` when a new link was made: `applied_by: "user"`, `confirmed: true`, `provisional: false`, `confidence: null`. `200` with the same shape when the tag was already on the document: a held AI link is confirmed, a removed one is restored and confirmed (its `applied_by` and confidence kept), and an applied or confirmed one is left as it is. `tag_details` is the document's whole current list | `401`; `404`; `403`; `400 {"tag_id": ["Choose a tag from this document's tag options."]}` for a `tag_id` that is unknown, inactive, a Department tag or not offered for this document, **one body for all of them**; `400 {"dimension": ["..."]}` a dimension other than `Topic` in the name form; `400 {"tag_name": ["..."]}` blank, over 255 characters or missing; `400 {"tag_id": ["..."]}` not a UUID; `400 {"non_field_errors": ["..."]}` neither form, or both; `409 {"detail": "A Topic with this name is already offered for this document. Choose it from the tag options.", "tag_id": "uuid"}` the name is a Topic already in `tag_options`, whose id this is |
 | POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
 | POST | `/api/documents/{id}/proposed-topics/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created | the same |
 
@@ -1123,6 +1124,30 @@ included and removed excluded, sorted by dimension then name:
 
 **The detail** `GET /api/documents/{id}` carries both, `classification` and `tag_details`, beside
 FR-15's fields. `tags` is unchanged in shape and lists **applied** links only.
+
+**The detail also carries `tag_options`** (D-105's dated note of 10 November 2026, night): the tags a
+person may apply to this document, which are the document's own classification scheme, each
+dimension sorted by name and always present:
+
+```json
+"tag_options": {
+  "Project": [{"tag_id": "uuid", "tag_name": "bridge maintenance"}],
+  "Process": [{"tag_id": "uuid", "tag_name": "purchasing"}],
+  "Topic":   []
+}
+```
+
+- **It discloses nothing to anyone who may read the document.** A value is offered only if every
+  role in the document's audience can read a source carrying it, and a caller reaches the detail
+  only if their role reads the document, so every offered value is on material the caller could
+  open. An unlinked tag is vocabulary and is offered too; an inactive tag never is.
+- **It includes tags already on the document,** held, applied or removed: applying one of those
+  is the `200` above.
+- **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
+- **A Topic name that is not in this list but exists** (on material outside the document's
+  audience, or inactive) is linked and answered `201` exactly as a new Topic is, so the answer
+  never tells the caller that a value they cannot see exists. After that the Topic is in this
+  document's list.
 
 **The 201 bodies** of `POST /api/documents` and `POST /api/documents/{id}/reprocess` carry
 `classification` (section 7.8 line 100): the object, or `null` when classification failed or the

@@ -55,6 +55,9 @@ from apps.documents.classification import (
     InsufficientText,
     InvalidClassification,
     NotOnThisDocument,
+    TagNotOffered,
+    TopicAlreadyOffered,
+    apply_tag,
     classify_document_now,
     confirm_classification,
     confirm_proposed_topic,
@@ -123,6 +126,7 @@ from .serializers import (
     RoleChangeSerializer,
     RoleSerializer,
     SearchResultsSerializer,
+    TagApplySerializer,
     TagDetailSerializer,
     UserSerializer,
     classification_payload,
@@ -221,6 +225,15 @@ INSUFFICIENT_TEXT_MESSAGE = "No text was extracted from this document, so it can
 CLASSIFICATION_UNAVAILABLE_MESSAGE = (
     "The knowledge service is temporarily unavailable. The document was not classified; "
     "please try again shortly."
+)
+# POST /api/documents/{id}/tags (D-105's dated note of 10 November 2026, night). One 400 for a
+# tag_id that is unknown, inactive or outside the document's scheme, keyed on the field, so the
+# answer never tells a tag that does not exist from one the caller may not see (invariant 1).
+TAG_NOT_OFFERED_MESSAGE = "Choose a tag from this document's tag options."
+# FR-10 Responses: "409 Conflict on a duplicate tag name within a dimension". Answered only for a
+# Topic already in the document's scheme, which the caller is offered anyway.
+TOPIC_ALREADY_OFFERED_MESSAGE = (
+    "A Topic with this name is already offered for this document. Choose it from the tag options."
 )
 # FR-15's download answers a document whose original is not stored, is gone from disk, or is
 # named by a path outside MEDIA_ROOT, with
@@ -1355,7 +1368,8 @@ class DocumentReprocessView(APIView):
 
 # --- FR-10 classification (D-104, D-105) -----------------------------------------------------
 #
-# Six routes over one document, and one rule for all of them, in this order: the document is
+# Seven routes over one document (the seventh, a person applying a tag, since D-105's dated note
+# of 10 November 2026, night), and one rule for all of them, in this order: the document is
 # resolved through the caller's scope (404 for an unknown id and one outside the scope alike,
 # D-46); then ``contribute_content`` is checked, 403 without it (D-105 settles the permission,
 # D-73 the order, so a 403 can never confirm that a document the caller cannot see exists); then
@@ -1464,6 +1478,49 @@ class DocumentTagConfirmView(APIView):
         except NotOnThisDocument:
             raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
         return Response(TagDetailSerializer(link).data)
+
+
+class DocumentTagsView(APIView):
+    """``POST /api/documents/{id}/tags`` — a person applies a tag (FR-10's provenance clause; UC-09
+    A3; D-105's dated note of 10 November 2026, night).
+
+    The FR-10 order: the scoped 404, then ``contribute_content``'s 403, then the body
+    (``TagApplySerializer``: exactly one of ``{tag_id}`` and ``{dimension: "Topic", tag_name}``),
+    then ``apply_tag``. A ``tag_id`` not offered for this document, for whatever reason, is one 400
+    keyed on ``tag_id``. A new Topic whose name is already offered is FR-10's 409, carrying that
+    tag's id, which the detail's ``tag_options`` already shows the caller; a Topic of that name that
+    exists only beyond the document's audience, or inactive, is linked and answered as a new one.
+
+    201 ``{"tag_details": [...]}`` when a new link was made; 200 with the same shape when the tag was
+    already on the document and was confirmed, restored or left as it was. ``tag_details`` is the
+    document's whole current list, as the classify reply carries it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = TagApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            applied = apply_tag(document, tag_id=data.get("tag_id"), tag_name=data.get("tag_name"))
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        except TagNotOffered:
+            return Response({"tag_id": [TAG_NOT_OFFERED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+        except TopicAlreadyOffered as exc:
+            return Response(
+                {"detail": TOPIC_ALREADY_OFFERED_MESSAGE, "tag_id": str(exc.tag_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except InvalidClassification as exc:
+            return Response({"tag_name": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"tag_details": tag_details_payload(document)},
+            status=status.HTTP_201_CREATED if applied.created else status.HTTP_200_OK,
+        )
 
 
 class DocumentTagView(APIView):

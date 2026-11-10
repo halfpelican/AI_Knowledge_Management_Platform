@@ -512,6 +512,11 @@ ROUTES_RETURNING_SOURCE_ROWS = {
         "post", lambda case: "proposed-topics/reject", body={"value": PROPOSED_TOPIC},
         prepare=_classified,
     ),
+    # A person applies a tag (D-105's dated note of 10 November 2026, night): a new Topic, so the
+    # Administrator's mirror is the 201 and the Employee's answer is the scope's 404.
+    ("api/documents/<uuid:pk>/tags", "POST"): _acts_on(
+        "post", lambda case: "tags", body={"dimension": "Topic", "tag_name": "board succession"}
+    ),
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {

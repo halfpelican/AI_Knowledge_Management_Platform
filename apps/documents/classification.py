@@ -16,8 +16,9 @@ model:
   ``apply_classification``.
 - **provenance** — an AI link is ``applied_by="ai"`` and unconfirmed; a person's ``confirm_tag``
   marks it confirmed and ``reject_tag`` removes it ("either may be accepted or removed in a single
-  action"). ``DocumentAnalysis.department_applied_by`` says, in the same vocabulary, whose value
-  the document's department is.
+  action"). A person applies a tag of their own with ``apply_tag``, ``applied_by="user"`` (UC-09
+  A3: a person "adds one it did not"). ``DocumentAnalysis.department_applied_by`` says, in the same
+  vocabulary, whose value the document's department is.
 - **correction** — "any value a user edits [is] retained and is not overwritten by later
   reprocessing, and the machine assignment is retained alongside it":
   ``DocumentAnalysis.user_edited`` guards the effective type, ``Documents.department`` and the two
@@ -40,6 +41,7 @@ and for the vocabulary tables.
 """
 
 import logging
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
@@ -96,6 +98,32 @@ class InvalidClassification(ClassificationError):
 class NotOnThisDocument(ClassificationError):
     """The tag link, proposed topic or analysis named is not this document's. The route answers
     404, the same answer as for a document outside the caller's scope (D-46)."""
+
+
+class TagNotOffered(ClassificationError):
+    """``apply_tag``'s ``tag_id`` names no tag in this document's scheme: unknown, inactive, outside
+    the three dimensions, or carried only by material some reader of the document may not see. The
+    route answers one 400 with one body for every one of them, so the answer cannot tell a tag that
+    does not exist from one the caller may not know of (CLAUDE.md invariant 1)."""
+
+
+class TopicAlreadyOffered(ClassificationError):
+    """``apply_tag``'s new Topic name is an active Topic already in this document's scheme: FR-10
+    Responses, "409 Conflict on a duplicate tag name within a dimension". ``tag_id`` is that Topic,
+    which ``tag_options`` already offers this document's readers, so naming it discloses nothing."""
+
+    def __init__(self, tag_id):
+        super().__init__("A Topic with this name is already offered for this document.")
+        self.tag_id = tag_id
+
+
+@dataclass(frozen=True)
+class AppliedTag:
+    """What ``apply_tag`` did: the link, and whether it is a new one (the route's 201) or an
+    existing one confirmed, restored or left as it was (its 200)."""
+
+    link: ContentTag
+    created: bool
 
 
 # --- The scheme ----------------------------------------------------------------------------------
@@ -187,6 +215,46 @@ def tag_scheme(document: Document) -> TagScheme:
         departments=tuple(sorted(departments)),
         tags={dimension: tuple(sorted(values)) for dimension, values in names.items()},
     )
+
+
+def offered_tags(document: Document) -> dict:
+    """``tag_scheme(document)``'s tags with their ids, keyed ``(dimension, tag_name)``: exactly the
+    values the scheme admits, no more, because the names are taken from the scheme and only then
+    matched to their active Tag rows (a name is unique within a dimension)."""
+    scheme = tag_scheme(document)
+    names = {(dimension, name) for dimension, values in scheme.tags.items() for name in values}
+    rows = Tag.objects.filter(active=True, dimension__in=REPOSITORY_TAG_DIMENSIONS).values_list(
+        "id", "dimension", "tag_name"
+    )
+    return {(dimension, name): tag_id for tag_id, dimension, name in rows if (dimension, name) in names}
+
+
+def tag_options(document: Document) -> dict[str, list[dict]]:
+    """What a person may apply to ``document``: ``{dimension: [{"tag_id", "tag_name"}, ...]}`` for
+    Project, Process and Topic, each sorted by name. The detail route carries it (D-105's dated
+    note of 10 November 2026, night), so the interface offers the existing values to choose from.
+
+    **Why it discloses nothing to anyone who may read the document.** It is ``tag_scheme``'s tags
+    and nothing else (``offered_tags``), and the detail route reaches it only after
+    ``scoped_documents`` admitted the document for the caller (D-46), so ``visible_to_roles``
+    overlaps the effective roles of the caller's role: some audience role R is one the caller's
+    role reads. ``tag_scheme`` admits a linked tag only if EVERY audience role, R included, can
+    read a source carrying it, and EFFECTIVE_ROLES is closed under generalisation (each role reads
+    its own, and an Administrator also reads all an Employee reads, D-66), so what R reads, the
+    caller reads: every linked value offered is on a source the caller could open. An unlinked tag
+    is vocabulary only (D-105) and names no source. An inactive tag is never offered. A document
+    with an empty audience would get the full scheme, but ``scoped_*`` fail closed on it, so no
+    caller ever reaches its detail.
+
+    **What it does reveal, stated rather than glossed:** the names of unlinked tags, which
+    ``tag_scheme`` has always put in every classification prompt. A tag whose last link was deleted
+    joins them: a person's own tag removed from its only document, or the only document carrying
+    a tag deleted. A removed AI link is kept, and keeps its tag linked.
+    """
+    options = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
+    for (dimension, name), tag_id in sorted(offered_tags(document).items(), key=lambda item: item[0][1]):
+        options[dimension].append({"tag_id": str(tag_id), "tag_name": name})
+    return options
 
 
 # --- Classify now: the orchestration the ingestion hook and the route call ----------------------
@@ -531,7 +599,8 @@ def reject_tag(document: Document, content_tag_id) -> None:
     The ``Tag`` row, a vocabulary, stays either way.
 
     A link already removed is not found here (``_link_on``), so removing it again is the same
-    "not on this document" as an unknown id.
+    "not on this document" as an unknown id. A person puts it back by applying the tag
+    (``apply_tag``).
     """
     with transaction.atomic():
         link = _link_on(document, content_tag_id)
@@ -540,6 +609,93 @@ def reject_tag(document: Document, content_tag_id) -> None:
             link.save(update_fields=["removed"])
         else:
             link.delete()
+
+
+def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -> AppliedTag:
+    """A person applies a tag to ``document`` (FR-10's provenance clause; UC-09 A3), in one
+    transaction with the document row locked, as the other writers lock it.
+
+    Exactly one form, which the route's serializer has already enforced:
+
+    - ``tag_id``: an existing tag, which must be in ``tag_scheme(document)`` (``offered_tags``). One
+      that is unknown, inactive, in another dimension or withheld from this document's audience
+      raises ``TagNotOffered``, the same for all of them.
+    - ``tag_name``: a new Topic, already normalised (only Topic may grow: FR-10's controlled
+      taxonomy growth). **The 409 and the rule that keeps it from disclosing anything:** a name that
+      is an active Topic in this document's scheme raises ``TopicAlreadyOffered``, because the
+      caller is already offered it. A Topic of that name that exists but is NOT in the scheme is
+      carried only by material some reader of this document cannot see, or is inactive; answering
+      409 for it would tell the caller a restricted value exists. So it is linked as it stands,
+      reactivated if it was inactive (as ``confirm_proposed_topic`` does), and answered exactly as a
+      new Topic is. Only a name no Topic has creates a Tag.
+
+    Then the link (``_apply_link``): a new one is ``applied_by="user"``, ``confirmed=True`` (as the
+    D-74 seed sets a person's links), not provisional, not removed, ``confidence`` null, and
+    ``created`` is True. A link already there is confirmed if it was held, restored if it was
+    removed, and otherwise left alone, and ``created`` is False. Raises ``NotOnThisDocument`` if the
+    document was deleted meanwhile, and ``InvalidClassification`` for a name that normalises to
+    nothing or overruns the column.
+    """
+    with transaction.atomic():
+        locked = Document.objects.select_for_update().filter(pk=document.pk).first()
+        if locked is None:
+            raise NotOnThisDocument("The document no longer exists.")
+        offered = offered_tags(locked)
+        if tag_id is not None:
+            if tag_id not in set(offered.values()):
+                raise TagNotOffered("This tag is not offered for this document.")
+            tag = Tag.objects.get(pk=tag_id)
+        else:
+            name = normalise_tag_name(tag_name or "")
+            if not name or len(name) > NAME_MAX_LENGTH:
+                raise InvalidClassification(
+                    f"A tag name must have at least one character and at most {NAME_MAX_LENGTH}."
+                )
+            if (TOPIC_DIMENSION, name) in offered:
+                raise TopicAlreadyOffered(offered[(TOPIC_DIMENSION, name)])
+            tag, _ = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
+            if not tag.active:
+                tag.active = True
+                tag.save(update_fields=["active"])
+        return _apply_link(locked, tag)
+
+
+def _apply_link(document: Document, tag: Tag) -> AppliedTag:
+    """``apply_tag``'s link: a live link is preferred to a removed one, should both exist."""
+    links = list(
+        ContentTag.objects.select_for_update()
+        .filter(tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk)
+        .order_by("pk")
+    )
+    live = next((link for link in links if not link.removed), None)
+    if live is not None:
+        if live.provisional:
+            # Held: confirmed, as the confirm route confirms it; provenance and confidence kept.
+            live.confirmed = True
+            live.provisional = False
+            live.save(update_fields=["confirmed", "provisional"])
+        # Applied or confirmed already: nothing to change.
+        return AppliedTag(link=live, created=False)
+    if links:
+        # Removed: restored and confirmed; applied_by and the machine's confidence kept. It is no
+        # longer held either, since a confirmed link is never provisional (confirm_tag's pair).
+        restored = links[0]
+        restored.removed = False
+        restored.confirmed = True
+        restored.provisional = False
+        restored.save(update_fields=["removed", "confirmed", "provisional"])
+        return AppliedTag(link=restored, created=False)
+    created = ContentTag.objects.create(
+        tag=tag,
+        source_type=DOCUMENT_SOURCE_TYPE,
+        source_id=document.pk,
+        applied_by=USER_APPLIED,
+        confirmed=True,
+        provisional=False,
+        removed=False,
+        confidence=None,
+    )
+    return AppliedTag(link=created, created=True)
 
 
 def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
@@ -616,7 +772,8 @@ def _link_on(document: Document, content_tag_id) -> ContentTag:
     """The ``ContentTag`` with this id on THIS document, locked; any other id is "not here".
 
     A removed link is "not here" too: it is no longer a tag of the document, no read lists it, and
-    confirming or removing it by id would act on something the caller is never shown."""
+    confirming or removing it by id would act on something the caller is never shown. Applying its
+    tag again restores it (``apply_tag``)."""
     try:
         link = (
             ContentTag.objects.select_for_update()

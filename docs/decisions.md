@@ -6998,6 +6998,59 @@ decision is recorded with its reason, and each build choice the brief left open 
 - **The stale comment (finding 10).** The comment above `MAXIMUM_CLASSIFY_ATTEMPTS` said it was named
   "not so anything uses it before Stage 6". `apps/ai/classification.py`'s attempt loop has used it
   since D-104. Corrected, and the same stale phrase in `apps/core/tests/test_constants.py` with it.
+- **A person applies a tag (finding 4).** FR-10's provenance clause speaks of tags "applied by a
+  person", and UC-09 A3 of a person who "adds one it did not", but only the D-74 seed script ever
+  wrote a person's link. `POST /api/documents/{id}/tags` (`apply_tag`) is guarded as the other FR-10
+  routes are: 401, then the scoped 404, then `contribute_content`'s 403 (D-73's order). Its body is
+  exactly one of two forms:
+  - `{"tag_id"}`: an existing tag, which must be active and in the document's scheme.
+  - `{"dimension": "Topic", "tag_name"}`: a new Topic, normalised as `Tags` normalises a name.
+    Only Topic may grow, by FR-10's controlled taxonomy growth, so any other dimension is a 400.
+  - **One 400 for a `tag_id` that cannot be applied.** Unknown, inactive, a Department tag or
+    withheld from the document's audience all get the same body, so the route cannot be used to
+    learn that a restricted tag exists (invariant 1).
+  - **The 409, and why an out-of-scheme name answers as created.** FR-10's "409 Conflict on a
+    duplicate tag name within a dimension" is answered only for a Topic already in the document's
+    scheme. The caller is offered that Topic anyway, and the 409 carries its id. A Topic of that
+    name that exists but is outside the scheme is carried only by material some reader of the
+    document cannot see, or is inactive. Answering 409 for it would tell the caller that a value
+    they cannot see exists. So it is linked as it stands, reactivated if it was inactive (as
+    `confirm_proposed_topic` already does), and answered 201 exactly as a new Topic is. A test
+    compares the two replies byte for byte, with only the new link's id masked: `Tags` has no
+    timestamp, and the reply carries no tag id, so nothing in it tells them apart. Timing is not
+    claimed to be indistinguishable. This entry's "the 409 is not reachable by design" is
+    superseded: it is reachable now, for an offered name.
+  - **The new link** is `applied_by: "user"`, `confirmed: true` (the D-74 seed's choice: a person's
+    tag is a decision already made), not provisional, not removed, confidence null, and the route
+    answers 201. A tag already on the document answers 200 with no new row:
+    - held: confirmed, as the confirm route does;
+    - removed: restored and confirmed, keeping its `applied_by` and the machine's confidence;
+    - applied or confirmed: left as it is, which includes an applied AI link nobody has confirmed.
+  - *Build choices:* a restored link is also no longer provisional, since a confirmed link is never
+    held (`confirm_tag` clears both together); the brief named the other fields and not this one.
+    The reply is `{"tag_details": [...]}`, the document's whole list in the classify reply's
+    shape, wrapped as the proposed-topic replies wrap theirs. The 409 carries the offered tag's id.
+- **`tag_options`, the choices (finding 4).** The brief asked for the document's scheme on "the
+  classification GET route". There is no such route: the interface reads the classification from
+  `GET /api/documents/{id}`, so `tag_options` is carried there, recorded as a correction to the
+  brief. It is `tag_scheme`'s tags with their ids, `{Project, Process, Topic: [{tag_id, tag_name}]}`
+  (`offered_tags`, `tag_options`).
+  - **Why every value in it is readable by the caller.** A linked value is offered only if every
+    role in the audience reads a source carrying it. A caller reaches the detail only if their role
+    reads the document, so some audience role is one the caller's role reads, and EFFECTIVE_ROLES
+    is closed under generalisation (D-66).
+  - **What the brief's sentence overstates.** "Every value in it is readable by every role in the
+    document's audience" is true of linked values only. An unlinked tag is in every scheme as
+    vocabulary (this entry's rule), and so in every document's `tag_options`, readable through no
+    source at all. That has always reached the classification prompt; `tag_options` now lists it
+    to every reader.
+  - **A residual, for the lead.** A tag becomes unlinked when its last link is deleted, and two
+    paths delete links: removing a person's own tag (this note's rule, since it holds no machine
+    assignment) and deleting a document (D-73). So a Topic a person typed on an Administrator-only
+    document and then removed would be listed, by name, to Employees. The kept AI removal does not
+    do this, because a removed AI link still counts as a link. Two changes would close the path:
+    keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
+    route). Neither is built as a rule; the decision is the lead's.
 
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
