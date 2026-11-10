@@ -441,7 +441,7 @@ export default function Classification({ docId, classification, tagDetails, tagO
     setAnnouncement({ text })
   }
 
-  function fail(caught, { onFieldErrors, fields = EDIT_FIELDS } = {}) {
+  function fail(caught, { onFieldErrors, fields = EDIT_FIELDS, limitReached } = {}) {
     const error =
       caught instanceof ApiError ? caught : new ApiError(NETWORK_ERROR_STATUS, messageForStatus(NETWORK_ERROR_STATUS))
     switch (error.status) {
@@ -466,6 +466,17 @@ export default function Classification({ docId, classification, tagDetails, tagO
         setFailure({ variant: 'error', title: TEXT.classifyFailedTitle, text: TEXT.classifyNoText })
         return
       case 429:
+        // Each route's own limit (D-79), with when to try again from Retry-After.
+        // Classify shares the upload limit; adding a tag has its own (the `tagging`
+        // scope, D-79's dated note), so the add control passes its words here.
+        if (limitReached) {
+          setFailure({
+            variant: 'error',
+            title: TEXT.classificationFailed,
+            text: limitReached(whenToRetry(error.retryAfter)),
+          })
+          return
+        }
         setFailure({
           variant: 'error',
           title: TEXT.classifyFailedTitle,
@@ -678,7 +689,11 @@ export default function Classification({ docId, classification, tagDetails, tagO
         return { ...reply, options: await readTagOptions() }
       },
       (result) => afterApply(result, option.tag_name),
-      { fields: CHOOSE_FIELDS, onFieldErrors: refusedFields('tag_id', 'tagSelect') },
+      {
+        fields: CHOOSE_FIELDS,
+        onFieldErrors: refusedFields('tag_id', 'tagSelect'),
+        limitReached: TEXT.tagLimitReached,
+      },
     )
   }
 
@@ -735,7 +750,11 @@ export default function Classification({ docId, classification, tagDetails, tagO
         setNewTopic('')
         afterApply(result, storedTopicName(result.body?.tag_details, name))
       },
-      { fields: NAME_FIELDS, onFieldErrors: refusedFields('tag_name', 'topicName') },
+      {
+        fields: NAME_FIELDS,
+        onFieldErrors: refusedFields('tag_name', 'topicName'),
+        limitReached: TEXT.tagLimitReached,
+      },
     )
   }
 

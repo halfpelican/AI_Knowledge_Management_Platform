@@ -1274,6 +1274,39 @@ describe('FR-10: the add control’s refusals', () => {
     expect(topicForm().getByLabelText(TEXT.tagNewTopicLabel).value).toBe('site safety')
     expect(addSection()).toBeTruthy()
   })
+
+  it.each([
+    {
+      form: 'the chooser',
+      act: () => press(chooser().getByRole('button', { name: TEXT.tagAddLabel(BRIDGE.tag_name) })),
+      name: BRIDGE.tag_name,
+    },
+    {
+      form: 'a new topic',
+      act: () => {
+        fireEvent.change(topicForm().getByLabelText(TEXT.tagNewTopicLabel), { target: { value: 'site safety' } })
+        press(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd }))
+      },
+      name: 'site safety',
+    },
+  ])('names the tagging limit on a 429 from $form, with when to try again, adds nothing and keeps the controls', async ({ act, name }) => {
+    // D-79's dated note: adding a tag has its own limit, the `tagging` scope. Its 429
+    // is not the upload limit, so it is not worded as classify's.
+    await renderDetail(detailOf({ classification: classificationOf(), tag_options: optionsOf() }), {
+      [`POST ${DOC}/tags`]: { status: 429, body: { detail: 'Request was throttled.' }, headers: { 'Retry-After': '42' } },
+    })
+
+    act()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.classificationFailed)
+    expect(alert.textContent).toContain(TEXT.tagLimitReached(TEXT.retryInSeconds(42)))
+    expect(alert.textContent).not.toContain(TEXT.classifyFailedTitle)
+    expect(alert.textContent).not.toContain(TEXT.classifyLimitReached(TEXT.retryInSeconds(42)))
+    expect(document.body.textContent).not.toContain('Request was throttled.')
+    expect(document.body.textContent).not.toContain(TEXT.tagApplied(name))
+    expect(addSection()).toBeTruthy()
+  })
 })
 
 describe('FR-10’s 409 sentence', () => {
