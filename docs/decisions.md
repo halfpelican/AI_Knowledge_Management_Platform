@@ -9394,8 +9394,24 @@ the user before any code.
 
 **Why each part:**
 
-- **The draft, because of the measurements above.** A garbled date became a cited wrong answer
-  every time, and the date format alone needs a person.
+- **An uploaded recording, because it sits inside the proposal's own assumption.**
+  - §1.9 rules out live transcription and native recording capture. Its capture line assumes that
+    recordings are uploaded, and nothing in it excludes transcribing one that was.
+  - Live transcription from the microphone, the other reading put to the user, would have
+    overturned both exclusions.
+  - It is still an addition, not a requirement the proposal contains: no FR transcribes audio, and
+    FR-09 takes a transcript.
+- **The draft, confirmed through FR-09, because that keeps one path into the index.**
+  - The transcription route stores nothing.
+  - What is indexed is the text a person confirmed, sent to `POST /api/meetings` with FR-09's
+    validation, the visibility rule (D-29) and FR-08's chunking and embedding unchanged.
+- **The review, because of the measurements above.**
+  - On the user's real voice, 9.6% of words came back wrong.
+  - One misheard date became a cited wrong answer three times out of three. An answer cites its
+    source, so a transcription error indexed unread comes back as a cited fact.
+  - Whisper writes dates the US way, which needs a person on its own.
+  - At about 0.25× real time, an hour's meeting is a draft in about fifteen minutes. The review
+    asks a person to read that draft and correct it, not to transcribe the meeting themselves.
 - **The setting, because only FLM has speech-to-text.** Claude and Voyage (D-113, the default since
   D-122) have none. D-114 wants M8 hostable on any device, so transcription is off unless the host
   runs FLM. A host without it still ingests a transcript made elsewhere, as a TXT file, through
