@@ -4916,7 +4916,11 @@ every value with no cap, and what the detail offers as `tag_options`.
   Administrator-only document and a readable document the caller may not tag all get the same 429,
   where below it they were told apart by 404 and 403; and one user's budget is not another's, each
   way round. `test_configuration.py`'s walk of every route lists this one in the `tagging` scope.
-- **The interface's 429 text** is the lead's to change, after this branch.
+- **The interface's 429 text** (`6b3e565`). The classification panel answered every 429 in
+  classify's words, "The upload limit has been reached". The Add tag control now says the limit on
+  adding tags was reached, with when to try again from `Retry-After`, and classify keeps its own
+  words. Tested in `frontend/tests/documentClassification.test.jsx`, for the chooser and for a new
+  topic.
 
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
