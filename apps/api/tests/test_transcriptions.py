@@ -108,12 +108,16 @@ def test_a_segment_is_transcribed(session_client, transcription_on, stub_ai_serv
     response = post_segment(session_client.client, original)
 
     assert response.status_code == 200, response.content
-    assert response.json() == {
+    body = response.json()
+    assert body == {
         "status": "transcribed",
         "text": stub_transcript_text(1),
         "model": STUB_ASR_MODEL,
         "duration_seconds": 2.0,
+        "loudest_dbfs": body["loudest_dbfs"],
     }
+    # The level the silence rule compared: the tone was built at -20 dBFS.
+    assert body["loudest_dbfs"] == pytest.approx(-20.0, abs=0.2)
     # The provider was sent the WAV rebuilt from the frames that were measured.
     assert stub_ai_service.transcribe_calls == [
         (audio.read_segment(original).wav, audio.SEGMENT_FILENAME)
@@ -158,7 +162,13 @@ def test_a_silent_segment_is_answered_without_a_provider_call(
     response = post_segment(session_client.client, data)
 
     assert response.status_code == 200
-    assert response.json() == {"status": "silent", "text": "", "model": None, "duration_seconds": 5.0}
+    body = response.json()
+    assert {key: body[key] for key in ("status", "text", "model", "duration_seconds")} == {
+        "status": "silent", "text": "", "model": None, "duration_seconds": 5.0,
+    }
+    # Null for digital silence, which JSON cannot write as minus infinity; a level below the
+    # threshold otherwise.
+    assert body["loudest_dbfs"] is None or body["loudest_dbfs"] < TRANSCRIPTION_SILENCE_DBFS
     assert stub_ai_service.transcribe_calls == []
     assert_nothing_stored()
 

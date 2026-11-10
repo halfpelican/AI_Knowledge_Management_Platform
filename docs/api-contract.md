@@ -1324,7 +1324,7 @@ into the index.
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
 | GET | `/api/transcriptions/status` | session + `contribute_content` | `200 {"enabled": bool, "available": bool, "segment_seconds": 30, "maximum_segment_seconds": 60}` | `401`; `403` the role lacks `contribute_content` |
-| POST | `/api/transcriptions` | session + `contribute_content` | `200 {"status": "transcribed", "text": "...", "model": "whisper-v3:turbo", "duration_seconds": 29.6}`, or `200 {"status": "silent", "text": "", "model": null, "duration_seconds": 30.0}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE` (DRF's body, with `Retry-After`); `503 {"detail": "...", "code": "transcription_disabled"}` transcription is not enabled on this server; `413` a declared `Content-Length` over 50 MB, or a segment over it; `400 {"audio": ["..."]}` no `audio` part, a segment with no audio frames, or one longer than `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS`; `415` not a 16-bit PCM WAV, mono or stereo, at 8–48 kHz, or a body that is not multipart; `429 {"detail": "...", "code": "transcription_in_flight"}` another segment of this user's is with the provider; `503 {"detail": "...", "code": "transcription_unavailable"}` the provider failed after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, or refused the segment (D-118) |
+| POST | `/api/transcriptions` | session + `contribute_content` | `200 {"status": "transcribed", "text": "...", "model": "whisper-v3:turbo", "duration_seconds": 29.6, "loudest_dbfs": -18.4}`, or `200 {"status": "silent", "text": "", "model": null, "duration_seconds": 30.0, "loudest_dbfs": -61.2}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE` (DRF's body, with `Retry-After`); `503 {"detail": "...", "code": "transcription_disabled"}` transcription is not enabled on this server; `413` a declared `Content-Length` over 50 MB, or a segment over it; `400 {"audio": ["..."]}` no `audio` part, a segment with no audio frames, or one longer than `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS`; `415` not a 16-bit PCM WAV, mono or stereo, at 8–48 kHz, or a body that is not multipart; `429 {"detail": "...", "code": "transcription_in_flight"}` another segment of this user's is with the provider; `503 {"detail": "...", "code": "transcription_unavailable"}` the provider failed after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, or refused the segment (D-118) |
 
 **The request is `multipart/form-data`**, one field, `audio`: one segment of the recording as a
 16-bit PCM WAV. The page decodes the recording in the browser, resamples it to 16 kHz mono and cuts
@@ -1346,7 +1346,8 @@ and the part's declared type are never consulted.
 
 **Silence never reaches Whisper.** The server measures the segment's loudest half second, and below
 `TRANSCRIPTION_SILENCE_DBFS` (-45 dBFS) answers `silent` without calling the provider: Whisper
-invents text from silence. What is sent to the provider is a WAV rebuilt from exactly the frames
+invents text from silence. Every reply carries that level as `loudest_dbfs`, rounded to a tenth,
+and `null` for digital silence, so the threshold (*tune*) can be checked on real recordings. What is sent to the provider is a WAV rebuilt from exactly the frames
 measured, so a header that understates its data cannot carry more audio past the checks.
 
 **The two 503s are told apart by `code`.** `transcription_disabled` means paste or upload the

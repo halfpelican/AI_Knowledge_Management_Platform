@@ -33,7 +33,9 @@ export function getTranscriptionStatus(options = {}) {
 
 /**
  * `POST /api/transcriptions`: one 16-bit PCM WAV segment in, its text out, as
- * `{status, text, model, duration_seconds}`. 200 for a transcribed segment and for
+ * `{status, text, model, duration_seconds, loudest_dbfs}`; the last is the level
+ * the server's silence rule compared, for checking the threshold, and the screen
+ * does not show it. 200 for a transcribed segment and for
  * a silent one, which is never sent to Whisper; 400 no audio, an empty segment or
  * one too long; 413 over 50 MB; 415 not a 16-bit PCM WAV; 429 past the rate, with
  * `Retry-After`, or with `code` `transcription_in_flight`; 503 with `code`

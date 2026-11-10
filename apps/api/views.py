@@ -6,6 +6,7 @@ Routes that need more than a session add ``HasRolePermission`` (FR-06).
 """
 
 import logging
+import math
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
@@ -1451,11 +1452,20 @@ class TranscriptionsView(APIView):
         except audio.SegmentTooLong:
             return Response({"audio": [SEGMENT_TOO_LONG_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
 
-        duration = round(segment.duration_seconds, 2)
+        # What every reply carries about the segment itself. ``loudest_dbfs`` is the level the
+        # silence rule compared with TRANSCRIPTION_SILENCE_DBFS, so the threshold (*tune*) can be
+        # checked against real recordings; null for digital silence, which JSON cannot write as
+        # minus infinity.
+        measured = {
+            "duration_seconds": round(segment.duration_seconds, 2),
+            "loudest_dbfs": (
+                round(segment.loudest_window_dbfs, 1)
+                if math.isfinite(segment.loudest_window_dbfs)
+                else None
+            ),
+        }
         if segment.silent:
-            return Response(
-                {"status": SEGMENT_SILENT, "text": "", "model": None, "duration_seconds": duration}
-            )
+            return Response({"status": SEGMENT_SILENT, "text": "", "model": None, **measured})
 
         token = take_transcription_slot(request.user)
         if token is None:
@@ -1484,12 +1494,7 @@ class TranscriptionsView(APIView):
         finally:
             release_transcription_slot(request.user, token)
         return Response(
-            {
-                "status": SEGMENT_TRANSCRIBED,
-                "text": result.text,
-                "model": result.model,
-                "duration_seconds": duration,
-            }
+            {"status": SEGMENT_TRANSCRIBED, "text": result.text, "model": result.model, **measured}
         )
 
 
