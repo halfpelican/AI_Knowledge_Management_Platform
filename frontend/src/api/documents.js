@@ -1,9 +1,10 @@
 /**
- * Document endpoints (FR-08 upload and retry, FR-15 browse, detail, download and
- * delete), per docs/api-contract.md. Thin wrappers over the one API client; no
+ * Document endpoints (FR-08 upload and retry, FR-10 classification and tags, FR-15
+ * browse, detail, download and delete), per docs/api-contract.md. Thin wrappers over
+ * the one API client; no
  * fetch and no XMLHttpRequest here.
  */
-import { apiUrl, del, get, post, upload } from './client.js'
+import { apiUrl, del, get, post, requestWithStatus, upload } from './client.js'
 
 /*
  * There is no wrapper for `GET /api/documents`, the bare list. The repository
@@ -212,7 +213,12 @@ export function reprocessDocument(docId, options = {}) {
  * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
  *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
  *   "user". A link with `provisional: true` is a held suggestion and is not among
- *   `tags`.
+ *   `tags`. A link a person removed is in no read.
+ * - `tag_options` — `{Project: [{tag_id, tag_name}], Process: [...], Topic: [...]}`,
+ *   the tags a person may apply to this document, which are its own
+ *   classification scheme: always all three keys, each sorted by name, tags
+ *   already on the document included. Nothing in it is on material a reader of the
+ *   document may not see (CLAUDE.md §6, invariant 1).
  *
  * Every action below needs a session and `contribute_content`, which both roles
  * hold (D-30, D-105). 404 for an unknown id or a document outside the caller's
@@ -289,6 +295,55 @@ export function confirmTag(docId, contentTagId, options = {}) {
  */
 export function removeTag(docId, contentTagId, options = {}) {
   return del(`/documents/${encodeURIComponent(docId)}/tags/${encodeURIComponent(contentTagId)}`, options)
+}
+
+/**
+ * The three dimensions a person applies a tag in, as the detail's `tag_options`
+ * keys them, in the order the screen offers them. The contract sends all three
+ * keys, each list sorted by name (docs/api-contract.md, NIT3004 FR-10). Department
+ * is the document's own field, not a tag applied here (D-72).
+ */
+export const TAG_OPTION_DIMENSIONS = ['Project', 'Process', 'Topic']
+
+/** The one dimension a new value may be created in: FR-10's controlled taxonomy growth. */
+export const NEW_TAG_DIMENSION = 'Topic'
+
+/**
+ * `POST /api/documents/{id}/tags` — a person applies a tag (FR-10's provenance
+ * clause; UC-09 A3; D-105's dated note of 10 November 2026, night).
+ *
+ * `choice` is exactly one of `{tagId}`, a tag from the detail's `tag_options`, sent
+ * as `{"tag_id": ...}`; or `{tagName}`, a new Topic, sent as `{"dimension": "Topic",
+ * "tag_name": ...}`, which the server matches after trimming, single-spacing and
+ * lower-casing.
+ *
+ * 201 `{tag_details}` when a new link was made; 200, the same shape, when the tag
+ * was already on the document: a held AI link confirmed, a removed one restored, or
+ * nothing to change. `tag_details` is the document's whole current list. The reply
+ * does not carry `tag_options`, which a new Topic joins: read the detail again.
+ *
+ * 409 `{detail, tag_id}`: the name is a Topic already in `tag_options`, whose id
+ * `error.details.tag_id` is, so the screen can choose it rather than make a
+ * duplicate. 400 keyed on `tag_id` (one body for an unknown, inactive or withheld
+ * tag, so a refusal never says which), `dimension`, `tag_name` (missing, blank or
+ * over 255 characters) or `non_field_errors` (neither form, or both). 404 scoped
+ * first; 403 without `contribute_content`; 401.
+ *
+ * @param {string} docId
+ * @param {{tagId: string} | {tagName: string}} choice
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal]
+ * @returns {Promise<{created: boolean, body: object|null}>} `created` is the 201.
+ */
+export async function applyTag(docId, choice, options = {}) {
+  const body =
+    'tagId' in choice ? { tag_id: choice.tagId } : { dimension: NEW_TAG_DIMENSION, tag_name: choice.tagName }
+  const { status, data } = await requestWithStatus(`/documents/${encodeURIComponent(docId)}/tags`, {
+    ...options,
+    method: 'POST',
+    body,
+  })
+  return { created: status === 201, body: data }
 }
 
 /**

@@ -1,16 +1,21 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import {
+  NEW_TAG_DIMENSION,
+  TAG_OPTION_DIMENSIONS,
+  applyTag,
   classifyDocument,
   confirmClassification,
   confirmProposedTopic,
   confirmTag,
+  fetchDocument,
   rejectProposedTopic,
   removeTag,
 } from '../api/documents.js'
 import { TEXT } from '../constants.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { whenToRetry } from '../utils/retryAfter.js'
+import { spacedTagName, tagNameError } from '../utils/validation.js'
 import Button from './Button.jsx'
 import Notice from './Notice.jsx'
 import SelectInput from './SelectInput.jsx'
@@ -43,8 +48,22 @@ const APPLIED_BY_USER = 'user'
 /** The fields the edit form can place a 400's message under. */
 const EDIT_FIELDS = ['doc_type', 'department']
 
-/** The keys of the three one-off requests; a tag's or a topic's key names the button pressed. */
-const KEY = { classify: 'classify', confirm: 'confirm', edit: 'edit' }
+/**
+ * The fields each way of adding a tag can place a 400's message beside: the chooser
+ * sends only `tag_id`, and the new-topic form only `tag_name` with its fixed
+ * dimension. Any other key, `non_field_errors` included, is a form-level failure.
+ */
+const CHOOSE_FIELDS = ['tag_id']
+const NAME_FIELDS = ['tag_name']
+
+/** The keys of the one-off requests; a tag's or a topic's key names the button pressed. */
+const KEY = {
+  classify: 'classify',
+  confirm: 'confirm',
+  edit: 'edit',
+  addChosen: 'add-chosen',
+  addTopic: 'add-topic',
+}
 
 /**
  * The three tag dimensions in the order the detail shows them, keyed lower-case
@@ -77,6 +96,44 @@ function dimensionLabel(dimension) {
 /** Whether a tag link is one the AI made and a person has not yet confirmed. */
 function isUnconfirmedAi(tag) {
   return tag.applied_by === APPLIED_BY_AI && tag.confirmed !== true
+}
+
+/**
+ * The detail's `tag_options` as one list per dimension, in TAG_OPTION_DIMENSIONS
+ * order, each in the server's own order. A dimension that did not arrive is an empty
+ * list, and an entry without an id is left out rather than offered.
+ */
+function optionsFrom(tagOptions) {
+  return Object.fromEntries(
+    TAG_OPTION_DIMENSIONS.map((dimension) => {
+      const list = tagOptions?.[dimension]
+      return [dimension, Array.isArray(list) ? list.filter((option) => typeof option?.tag_id === 'string') : []]
+    }),
+  )
+}
+
+/** The dimension and the option holding `tagId` among `options`, or null. */
+function findOption(options, tagId) {
+  for (const dimension of TAG_OPTION_DIMENSIONS) {
+    const option = options[dimension].find((candidate) => candidate.tag_id === tagId)
+    if (option) return { dimension, option }
+  }
+  return null
+}
+
+/**
+ * The name the server stored for a new Topic sent as `name`: its link in the
+ * reply, found without regard to case because the server lower-cases it, or the
+ * name as sent where none is found.
+ */
+function storedTopicName(tagDetails, name) {
+  const wanted = name.toLowerCase()
+  const link = (Array.isArray(tagDetails) ? tagDetails : []).find(
+    (tag) =>
+      String(tag.dimension ?? '').toLowerCase() === NEW_TAG_DIMENSION.toLowerCase() &&
+      String(tag.name ?? '').toLowerCase() === wanted,
+  )
+  return typeof link?.name === 'string' ? link.name : name
 }
 
 /**
@@ -279,6 +336,14 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  * gave that the suggestion matched (`department_applied_by` "user" with the outcome
  * `applied`) is said to be the person's, not the AI's (D-119 finding 10).
  *
+ * **A person adds a tag in one of two ways** (FR-10's provenance clause, UC-09
+ * A3): choosing one the document's own scheme offers, by dimension and then by
+ * name from `tag_options`, or typing a new Topic, the one dimension FR-10 lets
+ * grow. A 201 and a 200 are announced in different words, and the options are read
+ * again after either, because the reply does not carry them and a new Topic joins
+ * them. A 409 names a Topic already offered: its sentence is shown, and that tag is
+ * selected in the chooser with focus on its Add, so one press applies it.
+ *
  * **Authorisation is the server's.** The controls are offered to everyone who can
  * read the document, because both roles hold `contribute_content` (D-105); a 403
  * on any action withdraws them and says why in words. A 404 reads as the delete
@@ -292,10 +357,11 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  * @param {string} props.docId
  * @param {object|null|undefined} props.classification The detail's `classification`.
  * @param {object[]|undefined} props.tagDetails The detail's `tag_details`.
+ * @param {object|undefined} props.tagOptions The detail's `tag_options`.
  * @param {string} props.department The document's own `department`, the effective one.
- * @param {(patch: {classification?: object, tag_details?: object[], department?: string}) => void} props.onChange
+ * @param {(patch: {classification?: object, tag_details?: object[], tag_options?: object, department?: string}) => void} props.onChange
  */
-export default function Classification({ docId, classification, tagDetails, department, onChange }) {
+export default function Classification({ docId, classification, tagDetails, tagOptions, department, onChange }) {
   const headingId = useId()
   const heldHeadingId = useId()
   const legendId = useId()
@@ -318,6 +384,24 @@ export default function Classification({ docId, classification, tagDetails, depa
   // Where focus should go once the control that had it has left the page: the
   // Edit button after a save, else the section heading.
   const focusAfter = useRef(null)
+  // Adding a tag: the chooser (a dimension, and the tag chosen in it, '' until one
+  // is, which shows the first), the new topic's name as typed, and the messages
+  // beside either, a client check's or a 400's, keyed on the field.
+  const addHeadingId = useId()
+  const chooseLegendId = useId()
+  const topicLegendId = useId()
+  const chooseSubmitRef = useRef(null)
+  const tagSelectRef = useRef(null)
+  const topicNameRef = useRef(null)
+  const [chooser, setChooser] = useState({ dimension: TAG_OPTION_DIMENSIONS[0], tagId: '' })
+  const [newTopic, setNewTopic] = useState('')
+  const [addErrors, setAddErrors] = useState({})
+  // After FR-10's 409: whether the tag it named was found and selected.
+  const [conflict, setConflict] = useState(null)
+  // A control to focus once the render that shows it has committed: the chooser's
+  // Add after a 409, or the field a refusal was placed beside. A new object each
+  // time, so the same target twice running still moves focus.
+  const [focusRequest, setFocusRequest] = useState(null)
 
   const tags = Array.isArray(tagDetails) ? tagDetails : []
   const applied = tags.filter((tag) => tag.provisional !== true)
@@ -325,6 +409,9 @@ export default function Classification({ docId, classification, tagDetails, depa
   const proposedTopics = Array.isArray(classification?.proposed_topics) ? classification.proposed_topics : []
   const controls = !refused
   const classified = classification !== null && classification !== undefined
+  const options = optionsFrom(tagOptions)
+  const offered = options[chooser.dimension] ?? []
+  const chosen = offered.find((option) => option.tag_id === chooser.tagId) ?? offered[0] ?? null
 
   // After an action the pressed button may be gone — a removed tag, a Confirm that
   // became a Remove — leaving focus on the body. It goes somewhere deliberate.
@@ -342,11 +429,19 @@ export default function Classification({ docId, classification, tagDetails, depa
     if (editing) typeSelectRef.current?.focus()
   }, [editing])
 
+  useEffect(() => {
+    if (!focusRequest) return
+    const target = { chooseSubmit: chooseSubmitRef, tagSelect: tagSelectRef, topicName: topicNameRef }[
+      focusRequest.target
+    ]
+    target?.current?.focus()
+  }, [focusRequest])
+
   function announce(text) {
     setAnnouncement({ text })
   }
 
-  function fail(caught, { onFieldErrors } = {}) {
+  function fail(caught, { onFieldErrors, fields = EDIT_FIELDS } = {}) {
     const error =
       caught instanceof ApiError ? caught : new ApiError(NETWORK_ERROR_STATUS, messageForStatus(NETWORK_ERROR_STATUS))
     switch (error.status) {
@@ -380,7 +475,7 @@ export default function Classification({ docId, classification, tagDetails, depa
       case 400:
         if (onFieldErrors) {
           // DRF's validation message, under the field it names; the notice points at it.
-          const { fieldErrors: perField, formError } = extractFieldErrors(error, EDIT_FIELDS)
+          const { fieldErrors: perField, formError } = extractFieldErrors(error, fields)
           onFieldErrors(perField)
           setFailure({
             variant: 'error',
@@ -534,6 +629,113 @@ export default function Classification({ docId, classification, tagDetails, depa
         })
         announce(confirm ? TEXT.proposedTopicConfirmed(topic.value) : TEXT.proposedTopicRejected(topic.value))
       },
+    )
+  }
+
+  /**
+   * The document's `tag_options` read again, or null when the read failed or
+   * carried none. The apply reply does not carry them, and a new Topic joins them.
+   * A failed read is not the apply's failure: the tag was applied, and options left
+   * stale are answered by the server's own 409 or 400 on the next attempt.
+   */
+  async function readTagOptions() {
+    try {
+      const detail = await fetchDocument(docId)
+      const read = detail?.tag_options
+      return read && typeof read === 'object' ? read : null
+    } catch {
+      return null
+    }
+  }
+
+  /** A 201 or a 200: the links from the reply, the options as read again, the outcome in words. */
+  function afterApply({ created, body, options: reread }, name) {
+    const patch = {}
+    if (Array.isArray(body?.tag_details)) patch.tag_details = body.tag_details
+    if (reread) patch.tag_options = reread
+    onChange(patch)
+    announce(created ? TEXT.tagApplied(name) : TEXT.tagAlreadyApplied(name))
+  }
+
+  /** A 400 on either form: each message beside its field, and focus on that field. */
+  function refusedFields(field, target) {
+    return (errors) => {
+      setAddErrors(errors)
+      if (errors[field]) setFocusRequest({ target })
+    }
+  }
+
+  function applyChosen(event) {
+    event.preventDefault()
+    if (!chosen) return
+    const option = chosen
+    setConflict(null)
+    setAddErrors({})
+    run(
+      KEY.addChosen,
+      async () => {
+        const reply = await applyTag(docId, { tagId: option.tag_id })
+        return { ...reply, options: await readTagOptions() }
+      },
+      (result) => afterApply(result, option.tag_name),
+      { fields: CHOOSE_FIELDS, onFieldErrors: refusedFields('tag_id', 'tagSelect') },
+    )
+  }
+
+  /**
+   * FR-10's 409: the name is a Topic this document already offers. Its sentence is
+   * shown, and the tag the 409 names is selected in the chooser with focus on its
+   * Add, so one press applies it. Options read again, because the held ones lacked
+   * that tag, are handed up first and searched instead.
+   */
+  function offerExisting(tagId, reread, heldOptions) {
+    if (reread) onChange({ tag_options: reread })
+    const found = tagId ? findOption(reread ? optionsFrom(reread) : heldOptions, tagId) : null
+    if (found) {
+      setChooser({ dimension: found.dimension, tagId: found.option.tag_id })
+      setFocusRequest({ target: 'chooseSubmit' })
+    }
+    setConflict({ selected: found !== null })
+  }
+
+  function applyNewTopic(event) {
+    event.preventDefault()
+    // Trimmed and single-spaced, and sent that way, so the server measures what was
+    // measured here (src/utils/validation.js).
+    const name = spacedTagName(newTopic)
+    const problem = tagNameError(name)
+    setConflict(null)
+    if (problem) {
+      setAddErrors({ tag_name: problem })
+      setFocusRequest({ target: 'topicName' })
+      return
+    }
+    setAddErrors({})
+    const heldOptions = options
+    run(
+      KEY.addTopic,
+      async () => {
+        try {
+          const reply = await applyTag(docId, { tagName: name })
+          return { ...reply, options: await readTagOptions() }
+        } catch (caught) {
+          if (!(caught instanceof ApiError) || caught.status !== 409) throw caught
+          // The tag the 409 names is one the detail offers. Not among the options
+          // held here, they are older than the server's, and are read again first.
+          const tagId = typeof caught.details?.tag_id === 'string' ? caught.details.tag_id : null
+          const reread = tagId && !findOption(heldOptions, tagId) ? await readTagOptions() : null
+          return { conflict: true, tagId, options: reread }
+        }
+      },
+      (result) => {
+        if (result.conflict) {
+          offerExisting(result.tagId, result.options, heldOptions)
+          return
+        }
+        setNewTopic('')
+        afterApply(result, storedTopicName(result.body?.tag_details, name))
+      },
+      { fields: NAME_FIELDS, onFieldErrors: refusedFields('tag_name', 'topicName') },
     )
   }
 
@@ -700,6 +902,101 @@ export default function Classification({ docId, classification, tagDetails, depa
           </section>
         )
       })}
+
+      {/* Adding a tag, under the same rule as every other control: a 403 takes it
+          away with them. Two forms, each with its own legend and Add, so neither
+          way hides behind the other. */}
+      {controls ? (
+        <section className="tag-add" aria-labelledby={addHeadingId}>
+          <h4 id={addHeadingId} className="tag-group__heading">
+            {TEXT.tagAddHeading}
+          </h4>
+          <p className="tag-group__intro">{TEXT.tagAddIntro}</p>
+          {conflict ? (
+            <Notice variant="info">
+              {conflict.selected ? `${TEXT.tagAlreadyOffered} ${TEXT.tagAlreadyOfferedSelected}` : TEXT.tagAlreadyOffered}
+            </Notice>
+          ) : null}
+          <div className="tag-add__forms">
+            <form className="tag-add__form" aria-labelledby={chooseLegendId} onSubmit={applyChosen} noValidate>
+              <fieldset className="classification__fieldset">
+                <legend id={chooseLegendId} className="tag-add__legend">
+                  {TEXT.tagChooseLegend}
+                </legend>
+                <SelectInput
+                  label={TEXT.tagDimensionLabel}
+                  name="dimension"
+                  options={TAG_OPTION_DIMENSIONS.map((dimension) => ({
+                    value: dimension,
+                    label: dimensionLabel(dimension),
+                  }))}
+                  value={chooser.dimension}
+                  onChange={(event) => {
+                    setChooser({ dimension: event.target.value, tagId: '' })
+                    setAddErrors((current) => ({ ...current, tag_id: undefined }))
+                  }}
+                />
+                {chosen ? (
+                  <SelectInput
+                    ref={tagSelectRef}
+                    label={TEXT.tagChooseLabel}
+                    name="tag_id"
+                    options={offered.map((option) => ({ value: option.tag_id, label: option.tag_name }))}
+                    value={chosen.tag_id}
+                    error={addErrors.tag_id}
+                    onChange={(event) => {
+                      setChooser((current) => ({ ...current, tagId: event.target.value }))
+                      setAddErrors((current) => ({ ...current, tag_id: undefined }))
+                    }}
+                  />
+                ) : (
+                  <p className="tag-group__empty">{TEXT.tagChooseNone(dimensionLabel(chooser.dimension))}</p>
+                )}
+              </fieldset>
+              {chosen ? (
+                <Button
+                  ref={chooseSubmitRef}
+                  type="submit"
+                  variant="secondary"
+                  aria-label={TEXT.tagAddLabel(chosen.tag_name)}
+                  loading={pending === KEY.addChosen}
+                  disabled={pending !== null && pending !== KEY.addChosen}
+                >
+                  {pending === KEY.addChosen ? TEXT.tagAdding : TEXT.tagAdd}
+                </Button>
+              ) : null}
+            </form>
+            <form className="tag-add__form" aria-labelledby={topicLegendId} onSubmit={applyNewTopic} noValidate>
+              <fieldset className="classification__fieldset">
+                <legend id={topicLegendId} className="tag-add__legend">
+                  {TEXT.tagNewTopicLegend}
+                </legend>
+                <TextInput
+                  ref={topicNameRef}
+                  label={TEXT.tagNewTopicLabel}
+                  name="tag_name"
+                  hint={TEXT.tagNewTopicHint}
+                  value={newTopic}
+                  error={addErrors.tag_name}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setNewTopic(event.target.value)
+                    setAddErrors((current) => ({ ...current, tag_name: undefined }))
+                  }}
+                />
+              </fieldset>
+              <Button
+                type="submit"
+                variant="secondary"
+                loading={pending === KEY.addTopic}
+                disabled={pending !== null && pending !== KEY.addTopic}
+              >
+                {pending === KEY.addTopic ? TEXT.tagAdding : TEXT.tagNewTopicAdd}
+              </Button>
+            </form>
+          </div>
+        </section>
+      ) : null}
 
       {anythingHeld ? (
         <section className="tag-group tag-group--held" aria-labelledby={heldHeadingId}>

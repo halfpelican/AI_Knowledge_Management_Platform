@@ -119,6 +119,18 @@ export const QUESTION_MINIMUM_LENGTH = 10
 export const QUESTION_MAXIMUM_LENGTH = 500
 
 /**
+ * FR-10's new Topic name: at most this many characters, mirroring apps/core/models.py
+ * NAME_MAX_LENGTH, the width of `Tags.tag_name` and the `max_length` of the apply
+ * route's `tag_name` (docs/api-contract.md, NIT3004 FR-10). Counted after trimming and
+ * single-spacing, the form the name is sent in (src/utils/validation.js
+ * `spacedTagName`), so the server measures what the screen measured. A convenience:
+ * the server answers 400 `{"tag_name": [...]}` above it whatever the browser allowed
+ * (CLAUDE.md §6, invariant 4). apps/api/tests/test_front_end_constants_agreement.py
+ * fails when the two drift.
+ */
+export const TAG_NAME_MAXIMUM_LENGTH = 255
+
+/**
  * The two source types, from the fixed vocabulary the chunks, the search results
  * and the consulted sources all use (docs/schema-v1.md §3).
  */
@@ -167,6 +179,11 @@ export const VALIDATION = {
   questionRequired: 'Enter a question.',
   questionTooShort: `A question needs at least ${QUESTION_MINIMUM_LENGTH} characters.`,
   questionTooLong: `A question can be at most ${QUESTION_MAXIMUM_LENGTH} characters.`,
+  // FR-10's new Topic name, refused before any request when it is empty or longer
+  // than the server's column, both measured as the name is sent: trimmed, and each
+  // run of spaces one space. The limit is named, so a refusal says what would do.
+  tagNameRequired: 'Enter a name for the new topic.',
+  tagNameTooLong: `A topic name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
 }
 
 /**
@@ -602,6 +619,39 @@ export const TEXT = {
   proposedTopicRejectLabel: (value) => `Reject new topic ${value}`,
   proposedTopicConfirmed: (value) => `“${value}” was added as a topic tag.`,
   proposedTopicRejected: (value) => `The proposed topic “${value}” was rejected.`,
+  // FR-10's provenance clause and UC-09 A3: a person applies a tag, choosing one the
+  // document's own classification scheme offers (`tag_options`) or typing a new
+  // Topic, the one dimension FR-10 lets grow. What they add reads as a person's tag.
+  tagAddHeading: 'Add a tag',
+  tagAddIntro:
+    'Choose a tag offered for this document, or type a new topic. A tag you add is marked as added by a person.',
+  tagChooseLegend: 'Choose an existing tag',
+  tagDimensionLabel: 'Dimension',
+  tagChooseLabel: 'Tag',
+  // A dimension with nothing to offer is said to have none, rather than shown as an
+  // empty list. It speaks of this document's options only (invariant 1).
+  tagChooseNone: (dimension) => `No ${dimension} tags are offered for this document.`,
+  tagAdd: 'Add tag',
+  // The accessible name says which tag the press applies, after the visible words
+  // (WCAG 2.1 SC 2.4.6, SC 2.5.3).
+  tagAddLabel: (name) => `Add tag ${name}`,
+  tagAdding: 'Adding…',
+  tagNewTopicLegend: 'Type a new topic',
+  tagNewTopicLabel: 'New topic',
+  tagNewTopicHint: `Only a topic can be new; a project or process is chosen from the existing tags. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagNewTopicAdd: 'Add topic',
+  // The 201 and the 200 are worded apart: a new link, or a tag the document already
+  // had, which the server confirmed (a held suggestion), restored (one removed) or
+  // left as it was. After either, the tag is among the document's tags.
+  tagApplied: (name) => `“${name}” was added as a tag.`,
+  tagAlreadyApplied: (name) => `“${name}” was already on this document and is among its tags.`,
+  // FR-10's 409, word for word as the server sends it (apps/api/views.py
+  // TOPIC_ALREADY_OFFERED_MESSAGE). Shown from this copy, because the screen never
+  // renders a backend string; tests/documentClassification.test.jsx fails when the two
+  // drift.
+  tagAlreadyOffered: 'A Topic with this name is already offered for this document. Choose it from the tag options.',
+  // Said after it only when the tag the 409 named was found and selected.
+  tagAlreadyOfferedSelected: 'It is now selected under “Choose an existing tag”, so pressing Add tag applies it.',
   // `input_truncated`: only the opening of a long document was read (D-104). Said
   // rather than hidden, which is why the record keeps the flag.
   classificationTruncated: 'Only the opening of this document was read to classify it.',

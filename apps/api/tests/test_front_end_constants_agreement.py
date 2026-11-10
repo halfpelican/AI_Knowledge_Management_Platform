@@ -24,6 +24,9 @@ copies a value of ``apps/core/constants.py``:
 - ``SEARCH_MINIMUM_LENGTH``, ``SEARCH_MAXIMUM_LENGTH`` (since 10 November 2026),
   ``QUESTION_MINIMUM_LENGTH``, ``QUESTION_MAXIMUM_LENGTH`` and
   ``MAX_UPLOAD_BYTES``: each equal to its server constant.
+- ``TAG_NAME_MAXIMUM_LENGTH`` (since 10 November 2026, FR-10's new Topic name): equal to
+  ``NAME_MAX_LENGTH``, which is a column width in ``apps/core/models.py`` and not a value of
+  ``apps/core/constants.py``, so it is read from there.
 - ``MAX_UPLOAD_LABEL``: the ceiling in whole megabytes, as the server's value states it.
 - ``ACCEPTED_EXTENSIONS`` and ``ACCEPTED_FORMATS_LABEL``: D-15's four, no more, no fewer.
 - ``DOCUMENT_STATUS``, ``ROLES`` and ``SOURCE_TYPE``: the server's whole vocabulary, each
@@ -52,6 +55,7 @@ import pytest
 from django.conf import settings
 
 from apps.core import constants
+from apps.core import models as core_models
 
 CLIENT_CONSTANTS = Path(settings.BASE_DIR) / "frontend" / "src" / "constants.js"
 
@@ -65,6 +69,12 @@ BOUNDS = [
     ("QUESTION_MINIMUM_LENGTH", "MINIMUM_QUESTION_LENGTH"),
     ("QUESTION_MAXIMUM_LENGTH", "MAXIMUM_QUESTION_LENGTH"),
     ("MAX_UPLOAD_BYTES", "MAX_UPLOAD_BYTES"),
+]
+
+# (the client's export, the column width in apps/core/models.py it copies). The new Topic
+# name's limit is the width of Tags.tag_name and the apply route's max_length (FR-10).
+COLUMN_BOUNDS = [
+    ("TAG_NAME_MAXIMUM_LENGTH", "NAME_MAX_LENGTH"),
 ]
 
 VOCABULARIES = [
@@ -136,6 +146,18 @@ def test_the_clients_copy_of_each_bound_equals_the_server_constant(client_source
     server = getattr(constants, server_name)
     assert client == server, (
         f"constants.js has {client_name} = {client}, and apps/core/constants.py has "
+        f"{server_name} = {server}. The screen would refuse, or allow, what the server does not."
+    )
+
+
+@pytest.mark.parametrize(
+    ("client_name", "server_name"), COLUMN_BOUNDS, ids=[client for client, _ in COLUMN_BOUNDS]
+)
+def test_the_clients_copy_of_each_column_width_equals_the_model_constant(client_source, client_name, server_name):
+    client = _javascript_integer(_exported(client_source, client_name))
+    server = getattr(core_models, server_name)
+    assert client == server, (
+        f"constants.js has {client_name} = {client}, and apps/core/models.py has "
         f"{server_name} = {server}. The screen would refuse, or allow, what the server does not."
     )
 
