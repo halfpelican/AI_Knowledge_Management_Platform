@@ -14,6 +14,7 @@ from apps.ai.base import (
     INPUT_TYPE_QUERY,
     EmbeddingResult,
     ProviderHealth,
+    ProviderRefused,
     ProviderUnavailable,
 )
 from apps.ai.flm import FLMService
@@ -154,7 +155,7 @@ def test_embed_turns_a_client_error_into_unavailable_and_logs_it(caplog):
         return httpx2.Response(404, json={"error": {"message": "unknown model"}})
 
     with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
-        with pytest.raises(ProviderUnavailable, match="HTTP 404"):
+        with pytest.raises(ProviderRefused, match="HTTP 404"):
             make_service(handler).embed(["alpha"])
 
     (refusal,) = [r for r in caplog.records if r.name == attempt_log.ATTEMPT_LOGGER_NAME]

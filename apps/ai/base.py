@@ -121,6 +121,19 @@ class ProviderUnavailable(Exception):
     """
 
 
+class ProviderRefused(ProviderUnavailable):
+    """The provider refused the request with a 4xx other than a rate limit (D-118).
+
+    A bad key, an unknown model, a malformed request or an exhausted credit: the same
+    request would be refused again, so the retry loops stop at once instead of spending
+    their remaining attempts. It is a ProviderUnavailable, so everything that catches that
+    still does: the ask view answers NFR-19's 503 with its fixed notice, and classification
+    leaves the document unclassified. The provider logs the cause before raising it
+    (apps/ai/attempt_log.py). A 429 is not this: a rate limit passes, so it is a plain
+    ProviderUnavailable and is retried.
+    """
+
+
 class AIService(Protocol):
     def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
         """One vector per text, with the model and width that produced them.

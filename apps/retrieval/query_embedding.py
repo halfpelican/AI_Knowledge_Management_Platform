@@ -56,7 +56,7 @@ import time
 
 import apps.ai
 from apps.ai import attempt_log
-from apps.ai.base import INPUT_TYPE_QUERY, EmbeddingResult, ProviderUnavailable
+from apps.ai.base import INPUT_TYPE_QUERY, EmbeddingResult, ProviderRefused, ProviderUnavailable
 from apps.ai.prefixes import query_text
 from apps.core.constants import MAXIMUM_EMBED_ATTEMPTS
 
@@ -85,9 +85,11 @@ def embed_question(question: str) -> EmbeddingResult:
                 "question embedding", attempt, MAXIMUM_EMBED_ATTEMPTS, time.perf_counter() - started,
                 attempt_log.cause_of(exc), str(exc),
             )
-            # A transient outage. Retry; the loop bound is the whole policy, and the
-            # last failure is re-raised with its own message rather than replaced.
-            if attempt == MAXIMUM_EMBED_ATTEMPTS:
+            # A transient outage, a rate limit included. Retry; the loop bound is the whole
+            # policy, and the last failure is re-raised with its own message rather than
+            # replaced. A refusal (a bad key, an exhausted quota) is re-raised at once: a
+            # retry would be refused the same way (D-118).
+            if attempt == MAXIMUM_EMBED_ATTEMPTS or isinstance(exc, ProviderRefused):
                 raise
             continue
         problem = _usability_problem(result)

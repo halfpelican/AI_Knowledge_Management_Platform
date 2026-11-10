@@ -7401,12 +7401,14 @@ from the coordinating session's suggestion, and the user can drop it.
 **Where it applies:** `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4,
 `.env.example`, and a dated note on D-113.
 
-## D-118 · A provider's 4xx is a failed attempt: logged, raised as `ProviderUnavailable`, and answered with NFR-19's 503
+## D-118 · A provider's 4xx ends in NFR-19's 503: a rate limit is retried, any other 4xx is refused at once, and each is logged
 
-**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-12, D-19,
-D-113, D-117, `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`,
-`apps/ai/generation.py`, `apps/ai/attempt_log.py` · **Supersedes:** the rule, in those modules and
-their tests, that a 4xx "surfaces unchanged and consumes no retries"
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-10, FR-12,
+D-19, D-104, D-113, D-117, `apps/ai/_status.py`, `apps/ai/base.py`, `apps/ai/_openai_compat.py`,
+`apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/generation.py`, `apps/ai/classification.py`,
+`apps/retrieval/query_embedding.py`, `apps/ingestion/embedding.py`, `apps/ai/attempt_log.py` ·
+**Supersedes:** the rule, in those modules and their tests, that a 4xx "surfaces unchanged and
+consumes no retries"
 
 **What prompted it.** The coordinating session found it on 10 November by reading the code, before
 any live run, and the implementing session confirmed it.
@@ -7421,50 +7423,64 @@ any live run, and the implementing session confirmed it.
   - the 400 Anthropic sends once the monthly credit (D-113) has run out.
 - **NFR-19 requires the opposite:** "return a 503 … rather than crashing".
 
-**Decision (the user's, 10 November):**
+**Decision (the user's, 10 November): retry a 429, and answer the rest with the 503.** In the
+user's words, a rate limit counts as a failed attempt: three tries, then the 503 notice. Every other
+provider error, an empty credit balance included, shows the 503 notice and logs the real cause.
 
-- **Every 4xx from either provider becomes `ProviderUnavailable`,** in the three places a status
-  error is caught: the shared embed call (FLM and Voyage), FLM's chat call and Claude's call. So it
-  uses up an attempt, like an outage. After `MAXIMUM_GENERATION_ATTEMPTS` or
-  `MAXIMUM_EMBED_ATTEMPTS` (three, D-19), the ask answers the NFR-19 503 with its fixed notice. In
-  ingestion, the chunk fails, and the document's status says so (D-28).
-- **Each refusal is logged where it happens,** with the status and the provider's message, cut at
-  300 characters, on the attempts logger (`attempt_log.refused`):
-  - a **429 as a WARNING,** because a rate limit is expected under load and passes;
-  - **any other 4xx as an ERROR,** because a bad key, an unknown model, a malformed request or an
-    exhausted credit needs a person.
+- **One rule, in one place** (`apps/ai/_status.py`). It is used wherever a status error is caught:
+  the shared embed call (FLM and Voyage), FLM's chat call and Claude's call.
+  - **A 429 is `ProviderUnavailable`.** It uses up an attempt, like an outage. After the three
+    attempts of D-19 (`MAXIMUM_GENERATION_ATTEMPTS`, `MAXIMUM_EMBED_ATTEMPTS`,
+    `MAXIMUM_CLASSIFY_ATTEMPTS`), the ask answers the 503.
+  - **Any other 4xx is `ProviderRefused`,** a new subclass of `ProviderUnavailable` in
+    `apps/ai/base.py`. The retry loops stop on it at once, because the same request would be
+    refused again. Since it is a `ProviderUnavailable`, everything that catches that still does,
+    so the ask view answers the 503 without a change.
+  - **A 5xx is unchanged:** an outage, retried under D-19.
+- **Each 4xx is logged where it happens,** with the status and the provider's message, cut at 300
+  characters, on the attempts logger (`attempt_log.refused`):
+  - a **429 as a WARNING,** because a rate limit passes;
+  - **anything else as an ERROR,** because it needs a person.
 
   Logging at the provider covers ingestion and `reindex`, which log no attempts of their own.
-- **Classification follows.** FR-10 (#68, D-104) merged the same day. `classify_document` calls
-  the same `_chat_once` and `_claude_once`, so a 4xx there is a failed attempt too, retried to
-  `MAXIMUM_CLASSIFY_ATTEMPTS`, and the document is left unclassified (invariant 8). The merge
-  flipped #68's two tests that asserted a 4xx propagates after one call.
+- **Where it lands:**
+  - **the ask:** the 503 with its fixed notice, from question embedding or from generation;
+  - **ingestion:** the chunk fails, after three attempts for a 429 and after one for a refusal, and
+    the document's status says so (D-28);
+  - **classification:** FR-10 (#68, D-104) merged the same day. `classify_document` uses the same
+    `_chat_once` and `_claude_once`, so the document is left unclassified (invariant 8). The merge
+    into #69 rewrote #68's two tests that asserted a 4xx propagates after one call.
 - **No wait on `Retry-After`.** Pausing inside a user's request is its own question, and three
   quick attempts at a rate limit end in the 503 that says "try again shortly". Waiting is a
-  candidate for `reindex`, where there is no user waiting, if rate limits turn out to matter there.
+  candidate for `reindex`, where nobody is waiting, if rate limits turn out to matter there.
 
-**What it costs, accepted:**
+**How it got here, the same day.** The first version (2436f61) retried every 4xx three times. The
+user's answer narrowed retries to the 429 before the pull request merged. That removes the first
+version's cost: a mistyped model name or a bad key no longer spends two wasted calls.
 
-- **A misconfiguration is retried for nothing.** The case the old rule protected was a mistyped
-  model name, to stop it looking like an outage. It now costs two wasted calls and a 503, and its
-  cause is an ERROR line in the log instead of a traceback.
-- **A bad Voyage key during an upload** fails every chunk three times, with an ERROR line for each
-  call.
-- **The startup check gains,** though: a probe refused with a 4xx is now `ai.W001` ("unreachable")
-  with the status in its message, where before it escaped the check as an exception.
+**What it gives up, accepted:**
+
+- **A misconfiguration now reads as a 503** to the user, not as a traceback to a developer. The old
+  rule kept the traceback so that a typo would not look like an outage. The ERROR line now names the
+  status and the provider's message instead.
+- **The startup check gains,** though. A probe refused with a 4xx is now `ai.W001`, with the status
+  in its message. Before, the exception escaped the check.
 
 **Tests:**
 
+- `apps/ai/tests/test_status.py` pins the rule:
+  - a 5xx is an outage, and is not logged there;
+  - a 429 is retryable, and a WARNING;
+  - any other 4xx is a refusal, and an ERROR.
 - `apps/api/tests/test_ask_provider_refusals.py` runs the real `AnthropicService` through
-  `POST /api/ask`, from both roles. A Voyage 429 or 401 at question embedding, and a Claude 429 or
-  credit-exhausted 400 at generation, each give the 503 with exactly three calls and no
-  `QueryLog` row.
-- The generation-loop tests that asserted "no 4xx is retried" now assert the opposite, along with
-  the log levels.
+  `POST /api/ask`, from both roles. Each case gives the 503 and writes no `QueryLog` row:
+  - a Voyage 429 at question embedding, after three calls, and a 401 after one;
+  - a Claude 429 at generation, after three calls, and the credit-exhausted 400 after one.
+- The generation, classification and provider tests assert both counts and the log levels.
+  `apps/ingestion/tests/test_embedding.py` asserts a refused chunk fails on its first attempt.
 - NFR-19's fault-injection count is unchanged: three calls, then the 503.
-- The SDK-shaped builders those route tests need live in `apps/ai/testing.py`, because a vendor
-  SDK may not be imported outside `apps/ai`, tests included.
+- The SDK-shaped builders the route tests need live in `apps/ai/testing.py`, because a vendor SDK
+  may not be imported outside `apps/ai`, tests included.
 
-**Where it applies:** `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`,
-`apps/ai/generation.py` (the policy in its docstring), `apps/ai/attempt_log.py`,
-`apps/ai/testing.py`, `apps/ingestion/embedding.py` (docstring), and D-117's free-tier note.
+**Where it applies:** the modules under **Concerns**, `docs/ai-provider.md` §1, and D-117's free-tier
+note.

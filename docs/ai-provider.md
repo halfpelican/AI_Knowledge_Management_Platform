@@ -106,18 +106,20 @@ when its requirement is built, not speculatively before.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
-Every failed provider call counts as an attempt: a transport failure, a 5xx, and, since
-D-118, a 4xx. The provider logs a 4xx with its status and body before raising, a 429 as a
-WARNING and anything else as an ERROR, so a rate limit or an exhausted credit ends in the
-503, not a 500.
+A transport failure, a 5xx and, since D-118, a 429 each count as a failed attempt. Any
+other 4xx is `ProviderRefused`, a `ProviderUnavailable` that ends the attempts at once,
+because the same request would be refused again (`apps/ai/_status.py`). The provider logs
+every 4xx with its status and body first, a 429 as a WARNING and anything else as an
+ERROR. So a rate limit or an exhausted credit ends in the 503, not a 500.
 A response that does not conform to the statement schema counts as a failed attempt,
 not as an answer.
 
 `classify_document` raises `ProviderUnavailable` after `MAXIMUM_CLASSIFY_ATTEMPTS`; ingestion
 catches it and leaves the document unclassified (invariant 8, NFR-20). A reply that does not
 conform to `CLASSIFICATION_SCHEMA`, including a type outside the fixed list, counts as a failed
-attempt, not as a classification. So does a 4xx, as for generation (D-118): classification
-makes its calls through the same `_chat_once` and `_claude_once`.
+attempt, not as a classification. A 4xx is handled as for generation (D-118), because
+classification makes its calls through the same `_chat_once` and `_claude_once`: a 429 is a
+failed attempt, and any other 4xx ends the attempts at once.
 
 ### `on_attempt` — an observer, not an operation
 

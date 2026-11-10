@@ -10,7 +10,8 @@ from typing import Callable
 import openai
 from django.conf import settings
 
-from apps.ai import _openai_compat, attempt_log
+from apps.ai import _openai_compat
+from apps.ai._status import error_for_status
 from apps.ai.base import (
     DocumentClassification,
     EmbeddingResult,
@@ -100,12 +101,12 @@ class FLMService:
         ``timeout`` is generation's unless the caller passes its own: classification passes
         CLASSIFICATION_TIMEOUT_SECONDS (FR-10). Every FLM call carries one.
 
-        Raises ProviderUnavailable for any failed call, as ``_openai_compat.embed`` does:
-        a transport failure, a 5xx, or (since D-118) a 4xx, which is logged first with its
-        status and body. A 4xx surfaced as itself would reach the user as a 500, not the
-        NFR-19 503. A misconfiguration such as a mistyped model name is now retried and
-        answered with the 503 like an outage, and its cause shows in the log. Classification
-        calls come through here too, so the same holds for them.
+        Raises ProviderUnavailable for any failed call, as ``_openai_compat.embed`` does
+        (apps/ai/_status.py, D-118). A transport failure, a 5xx or a 429 is retried by the
+        caller. Any other 4xx is ProviderRefused, which the caller does not retry. A 4xx
+        is logged first with its status and body, and surfaced as itself would have
+        reached the user as a 500, not the NFR-19 503. Classification calls come through
+        here too, so the same holds for them.
 
         ``finish_reason`` and the usage counts are read for the attempt log only
         (apps/ai/attempt_log.py), and None where FLM leaves them out. FLM v0.9.39 was seen
@@ -124,11 +125,7 @@ class FLMService:
         except (openai.APITimeoutError, openai.APIConnectionError) as exc:
             raise ProviderUnavailable(f"{settings.FLM_BASE_URL} unreachable: {exc}") from exc
         except openai.APIStatusError as exc:
-            if exc.status_code < 500:
-                attempt_log.refused(settings.FLM_BASE_URL, exc.status_code, str(exc))  # D-118
-            raise ProviderUnavailable(
-                f"{settings.FLM_BASE_URL} returned HTTP {exc.status_code}: {exc}"
-            ) from exc
+            raise error_for_status(settings.FLM_BASE_URL, exc.status_code, str(exc)) from exc  # D-118
         except ValueError as exc:
             # An HTTP 200 carrying an error body instead of a completion: how FLM
             # reports an NPU fault (see the embed path's test for the observed case).

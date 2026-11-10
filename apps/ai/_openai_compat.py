@@ -1,13 +1,14 @@
 """Embedding call shared by the two OpenAI-wire-format endpoints, FLM and Voyage.
 
 Private to apps.ai. Transport failures, server errors and, since D-118, client errors
-(4xx) all become ProviderUnavailable, so nothing outside this package sees an openai
-exception from a failed call.
+(4xx) all become ProviderUnavailable, a refused 4xx as its subclass ProviderRefused
+(apps/ai/_status.py). So nothing outside this package sees an openai exception from a
+failed call.
 """
 
 import openai
 
-from apps.ai import attempt_log
+from apps.ai._status import error_for_status
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
 
 
@@ -42,12 +43,9 @@ def embed(
     except (openai.APITimeoutError, openai.APIConnectionError) as exc:
         raise ProviderUnavailable(f"{endpoint} unreachable: {exc}") from exc
     except openai.APIStatusError as exc:
-        if exc.status_code < 500:
-            # D-118: a 4xx is logged here, where its status and body are known, and then
-            # raised like an outage, so it is retried and ends in the NFR-19 503 rather
-            # than a 500. A rate limit passes; a bad key or an exhausted credit is in the log.
-            attempt_log.refused(endpoint, exc.status_code, str(exc))
-        raise ProviderUnavailable(f"{endpoint} returned HTTP {exc.status_code}: {exc}") from exc
+        # D-118: a 5xx or a 429 is retried; any other 4xx is refused at once. Either way
+        # it ends in the NFR-19 503, not a 500, and a 4xx is logged with its cause.
+        raise error_for_status(endpoint, exc.status_code, str(exc)) from exc
     except ValueError as exc:
         # The SDK raises ValueError when an HTTP 200 body carries no embedding data.
         # FLM reports an NPU fault exactly that way ({"error": ...} with status 200),

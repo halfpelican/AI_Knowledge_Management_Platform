@@ -25,6 +25,7 @@ from apps.ai.base import (
     INPUT_TYPE_QUERY,
     Passage,
     ProviderHealth,
+    ProviderRefused,
     ProviderUnavailable,
 )
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS, fewer_statements
@@ -390,34 +391,40 @@ def test_a_server_error_is_retried_and_a_later_conforming_reply_is_returned():
     assert len(client.messages.calls) == 2
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 429])
-def test_a_client_error_is_retried_to_the_limit_and_ends_in_unavailable(status):
+@pytest.mark.parametrize(
+    "status, calls", [(400, 1), (401, 1), (403, 1), (429, MAXIMUM_GENERATION_ATTEMPTS)]
+)
+def test_a_client_error_ends_in_unavailable_and_only_a_rate_limit_is_retried(status, calls):
     """D-118: a key, model, quota or rate problem ends in the NFR-19 503, not a 500.
 
-    Until 10 November 2026 a 4xx surfaced as itself after one call, and the ask view,
-    which catches only ProviderUnavailable, turned it into a 500.
+    Only a 429 is retried. Any other 4xx is ProviderRefused and stops after one call. Until
+    10 November 2026 a 4xx surfaced as itself, and the ask view, which catches only
+    ProviderUnavailable, turned it into a 500.
     """
     client = FakeGeneratingClient(status_error(status))
 
-    with pytest.raises(ProviderUnavailable, match=f"HTTP {status}"):
+    with pytest.raises(ProviderUnavailable, match=f"HTTP {status}") as raised:
         AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
-    assert len(client.messages.calls) == MAXIMUM_GENERATION_ATTEMPTS
+    assert isinstance(raised.value, ProviderRefused) == (status != 429)
+    assert len(client.messages.calls) == calls
 
 
 def test_an_exhausted_credit_is_logged_as_an_error_naming_the_cause(caplog):
-    """Anthropic answers 400 once the monthly credit is spent (D-113). The user sees the
-    503's fixed notice, and the log says why, once per refused call."""
+    """Anthropic answers 400 once the monthly credit is spent (D-113). A retry would be
+    refused the same way, so there is one call. The user sees the 503's fixed notice, and
+    the log says why."""
     client = FakeGeneratingClient(
         status_error(400, "Your credit balance is too low to access the Anthropic API.")
     )
 
     with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
-        with pytest.raises(ProviderUnavailable):
+        with pytest.raises(ProviderRefused):
             AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
+    assert len(client.messages.calls) == 1
     refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
-    assert [r.levelno for r in refusals] == [logging.ERROR] * MAXIMUM_GENERATION_ATTEMPTS
+    assert [r.levelno for r in refusals] == [logging.ERROR]
     assert "Anthropic API refused the request with HTTP 400" in refusals[0].getMessage()
     assert "credit balance is too low" in refusals[0].getMessage()
 
@@ -431,9 +438,11 @@ def test_a_voyage_refusal_is_unavailable_and_logged(status, level, caplog):
         return httpx2.Response(status, json={"detail": "refused by voyage"})
 
     with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
-        with pytest.raises(ProviderUnavailable, match=f"HTTP {status}"):
+        with pytest.raises(ProviderUnavailable, match=f"HTTP {status}") as raised:
             AnthropicService(embedding_client=voyage_client(handler)).embed(["alpha"])
 
+    # A rate limit is retryable; a bad key is a refusal, which callers do not retry.
+    assert isinstance(raised.value, ProviderRefused) == (status != 429)
     (refusal,) = [r for r in caplog.records if "refused the request" in r.getMessage()]
     assert refusal.levelno == level
     assert f"{VOYAGE_URL} refused the request with HTTP {status}" in refusal.getMessage()

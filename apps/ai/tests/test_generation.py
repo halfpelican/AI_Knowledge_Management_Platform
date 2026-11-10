@@ -15,8 +15,9 @@ The policy under test (CLAUDE.md section 5, D-19, invariant 10):
   correcting the constant to 2.
 - A reply that does not conform is a failed attempt, not a partial answer.
 - A reply that conforms on a later attempt is returned, and no further calls are made.
-- A 4xx is a failed attempt like any other since D-118: retried to the limit, then
-  ProviderUnavailable, with each refusal logged (a 429 as a WARNING, the rest as ERRORs).
+- Since D-118, a 429 is a failed attempt like an outage and is retried to the limit. Any
+  other 4xx is ProviderRefused and ends the loop after one call. Each is logged, a 429 as
+  a WARNING and the rest as ERRORs.
 
 Exercised through FLMService against the openai SDK's MockTransport, in-process, so the
 transport failures are real SDK exceptions rather than stand-ins. Nothing here reaches a
@@ -32,7 +33,7 @@ import pytest
 from django.test import override_settings
 
 from apps.ai import attempt_log
-from apps.ai.base import Passage, ProviderUnavailable
+from apps.ai.base import Passage, ProviderRefused, ProviderUnavailable
 from apps.ai.flm import FLMService
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
 from apps.ai.prompting import SYSTEM_PROMPT
@@ -297,36 +298,48 @@ def test_a_mixture_of_failure_kinds_still_stops_at_three_attempts():
     assert len(handler.seen) == 3
 
 
-# --- A 4xx is a failed attempt (D-118) ---------------------------------------------------
+# --- A 4xx ends in the 503: a 429 is retried, any other 4xx is refused (D-118) ----------
 
 
-def test_a_client_error_is_a_failed_attempt_that_ends_in_unavailable(caplog):
-    """D-118: a 4xx is retried like an outage and ends in ProviderUnavailable, the 503.
+def test_a_refused_request_ends_the_loop_at_once_with_its_cause_logged(caplog):
+    """D-118: a 4xx other than a rate limit is ProviderRefused.
 
-    Until 10 November 2026 a 4xx surfaced as itself after one call, so that a typo in
-    FLM_CHAT_MODEL would not look like an outage. On the anthropic provider a rate limit and
-    an exhausted credit are 4xx too, and surfacing them reached the user as a 500. The typo
-    shows in the log instead: one ERROR per refused call, naming the status.
+    A mistyped FLM_CHAT_MODEL would be refused the same way three times, so the loop stops
+    after one call. The view's 503 still catches it as the ProviderUnavailable it is, and
+    the cause is one ERROR line naming the status. Until 10 November 2026 a 4xx surfaced as
+    the SDK's own exception, which reached the user as a 500 on the anthropic provider,
+    where rate limits and an exhausted credit are routine.
     """
     handler = scripted(httpx2.Response(404, json={"error": {"message": "unknown model"}}))
 
     with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
-        with pytest.raises(ProviderUnavailable, match="HTTP 404"):
+        with pytest.raises(ProviderRefused, match="HTTP 404"):
             make_service(handler).generate_statements(QUESTION, PASSAGES)
 
-    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS == 3
+    assert len(handler.seen) == 1
     refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
-    assert [r.levelno for r in refusals] == [logging.ERROR] * 3
-    assert all("HTTP 404" in r.getMessage() for r in refusals)
+    assert [r.levelno for r in refusals] == [logging.ERROR]
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 422, 429])
-def test_every_4xx_is_retried_to_the_attempt_limit(status):
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+def test_no_refusal_is_retried(status):
     handler = scripted(httpx2.Response(status, json={"error": {"message": "nope"}}))
 
-    with pytest.raises(ProviderUnavailable):
+    with pytest.raises(ProviderRefused):
         make_service(handler).generate_statements(QUESTION, PASSAGES)
-    assert len(handler.seen) == 3
+    assert len(handler.seen) == 1
+
+
+def test_a_rate_limit_is_retried_to_the_attempt_limit():
+    """A 429 is a failed attempt like an outage: three calls, then ProviderUnavailable,
+    and not ProviderRefused, because a rate limit passes."""
+    handler = scripted(httpx2.Response(429, json={"error": {"message": "rate limited"}}))
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert not isinstance(excinfo.value, ProviderRefused)
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS == 3
 
 
 def test_a_rate_limit_is_a_warning_and_a_later_conforming_reply_is_returned(caplog):

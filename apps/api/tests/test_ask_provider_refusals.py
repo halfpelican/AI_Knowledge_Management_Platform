@@ -5,10 +5,16 @@ routine. Until 10 November 2026, both providers let a 4xx surface as itself, and
 view catches only ProviderUnavailable, so either one reached the user as a 500.
 
 These tests run the real AnthropicService through ``POST /api/ask``, with scripted Voyage
-and Claude clients and nothing on a network. The refusal becomes ProviderUnavailable in
-the provider, the retry loop spends every attempt on it, and the view answers 503 with
-the fixed notice, from both roles. The clients come from apps.ai.testing, because a
-vendor SDK may not be imported outside apps/ai, tests included (CLAUDE.md section 4).
+and Claude clients and nothing on a network, from both roles. The user's rule: retry a
+429, and answer the rest with the 503.
+- **A rate limit** becomes ProviderUnavailable, and the retry loop spends every attempt
+  on it.
+- **Any other 4xx** becomes ProviderRefused, which stops the loop after one call, an
+  exhausted credit included.
+- **Either way,** the view answers 503 with the fixed notice.
+
+The clients come from apps.ai.testing, because a vendor SDK may not be imported outside
+apps/ai, tests included (CLAUDE.md section 4).
 """
 
 import json
@@ -118,14 +124,18 @@ def assert_the_fixed_503(response, cause):
     assert not QueryLog.objects.exists()
 
 
-@pytest.mark.parametrize("status, message", [(429, "rate limited"), (401, "invalid api key")])
-def test_a_refused_question_embedding_is_503_after_every_attempt(
-    session_client, monkeypatch, passage, status, message
+@pytest.mark.parametrize(
+    "status, message, calls",
+    [(429, "rate limited", MAXIMUM_EMBED_ATTEMPTS), (401, "invalid api key", 1)],
+    ids=["rate-limited", "refused"],
+)
+def test_a_refused_question_embedding_is_503(
+    session_client, monkeypatch, passage, status, message, calls
 ):
-    calls = []
+    sent = []
 
     def handler(request):
-        calls.append(request)
+        sent.append(request)
         return httpx2.Response(status, json={"detail": message})
 
     claude = RefusingClaude(anthropic_status_error(500, "never reached"))
@@ -134,14 +144,16 @@ def test_a_refused_question_embedding_is_503_after_every_attempt(
     response = ask(session_client)
 
     assert_the_fixed_503(response, message)
-    assert len(calls) == MAXIMUM_EMBED_ATTEMPTS
+    assert len(sent) == calls
     assert claude.calls == 0  # nothing was generated for a question never embedded
 
 
-@pytest.mark.parametrize("status, message", [(429, "rate limited"), (400, CREDIT_EXHAUSTED)])
-def test_a_refused_generation_is_503_after_every_attempt(
-    session_client, monkeypatch, passage, status, message
-):
+@pytest.mark.parametrize(
+    "status, message, calls",
+    [(429, "rate limited", MAXIMUM_GENERATION_ATTEMPTS), (400, CREDIT_EXHAUSTED, 1)],
+    ids=["rate-limited", "credit-exhausted"],
+)
+def test_a_refused_generation_is_503(session_client, monkeypatch, passage, status, message, calls):
     claude = RefusingClaude(anthropic_status_error(status, message))
     install(
         monkeypatch,
@@ -151,4 +163,4 @@ def test_a_refused_generation_is_503_after_every_attempt(
     response = ask(session_client)
 
     assert_the_fixed_503(response, message)
-    assert claude.calls == MAXIMUM_GENERATION_ATTEMPTS
+    assert claude.calls == calls

@@ -20,10 +20,12 @@ below ERROR, and lowering it would let in every 4xx WARNING from ``django.reques
 - **each request a provider refuses with a 4xx (D-118, 10 November 2026),** with the
   status and the provider's message. A 429 is a WARNING, because a rate limit is expected
   under load and passes. Any other 4xx is an ERROR: a bad key, an unknown model, a
-  malformed request or an exhausted credit, none of which a retry fixes. The provider
-  still raises ProviderUnavailable, so the caller retries and the user sees the NFR-19
-  503. This line is where the cause shows, including on the ingestion path, which logs
-  no attempts of its own.
+  malformed request or an exhausted credit, none of which a retry fixes.
+  - **What the provider raises** (apps/ai/_status.py): a 429 as ProviderUnavailable, which
+    callers retry, and any other 4xx as ProviderRefused, which they do not.
+  - **What the user sees:** NFR-19's 503 either way.
+  - **Where the cause shows:** this line, the ingestion path included, which logs no
+    attempts of its own.
 
 Each line names the account, by primary key, when the view has set it with ``account``.
 Nothing logged here quotes the question, a passage or the model's reply: the details are
