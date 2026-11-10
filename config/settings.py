@@ -19,6 +19,7 @@ from apps.core.constants import (
     CONVERSATION_CREATE_THROTTLE_RATE,
     INGESTION_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
+    TAGGING_THROTTLE_RATE,
     PASSWORD_MINIMUM_LENGTH,
     SESSION_INACTIVITY_MINUTES,
 )
@@ -183,6 +184,8 @@ REST_FRAMEWORK = {
     #   it (D-26).
     # - "ask", "ingestion" and "conversation_create": per signed-in user (D-79, D-80).
     #   "ingestion" is one budget shared by the three routes that ingest.
+    # - "search" and "tagging": per signed-in user too, keyword search and a person applying a
+    #   tag (D-79's two notes of 10 November 2026).
     #
     # The counters live in the default cache. No CACHES is set, so that is Django's
     # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
@@ -193,6 +196,7 @@ REST_FRAMEWORK = {
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "tagging": TAGGING_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit

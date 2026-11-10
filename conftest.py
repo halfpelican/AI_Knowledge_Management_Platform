@@ -59,8 +59,10 @@ PASSWORD = "Correct-Horse-9-Battery"
 def reset_request_throttles():
     """Clear the throttle counters and the in-flight slots between tests.
 
-    Registration and login are rate limited per client address (D-26), and asks, ingestion
-    and thread creation per user (D-79). DRF keeps those counts in the cache, which outlives
+    Registration and login are rate limited per client address (D-26), and asks, ingestion,
+    thread creation, keyword search and a person applying a tag per user (D-79 and its notes of
+    10 November 2026). ``cache.clear()`` empties every scope at once, so a new scope needs nothing
+    here. DRF keeps those counts in the cache, which outlives
     a test, and so do each user's in-flight ask slot (apps/api/ask_slot.py) and in-flight
     ingestion slot (apps/api/ingestion_slot.py, D-85). Without this,
     a test that signs in a few times would 429 the next test rather than failing on its own
