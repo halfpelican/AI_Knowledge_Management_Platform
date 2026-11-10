@@ -1,0 +1,103 @@
+/* FR-19 knowledge-gap log (NIT3004, Objective 06): the page frame, the
+   aggregation action and the entries table. Tokens only, and no colour pair that
+   tokens.css does not already document with its contrast ratio: body and muted
+   text on the surface and on surface-alt, and the two button variants. */
+
+.gaps-page {
+  max-width: var(--content-max-width);
+}
+
+.gaps-page__intro {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+.gaps-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* The aggregation action, in a panel above the table it changes. */
+.gaps-cycle {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+.gaps-cycle__heading {
+  font-size: var(--text-lg);
+}
+
+.gaps-cycle__hint {
+  max-width: var(--measure-text);
+}
+
+/* Always in the page, so that a change to it is announced. It takes no room while
+   it has nothing to say. */
+.gaps-cycle__status {
+  max-width: var(--measure-text);
+  margin: var(--space-3) 0 0;
+}
+
+.gaps-cycle__status:empty {
+  margin: 0;
+}
+
+.gaps-cycle .notice {
+  margin: var(--space-3) 0 0;
+}
+
+/* The entries. At a narrow width the table scrolls sideways inside its own
+   labelled, focusable region (base.css, .table-scroll) instead of widening the
+   page. */
+.gaps-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.gaps-table th,
+.gaps-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.gaps-table thead th {
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+/* A question as a user typed it, up to the question limit: it wraps rather than
+   widening the table, and is not set in bold, because a long sentence in bold
+   reads poorly. */
+.gaps-table__subject {
+  min-width: var(--layout-card-min-width);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.gaps-table__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.gaps-table__date {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.gaps-table__action {
+  white-space: nowrap;
+}
+
+/* A button whose request is in flight keeps its focus (`aria-disabled`, not
+   `disabled`) and is shown as unavailable the way Button.css shows `:disabled`. */
+.gaps-page .btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: var(--opacity-disabled);
+}
