@@ -44,6 +44,9 @@ urlpatterns = [
          name="document-classify"),
     path("documents/<uuid:pk>/classification", views.DocumentClassificationView.as_view(),
          name="document-classification"),
+    # A person applies a tag: an existing one offered for the document, or a new Topic (D-105's
+    # dated note of 10 November 2026, night). POST only.
+    path("documents/<uuid:pk>/tags", views.DocumentTagsView.as_view(), name="document-tags"),
     path("documents/<uuid:pk>/tags/<uuid:content_tag_id>/confirm",
          views.DocumentTagConfirmView.as_view(), name="document-tag-confirm"),
     path("documents/<uuid:pk>/tags/<uuid:content_tag_id>", views.DocumentTagView.as_view(),
@@ -84,4 +87,8 @@ urlpatterns = [
     # FR-19's "mark an entry as addressed" (D-107): PATCH {"status": "Addressed" | "Open"}.
     path("knowledge-gaps/<uuid:pk>", views.KnowledgeGapDetailView.as_view(),
          name="knowledge-gap-detail"),
+    # NIT3004: FR-10's tag administration (D-119 finding 5), both routes behind manage_tags. The
+    # inventory with item counts, and DELETE: deactivate a tag in use, delete an unused one.
+    path("tags", views.TagListView.as_view(), name="tag-list"),
+    path("tags/<uuid:pk>", views.TagDetailView.as_view(), name="tag-detail"),
 ] + router.urls

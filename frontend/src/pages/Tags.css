@@ -1,0 +1,61 @@
+/* FR-10 tag administration (NIT3004, D-119 finding 5): the page frame and the
+   tags table. Tokens only, and no colour pair that tokens.css does not already
+   document with its contrast ratio: body and muted text on the surface, and the
+   two button variants. */
+
+.tags-page {
+  max-width: var(--content-max-width);
+}
+
+.tags-page__intro {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+.tags-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+/* At a narrow width the table scrolls sideways inside its own labelled, focusable
+   region (base.css, .table-scroll) instead of widening the page. The headings may
+   wrap, so the long count heading does not force the scroll on its own. */
+.tags-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tags-table th,
+.tags-table td {
+  padding: var(--space-2);
+  border-bottom: var(--border-width) solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tags-table thead th {
+  font-weight: var(--weight-semibold);
+}
+
+/* A tag name as a person typed it or the AI suggested it, up to 255 characters:
+   it wraps rather than widening the table. */
+.tags-table__name {
+  min-width: var(--layout-card-min-width);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.tags-table__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Retired reads as the word first; muted text on the surface is 7.56:1. */
+.tags-table__retired {
+  color: var(--color-text-muted);
+}
+
+.tags-table__action {
+  white-space: nowrap;
+}

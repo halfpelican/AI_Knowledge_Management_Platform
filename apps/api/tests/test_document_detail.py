@@ -82,7 +82,8 @@ def test_the_body_is_the_object_the_repository_list_returns(session_client, empl
     listed = session_client.client.get(DOCUMENTS_URL).json()
     detailed = detail(session_client.client, document.id).json()
 
-    detail_fields = {"extracted_text", "tags", "can_delete", "classification", "tag_details"}
+    detail_fields = {"extracted_text", "tags", "can_delete", "classification", "tag_details",
+                     "tag_options"}
     assert [{key: value for key, value in detailed.items() if key not in detail_fields}] == listed
 
 

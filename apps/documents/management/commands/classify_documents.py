@@ -18,8 +18,10 @@ its record. Any other exception propagates: it is a defect, not an outcome.
 **The record** (``--out``) carries the database name, the commit (``git rev-parse HEAD`` through
 ``scripts/measurement_record.py``, with the tracked files that were uncommitted, since a SHA names a
 commit and not a working tree), when the run started and finished, and per document the machine's
-values and confidences, both outcomes, the tag links with their provisional flags, the proposed and
-discarded suggestions, and the seconds the call took, or the error. The database named ``kmp`` is
+values and confidences, both outcomes, the tag links with their provisional and removed flags
+(a link a person removed is kept with the machine's assignment, D-105's dated note of 10 November
+2026, night), the proposed and discarded suggestions, and the seconds the call took, or the
+error. The database named ``kmp`` is
 refused (D-84 decision 1) through the same gate the measurement scripts apply.
 """
 
@@ -93,6 +95,7 @@ def document_entry(document: Document, analysis, seconds: float) -> dict:
                 "applied_by": link.applied_by,
                 "confirmed": link.confirmed,
                 "provisional": link.provisional,
+                "removed": link.removed,
                 "confidence": _number(link.confidence),
             }
             for link in links
@@ -234,12 +237,14 @@ class Command(BaseCommand):
         title = entry["title"][:40]
         if "error" in entry:
             return f"{entry['id']}  {title!r:<42}  ERROR {entry['error']}: {entry['detail']}"
-        tags = sum(1 for tag in entry["tags"] if not tag["provisional"])
-        held = len(entry["tags"]) - tags
+        live = [tag for tag in entry["tags"] if not tag["removed"]]
+        tags = sum(1 for tag in live if not tag["provisional"])
+        held = len(live) - tags
+        removed = len(entry["tags"]) - len(live)
         return (
             f"{entry['id']}  {title!r:<42}  type {entry['machine_doc_type']}/"
             f"{entry['doc_type_outcome']}  department {entry['machine_department']!r}/"
-            f"{entry['department_outcome']}  tags {tags} applied, {held} held, "
+            f"{entry['department_outcome']}  tags {tags} applied, {held} held, {removed} removed, "
             f"{len(entry['proposed_topics'])} proposed, {len(entry['discarded_suggestions'])} "
             f"discarded  {entry['seconds']}s"
         )

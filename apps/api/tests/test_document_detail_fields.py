@@ -10,6 +10,7 @@ scope, no ``file_path`` or ``content_hash``). This file holds what Stage 5 adds.
 role-dependent test runs from both roles; the 404 test has its Administrator mirror.
 """
 
+import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -38,9 +39,12 @@ pytestmark = pytest.mark.django_db
 DOCUMENTS_URL = "/api/documents"
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 BOTH_ROLES = [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME]
-# FR-15's three (D-63, D-73), and FR-10's two (D-105): the classification object and every tag
-# link with its provenance. apps/api/tests/test_document_classification.py tests those two.
-DETAIL_FIELDS = {"extracted_text", "tags", "can_delete", "classification", "tag_details"}
+# FR-15's three (D-63, D-73), and FR-10's three (D-105 and its dated note of 10 November 2026,
+# night): the classification object, every tag link with its provenance, and the tags a person may
+# apply. apps/api/tests/test_document_classification.py and test_fr10_person_applied_tags.py test
+# those.
+DETAIL_FIELDS = {"extracted_text", "tags", "can_delete", "classification", "tag_details",
+                 "tag_options"}
 NO_TAGS = {"project": [], "process": [], "topic": []}
 
 # Two lines and a tab, so a rendering that collapsed or reflowed it would not be equal.
@@ -182,10 +186,22 @@ def test_tags_are_listed_by_dimension_sorted_and_only_the_documents_own(session_
 
     response = detail(session_client.client, document)
 
-    assert response.json()["tags"] == {"project": ["budget", "supplier review"], "process": [],
-                                       "topic": ["finance"]}
-    for trace in (b"tagged department", b"purchasing", b"meeting process"):
-        assert trace not in response.content
+    body = response.json()
+    assert body["tags"] == {"project": ["budget", "supplier review"], "process": [],
+                            "topic": ["finance"]}
+    # Nothing that is not this document's own link is listed as one of its tags. Since D-105's dated
+    # note of 10 November 2026 (night) the body also carries tag_options, the values this document
+    # may take, so the check reads the two fields that list the document's own links rather than
+    # every byte: "purchasing" is on another document both roles read, and is rightly offered.
+    own = json.dumps({key: body[key] for key in ("tags", "tag_details")})
+    for trace in ("tagged department", "purchasing", "meeting process"):
+        assert trace not in own
+    assert "purchasing" in [entry["tag_name"] for entry in body["tag_options"]["Process"]]
+    # A Department tag is never an option. "meeting process" is not grown, so it is vocabulary and
+    # offered whatever its links (D-105's dated note of 10 November 2026, night: the security
+    # review), though it is none of this document's own tags.
+    assert b"tagged department" not in response.content
+    assert "meeting process" in [entry["tag_name"] for entry in body["tag_options"]["Process"]]
 
 
 def test_a_document_with_no_tags_has_every_dimension_empty(session_client):

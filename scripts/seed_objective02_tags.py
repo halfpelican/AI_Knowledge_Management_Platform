@@ -17,6 +17,22 @@ nothing and says so.
 **No Department tags.** FR-15's Department dimension is the ``documents.department`` column
 (D-72), the same source FR-14's filter uses.
 
+**A value only restricted material carries is marked grown** (D-105's dated note of 10 November
+2026, night: the security review of ``84b5771``). After linking, every seeded value that has links
+and no link on a document or meeting EVERY role may read is marked ``grown``, the marking
+``documents 0011`` applies to an existing database, so ``tag_scheme`` withholds it from an audience
+that cannot read a carrier, as it always has. On the objective-02 manifest that is the Project value
+``atlas``, carried by D09 and D15 alone. A value any such source carries stays vocabulary, offered to
+every reader whatever happens to its links later. ``--scheme-only`` links nothing, so it marks
+nothing: its values are unlinked vocabulary, as Objective 05 measured them.
+
+**Run it before any document is classified.** Classification sees the scheme as it stands, so a
+document classified before these values existed holds a seeded name it suggested in its
+``proposed_topics`` (a Topic) or ``discarded_suggestions`` (a Project or Process), not as a link. A
+proposal stays pending until a person confirms or rejects it or the document is classified again;
+confirming it links the seeded Topic and leaves it vocabulary (``_bring_into_use``; D-105's dated
+note of 10 November 2026, night).
+
 **Which database.** It writes wherever ``DATABASE_URL`` points, and prints the name first. Since
 1 November 2026 the alpha's database is ``kmp_demo_20261101``, restored from item 6's snapshot, and
 that is where these tags go (D-88). It was ``kmp`` when D-74 was written. A worktree's ``.env``
@@ -60,10 +76,13 @@ def main() -> int:
     from django.conf import settings
     from django.db import transaction
 
-    from apps.core.constants import SOURCE_TYPES, TAG_APPLIED_BY_VALUES
-    from apps.documents.models import ContentTag, Document, Tag, normalise_tag_name
+    from django.db.models import Q
 
-    document_source_type = SOURCE_TYPES[0]
+    from apps.core.constants import ROLE_NAMES, SOURCE_TYPES, TAG_APPLIED_BY_VALUES
+    from apps.documents.models import ContentTag, Document, Tag, normalise_tag_name
+    from apps.retrieval.scoping import scoped_documents, scoped_meetings
+
+    document_source_type, meeting_source_type = SOURCE_TYPES
     applied_by_user = "user"
     assert applied_by_user in TAG_APPLIED_BY_VALUES
 
@@ -84,7 +103,8 @@ def main() -> int:
         print("Stopped before writing anything; ingest the corpus first:\n  " + "\n  ".join(problems))
         return 1
 
-    created_tags = created_links = existing_links = 0
+    created_tags = created_links = existing_links = marked_grown = 0
+    seeded_tag_ids = set()
     with transaction.atomic():
         for item in tagged:
             document = documents.get(item["id"])
@@ -96,6 +116,7 @@ def main() -> int:
                         tag_name=normalise_tag_name(value), dimension=dimension
                     )
                     created_tags += tag_created
+                    seeded_tag_ids.add(tag.pk)
                     if args.scheme_only:
                         continue
                     _, link_created = ContentTag.objects.get_or_create(
@@ -108,15 +129,46 @@ def main() -> int:
                         created_links += 1
                     else:
                         existing_links += 1
+        if not args.scheme_only:
+            marked_grown = mark_restricted_only_values_grown(
+                seeded_tag_ids, ContentTag, Tag, Q, ROLE_NAMES, scoped_documents, scoped_meetings,
+                document_source_type, meeting_source_type,
+            )
         if args.dry_run:
             transaction.set_rollback(True)
 
     verb = "would create" if args.dry_run else "created"
     print(
         f"{len(tagged)} documents: {verb} {created_tags} tag(s) and {created_links} link(s); "
-        f"{existing_links} link(s) already present"
+        f"{existing_links} link(s) already present; marked {marked_grown} value(s) grown, carried "
+        f"only by material some role cannot read"
     )
     return 0
+
+
+def mark_restricted_only_values_grown(tag_ids, ContentTag, Tag, Q, role_names, scoped_documents,
+                                      scoped_meetings, document_source_type, meeting_source_type):
+    """Mark grown each of ``tag_ids`` that has links and no link on a source every role may read,
+    as ``documents 0011`` marks an existing database; returns how many were newly marked. Every link
+    counts, held and removed ones included. Readability is the scoping helpers', the one FR-11
+    predicate (D-53); nothing is unmarked."""
+
+    def readable_by_every_role(scoped):
+        identifiers = None
+        for role_name in role_names:
+            readable = set(scoped(role_name=role_name).values_list("id", flat=True))
+            identifiers = readable if identifiers is None else identifiers & readable
+        return identifiers or set()
+
+    links = ContentTag.objects.filter(tag_id__in=tag_ids)
+    linked = set(links.values_list("tag_id", flat=True))
+    readable_by_all = set(
+        links.filter(
+            Q(source_type=document_source_type, source_id__in=readable_by_every_role(scoped_documents))
+            | Q(source_type=meeting_source_type, source_id__in=readable_by_every_role(scoped_meetings))
+        ).values_list("tag_id", flat=True)
+    )
+    return Tag.objects.filter(pk__in=linked - readable_by_all, grown=False).update(grown=True)
 
 
 if __name__ == "__main__":
