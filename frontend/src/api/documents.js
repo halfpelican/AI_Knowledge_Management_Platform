@@ -200,10 +200,12 @@ export function reprocessDocument(docId, options = {}) {
  *   user_edited, proposed_topics: [{value, confidence}], classified_at, model,
  *   input_truncated}`. An outcome is `applied` (at or above the confidence
  *   threshold and written), `provisional` (below it: held, not the document's type,
- *   and `doc_type` is null), `discarded` (the department only: outside the known
- *   departments, nothing written) or `confirmed` (a person confirmed or edited
- *   it). `doc_type` is the effective type; the effective department is the
- *   document's own `department` field (D-72).
+ *   and `doc_type` is null; for the department also a suggestion that differs from
+ *   a department already on the document, which since 10 November stays until a
+ *   person accepts the suggestion, D-105's note), `discarded` (the department
+ *   only: outside the known departments, nothing written) or `confirmed` (a person
+ *   confirmed or edited it). `doc_type` is the effective type; the effective
+ *   department is the document's own `department` field (D-72).
  * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
  *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
  *   "user". A link with `provisional: true` is a held suggestion and is not among
@@ -221,7 +223,8 @@ export function reprocessDocument(docId, options = {}) {
  * `POST /api/documents/{id}/classify` — runs FR-10's classification over the
  * document's extracted text, which takes the AI service ten to sixty seconds.
  *
- * 200 `{classification, tag_details}`, both as the detail carries them; 422 no
+ * 200 `{classification, tag_details}`, both as the detail carries them, and no
+ * `department`, although a run can fill a blank one (D-105); 422 no
  * text was extracted, so there is nothing to classify (FR-10's own code); 503
  * NFR-19's notice, after `MAXIMUM_CLASSIFY_ATTEMPTS`; 429 past the ingestion
  * rate it shares with upload, meeting ingestion and reprocess (D-79), with a
@@ -242,9 +245,12 @@ export function classifyDocument(docId, options = {}) {
  * machine assignment is retained alongside it"). Either way the outcomes read
  * `confirmed` and later reprocessing leaves them alone.
  *
- * 200 `{classification}`; 400 `{"doc_type": ["..."]}` for a type outside Policy,
- * Procedure, Report and Meeting Paper; 404 also for a document that has no
- * classification yet (D-105's build notes: the type of a never-classified
+ * 200 `{classification, department}`, where `department` is the document's
+ * `department` column after the confirm or edit (D-105's note of 10 November),
+ * which the screen shows as it is rather than working it out from the outcome;
+ * 400 `{"doc_type": ["..."]}` for a type outside Policy, Procedure, Report and
+ * Meeting Paper, or `{"department": ["..."]}`; 404 also for a document that has
+ * no classification yet (D-105's build notes: the type of a never-classified
  * document is edited after `classifyDocument`, not instead of it).
  *
  * @param {string} docId
