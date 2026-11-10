@@ -6772,6 +6772,21 @@ hand-off to FR-10
 **Not covered:** the confidence threshold's value and how it is chosen (D-106); the summary and key
 points; FR-16's summarisation, which gets its own method the same way, when it is built.
 
+**Dated note, 10 November 2026 (night): the summary, the key points, sectioned summarising and the
+summary's grounding are not built in NIT3004.** The user's decision on the requirements audit
+(D-119, its finding 1). This entry built them "only if time allows after both verifications pass",
+and neither objective passed on its independent run (D-106, D-110). FR-10 therefore stays
+INCOMPLETE on its summary clauses:
+
+- the short summary and key points beneath the title in search results;
+- one request returning them together with the classification;
+- sectioned summarising and consolidation of long documents;
+- the summarisation prompt's grounding;
+- the summary in the classify route's 200.
+
+What the classifier reads stays capped at `CLASSIFICATION_INPUT_TOKENS`, with `input_truncated`
+recorded and shown, as before.
+
 ## D-105 · Schema v2 for FR-10: `DocumentAnalysis`, two `ContentTags` columns, the audience-scoped scheme, and how a suggestion becomes a record
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-10, FR-15, invariants 1, 4
@@ -6919,6 +6934,13 @@ django-backend agent's report).
   on the host D-114's choice lands on. *Declined:* moving the call after the ingestion commit, which
   does not shorten the upload; re-timing now on a throwaway database.
 
+**Dated note, 10 November 2026 (night): a correction to "Classification at upload".** That paragraph
+says the call runs "after the ingestion pipeline has decided the document's status". It does not. It
+runs between storing the extracted text and chunking (`apps/ingestion/documents.py`, section 7.8
+step 4), before the status is decided, as this entry's note on the upload's cost already describes.
+The rest of the paragraph stands: the call has its own savepoint, catches and logs every exception,
+and never changes the document's status. Found by the requirements audit (D-119, its finding 7).
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
@@ -7059,6 +7081,15 @@ configuration; clauses 2 and 3 are met.** The evidence is under `corpus/objectiv
   documents that mention meetings, schedules or events whatever the prompt says. Whether Claude does
   better is unmeasured; it would be measured as its own configuration, over repeated draws (this
   entry's note on the FLM configuration).
+
+**Dated note, 10 November 2026 (night): the revision is a departure from D-93, and is named as
+one.** The reference set's status line says "never tuned against (D-93)". Since `caf9e22` that is not
+true of the type definitions: they were revised once because of the first run's misses, and they
+name the misses' shapes (register, inventory, schedule, roster, tracker, announcement). D-93 settles
+that the frozen sets are not tuning sets, so this was a departure from it. It was made once, by the
+user's decision, and disclosed, with the first run kept as the independent figure. The file is
+frozen and is not edited; this note supersedes its line. The prompt now shipped has no independent
+accuracy figure (the requirements audit, D-119, its finding 8).
 
 ## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
 
@@ -7969,3 +8000,247 @@ version's cost: a mistyped model name or a bad key no longer spends two wasted c
 
 **Where it applies:** the modules under **Concerns**, `docs/ai-provider.md` §1, and D-117's free-tier
 note.
+
+## D-119 · The audit of FR-10, FR-19 and Objectives 05 and 06 returned INCOMPLETE, and its verdict is recorded here verbatim
+
+**Status:** Recorded, with the user's decisions on it · **Date:** 2026-11-10 · **Concerns:** FR-10,
+FR-19, FR-14 (D-69), Objectives 05 and 06 · **Audited:** FR-10 at `6357fe0` (PR #70, merged as
+`d3a9892`) and FR-19 at `45d5c25`
+
+One `requirements-auditor` run, read only, over both worktrees. It checked the proposal's text for
+FR-10, FR-19 and FR-14's `KnowledgeGaps` read, Objectives 05 and 06, and CLAUDE.md §8. It edited
+nothing and ran nothing. It is recorded here because a verdict that lives only in a terminal is the
+failure mode D-61 names. Its one line: FR-10 INCOMPLETE, FR-19 INCOMPLETE, Objective 05 NOT MET
+(clause 1), Objective 06 NOT MET on its independent run (clause 3). Neither requirement is in the M6
+twelve.
+
+**What the user decided on it, 10 November.**
+
+| Finding | Decided |
+|---|---|
+| 1: FR-10's summary, key points, sectioned summarising and grounding | **Not built in NIT3004.** D-104's own condition, "only if time allows after both verifications pass", is not met, and FR-10 stays INCOMPLETE on those clauses (D-104's dated note) |
+| 3, 4, 5: a removed AI tag comes back; a person cannot apply a tag; nothing deactivates or deletes a tag | **All three are built,** on a branch of their own: a removal kept beside the machine's assignment; a person applying an existing tag or a new Topic, with the 409 on a duplicate name; an Administrator deactivating a tag in use or deleting an unused one (D-105's dated note when that branch lands) |
+| 11: FR-19's "on a scheduled basis" | **Daily,** registered by a committed script (D-107's note, `027640e`) |
+| The security review's L1 and L2 (D-107's note), on FR-12's route | **A 500-character cap on a search term and a D-79 `search` throttle of 30 per minute,** in their own pull request (D-79's dated note when it lands) |
+
+**What was done on it the same night, on `feat/FR-19-knowledge-gaps`.**
+
+| Finding | Done |
+|---|---|
+| 7: D-105's sentence on when classification runs | A dated correction on D-105 |
+| 8: the frozen sets' status lines | D-106's and D-110's notes name both revisions as departures from D-93 (D-110's in `027640e`). Neither frozen file is edited |
+| 11 | `scripts/register_knowledge_gap_schedule.ps1` and section 9 of `docs/alpha-deployment.md` (`027640e`). Registering it on the host is the user's step |
+| 12: three passages describe the exclusion as it was before `333be14` | Corrected in `8c6156f`: `docs/api-contract.md`, D-110's note (marked as a correction) and `objective-06.md` |
+| 13: CLAUDE.md §8 condition 2 is not shown at `45d5c25`, and #70 is not merged in | At `45d5c25`, pytest 2786 passed, matrix 33/33. `main` merged in `3e5357f` (#69 and #70). At `8c6156f`, pytest 2839 passed, matrix 33/33; npm test 317 passed; lint, build and `makemigrations --check` clean. CI runs on the pull request |
+| 14: D-69 has no forward note | Added in `8c6156f` |
+| 15: the second development check's columns | Recorded on D-108; the script now reports the top-ranked passage (`8c6156f`) |
+
+**Left as recorded, or owed.**
+
+- **2: the tag browser is FR-15's facets.** A recorded deviation (D-105), unchanged.
+- **6 and 10:** the front-end test of the truncation notice, the department label and the stale
+  comment go with the tag branch.
+- **9: Objective 02's 60-second bound is not re-timed with classification at upload.** Still owed
+  before M8 (D-105); it needs FLM.
+- **16: the exclusion's residual risk is unmeasured** (D-108).
+- **Objective 05's clause 1 and Objective 06's clause 3 stay NOT MET on their independent runs.** The
+  informed re-runs are recorded as informed (D-106, D-108, D-110), and no further run is planned.
+
+**Where the report is out of date or overstates, checked against the repository.**
+
+- **Its line numbers are against `6357fe0` and `45d5c25`,** and findings 7, 8 and 11 to 15 were dealt
+  with after it, as above. Its "FR-19's full suite at 45d5c25 is unknown" is now known: 2786 passed.
+- **Its first correction is to the brief, not to the repository.** The brief called PR #70 open when
+  it had already merged.
+- **No overstatement found** in the claims re-read against the code and this file: D-104's condition
+  (finding 1), `reject_tag` deleting the link (finding 3), the order of classification and chunking
+  at upload (finding 7), and the stale comment (finding 10).
+
+**The verdict, verbatim.** Reproduced as the auditor returned it, quoted rather than edited.
+
+> ## Audit: FR-10, FR-19, Objectives 05 and 06 (NIT3004), 10 November 2026
+>
+> **Verdict**
+> - **FR-10 (Document Classification & Metadata Extraction, SHOULD): INCOMPLETE.** Five clauses are deferred by D-104: the summary, key points, sectioned summarising, grounding, and the summary in the 200. Three more partials are not recorded anywhere (gaps 3–5).
+> - **FR-19 (Knowledge Gap Log, COULD): INCOMPLETE.** "On a scheduled basis" is only partly met, and nothing records that. The interface contract contradicts the exclusion rule as it now works. CLAUDE.md §8 condition 2 is not shown at HEAD 45d5c25.
+> - **Objective 05: NOT MET.**
+>   - Clause 1: NOT MET. 12 of 20 (60%) on the independent run; 14 of 20 (70%) on the informed re-run.
+>   - Clause 2: MET.
+>   - Clause 3: MET.
+> - **Objective 06: NOT MET as independently verified.**
+>   - Clause 1: MET as measured, but only on wordings screened so that FR-12 declines them (D-110).
+>   - Clause 2: MET.
+>   - Clause 3: NOT MET on cycle 1, the independent run (P02 in the log). It is met on cycle 2, but cycle 2 is informed by cycle 1 and is not independent.
+>
+> **Corrections to the brief**
+> - **PR #70 is merged, not open.** `gh pr view 70` says MERGED at 2026-11-10T01:12:16Z, as d3a9892 on origin/main. CI was SUCCESS on head 6357fe0 for both jobs (Django on Python 3.12 with Postgres 16, and React lint, build and test). The worktree's local branch is `feat/FR-10-classification`; the remote branch is `fix/FR-10-objective-05`.
+> - **The FR-19 branch does not contain PR #70.** d3a9892 is not an ancestor of 45d5c25. Both sides changed four files since dae8792:
+>   - `apps/api/views.py`
+>   - `docs/api-contract.md`
+>   - `docs/decisions.md`
+>   - `frontend/src/constants.js`
+>
+> ### Clause coverage: FR-10 (worktree C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506)
+>
+> | Clause (proposal.txt) | Status | Evidence |
+> |---|---|---|
+> | 683 "displays an automatically assigned type … and department, each marked as AI-generated and editable by users holding the appropriate permission" | Satisfied (one minor mislabel, gap 10) | C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\src\components\Classification.jsx:586-657; ...\apps\api\views.py:1400-1432 (scoped 404, then contribute_content, 772-781); ...\frontend\tests\documentClassification.test.jsx:198-399; ...\apps\api\tests\test_document_classification.py:308-383 (both roles through session_client) |
+> | 684 "a short summary and a list of key points, shown beneath the title in search results" | **Declined, D-104** | Not built anywhere. ...\docs\decisions.md:6729-6734 |
+> | 685 "tags across four dimensions … shown separately" | Satisfied on the detail page | Classification.jsx:586-601 and 663-688. Department is a column, not a tag (D-72, D-105), recorded. |
+> | 685 "A tag browser lists all values with item counts" | **Partial, recorded (D-105)** | decisions.md:6864 says "FR-15's facets already count tags". The facets (...\apps\api\repository.py:260-285) list only values on documents in scope that match the other filters, so not "all values". |
+> | 687 "A single structured request issued at upload returns the classification, the summary and key points, and the tag assignments together" | **Partial** | One call at upload returns the type, department and tags: ...\apps\ingestion\documents.py:276-280 and 303-334, ...\apps\ai\classification.py:109-144. No summary or key points (D-104). |
+> | 688 "the type must be selected from a fixed list" | Satisfied | ...\apps\ai\classification.py:220-224; ...\apps\documents\classification.py:265-269; serializer ChoiceField; Classification.jsx:629-637; test_document_classification.py:363; documentClassification.test.jsx:497-512 |
+> | 688 "Tag names must be unique within a dimension after normalising case and whitespace" | Satisfied | ...\apps\documents\models.py:159-169; ...\apps\documents\tests\test_models.py:127-134; parser dedup at ...\apps\ai\classification.py:234-242 |
+> | 688 "Documents exceeding the model's context limit are summarised in sections and consolidated, rather than being truncated … without the user being told" | **Declined, D-104** (decisions.md:6747-6751) | The classifier reads the first 1,500 tokens (...\apps\core\constants.py:557) and records `input_truncated`. The detail tells the user (Classification.jsx:602-604), but that sentence has no front-end test (gap 6). |
+> | 689 confidence: "recorded with each assignment … below the configured threshold are marked provisional and presented for confirmation" | Satisfied | ...\apps\documents\classification.py:290-312, 355-357, 375-398; FR-15 reads exclude held links (repository.py:174, 228, 281); test_classification_apply.py:71-230; test_fr15_reads_exclude_provisional.py:51-79; documentClassification.test.jsx:218-237 and 562-586 |
+> | 690 controlled taxonomy growth, including "A tag confirmed by a user … is not altered by later reprocessing" | Satisfied | ...\apps\documents\classification.py:299-300, 323-344, 393-394, 468-514; test_classification_apply.py:121-131, 230-265, 322-347; ...\apps\ingestion\tests\test_classification_hook.py:131 |
+> | 691 provenance: "visually distinguished from those applied by a person and either may be accepted or removed in a single action" | **Partial, unrecorded** (gap 4) | The distinction and one-action accept/remove work (Classification.jsx:158-198; views.py:1435-1464). No route lets a person apply a tag. |
+> | 692 correction: "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it" | **Partial, unrecorded** (gap 3) | Type and department are satisfied (classification.py:281-312; test_classification_confirm.py:146). A removed AI tag comes back. |
+> | 693 grounding: "the summarisation prompt constrains output to content present in the document" | **Declined with the summary, D-104** | No summarisation prompt exists. |
+> | 694 taxonomy: one Tags table, one ContentTags join, "Tags are deactivated rather than deleted where content still references them" | **Partial** | The structure is there (models.py:152-192), and PROTECT stops a referenced tag being deleted (D-12). Nothing deactivates or deletes a tag (gap 5). Meetings are never classified (D-105, recorded). |
+> | 695 "200 OK with the classification, summary and tags" | **Partial** | views.py:1390-1397 returns `{classification, tag_details, department}`, with no summary. |
+> | 695 "409 Conflict on a duplicate tag name within a dimension" | **Declined, D-105** (decisions.md:6860-6862) | Unreachable because no route creates a tag from a typed name; confirm_proposed_topic uses get_or_create (classification.py:484). This is honest, but it holds only because gap 4 exists. |
+> | 695 "422 Unprocessable Entity where insufficient text was extracted" | Satisfied | views.py:1377-1381; classification.py:213-214; documents below the minimum have no ExtractedContent (ingestion\documents.py:221-234); test_document_classification.py:212-220; documentClassification.test.jsx:763 |
+> | 697 "DocumentAnalysis (Create, Read, Update); Tags, ContentTags (Create, Read, Delete)" | **Partial** | Everything is met except Tags Delete, which has no operation (gap 5). Departures from the field table are recorded (D-105). |
+>
+> ### Clause coverage: FR-19 (worktree C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19)
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | 1266 "A list, visible to Administrators … grouped by subject with an occurrence count and the ability to mark an entry as addressed" | Satisfied | ...\frontend\src\pages\KnowledgeGaps.jsx:81-142 and 195-217; ...\apps\api\views.py:1908-1974 (CanReviewKnowledgeGaps on every route); ...\frontend\tests\knowledgeGaps.test.jsx:185-545; ...\apps\api\tests\test_knowledge_gaps.py:104-170 and 289-329 |
+> | 1268 "Aggregates unanswered queries and zero-result searches from FR-12 on a scheduled basis, including those arising through FR-13 and FR-18" | **Partial** | Aggregation works, including FR-13 turns (...\apps\retrieval\gaps.py:172-249; ...\apps\retrieval\tests\test_knowledge_gaps.py:241-317). FR-18 is not built (D-107, recorded). The schedule is not set up anywhere (gap 11). |
+> | 1269 "queries that returned nothing because the user lacked access are excluded" | Satisfied by a heuristic, with residual risk recorded in D-108 | gaps.py:252-267 (the top-ranked passage decides, even below the threshold, since 333be14); searches are recounted as the Administrator (...\apps\retrieval\search.py:526-556); test_knowledge_gaps.py:376-501; test_search_total.py:79-122. The current rule has been tested only on the set that chose it. |
+> | 1270 "grouped by similarity rather than exact wording … asked repeatedly across departments" | Satisfied | Centroid cosine at 0.5256 (gaps.py:270-336; tests :516-711). Departments are not modelled, so "across departments" shows only as the count (D-107, recorded). |
+> | 1271 "200 OK with the gap list" | Satisfied | views.py:1918-1921; test_knowledge_gaps.py:110-120 and 177-209 |
+> | 1273 "KnowledgeGaps (Create, Read, Update); QueryLog, SearchLogs (Read)" | Satisfied | Created and updated by run_cycle; updated by PATCH; logs are read only, with PROTECT foreign keys (...\apps\retrieval\models.py:215-251); search_total writes no row (test_search_total.py:104). Extra columns recorded (D-107). |
+> | FR-14, 952 "KnowledgeGaps (Read)" | Satisfied on this branch, for a role holding `review_knowledge_gaps` | views.py:1892-1901; Dashboard.jsx gap panel; frontend\tests\dashboard.test.jsx gap tests; test_knowledge_gaps.py:348-405. This closes D-69 (D-107), but not on main until FR-19 merges. |
+>
+> ### Objective clauses against the evidence
+>
+> **Objective 05.** Evidence: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-05\runs\2026-11-10\
+>
+> - **What the records carry, and what I checked.**
+>   - Each record names its commit with no uncommitted tracked files: aee5374 for the first run, caf9e22 for the re-run.
+>   - Each names FLM v0.9.39 (CLI and server), the configuration flm / gemma3:4b / embed-gemma, the full dump hash 3bf98403…6f59, the database and threshold 0.95.
+>   - The reference-set SHA is 763e9a62…. I recomputed it: the committed blob and the working file both match. reference.json has not changed since fb9e18a (9 November, 17:31), which is before any run on the twenty.
+>   - The first-run evidence exists twice, as cac299f (on aee5374) and f187201 (on the follow-up). The files are identical.
+> - **Headline.** It is built, with Department as `Documents.department` rather than a tag (D-72, D-105, recorded). AI tags at or above 0.95 are applied immediately but labelled "Suggested by AI", with Confirm and Remove. That matches FR-10's confidence clause and the objective's own clause 2.
+> - **Clause 1: NOT MET.** 12 of 20 (60%) on the independent run (verification\verification.md, "Clause 1"); 14 of 20 on the informed re-run (rerun\verification\verification.md).
+> - **Clause 2: MET.** 48 of 48 below the threshold held, 27 of 27 at or above applied, no violations. The re-run: 47 of 47 and 25 of 25.
+> - **Clause 3: MET.** I checked the three discarded departments against the corpus's six; none of them is among the six. The script checks out-of-scheme links by dimension only (...\scripts\objective05_verify.py:196-198). Links are in-scheme by construction (classification.py:323-329).
+> - **Labelling.** The revision is honestly labelled. The type definitions in caf9e22 name the frozen misses' shapes: register, inventory, schedule, roster, tracker, announcement. So the prompt now shipped has no independent accuracy figure.
+>
+> **Objective 06.** Evidence: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19\corpus\objective-06\runs\2026-11-10\
+>
+> - **What the records carry, and what I checked.**
+>   - Commits: ce886e7 for the seeding and cycle 1; 333be14 for cycle 2.
+>   - FLM version, configuration and dump hash are all recorded.
+>   - Query-set SHA: I recomputed it. The committed blob is e40a589c…; the CRLF working file is e78314b7…, as D-110's correction says.
+> - **Clause 1: MET, 12 of 12 on both cycles.** The 8 unanswerable asks were screened to a top in-scope score of at most 0.25. On the draft's unscreened wordings, FR-12 answered 6 of 8, so they would never reach the log (...\corpus\objective-06\runs\2026-11-08\pre-measurement\pre-measurement.md:36-39 and 53-58). D-110 records this.
+> - **Clause 2: MET.** 4 entries of 3, each count equal to its items.
+> - **Clause 3: NOT MET on cycle 1, met on cycle 2.**
+>   - Cycle 1: verification\verification.md:30 and 40 show P02 in the log.
+>   - Cycle 2: met (rerun\verification\verification.md:40).
+>   - The development set scored both rules 15 of 15 (decisions.md:7215-7218), so the frozen thirty chose the rule.
+>   - P04 and P07 never exercised the clause.
+> - **Labelling.** The change is honestly labelled. The rule now shipped has no independent figure.
+>
+> ### Missing or partial (numbered)
+>
+> 1. **FR-10: summary, key points, sectioned summarising and grounding** (684, 687, 688 sentence 3, 693, and the summary in 695). Recorded as deferred in D-104 (decisions.md:6729-6734 and 6747-6751), which is honest. But D-104 builds them "only if time allows after both verifications pass", and neither objective passed independently. FR-10 cannot be complete without them; the record should say they will not be built.
+> 2. **FR-10: the tag browser is FR-15's facets** (685). Partial, recorded (D-105, decisions.md:6864). Values with no in-scope document are never listed, and counts depend on the active filters.
+> 3. **FR-10: a removed AI tag comes back** (692, "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it").
+>    - `reject_tag` deletes the link: ...\apps\documents\classification.py:462-465.
+>    - The next classify or reprocess creates it again: rule 4 at :323-329 calls `_link_tag` at :383-392.
+>    - Nothing keeps the machine's assignment. No test covers this.
+>    - **Unrecorded.** D-105 records only the proposed-topic version (decisions.md:6879).
+> 4. **FR-10: a person cannot apply a tag** (691, "those applied by a person"; UC-09 A3, "adds one it did not").
+>    - ...\apps\api\urls.py:40-54 has confirm and delete only. `applied_by="user"` links come only from the D-74 seed script.
+>    - **Unrecorded.** The 409 is unreachable precisely because of this.
+> 5. **FR-10: no operation deactivates or deletes a Tag** (694, "Tags are deactivated rather than deleted"; 697, Tags "Delete"). Only the schema holds this: `active` at models.py:156-157, and PROTECT. **Unrecorded** for FR-10.
+> 6. **FR-10: the truncation notice is untested in the front-end suite.** The test fixture only ever has `input_truncated: false` (documentClassification.test.jsx:54). CLAUDE.md §8 condition 2 is not met for that sentence.
+> 7. **FR-10: D-105 says classification at upload runs "after the ingestion pipeline has decided the document's status"** (decisions.md:6855-6858). That is false: it runs before chunking (...\apps\ingestion\documents.py:276-282). The note of 10 November is correct, but the sentence needs a dated correction.
+> 8. **The frozen files' status lines are now untrue.**
+>    - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\corpus\objective-05\reference.json says "never tuned against".
+>    - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19\corpus\objective-06\queries.json says "Never tuned against again".
+>    - Both sets later chose a change (caf9e22 and 333be14). The departure from D-93 is disclosed in substance in the D-106 and D-108 notes, but neither note names it as a departure from D-93.
+> 9. **FR-10 at upload affects FR-08, an M6 MUST.**
+>    - Classification runs inside the ingestion transaction while holding the row lock.
+>    - Objective 02's 60-second bound has not been re-timed; D-105 says this is "owed before M8" (decisions.md:6906-6914).
+>    - The worst case is 3 calls × 300 s (...\apps\ai\classification.py:89; flm.py uses that timeout).
+>    - Recorded as owed.
+> 10. **Minor (FR-10).**
+>     - A department the uploader typed is labelled "Suggested by AI" when the AI's suggestion matched it (classification.py:303-305; Classification.jsx:89-90).
+>     - The comment at ...\apps\core\constants.py:200-202 ("not so anything uses it before Stage 6") is stale.
+> 11. **FR-19: "on a scheduled basis"** (1268). Partial, **unrecorded**: D-107 asserts it is met.
+>     - There is a command (...\apps\retrieval\management\commands\aggregate_knowledge_gaps.py:3-6).
+>     - No schedule, interval, script or set-up instruction exists in the repository.
+>     - D-107 says "Task Scheduler on the laptop" (decisions.md:7063-7064), but D-114 has removed the laptop as the M8 host.
+> 12. **FR-19: the documents describe the old exclusion rule.**
+>     - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19\docs\api-contract.md:1187-1190 says "if the top passage above `RELEVANCE_THRESHOLD` … otherwise, including when nothing clears the threshold, it is kept". This contradicts the code since 333be14.
+>     - The same staleness is in decisions.md:7362-7364 (D-110's note says the exclusion "admits at RELEVANCE_THRESHOLD") and in ...\corpus\objective-06\runs\2026-11-10\objective-06.md:69-71.
+> 13. **FR-19: §8 condition 2 is not shown at HEAD 45d5c25.**
+>     - After 333be14, only apps/retrieval/tests were run (350 passed); the full suite is pending.
+>     - There is no PR, so CI has not run.
+>     - PR #70 is not merged into the branch, and four files overlap.
+>     - The 33/33 matrix result predates the change. The change touched no route, but the matrix has not been re-run.
+> 14. **D-69 has no forward note.** decisions.md:3901-3902 still says the dashboard does not read KnowledgeGaps "because the table does not exist".
+> 15. **The second exclusion check's table does not show why the current rule decided.** Its top-score and readable columns come from admitted passages only (...\scripts\exclusion_dev_check.py:102-111). So d27 shows "None" where the rule's evidence should be. The outcome column does call the cycle's own function (:100), so the pass is valid.
+> 16. **FR-19's residual risk is unmeasured.** A genuine gap whose weak nearest passage is Administrator-only is now left out. Recorded (D-108, decisions.md:7219-7221). 5 of the 25 sources are Administrator-only.
+>
+> ### Invariant check
+> - **1 (scope before ranking, no disclosure): pass.**
+>   - FR-10's scheme is built for the document's audience through scoped_documents and scoped_meetings (...\apps\documents\classification.py:101-185).
+>   - FR-19's check of Administrator scope runs only in the Administrator-only cycle. Nothing records a row that was left out.
+> - **4 (server-side authorisation): pass.** FR-10 checks contribute_content after the scoped 404 on all six routes. FR-19 checks review_knowledge_gaps on all three routes, and on the dashboard key through role_holds.
+> - **7 (two no-answer paths): pass.** Path B is aggregated (test_knowledge_gaps.py:444).
+> - **8 (a failed AI step never discards the source): pass.** test_classification_hook.py:88 and 110; a failed cycle rolls back.
+> - **9 (atomic ingestion): pass.** test_classification_hook.py:73.
+> - **10 (structured output or nothing): pass.** Non-conforming replies are retried to MAXIMUM_CLASSIFY_ATTEMPTS, then the route answers 503.
+> - **Set-level checks: pass, with two observations.**
+>   - No AI SDK is imported outside apps/ai in either worktree.
+>   - No inline threshold literals.
+>   - FR-10 and FR-19 write no chunks.
+>   - `MAXIMUM_TAG_SUGGESTIONS = 8` sits in apps/ai/classification.py:82, following GENERATION_MAX_TOKENS' precedent.
+>   - KnowledgeGap stores `embedding_model` but not a dimension; it is not a chunk.
+>
+> ### CLAUDE.md §8, per requirement
+> | Condition | FR-10 | FR-19 |
+> |---|---|---|
+> | 1. Behaves as the FR section says | No (gaps 1–5) | No (gap 11) |
+> | 2. Both suites; both roles; UI-only clauses tested in the front end | CI green on 6357fe0; both roles covered; truncation notice untested | Not shown at HEAD (gap 13) |
+> | 3. Happy path and a failure path | Yes | Yes |
+> | 4. Committed with the FR ID | Yes | Yes |
+> | 5. requirements-auditor reports no gaps | No | No |
+>
+> ### Gate impact
+> - Neither requirement is in the M6 twelve.
+> - The MUSTs this work touches:
+>   - FR-08: Objective 02's 60-second bound is not re-timed (gap 9).
+>   - FR-14: the Administrator's dashboard gains a key; this is tested.
+>   - FR-12: search.py was refactored for search_total. FR-12's tests passed in the full run before the rule change, and that change did not touch search.py.
+> - Smallest fixes:
+>   - **FR-19:**
+>     - Correct the three stale passages (gap 12).
+>     - Commit a schedule or record on-demand only (gap 11).
+>     - Merge d3a9892, run both suites and open the PR (gap 13).
+>     - Add a note to D-69.
+>   - **FR-10:**
+>     - Record that the summary will not be built, or build it (gap 1).
+>     - Make a tag removal durable (gap 3).
+>     - Add a person-applies-a-tag route, or record its absence (gap 4).
+>     - Record the Tags Delete and deactivation gap (gap 5).
+>     - Add one front-end test (gap 6).
+>     - Correct D-105 (gap 7).
+>     - Re-time Objective 02 (gap 9).
+>
+> ### Could not verify
+> - **The test counts.** I did not run them. FR-10's are corroborated by PR #70's body and green CI. FR-19's full suite at 45d5c25 is unknown.
+> - **The reference set's 8 November approval.** Its earliest commit is 9 November.
+> - **The deletions between runs.**
+> - **That the twenty were not consulted during the development sweeps.**
+> - **Live interface behaviour.** I read the code and the tests only.
+> - **Determinism.** The sweeps vary across repetitions at temperature 0 (X06, X15, and X07's first repetition failed), so the 60% is one draw. A 15-point shortfall makes it unlikely that a second draw would change the verdict.
+> - **Outside the FR text, not counted as gaps:** UC-09 E1's queue and A1's "undetermined" record; UC-10 E2 (sensitive questions kept verbatim), E3 (spurious questions), A2 (outdated knowledge) and A3 (partial answers). None of these is recorded.
+>
+> **One line:** FR-10 INCOMPLETE, FR-19 INCOMPLETE, Objective 05 NOT MET (clause 1), Objective 06 NOT MET on its independent run (clause 3).
