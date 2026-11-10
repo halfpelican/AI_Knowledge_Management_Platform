@@ -61,15 +61,50 @@ The end-to-end comparison waits for Claude.
   vectors, and the largest spread in a run's top score was 0.000925, against D-40's FLM drift of
   about 0.003 that set m.
 
+## End to end: the rule's value does at least as well as 0.30, and better on one run
+
+This is D-102's comparison, run the same day once the user had loaded API credit. It used
+`threshold_floor_e2e_voyage.py`, the 8 November script changed only where FLM was named.
+- **Questions:** every run of v2 went through the shipped `answer_question`, as the run's role.
+- **Generation:** Claude Sonnet 5.5 (D-115), with the cap of 6.
+- **Nothing written:** each ask ran inside a transaction that was rolled back, and the row counts
+  matched before and after.
+- **Values:** both were patched in this process only (`--patch-threshold`, `--patch-floor`). The
+  code still holds 0.30 and 0.0.
+
+The evidence is in `e2e/`, with the console output in `e2e_T3000_console.txt` and
+`e2e_T2687_console.txt`.
+
+| v2, 40 runs | FLM 0.30, no floor (D-102) | FLM 0.24 / 0.206 (D-102) | Voyage 0.30, no floor | **Voyage 0.2687 / 0.2468** |
+|---|---|---|---|---|
+| answered where expected | 29/32 | 30/32 | 31/32 | **32/32** |
+| declined where no answer is expected | 7/8 | 3/8 | 8/8 (5 before generation, 3 by it) | **8/8** (4 before generation, 4 by it) |
+| match with an expected source | 22/32 | 15/32 | 31/32 | **32/32** |
+| 503s / schema violations / out-of-scope citations | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 | **0 / 0 / 0** |
+| seconds per ask, median / max | 16.1 / 54.8 | 16.9 / 54.6 | 2.8 / 6.8 | **2.6 / 6.9** |
+| passages supplied per answer, median / max | 5 (D-101) | — | 2 / 11 | **3.5 / 11** |
+
+- **The one difference is u07,** an answerable run whose expected source scores 0.2968. At 0.30 it
+  is declined before generation. At 0.2687 it is answered and matched.
+- **Claude declined every no-answer run that reached it,** u37 ("parental leave", top 0.498)
+  included. That is D-102's conclusion holding: generation and verification do the declining that
+  scores cannot.
+- **The floor stops unrelated offers.** At 0.30 with no floor, all 8 no-answer runs were offered
+  the five nearest items, down to 0.12. At F 0.2468, the 4 runs declined before generation were
+  offered nothing. The 4 declined by generation were offered only items at or above the floor.
+  No answerable run lost an offer to the floor, because none ended in no answer. On FLM, the
+  margin rule could not set a floor at all (D-102), and D-56's gap stayed open.
+- **Spend:** 34 and 36 Claude calls; 93,900 and 125,432 tokens in, 7,529 and 7,781 out. That is
+  about $0.26 and $0.33 at $2 / $10 per million, under a cent per call.
+
 ## What this does not settle
 
-- **End to end.** D-102 found that the rule's value did worse end to end on FLM than 0.30 did.
-  So the same comparison is owed here: T 0.2687 with F 0.2468, against 0.30 with no floor, on v2,
-  with Sonnet and the cap of 6. It needs Claude, whose credits arrive on Sunday.
-- **The scores still overlap.** Three no-answer runs score above an answerable one, and u37 sits
-  at 0.498. Generation and verification still have to decline those (D-102's conclusion), on
-  either provider.
-- **Wiring.** `RELEVANCE_THRESHOLD` is a single value in `apps/core/constants.py`, and it is an
-  `embed-gemma` value. Giving Voyage its own value is a decision, taken with the end-to-end result.
+- **Adoption and wiring.** `RELEVANCE_THRESHOLD` and `PARTIAL_MATCH_FLOOR` are single values in
+  `apps/core/constants.py`, and both are `embed-gemma` values. Giving Voyage its own values is the
+  user's decision.
+- **The test sets.** Once a value is chosen, the frozen thirty, the threads, the HTTP check and
+  NFR-08 run on it, as D-101's "after" did on FLM.
+- **The scores still overlap.** Three no-answer runs score above an answerable one. Generation
+  declined them here, on a small set.
 - **Contamination.** As D-101's note records, v2 was written after the frozen results were seen,
   so the frozen thirty does not independently test any threshold chosen from it.
