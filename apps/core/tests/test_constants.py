@@ -259,6 +259,11 @@ def test_the_knowledge_gap_constants_are_d107s_and_d109s():
     assert constants.GAP_GROUPING_THRESHOLD == 0.5256
     # The sweep's own margin: its lowest within-subject pair, 0.5322, is above the value.
     assert constants.GAP_GROUPING_THRESHOLD < 0.5322
+    # D-122: voyage-4's own value, by D-109's rule on Voyage's vectors (10 November 2026,
+    # corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/), below that sweep's lowest
+    # within-subject pair, 0.5157. No other model is listed, so EmbeddingGemma keeps 0.5256.
+    assert constants.GAP_GROUPING_THRESHOLD_BY_MODEL == {"voyage-4": 0.5054}
+    assert constants.GAP_GROUPING_THRESHOLD_BY_MODEL["voyage-4"] < 0.5157
     assert constants.CYCLE_GRACE_SECONDS == 60
     assert constants.REVIEW_KNOWLEDGE_GAPS_PERMISSION == "review_knowledge_gaps"
     assert constants.DASHBOARD_GAP_ITEMS == constants.DASHBOARD_RECENT_ITEMS

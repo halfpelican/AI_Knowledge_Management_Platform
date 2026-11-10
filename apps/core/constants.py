@@ -649,6 +649,18 @@ DEFAULT_KNOWLEDGE_GAP_STATUS = KNOWLEDGE_GAP_OPEN
 # commit 4a1ed3d), and D-109's dated note of the same day records it.
 GAP_GROUPING_THRESHOLD = 0.5256
 
+# Per embedding model (D-122), as RELEVANCE_THRESHOLD_BY_MODEL is (D-120): a cosine belongs to the
+# model that produced the vectors. voyage-4's value comes from D-109's rule, run on the same
+# development paraphrase set with Voyage's query embeddings (10 November 2026,
+# corpus/objective-06/runs/2026-11-10/grouping-sweep-voyage/). The pairs again do not separate:
+# the lowest within-subject pair is 0.5157, and the highest cross-subject pair is 0.5297, the same
+# password pair. So the rule's best pairwise F1 gives 0.5054, and centroid grouping at that value
+# forms 12 entries of 3, none mixed. The lowest within-subject pair sits 0.0103 above it, about
+# twenty times Voyage's measured re-embedding jitter (0.00047). Any model not listed,
+# EmbeddingGemma included, keeps GAP_GROUPING_THRESHOLD; apps/retrieval/gaps.py's
+# grouping_threshold() reads both.
+GAP_GROUPING_THRESHOLD_BY_MODEL = {"voyage-4": 0.5054}
+
 # How far before the previous cycle's start an aggregation cycle's window reaches back, in seconds
 # (D-107). It covers a QueryLog or SearchLog row whose timestamp was set before the previous cycle
 # started and that committed after that cycle read. Re-scanning is harmless: a row already in the
