@@ -11,7 +11,8 @@ while one is pending.
 
 What it shows: rows written under 0008 survive both directions, a link reads ``removed = false``
 and an analysis ``department_applied_by = null`` after the forward, and the reverse drops exactly
-the two columns.
+the two columns. Since the security review's finding 5, the reverse also deletes a link marked
+removed, which the code before 0009 would show as a live tag, and keeps every live one.
 """
 
 import pytest
@@ -68,7 +69,7 @@ def test_0009_is_on_the_path_to_the_leaf_of_documents():
     assert AFTER in graph.forwards_plan(documents_leaf())
 
 
-def test_0009_applies_and_reverses_keeping_the_rows_either_way(document):
+def test_0009_applies_and_reverses_keeping_live_rows_and_deleting_removed_links(document):
     with connection.cursor() as cursor:
         cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")  # see the module docstring
 
@@ -94,14 +95,19 @@ def test_0009_applies_and_reverses_keeping_the_rows_either_way(document):
     assert (kept_link.removed, kept_link.provisional) == (False, True)
     kept_analysis = new_apps.get_model("documents", "DocumentAnalysis").objects.get(pk=analysis.pk)
     assert kept_analysis.department_applied_by is None
+    # A link a person removed, written under 0009.
+    removed_link = new_apps.get_model("documents", "ContentTag").objects.create(
+        tag_id=tag.pk, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk,
+        applied_by=AI_APPLIED, confirmed=False, removed=True,
+    )
 
-    # --- Reverse: the two columns go, the rows stay ------------------------------------------------
+    # --- Reverse: the two columns go, the live rows stay, the removed link goes ---------------------
     old_apps = migrate_documents_to(BEFORE)
     assert "removed" not in columns_of("content_tags")
     assert "department_applied_by" not in columns_of("document_analysis")
-    assert list(old_apps.get_model("documents", "ContentTag").objects.values_list("pk", flat=True)) == [
-        link.pk
-    ]
+    remaining = list(old_apps.get_model("documents", "ContentTag").objects.values_list("pk", flat=True))
+    assert removed_link.pk not in remaining  # the 0008 code would have shown it as a live tag
+    assert remaining == [link.pk]
     assert old_apps.get_model("documents", "DocumentAnalysis").objects.filter(pk=analysis.pk).exists()
 
     # --- Forward again, to the leaf, through the current models ----------------------------------

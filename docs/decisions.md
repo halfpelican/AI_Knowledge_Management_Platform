@@ -7228,7 +7228,11 @@ decision is recorded with its reason, and each build choice the brief left open 
     classification prompt. A throttle is the user's question, which the lead will put. Capping the
     prompt would change the classification input, so it is deferred.
   - **5 (low): fixed in the following commit.** Reversing `documents 0009` kept removed AI links,
-    which the 0008-era code shows as live tags again. 0009's reverse now deletes them.
+    which the 0008-era code shows as live tags again. 0009's reverse now deletes them, before it
+    drops the column; live links are untouched. 0009 is edited in place rather than followed by a
+    new migration. It is unpushed (CLAUDE.md §7 forbids editing a pushed migration's operations),
+    its author applied it only to test databases, and the appended operation does nothing forwards,
+    so a database that did apply it is in the state the edited migration reaches.
   - **7 (info): tested.** `tag_options`' guarantee needs EFFECTIVE_ROLES to be closed under
     generalisation. `apps/core/tests/test_constants.py` now asserts it.
   - **8 (info): fixed.** Topics confirmed before `documents 0010` read not grown. 0011 marks those
