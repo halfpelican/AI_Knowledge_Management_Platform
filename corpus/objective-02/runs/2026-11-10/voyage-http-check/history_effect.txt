@@ -1,0 +1,17 @@
+jitter bound: two scores move apart by at most 2 x 0.00047 = 0.00094
+
+t03 as Employee: verdict WIRED
+  composed set 1, bare follow-up's set 0; composed only 1, bare only 0
+  lowest bare-follow-up score among the composed-only passages: 0.2315 (threshold 0.2687)
+  shift needed for a history-blind server to supply the composed set: 0.0372 -> cannot come from the jitter
+
+t04 as Employee: verdict WIRED
+  composed set 8, bare follow-up's set 8; composed only 3, bare only 3
+  lowest bare-follow-up score among the composed-only passages: 0.2448 (threshold 0.2687)
+  shift needed for a history-blind server to supply the composed set: 0.2172 -> cannot come from the jitter
+
+t06 as Administrator: verdict WIRED
+  composed set 9, bare follow-up's set 0; composed only 9, bare only 0
+  lowest bare-follow-up score among the composed-only passages: 0.0463 (threshold 0.2687)
+  shift needed for a history-blind server to supply the composed set: 0.2224 -> cannot come from the jitter
+

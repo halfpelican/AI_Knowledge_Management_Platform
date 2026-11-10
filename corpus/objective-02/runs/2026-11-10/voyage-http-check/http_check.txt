@@ -1,0 +1,20 @@
+Thread set: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\corpus\objective-02\threads.json; HTTP check threads: t03 as Employee, t04 as Employee, t06 as Administrator
+Provider gate: anthropic (Voyage voyage-4 at 1024, Claude), the Voyage copy, D-120's values
+Provider gate: PASS
+Server: waitress 3.0.2, unknown threads, DEBUG off
+WARNING: the thread count is unknown, not 24 (D-85 decision 3)
+
+[t03 as Employee] Which company handles our catering? / How do I place an order with them?
+  verdict : WIRED
+  turn 2  : answered True, match True, correct True, leaks 0
+
+[t04 as Employee] Who is allowed to drive the fleet vehicles? / What records do they need to keep?
+  verdict : WIRED
+  turn 2  : answered True, match True, correct True, leaks 0
+
+[t06 as Administrator] How often are our suppliers reviewed? / Are we relying too heavily on just a few of them?
+  verdict : WIRED
+  turn 2  : answered True, match True, correct True, leaks 0
+
+WIRED 3 of 3; leaks 0 (must be 0); smallest gap between asks 7.0 s
+record written to C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\corpus\objective-02\runs\2026-11-10\voyage-http-check\http_check.json
