@@ -38,6 +38,11 @@ FRONTEND_SOURCE = Path(settings.BASE_DIR) / "frontend" / "src"
 CLIENT_COPIES = [
     ("ASK_IN_FLIGHT_CODE", FRONTEND_SOURCE / "api" / "ask.js"),
     ("INGESTION_IN_FLIGHT_CODE", FRONTEND_SOURCE / "api" / "ingestion.js"),
+    # D-123: the recording screen tells the in-flight 429 from the rate's, and the
+    # disabled 503 from the unavailable one, by these.
+    ("TRANSCRIPTION_IN_FLIGHT_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
+    ("TRANSCRIPTION_DISABLED_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
+    ("TRANSCRIPTION_UNAVAILABLE_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
 ]
 
 # `export const NAME_CODE = '...'`, a single-quoted string on one line, as both files write it.

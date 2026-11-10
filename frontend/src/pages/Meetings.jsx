@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { ApiError } from '../api/client.js'
 import { INGESTION_IN_FLIGHT_CODE } from '../api/ingestion.js'
@@ -10,12 +10,14 @@ import Button from '../components/Button.jsx'
 import FileDropZone from '../components/FileDropZone.jsx'
 import Notice from '../components/Notice.jsx'
 import NotPermitted from '../components/NotPermitted.jsx'
+import RecordingTranscriber from '../components/RecordingTranscriber.jsx'
 import SelectInput from '../components/SelectInput.jsx'
 import TextAreaInput from '../components/TextAreaInput.jsx'
 import TextInput from '../components/TextInput.jsx'
 import { TEXT, TRANSCRIPT_SOURCE } from '../constants.js'
 import useApiResource from '../hooks/useApiResource.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
+import { appendToDraft, draftFilename } from '../utils/audio.js'
 import { formatDate, todayIsoDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { whenToRetry } from '../utils/retryAfter.js'
@@ -29,6 +31,22 @@ import './Meetings.css'
 const FIELDS = ['title', 'meeting_date', 'transcript_text', 'file', 'attendees', 'visible_to_roles']
 
 const EMPTY_FORM = { title: '', meeting_date: '', transcript_text: '' }
+
+/**
+ * Save `text` as a UTF-8 text file named `filename`, from the page itself: the
+ * draft of a transcribed recording, so a person can keep it, or carry it to a host
+ * without transcription and add it there as a transcript file (D-123).
+ */
+function saveTextFile(text, filename) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
 
 /**
  * The meetings table as a pure view. The transcript body is not here — the list
@@ -92,6 +110,16 @@ export function MeetingTable({ meetings }) {
  * FR-05's GET /api/users stays Administrator-only, because it carries the role
  * each person holds and this form has no use for one. The server decides what
  * any of this may do (invariant 4).
+ *
+ * **A third source, a meeting recording (D-123).** RecordingTranscriber
+ * turns it into draft text a segment at a time, and the draft is kept here, apart
+ * from the pasted text, so switching source never loses it. It is added only once
+ * a person ticks that they reviewed it: Whisper mishears names, numbers and dates,
+ * and on 6 November one misheard date became a cited wrong answer three times out
+ * of three. What is added is the draft's text, sent exactly as pasted text is,
+ * through FR-09's own route; the recording itself never leaves the browser. The
+ * server cannot tell a reviewed transcript from a pasted one, so this screen is
+ * where the review is enforced, and the front-end suite holds it.
  */
 export default function Meetings() {
   useDocumentTitle('Meeting transcripts')
@@ -120,10 +148,35 @@ export default function Meetings() {
   const [formError, setFormError] = useState(null)
   const [notice, setNotice] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  // D-123: the recording's draft, whether a person has reviewed it, whether
+  // a run is going, and a key that gives the transcriber a fresh start once its
+  // draft has been added.
+  const [recordingDraft, setRecordingDraft] = useState('')
+  const [draftReviewed, setDraftReviewed] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
+  const [transcriberKey, setTranscriberKey] = useState(0)
+  const reviewId = useId()
   // The error summary. Focus moves here when a submission is refused, so a
   // keyboard user is taken to the reason instead of being left on the button.
   const errorSummaryRef = useRef(null)
   const headingRef = useRef(null)
+
+  const appendToRecordingDraft = useCallback((text) => {
+    setRecordingDraft((draft) => appendToDraft(draft, text))
+  }, [])
+
+  // A draft not yet added is work the person would lose by closing the tab, so
+  // the browser asks first. It cannot ask on a move within the app, which leaves
+  // this form and its draft behind; the draft can be saved as a text file.
+  useEffect(() => {
+    if (!recordingDraft.trim()) return undefined
+    function warn(event) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [recordingDraft])
 
   useEffect(() => {
     if (formError) errorSummaryRef.current?.focus()
@@ -143,12 +196,16 @@ export default function Meetings() {
     setValues((current) => ({ ...current, [name]: value }))
   }
 
-  /** Switching source clears the other half, so both can never be submitted. */
+  /**
+   * Switching source clears the other half, so both can never be submitted. A
+   * recording's draft is kept apart and is not cleared: it is a person's work,
+   * and it is submitted only from the recording option.
+   */
   function handleSourceChange(next) {
     setSource(next)
     setFile(null)
     setValues((current) => ({ ...current, transcript_text: '' }))
-    setFieldErrors((current) => ({ ...current, transcript_text: undefined, file: undefined }))
+    setFieldErrors((current) => ({ ...current, transcript_text: undefined, file: undefined, reviewed: undefined }))
   }
 
   function resetForm() {
@@ -156,6 +213,12 @@ export default function Meetings() {
     setFile(null)
     setAttendees([])
     setFieldErrors({})
+    if (source === TRANSCRIPT_SOURCE.recording) {
+      // The draft was added (or stored, on a 422): it is no longer unsaved work.
+      setRecordingDraft('')
+      setDraftReviewed(false)
+      setTranscriberKey((key) => key + 1)
+    }
   }
 
   function handleFailure(error) {
@@ -201,12 +264,15 @@ export default function Meetings() {
   async function handleSubmit(event) {
     event.preventDefault()
     setNotice(null)
+    const fromRecording = source === TRANSCRIPT_SOURCE.recording
     const clientErrors = validateMeetingIngestion({
       title: values.title,
       meetingDate: values.meeting_date,
-      transcriptText: values.transcript_text,
+      transcriptText: fromRecording ? recordingDraft : values.transcript_text,
       source,
       file,
+      reviewed: draftReviewed,
+      transcribing,
     })
     setFieldErrors(clientErrors)
     if (Object.keys(clientErrors).length > 0) {
@@ -220,8 +286,14 @@ export default function Meetings() {
       const meeting = await ingestMeeting({
         title: values.title.trim(),
         meetingDate: values.meeting_date,
-        // Exactly one of these reaches the API (src/api/meetings.js).
-        transcriptText: source === TRANSCRIPT_SOURCE.text ? values.transcript_text : undefined,
+        // Exactly one of these reaches the API (src/api/meetings.js). A
+        // recording's reviewed draft goes as pasted text does (D-123).
+        transcriptText:
+          source === TRANSCRIPT_SOURCE.text
+            ? values.transcript_text
+            : fromRecording
+              ? recordingDraft
+              : undefined,
         file: source === TRANSCRIPT_SOURCE.file ? file : undefined,
         attendees,
         visibleToRoles: rolesForVisibility(visibility),
@@ -359,6 +431,7 @@ export default function Meetings() {
             {[
               { value: TRANSCRIPT_SOURCE.text, label: TEXT.meetingSourceText },
               { value: TRANSCRIPT_SOURCE.file, label: TEXT.meetingSourceFile },
+              { value: TRANSCRIPT_SOURCE.recording, label: TEXT.meetingSourceRecording },
             ].map((option) => (
               <div className="meeting-form__choice" key={option.value}>
                 <input
@@ -367,7 +440,9 @@ export default function Meetings() {
                   name="transcript-source"
                   value={option.value}
                   checked={source === option.value}
-                  disabled={submitting}
+                  // Held while a recording is being transcribed: leaving the option
+                  // would end the run, though never the draft.
+                  disabled={submitting || transcribing}
                   onChange={() => handleSourceChange(option.value)}
                 />
                 <label htmlFor={`transcript-source-${option.value}`}>{option.label}</label>
@@ -375,7 +450,78 @@ export default function Meetings() {
             ))}
           </fieldset>
 
-          {source === TRANSCRIPT_SOURCE.text ? (
+          {source === TRANSCRIPT_SOURCE.recording ? (
+            <>
+              <RecordingTranscriber
+                key={transcriberKey}
+                disabled={submitting}
+                onText={appendToRecordingDraft}
+                onBusyChange={setTranscribing}
+              />
+              {recordingDraft.trim() ? (
+                <Notice variant="info" title={TEXT.draftReviewTitle}>
+                  {TEXT.draftReviewNotice}
+                </Notice>
+              ) : null}
+              {/* Shown once there is something to show in it, a run filling it, or
+                  a refusal to say against it; an empty box beside a server with
+                  transcription off would offer a place for text that cannot come. */}
+              {recordingDraft || transcribing || fieldErrors.transcript_text ? (
+                <TextAreaInput
+                  label={TEXT.draftLabel}
+                  name="recording_draft"
+                  rows={12}
+                  hint={TEXT.draftHint}
+                  value={recordingDraft}
+                  error={fieldErrors.transcript_text}
+                  // Read-only while segments are still arriving, so an edit is never
+                  // overtaken by the next one; editable as soon as the run ends.
+                  readOnly={transcribing}
+                  disabled={submitting}
+                  onChange={(event) => {
+                    setRecordingDraft(event.target.value)
+                    setFieldErrors((current) => ({ ...current, transcript_text: undefined }))
+                  }}
+                />
+              ) : null}
+              {recordingDraft.trim() ? (
+                <>
+                  <div className="field">
+                    <div className="meeting-form__review">
+                      <input
+                        type="checkbox"
+                        id={reviewId}
+                        checked={draftReviewed}
+                        disabled={submitting || transcribing}
+                        aria-invalid={fieldErrors.reviewed ? true : undefined}
+                        aria-describedby={fieldErrors.reviewed ? `${reviewId}-error` : undefined}
+                        onChange={(event) => {
+                          setDraftReviewed(event.target.checked)
+                          setFieldErrors((current) => ({ ...current, reviewed: undefined }))
+                        }}
+                      />
+                      <label htmlFor={reviewId}>{TEXT.draftReviewed}</label>
+                    </div>
+                    {fieldErrors.reviewed ? (
+                      <p id={`${reviewId}-error`} className="field__error">
+                        <span className="visually-hidden">Error: </span>
+                        {fieldErrors.reviewed}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="meeting-form__draft-actions">
+                    <Button
+                      variant="secondary"
+                      disabled={transcribing}
+                      onClick={() => saveTextFile(recordingDraft, draftFilename(values.title))}
+                    >
+                      {TEXT.draftSave}
+                    </Button>
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : source === TRANSCRIPT_SOURCE.text ? (
             <TextAreaInput
               label="Transcript"
               name="transcript_text"
@@ -422,7 +568,7 @@ export default function Meetings() {
           )}
 
           <div className="repository-page__actions">
-            <Button type="submit" loading={submitting} disabled={submitting}>
+            <Button type="submit" loading={submitting} disabled={submitting || transcribing}>
               {submitting ? 'Processing…' : 'Add transcript'}
             </Button>
           </div>

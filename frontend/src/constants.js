@@ -73,7 +73,36 @@ export const DOCUMENT_STATUS = {
 export const TRANSCRIPT_SOURCE = {
   text: 'text',
   file: 'file',
+  // D-123: a meeting recording, transcribed by Whisper into a draft that a
+  // person reviews before it is added. What is added is the draft's text, sent as
+  // pasted text is: the recording never reaches the server, only its segments do,
+  // and none of them is stored.
+  recording: 'recording',
 }
+
+/**
+ * The largest meeting recording the page will decode, mirroring
+ * apps/core/constants.py MAXIMUM_RECORDING_BYTES (D-123). Only the client
+ * enforces it: the recording itself is never uploaded, so it bounds this page's
+ * memory, where the file and its decoded audio sit together. Each segment the page
+ * sends is held to MAX_UPLOAD_BYTES by the server. apps/api/tests/
+ * test_front_end_constants_agreement.py fails when the two drift.
+ */
+export const MAXIMUM_RECORDING_BYTES = 500 * 1024 * 1024
+export const MAXIMUM_RECORDING_LABEL = '500 MB'
+/**
+ * The rate the page resamples a recording to before cutting it: Whisper's own,
+ * mirroring apps/core/constants.py TRANSCRIPTION_SAMPLE_RATE.
+ */
+export const TRANSCRIPTION_SAMPLE_RATE = 16000
+/**
+ * What the recording picker offers by default: audio files, and the video files a
+ * screen or meeting recorder writes (Game Bar and Teams write MP4). A hint to the
+ * picker, not a check: whatever the browser can decode is accepted, and anything
+ * it cannot is refused with a message when it is read.
+ */
+export const RECORDING_ACCEPT =
+  'audio/*,video/mp4,video/webm,video/quicktime,.m4a,.mp3,.wav,.aac,.ogg,.oga,.flac,.mp4,.webm,.mov'
 
 /**
  * FR-08 upload limits, mirroring apps/core/constants.py (ACCEPTED_EXTENSIONS,
@@ -169,6 +198,13 @@ export const VALIDATION = {
   meetingDateFuture: 'A meeting date may not be in the future.',
   transcriptRequired: 'Paste the transcript text.',
   transcriptFileRequired: 'Choose a transcript file.',
+  // D-123: a recording's draft is added only once it exists and a person
+  // has said they reviewed it.
+  recordingTooLarge: `Recording is larger than ${MAXIMUM_RECORDING_LABEL}. Choose a smaller file.`,
+  recordingTypeUnsupported: 'Choose an audio or video recording, such as M4A, MP3, WAV or MP4.',
+  transcriptDraftRequired: 'Transcribe a recording first, so there is a draft to add.',
+  transcriptReviewRequired: 'Confirm that you have reviewed and corrected the transcript.',
+  transcriptStillTranscribing: 'Wait for the transcription to finish, or stop it, before adding the transcript.',
   // FR-12: "queries shorter than two characters are rejected client-side". The
   // message names the minimum, so a refusal says what would be accepted.
   searchTermRequired: 'Enter something to search for.',
@@ -704,7 +740,65 @@ export const TEXT = {
   meetingNotFound: 'That meeting transcript could not be found.',
   meetingSourceText: 'Paste the transcript text',
   meetingSourceFile: 'Upload a transcript file',
+  meetingSourceRecording: 'Transcribe a meeting recording',
   meetingSourceLegend: 'How are you supplying the transcript?',
+
+  /* ---- Recording transcription (D-123) --------------------------- */
+  // Asked once, when the recording option is chosen, so nobody waits through a
+  // long run to learn that it cannot work.
+  recordingChecking: 'Checking whether recordings can be transcribed…',
+  recordingDisabledTitle: 'Transcription is not enabled here',
+  recordingDisabled:
+    'Recording transcription is not enabled on this server. Paste or upload the transcript instead.',
+  recordingUnavailableTitle: 'Transcription is not available right now',
+  recordingUnavailable:
+    'The transcription service is not answering. Try again shortly, or paste or upload the transcript instead.',
+  recordingStatusFailed: 'Could not check whether recordings can be transcribed.',
+  recordingCheckAgain: 'Check again',
+  recordingLabel: 'Meeting recording',
+  recordingHint:
+    `Audio or video, up to ${MAXIMUM_RECORDING_LABEL}. The recording stays in your browser; ` +
+    'it is transcribed a short segment at a time, and nothing is added until you review the draft.',
+  recordingNone: 'No recording chosen yet.',
+  recordingChosen: (name) => `Chosen: ${name}`,
+  recordingBusy: 'Transcribing. The recording cannot be changed until it has finished or is stopped.',
+  transcribeStart: 'Transcribe recording',
+  transcribeStop: 'Stop',
+  transcribeResume: 'Resume transcription',
+  transcribeReading: 'Reading the recording…',
+  transcribeProgressLabel: 'Transcription progress',
+  transcribeProgress: (done, total) => `Transcribed ${done} of ${total} segments.`,
+  transcribeSilent: (count) =>
+    count === 1 ? 'One silent stretch was skipped.' : `${count} silent stretches were skipped.`,
+  transcribeDone: 'Transcription finished. Review the draft below before adding it.',
+  transcribeNothingHeard: 'No speech was found in this recording, so nothing was added to the draft.',
+  transcribeStopped: (done, total) =>
+    `Stopped after ${done} of ${total} segments. The draft so far is kept, and you can resume.`,
+  // Invariant 8: a failed segment discards nothing. The page still holds the
+  // recording and the draft, and Resume sends the failed segment again.
+  transcribeFailedTitle: 'Transcription paused',
+  transcribeUnavailable: (done, total) =>
+    `The transcription service stopped answering after ${done} of ${total} segments. ` +
+    'The draft so far and the recording are kept; resume when it is back.',
+  transcribeDisabledNow:
+    'Recording transcription has been switched off on this server. The draft so far is kept.',
+  transcribeInFlight:
+    'Another transcription of yours is still running, perhaps in another tab. ' +
+    'The draft so far is kept; resume once it has finished.',
+  transcribeRefused: (done, total) =>
+    `A segment of this recording was refused after ${done} of ${total} segments. The draft so far is kept.`,
+  transcribeWaiting: (seconds) =>
+    `The transcription limit was reached. Carrying on in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}…`,
+  transcribeUnreadable:
+    'Your browser could not read this recording. Try an M4A, MP3, WAV or MP4 file.',
+  draftLabel: 'Transcript draft',
+  draftHint: 'Correct anything Whisper misheard. What you add is exactly this text.',
+  draftReviewTitle: 'Review the draft before adding it',
+  draftReviewNotice:
+    'This is a machine transcript. Check names, numbers and dates against the recording: ' +
+    'Whisper writes dates the US way ("March 1, 2027"), and a misheard word becomes a wrong answer later.',
+  draftReviewed: 'I have reviewed and corrected this transcript.',
+  draftSave: 'Save draft as a text file',
   // The transcript file's drop zone states its own state (usability finding 2).
   meetingFileNone: 'No file chosen yet.',
   meetingFileChosen: (name) => `Chosen: ${name}`,
