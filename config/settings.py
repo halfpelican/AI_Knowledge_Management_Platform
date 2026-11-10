@@ -323,8 +323,10 @@ EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=768)
 
 # Claude + Voyage: the proposal's production configuration, funded since D-113.
 ANTHROPIC_API_KEY = env.str("ANTHROPIC_API_KEY", default="")
-# Sonnet 5.5, the configuration under test (D-115): half Opus 5.5's per-token price.
-ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-sonnet-5-5")
+# Haiku 5.5 (D-121): it matched Sonnet 5.5 on every bar of the Haiku round, faster and at a
+# twentieth of the price. ANTHROPIC_MODEL=claude-sonnet-5-5 goes back to D-115's model. The same
+# setting selects FR-10's classification model, which is not yet measured on either.
+ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-haiku-5-5")
 VOYAGE_API_KEY = env.str("VOYAGE_API_KEY", default="")
 VOYAGE_MODEL = env.str("VOYAGE_MODEL", default="voyage-4")
 VOYAGE_BASE_URL = env.str("VOYAGE_BASE_URL", default="https://api.voyageai.com/v1")
