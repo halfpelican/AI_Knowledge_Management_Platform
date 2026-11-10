@@ -26,10 +26,11 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+import apps.ai
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
 from apps.ai import attempt_log
-from apps.ai.base import ProviderUnavailable
+from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
@@ -46,10 +47,12 @@ from apps.core.constants import (
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
     MAX_UPLOAD_BYTES,
+    MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
+    TRANSCRIPTION_SEGMENT_SECONDS,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import (
@@ -70,6 +73,7 @@ from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
 from apps.documents.models import Document, Tag
 from apps.documents.taxonomy import retire_tag, tag_inventory
+from apps.ingestion import audio
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.errors import (
@@ -100,6 +104,7 @@ from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
+from .transcription_slot import release_transcription_slot, take_transcription_slot
 from .permissions import HasRolePermission, role_holds
 from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
@@ -292,6 +297,35 @@ KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE = (
     "The knowledge service is temporarily unavailable, so the aggregation cycle did not run and "
     "nothing was changed. Please try again shortly."
 )
+# Recording transcription (D-123). Each refusal is answered before any provider call, and
+# none stores anything, because the route stores nothing at all. The two 503s carry codes, so the
+# page can tell "not enabled on this server" (paste or upload the transcript instead) from "FLM is
+# down" (resume shortly) without reading the detail.
+TRANSCRIPTION_DISABLED_MESSAGE = (
+    "Recording transcription is not enabled on this server. Paste or upload the transcript instead."
+)
+TRANSCRIPTION_DISABLED_CODE = "transcription_disabled"
+# NFR-19's informative notice for a segment the provider failed after MAXIMUM_TRANSCRIBE_ATTEMPTS:
+# what happened, and that nothing was stored, so sending the segment again is safe.
+TRANSCRIPTION_UNAVAILABLE_MESSAGE = (
+    "The transcription service is temporarily unavailable. This segment was not transcribed and "
+    "nothing was stored; please send it again shortly."
+)
+TRANSCRIPTION_UNAVAILABLE_CODE = "transcription_unavailable"
+NO_AUDIO_SUBMITTED_MESSAGE = "No audio segment was submitted."
+# 415, as FR-08 answers a format it does not accept: the bytes are not a 16-bit PCM WAV, which is
+# all the page sends (apps/ingestion/audio.py).
+UNSUPPORTED_AUDIO_MESSAGE = "Audio must be a 16-bit PCM WAV segment, mono or stereo."
+EMPTY_AUDIO_MESSAGE = "The audio segment holds no audio."
+SEGMENT_TOO_LONG_MESSAGE = (
+    f"An audio segment may hold at most {MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS} seconds of audio."
+)
+# A second segment from a user whose previous one is still with FLM (apps/api/transcription_slot.py).
+TRANSCRIPTION_IN_FLIGHT_MESSAGE = "Your previous audio segment is still being transcribed."
+TRANSCRIPTION_IN_FLIGHT_CODE = "transcription_in_flight"
+# The two values of a transcription reply's "status".
+SEGMENT_TRANSCRIBED = "transcribed"
+SEGMENT_SILENT = "silent"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -1299,6 +1333,164 @@ class MeetingDetailView(APIView):
             self.permission_denied(request, message=CanManageMeetings.message)
         delete_meeting(meeting)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --- Recording transcription (D-123) ---------------------------------------------------
+# Not in the proposal. A person with a meeting recording has the page turn it into a draft
+# transcript, one segment at a time; nothing here indexes anything. The confirmed draft goes in
+# through POST /api/meetings, FR-09's own route and the one path into the index.
+
+
+def transcription_refused(detail: str, code: str):
+    """A 503 carrying ``code``, for the page to branch on, as the in-flight 429s carry theirs."""
+    return Response({"detail": detail, "code": code}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class TranscriptionStatusView(APIView):
+    """``GET /api/transcriptions/status`` — whether a recording can be transcribed here, now.
+
+    The page asks once, when the recording option is chosen, so it can say before a long run
+    starts that transcription is not enabled on this server, or that FLM does not answer. The
+    body also carries the segment lengths, so the page cuts what the server will accept.
+
+    ``available`` is true only when transcription is enabled and the provider's
+    ``transcription_health`` reports FLM answering. That cannot show whether FLM was started with
+    ``--asr 1`` (D-123, "What it does not cover"); a server without it fails the first
+    segment, which the page reports the same way. No provider detail is returned: it names an
+    internal address, and the page needs only the two flags.
+
+    Behind ``contribute_content``, as the transcription itself is: only someone who may add a
+    transcript has a reason to ask.
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+
+    def get(self, request):
+        enabled = apps.ai.transcription_enabled()
+        available = enabled and apps.ai.get_ai_service().transcription_health().available
+        return Response(
+            {
+                "enabled": enabled,
+                "available": available,
+                "segment_seconds": TRANSCRIPTION_SEGMENT_SECONDS,
+                "maximum_segment_seconds": MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
+            }
+        )
+
+
+class TranscriptionsView(APIView):
+    """``POST /api/transcriptions`` — one recording segment in, its text out (D-123).
+
+    **The request is multipart**, one field, ``audio``: a 16-bit PCM WAV of at most
+    MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS. **It creates nothing**: no meeting, no chunk, no file,
+    no row. The page assembles the replies into a draft, a person corrects and confirms it, and
+    only then does FR-09's ``POST /api/meetings`` store and index it.
+
+    **The rejection order**, each before any provider call:
+
+    1. 401 no session; 403 the role lacks ``contribute_content`` (DRF's ``initial()``, before the
+       body is parsed, as the upload's permission is: the cheapest rejection first).
+    2. 429 past ``TRANSCRIPTION_THROTTLE_RATE``, scope ``transcription`` (D-79), also in
+       ``initial()``, so a rejected request counts against it too.
+    3. 503 ``transcription_disabled`` when ``TRANSCRIPTION_PROVIDER`` is ``none``, before the body
+       is read.
+    4. 413 a declared ``Content-Length`` over MAX_UPLOAD_BYTES, before the body is parsed; then
+       400 no ``audio`` part; then 413 again against the bytes that arrived.
+    5. 415 not a 16-bit PCM WAV at an accepted channel count and rate; 400 a segment with no audio
+       frames, or with more than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS of audio.
+    6. 200 ``"status": "silent"`` for a segment whose loudest half second is below
+       TRANSCRIPTION_SILENCE_DBFS, with no provider call: Whisper invents text from silence.
+    7. 429 ``transcription_in_flight`` while another segment of this user's is with the provider
+       (``apps/api/transcription_slot.py``).
+
+    Then the provider: 200 ``"status": "transcribed"`` with the text and the model, or NFR-19's
+    503 ``transcription_unavailable`` after MAXIMUM_TRANSCRIBE_ATTEMPTS (any 4xx refusal at once,
+    D-118). Nothing was stored, so the page sends the same segment again when the person resumes;
+    its draft and recording are its own and were never here to lose (invariant 8).
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transcription"
+
+    def post(self, request):
+        if not apps.ai.transcription_enabled():
+            return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
+
+        # The declared length, before request.data is touched, as the document upload does.
+        declared_length = request.META.get("CONTENT_LENGTH") or 0
+        try:
+            declared_length = int(declared_length)
+        except (TypeError, ValueError):
+            declared_length = 0
+        if declared_length > MAX_UPLOAD_BYTES:
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        uploaded = request.data.get("audio")
+        if not hasattr(uploaded, "read"):
+            return Response(
+                {"audio": [NO_AUDIO_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        # Again against what arrived, for a client that lies about or omits the length.
+        if uploaded.size > MAX_UPLOAD_BYTES:
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        try:
+            segment = audio.read_segment(uploaded.read())
+        except audio.UnsupportedAudio:
+            return Response(
+                {"detail": UNSUPPORTED_AUDIO_MESSAGE}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+            )
+        except audio.EmptyAudio:
+            return Response({"audio": [EMPTY_AUDIO_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+        except audio.SegmentTooLong:
+            return Response({"audio": [SEGMENT_TOO_LONG_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+
+        duration = round(segment.duration_seconds, 2)
+        if segment.silent:
+            return Response(
+                {"status": SEGMENT_SILENT, "text": "", "model": None, "duration_seconds": duration}
+            )
+
+        token = take_transcription_slot(request.user)
+        if token is None:
+            return Response(
+                {"detail": TRANSCRIPTION_IN_FLIGHT_MESSAGE, "code": TRANSCRIPTION_IN_FLIGHT_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        try:
+            # Every failed attempt inside is logged naming this account (apps/ai/attempt_log.py).
+            with attempt_log.account(request.user.pk):
+                result = audio.transcribe(segment)
+        except TranscriptionDisabled:
+            # The setting was read as on above; reached only if it changed in between.
+            return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
+        except ProviderUnavailable as exc:
+            # On the attempts logger, beside the failed attempts it ended, as the ask's 503 is.
+            logging.getLogger(attempt_log.ATTEMPT_LOGGER_NAME).warning(
+                "POST /api/transcriptions answered 503 (account %s): %s: %s",
+                request.user.pk,
+                attempt_log.cause_of(exc),
+                exc,
+            )
+            return transcription_refused(
+                TRANSCRIPTION_UNAVAILABLE_MESSAGE, TRANSCRIPTION_UNAVAILABLE_CODE
+            )
+        finally:
+            release_transcription_slot(request.user, token)
+        return Response(
+            {
+                "status": SEGMENT_TRANSCRIBED,
+                "text": result.text,
+                "model": result.model,
+                "duration_seconds": duration,
+            }
+        )
 
 
 class DocumentReprocessView(APIView):

@@ -10,6 +10,9 @@ command, a Warning is printed and the command continues.
 - An unreachable provider is a Warning (ai.W001). The API answers 503 until the
   provider returns (NFR-19); nothing else is affected.
 - An unknown AI_PROVIDER is an Error (ai.E002).
+- An unknown TRANSCRIPTION_PROVIDER is an Error (ai.E003), and transcription switched on with
+  FLM not answering is a Warning (ai.W002): the recording option reports it unavailable until
+  FLM returns, and nothing else is affected (D-123).
 
 pytest never runs this check: the stub in conftest.py stands in for the provider
 and test database creation skips system checks.
@@ -24,6 +27,38 @@ from apps.ai.base import ProviderUnavailable
 PROBE_TEXT = "embedding dimension probe"
 UNREACHABLE = "AI provider unreachable; the API will answer 503 until it is."
 REINDEX_COMMAND = "python manage.py reindex --provider <name>"
+TRANSCRIPTION_UNREACHABLE = (
+    "Recording transcription is on (TRANSCRIPTION_PROVIDER=flm) but FLM does not answer; the "
+    "recording option will report it unavailable until it does."
+)
+TRANSCRIPTION_SERVE_HINT = "Start FLM with speech loaded: flm serve gemma3:4b --embed 1 --asr 1"
+
+
+@checks.register("ai")
+def check_transcription_provider(app_configs, **kwargs):
+    """D-123's setting: a known value, and FLM answering when it is on."""
+    # Imported at call time so the attribute the test suite patches is the one used.
+    from apps.ai import get_ai_service, transcription_enabled
+
+    try:
+        enabled = transcription_enabled()
+    except ImproperlyConfigured as exc:
+        return [checks.Error(str(exc), hint="Set TRANSCRIPTION_PROVIDER to 'none' or 'flm'.", id="ai.E003")]
+    if not enabled:
+        return []
+    try:
+        health = get_ai_service().transcription_health()
+    except ImproperlyConfigured:
+        return []  # an unknown AI_PROVIDER is ai.E002's to report, once
+    if not health.available:
+        return [
+            checks.Warning(
+                f"{TRANSCRIPTION_UNREACHABLE} {health.detail}",
+                hint=TRANSCRIPTION_SERVE_HINT,
+                id="ai.W002",
+            )
+        ]
+    return []
 
 
 @checks.register("ai")

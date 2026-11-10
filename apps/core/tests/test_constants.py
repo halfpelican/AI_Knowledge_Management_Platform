@@ -16,6 +16,7 @@ SECTION_5_NAMES = [
     "MAXIMUM_GENERATION_ATTEMPTS",
     "MAXIMUM_EMBED_ATTEMPTS",
     "MAXIMUM_CLASSIFY_ATTEMPTS",
+    "MAXIMUM_TRANSCRIBE_ATTEMPTS",
     "MINIMUM_QUESTION_LENGTH",
     "MAXIMUM_QUESTION_LENGTH",
     "MINIMUM_CONTENT_LENGTH",
@@ -147,6 +148,22 @@ def test_attempt_counts_are_one_attempt_plus_two_retries():
     assert constants.MAXIMUM_GENERATION_ATTEMPTS == 3
     assert constants.MAXIMUM_EMBED_ATTEMPTS == 3
     assert constants.MAXIMUM_CLASSIFY_ATTEMPTS == 3
+    # And recording transcription's (D-123), 1 initial call + 2 retries like the rest.
+    assert constants.MAXIMUM_TRANSCRIBE_ATTEMPTS == 3
+
+
+def test_the_transcription_bounds_are_ordered():
+    """D-123: the page's segment fits under the server's ceiling with room for a tail, the sample
+    rate the page sends is inside the accepted range, and silence is measured in dBFS."""
+    assert 0 < constants.TRANSCRIPTION_SEGMENT_SECONDS < constants.MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS
+    assert (
+        constants.MINIMUM_TRANSCRIPTION_SAMPLE_RATE
+        <= constants.TRANSCRIPTION_SAMPLE_RATE
+        <= constants.MAXIMUM_TRANSCRIPTION_SAMPLE_RATE
+    )
+    assert constants.TRANSCRIPTION_SILENCE_DBFS < 0
+    assert 0 < constants.TRANSCRIPTION_SILENCE_WINDOW_SECONDS < constants.TRANSCRIPTION_SEGMENT_SECONDS
+    assert constants.MAXIMUM_RECORDING_BYTES > constants.MAX_UPLOAD_BYTES
 
 
 def test_top_k_is_positive():

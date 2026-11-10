@@ -20,6 +20,7 @@ from apps.core.constants import (
     INGESTION_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
+    TRANSCRIPTION_THROTTLE_RATE,
     PASSWORD_MINIMUM_LENGTH,
     SESSION_INACTIVITY_MINUTES,
 )
@@ -186,6 +187,8 @@ REST_FRAMEWORK = {
     #   "ingestion" is one budget shared by the three routes that ingest.
     # - "search" and "tagging": per signed-in user too, keyword search and a person applying a
     #   tag (D-79's two notes of 10 November 2026).
+    # - "transcription": per signed-in user, one recording segment sent for transcription
+    #   (D-123).
     #
     # The counters live in the default cache. No CACHES is set, so that is Django's
     # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
@@ -197,6 +200,7 @@ REST_FRAMEWORK = {
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
+        "transcription": TRANSCRIPTION_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit
@@ -319,6 +323,13 @@ FLM_BASE_URL = env.str("FLM_BASE_URL", default="http://127.0.0.1:52625/v1")
 FLM_API_KEY = env.str("FLM_API_KEY", default="flm")  # placeholder, not a credential
 FLM_CHAT_MODEL = env.str("FLM_CHAT_MODEL", default="gemma3:4b")
 FLM_EMBED_MODEL = env.str("FLM_EMBED_MODEL", default="embed-gemma")
+
+# Recording transcription (D-123), selected independently of AI_PROVIDER, because only FLM
+# has speech-to-text: Claude and Voyage have none. "none" (the default) leaves it off, so a host
+# without the NPU (D-114) offers no control that cannot work; "flm" sends each segment to
+# whisper-v3:turbo on the FLM server at FLM_BASE_URL, which must be started with --asr 1.
+TRANSCRIPTION_PROVIDER = env.str("TRANSCRIPTION_PROVIDER", default="none")
+FLM_ASR_MODEL = env.str("FLM_ASR_MODEL", default="whisper-v3:turbo")
 
 # Length of the vectors the configured embedding model returns (docs/decisions.md
 # D-03): 1024 for voyage-4, the default since D-122, and 768 for FLM's embed-gemma. The pgvector

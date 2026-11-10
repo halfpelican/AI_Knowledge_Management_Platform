@@ -90,6 +90,13 @@ class DocumentClassification:
     model: str                    # the chat model that answered, for the DocumentAnalysis record
     input_truncated: bool         # the text was cut at CLASSIFICATION_INPUT_TOKENS before it was sent
 
+@dataclass(frozen=True)
+class Transcription:              # D-123 — one recording segment's text, a draft
+    text: str                     # the speech model's text, stripped; may be empty
+    model: str                    # FLM_ASR_MODEL, whisper-v3:turbo
+
+class TranscriptionDisabled(ProviderUnavailable): ...  # TRANSCRIPTION_PROVIDER=none
+
 class AIService(Protocol):
     def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult: ...
     def generate_statements(
@@ -101,13 +108,17 @@ class AIService(Protocol):
     ) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
     def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription: ...
+    def transcription_health(self) -> ProviderHealth: ...
 ```
 
 The operations are the ones listed on `AIService`, and the list is the source of truth, not a
 count. `classify_document` arrived with FR-10 on 9 November 2026 (D-104), when NIT3004 asked for
 it; it lives in its own module, `apps/ai/classification.py`, so nothing in the generation prompt
-or its loop changed for it — section 5b. Summarisation (FR-16) gets its own method the same way
-when its requirement is built, not speculatively before.
+or its loop changed for it — section 5b. `transcribe` and `transcription_health` arrived on 10
+November 2026 with recording transcription (D-123), when the user asked for it — section 5c.
+Summarisation (FR-16) gets its own method the same way when its requirement is built, not
+speculatively before.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
@@ -125,6 +136,11 @@ conform to `CLASSIFICATION_SCHEMA`, including a type outside the fixed list, cou
 attempt, not as a classification. A 4xx is handled as for generation (D-118), because
 classification makes its calls through the same `_chat_once` and `_claude_once`: a 429 is a
 failed attempt, and any other 4xx ends the attempts at once.
+
+`transcribe` raises `TranscriptionDisabled` before any call when `TRANSCRIPTION_PROVIDER` is
+`none`, and otherwise `ProviderUnavailable` after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, with a 4xx handled
+as for generation (D-118). `POST /api/transcriptions` answers either with a 503 carrying its own
+code. `transcription_health` never raises (section 5c).
 
 ### `on_attempt` — an observer, not an operation
 
@@ -203,6 +219,13 @@ Call `get_ai_service()`. Never instantiate an implementation directly outside
 `apps/ai/`, and never import `openai` or `anthropic` outside that package. The
 auditor greps for exactly this.
 
+**Recording transcription has a setting of its own** (D-123): `TRANSCRIPTION_PROVIDER`,
+`none` (the default) or `flm`. It is independent of `AI_PROVIDER`, because only FLM has
+speech-to-text, so a deployment on the `anthropic` default still transcribes through FLM when the
+setting is `flm`. `apps.ai.transcription_enabled()` reads it without calling anything; the
+transcription itself still goes through `get_ai_service().transcribe()` (section 5c). An unknown
+value is `ImproperlyConfigured`, and the startup check reports it as `ai.E003`.
+
 ---
 
 ## 3. FLM implementation
@@ -241,11 +264,24 @@ be co-resident with an LLM in server mode. Endpoints then available at
 `http://127.0.0.1:8625/v1`: `/models`, `/chat/completions`, `/embeddings`,
 `/audio/transcriptions`.
 
+**For recording transcription (D-123), add `--asr 1`**, which loads `whisper-v3:turbo`
+beside the other two (`flm pull whisper-v3:turbo` first, 623 MB):
+
+```powershell
+flm serve gemma3:4b --embed 1 --asr 1
+```
+
+Measured on v0.9.39 on 6 November 2026: one server holds all three models, and
+`scripts/check_flm.py` still passes with speech loaded. **Before starting a server, check for one
+already running** (`Get-Process flm`): Windows lets two `flm serve` processes listen on 8625 at
+once, requests then go to either, and the second could not load its model.
+
 | Setting | Value |
 |---|---|
 | Chat model | `gemma3:4b` |
 | Embedding model | `embed-gemma` (embeddinggemma-300m, Q4_1) |
 | Embedding dimension | 768 |
+| Speech model | `whisper-v3:turbo`, with `--asr 1` (D-123) |
 | Max embedding chunk | 2048 tokens — our 500-token chunks are well inside it |
 | Requires | XDNA2 NPU (Strix, Strix Halo, Kraken, Gorgon Point), driver ≥ 32.0.203.304 |
 
@@ -467,6 +503,32 @@ tested retry path, not as a measured one.
 
 ---
 
+## 5c. Recording transcription (D-123)
+
+`apps/ai/transcription.py` holds the one call both providers make, because Claude and Voyage have
+no speech-to-text: a multipart POST to FLM's `/v1/audio/transcriptions` with `FLM_ASR_MODEL`,
+`language=en`, `response_format=json` and the segment as a WAV part, carrying
+`TRANSCRIPTION_TIMEOUT_SECONDS`. The FLM provider passes its own client; the Anthropic provider
+builds an FLM client from `FLM_BASE_URL` only when the setting is `flm`.
+
+- **One segment per call.** The page cuts a recording into WAV segments of at most
+  `TRANSCRIPTION_SEGMENT_SECONDS` and sends them one at a time. The server never decodes MP4, M4A
+  or MP3; it receives only 16-bit PCM WAV, which Python's `wave` reads.
+- **Silence never reaches the provider.** `apps/ingestion/audio.py` refuses a segment whose loudest
+  half second is below `TRANSCRIPTION_SILENCE_DBFS` before any call, because Whisper invents text
+  from silence. What it sends is a WAV rebuilt from exactly the frames it measured.
+- **Attempts:** `MAXIMUM_TRANSCRIBE_ATTEMPTS` (1 initial call + 2 retries) for a transport failure,
+  a 5xx, a 429 or a 200 with no text; any other 4xx is `ProviderRefused` at once (D-118). Each
+  failed attempt is logged under the step `transcription`.
+- **Health** is FLM's model list answering within `HEALTH_TIMEOUT_SECONDS`. It cannot show that
+  Whisper is loaded: FLM's `/v1/models` lists its chat catalogue and names neither
+  `whisper-v3:turbo` nor `embed-gemma`. A server started without `--asr 1` fails the first segment.
+
+Nothing returned is indexed. The page assembles the text into a draft that a person reviews, and
+the confirmed draft goes in through FR-09's `POST /api/meetings`.
+
+---
+
 ## 6. Testing
 
 Tests never reach a live FLM server. Inject a stub `AIService` returning fixed
@@ -477,7 +539,10 @@ against recorded responses, including deliberately malformed ones.
 Enforced, not just stated: an autouse fixture in `conftest.py` points `FLM_BASE_URL`,
 `VOYAGE_BASE_URL` and the Anthropic SDK at a closed loopback port and blanks every API
 key for the whole suite, so an accidental live call fails with a connection error
-instead of quietly succeeding against a developer's running server.
+instead of quietly succeeding against a developer's running server. The same fixture
+sets `TRANSCRIPTION_PROVIDER` to `none` whatever a developer's `.env` says; a test that needs
+transcription on says so. The stub's `transcribe` returns a numbered text per segment
+(`stub_transcript_text`), and `transcription=` overrides it as `classification=` does.
 
 ---
 
