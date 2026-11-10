@@ -1,0 +1,110 @@
+database: kmp_obj0506_20261101
+FLM gate: scripts/check_flm.py's checks (D-83)
+
+[GET /models]
+  33 model(s) advertised by /models:
+    - deepseek-r1:8b
+    - deepseek-r1-0528:8b
+    - gemma3:1b
+    - gemma3:4b
+    - gemma4-it:e2b
+    - gpt-oss:20b
+    - gpt-oss-sg:20b
+    - lfm2:1.2b
+    - lfm2:2.6b
+    - lfm2-trans:2.6b
+    - lfm2.5-it:1.2b
+    - lfm2.5-tk:1.2b
+    - llama3.1:8b
+    - llama3.2:1b
+    - llama3.2:3b
+    - medgemma:4b
+    - medgemma1.5:4b
+    - nanbeige4.1:3b
+    - phi4-mini-it:4b
+    - qwen2.5-it:3b
+    - qwen2.5vl-it:3b
+    - qwen3:0.6b
+    - qwen3:1.7b
+    - qwen3:4b
+    - qwen3:8b
+    - qwen3-it:4b
+    - qwen3-tk:4b
+    - qwen3.5:0.8b
+    - qwen3.5:2b
+    - qwen3.5:4b
+    - qwen3.5:9b
+    - qwen3vl-it:4b
+    - translategemma:4b
+  note: this list is the model catalogue rather than the resident set,
+        and it does not include the embedding model. The two calls below are the proof.
+  chat model 'gemma3:4b': advertised
+  PASS
+
+[POST /chat/completions]
+  model  : gemma3:4b
+  prompt : 'Reply with the single word: pong'
+  reply  : 'pong'  (1.4s)
+  PASS
+
+[POST /embeddings]
+  model      : embed-gemma
+  inputs     : 3, vectors returned: 3  (0.9s)
+  dimensions : [768, 768, 768]  (expected 768)
+  determinism : same input twice in one batch -> cosine 1.0000
+  determinism : same input in a second call  -> cosine 1.0000
+  discrimination: two unrelated inputs      -> cosine 0.1301
+  sanity      : vectors are deterministic and discriminate between inputs
+  PASS
+  A01 Employee      ask    answered                     20.0s  What happens to annual leave I haven't used by the end of th
+  A02 Employee      ask    answered                     8.5s  Is multi-factor authentication required for my work email?
+  A03 Employee      ask    answered                     9.7s  Who has to approve a purchase of eighteen thousand dollars?
+  A04 Employee      ask    answered                     8.6s  How many days do I have to submit an expense claim after pay
+  A05 Administrator ask    answered                     23.2s  What rating does Bluewater IT have in the vendor register?
+  A06 Administrator ask    answered                     8.9s  Who is facilitating the "Writing clear reports" session?
+  A07 Employee      ask    answered                     9.8s  Where is the assembly point if we have to evacuate the build
+  A08 Employee      search 1 result(s)                  0.0s  Harbour Light
+  A09 Administrator search 1 result(s)                  0.0s  Quartz Harbour
+  A10 Employee      search 1 result(s)                  0.0s  Lantern Grove
+  U01 Employee      ask    no-answer                    0.4s  Will my salary rise with inflation?
+  U02 Administrator ask    no-answer                    0.4s  Are salaries indexed to inflation?
+  U03 Administrator search 0 result(s)                  0.0s  salary review
+  U04 Employee      ask    no-answer                    0.4s  Is there a corporate credit card I can be issued with?
+  U05 Administrator ask    no-answer                    0.4s  Is there a corporate credit card program?
+  U06 Employee      search 0 result(s)                  0.0s  corporate card
+  U07 Employee      ask    no-answer                    0.4s  Does everything stop over Christmas?
+  U08 Administrator ask    no-answer                    0.4s  What stops running over the Christmas period?
+  U09 Employee      search 0 result(s)                  0.0s  christmas shutdown
+  U10 Employee      ask    no-answer                    0.4s  Is jury duty paid?
+  U11 Administrator ask    no-answer                    0.4s  What happens if someone is summoned for jury service?
+  U12 Employee      search 0 result(s)                  0.0s  jury duty
+  P01 Employee      ask    no-answer                    0.5s  Who is the project manager for Project Atlas?
+  P02 Employee      ask    no-answer                    0.4s  What gets decided at the Quartz Harbour milestone gate?
+  P03 Employee      search 0 result(s)                  0.0s  Quartz Harbour
+  P04 Employee      ask    answered                     30.2s  Who on the team is rated four in project management?
+  P05 Employee      search 0 result(s)                  0.1s  Ember Field
+  P06 Employee      ask    no-answer                    0.5s  How much is in the Fernwood contingency reserve?
+  P07 Employee      ask    answered                     31.1s  What did the risk committee decide to do about supplier conc
+  P08 Employee      ask    no-answer                    0.5s  How many people reported the Cobalt Reef phishing email to t
+
+wrote corpus\objective-06\runs\2026-11-10\seed\seed.json
+{
+  "answerable": {
+    "asks_answered": 7,
+    "asks_no_answer": 0,
+    "searches_with_results": 3,
+    "searches_zero": 0
+  },
+  "unanswerable": {
+    "asks_answered": 0,
+    "asks_no_answer": 8,
+    "searches_with_results": 0,
+    "searches_zero": 4
+  },
+  "permission-only": {
+    "asks_answered": 2,
+    "asks_no_answer": 4,
+    "searches_with_results": 0,
+    "searches_zero": 2
+  }
+}

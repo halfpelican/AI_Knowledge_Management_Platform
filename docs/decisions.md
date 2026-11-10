@@ -7201,6 +7201,27 @@ every question asked as the Employee; nothing was written. The evidence is
 - **An FLM-configuration result,** like D-109's and D-110's values: repeated on the new configuration
   before the thirty are run there (D-110's note).
 
+**Dated note, 10 November 2026 (evening): the rule now decides on the top-ranked passage even below
+the threshold.** The user's decision, after Objective 06's first cycle on the frozen thirty (D-110's
+note) kept P02: its answer exists only in the Administrator-only Atlas brief, which scored 0.2977 to
+0.2983 across the Administrator's scope, under `RELEVANCE_THRESHOLD` and inside D-40's drift, and
+step 4 above kept every row with nothing admitted.
+
+- **The rule from `333be14`:** rank the question over the Administrator's scope and take the
+  top-ranked passage, whether or not it clears the threshold. If its `visible_to_roles` has no
+  overlap with the asker's effective roles, the best evidence for an answer is where the asker cannot
+  read it, and the row is left out. If the asker may read it, the row is a gap. If no passage of the
+  question's embedding model exists, the row is a gap.
+- **Development check repeated on the new rule** (`corpus/objective-06/runs/2026-11-10/
+  exclusion-dev-check-2/`): scoped questions left out 6 of 6, no-answer questions kept 9 of 9,
+  ordinary questions kept 46 of 50, exactly as under the old rule. Both rules score 15 of 15, so the
+  development set did not choose between them: the frozen result did, and this is disclosed as such.
+- **The known cost:** a genuine gap whose weak best match happens to be a restricted passage is left
+  out. Neither the development questions nor the frozen thirty's unanswerable asks have that shape
+  (every one's top passage is readable), so its size is unmeasured.
+- **Tests:** two below-threshold cases replace the old "nothing above the threshold is kept" test;
+  the restricted one failed under a break restoring the old condition.
+
 ## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
@@ -7346,6 +7367,33 @@ for Administrator-only phrases.
   reported per draw, as D-103 measured FLM's band.
 - **Every Objective 06 result records its configuration:** the provider, the chat model and the
   embedding model, in the seeding, sweep and verification records.
+
+**Dated note, 10 November 2026 (evening): Objective 06's verification. The first cycle meets clauses 1
+and 2 and not clause 3; after one disclosed rule change, a second cycle meets all three.** The
+evidence is `corpus/objective-06/runs/2026-11-10/objective-06.md`, with `seed/`, `cycle/`,
+`verification/` and `rerun/`.
+
+| | Cycle 1, `ce886e7` | Cycle 2, `333be14` |
+|---|---|---|
+| status | **the independent test** | informed by cycle 1 (D-108's note) |
+| clause 1, unanswerable queries and zero-result searches in the log | 12 of 12, met | 12 of 12, met |
+| clause 2, one entry per subject, count accurate | 4 entries of 3, met | 4 entries of 3, met |
+| clause 3, no permission-only query in the log | **P02 in the log, not met** | none, met |
+
+- **The seeding** went through the shipped `answer_question` and `search` as each query's user: the 8
+  screened unanswerable asks all took no-answer path A, the 7 answerable asks were answered, and of
+  the 6 permission-only asks 4 reached a no-answer while P04 and P07 were answered from readable
+  material, as the pre-measurement found. A first attempt stopped after its first ask on a script
+  error; that ask's one logged row was deleted and the thirty were seeded once.
+- **Cycle 2 ran over the same seeded logs,** after cycle 1's 5 entries, 13 items and 1 cycle record
+  were deleted.
+- **Cycle 1 stands as the independent figure** for clause 3. The four subjects grouped correctly on
+  both cycles, and no answerable query entered the log on either.
+- **Correction to this entry's freeze line:** the SHA-256 given above, `e78314b7…`, is the file with
+  Windows line endings as written before commit. Git stores it with LF endings (`core.autocrlf
+  input`), and the committed file, which the seeding read, hashes to
+  `e40a589c91893be6cca1ccd77d175571df8090d51d9ebdcaadade95be4dc1462`. The two differ only in line
+  endings.
 
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
