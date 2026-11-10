@@ -15,8 +15,9 @@ The policy under test (CLAUDE.md section 5, D-19, invariant 10):
   correcting the constant to 2.
 - A reply that does not conform is a failed attempt, not a partial answer.
 - A reply that conforms on a later attempt is returned, and no further calls are made.
-- A 4xx consumes no retries: it is a configuration error, it would fail identically three
-  times, and it surfaces as itself.
+- Since D-118, a 429 is a failed attempt like an outage and is retried to the limit. Any
+  other 4xx is ProviderRefused and ends the loop after one call. Each is logged, a 429 as
+  a WARNING and the rest as ERRORs.
 
 Exercised through FLMService against the openai SDK's MockTransport, in-process, so the
 transport failures are real SDK exceptions rather than stand-ins. Nothing here reaches a
@@ -24,13 +25,15 @@ network.
 """
 
 import json
+import logging
 
 import httpx2
 import openai
 import pytest
 from django.test import override_settings
 
-from apps.ai.base import Passage, ProviderUnavailable
+from apps.ai import attempt_log
+from apps.ai.base import Passage, ProviderRefused, ProviderUnavailable
 from apps.ai.flm import FLMService
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS
 from apps.ai.prompting import SYSTEM_PROMPT
@@ -295,33 +298,62 @@ def test_a_mixture_of_failure_kinds_still_stops_at_three_attempts():
     assert len(handler.seen) == 3
 
 
-# --- The 4xx that must not be retried ---------------------------------------------------
+# --- A 4xx ends in the 503: a 429 is retried, any other 4xx is refused (D-118) ----------
 
 
-def test_a_client_error_surfaces_as_itself_and_consumes_no_retries():
-    """4xx is a misconfiguration, not an outage: one call, and the SDK error surfaces.
+def test_a_refused_request_ends_the_loop_at_once_with_its_cause_logged(caplog):
+    """D-118: a 4xx other than a rate limit is ProviderRefused.
 
-    Retrying an unknown model name twice more collects the same 404 twice more, and
-    dressing it up as ProviderUnavailable would make a typo in FLM_CHAT_MODEL look like a
-    transient NPU fault and be reported to the user as a 503.
+    A mistyped FLM_CHAT_MODEL would be refused the same way three times, so the loop stops
+    after one call. The view's 503 still catches it as the ProviderUnavailable it is, and
+    the cause is one ERROR line naming the status. Until 10 November 2026 a 4xx surfaced as
+    the SDK's own exception, which reached the user as a 500 on the anthropic provider,
+    where rate limits and an exhausted credit are routine.
     """
     handler = scripted(httpx2.Response(404, json={"error": {"message": "unknown model"}}))
 
-    with pytest.raises(openai.APIStatusError) as excinfo:
-        make_service(handler).generate_statements(QUESTION, PASSAGES)
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderRefused, match="HTTP 404"):
+            make_service(handler).generate_statements(QUESTION, PASSAGES)
 
-    assert excinfo.value.status_code == 404
-    assert not isinstance(excinfo.value, ProviderUnavailable)
-    assert len(handler.seen) == 1  # no retries
+    assert len(handler.seen) == 1
+    refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert [r.levelno for r in refusals] == [logging.ERROR]
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 404, 422, 429])
-def test_no_4xx_is_retried(status):
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 422])
+def test_no_refusal_is_retried(status):
     handler = scripted(httpx2.Response(status, json={"error": {"message": "nope"}}))
 
-    with pytest.raises(openai.APIStatusError):
+    with pytest.raises(ProviderRefused):
         make_service(handler).generate_statements(QUESTION, PASSAGES)
     assert len(handler.seen) == 1
+
+
+def test_a_rate_limit_is_retried_to_the_attempt_limit():
+    """A 429 is a failed attempt like an outage: three calls, then ProviderUnavailable,
+    and not ProviderRefused, because a rate limit passes."""
+    handler = scripted(httpx2.Response(429, json={"error": {"message": "rate limited"}}))
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert not isinstance(excinfo.value, ProviderRefused)
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS == 3
+
+
+def test_a_rate_limit_is_a_warning_and_a_later_conforming_reply_is_returned(caplog):
+    """A 429 passes, so it is a WARNING rather than an ERROR, and the next attempt's
+    conforming reply is the answer."""
+    handler = scripted(httpx2.Response(429, json={"error": {"message": "rate limited"}}), CONFORMING)
+
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        result = make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert result.statements != []
+    assert len(handler.seen) == 2
+    (refusal,) = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert refusal.levelno == logging.WARNING
 
 
 # --- The diagnostic hook the harness measures with ---------------------------------------

@@ -22,9 +22,11 @@ import anthropic as anthropic_sdk
 from django.conf import settings
 
 from apps.ai import _openai_compat
+from apps.ai._status import error_for_status
 from apps.ai.base import (
     DocumentClassification,
     EmbeddingResult,
+    InputType,
     Passage,
     ProviderHealth,
     ProviderUnavailable,
@@ -83,11 +85,27 @@ class AnthropicService:
             )
         return self._anthropic_client
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
+        """Voyage embeddings, at voyage-4's default 1024 dimensions.
+
+        ``input_type`` goes on the request (D-116). Voyage puts a different instruction
+        in front of a question and a passage, and Voyage says retrieval improves with
+        it. None sends nothing, which is Voyage's default. The texts arrive unprefixed:
+        apps/ai/prefixes.py adds EmbeddingGemma's prefixes and nothing for Voyage.
+
+        No ``output_dimension`` is sent, so the width is the model's default. The
+        startup check and ``reindex`` compare it with EMBEDDING_DIMENSION, which must be
+        1024 for this provider. A database first built at FLM's 768 needs
+        ``reindex --resize-column`` (D-117).
+        """
         if not texts:
             raise ValueError("embed() needs at least one text")
         return _openai_compat.embed(
-            self._voyage(), settings.VOYAGE_MODEL, texts, endpoint=settings.VOYAGE_BASE_URL
+            self._voyage(),
+            settings.VOYAGE_MODEL,
+            texts,
+            endpoint=settings.VOYAGE_BASE_URL,
+            extra_body={"input_type": input_type} if input_type else None,
         )
 
     def generate_statements(
@@ -142,10 +160,13 @@ class AnthropicService:
         message, which is this API's shape; the string is the one FLM receives as its
         system message — generation's unless the caller passes its own, as classification
         does with CLASSIFICATION_SYSTEM_PROMPT and CLASSIFICATION_TIMEOUT_SECONDS (FR-10).
-        Transport failures become ProviderUnavailable and 4xx surfaces unchanged, the same
-        division the embed path makes. ``stop_reason`` and the usage
-        counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
-        the reply leaves them out.
+        Every failed call becomes ProviderUnavailable, as on the embed path
+        (apps/ai/_status.py, D-118). A transport failure, a 5xx, or a 429 under load is
+        retried by the caller. Any other 4xx, the 400 Anthropic sends once the monthly
+        credit has run out included, is ProviderRefused, which the caller does not retry.
+        Both are logged first with their status and body, for generation and
+        classification alike. ``stop_reason`` and the usage counts are read for the
+        attempt log only (apps/ai/attempt_log.py), and None where the reply leaves them out.
 
         No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
         and current Claude models refuse them, so this path is not deterministic run to
@@ -165,11 +186,9 @@ class AnthropicService:
         except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
             raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc
         except anthropic_sdk.APIStatusError as exc:
-            if exc.status_code >= 500:
-                raise ProviderUnavailable(
-                    f"Anthropic API returned HTTP {exc.status_code}: {exc}"
-                ) from exc
-            raise  # 4xx, including a 429, is not an outage and consumes no retries
+            # D-118: a rate limit is retried; an exhausted credit or a bad key is refused at
+            # once. Either way it ends in the NFR-19 503, with the cause in the log.
+            raise error_for_status("Anthropic API", exc.status_code, str(exc)) from exc
         # Claude replies in content blocks; only the text ones carry the JSON object.
         usage = getattr(response, "usage", None)
         return ChatReply(

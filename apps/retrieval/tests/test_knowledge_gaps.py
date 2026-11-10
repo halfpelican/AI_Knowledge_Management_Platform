@@ -128,7 +128,7 @@ class DesignedService:
         self.down_for = set(down_for)
         self.embed_calls: list[list[str]] = []
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.embed_calls.append(list(texts))
         [text] = texts
         raw = text[len(QUERY_PREFIX):] if text.startswith(QUERY_PREFIX) else text

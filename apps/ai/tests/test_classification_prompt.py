@@ -325,3 +325,32 @@ def test_the_system_prompt_forbids_an_empty_tag_value_and_says_to_leave_the_dime
     flattened = " ".join(CLASSIFICATION_SYSTEM_PROMPT.split())
     assert 'never with an empty "value"' in flattened
     assert "leave that dimension out" in flattened
+
+
+# --- The disclosed revision of 10 November 2026 (D-106's note), after the frozen run ----------
+#
+# The first run on the frozen reference set called spreadsheet registers and trackers Policy or
+# Procedure, and called a schedule, a booking-rules document and an announcement Meeting Paper.
+# The definitions now name those shapes; these tests hold the wording in place.
+
+
+def test_the_report_definition_names_data_laid_out_as_a_table_and_announcements():
+    from apps.ai.classification import CLASSIFICATION_SYSTEM_PROMPT
+
+    flattened = " ".join(CLASSIFICATION_SYSTEM_PROMPT.split())
+    assert "register, inventory, schedule, roster, tracker or table" in flattened
+    assert "or an announcement" in flattened
+
+
+def test_a_meeting_in_the_title_does_not_make_a_meeting_paper():
+    from apps.ai.classification import CLASSIFICATION_SYSTEM_PROMPT
+
+    flattened = " ".join(CLASSIFICATION_SYSTEM_PROMPT.split())
+    assert "is not a Meeting Paper because its title or subject mentions a meeting" in flattened
+
+
+def test_a_guide_of_steps_is_a_procedure():
+    from apps.ai.classification import CLASSIFICATION_SYSTEM_PROMPT
+
+    flattened = " ".join(CLASSIFICATION_SYSTEM_PROMPT.split())
+    assert "steps, instructions or a guide to follow" in flattened

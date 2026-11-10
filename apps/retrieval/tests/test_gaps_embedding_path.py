@@ -77,7 +77,7 @@ class RefusingService:
     """The provider, refusing every call: the cycle may reach it only through embed_question,
     which this test has replaced, so any call here is a bypass."""
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         raise AssertionError(f"the cycle called the provider's embed directly with {texts!r}")
 
     def generate_statements(self, question, passages):

@@ -7018,6 +7018,42 @@ consulted.
   embedding model.
 - **Not covered:** a confidence derived from anything but the model's own report.
 
+**Dated note, 10 November 2026 (evening): Objective 05's verification. Clause 1 is not met on the FLM
+configuration; clauses 2 and 3 are met.** The evidence is under `corpus/objective-05/runs/2026-11-10/`:
+`objective-05.md` for the first run and `rerun/rerun.md` for the second.
+
+| | First run, `aee5374` | Re-run, `caf9e22` |
+|---|---|---|
+| status | **the independent test** | informed by the first run |
+| clause 1, types matching the frozen reference | **12 of 20 (60%)**, not met | **14 of 20 (70%)**, not met |
+| clause 2, below-threshold assignments held | 48 of 48, met | 47 of 47, met |
+| clause 3, out-of-scheme values | 3 departments and 6 Project or Process values discarded, 2 Topics proposed, none linked; met | 1 department and 6 Project or Process values discarded, 2 Topics proposed, none linked; met |
+
+- **The first run is the frozen reference set's one independent use.** It ran on provider `flm`,
+  `gemma3:4b`, FLM v0.9.39, `kmp_obj0506_20261101` (dump `3bf98403…6f59`), threshold 0.95, after
+  `documents 0008` and `accounts 0006` were applied and the 14 tag values seeded without links. Its
+  eight misses were three shapes the twelve development documents lacked: spreadsheet registers and
+  trackers, a schedule, a booking-rules document and an announcement called Meeting Paper, and two
+  guides given the reference's own alternative. Every miss scored 0.95.
+- **The user's decision: one disclosed revision, then one re-run.** The type definitions were revised
+  once and seven development documents of the failing shapes were added (`caf9e22`; the manifest says
+  when and why). On the third development sweep the first twelve stayed at 35 of 35 and the seven new
+  ones matched 7 of 21: the register and the guide were fixed, while a roster, an announcement and a
+  rules document whose title mentions meetings were still called Meeting Paper. Type confidences
+  still did not separate, so the threshold stayed 0.95. The first run's 20 analysis rows and 38 AI
+  tag links were deleted, after their counts were checked, and the twenty were classified again.
+- **The re-run gained two:** D03, D12 and D17 were fixed and D04 was lost. **It is not an independent
+  test:** the revision was made because of the first run, so the frozen twenty no longer
+  independently test classification, as D-101's note said of the thirty. The 60% stands as the
+  independent figure.
+- **For information only, not the rule:** counting the reference's recorded alternatives would give
+  14 of 20 on the first run and 16 of 20 on the re-run. The frozen rule counts the reference column.
+- **No further revision is made** (the user's decision: one). What remains is recorded rather than
+  fixed: on gemma3:4b the type's confidence carries almost no information, and Meeting Paper attracts
+  documents that mention meetings, schedules or events whatever the prompt says. Whether Claude does
+  better is unmeasured; it would be measured as its own configuration, over repeated draws (this
+  entry's note on the FLM configuration).
+
 ## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19, FR-14 (D-69), invariants 1
@@ -7545,6 +7581,9 @@ user showed Anthropic's "API credits for Max, Ultra, and Team plans" page on 9 N
   `embed-gemma`'s 768 dimensions (D-03).
   - If the chosen Voyage model does not output 768 dimensions, the pgvector column changes, and that
     is a schema migration under `CLAUDE.md` §7.
+    - **Dated note, 10 November 2026: corrected by D-117.** voyage-4 never outputs 768. No
+      migration can change the width either, because migration 0002 already sizes the column from
+      `EMBEDDING_DIMENSION`. The column is resized by `reindex --resize-column` instead.
 - **`manage.py reindex` deletes and recreates every chunk.** On a database with conversation history,
   every `AnswerCitation.chunk` is then nulled (`SET_NULL`, D-67), and every reopened thread shows its
   provenance as removed.
@@ -7659,3 +7698,202 @@ and a refusal on policy documents is unlikely. A refusal reaches the shared loop
 fails the schema, and counts as a failed attempt.
 
 **Where it applies:** `config/settings.py`, `.env.example`, `apps/ai/anthropic.py`.
+
+## D-116 · `AIService.embed()` takes a keyword-only `input_type`, so Voyage is told whether it is embedding a question or a passage
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, FR-08, FR-12, R10,
+`apps/ai/base.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/prefixes.py`,
+`docs/ai-provider.md` §1
+
+**What prompted it.** Voyage marks each text as a question or a passage with an `input_type` field
+on the request, and puts a different instruction in front of each side. Voyage documents better
+retrieval with it. `embed(texts)` had no way to say which side a text is on.
+- `apps/ai/prefixes.py` already said that Voyage is told on the request rather than by a prefix,
+  but nothing passed it.
+- `docs/ai-provider.md` §1 says a parameter that changes what the model is asked is argued on its
+  own merits. This one does, so it was put to the user.
+
+**Decision (the user's, 10 November):**
+
+- **`embed(texts, *, input_type=None)`,** on the Protocol and on every implementation. The values
+  are Voyage's own, `"query"` and `"document"`, named `INPUT_TYPE_QUERY` and
+  `INPUT_TYPE_DOCUMENT` in `apps/ai/base.py`.
+- **Retrieval passes `"query"`** (`embed_question`). **Ingestion passes `"document"`** for every
+  chunk, `reindex` included. The width probes in `apps/ai/checks.py` and `reindex` pass nothing,
+  because the width does not depend on it.
+- **Voyage sends it,** and sends nothing when it is `None`, which is Voyage's default.
+- **FLM accepts it and sends nothing.** EmbeddingGemma's task prefixes already carry the side. They
+  stay in the callers, because the document prefix needs the title, which `embed()` never sees.
+- **The test doubles take the keyword too,** about twenty of them, under `apps/ai/base.py`'s rule
+  that a contract and its implementations do not differ by a parameter.
+  `apps/ai/tests/test_embed_input_type.py` checks the Protocol, both providers and the stub.
+
+**Consequences:**
+
+- **It changes Voyage's document vectors, so it had to land before the first Voyage re-index.** No
+  Voyage chunk exists yet. Voyage says vectors made with and without it stay comparable, but the
+  threshold re-derived under D-113 will describe vectors made with it.
+- **FLM is unchanged.** No FLM request carries the field, so nothing on the FLM baseline moves.
+- **`CLAUDE.md` §4's `AIService` snippet does not show the keyword,** just as it does not show
+  `on_attempt`. `docs/ai-provider.md` §1 does.
+- **#68 (FR-10) merged first,** on 10 November. It added `classify_document` to the same files, and
+  the merge into #69 kept both. Classification embeds nothing, so it passes no `input_type`.
+
+**Where it applies:** `apps/ai/base.py`, `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`,
+`apps/ai/flm.py`, `apps/ai/testing.py`, `apps/retrieval/query_embedding.py`,
+`apps/ingestion/embedding.py`, `docs/ai-provider.md` §1.
+
+## D-117 · A new embedding width is applied by `reindex --resize-column <database>`, not by a migration
+
+**Status:** Settled by the user (the resize flag); proposed by the implementing session (the
+database name as confirmation) · **Date:** 2026-11-10 · **Concerns:** D-03, D-08, D-28, D-67, D-113,
+R10, FR-08, `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4 ·
+**Corrects:** D-113's "that is a schema migration under `CLAUDE.md` §7"
+
+**What prompted it.**
+
+- **voyage-4 never outputs 768.** It outputs 1024 dimensions by default, and 256, 512 or 2048 on
+  request (Voyage's API reference, checked 10 November 2026). Moving to Voyage changes the
+  column's width.
+- **D-113 said that change "is a schema migration". It cannot be.** Migration 0002 sizes the column
+  from `EMBEDDING_DIMENSION` when it first runs, and the model reads the same setting, so the
+  migration state always matches the model.
+  - With `EMBEDDING_DIMENSION=1024`, `makemigrations --check` reports "No changes detected"
+    (checked offline, 10 November), and `migrate` has nothing to apply.
+  - A database restored from the FLM snapshot therefore keeps `vector(768)`.
+- **`reindex`'s own refusal gave advice that did nothing.** It told the operator to "run
+  makemigrations and migrate to resize the column".
+
+**Options put to the user:**
+
+- the resize inside `reindex`, behind an explicit flag;
+- a fresh database built by `migrate` at 1024 and loaded by script rather than restored from the
+  snapshot. That needs no resize code, but it departs from D-113, and the rows would not match the
+  FLM baseline's;
+- an unsized `vector` column. Any width fits, but Postgres stops refusing a wrong width and
+  `CLAUDE.md` §4's rule changes.
+
+**Decision (the user's, 10 November): `reindex --resize-column`.**
+
+- **Without the flag,** when the stored column's width is not `EMBEDDING_DIMENSION`, `reindex`
+  refuses and says why `migrate` cannot help.
+- **With it,** one transaction deletes every chunk through the ORM and alters the column to
+  `vector(EMBEDDING_DIMENSION)`. Deleting through the ORM sets each `AnswerCitation.chunk` to null
+  (D-67). The rebuild then runs as before, one source per transaction.
+- **None of the old vectors survive,** because they cannot be cast to the new width.
+  - A source that fails to rebuild afterwards has no chunks left. Its status is set to
+    `Indexing failed` (for a meeting, `Processing failed`) rather than left at `Indexed`.
+  - Running `reindex` again without the flag rebuilds those sources. A run interrupted after the
+    resize is finished the same way.
+- **`--dry-run`** reports the resize and changes nothing.
+
+**The flag's value is the connected database's name.** This is the implementing session's proposal,
+from the coordinating session's suggestion, and the user can drop it.
+- Deleting every chunk nulls every citation, so the command must be told which database it is
+  connected to: `reindex --resize-column <database>`.
+- A name that does not match is refused even when no resize is needed. The caller then believes
+  they are connected somewhere else, and an ordinary re-index nulls citations too.
+- This is what keeps `kmp_obj02_20261101` and `kmp_demo_20261101` safe from a slip.
+
+**Consequences:**
+
+- **The switch on a restored copy:** set `AI_PROVIDER=anthropic`, `EMBEDDING_DIMENSION=1024` and the
+  two keys in `.env`. Then run
+  `python manage.py reindex --provider anthropic --resize-column <database>`. A database built by
+  `migrate` at 1024 needs no flag.
+- **Voyage's free tier cannot carry a re-index.** Each chunk is its own request (D-28), and the free
+  tier allows 3 requests a minute. Under D-118 a 429 is retried, but with no wait, so a rate-limited
+  chunk uses up its three attempts in moments and fails. The payment method D-113 leaves to the
+  user comes first: Tier 1 allows 2,000 requests and 8M tokens a minute. The user said on
+  10 November that they are adding it.
+- **The schema is unchanged.** There is no migration and no model change, so `makemigrations --check`
+  still passes. Postgres still refuses a vector of the wrong width.
+- **Django's foreign keys are deferred,** so the delete leaves checks pending, and Postgres refuses
+  to alter a table while they are. The command runs them first, with `connection.check_constraints()`.
+
+**Where it applies:** `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4,
+`.env.example`, and a dated note on D-113.
+
+## D-118 · A provider's 4xx ends in NFR-19's 503: a rate limit is retried, any other 4xx is refused at once, and each is logged
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-10, FR-12,
+D-19, D-104, D-113, D-117, `apps/ai/_status.py`, `apps/ai/base.py`, `apps/ai/_openai_compat.py`,
+`apps/ai/anthropic.py`, `apps/ai/flm.py`, `apps/ai/generation.py`, `apps/ai/classification.py`,
+`apps/retrieval/query_embedding.py`, `apps/ingestion/embedding.py`, `apps/ai/attempt_log.py` ·
+**Supersedes:** the rule, in those modules and their tests, that a 4xx "surfaces unchanged and
+consumes no retries"
+
+**What prompted it.** The coordinating session found it on 10 November by reading the code, before
+any live run, and the implementing session confirmed it.
+- **Both providers let a 4xx surface as itself.** Only a transport failure or a 5xx became
+  `ProviderUnavailable`.
+- **Nothing above them catches anything else.** The generation loop, the question embedding and
+  the ask view catch only `ProviderUnavailable`, and there is no DRF `EXCEPTION_HANDLER`. So a 4xx
+  reached the user as a 500.
+- **On FLM that never arose,** because FLM does not send 4xx. On the `anthropic` provider they are
+  routine:
+  - a 429 under NFR-08's concurrency, or on Voyage's free tier of 3 requests a minute;
+  - the 400 Anthropic sends once the monthly credit (D-113) has run out.
+- **NFR-19 requires the opposite:** "return a 503 … rather than crashing".
+
+**Decision (the user's, 10 November): retry a 429, and answer the rest with the 503.** In the
+user's words, a rate limit counts as a failed attempt: three tries, then the 503 notice. Every other
+provider error, an empty credit balance included, shows the 503 notice and logs the real cause.
+
+- **One rule, in one place** (`apps/ai/_status.py`). It is used wherever a status error is caught:
+  the shared embed call (FLM and Voyage), FLM's chat call and Claude's call.
+  - **A 429 is `ProviderUnavailable`.** It uses up an attempt, like an outage. After the three
+    attempts of D-19 (`MAXIMUM_GENERATION_ATTEMPTS`, `MAXIMUM_EMBED_ATTEMPTS`,
+    `MAXIMUM_CLASSIFY_ATTEMPTS`), the ask answers the 503.
+  - **Any other 4xx is `ProviderRefused`,** a new subclass of `ProviderUnavailable` in
+    `apps/ai/base.py`. The retry loops stop on it at once, because the same request would be
+    refused again. Since it is a `ProviderUnavailable`, everything that catches that still does,
+    so the ask view answers the 503 without a change.
+  - **A 5xx is unchanged:** an outage, retried under D-19.
+- **Each 4xx is logged where it happens,** with the status and the provider's message, cut at 300
+  characters, on the attempts logger (`attempt_log.refused`):
+  - a **429 as a WARNING,** because a rate limit passes;
+  - **anything else as an ERROR,** because it needs a person.
+
+  Logging at the provider covers ingestion and `reindex`, which log no attempts of their own.
+- **Where it lands:**
+  - **the ask:** the 503 with its fixed notice, from question embedding or from generation;
+  - **ingestion:** the chunk fails, after three attempts for a 429 and after one for a refusal, and
+    the document's status says so (D-28);
+  - **classification:** FR-10 (#68, D-104) merged the same day. `classify_document` uses the same
+    `_chat_once` and `_claude_once`, so the document is left unclassified (invariant 8). The merge
+    into #69 rewrote #68's two tests that asserted a 4xx propagates after one call.
+- **No wait on `Retry-After`.** Pausing inside a user's request is its own question, and three
+  quick attempts at a rate limit end in the 503 that says "try again shortly". Waiting is a
+  candidate for `reindex`, where nobody is waiting, if rate limits turn out to matter there.
+
+**How it got here, the same day.** The first version (2436f61) retried every 4xx three times. The
+user's answer narrowed retries to the 429 before the pull request merged. That removes the first
+version's cost: a mistyped model name or a bad key no longer spends two wasted calls.
+
+**What it gives up, accepted:**
+
+- **A misconfiguration now reads as a 503** to the user, not as a traceback to a developer. The old
+  rule kept the traceback so that a typo would not look like an outage. The ERROR line now names the
+  status and the provider's message instead.
+- **The startup check gains,** though. A probe refused with a 4xx is now `ai.W001`, with the status
+  in its message. Before, the exception escaped the check.
+
+**Tests:**
+
+- `apps/ai/tests/test_status.py` pins the rule:
+  - a 5xx is an outage, and is not logged there;
+  - a 429 is retryable, and a WARNING;
+  - any other 4xx is a refusal, and an ERROR.
+- `apps/api/tests/test_ask_provider_refusals.py` runs the real `AnthropicService` through
+  `POST /api/ask`, from both roles. Each case gives the 503 and writes no `QueryLog` row:
+  - a Voyage 429 at question embedding, after three calls, and a 401 after one;
+  - a Claude 429 at generation, after three calls, and the credit-exhausted 400 after one.
+- The generation, classification and provider tests assert both counts and the log levels.
+  `apps/ingestion/tests/test_embedding.py` asserts a refused chunk fails on its first attempt.
+- NFR-19's fault-injection count is unchanged: three calls, then the 503.
+- The SDK-shaped builders the route tests need live in `apps/ai/testing.py`, because a vendor SDK
+  may not be imported outside `apps/ai`, tests included.
+
+**Where it applies:** the modules under **Concerns**, `docs/ai-provider.md` §1, and D-117's free-tier
+note.

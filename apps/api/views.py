@@ -1374,6 +1374,13 @@ class DocumentClassifyView(APIView):
     MAXIMUM_CLASSIFY_ATTEMPTS, nothing written. Throttled in the "ingestion" scope (D-79): it is
     one provider call, like a reprocess. No in-flight slot (D-85): the slot bounds extraction and
     embedding, and this does neither.
+
+    200 ``{classification, tag_details, department}``. ``department`` is the document's
+    ``department`` column as it stands after the classification, re-read from the row as the
+    confirm route's is: the machine fills a blank department with an applied in-scheme suggestion,
+    and keeps a different one, holding the suggestion for a person (D-105's note of 10 November).
+    The client cannot tell which from the classification object, which does not carry the
+    effective department (D-72), so it is returned rather than inferred.
     """
 
     permission_classes = [IsAuthenticated]
@@ -1398,10 +1405,12 @@ class DocumentClassifyView(APIView):
                 {"detail": CLASSIFICATION_UNAVAILABLE_MESSAGE},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        document.refresh_from_db(fields=["department"])
         return Response(
             {
                 "classification": classification_payload(analysis),
                 "tag_details": tag_details_payload(document),
+                "department": document.department,
             }
         )
 

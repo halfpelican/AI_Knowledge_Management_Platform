@@ -88,10 +88,17 @@ function provenanceFor(outcome, machineValue, confidence, effectiveValue, isDepa
   switch (outcome) {
     case OUTCOME.applied:
       return withConfidence(TEXT.classificationSuggestedByAI, confidence)
-    case OUTCOME.provisional:
-      return machineValue
-        ? `${TEXT.classificationAwaiting}. ${withConfidence(TEXT.classificationSuggestion(machineValue), confidence)}.`
-        : `${TEXT.classificationAwaiting}.`
+    case OUTCOME.provisional: {
+      if (!machineValue) return `${TEXT.classificationAwaiting}.`
+      const held = `${TEXT.classificationAwaiting}. ${withConfidence(TEXT.classificationSuggestion(machineValue), confidence)}.`
+      // Since 10 November a department already on the document stays, and a
+      // different suggestion waits here (D-105's note). Confirming writes the
+      // suggestion over the department shown, so the sentence says so rather than
+      // leaving "Confirm" to be read as confirming the value on screen.
+      return isDepartment && effectiveValue && effectiveValue !== machineValue
+        ? `${held} ${TEXT.classificationConfirmReplaces(effectiveValue, machineValue)}`
+        : held
+    }
     case OUTCOME.confirmed:
       // The machine's value is kept beside the person's (FR-10); it is named only
       // where it differs, so a confirmation of the suggestion reads as one line.
@@ -109,13 +116,29 @@ function provenanceFor(outcome, machineValue, confidence, effectiveValue, isDepa
 }
 
 /**
- * The document's effective department after a confirm or an edit. The route
- * returns `{classification}` and not the document object, so the value the
- * document now carries is worked out from what was sent and from D-105's apply
- * rules: an edit writes the department it sent, and an empty-body confirm
- * applies a held (provisional) suggestion. Nothing else moves it.
+ * The document's department after a classify run, a confirm or an edit: the
+ * reply's `department`, the column the server stored (docs/api-contract.md,
+ * FR-10; D-105's note of 10 November). It is taken as it is; nothing is worked
+ * out from the outcome or from what was sent.
+ *
+ * `fallbackForOlderServer` runs only when a reply carries no `department`, which
+ * is a server from before the field: its confirm reply was `{classification}` and
+ * its classify reply `{classification, tag_details}`. For a confirm or an edit
+ * the fallback is the inference below; for a classify run it is the department
+ * as it stood, unchanged. Remove both once no such server is run against this
+ * front end.
  */
-function departmentAfterConfirm(current, previous, next, sent) {
+function departmentFromReply(reply, fallbackForOlderServer) {
+  if (typeof reply?.department === 'string') return reply.department
+  return fallbackForOlderServer()
+}
+
+/**
+ * For an older server only (see `departmentFromReply`): the department this
+ * section inferred before the reply carried one. An edit stored the department
+ * it sent, and an empty-body confirm stored a held (provisional) suggestion.
+ */
+function departmentInferredForOlderServer(current, previous, next, sent) {
   if (sent.department !== undefined) return sent.department
   if (previous?.department_outcome === OUTCOME.provisional && next?.department_outcome === OUTCOME.confirmed) {
     return next.machine_department ?? current
@@ -232,10 +255,16 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  * department shown is the document's own.
  *
  * **One click is one request, and the section re-reads from the reply.** The
- * routes return what changed — the classification, the tag links, or the one
- * link — and `onChange` hands it to the page, which holds the record. Nothing is
- * assumed about the result beyond what the reply says, with one exception
- * documented at `departmentAfterConfirm`.
+ * routes return what changed — the classification, the tag links, the one link,
+ * or the department a classify run, a confirm or an edit left stored — and
+ * `onChange` hands it to the page, which holds the record. Nothing is assumed
+ * about the result beyond what the reply says (`departmentFromReply` falls back,
+ * for an older server only).
+ *
+ * **A department already on the document is the current one** while a different
+ * suggestion waits (D-105's note of 10 November): the value shown is the
+ * document's, the suggestion is named as awaiting confirmation, and the sentence
+ * says that confirming replaces the one with the other.
  *
  * **Authorisation is the server's.** The controls are offered to everyone who can
  * read the document, because both roles hold `contribute_content` (D-105); a 403
@@ -377,7 +406,14 @@ export default function Classification({ docId, classification, tagDetails, depa
       KEY.classify,
       () => classifyDocument(docId),
       (body) => {
-        onChange({ classification: body?.classification ?? null, tag_details: body?.tag_details ?? [] })
+        onChange({
+          classification: body?.classification ?? null,
+          tag_details: body?.tag_details ?? [],
+          // A run fills a blank department with an applied suggestion (D-105), and
+          // the reply says what the department now is. Without it, as from an older
+          // server, the department stays as it was.
+          department: departmentFromReply(body, () => department),
+        })
         announce(TEXT.classifyDone)
       },
     )
@@ -390,20 +426,27 @@ export default function Classification({ docId, classification, tagDetails, depa
       () => confirmClassification(docId, {}),
       (body) => {
         const next = body?.classification ?? previous
-        onChange({ classification: next, department: departmentAfterConfirm(department, previous, next, {}) })
+        onChange({
+          classification: next,
+          department: departmentFromReply(body, () => departmentInferredForOlderServer(department, previous, next, {})),
+        })
         announce(TEXT.classificationConfirmedAll)
       },
     )
   }
 
   function openEdit() {
-    // The held suggestion is what Save would confirm, so it is what the form
-    // starts from; otherwise the document's own values.
+    // The type starts from the document's, or, while that is held, from the
+    // suggestion, because the list has no empty choice. The department starts
+    // from the document's own whenever it has one, so saving a changed type never
+    // also writes a held suggestion over it that the person did not choose. Only a
+    // blank department starts from the suggestion, as the server itself fills only
+    // a blank department (D-105's note of 10 November).
     const docType =
       classification?.doc_type ??
       (DOCUMENT_TYPES.includes(classification?.machine_doc_type) ? classification.machine_doc_type : DOCUMENT_TYPES[0])
     const startDepartment =
-      classification?.department_outcome === OUTCOME.provisional && classification?.machine_department
+      !department && classification?.department_outcome === OUTCOME.provisional && classification?.machine_department
         ? classification.machine_department
         : (department ?? '')
     setForm({ docType, department: startDepartment })
@@ -432,7 +475,9 @@ export default function Classification({ docId, classification, tagDetails, depa
         const next = body?.classification ?? previous
         onChange({
           classification: next,
-          department: departmentAfterConfirm(department, previous, next, { department: sent.department }),
+          department: departmentFromReply(body, () =>
+            departmentInferredForOlderServer(department, previous, next, { department: sent.department }),
+          ),
         })
         setEditing(false)
         focusAfter.current = () => editButtonRef.current

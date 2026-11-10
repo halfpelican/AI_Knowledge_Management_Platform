@@ -255,7 +255,7 @@ def test_a_cycle_with_nothing_to_take_is_still_201(administrator_client):
 
 
 class DownService:
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         raise ProviderUnavailable("connection refused (designed)")
 
     def generate_statements(self, question, passages):

@@ -67,7 +67,7 @@ def test_a_second_run_takes_nothing_twice(employee):
 
 
 class DownService:
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         raise ProviderUnavailable("connection refused (designed)")
 
     def generate_statements(self, question, passages):

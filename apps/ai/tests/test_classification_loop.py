@@ -185,11 +185,15 @@ def test_a_mixture_of_failure_kinds_still_stops_at_three_attempts():
 # --- Anything else propagates after one call --------------------------------------------------
 
 
-class ClientError(Exception):
-    """Stands in for a 4xx: a misconfiguration, which would fail identically three times."""
+class UndecidedError(Exception):
+    """Stands in for an exception the provider did not decide, which is a bug, not an outage.
+
+    Since D-118 a 4xx is not one of these: the providers raise it as ProviderUnavailable,
+    and test_classification_providers.py asserts that it is retried as a failed attempt.
+    """
 
 
-@pytest.mark.parametrize("error", [ClientError("404 unknown model"), ValueError("bad request")], ids=["4xx", "ValueError"])
+@pytest.mark.parametrize("error", [UndecidedError("unexpected"), ValueError("bad request")], ids=["undecided", "ValueError"])
 def test_any_other_exception_propagates_as_itself_after_one_call(error):
     call_once, calls = scripted(error, CONFORMING, CONFORMING)
 

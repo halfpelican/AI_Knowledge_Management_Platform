@@ -9,13 +9,19 @@ gets its own method the same way, then, not speculatively now.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Protocol
+from typing import TYPE_CHECKING, Callable, Literal, Protocol
 
 if TYPE_CHECKING:
     # The observer's record type. Imported for type checkers only: it lives beside the
     # attempt loop that builds it (apps/ai/generation.py), which imports this module, so
     # a runtime import here would be a cycle.
     from apps.ai.generation import GenerationAttempt
+
+# What the texts passed to embed() are (D-116): a question being asked, or a passage
+# being indexed. These are Voyage's own two values for its ``input_type`` field.
+INPUT_TYPE_QUERY = "query"
+INPUT_TYPE_DOCUMENT = "document"
+InputType = Literal["query", "document"]
 
 
 @dataclass(frozen=True)
@@ -115,8 +121,33 @@ class ProviderUnavailable(Exception):
     """
 
 
+class ProviderRefused(ProviderUnavailable):
+    """The provider refused the request with a 4xx other than a rate limit (D-118).
+
+    A bad key, an unknown model, a malformed request or an exhausted credit: the same
+    request would be refused again, so the retry loops stop at once instead of spending
+    their remaining attempts. It is a ProviderUnavailable, so everything that catches that
+    still does: the ask view answers NFR-19's 503 with its fixed notice, and classification
+    leaves the document unclassified. The provider logs the cause before raising it
+    (apps/ai/attempt_log.py). A 429 is not this: a rate limit passes, so it is a plain
+    ProviderUnavailable and is retried.
+    """
+
+
 class AIService(Protocol):
-    def embed(self, texts: list[str]) -> EmbeddingResult: ...
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
+        """One vector per text, with the model and width that produced them.
+
+        ``input_type`` says what the texts are: INPUT_TYPE_QUERY for a question,
+        INPUT_TYPE_DOCUMENT for a passage being indexed, or None where it makes no
+        difference, as in a dimension probe. It is keyword-only and defaults to None.
+        Unlike ``on_attempt`` it does change what the model is asked, which is why it
+        has a decision of its own (D-116): Voyage puts a different instruction in
+        front of each side. EmbeddingGemma learns the same thing from the task prefix
+        in the text itself (apps/ai/prefixes.py), so the FLM provider accepts the
+        argument and sends nothing for it.
+        """
+        ...
 
     def generate_statements(
         self,
