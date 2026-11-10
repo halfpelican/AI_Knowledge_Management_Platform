@@ -7392,6 +7392,28 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
   - **The contract** says a person's link is kept, and its 400 list for the name form now names a
     missing `dimension` too (`serializers.py`).
 
+**Dated note, 10 November 2026 (night): Objective 02's bound re-timed with classification at upload,
+on FLM. It is met.** This was the "owed before M8" item in this entry's note on the upload's cost,
+and gap 9 of the requirements audit (D-119).
+- **How:** `docs/measurement-runbook.md`, steps 1 to 7, at `749a689`, on a fresh database
+  (`kmp_obj02_20261110classify`), with FLM v0.9.39, `check_flm.py` passing, and Waitress started
+  with `--threads=24`.
+- **The result:** every valid item was Indexed and found, every invalid item was refused with its
+  documented error, and no document of twenty pages or fewer took more than 60 s. The slowest took
+  24.5 s.
+- **What classification added:** 10 to 28 s per document. There were 21 calls for 20 documents, of
+  9.3 to 17.8 s each, and one second attempt after a reply that was not valid JSON. D04, 26 pages
+  and outside the bound, took 61.3 s against 33.3 s, above this entry's estimate of 41 to 55 s.
+- **Evidence:** `corpus/objective-02/runs/2026-11-10/ingestion-classify-flm/` (`results.json`,
+  `results.md`, `retime.md`).
+- **Not shown:**
+  - **A document near twenty pages.** The corpus's only multi-page PDF has 26 pages, and with a
+    classification retry such a document could come close to 60 s. Timing one directly would
+    settle it.
+  - **The bound on `anthropic`.** D-114 chooses M8's host with its provider, and D-122 is about to
+    make `anthropic` the default. If M8 runs there, the bound is re-timed on a Voyage-indexed
+    database, and this FLM run does not stand in for it.
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
