@@ -286,6 +286,9 @@ class QuestionResult:
     # by an Employee) or the set names no source.
     source_rank: int | None = None
     source_score: float | None = None
+    # The admission floor this run applied: the embedding model's own (D-120), or --threshold
+    # where one was given. None until measure() has ranked. miss_rows judges the source by it.
+    threshold: float | None = None
     # What a no-answer reply would offer (D-56): the shipped derivation, plus each offered
     # source's best score. Recorded on every run, answered or not, so a floor can be chosen.
     offered: list[dict] = field(default_factory=list)
@@ -580,6 +583,7 @@ def measure(
     result.offered = offered_record(ranked, sources, embedding.model)
     # The embedding model's own threshold unless the caller overrides it (D-120).
     floor = relevance_threshold(embedding.model) if threshold is None else threshold
+    result.threshold = floor
     admitted = [candidate for candidate in ranked if candidate.score >= floor]
 
     # The chunks this role may NOT see. Computed only so the harness can assert
@@ -683,18 +687,23 @@ def item_label(sources: SourceIndex | None, chunk_id: str) -> str:
     return f"{item}:{chunk_id[:8]}" if item else chunk_id[:8]
 
 
-def miss_rows(results: list[QuestionResult], threshold: float) -> list[dict]:
+def miss_rows(results: list[QuestionResult], threshold: float | None = None) -> list[dict]:
     """One row per miss, so the fixes after M6 aim at causes, not symptoms.
 
     A miss is a run that expected an answer and did not show the expected answer, or a run
     that expected no answer and was answered. Each row says whether the expected source was
-    a candidate for this role and at what rank, its best score against ``threshold``, and
+    a candidate for this role and at what rank, its best score against the threshold, and
     where the run ended: no-answer path A (nothing above the threshold, so generation was
     never called), path B (generation ran and no statement survived verification),
     unavailable, or answered without the expected answer.
+
+    The threshold is ``threshold`` where the caller gives one, and otherwise the one each run
+    applied (``QuestionResult.threshold``): the embedding model's own since D-120, which is
+    what main() means by passing --threshold's default of None.
     """
     rows = []
     for result in results:
+        applied = result.threshold if threshold is None else threshold
         if result.expects_answer:
             if result.expected_answer_found:
                 continue
@@ -717,9 +726,9 @@ def miss_rows(results: list[QuestionResult], threshold: float) -> list[dict]:
             "source": result.source,
             "source_rank": result.source_rank,
             "source_score": result.source_score,
-            "threshold": threshold,
-            "above_threshold": (None if result.source_score is None
-                                else result.source_score >= threshold),
+            "threshold": applied,
+            "above_threshold": (None if result.source_score is None or applied is None
+                                else result.source_score >= applied),
             "ended": ended,
         })
     return rows
@@ -1187,6 +1196,7 @@ def thread_run_record(run: dict, result: QuestionResult, score: dict, sources: S
         "top_score": result.top_score,
         "source_rank": result.source_rank,
         "source_score": result.source_score,
+        "threshold": result.threshold,
         "partial_matches": result.offered,
         "retrieved": [{"chunk_id": c.chunk_id, "score": c.score, "item": item_of(c.chunk_id)}
                       for c in result.retrieved],
@@ -1558,6 +1568,7 @@ def main() -> int:
                     "top_score": r.top_score,
                     "source_rank": r.source_rank,
                     "source_score": r.source_score,
+                    "threshold": r.threshold,
                     "partial_matches": r.offered,
                     "retrieved": [
                         {"chunk_id": c.chunk_id, "score": c.score,

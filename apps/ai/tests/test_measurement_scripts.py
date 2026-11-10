@@ -734,3 +734,79 @@ def test_a_miss_says_where_the_source_stood_and_where_the_run_ended(scripts):
     assert rows["q01"]["ended"] == "path A" and rows["q01"]["above_threshold"] is False
     assert rows["q02"]["ended"] == "path B" and rows["q02"]["above_threshold"] is True
     assert rows["q03"]["source_rank"] is None and rows["q03"]["above_threshold"] is None
+
+
+def test_a_miss_row_is_judged_against_the_threshold_its_own_run_applied(scripts):
+    """D-120: with no --threshold, each row reads the floor its run applied, not None.
+
+    The CLI's --threshold has defaulted to None since D-120, meaning the embedding model's own
+    value. miss_rows compared each score with that None, which raised TypeError at the end of a
+    full run: after every question had been asked, and before the record was written.
+    """
+    harness = scripts("citation_harness")
+    voyage = harness.QuestionResult(question_id="q01", kind="ordinary", role="Employee",
+                                    question="How much leave?", source="D01",
+                                    expected_answer="1.67 days", source_rank=1,
+                                    source_score=0.28, threshold=0.2687)
+
+    (row,) = harness.miss_rows([voyage], None)  # what main() passes with no --threshold
+    assert row["threshold"] == 0.2687 and row["above_threshold"] is True
+
+    (row,) = harness.miss_rows([voyage], 0.30)  # an explicit override still governs
+    assert row["threshold"] == 0.30 and row["above_threshold"] is False
+
+
+class FixedVectorService:
+    """Embeds every question as the first axis, under STUB_EMBEDDING_MODEL; cites the first passage."""
+
+    def __init__(self, dimension):
+        self.dimension = dimension
+
+    def embed(self, texts, *, input_type=None):
+        from apps.ai.base import EmbeddingResult
+        from apps.ai.testing import STUB_EMBEDDING_MODEL
+
+        vector = [1.0] + [0.0] * (self.dimension - 1)
+        return EmbeddingResult(vectors=[vector for _ in texts], model=STUB_EMBEDDING_MODEL,
+                               dimension=self.dimension)
+
+    def generate_statements(self, question, passages, on_attempt=None):
+        from apps.ai.base import Statement, StatementList
+
+        return StatementList(statements=[Statement(text="Ridgeline.", chunk_id=passages[0].chunk_id)])
+
+
+def test_a_run_records_the_threshold_its_embedding_model_gets(scripts, monkeypatch):
+    """D-120: measure() records the floor it applied: the model's own, unless overridden."""
+    from uuid import uuid4
+
+    from django.conf import settings
+
+    import apps.ai
+    from apps.ai.testing import STUB_EMBEDDING_MODEL
+    from apps.core.constants import RELEVANCE_THRESHOLD, RELEVANCE_THRESHOLD_BY_MODEL
+    from apps.documents.models import ContentChunk
+
+    harness = scripts("citation_harness")
+    dimension = settings.EMBEDDING_DIMENSION
+    cosine = 0.25  # under the unlisted model's 0.30, over the value listed below
+    chunk = ContentChunk(
+        id=uuid4(), source_type="document", source_id=uuid4(), chunk_index=0,
+        chunk_text="Ridgeline.", embedding=[cosine, (1 - cosine * cosine) ** 0.5] + [0.0] * (dimension - 2),
+        embedding_model=STUB_EMBEDDING_MODEL, embedding_dimension=dimension,
+        visible_to_roles=[EMPLOYEE_ROLE_NAME],
+    )
+    service = FixedVectorService(dimension)
+    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
+    question = {"id": "q01", "kind": "ordinary", "role": EMPLOYEE_ROLE_NAME,
+                "question": "Who caters the offsite?"}
+
+    unlisted = harness.run_question(question, [chunk], service)
+    assert unlisted.threshold == RELEVANCE_THRESHOLD and not unlisted.generation_called
+
+    monkeypatch.setitem(RELEVANCE_THRESHOLD_BY_MODEL, STUB_EMBEDDING_MODEL, 0.2)
+    listed = harness.run_question(question, [chunk], service)
+    assert listed.threshold == 0.2 and listed.generation_called
+
+    overridden = harness.run_question(question, [chunk], service, 0.24)
+    assert overridden.threshold == 0.24 and overridden.generation_called
