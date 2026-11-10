@@ -7077,10 +7077,11 @@ from the coordinating session's suggestion, and the user can drop it.
   two keys in `.env`. Then run
   `python manage.py reindex --provider anthropic --resize-column <database>`. A database built by
   `migrate` at 1024 needs no flag.
-- **Voyage's free tier cannot carry a re-index.** Each chunk is its own request (D-28). The free tier
-  allows 3 requests a minute, and a 429 is a 4xx, which fails the source rather than being retried.
-  The payment method D-113 leaves to the user comes first: Tier 1 allows 2,000 requests and 8M
-  tokens a minute.
+- **Voyage's free tier cannot carry a re-index.** Each chunk is its own request (D-28), and the free
+  tier allows 3 requests a minute. Under D-118 a 429 is retried, but with no wait, so a rate-limited
+  chunk uses up its three attempts in moments and fails. The payment method D-113 leaves to the
+  user comes first: Tier 1 allows 2,000 requests and 8M tokens a minute. The user said on
+  10 November that they are adding it.
 - **The schema is unchanged.** There is no migration and no model change, so `makemigrations --check`
   still passes. Postgres still refuses a vector of the wrong width.
 - **Django's foreign keys are deferred,** so the delete leaves checks pending, and Postgres refuses
@@ -7088,3 +7089,67 @@ from the coordinating session's suggestion, and the user can drop it.
 
 **Where it applies:** `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4,
 `.env.example`, and a dated note on D-113.
+
+## D-118 · A provider's 4xx is a failed attempt: logged, raised as `ProviderUnavailable`, and answered with NFR-19's 503
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-12, D-19,
+D-113, D-117, `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`,
+`apps/ai/generation.py`, `apps/ai/attempt_log.py` · **Supersedes:** the rule, in those modules and
+their tests, that a 4xx "surfaces unchanged and consumes no retries"
+
+**What prompted it.** The coordinating session found it on 10 November by reading the code, before
+any live run, and the implementing session confirmed it.
+- **Both providers let a 4xx surface as itself.** Only a transport failure or a 5xx became
+  `ProviderUnavailable`.
+- **Nothing above them catches anything else.** The generation loop, the question embedding and
+  the ask view catch only `ProviderUnavailable`, and there is no DRF `EXCEPTION_HANDLER`. So a 4xx
+  reached the user as a 500.
+- **On FLM that never arose,** because FLM does not send 4xx. On the `anthropic` provider they are
+  routine:
+  - a 429 under NFR-08's concurrency, or on Voyage's free tier of 3 requests a minute;
+  - the 400 Anthropic sends once the monthly credit (D-113) has run out.
+- **NFR-19 requires the opposite:** "return a 503 … rather than crashing".
+
+**Decision (the user's, 10 November):**
+
+- **Every 4xx from either provider becomes `ProviderUnavailable`,** in the three places a status
+  error is caught: the shared embed call (FLM and Voyage), FLM's chat call and Claude's call. So it
+  uses up an attempt, like an outage. After `MAXIMUM_GENERATION_ATTEMPTS` or
+  `MAXIMUM_EMBED_ATTEMPTS` (three, D-19), the ask answers the NFR-19 503 with its fixed notice. In
+  ingestion, the chunk fails, and the document's status says so (D-28).
+- **Each refusal is logged where it happens,** with the status and the provider's message, cut at
+  300 characters, on the attempts logger (`attempt_log.refused`):
+  - a **429 as a WARNING,** because a rate limit is expected under load and passes;
+  - **any other 4xx as an ERROR,** because a bad key, an unknown model, a malformed request or an
+    exhausted credit needs a person.
+
+  Logging at the provider covers ingestion and `reindex`, which log no attempts of their own.
+- **No wait on `Retry-After`.** Pausing inside a user's request is its own question, and three
+  quick attempts at a rate limit end in the 503 that says "try again shortly". Waiting is a
+  candidate for `reindex`, where there is no user waiting, if rate limits turn out to matter there.
+
+**What it costs, accepted:**
+
+- **A misconfiguration is retried for nothing.** The case the old rule protected was a mistyped
+  model name, to stop it looking like an outage. It now costs two wasted calls and a 503, and its
+  cause is an ERROR line in the log instead of a traceback.
+- **A bad Voyage key during an upload** fails every chunk three times, with an ERROR line for each
+  call.
+- **The startup check gains,** though: a probe refused with a 4xx is now `ai.W001` ("unreachable")
+  with the status in its message, where before it escaped the check as an exception.
+
+**Tests:**
+
+- `apps/api/tests/test_ask_provider_refusals.py` runs the real `AnthropicService` through
+  `POST /api/ask`, from both roles. A Voyage 429 or 401 at question embedding, and a Claude 429 or
+  credit-exhausted 400 at generation, each give the 503 with exactly three calls and no
+  `QueryLog` row.
+- The generation-loop tests that asserted "no 4xx is retried" now assert the opposite, along with
+  the log levels.
+- NFR-19's fault-injection count is unchanged: three calls, then the 503.
+- The SDK-shaped builders those route tests need live in `apps/ai/testing.py`, because a vendor
+  SDK may not be imported outside `apps/ai`, tests included.
+
+**Where it applies:** `apps/ai/_openai_compat.py`, `apps/ai/anthropic.py`, `apps/ai/flm.py`,
+`apps/ai/generation.py` (the policy in its docstring), `apps/ai/attempt_log.py`,
+`apps/ai/testing.py`, `apps/ingestion/embedding.py` (docstring), and D-117's free-tier note.

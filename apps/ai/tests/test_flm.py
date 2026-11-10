@@ -1,12 +1,14 @@
 """FLMService against an in-process mock of the OpenAI wire format. No live server."""
 
 import json
+import logging
 
 import httpx2  # the openai SDK's HTTP layer; its MockTransport keeps every call in-process
 import openai
 import pytest
 from django.test import override_settings
 
+from apps.ai import attempt_log
 from apps.ai.base import (
     INPUT_TYPE_DOCUMENT,
     INPUT_TYPE_QUERY,
@@ -144,16 +146,21 @@ def test_embed_wraps_a_server_error():
         make_service(handler).embed(["alpha"])
 
 
-def test_embed_lets_a_client_error_surface_as_is():
-    # 4xx is a bad request or a misconfiguration, not an outage. It must not be
-    # dressed up as "provider unavailable" and turned into a 503.
+def test_embed_turns_a_client_error_into_unavailable_and_logs_it(caplog):
+    # D-118: a 4xx surfaced as itself reached the user as a 500, not NFR-19's 503. It is
+    # raised as unavailable instead, and its status and body go to the log, which is
+    # where a mistyped model name now shows.
     def handler(request):
         return httpx2.Response(404, json={"error": {"message": "unknown model"}})
 
-    with pytest.raises(openai.APIStatusError) as excinfo:
-        make_service(handler).embed(["alpha"])
-    assert excinfo.value.status_code == 404
-    assert not isinstance(excinfo.value, ProviderUnavailable)
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable, match="HTTP 404"):
+            make_service(handler).embed(["alpha"])
+
+    (refusal,) = [r for r in caplog.records if r.name == attempt_log.ATTEMPT_LOGGER_NAME]
+    assert refusal.levelno == logging.ERROR
+    assert f"{BASE_URL} refused the request with HTTP 404" in refusal.getMessage()
+    assert "unknown model" in refusal.getMessage()
 
 
 def test_embed_wraps_an_error_body_delivered_with_status_200():

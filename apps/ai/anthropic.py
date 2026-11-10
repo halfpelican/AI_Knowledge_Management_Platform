@@ -21,7 +21,7 @@ from typing import Callable
 import anthropic as anthropic_sdk
 from django.conf import settings
 
-from apps.ai import _openai_compat
+from apps.ai import _openai_compat, attempt_log
 from apps.ai.base import (
     EmbeddingResult,
     InputType,
@@ -141,10 +141,12 @@ class AnthropicService:
 
         The system prompt goes in the SDK's own ``system`` parameter rather than as a
         message, which is this API's shape; the string is the one FLM receives as its
-        system message. Transport failures become ProviderUnavailable and 4xx surfaces
-        unchanged, the same division the embed path makes. ``stop_reason`` and the usage
-        counts are read for the attempt log only (apps/ai/attempt_log.py), and None where
-        the reply leaves them out.
+        system message. Every failed call becomes ProviderUnavailable, as on the embed
+        path: a transport failure, a 5xx, or (since D-118) a 4xx, which is logged first
+        with its status and body. That covers a 429 under load, and the 400 Anthropic
+        sends once the monthly credit has run out. ``stop_reason`` and the usage counts are
+        read for the attempt log only (apps/ai/attempt_log.py), and None where the reply
+        leaves them out.
 
         No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
         and current Claude models refuse them, so this path is not deterministic run to
@@ -164,11 +166,13 @@ class AnthropicService:
         except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
             raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc
         except anthropic_sdk.APIStatusError as exc:
-            if exc.status_code >= 500:
-                raise ProviderUnavailable(
-                    f"Anthropic API returned HTTP {exc.status_code}: {exc}"
-                ) from exc
-            raise  # 4xx, including a 429, is not an outage and consumes no retries
+            if exc.status_code < 500:
+                # D-118: logged where the status and body are known, then retried like an
+                # outage, so a rate limit or an exhausted credit ends in the NFR-19 503.
+                attempt_log.refused("Anthropic API", exc.status_code, str(exc))
+            raise ProviderUnavailable(
+                f"Anthropic API returned HTTP {exc.status_code}: {exc}"
+            ) from exc
         # Claude replies in content blocks; only the text ones carry the JSON object.
         usage = getattr(response, "usage", None)
         return ChatReply(

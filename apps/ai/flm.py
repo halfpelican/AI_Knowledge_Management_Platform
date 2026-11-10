@@ -10,7 +10,7 @@ from typing import Callable
 import openai
 from django.conf import settings
 
-from apps.ai import _openai_compat
+from apps.ai import _openai_compat, attempt_log
 from apps.ai.base import (
     EmbeddingResult,
     InputType,
@@ -86,10 +86,11 @@ class FLMService:
     def _chat_once(self, messages: list[dict], *, max_tokens: int) -> ChatReply:
         """One chat completion. Returns the reply text and what FLM reported about it.
 
-        Raises ProviderUnavailable for a retryable transport failure, and lets a 4xx
-        surface unchanged — the same division ``_openai_compat.embed`` makes, for the
-        same reason: a misconfiguration is not an outage and repeating it three times
-        produces the same answer three times.
+        Raises ProviderUnavailable for any failed call, as ``_openai_compat.embed`` does:
+        a transport failure, a 5xx, or (since D-118) a 4xx, which is logged first with its
+        status and body. A 4xx surfaced as itself would reach the user as a 500, not the
+        NFR-19 503. A misconfiguration such as a mistyped model name is now retried and
+        answered with the 503 like an outage, and its cause shows in the log.
 
         ``finish_reason`` and the usage counts are read for the attempt log only
         (apps/ai/attempt_log.py), and None where FLM leaves them out. FLM v0.9.39 was seen
@@ -108,11 +109,11 @@ class FLMService:
         except (openai.APITimeoutError, openai.APIConnectionError) as exc:
             raise ProviderUnavailable(f"{settings.FLM_BASE_URL} unreachable: {exc}") from exc
         except openai.APIStatusError as exc:
-            if exc.status_code >= 500:
-                raise ProviderUnavailable(
-                    f"{settings.FLM_BASE_URL} returned HTTP {exc.status_code}: {exc}"
-                ) from exc
-            raise  # 4xx is a configuration or request error, not an outage
+            if exc.status_code < 500:
+                attempt_log.refused(settings.FLM_BASE_URL, exc.status_code, str(exc))  # D-118
+            raise ProviderUnavailable(
+                f"{settings.FLM_BASE_URL} returned HTTP {exc.status_code}: {exc}"
+            ) from exc
         except ValueError as exc:
             # An HTTP 200 carrying an error body instead of a completion: how FLM
             # reports an NPU fault (see the embed path's test for the observed case).

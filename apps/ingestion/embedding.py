@@ -22,7 +22,9 @@ Three things every row carries, and each is an invariant rather than a convenien
 Two failure classes, deliberately not the same thing:
 
 - A provider that is unavailable, or answers unusably, fails the CHUNK. It is
-  retried to MAXIMUM_EMBED_ATTEMPTS, then counted and skipped. The document still
+  retried to MAXIMUM_EMBED_ATTEMPTS, then counted and skipped. Since D-118 that
+  includes a request the provider refuses with a 4xx, such as a rate limit. The
+  provider logs the refusal (apps/ai/attempt_log.py), since nothing here logs attempts. The document still
   commits, carrying the status that says so (CLAUDE.md invariant 8, NFR-20).
 - Anything else propagates. An unexpected exception is not an outcome the pipeline
   decided, so it rolls the caller's transaction back and leaves nothing behind

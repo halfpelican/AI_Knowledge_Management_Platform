@@ -16,7 +16,14 @@ below ERROR, and lowering it would let in every 4xx WARNING from ``django.reques
   ``ValueError`` FLM's 200 carrying an error body) or ``SchemaViolation``;
 - each failed attempt to embed the question, the same way, and an embedding reply that
   cannot be used as a query vector;
-- the 503 ``POST /api/ask`` answers, with the message of the exception that caused it.
+- the 503 ``POST /api/ask`` answers, with the message of the exception that caused it;
+- **each request a provider refuses with a 4xx (D-118, 10 November 2026),** with the
+  status and the provider's message. A 429 is a WARNING, because a rate limit is expected
+  under load and passes. Any other 4xx is an ERROR: a bad key, an unknown model, a
+  malformed request or an exhausted credit, none of which a retry fixes. The provider
+  still raises ProviderUnavailable, so the caller retries and the user sees the NFR-19
+  503. This line is where the cause shows, including on the ingestion path, which logs
+  no attempts of its own.
 
 Each line names the account, by primary key, when the view has set it with ``account``.
 Nothing logged here quotes the question, a passage or the model's reply: the details are
@@ -179,6 +186,23 @@ def parsed_attempt(number: int, of: int, seconds: float, statements: int, *, rep
         _bracket(reply),
         _account.get() or "not set",
         statements,
+    )
+
+
+def refused(source: str, status: int, detail: str) -> None:
+    """A provider's 4xx refusal of one request (D-118).
+
+    ``source`` names the provider or endpoint, ``status`` is the HTTP status, and
+    ``detail`` is the SDK's message, which carries the provider's error body. It is cut at
+    DETAIL_LIMIT, as every detail here is.
+    """
+    logger.log(
+        logging.WARNING if status == 429 else logging.ERROR,
+        "%s refused the request with HTTP %d (account %s): %s",
+        source,
+        status,
+        _account.get() or "not set",
+        _detail(detail),
     )
 
 

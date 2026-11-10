@@ -266,11 +266,11 @@ class FakeGeneratingClient:
         self.models = FakeModels()
 
 
-def status_error(status_code):
+def status_error(status_code, message="scripted"):
     """An anthropic APIStatusError carrying ``status_code``, built without a live call."""
     request = httpx2.Request("POST", "https://api.anthropic.test/v1/messages")
-    response = httpx2.Response(status_code, json={"error": {"message": "scripted"}}, request=request)
-    return anthropic_sdk.APIStatusError("scripted", response=response, body=None)
+    response = httpx2.Response(status_code, json={"error": {"message": message}}, request=request)
+    return anthropic_sdk.APIStatusError(message, response=response, body=None)
 
 
 def test_generate_statements_sends_the_shared_prompt_and_returns_statements():
@@ -391,18 +391,52 @@ def test_a_server_error_is_retried_and_a_later_conforming_reply_is_returned():
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 429])
-def test_a_client_error_surfaces_as_itself_and_consumes_no_retries(status):
-    """4xx is a key, model or quota problem, not an outage; a 429 included (see the
-    provider comment: retrying a rate limit inside a 3-attempt budget would exhaust it
-    and report a billing condition as an NPU fault)."""
+def test_a_client_error_is_retried_to_the_limit_and_ends_in_unavailable(status):
+    """D-118: a key, model, quota or rate problem ends in the NFR-19 503, not a 500.
+
+    Until 10 November 2026 a 4xx surfaced as itself after one call, and the ask view,
+    which catches only ProviderUnavailable, turned it into a 500.
+    """
     client = FakeGeneratingClient(status_error(status))
 
-    with pytest.raises(anthropic_sdk.APIStatusError) as excinfo:
+    with pytest.raises(ProviderUnavailable, match=f"HTTP {status}"):
         AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
-    assert excinfo.value.status_code == status
-    assert not isinstance(excinfo.value, ProviderUnavailable)
-    assert len(client.messages.calls) == 1
+    assert len(client.messages.calls) == MAXIMUM_GENERATION_ATTEMPTS
+
+
+def test_an_exhausted_credit_is_logged_as_an_error_naming_the_cause(caplog):
+    """Anthropic answers 400 once the monthly credit is spent (D-113). The user sees the
+    503's fixed notice, and the log says why, once per refused call."""
+    client = FakeGeneratingClient(
+        status_error(400, "Your credit balance is too low to access the Anthropic API.")
+    )
+
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable):
+            AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
+    refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert [r.levelno for r in refusals] == [logging.ERROR] * MAXIMUM_GENERATION_ATTEMPTS
+    assert "Anthropic API refused the request with HTTP 400" in refusals[0].getMessage()
+    assert "credit balance is too low" in refusals[0].getMessage()
+
+
+@pytest.mark.parametrize("status, level", [(429, logging.WARNING), (401, logging.ERROR)])
+def test_a_voyage_refusal_is_unavailable_and_logged(status, level, caplog):
+    """D-118: a Voyage rate limit or a bad key ends in ProviderUnavailable, which the caller
+    retries, and not in an exception the ask view cannot turn into its 503."""
+
+    def handler(request):
+        return httpx2.Response(status, json={"detail": "refused by voyage"})
+
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable, match=f"HTTP {status}"):
+            AnthropicService(embedding_client=voyage_client(handler)).embed(["alpha"])
+
+    (refusal,) = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert refusal.levelno == level
+    assert f"{VOYAGE_URL} refused the request with HTTP {status}" in refusal.getMessage()
 
 
 def test_every_attempt_is_reported_to_on_attempt():

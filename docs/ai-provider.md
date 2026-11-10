@@ -77,6 +77,10 @@ NIT3004 work and get their own methods later — do not add them speculatively.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
+Every failed provider call counts as an attempt: a transport failure, a 5xx, and, since
+D-118, a 4xx. The provider logs a 4xx with its status and body before raising, a 429 as a
+WARNING and anything else as an ERROR, so a rate limit or an exhausted credit ends in the
+503, not a 500.
 A response that does not conform to the statement schema counts as a failed attempt,
 not as an answer.
 
