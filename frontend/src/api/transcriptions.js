@@ -1,5 +1,5 @@
 /**
- * Recording transcription's two routes (D-123; docs/api-contract.md,
+ * Recording transcription's routes, the status and the segment (D-123; docs/api-contract.md,
  * "Recording transcription"). Thin wrappers over the one API client; no fetch and
  * no XMLHttpRequest here.
  *
@@ -15,8 +15,10 @@ export const TRANSCRIPTION_DISABLED_CODE = 'transcription_disabled'
 export const TRANSCRIPTION_UNAVAILABLE_CODE = 'transcription_unavailable'
 /** The 429 while another segment of this user's is still being transcribed. */
 export const TRANSCRIPTION_IN_FLIGHT_CODE = 'transcription_in_flight'
+/** The 429, with Retry-After, while the server is transcribing as many segments as it allows. */
+export const TRANSCRIPTION_BUSY_CODE = 'transcription_busy'
 
-/** The two values of a transcribed segment's `status`. */
+/** The values of a transcribed segment's `status`. */
 export const SEGMENT_STATUS = {
   transcribed: 'transcribed',
   silent: 'silent',
@@ -37,8 +39,9 @@ export function getTranscriptionStatus(options = {}) {
  * the server's silence rule compared, for checking the threshold, and the screen
  * does not show it. 200 for a transcribed segment and for
  * a silent one, which is never sent to Whisper; 400 no audio, an empty segment or
- * one too long; 413 over 50 MB; 415 not a 16-bit PCM WAV; 429 past the rate, with
- * `Retry-After`, or with `code` `transcription_in_flight`; 503 with `code`
+ * one too long; 413 over 50 MB; 415 not a 16-bit PCM mono WAV at 16 kHz; 429 past
+ * the rate, with `Retry-After`, or with `code` `transcription_in_flight`, or with
+ * `code` `transcription_busy` and `Retry-After`; 503 with `code`
  * `transcription_disabled` or `transcription_unavailable`.
  *
  * Sent through `upload()` because the body is multipart. The server checks the

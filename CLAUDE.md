@@ -106,8 +106,8 @@ class AIService(Protocol):
 
 The list, not a count, is the source of truth. `classify_document` arrived with FR-10 on 9 November
 2026 (D-104). `transcribe` and `transcription_health` arrived on 10 November 2026 with recording
-transcription (D-123): only FLM has speech-to-text, so both providers send a segment to
-FLM's Whisper, selected by its own `TRANSCRIPTION_PROVIDER` (`none` by default), not by
+transcription (D-123): only FLM has speech-to-text, so the FLM and Anthropic providers alike send a
+segment to FLM's Whisper, selected by its own `TRANSCRIPTION_PROVIDER` (`none` by default), not by
 `AI_PROVIDER`. Summarisation (FR-16) is added the same way when its
 requirement is built, not before.
 
@@ -204,6 +204,7 @@ set during evaluation, not guessed in a code review.
 | `TRANSCRIPTION_SEGMENT_SECONDS` / `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` | 30 s, the page's segment / 60 s, the most the server transcribes in one request |
 | `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |
 | `MAXIMUM_RECORDING_BYTES` | 500 MB — the largest recording the page decodes; client-only, since the recording never reaches the server |
+| `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` | 2 — segments the whole server sends to FLM at once (D-123) |
 | `MAXIMUM_STATEMENTS` | **6**, *tune* — chosen on the development set; a retry after a cut-off asks for fewer (D-100) |
 | `MINIMUM_QUESTION_LENGTH` | ~10 characters |
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |

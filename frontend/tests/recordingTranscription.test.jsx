@@ -273,6 +273,25 @@ describe('D-123: nothing is added until a person has reviewed the draft', () => 
     expect(await screen.findByText(TEXT.recordingNone)).toBeTruthy()
   })
 
+  it('keeps the draft and the tick when the add itself is refused', async () => {
+    const answered = serve({
+      meetings: { status: 429, body: { detail: 'Request was throttled.' }, headers: { 'Retry-After': '30' } },
+    })
+    renderMeetings()
+    await transcribe()
+    await screen.findByText(TEXT.transcribeDone)
+    fillMeetingDetails()
+    const draft = draftBox().value
+    fireEvent.click(screen.getByLabelText(TEXT.draftReviewed))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add transcript' }))
+
+    expect(await screen.findByText(new RegExp(TEXT.meetingLimitReached('').split('.')[0]))).toBeTruthy()
+    expect(meetingRequests(answered)).toHaveLength(1)
+    expect(draftBox().value).toBe(draft)
+    expect(screen.getByLabelText(TEXT.draftReviewed).checked).toBe(true)
+  })
+
   it('has nothing to add before a recording is transcribed', async () => {
     const answered = serve()
     renderMeetings()
@@ -296,7 +315,7 @@ describe('D-123: a failed segment discards nothing (invariant 8)', () => {
     ],
     [
       'the segment is refused',
-      { status: 415, body: { detail: 'Audio must be a 16-bit PCM WAV segment, mono or stereo.' } },
+      { status: 415, body: { detail: 'Audio must be a 16-bit PCM mono WAV segment at 16 kHz.' } },
       TEXT.transcribeRefused(1, SEGMENT_COUNT),
     ],
   ])('pauses when %s, keeps the draft, and resumes from the failed segment', async (_, failure, words) => {
@@ -344,6 +363,25 @@ describe('D-123: a failed segment discards nothing (invariant 8)', () => {
     expect(draftBox().value).toBe(expectedDraft(Array.from({ length: SEGMENT_COUNT }, (_, i) => i + 1)))
   })
 
+  it('waits out a busy server with its own words and carries on by itself', async () => {
+    let busy = false
+    serve({
+      segments: (n) => {
+        if (n === 2 && !busy) {
+          busy = true
+          return { status: 429, body: { detail: 'busy', code: 'transcription_busy' }, headers: { 'Retry-After': '1' } }
+        }
+        return transcribedReply(busy ? n - 1 : n)
+      },
+    })
+    renderMeetings()
+    await transcribe()
+
+    expect(await screen.findByText(TEXT.transcribeBusy(1))).toBeTruthy()
+    await screen.findByText(TEXT.transcribeDone, {}, { timeout: 4000 })
+    expect(draftBox().value).toBe(expectedDraft(Array.from({ length: SEGMENT_COUNT }, (_, i) => i + 1)))
+  })
+
   it('pauses with its own words while another transcription of the user is in flight', async () => {
     serve({
       segments: (n) =>
@@ -367,6 +405,59 @@ describe('D-123: a failed segment discards nothing (invariant 8)', () => {
     expect(await screen.findByText(TEXT.transcribeDisabledNow)).toBeTruthy()
     expect(draftBox().value).toBe(expectedDraft([1]))
     expect(screen.queryByRole('button', { name: TEXT.transcribeResume })).toBeNull()
+  })
+
+  it('takes back a tick given before more of the recording was transcribed', async () => {
+    let failed = false
+    const answered = serve({
+      segments: (n) => {
+        if (n === 2 && !failed) {
+          failed = true
+          return { status: 503, body: { detail: 'down', code: 'transcription_unavailable' } }
+        }
+        return transcribedReply(failed ? n - 1 : n)
+      },
+    })
+    renderMeetings()
+    await transcribe()
+    await screen.findByText(TEXT.transcribeUnavailable(1, SEGMENT_COUNT))
+    fireEvent.click(screen.getByLabelText(TEXT.draftReviewed))
+    expect(screen.getByLabelText(TEXT.draftReviewed).checked).toBe(true)
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.transcribeResume }))
+    await screen.findByText(TEXT.transcribeDone)
+
+    // The later segments have not been read, so the tick is gone and must be given again.
+    expect(screen.getByLabelText(TEXT.draftReviewed).checked).toBe(false)
+    fillMeetingDetails()
+    fireEvent.click(screen.getByRole('button', { name: 'Add transcript' }))
+    expect(await screen.findByText(VALIDATION.transcriptReviewRequired)).toBeTruthy()
+    expect(meetingRequests(answered)).toHaveLength(0)
+  })
+
+  it('keeps its place through a look at another source, and resumes without repeating a segment', async () => {
+    let failed = false
+    const answered = serve({
+      segments: (n) => {
+        if (n === 2 && !failed) {
+          failed = true
+          return { status: 503, body: { detail: 'down', code: 'transcription_unavailable' } }
+        }
+        return transcribedReply(failed ? n - 1 : n)
+      },
+    })
+    renderMeetings()
+    await transcribe()
+    await screen.findByText(TEXT.transcribeUnavailable(1, SEGMENT_COUNT))
+
+    fireEvent.click(screen.getByLabelText(TEXT.meetingSourceText))
+    fireEvent.click(screen.getByLabelText(TEXT.meetingSourceRecording))
+    fireEvent.click(screen.getByRole('button', { name: TEXT.transcribeResume }))
+
+    await screen.findByText(TEXT.transcribeDone)
+    expect(draftBox().value).toBe(expectedDraft(Array.from({ length: SEGMENT_COUNT }, (_, i) => i + 1)))
+    expect(segmentRequests(answered)).toHaveLength(SEGMENT_COUNT + 1)
+    expect(decodeRecording).toHaveBeenCalledTimes(1)
   })
 
   it('stops at the person’s request, keeping the draft, and resumes', async () => {
@@ -485,7 +576,9 @@ describe('D-123: the draft is the person’s work', () => {
       const [blob, filename] = saved
       expect(filename).toBe('budget-review-transcript.txt')
       expect(await blob.text()).toBe(draftBox().value)
-      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:draft')
+      // Revoked a moment after the click, not at once, so the download is not cancelled.
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled()
+      await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:draft'), { timeout: 2000 })
     } finally {
       delete URL.createObjectURL
       delete URL.revokeObjectURL

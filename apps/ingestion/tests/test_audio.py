@@ -12,9 +12,8 @@ import pytest
 
 from apps.ai.testing import STUB_ASR_MODEL, stub_transcript_text
 from apps.core.constants import (
-    MAXIMUM_TRANSCRIPTION_SAMPLE_RATE,
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
-    MINIMUM_TRANSCRIPTION_SAMPLE_RATE,
+    TRANSCRIPTION_SAMPLE_RATE,
     TRANSCRIPTION_SILENCE_DBFS,
 )
 from apps.ingestion import audio
@@ -38,23 +37,16 @@ def test_a_mono_16_khz_segment_is_read_with_its_shape_and_level():
     assert not segment.silent
 
 
-def test_a_stereo_segment_at_44_1_khz_is_accepted():
-    segment = audio.read_segment(build.tone(1.0, rate=44_100, channels=2))
-
-    assert (segment.sample_rate, segment.channels, segment.frame_count) == (44_100, 2, 44_100)
-    assert not segment.silent
-
-
-@pytest.mark.parametrize("rate", [MINIMUM_TRANSCRIPTION_SAMPLE_RATE, MAXIMUM_TRANSCRIPTION_SAMPLE_RATE])
-def test_the_sample_rate_bounds_are_accepted(rate):
-    assert audio.read_segment(build.tone(0.5, rate=rate)).sample_rate == rate
+def test_a_stereo_segment_is_unsupported():
+    """Only what the page sends is accepted: 16 kHz mono (the security review of 11 November)."""
+    with pytest.raises(audio.UnsupportedAudio, match="only mono"):
+        audio.read_segment(build.tone(1.0, channels=2))
 
 
-@pytest.mark.parametrize(
-    "rate", [MINIMUM_TRANSCRIPTION_SAMPLE_RATE - 1, MAXIMUM_TRANSCRIPTION_SAMPLE_RATE + 1]
-)
-def test_a_sample_rate_outside_the_bounds_is_unsupported(rate):
-    with pytest.raises(audio.UnsupportedAudio):
+@pytest.mark.parametrize("rate", [8_000, 22_050, 44_100, 48_000])
+def test_any_rate_but_the_pages_is_unsupported(rate):
+    assert rate != TRANSCRIPTION_SAMPLE_RATE
+    with pytest.raises(audio.UnsupportedAudio, match="Hz"):
         audio.read_segment(build.tone(0.5, rate=rate))
 
 
@@ -94,7 +86,7 @@ def test_a_float_wav_is_unsupported():
 
 def test_three_channels_are_unsupported():
     samples = build.tone_samples(0.5) * 3
-    with pytest.raises(audio.UnsupportedAudio, match="3 channels"):
+    with pytest.raises(audio.UnsupportedAudio, match="3 channels; only mono"):
         audio.read_segment(build.wav_from_samples(samples, channels=3))
 
 
@@ -104,24 +96,41 @@ def test_a_wav_with_no_frames_is_empty():
 
 
 def test_the_longest_segment_is_accepted_and_one_frame_more_is_too_long():
-    rate = 8_000  # the lowest accepted rate keeps the bytes small
-    frames = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * rate
-    assert audio.read_segment(build.wav_from_samples([1000] * frames, rate=rate)).duration_seconds == (
+    frames = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * TRANSCRIPTION_SAMPLE_RATE
+    assert audio.read_segment(build.steady_wav(frames)).duration_seconds == (
         MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS
     )
     with pytest.raises(audio.SegmentTooLong) as refused:
-        audio.read_segment(build.wav_from_samples([1000] * (frames + 1), rate=rate))
+        audio.read_segment(build.steady_wav(frames + 1))
     assert refused.value.seconds > MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS
 
 
 def test_a_long_upload_is_refused_having_read_one_frame_past_the_limit():
     """However much audio follows, the reader stops one frame past the longest segment, so a
     50 MB WAV costs no more memory or time than a 60 s one before it is refused."""
-    rate = 8_000
-    frames = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * rate
+    frames = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * TRANSCRIPTION_SAMPLE_RATE
     with pytest.raises(audio.SegmentTooLong) as refused:
-        audio.read_segment(build.wav_from_samples([1000] * (frames * 5), rate=rate))
-    assert refused.value.seconds == (frames + 1) / rate
+        audio.read_segment(build.steady_wav(frames * 5))
+    assert refused.value.seconds == (frames + 1) / TRANSCRIPTION_SAMPLE_RATE
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(
+            build.with_chunk_before_data(build.tone(0.5), b"LIST", 2**31, b"INFO"),
+            id="a LIST chunk declaring 2 GB before the data",
+        ),
+        pytest.param(build.with_chunk_before_fmt(build.tone(0.5), b"JUNK", 2**32 - 1), id="JUNK before fmt"),
+        pytest.param(build.with_fmt_size(build.tone(0.5), 2**32 - 1), id="a fmt chunk declaring 4 GB"),
+    ],
+)
+def test_a_header_whose_chunk_runs_past_the_file_is_unsupported_not_a_crash(data):
+    """Python 3.12's wave raises a bare RuntimeError for these, which reached the user as a 500
+    and wrote a traceback per request until the security review of 11 November. Fuzzing 20,020
+    corrupted headers that day raised nothing else that escaped."""
+    with pytest.raises(audio.UnsupportedAudio):
+        audio.read_segment(data)
 
 
 # --- Silence --------------------------------------------------------------------------------------

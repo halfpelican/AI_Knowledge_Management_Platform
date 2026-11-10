@@ -23,6 +23,8 @@ import uuid
 
 from django.core.cache import cache
 
+from apps.core.constants import MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT
+
 # No expiry: Django's cache reads a timeout of None as "never".
 TRANSCRIPTION_SLOT_TIMEOUT_SECONDS = None
 
@@ -44,5 +46,37 @@ def take_transcription_slot(user) -> str | None:
 def release_transcription_slot(user, token: str) -> None:
     """Free this user's slot, but only if it is still the one ``token`` took."""
     key = transcription_slot_key(user)
+    if cache.get(key) == token:
+        cache.delete(key)
+
+
+# --- The server's slots: MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT across every user --------------------
+#
+# The per-user slot above bounds one user. It does not bound many: the security review of 11
+# November (finding 2) showed accounts registered for the purpose, each sending one long segment,
+# holding every Waitress thread while FLM's one NPU took their segments in turn. So the server
+# holds a few slots of its own, MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT of them, as fixed cache keys taken
+# with the same atomic ``cache.add`` and released the same way. Past them a segment is refused at
+# once, before any provider call, and the page waits out the reply's Retry-After and sends it
+# again. One process holds every slot (D-64), as for the per-user one.
+
+
+def server_slot_key(index: int) -> str:
+    return f"transcription_server_slot_{index}"
+
+
+def take_server_slot() -> tuple[int, str] | None:
+    """Take a free server slot and return it, or None when every one is held."""
+    token = uuid.uuid4().hex
+    for index in range(MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT):
+        if cache.add(server_slot_key(index), token, timeout=TRANSCRIPTION_SLOT_TIMEOUT_SECONDS):
+            return index, token
+    return None
+
+
+def release_server_slot(slot: tuple[int, str]) -> None:
+    """Free a server slot, but only if it is still the one this request took."""
+    index, token = slot
+    key = server_slot_key(index)
     if cache.get(key) == token:
         cache.delete(key)

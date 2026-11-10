@@ -113,7 +113,7 @@ FLM on the NPU laptop whichever `AI_PROVIDER` is set. It is off unless `.env` sa
 TRANSCRIPTION_PROVIDER=flm
 ```
 
-Pull the speech model once (623 MB), then serve it beside the other two with `--asr 1`:
+Pull the speech model once (623 MB), then serve it beside `gemma3:4b` and `embed-gemma` with `--asr 1`:
 
 ```powershell
 flm pull whisper-v3:turbo
@@ -123,12 +123,12 @@ flm pull whisper-v3:turbo
 flm serve gemma3:4b --embed 1 --asr 1
 ```
 
-- **Check for an FLM server already running first** (`Get-Process flm`). Windows lets two
-  `flm serve` processes listen on port 8625 at once; requests then go to either, and the second
-  could not load its model. Stop the old one before starting this one.
+- **Check for an FLM server already running first** (`Get-Process flm`). Windows lets a second
+  `flm serve` process listen on port 8625 beside the first; requests then go to either, and the
+  newer one could not load its model. Stop the old one before starting this one.
 - **The recording stays in the browser.** The page decodes it (audio, or the sound of a video such
-  as a Game Bar MP4, up to 500 MB) and sends it to `POST /api/transcriptions` in WAV segments of up
-  to 30 s. FLM transcribes at about a quarter of real time, so an hour's meeting takes about fifteen
+  as a Game Bar MP4, up to 500 MB) and sends it to `POST /api/transcriptions` in WAV segments of
+  about 30 s. FLM transcribes at about a quarter of real time, so an hour's meeting takes about fifteen
   minutes.
 - **Nothing is added until a person ticks that they reviewed the draft.** Whisper mishears names,
   numbers and dates, and writes dates the US way.

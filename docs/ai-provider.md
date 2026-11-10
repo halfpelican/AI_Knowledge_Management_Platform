@@ -265,15 +265,15 @@ be co-resident with an LLM in server mode. Endpoints then available at
 `/audio/transcriptions`.
 
 **For recording transcription (D-123), add `--asr 1`**, which loads `whisper-v3:turbo`
-beside the other two (`flm pull whisper-v3:turbo` first, 623 MB):
+beside `gemma3:4b` and `embed-gemma` (`flm pull whisper-v3:turbo` first, 623 MB):
 
 ```powershell
 flm serve gemma3:4b --embed 1 --asr 1
 ```
 
-Measured on v0.9.39 on 6 November 2026: one server holds all three models, and
+Measured on v0.9.39 on 6 November 2026: one server holds the chat, embedding and speech models, and
 `scripts/check_flm.py` still passes with speech loaded. **Before starting a server, check for one
-already running** (`Get-Process flm`): Windows lets two `flm serve` processes listen on 8625 at
+already running** (`Get-Process flm`): Windows lets a second `flm serve` process listen on 8625 beside the first at
 once, requests then go to either, and the second could not load its model.
 
 | Setting | Value |
@@ -505,7 +505,7 @@ tested retry path, not as a measured one.
 
 ## 5c. Recording transcription (D-123)
 
-`apps/ai/transcription.py` holds the one call both providers make, because Claude and Voyage have
+`apps/ai/transcription.py` holds the one call the FLM and Anthropic providers make, because Claude and Voyage have
 no speech-to-text: a multipart POST to FLM's `/v1/audio/transcriptions` with `FLM_ASR_MODEL`,
 `language=en`, `response_format=json` and the segment as a WAV part, carrying
 `TRANSCRIPTION_TIMEOUT_SECONDS`. The FLM provider passes its own client; the Anthropic provider
@@ -513,7 +513,9 @@ builds an FLM client from `FLM_BASE_URL` only when the setting is `flm`.
 
 - **One segment per call.** The page cuts a recording into WAV segments of at most
   `TRANSCRIPTION_SEGMENT_SECONDS` and sends them one at a time. The server never decodes MP4, M4A
-  or MP3; it receives only 16-bit PCM WAV, which Python's `wave` reads.
+  or MP3; it accepts only a 16-bit PCM mono WAV at 16 kHz, which Python's `wave` reads.
+- **At most `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) calls at once** across the server, since FLM's one
+  NPU takes them in turn; past that the route answers 429 `transcription_busy` before any call.
 - **Silence never reaches the provider.** `apps/ingestion/audio.py` refuses a segment whose loudest
   half second is below `TRANSCRIPTION_SILENCE_DBFS` before any call, because Whisper invents text
   from silence. What it sends is a WAV rebuilt from exactly the frames it measured.

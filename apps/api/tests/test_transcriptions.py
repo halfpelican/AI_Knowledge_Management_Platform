@@ -1,5 +1,5 @@
-"""Recording transcription's two routes (D-123; docs/api-contract.md, "Recording
-transcription").
+"""Recording transcription's routes, the status and the segment (D-123; docs/api-contract.md,
+"Recording transcription").
 
 ``GET /api/transcriptions/status`` and ``POST /api/transcriptions``: a session and
 ``contribute_content`` on both (FR-06), every test that can run from both roles runs from both
@@ -12,13 +12,15 @@ What they hold, enumerated:
 - the happy path: a segment's text and the model, from the stub, sent the rebuilt WAV;
 - nothing is stored: no meeting, no chunk, by any outcome;
 - silence: answered ``silent`` with no provider call, for digital silence and for quiet noise;
-- the rejection order: 401, 403, 503 ``transcription_disabled`` before the body is read, 413 on
-  the declared length, 400 with no ``audio``, 413 on the bytes, 415 for anything but a 16-bit PCM
-  WAV, 400 for an empty or over-long segment, and the JSON-only parser's 415;
+- the refusals: 401, 403, 503 ``transcription_disabled``, 413 on the declared length, 400 with no
+  ``audio``, 415 for anything but a 16-bit PCM mono WAV at 16 kHz, 400 for an empty or over-long
+  segment, and the parser's 415 for JSON; and the 403 and 413 again from a session that sends its
+  CSRF token, as the page does, which has its body parsed during authentication;
 - the provider failing: NFR-19's 503 ``transcription_unavailable`` for an outage and for a
   refusal, nothing stored, the user's slot released;
 - one segment in flight per user: 429 ``transcription_in_flight`` while it is held, and a silent
-  or refused segment answered without it;
+  or refused segment answered without it; and MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT across the server:
+  429 ``transcription_busy`` with Retry-After while every server slot is held;
 - CSRF on a session that does not send the token;
 - the status route's two flags and its segment lengths.
 
@@ -33,13 +35,20 @@ from rest_framework.test import APIClient
 from apps.accounts.models import RolePermission
 from apps.ai.base import ProviderRefused, ProviderUnavailable, TranscriptionDisabled
 from apps.ai.testing import STUB_ASR_MODEL, stub_transcript_text
-from apps.api.transcription_slot import take_transcription_slot, transcription_slot_key
+from apps.api.transcription_slot import (
+    server_slot_key,
+    take_server_slot,
+    take_transcription_slot,
+    transcription_slot_key,
+)
 from apps.api.views import (
     EMPTY_AUDIO_MESSAGE,
     FILE_TOO_LARGE_MESSAGE,
     NO_AUDIO_SUBMITTED_MESSAGE,
     SEGMENT_TOO_LONG_MESSAGE,
     TRANSCRIPTION_DISABLED_CODE,
+    TRANSCRIPTION_BUSY_CODE,
+    TRANSCRIPTION_BUSY_MESSAGE,
     TRANSCRIPTION_DISABLED_MESSAGE,
     TRANSCRIPTION_IN_FLIGHT_CODE,
     TRANSCRIPTION_UNAVAILABLE_CODE,
@@ -50,6 +59,9 @@ from apps.core.constants import (
     CONTRIBUTE_CONTENT_PERMISSION,
     MAX_UPLOAD_BYTES,
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
+    MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT,
+    TRANSCRIPTION_BUSY_RETRY_SECONDS,
+    TRANSCRIPTION_SAMPLE_RATE,
     TRANSCRIPTION_SEGMENT_SECONDS,
     TRANSCRIPTION_SILENCE_DBFS,
 )
@@ -139,11 +151,20 @@ def test_a_transcribed_segment_stores_nothing(employee_client, transcription_on,
     assert ContentChunk.objects.count() == chunks_before
 
 
-def test_a_stereo_segment_at_another_rate_is_transcribed(employee_client, transcription_on):
-    response = post_segment(employee_client, build.tone(1.0, rate=44_100, channels=2))
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(build.tone(1.0, channels=2), id="stereo"),
+        pytest.param(build.tone(1.0, rate=44_100), id="44.1 kHz"),
+    ],
+)
+def test_anything_but_what_the_page_sends_is_415(employee_client, transcription_on, stub_ai_service, data):
+    """16 kHz mono only: the page sends nothing else, and a wider range only made a segment
+    dearer to measure (the security review of 11 November)."""
+    response = post_segment(employee_client, data)
 
-    assert response.status_code == 200
-    assert response.json()["status"] == "transcribed"
+    assert response.status_code == 415
+    assert stub_ai_service.transcribe_calls == []
 
 
 # --- Silence never reaches the provider -----------------------------------------------------------
@@ -189,8 +210,8 @@ def test_a_role_without_contribute_content_is_forbidden(session_client, transcri
     assert stub_ai_service.transcribe_calls == []
 
 
-def test_with_transcription_off_a_segment_is_503_before_its_body_is_read(session_client, stub_ai_service):
-    # No audio at all: the refusal comes before the body is looked at.
+def test_with_transcription_off_a_segment_is_503_and_reaches_no_provider(session_client, stub_ai_service):
+    # No audio at all: the refusal does not need any.
     response = post_segment(session_client.client)
 
     assert response.status_code == 503
@@ -201,7 +222,7 @@ def test_with_transcription_off_a_segment_is_503_before_its_body_is_read(session
     assert stub_ai_service.transcribe_calls == []
 
 
-def test_a_declared_length_over_the_ceiling_is_413_before_parsing(session_client, transcription_on):
+def test_a_declared_length_over_the_ceiling_is_413(session_client, transcription_on):
     response = post_segment(
         session_client.client, build.tone(1.0), CONTENT_LENGTH=str(MAX_UPLOAD_BYTES + 1)
     )
@@ -269,8 +290,7 @@ def test_an_empty_segment_is_400(session_client, transcription_on):
 
 
 def test_a_segment_over_the_longest_is_400(session_client, transcription_on, stub_ai_service):
-    rate = 8_000
-    data = build.wav_from_samples([1000] * (MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * rate + 1), rate=rate)
+    data = build.steady_wav(MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * TRANSCRIPTION_SAMPLE_RATE + 1)
 
     response = post_segment(session_client.client, data)
 
@@ -292,6 +312,45 @@ def test_a_session_without_the_csrf_token_is_refused(employee, transcription_on)
     response = post_segment(client, build.tone(1.0))
 
     assert response.status_code == 403
+
+
+def csrf_session(user):
+    """A session that sends its CSRF token, as the page does: the cookie from GET /api/auth/me, and
+    the token in X-CSRFToken on every POST. DRF parses such a request's body while it checks the
+    token, before the permission and the size checks (the security review of 11 November)."""
+    client = APIClient(enforce_csrf_checks=True)
+    client.force_login(user)
+    assert client.get("/api/auth/me").status_code == 200
+    return client, {"HTTP_X_CSRFTOKEN": client.cookies["csrftoken"].value}
+
+
+def test_a_session_sending_its_token_is_answered_as_any_other(session_client, transcription_on, stub_ai_service):
+    client, token = csrf_session(session_client.user)
+
+    response = post_segment(client, build.tone(1.0), **token)
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "transcribed"
+
+
+def test_a_session_sending_its_token_still_gets_the_403_and_the_413(
+    session_client, transcription_on, stub_ai_service, monkeypatch
+):
+    """The answers keep their order with CSRF enforced; what the order does not do is spare the
+    parse (D-123, "What it does not cover"). That shows here too: a declared length larger than the
+    bytes sent, which the plain client's 413 test uses, cannot be sent with the token, because DRF
+    reads the whole declared body while checking it. So the ceiling is lowered and a real body sent
+    over it."""
+    client, token = csrf_session(session_client.user)
+    monkeypatch.setattr("apps.api.views.MAX_UPLOAD_BYTES", 1000)
+    oversized = post_segment(client, build.tone(1.0), **token)
+    monkeypatch.undo()
+    revoke_contribute_content(session_client.user)
+    forbidden = post_segment(client, build.tone(1.0), **token)
+
+    assert oversized.status_code == 413
+    assert forbidden.status_code == 403
+    assert stub_ai_service.transcribe_calls == []
 
 
 # --- The provider failing (NFR-19, D-118, invariant 8) --------------------------------------------
@@ -388,17 +447,51 @@ def test_one_users_slot_is_not_anothers(employee, administrator_client, transcri
     assert post_segment(administrator_client, build.tone(1.0)).status_code == 200
 
 
+def test_every_server_slot_held_is_429_busy_with_retry_after(
+    employee, administrator, employee_client, transcription_on, stub_ai_service
+):
+    """MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT across every user: other people's segments are with FLM, so
+    this one is refused at once, with its own words and a time to try again, and costs nothing."""
+    from django.core.cache import cache
+
+    held = [take_server_slot() for _ in range(MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT)]
+    assert all(held) and take_server_slot() is None
+
+    response = post_segment(employee_client, build.tone(1.0))
+
+    assert response.status_code == 429
+    assert response.json() == {"detail": TRANSCRIPTION_BUSY_MESSAGE, "code": TRANSCRIPTION_BUSY_CODE}
+    assert response["Retry-After"] == str(TRANSCRIPTION_BUSY_RETRY_SECONDS)
+    assert stub_ai_service.transcribe_calls == []
+    # The user's own slot was given back, so the segment goes as soon as a server slot is free.
+    assert cache.get(transcription_slot_key(employee)) is None
+    cache.delete(server_slot_key(0))
+    assert post_segment(employee_client, build.tone(1.0)).status_code == 200
+
+
+def test_a_silent_segment_needs_no_server_slot(employee_client, transcription_on):
+    for _ in range(MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT):
+        take_server_slot()
+
+    assert post_segment(employee_client, build.silence(1.0)).json()["status"] == "silent"
+
+
 def test_the_slot_is_released_after_a_success_and_after_a_failure(
     employee, employee_client, transcription_on, stub_ai_service
 ):
     from django.core.cache import cache
 
+    def all_free():
+        return cache.get(transcription_slot_key(employee)) is None and all(
+            cache.get(server_slot_key(index)) is None for index in range(MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT)
+        )
+
     assert post_segment(employee_client, build.tone(1.0)).status_code == 200
-    assert cache.get(transcription_slot_key(employee)) is None
+    assert all_free()
 
     stub_ai_service.transcription = raising(ProviderUnavailable("down"))
     assert post_segment(employee_client, build.tone(1.0)).status_code == 503
-    assert cache.get(transcription_slot_key(employee)) is None
+    assert all_free()
 
 
 # --- The status route -----------------------------------------------------------------------------

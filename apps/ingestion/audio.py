@@ -4,10 +4,13 @@ The page decodes a meeting recording in the browser and posts it here one WAV se
 (POST /api/transcriptions). This module is everything that happens to a segment between the
 route's checks and its reply:
 
-- **Read.** Only a 16-bit PCM WAV is accepted, mono or stereo, at a sample rate between
-  MINIMUM_TRANSCRIPTION_SAMPLE_RATE and MAXIMUM_TRANSCRIPTION_SAMPLE_RATE: what the page always
-  sends, and all Python's ``wave`` reads. The format is decided by the bytes, as FR-08 decides a
-  document's, never by a filename or a declared type.
+- **Read.** Only what the page sends is accepted: a 16-bit PCM mono WAV at
+  TRANSCRIPTION_SAMPLE_RATE (16 kHz), which Python's ``wave`` reads. Nothing else is needed, and
+  every other rate or channel count only makes a segment dearer to measure: the security review
+  of 11 November measured a 60 s, 48 kHz stereo segment at about thirteen times the CPU of the
+  page's own. The format is decided by the bytes, as FR-08 decides a document's, never by a
+  filename or a declared type. A header ``wave`` cannot follow is refused as unsupported, whatever
+  ``wave`` raised for it.
 - **Bounded.** A segment longer than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS is refused before its
   loudness is measured, so one request stays short, and no more than one frame past that limit is
   ever read from it. One with no frames at all is refused as empty.
@@ -37,9 +40,8 @@ from dataclasses import dataclass
 import apps.ai
 from apps.ai.base import Transcription
 from apps.core.constants import (
-    MAXIMUM_TRANSCRIPTION_SAMPLE_RATE,
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
-    MINIMUM_TRANSCRIPTION_SAMPLE_RATE,
+    TRANSCRIPTION_SAMPLE_RATE,
     TRANSCRIPTION_SILENCE_DBFS,
     TRANSCRIPTION_SILENCE_WINDOW_SECONDS,
 )
@@ -48,7 +50,7 @@ from apps.core.constants import (
 RIFF_SIGNATURE = b"RIFF"
 WAVE_FORM_TYPE = b"WAVE"
 SAMPLE_WIDTH_BYTES = 2  # 16-bit PCM, the only width accepted
-ACCEPTED_CHANNELS = (1, 2)
+CHANNELS = 1  # mono, the only channel count accepted
 # A 16-bit sample's full scale, for dBFS: 0 dBFS is a square wave at the largest magnitude.
 FULL_SCALE = 32768.0
 # The loudness of a segment with no signal at all: every sample zero.
@@ -58,7 +60,7 @@ SEGMENT_FILENAME = "segment.wav"
 
 
 class UnsupportedAudio(ValueError):
-    """Not a 16-bit PCM WAV at an accepted channel count and sample rate."""
+    """Not a 16-bit PCM mono WAV at TRANSCRIPTION_SAMPLE_RATE, or not a WAV ``wave`` can read."""
 
 
 class EmptyAudio(ValueError):
@@ -94,7 +96,8 @@ class AudioSegment:
 
 
 def read_segment(data: bytes) -> AudioSegment:
-    """Read, bound, measure and rebuild one segment. Raises one of the three errors above."""
+    """Read, bound, measure and rebuild one segment. Raises UnsupportedAudio, EmptyAudio or
+    SegmentTooLong."""
     if len(data) < 12 or data[:4] != RIFF_SIGNATURE or data[8:12] != WAVE_FORM_TYPE:
         raise UnsupportedAudio("not a WAV file")
     try:
@@ -104,19 +107,23 @@ def read_segment(data: bytes) -> AudioSegment:
             rate = reader.getframerate()
             if width != SAMPLE_WIDTH_BYTES:
                 raise UnsupportedAudio(f"{width * 8}-bit samples; only 16-bit PCM is accepted")
-            if channels not in ACCEPTED_CHANNELS:
-                raise UnsupportedAudio(f"{channels} channels; only mono or stereo is accepted")
-            if not MINIMUM_TRANSCRIPTION_SAMPLE_RATE <= rate <= MAXIMUM_TRANSCRIPTION_SAMPLE_RATE:
-                raise UnsupportedAudio(f"a sample rate of {rate} Hz is outside the accepted range")
+            if channels != CHANNELS:
+                raise UnsupportedAudio(f"{channels} channels; only mono is accepted")
+            if rate != TRANSCRIPTION_SAMPLE_RATE:
+                raise UnsupportedAudio(f"{rate} Hz; only {TRANSCRIPTION_SAMPLE_RATE} Hz is accepted")
             # At most one frame past the longest segment is read, whatever the header declares
             # and however much data follows it, so a long upload costs no more memory or time
             # than the longest segment before it is refused.
             longest = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * rate
             raw = reader.readframes(longest + 1)
-    except (wave.Error, EOFError) as exc:
+    except (wave.Error, EOFError, RuntimeError) as exc:
         # wave.Error covers a WAV whose encoding is not PCM, a missing fmt or data chunk and a
-        # malformed chunk; EOFError a file cut off inside its header.
-        raise UnsupportedAudio(f"not a readable PCM WAV ({exc})") from exc
+        # malformed chunk; EOFError a file cut off inside its header. RuntimeError is what
+        # Python 3.12's wave raises, bare, when a chunk before the data declares a size past the
+        # end of the file (its _Chunk.seek), which a truncated recording's LIST chunk can do: a
+        # 500 until the security review of 11 November found it. 20,020 corrupted headers fuzzed
+        # that day raised nothing else; apps/ingestion/tests/test_audio.py keeps the cases.
+        raise UnsupportedAudio(f"not a readable PCM WAV ({exc!r})") from exc
 
     # The frames actually present, which a header can overstate; a trailing partial frame is
     # dropped.

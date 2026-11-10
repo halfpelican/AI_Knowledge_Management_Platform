@@ -551,8 +551,8 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     # Document or Meeting row is read or returned.
     ("api/tags", "GET"): "Tags and their counts of sources, for the Administrator alone.",
     ("api/tags/<uuid:pk>", "DELETE"): "The retired tag's entry, or nothing.",
-    # Recording transcription (D-123). Neither route reads a Document, a Meeting or a chunk, and
-    # neither stores anything: a transcript enters the knowledge base only through
+    # Recording transcription (D-123). No transcription route reads a Document, a Meeting or a
+    # chunk, or stores anything: a transcript enters the knowledge base only through
     # POST /api/meetings, classified above.
     ("api/transcriptions/status", "GET"): "Two flags and the two segment lengths.",
     ("api/transcriptions", "POST"): (

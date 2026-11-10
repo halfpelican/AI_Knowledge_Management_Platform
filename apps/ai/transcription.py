@@ -2,7 +2,7 @@
 
 Only FLM has speech-to-text: Claude and Voyage have none. So ``AIService.transcribe`` is the same
 call whichever ``AI_PROVIDER`` is set, and it lives here, once, as the classification prompt and
-the generation loop do, so the two providers cannot drift. ``TRANSCRIPTION_PROVIDER`` selects it,
+the generation loop do, so the FLM and Anthropic providers cannot drift. ``TRANSCRIPTION_PROVIDER`` selects it,
 independently of ``AI_PROVIDER``:
 
 - ``none``, the default: ``transcribe`` raises TranscriptionDisabled before any call, and
@@ -46,7 +46,7 @@ from apps.ai.base import (
 )
 from apps.core.constants import MAXIMUM_TRANSCRIBE_ATTEMPTS
 
-# The two TRANSCRIPTION_PROVIDER values. "none" is the default (config/settings.py).
+# The TRANSCRIPTION_PROVIDER values. "none" is the default (config/settings.py).
 TRANSCRIPTION_OFF = "none"
 TRANSCRIPTION_FLM = "flm"
 TRANSCRIPTION_PROVIDERS = (TRANSCRIPTION_OFF, TRANSCRIPTION_FLM)

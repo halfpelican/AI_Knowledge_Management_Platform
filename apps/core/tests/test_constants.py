@@ -153,15 +153,14 @@ def test_attempt_counts_are_one_attempt_plus_two_retries():
 
 
 def test_the_transcription_bounds_are_ordered():
-    """D-123: the page's segment fits under the server's ceiling with room for a tail, the sample
-    rate the page sends is inside the accepted range, and silence is measured in dBFS."""
+    """D-123: the page's segment fits under the server's ceiling with room for a tail, the page
+    sends Whisper's rate, silence is measured in dBFS, and the server-wide cap lets one segment
+    wait behind another."""
     assert 0 < constants.TRANSCRIPTION_SEGMENT_SECONDS < constants.MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS
-    assert (
-        constants.MINIMUM_TRANSCRIPTION_SAMPLE_RATE
-        <= constants.TRANSCRIPTION_SAMPLE_RATE
-        <= constants.MAXIMUM_TRANSCRIPTION_SAMPLE_RATE
-    )
+    assert constants.TRANSCRIPTION_SAMPLE_RATE == 16_000
     assert constants.TRANSCRIPTION_SILENCE_DBFS < 0
+    assert constants.MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT == 2
+    assert constants.TRANSCRIPTION_BUSY_RETRY_SECONDS > 0
     assert 0 < constants.TRANSCRIPTION_SILENCE_WINDOW_SECONDS < constants.TRANSCRIPTION_SEGMENT_SECONDS
     assert constants.MAXIMUM_RECORDING_BYTES > constants.MAX_UPLOAD_BYTES
 

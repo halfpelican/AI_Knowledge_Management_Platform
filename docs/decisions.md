@@ -9363,8 +9363,8 @@ the user before any code.
 
 **What was measured first** (6 November, FLM v0.9.39, the D-83 pin, model `whisper-v3:turbo`):
 
-- **Setup.** `flm pull whisper-v3:turbo` is 623 MB. One server holds all three models:
-  `flm serve gemma3:4b --embed 1 --asr 1`. `scripts/check_flm.py` still passes with speech loaded.
+- **Setup.** `flm pull whisper-v3:turbo` is 623 MB. One server holds `gemma3:4b`, `embed-gemma` and
+  `whisper-v3:turbo` together: `flm serve gemma3:4b --embed 1 --asr 1`. `scripts/check_flm.py` still passes with speech loaded.
 - **Speed.** 0.24–0.31× real time: 2.5 minutes took 40–47 s, 5 minutes 79 s, 11 minutes 157 s. The
   text was the same on every run. FLM took WAV and MP4/AAC directly.
 - **Accuracy.** About 4% of words wrong on synthesised speech, and 9.6% on the user's own voice
@@ -9378,9 +9378,11 @@ the user before any code.
 
 - **An uploaded recording, after the meeting. Not live.** In the user's words: "Uploaded recording
   but not an audio file, it will transcribed by whisper and be text file." The platform never
-  records, so §1.9's two exclusions stand. The change is narrower: a person who already has a
+  records, so §1.9's exclusions of live transcription and of native recording capture stand. The change is narrower: a person who already has a
   recording can have the platform turn it into a transcript.
-- **A draft first.** Nothing is indexed until a person has read, corrected and confirmed the draft.
+- **A draft first.** Nothing is indexed until a person has ticked that they reviewed and corrected
+  the draft, and confirmed it. The tick is the interface's to ask for; it cannot prove the reading
+  (see "What it does not cover").
   The confirmed text goes in through `POST /api/meetings` as pasted text: FR-09's own route,
   unchanged, and still the only path into the index.
 - **Its own setting.** `TRANSCRIPTION_PROVIDER`, `none` or `flm`, independent of `AI_PROVIDER` and
@@ -9398,7 +9400,7 @@ the user before any code.
   - §1.9 rules out live transcription and native recording capture. Its capture line assumes that
     recordings are uploaded, and nothing in it excludes transcribing one that was.
   - Live transcription from the microphone, the other reading put to the user, would have
-    overturned both exclusions.
+    overturned those exclusions, live transcription and native recording capture.
   - It is still an addition, not a requirement the proposal contains: no FR transcribes audio, and
     FR-09 takes a transcript.
 - **The draft, confirmed through FR-09, because that keeps one path into the index.**
@@ -9427,35 +9429,49 @@ the user before any code.
   - `transcribe` takes one WAV segment and returns its text and the model that produced it.
   - `transcription_health` is a report that never raises, as `health` is. It lets the page say
     before a long run starts that FLM cannot be reached.
-  - Both providers implement them through `apps/ai/transcription.py`. It calls FLM's
+  - The FLM and Anthropic providers implement them through `apps/ai/transcription.py`. It calls FLM's
     OpenAI-compatible `/v1/audio/transcriptions` with `FLM_ASR_MODEL` (`whisper-v3:turbo`) through
     the `openai` client, whichever `AI_PROVIDER` is set. No vendor SDK is imported outside
     `apps/ai/`.
   - **Attempts:** `MAXIMUM_TRANSCRIBE_ATTEMPTS` is 3 (1 initial call + 2 retries), as D-19's other
     attempt totals are. D-118's rule applies: a transport failure, a 5xx or a 429 is retried; any
     other 4xx is `ProviderRefused` and is not.
-  - **With the setting `none`,** both raise `TranscriptionDisabled`, a `ProviderUnavailable`.
+  - **With the setting `none`,** `transcribe` raises `TranscriptionDisabled`, a
+    `ProviderUnavailable`, on either provider, and `transcription_health` reports transcription
+    unavailable without raising.
 - **The browser cuts the recording into segments.** Each is a 16 kHz mono 16-bit PCM WAV of at most
   `TRANSCRIPTION_SEGMENT_SECONDS` (30 s), cut at the quietest tenth of a second in its last third, so
-  that a cut rarely falls inside a word. Two reasons:
+  that a cut rarely falls inside a word. The last segment may run up to a second longer rather than
+  leave a sliver to be sent alone, which the server's 60 s ceiling admits. The reasons for cutting in
+  the browser:
   - **Request length.** At 0.25× real time, an hour's recording is about fifteen minutes of
     transcription. One request that long would hold a Waitress thread throughout and lose everything
     if it failed near the end.
   - **Decoding.** Nothing in the stack decodes MP4, M4A or MP3 (there is no ffmpeg), and the
-    browser decodes every common audio and video format. The server only ever receives WAV, which
-    Python's `wave` reads.
-- **Two routes** (`docs/api-contract.md`, "Recording transcription"):
+    browser decodes every common audio and video format. The server accepts only what the page
+    sends, a 16-bit PCM mono WAV at 16 kHz, which Python's `wave` reads. It accepted any rate from
+    8 to 48 kHz, mono or stereo, until the security review of 11 November measured a 60 s, 48 kHz
+    stereo segment at about thirteen times the CPU of the page's own.
+- **The routes** (`docs/api-contract.md`, "Recording transcription"):
   - `GET /api/transcriptions/status`: whether transcription is enabled here, and whether FLM
     answered.
   - `POST /api/transcriptions`: one segment in, its text out. It creates nothing: no meeting, no
     chunk, no row.
-  - **Both** need a session and `contribute_content` (FR-06), and are tested from an Employee and an
-    Administrator session (Objective 01).
-  - **The POST** is throttled per user in its own scope, `transcription`
-    (`TRANSCRIPTION_THROTTLE_RATE`, D-79). It holds one transcription in flight per user
-    (`apps/api/transcription_slot.py`, D-85's mechanism under its own key). Each segment is held to
-    `MAX_UPLOAD_BYTES`, checked against the declared length before parsing and again against what
-    arrived, and to `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` of audio.
+  - **Each needs a session and `contribute_content`** (FR-06), and each is tested from an Employee
+    and an Administrator session (Objective 01).
+  - **Each is throttled per user in one scope,** `transcription` (`TRANSCRIPTION_THROTTLE_RATE`,
+    D-79). The status is in it because each request asks FLM for its model list.
+  - **The POST holds one transcription in flight per user** (`apps/api/transcription_slot.py`,
+    D-85's mechanism under its own key), **and `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) across the
+    server.** FLM's one NPU takes segments in turn, so without the server's cap, accounts
+    registered for the purpose could hold every Waitress thread with one segment each (the
+    security review of 11 November, finding 2). Past it a segment is answered 429
+    `transcription_busy` with a Retry-After, which the page waits out by itself.
+  - **Each segment is held to `MAX_UPLOAD_BYTES`** (the answer is 413) **and to
+    `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` of audio** (400), and no more than one frame past that
+    is ever read from it. The size is checked against the declared length and again against the
+    bytes that arrived, as on the upload; the second check is for a client that understates its
+    length, which the test client cannot send, so it is untested, as the upload's is.
 - **Silence never reaches Whisper.** The server measures each segment's loudest half second. Below
   `TRANSCRIPTION_SILENCE_DBFS`, the segment is answered `200` with `"status": "silent"` and no text,
   and the provider is not called. A segment with no audio frames at all is a `400`.
@@ -9465,12 +9481,19 @@ the user before any code.
   the client's copy.
 - **Invariant 8 and NFR-20: a failed transcription discards nothing.**
   - **A failed segment stops the run and keeps it.** The decoded recording and the draft stay in
-    the page, and Resume retries from the failed segment.
-  - **The draft can be saved as a TXT file at any point.** The page warns before it is left with a
-    draft that has not been submitted.
-  - **The server keeps nothing,** so nothing on it can be lost.
+    the page, through a look at another source as well, and Resume retries from the failed segment.
+    The exception is the 503 that says transcription has been switched off on the server: the draft
+    is kept, and there is nothing to resume until it is switched on again.
+  - **The draft can be saved as a TXT file at any point,** while segments are still arriving too.
+  - **The browser asks before a tab holding an unadded draft is closed or reloaded.** It cannot ask
+    on a move within the app (see "What it does not cover").
+  - **The server keeps nothing,** so nothing on it can be lost. Nothing persistent, that is: a
+    segment larger than Waitress's in-memory buffer (512 KB; a 30 s segment is about 960 KB)
+    passes through the web server's own self-deleting temporary file while the request is read.
 - **The review is the interface's to enforce.** A transcript from a recording cannot be submitted
-  until the person ticks that they have reviewed it. The notice above the draft names what Whisper
+  until the person ticks that they have reviewed it, and any text Whisper adds after the tick takes
+  it back, so a run stopped, ticked and resumed cannot carry its later segments in unread (the
+  requirements audit of 11 November found that it could). The notice above the draft names what Whisper
   gets wrong: names, numbers and US dates. The server cannot tell a reviewed transcript from a
   pasted one, so the front-end suite holds this clause (`CLAUDE.md` §8 item 2).
 
@@ -9493,6 +9516,28 @@ the user before any code.
   reports as unavailable.
 - **Recordings too large to decode in the page.** The cap is set from what a browser tab can hold,
   not measured on every browser.
+- **Leaving the page within the app.** The app's router (`BrowserRouter`) offers no way to stop a
+  move to another page, so following a link inside the app leaves an unadded draft and a paused run
+  behind without asking. Only closing or reloading the tab asks. Saving the draft as a text file is
+  the way to keep it.
+- **Real recordings in a real browser, before the end-to-end trial.** The suites replace the
+  browser's decoder. In Chromium on 11 November a 44.1 kHz stereo WAV and a WebM/Opus recording
+  decoded to 16 kHz at their full length, but an MP4/AAC file recorded by the browser itself decoded
+  to 1.06 s of 2 s, which may be the recorder's doing rather than the decoder's. A Game Bar or Voice
+  Recorder file is the trial's to check.
+- **What a request body costs before it is refused.** The size check orders the answers, not the
+  reading. A session that sends its CSRF token, as the page always does, has its whole multipart
+  body parsed by DRF while authenticating, because DRF's CSRF check reads `request.POST`, and so
+  before the 403, the 429, the 503 and the 413 (the security review of 11 November found it,
+  driving the view with CSRF enforced). What bounds the reading is the web server's own body
+  limit, which the alpha's `waitress-serve` line leaves at Waitress's default of 1 GB. **This is
+  not the transcription route's alone:** `POST /api/documents` and `POST /api/meetings` share the
+  cause, and `config/settings.py` and D-30 claim the declared-length check refuses a body "before
+  it is parsed". Fixing it for every route (a body limit on the web server, or a length check
+  ahead of DRF) and correcting those claims is a separate change, proposed on 11 November and not
+  made here.
+- **Retries and a busy NPU.** A segment that times out is retried at once. Whether FLM goes on
+  working on the abandoned request, so that the retry queues behind it, is not measured.
 - **The silence threshold is a starting value.** `TRANSCRIPTION_SILENCE_DBFS` is *tune*: set from
   the -90 dBFS silent track above and ordinary speech levels, and to be checked on the user's real
   recordings in the end-to-end trial.

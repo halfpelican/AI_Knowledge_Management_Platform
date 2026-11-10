@@ -347,10 +347,11 @@ DOWNLOAD_CONTENT_TYPES = {
 # POST /api/transcriptions, which returns that segment's text. Nothing is indexed until a person
 # confirms the draft and submits it through FR-09's POST /api/meetings.
 #
-# The length the page aims each segment at, in seconds, and the most it sends. 30 s is Whisper's
-# own window. The page cuts at the quietest tenth of a second in a segment's last third, so a cut
-# rarely falls inside a word. frontend/src/constants.js copies it, and the agreement test ties
-# the copy (apps/api/tests/test_front_end_constants_agreement.py).
+# The length the page aims each segment at, in seconds: 30 s is Whisper's own window. The page cuts
+# at the quietest tenth of a second in a segment's last third, so a cut rarely falls inside a word,
+# and lets its last segment run up to a second longer rather than send a sliver. The page reads
+# this from GET /api/transcriptions/status (``segment_seconds``), so there is no client copy to
+# drift.
 TRANSCRIPTION_SEGMENT_SECONDS = 30
 # The longest segment the server will transcribe, in seconds of audio. Above the page's own
 # segment length, so a final segment that absorbs a short tail is still accepted, and well below
@@ -358,11 +359,10 @@ TRANSCRIPTION_SEGMENT_SECONDS = 30
 # about 15-19 s of transcription.
 MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS = 60
 # The sample rate the page resamples a recording to before cutting it, in hertz: Whisper's own.
-# The server accepts any 16-bit PCM WAV between the two bounds below, so a segment from another
-# client is not refused for its rate alone.
+# The server accepts a 16-bit PCM mono WAV at exactly this rate and nothing else: the page sends
+# nothing else, and a wider range only made a segment dearer to measure (the security review of
+# 11 November). frontend/src/constants.js copies it.
 TRANSCRIPTION_SAMPLE_RATE = 16_000
-MINIMUM_TRANSCRIPTION_SAMPLE_RATE = 8_000
-MAXIMUM_TRANSCRIPTION_SAMPLE_RATE = 48_000
 # Silence never reaches Whisper, which invents text from it: on 6 November a silent track
 # (-90 dBFS) came back as "E ai E ai...". A segment whose loudest TRANSCRIPTION_SILENCE_WINDOW
 # is quieter than this, in dB relative to full scale, is answered "silent" without a provider
@@ -371,6 +371,14 @@ MAXIMUM_TRANSCRIPTION_SAMPLE_RATE = 48_000
 # checked on the user's real recordings in the end-to-end trial.
 TRANSCRIPTION_SILENCE_DBFS = -45.0
 TRANSCRIPTION_SILENCE_WINDOW_SECONDS = 0.5
+# How many segments the whole server sends to FLM at once, across every user. FLM has one NPU and
+# takes requests in turn, so more at once only queue there, each holding a Waitress thread, until
+# they meet TRANSCRIPTION_TIMEOUT_SECONDS. Two lets one segment wait behind another, at most one
+# segment's time, without many users' segments holding every thread (the security review of 11
+# November, finding 2). A segment past it is answered 429 "transcription_busy" with
+# TRANSCRIPTION_BUSY_RETRY_SECONDS in Retry-After, which the page waits out by itself.
+MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT = 2
+TRANSCRIPTION_BUSY_RETRY_SECONDS = 5
 # The largest recording the page will decode, in bytes. The recording never reaches the server,
 # only its segments do, and each of those is held to MAX_UPLOAD_BYTES; so this bounds the
 # page's memory, where the whole file and its decoded audio sit together, and only the client

@@ -53,6 +53,7 @@ from apps.core.constants import (
     MINIMUM_CONTENT_LENGTH,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
+    TRANSCRIPTION_BUSY_RETRY_SECONDS,
     TRANSCRIPTION_SEGMENT_SECONDS,
 )
 from apps.core.models import NAME_MAX_LENGTH
@@ -105,7 +106,12 @@ from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
-from .transcription_slot import release_transcription_slot, take_transcription_slot
+from .transcription_slot import (
+    release_server_slot,
+    release_transcription_slot,
+    take_server_slot,
+    take_transcription_slot,
+)
 from .permissions import HasRolePermission, role_holds
 from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
@@ -299,7 +305,7 @@ KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE = (
     "nothing was changed. Please try again shortly."
 )
 # Recording transcription (D-123). Each refusal is answered before any provider call, and
-# none stores anything, because the route stores nothing at all. The two 503s carry codes, so the
+# none stores anything, because the route stores nothing at all. Each 503 carries a code, so the
 # page can tell "not enabled on this server" (paste or upload the transcript instead) from "FLM is
 # down" (resume shortly) without reading the detail.
 TRANSCRIPTION_DISABLED_MESSAGE = (
@@ -316,7 +322,7 @@ TRANSCRIPTION_UNAVAILABLE_CODE = "transcription_unavailable"
 NO_AUDIO_SUBMITTED_MESSAGE = "No audio segment was submitted."
 # 415, as FR-08 answers a format it does not accept: the bytes are not a 16-bit PCM WAV, which is
 # all the page sends (apps/ingestion/audio.py).
-UNSUPPORTED_AUDIO_MESSAGE = "Audio must be a 16-bit PCM WAV segment, mono or stereo."
+UNSUPPORTED_AUDIO_MESSAGE = "Audio must be a 16-bit PCM mono WAV segment at 16 kHz."
 EMPTY_AUDIO_MESSAGE = "The audio segment holds no audio."
 SEGMENT_TOO_LONG_MESSAGE = (
     f"An audio segment may hold at most {MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS} seconds of audio."
@@ -324,7 +330,15 @@ SEGMENT_TOO_LONG_MESSAGE = (
 # A second segment from a user whose previous one is still with FLM (apps/api/transcription_slot.py).
 TRANSCRIPTION_IN_FLIGHT_MESSAGE = "Your previous audio segment is still being transcribed."
 TRANSCRIPTION_IN_FLIGHT_CODE = "transcription_in_flight"
-# The two values of a transcription reply's "status".
+# Every server slot is held (MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT, across all users): other people's
+# segments are with FLM. Not this user's doing, so not the in-flight text, which suggests another
+# tab. A 429 with Retry-After, which the page waits out and then sends the segment again.
+TRANSCRIPTION_BUSY_MESSAGE = (
+    "The transcription service is busy with other recordings. This segment was not transcribed "
+    "and nothing was stored; it can be sent again in a few seconds."
+)
+TRANSCRIPTION_BUSY_CODE = "transcription_busy"
+# The values of a transcription reply's "status".
 SEGMENT_TRANSCRIBED = "transcribed"
 SEGMENT_SILENT = "silent"
 
@@ -1358,13 +1372,18 @@ class TranscriptionStatusView(APIView):
     ``transcription_health`` reports FLM answering. That cannot show whether FLM was started with
     ``--asr 1`` (D-123, "What it does not cover"); a server without it fails the first
     segment, which the page reports the same way. No provider detail is returned: it names an
-    internal address, and the page needs only the two flags.
+    internal address, and the page needs only ``enabled`` and ``available``.
 
     Behind ``contribute_content``, as the transcription itself is: only someone who may add a
-    transcript has a reason to ask.
+    transcript has a reason to ask. **Throttled in the ``transcription`` scope**, one budget with
+    the segments: each request asks FLM for its model list, so an unthrottled one would let a
+    single user make the server call FLM as fast as they could ask (the security review of 11
+    November, suspicion S2). The page asks once per visit to the option.
     """
 
     permission_classes = [IsAuthenticated, CanContributeContent]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transcription"
 
     def get(self, request):
         enabled = apps.ai.transcription_enabled()
@@ -1389,20 +1408,27 @@ class TranscriptionsView(APIView):
 
     **The rejection order**, each before any provider call:
 
-    1. 401 no session; 403 the role lacks ``contribute_content`` (DRF's ``initial()``, before the
-       body is parsed, as the upload's permission is: the cheapest rejection first).
+    1. 401 no session; 403 the role lacks ``contribute_content`` (DRF's ``initial()``).
     2. 429 past ``TRANSCRIPTION_THROTTLE_RATE``, scope ``transcription`` (D-79), also in
        ``initial()``, so a rejected request counts against it too.
-    3. 503 ``transcription_disabled`` when ``TRANSCRIPTION_PROVIDER`` is ``none``, before the body
-       is read.
-    4. 413 a declared ``Content-Length`` over MAX_UPLOAD_BYTES, before the body is parsed; then
-       400 no ``audio`` part; then 413 again against the bytes that arrived.
-    5. 415 not a 16-bit PCM WAV at an accepted channel count and rate; 400 a segment with no audio
-       frames, or with more than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS of audio.
+    3. 503 ``transcription_disabled`` when ``TRANSCRIPTION_PROVIDER`` is ``none``.
+    4. 413 a declared ``Content-Length`` over MAX_UPLOAD_BYTES; then 400 no ``audio`` part; then
+       413 again against the bytes that arrived.
+    5. 415 not a 16-bit PCM mono WAV at 16 kHz; 400 a segment with no audio frames, or with more
+       than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS of audio.
     6. 200 ``"status": "silent"`` for a segment whose loudest half second is below
        TRANSCRIPTION_SILENCE_DBFS, with no provider call: Whisper invents text from silence.
-    7. 429 ``transcription_in_flight`` while another segment of this user's is with the provider
+    7. 429 ``transcription_in_flight`` while another segment of this user's is with the provider,
+       then 429 ``transcription_busy``, with Retry-After, while every server slot is held
        (``apps/api/transcription_slot.py``).
+
+    **These order the answers, not the reading of the body.** A session that sends its CSRF token,
+    as the page always does, has the whole multipart body parsed by DRF during authentication,
+    before the 403, the 429, the 503 and the 413: DRF's CSRF check reads ``request.POST``, which
+    parses the body with this view's parser (found by the security review of 11 November, which
+    drove this view with CSRF enforced). So none of these checks bounds what the server reads;
+    the web server's own request-body limit does. That is not this route's alone: the document
+    upload and the meeting ingest share it, and it is recorded in D-123 as open.
 
     Then the provider: 200 ``"status": "transcribed"`` with the text and the model, or NFR-19's
     503 ``transcription_unavailable`` after MAXIMUM_TRANSCRIBE_ATTEMPTS (any 4xx refusal at once,
@@ -1419,7 +1445,9 @@ class TranscriptionsView(APIView):
         if not apps.ai.transcription_enabled():
             return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
 
-        # The declared length, before request.data is touched, as the document upload does.
+        # The declared length, before this view touches request.data, as the document upload does.
+        # It shapes the answer; it does not spare the parse, which a CSRF-checked session has
+        # already had (see the docstring).
         declared_length = request.META.get("CONTENT_LENGTH") or 0
         try:
             declared_length = int(declared_length)
@@ -1473,6 +1501,14 @@ class TranscriptionsView(APIView):
                 {"detail": TRANSCRIPTION_IN_FLIGHT_MESSAGE, "code": TRANSCRIPTION_IN_FLIGHT_CODE},
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
+        server_slot = take_server_slot()
+        if server_slot is None:
+            release_transcription_slot(request.user, token)
+            return Response(
+                {"detail": TRANSCRIPTION_BUSY_MESSAGE, "code": TRANSCRIPTION_BUSY_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(TRANSCRIPTION_BUSY_RETRY_SECONDS)},
+            )
         try:
             # Every failed attempt inside is logged naming this account (apps/ai/attempt_log.py).
             with attempt_log.account(request.user.pk):
@@ -1492,6 +1528,7 @@ class TranscriptionsView(APIView):
                 TRANSCRIPTION_UNAVAILABLE_MESSAGE, TRANSCRIPTION_UNAVAILABLE_CODE
             )
         finally:
+            release_server_slot(server_slot)
             release_transcription_slot(request.user, token)
         return Response(
             {"status": SEGMENT_TRANSCRIBED, "text": result.text, "model": result.model, **measured}

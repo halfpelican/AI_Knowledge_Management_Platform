@@ -80,6 +80,41 @@ def quiet_with_a_burst(seconds, *, burst_seconds, burst_rms_dbfs, rate=TRANSCRIP
     return wav_from_samples(samples, rate=rate)
 
 
+def steady_wav(frames: int, *, value=1000, rate=TRANSCRIPTION_SAMPLE_RATE) -> bytes:
+    """``frames`` mono frames all at ``value``, built from repeated bytes so a long one is quick."""
+    return wav_bytes_from_pcm(struct.pack("<h", value) * frames, rate=rate)
+
+
+def wav_bytes_from_pcm(pcm: bytes, *, rate=TRANSCRIPTION_SAMPLE_RATE, channels=1) -> bytes:
+    """A 16-bit WAV around little-endian ``pcm`` as given."""
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as writer:
+        writer.setnchannels(channels)
+        writer.setsampwidth(2)
+        writer.setframerate(rate)
+        writer.writeframes(pcm)
+    return buffer.getvalue()
+
+
+def with_chunk_before_data(wav: bytes, chunk_id: bytes, declared_size: int, payload: bytes = b"") -> bytes:
+    """``wav`` with a chunk between its fmt and data chunks declaring ``declared_size`` bytes,
+    whatever it holds. A size past the end of the file is what makes Python 3.12's wave raise a
+    bare RuntimeError (the security review of 11 November, finding 3)."""
+    assert wav[36:40] == b"data", "expected the canonical 44-byte header"
+    return wav[:36] + chunk_id + struct.pack("<I", declared_size) + payload + wav[36:]
+
+
+def with_chunk_before_fmt(wav: bytes, chunk_id: bytes, declared_size: int) -> bytes:
+    """``wav`` with a chunk straight after the WAVE form type, before fmt."""
+    return wav[:12] + chunk_id + struct.pack("<I", declared_size) + wav[12:]
+
+
+def with_fmt_size(wav: bytes, declared_size: int) -> bytes:
+    """``wav`` with its fmt chunk declaring ``declared_size`` bytes."""
+    assert wav[12:16] == b"fmt "
+    return wav[:16] + struct.pack("<I", declared_size) + wav[20:]
+
+
 def with_declared_frames(wav: bytes, frames: int) -> bytes:
     """``wav`` with its data chunk's declared size rewritten to ``frames`` mono 16-bit frames.
 

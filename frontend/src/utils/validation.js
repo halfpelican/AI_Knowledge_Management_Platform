@@ -72,7 +72,8 @@ export function validateMeetingIngestion({
   if (!meetingDate) errors.meeting_date = VALIDATION.meetingDateRequired
   else if (meetingDate > todayIsoDate()) errors.meeting_date = VALIDATION.meetingDateFuture
   if (source === TRANSCRIPT_SOURCE.recording) {
-    // D-123: a recording's draft is added only when the run has ended, the
+    // `source` is TRANSCRIPT_SOURCE's: pasted text, a transcript file, or a recording's draft.
+  // D-123: a recording's draft is added only when the run has ended, the
     // draft holds something, and a person has said they reviewed it. The last is
     // this screen's to enforce: the server cannot tell it from pasted text.
     if (transcribing) errors.transcript_text = VALIDATION.transcriptStillTranscribing

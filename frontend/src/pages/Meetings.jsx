@@ -32,6 +32,9 @@ const FIELDS = ['title', 'meeting_date', 'transcript_text', 'file', 'attendees',
 
 const EMPTY_FORM = { title: '', meeting_date: '', transcript_text: '' }
 
+/** How long a saved draft's download address lives after the click, in milliseconds. */
+const DRAFT_DOWNLOAD_REVOKE_MS = 1000
+
 /**
  * Save `text` as a UTF-8 text file named `filename`, from the page itself: the
  * draft of a transcribed recording, so a person can keep it, or carry it to a host
@@ -45,7 +48,9 @@ function saveTextFile(text, filename) {
   document.body.appendChild(link)
   link.click()
   link.remove()
-  URL.revokeObjectURL(url)
+  // Revoked a moment later, not at once: some browsers cancel a download whose address is revoked
+  // straight after the click, and this button is the way to keep a draft (invariant 8).
+  setTimeout(() => URL.revokeObjectURL?.(url), DRAFT_DOWNLOAD_REVOKE_MS)
 }
 
 /**
@@ -111,9 +116,13 @@ export function MeetingTable({ meetings }) {
  * each person holds and this form has no use for one. The server decides what
  * any of this may do (invariant 4).
  *
- * **A third source, a meeting recording (D-123).** RecordingTranscriber
+ * **Another source, a meeting recording (D-123).** RecordingTranscriber
  * turns it into draft text a segment at a time, and the draft is kept here, apart
- * from the pasted text, so switching source never loses it. It is added only once
+ * from the pasted text, so switching source never loses it. The transcriber stays
+ * mounted, hidden, once the option has been opened, so a run paused or stopped
+ * there can still resume after a look at another source; the requirements audit
+ * of 11 November found that leaving the option lost the decoded recording, and
+ * choosing the file again then transcribed its start a second time. It is added only once
  * a person ticks that they reviewed it: Whisper mishears names, numbers and dates,
  * and on 6 November one misheard date became a cited wrong answer three times out
  * of three. What is added is the draft's text, sent exactly as pasted text is,
@@ -155,14 +164,21 @@ export default function Meetings() {
   const [draftReviewed, setDraftReviewed] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [transcriberKey, setTranscriberKey] = useState(0)
+  // Set once the recording option is first chosen, so the transcriber is mounted (and asks the
+  // server whether transcription is available) only for someone who wants it.
+  const [recordingOpened, setRecordingOpened] = useState(false)
   const reviewId = useId()
   // The error summary. Focus moves here when a submission is refused, so a
   // keyboard user is taken to the reason instead of being left on the button.
   const errorSummaryRef = useRef(null)
   const headingRef = useRef(null)
 
+  // New machine text has not been reviewed, so a tick given before it arrived is taken back: a
+  // run stopped, ticked and resumed would otherwise carry its later segments in unread (the
+  // security review of 11 November, finding 4).
   const appendToRecordingDraft = useCallback((text) => {
     setRecordingDraft((draft) => appendToDraft(draft, text))
+    setDraftReviewed(false)
   }, [])
 
   // A draft not yet added is work the person would lose by closing the tab, so
@@ -202,6 +218,7 @@ export default function Meetings() {
    * and it is submitted only from the recording option.
    */
   function handleSourceChange(next) {
+    if (next === TRANSCRIPT_SOURCE.recording) setRecordingOpened(true)
     setSource(next)
     setFile(null)
     setValues((current) => ({ ...current, transcript_text: '' }))
@@ -450,14 +467,22 @@ export default function Meetings() {
             ))}
           </fieldset>
 
-          {source === TRANSCRIPT_SOURCE.recording ? (
-            <>
+          {/* Kept mounted once opened, hidden while another source is chosen, so a paused run
+              keeps its decoded recording and its place. Hidden, it takes no page-wide drop. */}
+          {recordingOpened ? (
+            <div hidden={source !== TRANSCRIPT_SOURCE.recording}>
               <RecordingTranscriber
                 key={transcriberKey}
+                active={source === TRANSCRIPT_SOURCE.recording}
                 disabled={submitting}
                 onText={appendToRecordingDraft}
                 onBusyChange={setTranscribing}
               />
+            </div>
+          ) : null}
+
+          {source === TRANSCRIPT_SOURCE.recording ? (
+            <>
               {recordingDraft.trim() ? (
                 <Notice variant="info" title={TEXT.draftReviewTitle}>
                   {TEXT.draftReviewNotice}
@@ -510,9 +535,10 @@ export default function Meetings() {
                     ) : null}
                   </div>
                   <div className="meeting-form__draft-actions">
+                    {/* Enabled while segments are still arriving too: what is saved is the
+                        draft as it stands, and keeping it is the point (invariant 8). */}
                     <Button
                       variant="secondary"
-                      disabled={transcribing}
                       onClick={() => saveTextFile(recordingDraft, draftFilename(values.title))}
                     >
                       {TEXT.draftSave}

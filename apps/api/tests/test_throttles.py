@@ -10,8 +10,8 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
 - ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
 - ``tagging`` on ``POST /api/documents/{id}/tags``, since D-79's note on tagging of the same night
   (D-105's security review, finding 4);
-- ``transcription`` on ``POST /api/transcriptions``, one recording segment per request
-  (D-123).
+- ``transcription`` on ``POST /api/transcriptions``, one recording segment per request, and on
+  ``GET /api/transcriptions/status``, which asks FLM for its model list (D-123).
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -453,6 +453,10 @@ def test_one_users_transcription_budget_is_not_anothers(employee_client, adminis
     assert segment_without_audio(administrator_client).status_code == 503
 
 
-def test_the_transcription_status_is_not_throttled(employee_client):
-    for _ in range(TRANSCRIPTION_LIMIT + 1):
-        assert employee_client.get("/api/transcriptions/status").status_code == 200
+def test_the_transcription_status_shares_the_segment_budget(employee_client):
+    """Each status request asks FLM for its model list, so it is throttled in the same scope as
+    the segments (the security review of 11 November, suspicion S2)."""
+    for _ in range(TRANSCRIPTION_LIMIT):
+        segment_without_audio(employee_client)
+
+    assert_rate_throttled(employee_client.get("/api/transcriptions/status"))

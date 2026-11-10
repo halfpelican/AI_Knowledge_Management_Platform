@@ -789,6 +789,9 @@ export const TEXT = {
     `A segment of this recording was refused after ${done} of ${total} segments. The draft so far is kept.`,
   transcribeWaiting: (seconds) =>
     `The transcription limit was reached. Carrying on in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}…`,
+  // The server is transcribing as many segments as it allows, for other people too.
+  transcribeBusy: (seconds) =>
+    `The transcription service is busy with other recordings. Carrying on in ${seconds} ${seconds === 1 ? 'second' : 'seconds'}…`,
   transcribeUnreadable:
     'Your browser could not read this recording. Try an M4A, MP3, WAV or MP4 file.',
   draftLabel: 'Transcript draft',

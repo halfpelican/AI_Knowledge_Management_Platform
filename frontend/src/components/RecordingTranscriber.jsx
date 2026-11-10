@@ -3,6 +3,7 @@ import { ApiError, NETWORK_ERROR_STATUS } from '../api/client.js'
 import {
   getTranscriptionStatus,
   SEGMENT_STATUS,
+  TRANSCRIPTION_BUSY_CODE,
   TRANSCRIPTION_DISABLED_CODE,
   TRANSCRIPTION_IN_FLIGHT_CODE,
   transcribeSegment,
@@ -83,11 +84,13 @@ function problemFor(error, done, total) {
  * long run is visibly moving and a screen reader hears where it is.
  *
  * @param {object} props
+ * @param {boolean} [props.active] The recording option is the one chosen. While it is not, the
+ *   form keeps this component mounted and hidden, and its drop zone takes no page-wide drop.
  * @param {boolean} [props.disabled] The form is busy adding the transcript.
  * @param {(text: string) => void} props.onText Called with each transcribed segment's text, in order.
  * @param {(busy: boolean) => void} [props.onBusyChange] Told when a run starts and ends.
  */
-export default function RecordingTranscriber({ disabled = false, onText, onBusyChange }) {
+export default function RecordingTranscriber({ active = true, disabled = false, onText, onBusyChange }) {
   // Asked once, when the option is chosen; Check again asks again.
   const status = useApiResource(getTranscriptionStatus)
   // Set when a segment is answered "not enabled": the server was switched off mid-run.
@@ -100,6 +103,7 @@ export default function RecordingTranscriber({ disabled = false, onText, onBusyC
   const [heardSpeech, setHeardSpeech] = useState(false)
   const [problem, setProblem] = useState(null)
   const [waitingSeconds, setWaitingSeconds] = useState(null)
+  const [waitingBusy, setWaitingBusy] = useState(false)
   // Whether the chosen recording has been decoded, so Resume has something to resume.
   const [decoded, setDecoded] = useState(false)
 
@@ -178,6 +182,8 @@ export default function RecordingTranscriber({ disabled = false, onText, onBusyC
           error.code !== TRANSCRIPTION_IN_FLIGHT_CODE &&
           typeof error.retryAfter === 'number'
         if (rateLimited) {
+          // The rate limit's 429 and the busy server's both carry Retry-After; only the words differ.
+          setWaitingBusy(error.code === TRANSCRIPTION_BUSY_CODE)
           setWaitingSeconds(error.retryAfter)
           try {
             await pause(error.retryAfter * 1000, controller.signal)
@@ -289,7 +295,8 @@ export default function RecordingTranscriber({ disabled = false, onText, onBusyC
   let statusLine = ''
   if (phase === PHASE.reading) statusLine = TEXT.transcribeReading
   else if (phase === PHASE.transcribing) {
-    statusLine = waitingSeconds !== null ? TEXT.transcribeWaiting(waitingSeconds) : TEXT.transcribeProgress(done, total)
+    if (waitingSeconds === null) statusLine = TEXT.transcribeProgress(done, total)
+    else statusLine = waitingBusy ? TEXT.transcribeBusy(waitingSeconds) : TEXT.transcribeWaiting(waitingSeconds)
   } else if (phase === PHASE.stopped) statusLine = TEXT.transcribeStopped(done, total)
   else if (phase === PHASE.done) statusLine = heardSpeech ? TEXT.transcribeDone : TEXT.transcribeNothingHeard
   if (silentCount > 0 && phase !== PHASE.reading) statusLine = `${statusLine} ${TEXT.transcribeSilent(silentCount)}`.trim()
@@ -304,7 +311,7 @@ export default function RecordingTranscriber({ disabled = false, onText, onBusyC
         disabledReason={TEXT.recordingBusy}
         error={fileError}
         status={file ? TEXT.recordingChosen(file.name) : TEXT.recordingNone}
-        pageDrop
+        pageDrop={active}
         onFiles={chooseFile}
       />
       <div className="recording-transcriber__actions">
