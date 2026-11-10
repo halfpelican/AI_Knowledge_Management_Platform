@@ -1,0 +1,61 @@
+dev-threads: 12 threads, 56 runs, 35 texts compared, SHA-256 18d142f02c19fc19fcf3b6427e1ef8e504705344cc2ed5f42d387f14fb9f1012; validation problems: none
+frozen questions compared: 56 (30 from questions.json, 26 from threads.json). Their text is not printed.
+pairs compared: 1960; flagged (exact, Jaccard >= 0.5, difflib >= 0.8 or cosine >= 0.9): 0
+
+top 5 by jaccard:
+  0.400  t26 turn 1  vs  questions.json q06
+  0.357  t22 turn 2 spelled_out  vs  questions.json q08
+  0.333  t25 turn 2 spelled_out  vs  questions.json q20
+  0.333  t31 turn 2 spelled_out  vs  questions.json q22
+  0.300  t22 turn 2  vs  questions.json q08
+
+top 5 by difflib:
+  0.699  t25 turn 2 spelled_out  vs  questions.json q20
+  0.661  t22 turn 1  vs  threads.json t02 turn 1
+  0.636  t26 turn 1  vs  questions.json q06
+  0.618  t31 turn 2 spelled_out  vs  questions.json q22
+  0.589  t25 turn 2  vs  questions.json q20
+
+top 5 by cosine:
+  0.870  t22 turn 2 spelled_out  vs  questions.json q08
+  0.810  t31 turn 2 spelled_out  vs  questions.json q22
+  0.809  t26 turn 1  vs  questions.json q06
+  0.809  t30 turn 1  vs  questions.json q02
+  0.748  t28 turn 1  vs  questions.json q07
+
+per dev text, its nearest frozen question by cosine (identifier only):
+  t20 turn 1                   0.522 (Jaccard 0.10, difflib 0.47) vs threads.json t02 turn 1
+  t20 turn 2                   0.618 (Jaccard 0.00, difflib 0.27) vs questions.json n01
+  t20 turn 2 spelled_out       0.537 (Jaccard 0.08, difflib 0.26) vs questions.json n01
+  t21 turn 1                   0.487 (Jaccard 0.00, difflib 0.52) vs questions.json q10
+  t21 turn 2                   0.485 (Jaccard 0.00, difflib 0.33) vs threads.json t09 turn 2
+  t21 turn 2 spelled_out       0.519 (Jaccard 0.00, difflib 0.34) vs threads.json t09 turn 2 spelled_out
+  t22 turn 1                   0.702 (Jaccard 0.29, difflib 0.66) vs threads.json t02 turn 1
+  t22 turn 2                   0.704 (Jaccard 0.30, difflib 0.54) vs questions.json q08
+  t22 turn 2 spelled_out       0.870 (Jaccard 0.36, difflib 0.57) vs questions.json q08
+  t23 turn 1                   0.480 (Jaccard 0.11, difflib 0.44) vs questions.json q07
+  t23 turn 2                   0.522 (Jaccard 0.00, difflib 0.49) vs threads.json t09 turn 2
+  t23 turn 2 spelled_out       0.519 (Jaccard 0.25, difflib 0.50) vs questions.json q11
+  t24 turn 1                   0.334 (Jaccard 0.08, difflib 0.41) vs questions.json q03
+  t24 turn 2                   0.423 (Jaccard 0.00, difflib 0.38) vs threads.json t09 turn 2
+  t24 turn 2 spelled_out       0.402 (Jaccard 0.00, difflib 0.29) vs questions.json q03
+  t25 turn 1                   0.455 (Jaccard 0.10, difflib 0.48) vs questions.json s03
+  t25 turn 2                   0.745 (Jaccard 0.29, difflib 0.59) vs questions.json q20
+  t25 turn 2 spelled_out       0.598 (Jaccard 0.33, difflib 0.70) vs questions.json q20
+  t26 turn 1                   0.809 (Jaccard 0.40, difflib 0.64) vs questions.json q06
+  t26 turn 2                   0.544 (Jaccard 0.00, difflib 0.46) vs threads.json t09 turn 2
+  t26 turn 2 spelled_out       0.401 (Jaccard 0.00, difflib 0.34) vs threads.json t09 turn 2
+  t27 turn 1                   0.404 (Jaccard 0.08, difflib 0.24) vs questions.json q16
+  t27 turn 2                   0.553 (Jaccard 0.20, difflib 0.49) vs questions.json q13
+  t27 turn 2 spelled_out       0.535 (Jaccard 0.00, difflib 0.41) vs questions.json q13
+  t28 turn 1                   0.748 (Jaccard 0.18, difflib 0.53) vs questions.json q07
+  t28 turn 2                   0.417 (Jaccard 0.00, difflib 0.40) vs threads.json t06 turn 2
+  t28 turn 2 spelled_out       0.518 (Jaccard 0.08, difflib 0.35) vs threads.json t08 turn 1
+  t29 turn 1                   0.492 (Jaccard 0.10, difflib 0.47) vs threads.json t07 turn 1
+  t29 turn 2                   0.560 (Jaccard 0.14, difflib 0.38) vs threads.json t01 turn 2
+  t29 turn 2 spelled_out       0.506 (Jaccard 0.10, difflib 0.46) vs threads.json t07 turn 1
+  t30 turn 1                   0.809 (Jaccard 0.17, difflib 0.49) vs questions.json q02
+  t30 turn 2                   0.443 (Jaccard 0.10, difflib 0.32) vs questions.json q16
+  t31 turn 1                   0.519 (Jaccard 0.17, difflib 0.38) vs questions.json q07
+  t31 turn 2                   0.673 (Jaccard 0.25, difflib 0.27) vs threads.json t05 turn 2
+  t31 turn 2 spelled_out       0.810 (Jaccard 0.33, difflib 0.62) vs questions.json q22

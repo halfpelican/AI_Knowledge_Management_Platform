@@ -46,6 +46,18 @@ REFERENCE = REPOSITORY_ROOT / "corpus" / "objective-05" / "reference.json"
 MANIFEST = REPOSITORY_ROOT / "corpus" / "objective-02" / "manifest.json"
 
 
+def provider_record(settings) -> dict:
+    """The configuration this result belongs to (D-113): the provider, its chat model and its
+    embedding model. A value tuned, or a result measured, on one configuration does not carry
+    over to another, so every record names its own."""
+    provider = settings.AI_PROVIDER
+    if provider == "anthropic":
+        return {"ai_provider": provider, "chat_model": settings.ANTHROPIC_MODEL,
+                "embedding_model": settings.VOYAGE_MODEL}
+    return {"ai_provider": provider, "chat_model": settings.FLM_CHAT_MODEL,
+            "embedding_model": settings.FLM_EMBED_MODEL}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -78,6 +90,7 @@ def main() -> int:
     threshold = CLASSIFICATION_CONFIDENCE_THRESHOLD
     version = check_flm.flm_version(settings.FLM_BASE_URL, settings.FLM_API_KEY)
     record = measurement_record.run_record(dump_sha256=arguments.dump_sha256, database=database, flm=version.as_record())
+    record["configuration"] = provider_record(settings)
     record.update({
         "kind": "Objective 05 verification (D-106)",
         "reference_set": str(REFERENCE.relative_to(REPOSITORY_ROOT)),
@@ -89,7 +102,8 @@ def main() -> int:
     })
 
     rows, problems = [], []
-    clause2 = {"below_threshold": 0, "below_and_held": 0, "at_or_above": 0, "at_or_above_and_applied": 0, "violations": []}
+    clause2 = {"below_threshold": 0, "below_and_held": 0, "at_or_above": 0, "at_or_above_and_applied": 0,
+               "at_or_above_held_to_keep_a_given_department": 0, "violations": []}
     clause3 = {"department_out_of_scheme": 0, "department_discarded": 0, "project_process_discarded": 0,
                "topic_proposed": 0, "out_of_scheme_links": 0, "violations": []}
     tag_hits = tag_suggested = tag_reference = 0
@@ -145,10 +159,7 @@ def main() -> int:
         elif dept_conf is not None and not analysis.user_edited:
             if dept_conf < threshold:
                 clause2["below_threshold"] += 1
-                if analysis.department_outcome == provisional and document.department != analysis.machine_department:
-                    clause2["below_and_held"] += 1
-                elif analysis.department_outcome == provisional and document.department == analysis.machine_department == item["department"]:
-                    # The uploader already set this department; holding the suggestion changed nothing.
+                if analysis.department_outcome == provisional:
                     clause2["below_and_held"] += 1
                 else:
                     clause2["violations"].append(f"{entry['id']} department {dept_conf} < {threshold} but outcome {analysis.department_outcome}")
@@ -156,6 +167,11 @@ def main() -> int:
                 clause2["at_or_above"] += 1
                 if analysis.department_outcome == applied and document.department == analysis.machine_department:
                     clause2["at_or_above_and_applied"] += 1
+                elif (analysis.department_outcome == provisional and document.department
+                      and document.department != analysis.machine_department):
+                    # D-105's note of 10 November: the machine fills only a blank department, so a
+                    # different suggestion is held against the department the document already has.
+                    clause2["at_or_above_held_to_keep_a_given_department"] += 1
                 else:
                     clause2["violations"].append(f"{entry['id']} department {dept_conf} >= {threshold} but outcome {analysis.department_outcome}")
         # Tags: the AI links on this document, with provenance.
@@ -225,7 +241,7 @@ def main() -> int:
                      f"{len(r['proposed_topics'] or [])} | {len(r['discarded_suggestions'] or [])} |")
     c1, c2, c3 = summary["clause_1"], summary["clause_2"], summary["clause_3"]
     lines += ["", f"**Clause 1:** {c1['type_matches']} of {c1['of']} types match the reference ({c1['rate_percent']}%); 75% {'MET' if c1['passes_75_percent'] else 'NOT MET'}. Misses: {c1['misses']}",
-              f"**Clause 2:** {c2['below_and_held']} of {c2['below_threshold']} below-threshold assignments held as provisional; {c2['at_or_above_and_applied']} of {c2['at_or_above']} at or above applied; violations: {c2['violations'] or 'none'}.",
+              f"**Clause 2:** {c2['below_and_held']} of {c2['below_threshold']} below-threshold assignments held as provisional; {c2['at_or_above_and_applied']} of {c2['at_or_above']} at or above applied and {c2['at_or_above_held_to_keep_a_given_department']} held to keep a department the document already had; violations: {c2['violations'] or 'none'}.",
               f"**Clause 3:** departments discarded {c3['department_discarded']}, Project/Process suggestions discarded {c3['project_process_discarded']}, Topic values proposed {c3['topic_proposed']}, out-of-scheme links {c3['out_of_scheme_links']}; violations: {c3['violations'] or 'none'}.",
               f"Tags against the manifest, for information: precision {summary['tags_for_information']['precision_percent']}%, recall {summary['tags_for_information']['recall_percent']}%."]
     if problems:

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.js'
 import { deleteDocument, documentDownloadUrl, fetchDocument } from '../api/documents.js'
 import Button from '../components/Button.jsx'
+import Classification from '../components/Classification.jsx'
 import Dialog from '../components/Dialog.jsx'
 import Notice from '../components/Notice.jsx'
 import { TEXT } from '../constants.js'
@@ -34,6 +35,25 @@ function repositoryPathFrom(state) {
 function tagsIn(tags, dimension) {
   const names = tags?.[dimension]
   return Array.isArray(names) ? names : []
+}
+
+/**
+ * The detail's `tags` — the names in each of the three dimensions, sorted, each
+ * once, held suggestions excluded — rebuilt from `tag_details` after an FR-10
+ * action changed the links. The contract defines `tags` in exactly those terms
+ * (docs/api-contract.md, FR-15), so the metadata above the classification
+ * section keeps agreeing with it without a second read of the document.
+ */
+function tagsFrom(tagDetails) {
+  const tags = Object.fromEntries(TAG_DIMENSIONS.map(([dimension]) => [dimension, []]))
+  for (const link of Array.isArray(tagDetails) ? tagDetails : []) {
+    if (link.provisional === true) continue
+    const dimension = String(link.dimension ?? '').toLowerCase()
+    if (!(dimension in tags) || typeof link.name !== 'string') continue
+    if (!tags[dimension].includes(link.name)) tags[dimension].push(link.name)
+  }
+  for (const names of Object.values(tags)) names.sort()
+  return tags
 }
 
 /**
@@ -81,7 +101,7 @@ export default function DocumentDetail() {
   const loader = useCallback(({ signal }) => fetchDocument(docId, { signal }), [docId])
   // Named `record`, not `document`: a local called `document` would shadow the
   // browser global inside every line of this component.
-  const { data: record, loading, error, reload } = useApiResource(loader)
+  const { data: record, loading, error, reload, setData } = useApiResource(loader)
   useDocumentTitle(record?.title ?? 'Document')
 
   const [confirming, setConfirming] = useState(false)
@@ -128,6 +148,21 @@ export default function DocumentDetail() {
   const canDelete = record.can_delete === true && !deleteRefused
   const extractedText = record.extracted_text
   const hasText = typeof extractedText === 'string' && extractedText.length > 0
+
+  /**
+   * FR-10's section reports what one of its routes returned — the
+   * classification, the tag links, the effective department — and the record
+   * takes it. When the links changed, `tags` is rebuilt from them so the
+   * metadata list above stays the same list the server would send.
+   */
+  function applyClassificationChange(patch) {
+    setData((current) => {
+      if (!current) return current
+      const next = { ...current, ...patch }
+      if (Array.isArray(patch.tag_details)) next.tags = tagsFrom(patch.tag_details)
+      return next
+    })
+  }
 
   async function confirmDelete() {
     if (deleteInFlight.current) return
@@ -213,6 +248,17 @@ export default function DocumentDetail() {
           </Button>
         ) : null}
       </div>
+
+      {/* FR-10: the AI-suggested type, department and tags, each marked as such
+          and confirmable, editable or removable in one action (D-104, D-105). The
+          department it shows is the record's own field, the effective one. */}
+      <Classification
+        docId={record.doc_id}
+        classification={record.classification ?? null}
+        tagDetails={record.tag_details ?? []}
+        department={record.department ?? ''}
+        onChange={applyClassificationChange}
+      />
 
       <h2 id="extracted-content-heading">{TEXT.documentExtractedHeading}</h2>
       {hasText ? (

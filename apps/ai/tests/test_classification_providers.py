@@ -20,7 +20,7 @@ import pytest
 from django.test import override_settings
 
 from apps.ai import attempt_log
-from apps.ai.anthropic import AnthropicService
+from apps.ai.anthropic import CLAUDE_EFFORT, CLAUDE_MAX_TOKENS, AnthropicService
 from apps.ai.base import DocumentClassification, Passage, ProviderUnavailable, TagScheme
 from apps.ai.classification import (
     CLASSIFICATION_MAX_TOKENS,
@@ -333,8 +333,13 @@ def test_claude_classifies_with_the_shared_prompt_and_the_classification_paramet
     assert result.input_truncated is False
     (call,) = client.messages.calls
     assert call["model"] == "claude-opus-5"
-    assert call["temperature"] == 0.0
-    assert call["max_tokens"] == CLASSIFICATION_MAX_TOKENS
+    # Main's Claude request shape (#67, D-115): no sampling parameter, which current Claude
+    # models refuse, the effort setting instead, and Claude's own ceiling, because thinking
+    # counts against max_tokens and FLM's 400 would cut the reply off before its JSON.
+    assert "temperature" not in call
+    assert call["output_config"] == {"effort": CLAUDE_EFFORT}
+    assert call["max_tokens"] == CLAUDE_MAX_TOKENS
+    assert call["max_tokens"] > CLASSIFICATION_MAX_TOKENS
     assert call["timeout"] == CLASSIFICATION_TIMEOUT_SECONDS
     # The classification system prompt in the SDK's own parameter: the string FLM gets as a message.
     assert call["system"] == CLASSIFICATION_SYSTEM_PROMPT
@@ -431,4 +436,5 @@ def test_claude_generation_still_carries_its_own_system_prompt_and_timeout():
     (call,) = client.messages.calls
     assert call["system"] == SYSTEM_PROMPT
     assert call["timeout"] == GENERATION_TIMEOUT_SECONDS
-    assert call["max_tokens"] == GENERATION_MAX_TOKENS
+    assert call["max_tokens"] == CLAUDE_MAX_TOKENS  # #67: Claude's ceiling, not FLM's GENERATION_MAX_TOKENS
+    assert "temperature" not in call

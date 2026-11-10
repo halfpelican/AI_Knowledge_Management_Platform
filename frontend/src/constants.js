@@ -271,6 +271,22 @@ export const TEXT = {
   uploadDropHint: `Accepted formats: ${ACCEPTED_FORMATS_LABEL}. Up to ${MAX_UPLOAD_LABEL} per file.`,
   uploadDropTarget: 'Drop files here',
   uploadQueueEmpty: 'No files chosen yet.',
+  // Usability findings 1 and 2: what the drop zone itself says after a pick or a
+  // drop, where the pointer was released, rather than the browser's own "No file
+  // chosen". Every file goes into the queue, a refused one with its reason, so the
+  // sentence counts what was added and says how many of those cannot be sent.
+  dropZoneAdded: (names, refused) => {
+    const what = names.length === 1 ? names[0] : `${names.length} files`
+    let tail = ''
+    if (refused > 0 && names.length === 1) tail = ' It cannot be uploaded; the reason is shown beside it.'
+    else if (refused > 0 && refused === names.length) tail = ' None of them can be uploaded; the reason is shown beside each.'
+    else if (refused > 0) tail = ` ${refused} of them cannot be uploaded; the reason is shown beside each.`
+    return `Added ${what} to the queue below.${tail}`
+  },
+  // Finding 4: while the queue is sending, the zone says why it takes nothing, and a
+  // drop made meanwhile is answered rather than vanishing.
+  dropZoneBusy: 'Uploading. You can add more files once these have finished.',
+  dropZoneRefused: 'Nothing was added, because files are still uploading. Add more once they have finished.',
   uploadTransferring: 'Uploading',
   // The transfer has finished and the server is extracting, chunking and
   // embedding. Ingestion is synchronous (FR-08), so this is the wait.
@@ -475,6 +491,104 @@ export const TEXT = {
   documentDeleteCancel: 'Cancel',
   documentDeleteFailed: 'Could not delete the document',
   documentDeleteNotPermitted: 'You do not have permission to delete documents.',
+  // FR-10's classification section on the detail view (src/components/
+  // Classification.jsx, D-104, D-105). Every AI value is said to be one in words,
+  // never by colour or position alone: "each marked as AI-generated" is the FR's
+  // clause, and a mark a screen reader cannot read is not a mark.
+  classificationHeading: 'Classification',
+  classificationIntro:
+    'The type, the department and some tags are suggested by AI and are marked as such. A suggestion can be confirmed, edited or removed; what a person confirms or edits is kept by later reprocessing.',
+  // `classification` is null: nothing has been suggested. An ordinary state.
+  classificationNone: 'Not classified yet.',
+  classificationNoneHint: 'No type, department or tags have been suggested for this document.',
+  classifyNow: 'Classify now',
+  classifying: 'Classifying…',
+  // The request itself is the wait: the AI reads the opening of the document and
+  // answers in ten to sixty seconds. Announced as well as spun.
+  classifyingStatus: 'Classifying this document. This can take up to a minute.',
+  classifyDone: 'The document has been classified.',
+  classifyFailedTitle: 'Could not classify this document',
+  // FR-10's 422: there is no extracted text to classify. It says what would help.
+  classifyNoText:
+    'No text was extracted from this document, so there is nothing to classify. A text-based or OCR’d copy can be.',
+  // The 503 is NFR-19's notice; this sentence follows the client's fixed 503 text and
+  // says what became of the record: nothing.
+  classifyNotDone: 'The document was not classified, so nothing here has changed.',
+  // The ingestion 429 (D-79), the budget classification shares with upload,
+  // meeting ingestion and reprocess. Named "the upload limit" as the other three
+  // name it, so the one limit is recognisably one.
+  classifyLimitReached: (when) =>
+    `The upload limit has been reached, so this document was not classified. You can try again ${when}.`,
+  classificationFieldType: 'Document type',
+  classificationFieldDepartment: 'Department',
+  // The document's type while the only suggestion is provisional: `doc_type` is
+  // null, and the screen says so rather than showing the held suggestion in its
+  // place (FR-10: "presented for confirmation rather than applied silently").
+  classificationNotAssigned: 'Not yet assigned',
+  classificationSuggestedByAI: 'Suggested by AI',
+  classificationAwaiting: 'Awaiting your confirmation',
+  classificationConfirmed: 'Confirmed by a person',
+  classificationConfidence: (percent) => `${percent}% confidence`,
+  // A provisional value, named beside the "not yet assigned" effective value, so
+  // the reader sees what confirming would apply.
+  classificationSuggestion: (value) => `The AI suggested ${value}`,
+  // A department outside the known departments is discarded, never written
+  // (FR-10's controlled taxonomy growth). The department shown is the document's
+  // own, and this sentence says what happened to the suggestion.
+  classificationDiscardedDepartment: (value) =>
+    `The AI suggested “${value}”, which is not one of the known departments, so it was not applied.`,
+  classificationDiscardedDepartmentUnnamed:
+    'The AI’s department suggestion was not one of the known departments, so it was not applied.',
+  // One request confirms both suggestions as they stand; the edit form sends the
+  // chosen values in one request as well.
+  classificationConfirmAll: 'Confirm type and department',
+  classificationConfirming: 'Confirming…',
+  classificationConfirmedAll: 'The type and department are confirmed.',
+  classificationEdit: 'Edit type and department',
+  classificationEditLegend: 'Edit the type and department',
+  classificationDepartmentHint: 'Leave empty to record no department.',
+  classificationSave: 'Save',
+  classificationSaving: 'Saving…',
+  classificationCancel: 'Cancel',
+  classificationSaved: 'The type and department have been saved.',
+  classificationFailed: 'Could not update the classification',
+  // The 400 on the edit form, whose message is already under the field.
+  classificationCheckFields: 'Check the highlighted field and try again.',
+  // A 403 on any action: the role may not change classifications, so the
+  // controls go, and the sentence says why in words. The record stays.
+  classificationNotPermitted: 'Your role may not change classifications, so these controls are not available.',
+  classificationTagsHeading: 'Tags',
+  // Provenance per tag, in words (FR-10: "tags applied automatically are visually
+  // distinguished from those applied by a person"). A word, not only a border.
+  tagAddedByPerson: 'Added by a person',
+  tagSuggestedByAI: 'Suggested by AI',
+  tagConfirmedAI: 'Suggested by AI, confirmed by a person',
+  tagConfirm: 'Confirm',
+  tagRemove: 'Remove',
+  tagReject: 'Reject',
+  // The accessible names, so a column of "Confirm" and "Remove" buttons each name
+  // their tag (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3).
+  tagConfirmLabel: (name) => `Confirm tag ${name}`,
+  tagRemoveLabel: (name) => `Remove tag ${name}`,
+  tagRejectLabel: (name) => `Reject suggested tag ${name}`,
+  tagConfirmed: (name) => `“${name}” is now a confirmed tag.`,
+  tagRemoved: (name) => `“${name}” was removed.`,
+  tagRejected: (name) => `The suggestion “${name}” was rejected.`,
+  // Held suggestions: provisional AI tags and proposed new Topic values. They are
+  // not the document's tags until confirmed (FR-10), and the heading says so.
+  suggestedTagsHeading: 'Suggested tags awaiting confirmation',
+  suggestedTagsIntro:
+    'These are suggestions, not tags of the document. Confirm one to add it as a tag, or reject it.',
+  // A Topic value the AI proposed that is not yet in the list of topics: FR-10
+  // allows a new value in Topic only, and only once a person confirms it.
+  proposedTopicLabel: 'New topic, not yet in the list of topics',
+  proposedTopicConfirmLabel: (value) => `Confirm new topic ${value}`,
+  proposedTopicRejectLabel: (value) => `Reject new topic ${value}`,
+  proposedTopicConfirmed: (value) => `“${value}” was added as a topic tag.`,
+  proposedTopicRejected: (value) => `The proposed topic “${value}” was rejected.`,
+  // `input_truncated`: only the opening of a long document was read (D-104). Said
+  // rather than hidden, which is why the record keeps the flag.
+  classificationTruncated: 'Only the opening of this document was read to classify it.',
   // The meeting delete, which is not in the proposal and mirrors the document
   // delete above (src/pages/MeetingDetail.jsx). The control shows only when the
   // meeting detail says `can_delete`; the server checks `manage_meetings` on
@@ -520,11 +634,27 @@ export const TEXT = {
   meetingSourceText: 'Paste the transcript text',
   meetingSourceFile: 'Upload a transcript file',
   meetingSourceLegend: 'How are you supplying the transcript?',
+  // The transcript file's drop zone states its own state (usability finding 2).
+  meetingFileNone: 'No file chosen yet.',
+  meetingFileChosen: (name) => `Chosen: ${name}`,
+  meetingFileBusy: 'Adding the transcript. The file cannot be changed until it has finished.',
   // FR-09: attendees are a participation record and never an access control
   // (D-16, CLAUDE.md §6, invariant 3).
   attendeesHint:
     'A record of who took part. Attendees do not control who can read the transcript; visibility does.',
   loadingAttendees: 'Loading the list of people…',
+  // Usability finding 5: the picker adds one person at a time to a visible list,
+  // with no modifier keys. These are its words.
+  attendeeAddLabel: 'Add an attendee',
+  attendeeChoosePrompt: 'Choose a person…',
+  attendeeAllAdded: 'Everyone in the directory has been added.',
+  attendeeAddButton: 'Add',
+  attendeeListLabel: 'Attendees to be recorded',
+  attendeeNoneYet: 'No attendees added yet.',
+  attendeeRemove: 'Remove',
+  attendeeRemoveLabel: (person) => `Remove ${person}`,
+  attendeeAdded: (person) => `${person} added to the attendees.`,
+  attendeeRemoved: (person) => `${person} removed from the attendees.`,
   // No longer "only an Administrator can do this": FR-09's association is open to
   // every role, and the picker reads the directory any session may read (D-34).
   // This is the note for having nobody to choose from — a failed read, or a

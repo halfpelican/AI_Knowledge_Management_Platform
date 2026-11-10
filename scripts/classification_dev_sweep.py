@@ -113,6 +113,18 @@ def choose_threshold(observations: list[dict]) -> dict:
             "highest_wrong": max(wrong) if wrong else None, "table": table}
 
 
+def provider_record(settings) -> dict:
+    """The configuration this result belongs to (D-113): the provider, its chat model and its
+    embedding model. A value tuned, or a result measured, on one configuration does not carry
+    over to another, so every record names its own."""
+    provider = settings.AI_PROVIDER
+    if provider == "anthropic":
+        return {"ai_provider": provider, "chat_model": settings.ANTHROPIC_MODEL,
+                "embedding_model": settings.VOYAGE_MODEL}
+    return {"ai_provider": provider, "chat_model": settings.FLM_CHAT_MODEL,
+            "embedding_model": settings.FLM_EMBED_MODEL}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out-dir", type=Path, required=True)
@@ -167,6 +179,8 @@ def main() -> int:
         "repetitions": arguments.repetitions,
         "database": "none: nothing is read from or written to a database",
     }
+
+    record["configuration"] = provider_record(settings)
 
     observations: list[dict] = []
     for document in documents:

@@ -190,8 +190,8 @@ None is fixed here. Fixing them is react-frontend's work, under a decision the u
 
 | Requirement | Clause | Why |
 |---|---|---|
-| FR-02 | "Show password" toggle | Outside this step's list |
-| FR-02 | Login button disables and shows a loading indicator | Outside this step's list |
+| FR-02 | "Show password" toggle | Covered 9 November 2026 (item 10 early audit, finding 2): `login.test.jsx` :: starts hidden, reveals what was typed on press and re-hides it, holding the value and carrying the state in aria-pressed |
+| FR-02 | Login button disables and shows a loading indicator | Covered 9 November 2026 (item 10 early audit, finding 2): `login.test.jsx` :: disables the button and shows the loading state in flight, so a second click sends no second POST, and recovers when the answer lands |
 | FR-04 | The "You've been logged out" confirmation | A defect: the screen does not show it (item 1) |
 | FR-06 | Role-conditional elements other than the role management link, its route and the delete control | Outside this step's list. The visibility choice on Upload and Meetings is the obvious one |
 | FR-08 | The "Processing failed…" sentence for each status | Thin: the action is tested, the per-status wording is not |

@@ -38,7 +38,9 @@ pytestmark = pytest.mark.django_db
 DOCUMENTS_URL = "/api/documents"
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 BOTH_ROLES = [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME]
-DETAIL_FIELDS = {"extracted_text", "tags", "can_delete"}
+# FR-15's three (D-63, D-73), and FR-10's two (D-105): the classification object and every tag
+# link with its provenance. apps/api/tests/test_document_classification.py tests those two.
+DETAIL_FIELDS = {"extracted_text", "tags", "can_delete", "classification", "tag_details"}
 NO_TAGS = {"project": [], "process": [], "topic": []}
 
 # Two lines and a tab, so a rendering that collapsed or reflowed it would not be equal.
@@ -86,7 +88,7 @@ def detail(client, document):
 # --- The shape ---------------------------------------------------------------------------------
 
 
-def test_the_detail_is_the_list_object_plus_exactly_the_three_detail_fields(session_client):
+def test_the_detail_is_the_list_object_plus_exactly_the_detail_fields(session_client):
     document = make_document(session_client.user, department="People")
 
     [listed] = session_client.client.get(DOCUMENTS_URL).json()

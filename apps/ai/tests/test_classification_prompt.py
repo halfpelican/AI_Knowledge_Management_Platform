@@ -302,3 +302,26 @@ def test_the_cut_collapses_whitespace_and_is_idempotent():
 def test_an_empty_text_is_empty_and_not_cut():
     assert classification_input("") == ("", False)
     assert classification_input("   \n ") == ("", False)
+
+
+# --- The one revision made on the development documents (D-106, 9 November 2026) ----------
+#
+# The first development sweep never suggested Meeting Paper (0 of 9) and failed D21 on every
+# attempt with a tag whose value was empty. The prompt gained a definition of each type and a
+# rule against empty values; these tests hold both in place.
+
+
+def test_the_system_prompt_defines_every_document_type_by_its_purpose():
+    from apps.ai.classification import CLASSIFICATION_SYSTEM_PROMPT
+    from apps.core.constants import DOCUMENT_TYPES
+
+    for doc_type in DOCUMENT_TYPES:
+        assert f"   - {doc_type}: " in CLASSIFICATION_SYSTEM_PROMPT, doc_type
+
+
+def test_the_system_prompt_forbids_an_empty_tag_value_and_says_to_leave_the_dimension_out():
+    from apps.ai.classification import CLASSIFICATION_SYSTEM_PROMPT
+
+    flattened = " ".join(CLASSIFICATION_SYSTEM_PROMPT.split())
+    assert 'never with an empty "value"' in flattened
+    assert "leave that dimension out" in flattened

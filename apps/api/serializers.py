@@ -21,20 +21,21 @@ from apps.core.constants import (
     DEFAULT_DOCUMENT_SORT,
     DOCUMENT_SORT_VALUES,
     DOCUMENT_STATUS_VALUES,
+    DOCUMENT_TYPES,
     KNOWLEDGE_GAP_STATUS_VALUES,
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
     ROLE_NAMES,
 )
 from apps.core.models import NAME_MAX_LENGTH
-from apps.documents.models import Document, normalise_tag_name
+from apps.documents.models import ContentTag, Document, normalise_tag_name
 from apps.meetings.models import Meeting
 from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
 
 from .answers import resolve_sources
-from .repository import extracted_text_of, tags_of
+from .repository import classification_of, extracted_text_of, tag_details_of, tags_of
 
 User = get_user_model()
 
@@ -193,6 +194,11 @@ class DocumentDetailSerializer(DocumentSerializer):
       screen did (invariant 4). Read from the context with no default, so a caller that forgets
       to decide it raises rather than rendering a guess.
 
+    **FR-10 adds two more (D-105):** ``classification``, the ``ClassificationSerializer`` object
+    or ``None`` for a document never classified, and ``tag_details``, one entry per tag link,
+    provisional included, with its provenance. ``tags`` keeps its shape and lists applied links
+    only. The effective department is the ``department`` field already in the object (D-72).
+
     The list routes keep ``DocumentSerializer``: a list of fifty documents should not carry
     fifty documents' whole text, as ``MeetingListSerializer`` leaves out the transcript.
     """
@@ -200,9 +206,13 @@ class DocumentDetailSerializer(DocumentSerializer):
     extracted_text = serializers.SerializerMethodField()
     tags = serializers.SerializerMethodField()
     can_delete = serializers.SerializerMethodField()
+    classification = serializers.SerializerMethodField()
+    tag_details = serializers.SerializerMethodField()
 
     class Meta(DocumentSerializer.Meta):
-        fields = DocumentSerializer.Meta.fields + ("extracted_text", "tags", "can_delete")
+        fields = DocumentSerializer.Meta.fields + (
+            "extracted_text", "tags", "can_delete", "classification", "tag_details",
+        )
         read_only_fields = fields
 
     def get_extracted_text(self, document):
@@ -213,6 +223,12 @@ class DocumentDetailSerializer(DocumentSerializer):
 
     def get_can_delete(self, document):
         return self.context["can_delete"]
+
+    def get_classification(self, document):
+        return classification_payload(classification_of(document))
+
+    def get_tag_details(self, document):
+        return tag_details_payload(document)
 
 
 class DocumentUploadSerializer(serializers.Serializer):
@@ -247,6 +263,80 @@ class DocumentUploadSerializer(serializers.Serializer):
         # same roles differently produce the same row and the FR-11 predicate has
         # one shape to match.
         return [name for name in ROLE_NAMES if name in set(value)]
+
+
+# --- FR-10 classification (D-104, D-105) ------------------------------------------------
+
+
+class ClassificationSerializer(serializers.Serializer):
+    """The ``classification`` object: a ``DocumentAnalysis`` as the detail, the classify route and
+    the upload's 201 carry it (docs/api-contract.md, NIT3004 — FR-10).
+
+    Confidences are numbers, not DRF's default string rendering of a Decimal, because the client
+    compares them with a threshold rather than displaying them verbatim. The effective department
+    is NOT here: it is the document object's ``department`` (D-72), and ``department_outcome``
+    says how it got there. ``discarded_suggestions`` is not exposed: it is a record for the
+    Objective 05 measurement (D-106), not for the interface.
+    """
+
+    doc_type = serializers.CharField(read_only=True, allow_null=True)
+    doc_type_outcome = serializers.CharField(read_only=True, allow_null=True)
+    department_outcome = serializers.CharField(read_only=True, allow_null=True)
+    machine_doc_type = serializers.CharField(read_only=True, allow_null=True)
+    machine_doc_type_confidence = serializers.FloatField(read_only=True, allow_null=True)
+    machine_department = serializers.CharField(read_only=True, allow_blank=True)
+    machine_department_confidence = serializers.FloatField(read_only=True, allow_null=True)
+    user_edited = serializers.BooleanField(read_only=True)
+    proposed_topics = serializers.JSONField(read_only=True)
+    classified_at = serializers.DateTimeField(read_only=True)
+    model = serializers.CharField(read_only=True, allow_blank=True)
+    input_truncated = serializers.BooleanField(read_only=True)
+
+
+class TagDetailSerializer(serializers.ModelSerializer):
+    """One ``tag_details`` entry: a ``ContentTag`` link with its tag's dimension and name, its
+    provenance (``applied_by``, ``confirmed``) and FR-10's ``provisional`` and ``confidence``."""
+
+    content_tag_id = serializers.UUIDField(source="id", read_only=True)
+    dimension = serializers.CharField(source="tag.dimension", read_only=True)
+    name = serializers.CharField(source="tag.tag_name", read_only=True)
+    confidence = serializers.FloatField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = ContentTag
+        fields = ("content_tag_id", "dimension", "name", "applied_by", "confirmed", "provisional",
+                  "confidence")
+        read_only_fields = fields
+
+
+def classification_payload(analysis) -> dict | None:
+    """The ``classification`` object for ``analysis``, or ``None`` where there is none."""
+    return None if analysis is None else ClassificationSerializer(analysis).data
+
+
+def tag_details_payload(document) -> list[dict]:
+    """The document's ``tag_details``, through ``tag_details_of`` (provisional included)."""
+    return TagDetailSerializer(tag_details_of(document), many=True).data
+
+
+class ClassificationConfirmSerializer(serializers.Serializer):
+    """``POST /api/documents/{id}/classification``: a person confirms as it stands (both omitted)
+    or edits. ``doc_type`` is one of DOCUMENT_TYPES, read through a ChoiceField so the 400 is keyed
+    on it (FR-10: "the type must be selected from a fixed list"); ``department`` may be blank, which
+    clears it. Null means omitted, for either."""
+
+    doc_type = serializers.ChoiceField(choices=DOCUMENT_TYPES, required=False, allow_null=True)
+    department = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, required=False, allow_null=True, allow_blank=True,
+        trim_whitespace=True,
+    )
+
+
+class ProposedTopicSerializer(serializers.Serializer):
+    """The body of the proposed-topic routes: the value as proposed or as typed. It is normalised
+    before it is matched, so case and spacing do not matter; blank, or over the column, is 400."""
+
+    value = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
 
 
 # --- FR-09 meeting transcript ingestion ------------------------------------------------

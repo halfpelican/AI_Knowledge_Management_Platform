@@ -51,6 +51,17 @@ from apps.core.constants import (
     ROLE_NAMES,
 )
 from apps.core.models import NAME_MAX_LENGTH
+from apps.documents.classification import (
+    InsufficientText,
+    InvalidClassification,
+    NotOnThisDocument,
+    classify_document_now,
+    confirm_classification,
+    confirm_proposed_topic,
+    confirm_tag,
+    reject_proposed_topic,
+    reject_tag,
+)
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
 from apps.documents.models import Document
@@ -84,10 +95,11 @@ from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
 from .permissions import HasRolePermission, role_holds
-from .repository import RepositoryFilters, browse, repository_documents
+from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
     AnswerSerializer,
     AskSerializer,
+    ClassificationConfirmSerializer,
     ConversationCreateSerializer,
     ConversationDetailSerializer,
     ConversationSerializer,
@@ -105,12 +117,16 @@ from .serializers import (
     MeetingIngestSerializer,
     MeetingListSerializer,
     MeetingSerializer,
+    ProposedTopicSerializer,
     RecentQuestionSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
     SearchResultsSerializer,
+    TagDetailSerializer,
     UserSerializer,
+    classification_payload,
+    tag_details_payload,
 )
 
 User = get_user_model()
@@ -197,6 +213,15 @@ ALREADY_INDEXED_MESSAGE = "This document is already indexed."
 # Reprocess's 422 for a document whose file_path is blank, names a file missing from disk, or
 # names a path outside MEDIA_ROOT (D-75's note of 21 October). The cause is logged, not sent.
 NO_STORED_ORIGINAL_MESSAGE = "This document has no stored original to reprocess."
+# FR-10 Responses: "422 Unprocessable Entity where insufficient text was extracted" (D-105): the
+# classify route's answer for a document with no extracted text, given before any provider call.
+INSUFFICIENT_TEXT_MESSAGE = "No text was extracted from this document, so it cannot be classified."
+# NFR-19's notice for the classify route, as KNOWLEDGE_SERVICE_UNAVAILABLE_MESSAGE below is for
+# /api/ask: what happened, and that nothing was recorded, so the action is safe to repeat.
+CLASSIFICATION_UNAVAILABLE_MESSAGE = (
+    "The knowledge service is temporarily unavailable. The document was not classified; "
+    "please try again shortly."
+)
 # FR-15's download answers a document whose original is not stored, is gone from disk, or is
 # named by a path outside MEDIA_ROOT, with
 # exactly the 404 body its scoped lookup gives an unknown id or one outside the caller's scope
@@ -741,11 +766,9 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
             release_ingestion_slot(request.user, token)
         # The document object is returned whatever the code: on a 422 the file is
         # kept and the record carries the status saying why it is not indexed, which
-        # is what FR-08's "Processing failed. Please try again" action reads.
-        body = DocumentSerializer(outcome.document).data
-        if outcome.detail:
-            body["detail"] = outcome.detail
-        return Response(body, status=outcome.http_status)
+        # is what FR-08's "Processing failed. Please try again" action reads. A 201
+        # also carries the classification, or null (section 7.8 line 100; D-105).
+        return Response(ingestion_body(outcome), status=outcome.http_status)
 
 
 def scoped_document_or_404(request, pk):
@@ -762,6 +785,31 @@ def scoped_document_or_404(request, pk):
         ),
         pk=pk,
     )
+
+
+def require_contribute_content(request, view) -> None:
+    """403 unless the caller's role holds ``contribute_content``, checked AFTER the scoped lookup.
+
+    FR-10's routes (D-105) check the permission inside the method, as FR-15's delete does (D-73):
+    a permission class runs in ``initial()``, before the lookup, and would answer 403 for a document
+    outside the caller's scope and so confirm that it exists. The message is the permission class's
+    own, so this 403 reads as every other 403 does.
+    """
+    if not CanContributeContent().has_permission(request, view):
+        view.permission_denied(request, message=CanContributeContent.message)
+
+
+def ingestion_body(outcome) -> dict:
+    """The upload's and the reprocess's body: the document object; ``detail`` on a 422; and on a 201
+    ``classification`` (section 7.8 line 100; D-105), the object or null when classification failed
+    and the document is indexed unclassified (invariant 8, D-33 part 1). The list routes never
+    carry it."""
+    body = DocumentSerializer(outcome.document).data
+    if outcome.detail:
+        body["detail"] = outcome.detail
+    if outcome.http_status == status.HTTP_201_CREATED:
+        body["classification"] = classification_payload(outcome.analysis)
+    return body
 
 
 class DocumentDetailView(APIView):
@@ -1302,10 +1350,173 @@ class DocumentReprocessView(APIView):
             )
         finally:
             release_ingestion_slot(request.user, token)
-        body = DocumentSerializer(outcome.document).data
-        if outcome.detail:
-            body["detail"] = outcome.detail
-        return Response(body, status=outcome.http_status)
+        return Response(ingestion_body(outcome), status=outcome.http_status)
+
+
+# --- FR-10 classification (D-104, D-105) -----------------------------------------------------
+#
+# Six routes over one document, and one rule for all of them, in this order: the document is
+# resolved through the caller's scope (404 for an unknown id and one outside the scope alike,
+# D-46); then ``contribute_content`` is checked, 403 without it (D-105 settles the permission,
+# D-73 the order, so a 403 can never confirm that a document the caller cannot see exists); then
+# the body is validated; then apps/documents/classification.py does the work, in one transaction.
+# No body here says more than the 404 would: ``NotOnThisDocument`` (a link, a proposal or an
+# analysis that is not this document's) is answered with the scoped lookup's own 404 body, word
+# for word.
+
+
+class DocumentClassifyView(APIView):
+    """``POST /api/documents/{id}/classify`` — classify now (FR-10, D-105).
+
+    One provider call through ``classify_document_now``, then the apply rules, in one transaction.
+    422 where the document has no extracted text (FR-10 Responses: "where insufficient text was
+    extracted"), before any provider call; 503 with NFR-19's notice when the provider failed after
+    MAXIMUM_CLASSIFY_ATTEMPTS, nothing written. Throttled in the "ingestion" scope (D-79): it is
+    one provider call, like a reprocess. No in-flight slot (D-85): the slot bounds extraction and
+    embedding, and this does neither.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "ingestion"
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            analysis = classify_document_now(document)
+        except InsufficientText:
+            return Response(
+                {"detail": INSUFFICIENT_TEXT_MESSAGE},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        except ProviderUnavailable as exc:
+            # The failed attempts themselves are in the provider attempts log (apps/ai); this
+            # names the route and the document the 503 was answered for.
+            logger.warning("POST /api/documents/%s/classify answered 503: %s", document.pk, exc)
+            return Response(
+                {"detail": CLASSIFICATION_UNAVAILABLE_MESSAGE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(
+            {
+                "classification": classification_payload(analysis),
+                "tag_details": tag_details_payload(document),
+            }
+        )
+
+
+class DocumentClassificationView(APIView):
+    """``POST /api/documents/{id}/classification`` — a person confirms or edits (FR-10, D-105).
+
+    Body ``{doc_type?, department?}``. Both omitted confirms as it stands: a provisional type is
+    applied and a provisional department is written to ``Documents.department``. A ``doc_type``
+    outside DOCUMENT_TYPES is 400 keyed on ``doc_type``; a document never classified is the scoped
+    lookup's 404, so the body says no more than it would for a document the caller cannot see.
+
+    200 ``{classification, department}``: ``department`` is the document's ``department`` column as
+    it stands after the confirm or edit, re-read from the row, so the client never has to work out
+    the effective department from the outcome (it is not in the classification object, D-72).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = ClassificationConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            analysis = confirm_classification(
+                document, doc_type=data.get("doc_type"), department=data.get("department")
+            )
+        except InvalidClassification as exc:
+            return Response({"doc_type": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        document.refresh_from_db(fields=["department"])
+        return Response(
+            {"classification": classification_payload(analysis), "department": document.department}
+        )
+
+
+class DocumentTagConfirmView(APIView):
+    """``POST /api/documents/{id}/tags/{content_tag_id}/confirm`` — accept a tag "in a single
+    action" (FR-10's provenance clause): confirmed, no longer provisional, ``applied_by`` kept."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk, content_tag_id):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            link = confirm_tag(document, content_tag_id)
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        return Response(TagDetailSerializer(link).data)
+
+
+class DocumentTagView(APIView):
+    """``DELETE /api/documents/{id}/tags/{content_tag_id}`` — remove a tag "in a single action". The
+    link goes; the ``Tags`` row, a vocabulary, stays (D-73's note). 204 with no body."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, content_tag_id):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            reject_tag(document, content_tag_id)
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class _ProposedTopicView(APIView):
+    """The two proposed-topic routes share everything but the function they call: body
+    ``{value}``, validated after the 404 and the 403; the value normalised before it is matched;
+    200 with the classification and the tag details as they now stand."""
+
+    permission_classes = [IsAuthenticated]
+
+    def act(self, document, value):  # pragma: no cover - the subclasses decide
+        raise NotImplementedError
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = ProposedTopicSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 keyed on "value"
+        try:
+            self.act(document, serializer.validated_data["value"])
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        except InvalidClassification as exc:
+            return Response({"value": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                "classification": classification_payload(classification_of(document)),
+                "tag_details": tag_details_payload(document),
+            }
+        )
+
+
+class DocumentProposedTopicConfirmView(_ProposedTopicView):
+    """``POST /api/documents/{id}/proposed-topics/confirm`` — a person confirms an out-of-scheme
+    Topic, which is when the tag is created (FR-10: "requires user confirmation before it is
+    created") and linked ``applied_by="ai"``, confirmed."""
+
+    def act(self, document, value):
+        confirm_proposed_topic(document, value)
+
+
+class DocumentProposedTopicRejectView(_ProposedTopicView):
+    """``POST /api/documents/{id}/proposed-topics/reject`` — the proposal is dropped and nothing
+    is created."""
+
+    def act(self, document, value):
+        reject_proposed_topic(document, value)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------

@@ -34,6 +34,8 @@ frontend/dist/
 .idea/
 .DS_Store
 Thumbs.db
+# Office lock files (a ~$... twin appears beside any open .docx/.xlsx)
+~$*
 
 # The proposal and the plain-text extraction of it. The .docx is the spec, not
 # source; commit it deliberately if the team wants it in the repository.

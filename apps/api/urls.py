@@ -37,6 +37,21 @@ urlpatterns = [
     # Stage 5 item 2a: FR-15's download link, the stored original as an attachment (D-75).
     path("documents/<uuid:pk>/download", views.DocumentDownloadView.as_view(),
          name="document-download"),
+    # NIT3004: FR-10's classification routes (D-104, D-105). Each has a non-UUID segment after the
+    # id, so none can collide with documents/<uuid:pk> below; listed before it for the reading
+    # habit's sake, as reprocess and download are. Scoped 404 first, then contribute_content.
+    path("documents/<uuid:pk>/classify", views.DocumentClassifyView.as_view(),
+         name="document-classify"),
+    path("documents/<uuid:pk>/classification", views.DocumentClassificationView.as_view(),
+         name="document-classification"),
+    path("documents/<uuid:pk>/tags/<uuid:content_tag_id>/confirm",
+         views.DocumentTagConfirmView.as_view(), name="document-tag-confirm"),
+    path("documents/<uuid:pk>/tags/<uuid:content_tag_id>", views.DocumentTagView.as_view(),
+         name="document-tag"),
+    path("documents/<uuid:pk>/proposed-topics/confirm",
+         views.DocumentProposedTopicConfirmView.as_view(), name="document-proposed-topic-confirm"),
+    path("documents/<uuid:pk>/proposed-topics/reject",
+         views.DocumentProposedTopicRejectView.as_view(), name="document-proposed-topic-reject"),
     # Stage 4 item 10b: the route a document citation links to, so FR-12's "links to the
     # source document or meeting" reaches the document rather than the repository (D-46).
     # Stage 5 item 2 adds FR-15's detail fields to its GET, and the DELETE method (D-73).

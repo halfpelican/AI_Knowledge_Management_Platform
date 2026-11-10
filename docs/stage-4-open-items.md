@@ -107,6 +107,12 @@ switch is coming; and a snapshot would put deleted text back on screen through i
 4b. The snapshot came from D-61's suggested fix and was copied here without being
 checked against FR-15's deletion clause.
 
+**Dated note, 10 November 2026.** "No switch is coming" no longer holds. The `anthropic`
+provider is funded (D-113), and a switch is a re-index. The conclusion stands: no passage-text
+snapshot. The consequence is now live, though. `reindex` recreates every chunk, so re-indexing a
+database with history nulls every citation's chunk (D-67). D-113 therefore re-indexes a fresh
+copy restored from the snapshot.
+
 ### 2.4 An unused "New conversation" can outlive its session
 
 **Gap 12 · minor · D-58.** Orphaned empty `Conversations` rows accumulate. **Owner:

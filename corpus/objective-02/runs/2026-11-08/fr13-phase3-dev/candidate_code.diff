@@ -1,0 +1,1224 @@
+diff --git a/apps/ai/prompting.py b/apps/ai/prompting.py
+index 9b7ef3b..b2f101e 100644
+--- a/apps/ai/prompting.py
++++ b/apps/ai/prompting.py
+@@ -242,18 +242,31 @@ def neutralise_passage_delimiter(text: str) -> str:
+ # The heading is prompt text, so it lives here with the rest of the prompt rather than in
+ # apps/retrieval/, and rewording it is a change that the lesson above applies to in full.
+ #
+-# It says three things and each one is load-bearing: what the lines are (earlier questions
+-# in this conversation), what they are for (resolving a pronoun or a short reference), and
+-# what they are NOT (passages, carrying no chunk_id, citable). The last clause is there
+-# because of what this file has already learned twice — ANYTHING IN A PROMPT IS A
+-# CANDIDATE FOR BEING CITED — and a user's own earlier question is no exception. The
+-# question a person typed can contain a UUID, a document title or a section number, and
+-# the model has no way to know those are not identifiers unless the prompt says so.
++# It says four things and each one is load-bearing: what the lines are (earlier questions
++# in this conversation), what they are for (resolving a pronoun or a short reference),
++# what they are NOT (passages, carrying no chunk_id, citable), and that they are not to be
++# ANSWERED AGAIN. The citing clause is there because of what this file has already learned
++# twice — ANYTHING IN A PROMPT IS A CANDIDATE FOR BEING CITED — and a user's own earlier
++# question is no exception. The question a person typed can contain a UUID, a document
++# title or a section number, and the model has no way to know those are not identifiers
++# unless the prompt says so.
++#
++# The last sentence, and the lead-in's "only question" clause, are step 7 phase 3
++# (8 November 2026). The 3 November thread run measured the failure they answer: 7 of the
++# 9 answered with-history follow-ups opened with the FIRST turn's answer — including t01,
++# where the right passage sat at rank 1 and the model quoted turn 1's fact anyway
++# (corpus/objective-02/runs/2026-11-03/fr13-before.md). The block said what the earlier
++# questions are; it did not say not to answer them. Both changes are inside the
++# conversational block only, so a single-turn prompt stays byte-identical to the one
++# docs/flm-baseline.md measured — that identity has its own test
++# (apps/retrieval/tests/test_follow_up_focus.py).
+ PRIOR_QUESTIONS_HEADING = (
+     "Earlier questions in this conversation, oldest first. They are provided as context "
+     "only, so that a pronoun or an abbreviated reference in the question below can be "
+     "resolved. They are NOT passages: they carry no chunk_id, they are not a source of "
+-    "facts, and nothing in them may be cited."
++    "facts, and nothing in them may be cited. They have already been asked: do not "
++    "answer them again, and do not restate facts that answer them unless the question "
++    "below asks for those facts."
+ )
+ 
+ # A dash, and deliberately not "1.", "2.", "3.". One of the three fabrications measured at
+@@ -265,8 +278,11 @@ PRIOR_QUESTION_MARKER = "- "
+ 
+ # What separates the history from the question actually being asked. Named, because the
+ # model has to be able to tell which line it is answering, and because a test asserts that
+-# the new question is still findable after the block is prepended.
+-QUESTION_LEAD_IN = "The question to answer: "
++# the new question is still findable after the block is prepended. "The only question to
++# answer" is phase 3's half of the restatement fix: the line the model must answer is the
++# line most likely to be skipped when the earlier subject dominates the block above it,
++# so the instruction sits on that line rather than only in the heading.
++QUESTION_LEAD_IN = "The question to answer, and the only question to answer: "
+ 
+ 
+ def build_conversational_question(question: str, prior_questions: list[str]) -> str:
+diff --git a/apps/ai/tests/test_fr13_measurement_scripts.py b/apps/ai/tests/test_fr13_measurement_scripts.py
+index 25c2690..ca84dcd 100644
+--- a/apps/ai/tests/test_fr13_measurement_scripts.py
++++ b/apps/ai/tests/test_fr13_measurement_scripts.py
+@@ -529,7 +529,8 @@ class RecordingService:
+ 
+     def embed(self, texts):
+         self.embed_calls.append(list(texts))
+-        return EmbeddingResult(vectors=[unit_vector_at(1.0)], model=STUB_EMBEDDING_MODEL,
++        # One vector per text: a with-history run sends two texts in one call (phase 3).
++        return EmbeddingResult(vectors=[unit_vector_at(1.0) for _ in texts], model=STUB_EMBEDDING_MODEL,
+                                dimension=settings.EMBEDDING_DIMENSION)
+ 
+     def generate_statements(self, question, passages, on_attempt=None):
+@@ -564,7 +565,10 @@ def test_a_thread_run_embeds_and_prompts_what_compose_returns(scripts, document,
+     first, follow_up = threads[2]["turns"][0]["question"], threads[2]["turns"][1]["question"]
+     spelled = threads[2]["turns"][1]["spelled_out"]
+     expected = [compose(first, []), compose(follow_up, [first]), compose(follow_up, []), compose(spelled, [])]
+-    assert service.embed_calls == [[query_text(c.for_retrieval)] for c in expected]
++    # Phase 3: each run embeds its context's retrieval_texts — two for with-history,
++    # one for the rest — each with the query prefix, in one call per run.
++    assert service.embed_calls == [[query_text(t) for t in c.retrieval_texts] for c in expected]
++    assert [len(call) for call in service.embed_calls] == [1, 2, 1, 1]
+     assert service.prompt_questions == [c.for_prompt for c in expected]
+     assert first in expected[1].for_retrieval  # not vacuous: the history is in the join
+ 
+@@ -619,6 +623,40 @@ def test_the_harness_candidate_set_applies_d66(scripts, document):
+     assert not harness.readable_by(chunk, EMPLOYEE_ROLE_NAME)
+ 
+ 
++def test_the_measuring_tools_compute_retrieval_with_the_shipped_functions(scripts):
++    """Step 7 phase 3: the tools call the pipeline's retrieval, not a copy of it.
++
++    A follow-up with history now embeds two texts and ranks by each candidate's best
++    score. If the harness or the HTTP check's in-process comparison kept the old
++    one-text shape, the harness would measure a retrieval POST /api/ask no longer
++    performs, and the WIRED verdict would call the server MISMATCH for doing exactly
++    what ships. So: the harness's ``measure`` embeds through the pipeline's own
++    ``embed_query_texts`` and ranks with ``rank_by_best`` — the same objects, by
++    identity — and the HTTP check's ``supplied_ids`` goes further and calls
++    ``apps.retrieval.pipeline.ranked_for_query_texts``, the function
++    ``answer_question`` itself uses for steps 3 to 5.
++    """
++    import inspect
++
++    import apps.retrieval.query_embedding as query_embedding
++    import apps.retrieval.ranking as ranking
++
++    harness = scripts("citation_harness")
++    assert harness.embed_query_texts is query_embedding.embed_query_texts
++    assert harness.rank_by_best is ranking.rank_by_best
++    measure_source = inspect.getsource(harness.measure)
++    assert "embed_query_texts(" in measure_source
++    assert "rank_by_best(" in measure_source
++
++    check = scripts("conversation_http_check")
++    supplied_source = inspect.getsource(check.supplied_ids)
++    assert "ranked_for_query_texts(" in supplied_source
++    # The old shape — its own embed call and its own rank call — is gone from the
++    # comparison, so it cannot drift from the pipeline's sequence again.
++    assert "embed_question(" not in supplied_source
++    assert "candidate_chunks(" not in supplied_source
++
++
+ # --- conversation_http_check.py --------------------------------------------------------------
+ 
+ 
+@@ -796,10 +834,12 @@ def test_the_verdict_comes_from_the_rows_the_server_wrote(scripts, monkeypatch,
+     thread = http_thread(check, threads, "t03")
+     first, follow_up = thread["turns"][0]["question"], thread["turns"][1]["question"]
+     with_history, cold, first_ids = [str(uuid4())], [str(uuid4())], [str(uuid4())]
+-    by_text = {compose(first, []).for_retrieval: first_ids,
+-               compose(follow_up, [first]).for_retrieval: with_history,
+-               compose(follow_up, []).for_retrieval: cold}
+-    monkeypatch.setattr(check, "supplied_ids", lambda text, role: by_text[text])
++    # Keyed by the context's retrieval_texts, which is what check_thread now hands
++    # supplied_ids (phase 3): two texts for the with-history comparison, one otherwise.
++    by_texts = {compose(first, []).retrieval_texts: first_ids,
++                compose(follow_up, [first]).retrieval_texts: with_history,
++                compose(follow_up, []).retrieval_texts: cold}
++    monkeypatch.setattr(check, "supplied_ids", lambda texts, role: by_texts[tuple(texts)])
+     FakeServer.supplied = {first: first_ids, follow_up: with_history if served == "with" else cold}
+     session = FakeServer("http://127.0.0.1:8000")
+     session.user = employee
+diff --git a/apps/retrieval/conversation.py b/apps/retrieval/conversation.py
+index a49389d..690ec23 100644
+--- a/apps/retrieval/conversation.py
++++ b/apps/retrieval/conversation.py
+@@ -34,10 +34,21 @@ places.
+ - ``for_prompt`` — the LABELLED block (``apps.ai.prompting.build_conversational_question``),
+   which is what generation receives. Here the labelling is the whole point: the block says
+   the lines are earlier questions, provided as context only, that they are not passages,
+-  that they carry no chunk_id and that nothing in them may be cited.
++  that they carry no chunk_id, that nothing in them may be cited, and (since step 7
++  phase 3) that they are not to be answered again.
+ 
+ Neither is a protocol change and neither is visible outside ``answer_question``.
+ 
++**Amended 8 November 2026 (step 7 phase 3): a follow-up embeds TWO texts, not one.** The
++3 November thread run showed the join working against the turn it serves: the earlier
++subject dominates the vector, so a follow-up can retrieve its predecessor's passages and
++not its own. ``retrieval_texts`` on the context is now what gets embedded — the join alone
++for a one-off, the join and the follow-up alone for a turn with history, in one ``embed()``
++call — and ranking scores each candidate by the better of the two cosines
++(``apps.retrieval.ranking.rank_by_best``). ``for_retrieval`` is unchanged and stays the
++primary retrieval string in every record. Everything above about the plain join still
++holds; the second text is the follow-up as asked, not a third composition.
++
+ **4. Anything in a prompt is a candidate for being cited.** That is the generalised lesson
+ of D-39 and of the Stage 4 item 6 fabrications (apps/ai/prompting.py records both at
+ length), and it applies to a user's own earlier question exactly as it applied to a worked
+@@ -107,20 +118,34 @@ RETRIEVAL_JOIN = " "
+ 
+ @dataclass(frozen=True)
+ class ConversationContext:
+-    """The two composed strings for one turn, and the history they were composed from.
++    """The composed strings for one turn, and the history they were composed from.
+ 
+     Frozen, like every other object in this package that a later step reads a decision
+-    off: the string that was embedded and the string that was sent to generation must be
++    off: the strings that were embedded and the string that was sent to generation must be
+     the ones the record describes.
+ 
+     ``prior_questions`` is oldest first and is on the object for one reason — so a test
+     can assert what was loaded without re-deriving it from the strings. Nothing in the
+     pipeline reads it.
+ 
++    ``retrieval_texts`` is WHAT GETS EMBEDDED, in order, and it is the one place that
++    choice is made (step 7 phase 3, 8 November 2026). With no history it is
++    ``(question,)`` — one text, one vector, the pipeline before FR-13 existed. With
++    history it is ``(for_retrieval, question)``: the plain join AND the follow-up on its
++    own, embedded in ONE provider call, and ranking takes each candidate's best score
++    across the two vectors (``apps.retrieval.ranking.rank_by_best``). The 3 November
++    thread run showed why the join alone is not enough: ``compose`` folds the earlier
++    questions and the follow-up into one string, so the earlier subject can dominate the
++    vector and the turn retrieves its predecessor's passages. The join stays first in the
++    tuple so the record's primary retrieval string is unchanged. Both vectors are scored
++    over the SAME already-scoped candidate set — the texts change nothing about FR-11,
++    and scope is still a predicate on the query before any ranking (invariant 1).
++
+     **Where there is no history, both strings ARE the question**, by identity of value:
+-    ``for_retrieval == for_prompt == question``. A one-off question therefore produces
+-    byte-identical retrieval and generation inputs to the ones the pipeline produced
+-    before FR-13 existed, which is what keeps docs/flm-baseline.md describing that path.
++    ``for_retrieval == for_prompt == question``, and ``retrieval_texts == (question,)``.
++    A one-off question therefore produces byte-identical retrieval and generation inputs
++    to the ones the pipeline produced before FR-13 existed, which is what keeps
++    docs/flm-baseline.md describing that path.
+ 
+     The one exception is a question containing the passage delimiter ``[chunk_id:``, where
+     ``for_prompt`` carries it neutralised (D-45, ``apps.ai.prompting``): generation must not
+@@ -131,6 +156,7 @@ class ConversationContext:
+     prior_questions: tuple[str, ...]
+     for_retrieval: str
+     for_prompt: str
++    retrieval_texts: tuple[str, ...]
+ 
+ 
+ def prior_questions(*, conversation, user) -> tuple[str, ...]:
+@@ -186,13 +212,20 @@ def compose(question: str, prior_questions: Sequence[str]) -> ConversationContex
+     thread's first turn send.
+     """
+     history = tuple(prior_questions)
++    # Plain, so the query vector is about the subject and not about the framing.
++    joined = RETRIEVAL_JOIN.join([*history, question])
+     return ConversationContext(
+         prior_questions=history,
+-        # Plain, so the query vector is about the subject and not about the framing.
+-        for_retrieval=RETRIEVAL_JOIN.join([*history, question]),
++        for_retrieval=joined,
+         # Labelled, so nothing in it can be mistaken for a passage. The prompt text is in
+         # apps/ai/prompting.py with the rest of the prompt.
+         for_prompt=build_conversational_question(question, list(history)),
++        # What gets embedded (phase 3): the join alone for a one-off, the join AND the
++        # question for a follow-up, so ranking can take each candidate's best of the two
++        # scores. The choice is made HERE, once, so the pipeline, the harness's --threads
++        # mode and the HTTP check's comparison cannot pick different texts for the same
++        # turn. See the class docstring.
++        retrieval_texts=(joined,) if not history else (joined, question),
+     )
+ 
+ 
+diff --git a/apps/retrieval/pipeline.py b/apps/retrieval/pipeline.py
+index c86c8f0..16dd54f 100644
+--- a/apps/retrieval/pipeline.py
++++ b/apps/retrieval/pipeline.py
+@@ -168,10 +168,11 @@ record-only, like ``no_answer_reason``: no serializer exposes either, or the ide
+ no-answer reply stops being identical.
+ """
+ 
++from collections.abc import Sequence
+ from dataclasses import dataclass
+ 
+ import apps.ai
+-from apps.ai.base import Passage, Statement
++from apps.ai.base import EmbeddingResult, Passage, Statement
+ from apps.core.constants import (
+     MAXIMUM_QUESTION_LENGTH,
+     MINIMUM_QUESTION_LENGTH,
+@@ -180,10 +181,10 @@ from apps.core.constants import (
+     NO_STATEMENT_VERIFIED,
+ )
+ from apps.retrieval.conversation import conversation_context
+-from apps.retrieval.query_embedding import embed_question
++from apps.retrieval.query_embedding import embed_query_texts
+ from apps.retrieval.partial_matches import PartialMatch, partial_matches
+ from apps.retrieval.query_log import record_query
+-from apps.retrieval.ranking import RankedPassage, admit, rank, truncate_to_context
++from apps.retrieval.ranking import RankedPassage, admit, rank_by_best, truncate_to_context
+ from apps.retrieval.scoping import candidate_chunks, permission_scope
+ from apps.retrieval.verification import VerificationResult, verify_citations
+ 
+@@ -406,6 +407,36 @@ def check_question_length(question: str) -> None:
+         )
+ 
+ 
++def ranked_for_query_texts(
++    texts: Sequence[str], *, role_name: str
++) -> tuple[EmbeddingResult, list[RankedPassage]]:
++    """7.10 steps 3 to 5 for one turn's query texts: embed, restrict, rank by best.
++
++    THE ONE DEFINITION of how a turn's retrieval is computed, used by ``answer_question``
++    and by the measuring tools — scripts/conversation_http_check.py's in-process
++    comparison calls this function, so its WIRED verdict keeps meaning "the server did
++    what this process computes" now that a follow-up's ranking takes two vectors
++    (step 7 phase 3). A tool with its own copy of these three steps would agree with the
++    pipeline until the next change here, and disagree silently after it.
++
++    ``texts`` is ``ConversationContext.retrieval_texts``: one text for a one-off, the
++    composed join and the follow-up alone for a turn with history. One ``embed()`` call
++    for all of them (apps/retrieval/query_embedding.py says why one), then ONE candidate
++    query, then ``rank_by_best`` over the same candidates with every vector.
++
++    **The order inside is invariant 1's.** The scope is a condition on the candidate
++    query — both FR-11 predicates, before anything is scored — and both vectors rank
++    the SAME already-restricted set. The second query text widens what can score well;
++    it cannot widen what exists to be scored.
++
++    The model name comes back on the result and is matched as-is: what the provider
++    answered with, never what settings expected (risk R10).
++    """
++    embedding = embed_query_texts(list(texts))
++    candidates = candidate_chunks(role_name=role_name, embedding_model=embedding.model)
++    return embedding, rank_by_best(candidates, embedding.vectors)
++
++
+ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutcome:
+     """7.10 steps 1 to 11: validate, scope, embed, rank, admit, fit, generate, verify, record.
+ 
+@@ -452,26 +483,21 @@ def answer_question(*, question: str, user, conversation=None) -> RetrievalOutco
+     # caller is refused before any row is read on their behalf.
+     context = conversation_context(question=question, conversation=conversation, user=user)
+ 
+-    # Step 3. The model name comes back on the result and is used as-is below: what the
+-    # provider answered with, never what settings expected (risk R10). The PLAIN composed
+-    # string is what gets embedded: a follow-up finds the right passages because its
+-    # predecessors' nouns are in the vector, and the labelling prose is left out of it
+-    # because every word of instruction in an embedded string dilutes the query.
+-    embedding = embed_question(context.for_retrieval)
+-
+-    # Step 4. Both FR-11 predicates are conditions on this query, so no out-of-scope row
+-    # and no row from another embedding model is ever fetched, let alone ranked.
+-    candidates = candidate_chunks(role_name=role_name, embedding_model=embedding.model)
+-
+-    # Step 5. Cosine in application code, best first, capped at TOP_K, then the floor.
+-    # The ranked list is NAMED rather than passed straight into ``admit`` because FR-12's
+-    # partial matches are derived from it before the floor narrows it (see below).
+-    ranked = rank(candidates, embedding.vectors[0])
++    # Steps 3 to 5, one function, shared with the measuring tools (phase 3): embed the
++    # turn's query texts in one call, restrict the candidate set in the query, rank by
++    # each candidate's best score. The PLAIN composed strings are what get embedded —
++    # the labelling prose is left out because every word of instruction in an embedded
++    # string dilutes the query — and with history there are two of them, the join and
++    # the follow-up alone, so the earlier subject cannot be the only wording that gets
++    # a vote (``ConversationContext.retrieval_texts``). The ranked list is NAMED rather
++    # than passed straight into ``admit`` because FR-12's partial matches are derived
++    # from it before the floor narrows it (see below).
++    _, ranked = ranked_for_query_texts(context.retrieval_texts, role_name=role_name)
+ 
+     # FR-12's "partially related items", derived HERE — once, from the pre-threshold ranked
+     # list, above the path-A branch — so that both no-answer paths are handed the same value
+     # (invariant 7, apps/retrieval/partial_matches.py). Every item named is in the asking
+-    # role's scope because ``candidates`` was (invariant 1), and none of them carries passage
++    # role's scope because the candidate set was (invariant 1), and none of them carries passage
+     # text. Only items whose best passage reaches PARTIAL_MATCH_FLOOR are named (D-56's
+     # floor; 0.0, none, since step 7: D-56 stays open). With a floor above zero an EMPTY
+     # offer implies path A; that module says why this discloses nothing outside the
+diff --git a/apps/retrieval/query_embedding.py b/apps/retrieval/query_embedding.py
+index 1704704..61bf29e 100644
+--- a/apps/retrieval/query_embedding.py
++++ b/apps/retrieval/query_embedding.py
+@@ -65,20 +65,44 @@ def embed_question(question: str) -> EmbeddingResult:
+ 
+     Raises ProviderUnavailable when the provider was unreachable for every attempt,
+     or when it answered once with something that cannot be used as a query vector.
++
++    One text of ``embed_query_texts``: the single definition of the query embedding
++    path, including the task prefix, the retry policy and the usability check. This
++    wrapper stays because a one-text call is what most callers mean and what every
++    caller meant before step 7 phase 3.
++    """
++    return embed_query_texts([question])
++
++
++def embed_query_texts(texts: list[str]) -> EmbeddingResult:
++    """One vector per text, in order, and the model that produced them — in ONE call.
++
++    Step 7 phase 3 (8 November 2026): a follow-up with history ranks by the best of two
++    scores, against the composed retrieval string and against the follow-up alone, so
++    the pipeline needs both vectors. They are fetched in one ``embed()`` call — the
++    provider interface is a batch already — because two calls would be two chances to
++    fail, two attempt loops, and on FLM two NPU round trips for one turn.
++
++    Raises ProviderUnavailable when the provider was unreachable for every attempt, or
++    when it answered once with something that cannot be used as query vectors.
+     """
++    if not texts:
++        raise ValueError("embed_query_texts() needs at least one text")
+     # Looked up on the module at call time, never from-imported: the suite's autouse
+     # fixture replaces this attribute with a stub, and a name bound at import time
+     # would quietly reach a real provider instead (docs/ai-provider.md section 6).
+     service = apps.ai.get_ai_service()
+-    # The query side of the model's task prefixes (apps/ai/prefixes.py). The prefixed
+-    # string is what the provider sees; nothing else is affected, and the question the
+-    # caller passed in is what gets logged and shown.
+-    prefixed = query_text(question)
++    # The query side of the model's task prefixes (apps/ai/prefixes.py), applied to
++    # EVERY text: each one is a question-side string — the composed join and the bare
++    # follow-up alike — and a vector built without the prefix would sit in the wrong
++    # space (risk R10). The prefixed strings are what the provider sees; nothing else
++    # is affected, and the question the caller passed in is what gets logged and shown.
++    prefixed = [query_text(text) for text in texts]
+ 
+     for attempt in range(1, MAXIMUM_EMBED_ATTEMPTS + 1):  # 1 initial call + 2 retries
+         started = time.perf_counter()
+         try:
+-            result = service.embed([prefixed])
++            result = service.embed(prefixed)
+         except ProviderUnavailable as exc:
+             attempt_log.failed_attempt(
+                 "question embedding", attempt, MAXIMUM_EMBED_ATTEMPTS, time.perf_counter() - started,
+@@ -89,7 +113,7 @@ def embed_question(question: str) -> EmbeddingResult:
+             if attempt == MAXIMUM_EMBED_ATTEMPTS:
+                 raise
+             continue
+-        problem = _usability_problem(result)
++        problem = _usability_problem(result, expected=len(texts))
+         if problem is not None:
+             attempt_log.failed_attempt(
+                 "question embedding", attempt, MAXIMUM_EMBED_ATTEMPTS, time.perf_counter() - started,
+@@ -102,8 +126,8 @@ def embed_question(question: str) -> EmbeddingResult:
+     raise AssertionError("unreachable: the loop returns or raises")  # pragma: no cover
+ 
+ 
+-def _usability_problem(result: EmbeddingResult) -> str | None:
+-    """What is wrong with this response, or None if it can be used as a query vector.
++def _usability_problem(result: EmbeddingResult, *, expected: int) -> str | None:
++    """What is wrong with this response, or None if it can be used as query vectors.
+ 
+     The three conditions are the ones apps/ingestion/embedding.py::_is_usable()
+     checks, for the reasons given there, and the two must not diverge: a response the
+@@ -111,19 +135,28 @@ def _usability_problem(result: EmbeddingResult) -> str | None:
+     Written out here rather than imported, because ``_is_usable`` is private to
+     ingestion, answers only true or false, and this needs to say what was wrong so the
+     503 and its log line name the misconfiguration instead of merely reporting it.
++
++    ``expected`` is how many texts were sent — 1 for a one-off question, 2 for a
++    follow-up with history — and every returned vector must have the index's width:
++    ranking takes a maximum across them, and one mis-sized vector would make that
++    maximum a comparison across spaces (risk R10).
+     """
+-    if len(result.vectors) != 1:
+-        return f"returned {len(result.vectors)} vectors for one question, not exactly one"
++    if len(result.vectors) != expected:
++        return (
++            f"returned {len(result.vectors)} vectors for {expected} "
++            f"text{'' if expected == 1 else 's'}, not exactly {expected}"
++        )
+     if result.dimension != settings.EMBEDDING_DIMENSION:
+         return (
+             f"declared dimension {result.dimension}, but this index is built at "
+             f"{settings.EMBEDDING_DIMENSION}"
+         )
+-    if len(result.vectors[0]) != result.dimension:
+-        # The least visible form: both numbers look plausible and only the pair is
+-        # wrong. pgvector catches it on the chunk side; nothing would catch it here.
+-        return (
+-            f"declared dimension {result.dimension} but returned a vector of width "
+-            f"{len(result.vectors[0])}"
+-        )
++    for vector in result.vectors:
++        if len(vector) != result.dimension:
++            # The least visible form: both numbers look plausible and only the pair is
++            # wrong. pgvector catches it on the chunk side; nothing would catch it here.
++            return (
++                f"declared dimension {result.dimension} but returned a vector of width "
++                f"{len(vector)}"
++            )
+     return None
+diff --git a/apps/retrieval/ranking.py b/apps/retrieval/ranking.py
+index 6e7ebdd..9cdb7bc 100644
+--- a/apps/retrieval/ranking.py
++++ b/apps/retrieval/ranking.py
+@@ -118,9 +118,38 @@ class RankedPassage:
+ 
+ 
+ def rank(candidates: Iterable[ContentChunk], query_vector: list[float]) -> list[RankedPassage]:
+-    """Score every candidate, order best first, then keep at most TOP_K.
++    """Score every candidate against one query vector: ``rank_by_best`` of exactly it.
++
++    The single-vector form every caller used before step 7 phase 3, and the form every
++    single-turn caller still uses. It delegates rather than keeping its own scoring
++    loop, so there is ONE definition of score-sort-cap and the two cannot drift — the
++    same argument that moved this module's functions out of the harness at Stage 4
++    item 5. With one vector the maximum in ``rank_by_best`` is the identity, so this
++    returns byte-for-byte what it returned before the delegation existed.
++    """
++    return rank_by_best(candidates, [query_vector])
++
++
++def rank_by_best(
++    candidates: Iterable[ContentChunk], query_vectors: list[list[float]]
++) -> list[RankedPassage]:
++    """Score every candidate by its BEST cosine against the query vectors, order, cap.
++
++    Step 7 phase 3 (8 November 2026), FR-13. A follow-up with history supplies two query
++    texts — the composed join of the earlier questions and the follow-up, and the
++    follow-up on its own (``ConversationContext.retrieval_texts``) — and each candidate's
++    score is the LARGER of its two cosines. The 3 November thread run is the reason: the
++    composed join lets the earlier subject dominate the query vector, so the turn can
++    retrieve its predecessor's passages while the passage that answers the follow-up
++    itself sits below them. The maximum lets whichever wording is nearer win per
++    candidate; a single-turn call passes one vector and the maximum is the identity.
++
++    **Invariant 1 is untouched by construction.** ``candidates`` is whatever
++    ``scoping.candidate_chunks`` returned — both FR-11 predicates are already conditions
++    on that query — and every vector is scored over that SAME set. A second query text
++    is not a second candidate set, and no vector can reach a chunk the scope excluded.
+ 
+-    THE ORDER OF THOSE THREE STEPS IS THE WHOLE FUNCTION. Every candidate is scored,
++    THE ORDER OF SCORE, SORT, CAP IS THE WHOLE FUNCTION. Every candidate is scored,
+     the full list is sorted by score descending, and only then is it cut to TOP_K.
+     Capping before sorting — slicing the candidate set and ranking the slice — would
+     take 25 arbitrary rows in whatever order the database happened to return them and
+@@ -135,20 +164,33 @@ def rank(candidates: Iterable[ContentChunk], query_vector: list[float]) -> list[
+     which of two equally scored passages came first.
+ 
+     The threshold is NOT applied here — see the module docstring. Callers pass this
+-    list to ``admit`` and may read its top score first.
++    list to ``admit`` and may read its top score first. RELEVANCE_THRESHOLD, TOP_K and
++    MAXIMUM_CONTEXT_TOKENS all apply to the combined score, exactly as they applied to
++    the single score: nothing downstream knows how many vectors were compared.
+     """
+-    scored = [
+-        RankedPassage(
+-            chunk_id=str(chunk.id),
+-            chunk_text=chunk.chunk_text,
+-            # list() because pgvector hands the column back as a numpy array, and
+-            # cosine_similarity is written against sequences of plain floats.
+-            score=cosine_similarity(query_vector, list(chunk.embedding)),
+-            source_type=chunk.source_type,
+-            source_id=chunk.source_id,
++    if not query_vectors:
++        # No vector is a caller's bug, not an empty ranking: a turn always embeds at
++        # least its own question, and an empty maximum below would be a ValueError
++        # three lines later with a worse name.
++        raise ValueError("rank_by_best() needs at least one query vector")
++    scored = []
++    for chunk in candidates:
++        # list() because pgvector hands the column back as a numpy array, and
++        # cosine_similarity is written against sequences of plain floats. Read once
++        # per candidate, however many vectors score it.
++        embedding = list(chunk.embedding)
++        scored.append(
++            RankedPassage(
++                chunk_id=str(chunk.id),
++                chunk_text=chunk.chunk_text,
++                score=max(
++                    cosine_similarity(query_vector, embedding)
++                    for query_vector in query_vectors
++                ),
++                source_type=chunk.source_type,
++                source_id=chunk.source_id,
++            )
+         )
+-        for chunk in candidates
+-    ]
+     # Sort first, cap second. Never the other way round.
+     scored.sort(key=lambda passage: passage.score, reverse=True)
+     return scored[:TOP_K]
+diff --git a/apps/retrieval/tests/test_compose.py b/apps/retrieval/tests/test_compose.py
+index 7d67355..8da5cd0 100644
+--- a/apps/retrieval/tests/test_compose.py
++++ b/apps/retrieval/tests/test_compose.py
+@@ -88,8 +88,10 @@ class RecordingService:
+ 
+     def embed(self, texts):
+         self.embed_calls.append(list(texts))
++        # One vector per text, as the provider contract has it: a follow-up with
++        # history sends two texts in one call (step 7 phase 3).
+         return EmbeddingResult(
+-            vectors=[list(QUERY_VECTOR)],
++            vectors=[list(QUERY_VECTOR) for _ in texts],
+             model=STUB_EMBEDDING_MODEL,
+             dimension=settings.EMBEDDING_DIMENSION,
+         )
+@@ -135,6 +137,8 @@ def test_compose_builds_the_plain_join_and_the_labelled_block():
+     assert composed.for_prompt == build_conversational_question(FOLLOW_UP, [FIRST, SECOND])
+     assert PRIOR_QUESTIONS_HEADING in composed.for_prompt
+     assert PRIOR_QUESTIONS_HEADING not in composed.for_retrieval
++    # Phase 3: with history, BOTH query texts, join first; nothing labelled in either.
++    assert composed.retrieval_texts == (composed.for_retrieval, FOLLOW_UP)
+ 
+ 
+ def test_compose_with_no_history_is_the_question_both_ways():
+@@ -142,7 +146,11 @@ def test_compose_with_no_history_is_the_question_both_ways():
+     composed = compose(FOLLOW_UP, [])
+ 
+     assert composed == ConversationContext(
+-        prior_questions=(), for_retrieval=FOLLOW_UP, for_prompt=FOLLOW_UP
++        prior_questions=(),
++        for_retrieval=FOLLOW_UP,
++        for_prompt=FOLLOW_UP,
++        # One text, so the single-turn path embeds exactly what it always embedded.
++        retrieval_texts=(FOLLOW_UP,),
+     )
+ 
+ 
+@@ -184,7 +192,9 @@ def test_conversation_context_delegates_to_compose(employee, monkeypatch):
+     conversation = Conversation.objects.create(user=employee, title="Catering")
+     make_turn(conversation, employee, FIRST)
+     calls = []
+-    sentinel = ConversationContext(prior_questions=("x",), for_retrieval="r", for_prompt="p")
++    sentinel = ConversationContext(
++        prior_questions=("x",), for_retrieval="r", for_prompt="p", retrieval_texts=("r",)
++    )
+ 
+     def spy(question, history):
+         calls.append((question, tuple(history)))
+@@ -265,10 +275,13 @@ def test_the_pipeline_sends_composes_strings(document, monkeypatch):
+     answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
+ 
+     first, follow_up = compose(FIRST, []), compose(FOLLOW_UP, [FIRST])
++    # Phase 3: a turn embeds the context's retrieval_texts, each with the query prefix,
++    # in ONE call — one text for the first turn, the join and the follow-up for turn two.
+     assert double.embed_calls == [
+-        [query_text(first.for_retrieval)],
+-        [query_text(follow_up.for_retrieval)],
++        [query_text(text) for text in first.retrieval_texts],
++        [query_text(text) for text in follow_up.retrieval_texts],
+     ]
++    assert [len(call) for call in double.embed_calls] == [1, 2]
+     assert double.prompt_questions == [first.for_prompt, follow_up.for_prompt]
+     # And not vacuously: the follow-up's strings carry the first question.
+     assert FIRST in follow_up.for_retrieval and FIRST in follow_up.for_prompt
+diff --git a/apps/retrieval/tests/test_conversation.py b/apps/retrieval/tests/test_conversation.py
+index b12f687..6c16f0e 100644
+--- a/apps/retrieval/tests/test_conversation.py
++++ b/apps/retrieval/tests/test_conversation.py
+@@ -171,8 +171,11 @@ class ControlledService:
+ 
+     def embed(self, texts: list[str]) -> EmbeddingResult:
+         self.embed_calls.append(list(texts))
++        # One vector per text, as the contract has it: a follow-up with history sends
++        # the join and the follow-up in one call (step 7 phase 3), and both embed to
++        # the same controlled vector here so every expected score stays computable.
+         return EmbeddingResult(
+-            vectors=[list(self.vector)],
++            vectors=[list(self.vector) for _ in texts],
+             model=self.model,
+             dimension=settings.EMBEDDING_DIMENSION,
+         )
+@@ -605,9 +608,13 @@ def test_each_turn_retrieves_afresh(document, service):
+         str(later_chunk.id),
+         str(first_chunk.id),
+     ]
+-    # And the second embedding call is the composed string, not the bare follow-up.
++    # And the second embedding call carries the composed string AND the follow-up on
++    # its own (step 7 phase 3), in that order, in one call — never two calls.
+     assert service.embed_calls[0] == [query_text(FIRST)]
+-    assert service.embed_calls[1] == [query_text(RETRIEVAL_JOIN.join([FIRST, FOLLOW_UP]))]
++    assert service.embed_calls[1] == [
++        query_text(RETRIEVAL_JOIN.join([FIRST, FOLLOW_UP])),
++        query_text(FOLLOW_UP),
++    ]
+ 
+ 
+ # --- Verification is indifferent to where in the prompt an identifier came from --------
+diff --git a/scripts/citation_harness.py b/scripts/citation_harness.py
+index 4c4daed..acf27b8 100644
+--- a/scripts/citation_harness.py
++++ b/scripts/citation_harness.py
+@@ -79,13 +79,17 @@ re-measures RELEVANCE_THRESHOLD and D-56's partial-matches floor: for every run,
+ ``partial_matches()`` would offer (with each source's best score), and where the
+ question's expected source ranked. Neither changes what the pipeline does.
+ 
+-Questions are embedded through ``apps.retrieval.query_embedding.embed_question()``
++Questions are embedded through ``apps.retrieval.query_embedding.embed_query_texts()``
+ rather than by calling ``service.embed()`` here, so the harness exercises the
+ pipeline's own query path: the embedding model's query task prefix
+ (``apps/ai/prefixes.py``) and the response check are applied exactly as FR-12 applies
+ them. Measuring a parallel copy of that path would measure something the shipped
+-system does not do. The ranking, the threshold, the scoring and the reporting below
+-are unchanged.
++system does not do. Since step 7 phase 3 a ``--threads`` run with history embeds the
++context's TWO texts — the composed join and the follow-up alone, one provider call —
++and ranks with ``apps.retrieval.ranking.rank_by_best``, each candidate's best score,
++because that is what ``POST /api/ask`` now does. Every other run embeds one text and
++``rank_by_best`` of one vector IS ``rank``. The threshold, the scoring and the
++reporting below are unchanged.
+ 
+ --------------------------------------------------------------------------------
+ THE DUPLICATION IS OVER — WHERE THE PIECES LIVE NOW
+@@ -174,9 +178,13 @@ from apps.documents.models import ContentChunk, Document  # noqa: E402
+ from apps.meetings.models import Meeting  # noqa: E402
+ 
+ # FR-13's composition, the shipped function (D-86 decision 5). conversation_context() calls
+-# it, and apps/retrieval/tests/test_compose.py pins the two together.
++# it, and apps/retrieval/tests/test_compose.py pins the two together. Since step 7 phase 3
++# the context also decides WHAT is embedded (``retrieval_texts``: the join alone, or the
++# join and the follow-up), and ``measure()`` embeds exactly those texts through the
++# pipeline's own batch function and ranks with the pipeline's own best-of rule — so the
++# harness keeps measuring the shipped retrieval, not the retrieval phase 3 replaced.
+ from apps.retrieval.conversation import compose  # noqa: E402
+-from apps.retrieval.query_embedding import embed_question  # noqa: E402
++from apps.retrieval.query_embedding import embed_query_texts, embed_question  # noqa: E402
+ 
+ # D-66: the role names whose content a role may read. The candidate set below applies it,
+ # as apps/retrieval/scoping.py does.
+@@ -193,7 +201,12 @@ from apps.retrieval.partial_matches import partial_matches  # noqa: E402
+ # removes three more definitions that could drift. The threshold is applied by this
+ # module rather than by ranking.admit(), because --threshold sweeps it for tuning (D-37)
+ # and admit() correctly reads the settled constant.
+-from apps.retrieval.ranking import RankedPassage, rank, truncate_to_context  # noqa: E402
++from apps.retrieval.ranking import (  # noqa: E402
++    RankedPassage,
++    rank,
++    rank_by_best,
++    truncate_to_context,
++)
+ 
+ # Citation verification, as the pipeline performs it: set membership against the
+ # identifiers actually supplied to the prompt (apps/retrieval/verification.py, FR-12 step
+@@ -270,9 +283,14 @@ class QuestionResult:
+     # ordinary run; the labelled composed form under --with-history. Recorded so the JSON
+     # out says which prompt produced these statements rather than leaving it to be assumed.
+     prompt_question: str = ""
+-    # The string actually embedded: ``question`` on an ordinary run and under
++    # The primary string embedded: ``question`` on an ordinary run and under
+     # --with-history, compose()'s plain join on a --threads run with history.
+     retrieval_text: str = ""
++    # EVERY string embedded, in order (step 7 phase 3): ``[retrieval_text]``, plus the
++    # follow-up alone on a --threads run with history, exactly
++    # ``ConversationContext.retrieval_texts``. Ranking takes each candidate's best score
++    # across their vectors, as the pipeline does.
++    retrieval_texts: list[str] = field(default_factory=list)
+     retrieved: list[RankedPassage] = field(default_factory=list)
+     top_score: float | None = None
+     # Where the expected source's best chunk sat in the full ranked list, 1-based, and its
+@@ -538,33 +556,41 @@ def run_question(
+     # join of the history and the question; this run deliberately does not, so that the
+     # passages are the ones the item-6 run supplied and the prompt block is the only thing
+     # that changed. A --threads run is the one that embeds the join (run_thread_run).
+-    return measure(result, result.question, chunks, service, threshold, sources, started)
++    return measure(result, [result.question], chunks, service, threshold, sources, started)
+ 
+ 
+ def measure(
+     result: QuestionResult,
+-    retrieval_text: str,
++    retrieval_texts: list[str],
+     chunks: list[ContentChunk],
+     service,
+     threshold: float,
+     sources: SourceIndex | None,
+     started: float,
+ ) -> QuestionResult:
+-    """Embed ``retrieval_text``, rank, admit, generate on ``result.prompt_question``, verify.
++    """Embed ``retrieval_texts``, rank by best, admit, generate on the prompt string, verify.
+ 
+     The measuring half of run_question, shared with --threads. ``result`` already carries
+     its role, its expectation and the prompt string; this fills in everything observed.
++
++    ``retrieval_texts`` is one text for every run except a --threads run with history,
++    where it is ``ConversationContext.retrieval_texts`` — the composed join and the
++    follow-up alone — and ranking takes each candidate's best score across the vectors,
++    exactly as ``apps.retrieval.pipeline.ranked_for_query_texts`` does (step 7 phase 3).
+     """
+-    result.retrieval_text = retrieval_text
++    result.retrieval_text = retrieval_texts[0]
++    result.retrieval_texts = list(retrieval_texts)
+ 
+-    # The pipeline's own query path, not a copy of it: embed_question() applies the
+-    # embedding model's query task prefix and validates the response, so the harness
+-    # measures what the shipped system sends rather than something adjacent to it.
+-    embedding = embed_question(retrieval_text)
+-    query_vector = embedding.vectors[0]
++    # The pipeline's own query path, not a copy of it: embed_query_texts() applies the
++    # embedding model's query task prefix to every text, fetches the vectors in ONE
++    # call and validates the response, so the harness measures what the shipped system
++    # sends rather than something adjacent to it.
++    embedding = embed_query_texts(list(retrieval_texts))
+ 
+     candidates = build_candidate_set(chunks, result.role, embedding.model)
+-    ranked = rank(candidates, query_vector)
++    # The shipped combination rule: each candidate's best score across the query
++    # vectors (one vector, and this IS rank(), for every single-text run).
++    ranked = rank_by_best(candidates, embedding.vectors)
+     result.top_score = ranked[0].score if ranked else None
+     result.source_rank, result.source_score = best_ranked(ranked, sources, result.source)
+     result.offered = offered_record(ranked, sources)
+@@ -1043,12 +1069,13 @@ def run_thread_run(
+     threshold: float,
+     sources: SourceIndex | None,
+ ) -> QuestionResult:
+-    """One run of the thread set: compose() its two strings, then measure them.
++    """One run of the thread set: compose() its strings, then measure them.
+ 
+     ``run["prior"]`` is the first turn's question for a follow-up asked with history, and
+     empty otherwise, so ``compose`` returns exactly what conversation_context() returns on
+-    that turn of a real thread. The plain join is embedded and the labelled block is
+-    prompted, as POST /api/ask does.
++    that turn of a real thread. The context's ``retrieval_texts`` are embedded — the join
++    alone, or the join and the follow-up, with ranking by best score (step 7 phase 3) —
++    and the labelled block is prompted, as POST /api/ask does.
+     """
+     started = time.perf_counter()
+     composed = compose(run["question"], run["prior"])
+@@ -1064,7 +1091,7 @@ def run_thread_run(
+         expected_answer=None,
+     )
+     result.prompt_question = composed.for_prompt
+-    return measure(result, composed.for_retrieval, chunks, service, threshold, sources, started)
++    return measure(result, list(composed.retrieval_texts), chunks, service, threshold, sources, started)
+ 
+ 
+ def thread_observation(result: QuestionResult, chunks: list[ContentChunk], sources: SourceIndex | None) -> dict:
+@@ -1171,6 +1198,9 @@ def thread_run_record(run: dict, result: QuestionResult, score: dict, sources: S
+                                      "expects_answer", "expected_answer", "sources")},
+         "question": result.question,
+         "retrieval_text": result.retrieval_text,
++        # Every text embedded for this run (phase 3): [retrieval_text], plus the
++        # follow-up alone on a with-history run. Scores are each candidate's best.
++        "retrieval_texts": result.retrieval_texts,
+         "prompt_question": result.prompt_question,
+         "top_score": result.top_score,
+         "source_rank": result.source_rank,
+diff --git a/scripts/conversation_http_check.py b/scripts/conversation_http_check.py
+index 2cfce2f..e47eebc 100644
+--- a/scripts/conversation_http_check.py
++++ b/scripts/conversation_http_check.py
+@@ -208,19 +208,22 @@ def sign_in(session_class, base_url: str, email: str, password: str, role: str):
+     return session, None
+ 
+ 
+-def supplied_ids(text: str, role: str) -> list[str]:
+-    """What POST /api/ask would supply to generation for ``text``: pipeline steps 3 to 7.
+-
+-    The pipeline's own functions, in its order, read-only. ``text`` is a retrieval string
+-    from compose(), so this is the server's turn reproduced up to the prompt.
++def supplied_ids(texts, role: str) -> list[str]:
++    """What POST /api/ask would supply to generation for ``texts``: pipeline steps 3 to 7.
++
++    Read-only, and steps 3 to 5 are THE PIPELINE'S OWN FUNCTION,
++    ``apps.retrieval.pipeline.ranked_for_query_texts`` — not a copy of its sequence —
++    so the WIRED verdict keeps meaning "the server did what this process computes".
++    Step 7 phase 3 is why that matters again: a follow-up with history embeds two texts
++    and ranks by each candidate's best score, and a comparison still embedding one text
++    would call the server MISMATCH for doing exactly what ships. ``texts`` is a
++    ``ConversationContext.retrieval_texts`` from compose().
+     """
+-    from apps.retrieval.query_embedding import embed_question
+-    from apps.retrieval.ranking import admit, rank, truncate_to_context
+-    from apps.retrieval.scoping import candidate_chunks
++    from apps.retrieval.pipeline import ranked_for_query_texts
++    from apps.retrieval.ranking import admit, truncate_to_context
+ 
+-    embedding = embed_question(text)
+-    candidates = candidate_chunks(role_name=role, embedding_model=embedding.model)
+-    return [p.chunk_id for p in truncate_to_context(admit(rank(candidates, embedding.vectors[0])))]
++    _, ranked = ranked_for_query_texts(list(texts), role_name=role)
++    return [p.chunk_id for p in truncate_to_context(admit(ranked))]
+ 
+ 
+ def summarise_reply(body) -> dict:
+@@ -295,10 +298,12 @@ def check_thread(entry, thread, session, user, pacer, context) -> dict:
+         return out
+ 
+     composed, alone = compose(follow_up, [first]), compose(follow_up, [])
++    # Each way's retrieval_texts, as the pipeline embeds them (phase 3): the with-history
++    # comparison carries the join AND the follow-up, the other two carry one text.
+     expected = {
+-        "first_turn": supplied_ids(compose(first, []).for_retrieval, role),
+-        "with_history": supplied_ids(composed.for_retrieval, role),
+-        "cold": supplied_ids(alone.for_retrieval, role),
++        "first_turn": supplied_ids(compose(first, []).retrieval_texts, role),
++        "with_history": supplied_ids(composed.retrieval_texts, role),
++        "cold": supplied_ids(alone.retrieval_texts, role),
+     }
+     served = out["query_log"][1]["retrieved_chunk_ids"]
+     out["in_process"] = {**expected, "with_history_retrieval_text": composed.for_retrieval}
+diff --git a/apps/retrieval/tests/test_follow_up_focus.py b/apps/retrieval/tests/test_follow_up_focus.py
+new file mode 100644
+index 0000000..c40f275
+--- /dev/null
++++ b/apps/retrieval/tests/test_follow_up_focus.py
+@@ -0,0 +1,359 @@
++"""Step 7 phase 3 (FR-13): a follow-up answers the question actually asked.
++
++The 3 November thread run (corpus/objective-02/runs/2026-11-03/fr13-before.md) measured
++two failures in one symptom: 7 of 9 answered with-history follow-ups restated the FIRST
++turn's answer. Phase 3 is two changes, and this module tests each at its boundary,
++because each is only safe inside it:
++
++1. **Option 1, the prompt.** The conversational block now says the earlier questions are
++   not to be answered again, and the lead-in says the question below is the only one to
++   answer. The boundary is BYTE-IDENTITY for a single-turn prompt: with no history the
++   composed prompt is exactly the question, so docs/flm-baseline.md and every frozen
++   single-question measurement keep describing the one-off path. SYSTEM_PROMPT is
++   untouched.
++
++2. **Option 2, retrieval.** A turn with history embeds TWO texts in ONE ``embed()`` call
++   — the composed join and the follow-up on its own — and each candidate's score is the
++   LARGER of its two cosines (``rank_by_best``). The boundary is invariant 1: both
++   vectors are scored over the SAME already-scoped candidate set, so the second text can
++   change which in-scope passage wins and cannot widen what exists to be scored. A
++   single-turn call embeds one text and the maximum is the identity.
++
++The measuring-tools half of the change — the harness and the HTTP check computing
++retrieval through the shipped functions — is pinned in
++apps/ai/tests/test_fr13_measurement_scripts.py, beside the other script tests.
++"""
++
++from math import sqrt
++from types import SimpleNamespace
++from uuid import uuid4
++
++import pytest
++from django.conf import settings
++
++import apps.ai
++from apps.ai.base import EmbeddingResult, Passage, ProviderUnavailable, Statement, StatementList
++from apps.ai.prefixes import query_text
++from apps.ai.prompting import (
++    PRIOR_QUESTIONS_HEADING,
++    QUESTION_LEAD_IN,
++    build_conversational_question,
++    build_user_prompt,
++)
++from apps.ai.testing import STUB_EMBEDDING_MODEL
++from apps.core.constants import (
++    ADMINISTRATOR_ROLE_NAME,
++    EMPLOYEE_ROLE_NAME,
++    NO_RELEVANT_PASSAGE,
++    RELEVANCE_THRESHOLD,
++    SOURCE_TYPES,
++)
++from apps.documents.models import ContentChunk
++from apps.retrieval.conversation import RETRIEVAL_JOIN, compose
++from apps.retrieval.models import Conversation, QueryLog
++from apps.retrieval.pipeline import answer_question
++from apps.retrieval.query_embedding import embed_query_texts
++from apps.retrieval.ranking import rank, rank_by_best
++
++FIRST = "Which company handles our catering?"
++FOLLOW_UP = "How do I order lunch from them?"
++ONE_OFF = "What is the catering budget for staff events?"
++
++# The two fragments option 1 added, asserted as content rather than only through the
++# constants, so reverting the wording fails here even if the constants stay imported.
++HEADING_FOCUS_FRAGMENT = "do not restate facts that answer them"
++LEAD_IN_FOCUS_FRAGMENT = "the only question to answer"
++
++
++def wide(*components) -> list[float]:
++    """The given leading components, zero-padded to the real column width."""
++    values = list(components)
++    return values + [0.0] * (settings.EMBEDDING_DIMENSION - len(values))
++
++
++# Two orthogonal unit query vectors: every expected cosine below is readable by eye.
++JOIN_VECTOR = wide(1.0)  # what the composed join embeds to, in these tests
++FOLLOW_UP_VECTOR = wide(0.0, 1.0)  # what the follow-up alone embeds to
++
++ABOVE = 0.80
++assert RELEVANCE_THRESHOLD < ABOVE
++
++
++class TwoVectorService:
++    """An AIService whose query vectors depend on the text, so the two texts differ.
++
++    ``vector_by_text`` maps the PREFIXED text (what the provider actually receives,
++    apps/ai/prefixes.py) to its vector. Generation cites the first passage, which is how
++    the tests below read "which passage won the ranking" off the answer.
++    """
++
++    def __init__(self, vector_by_text):
++        self.vector_by_text = dict(vector_by_text)
++        self.embed_calls: list[list[str]] = []
++        self.generate_calls: list[tuple] = []
++
++    def embed(self, texts):
++        self.embed_calls.append(list(texts))
++        return EmbeddingResult(
++            vectors=[list(self.vector_by_text[text]) for text in texts],
++            model=STUB_EMBEDDING_MODEL,
++            dimension=settings.EMBEDDING_DIMENSION,
++        )
++
++    def generate_statements(self, question, passages):
++        self.generate_calls.append((question, list(passages)))
++        return StatementList(
++            statements=[Statement(text="A grounded statement.", chunk_id=passages[0].chunk_id)]
++        )
++
++    def health(self):
++        raise AssertionError("the pipeline does not check provider health")
++
++
++def make_chunk(document, visible_to_roles, *, index, embedding, text="A passage."):
++    return ContentChunk.objects.create(
++        source_type=SOURCE_TYPES[0],
++        source_id=document.id,
++        chunk_index=index,
++        chunk_text=text,
++        embedding=embedding,
++        embedding_model=STUB_EMBEDDING_MODEL,
++        embedding_dimension=settings.EMBEDDING_DIMENSION,
++        visible_to_roles=visible_to_roles,
++    )
++
++
++def make_history(employee):
++    """A conversation with FIRST already asked, so the next ask is a with-history turn."""
++    conversation = Conversation.objects.create(user=employee, title="Catering")
++    QueryLog.objects.create(
++        user=employee,
++        conversation=conversation,
++        question=FIRST,
++        answer_text=None,
++        retrieved_chunk_ids=[],
++        answered=False,
++        no_answer_reason=NO_RELEVANT_PASSAGE,
++        rejected_count=None,
++    )
++    return conversation
++
++
++def follow_up_service():
++    """The double for a with-history turn: the join and the follow-up embed differently."""
++    joined = RETRIEVAL_JOIN.join([FIRST, FOLLOW_UP])
++    return TwoVectorService(
++        {
++            query_text(joined): JOIN_VECTOR,
++            query_text(FOLLOW_UP): FOLLOW_UP_VECTOR,
++        }
++    )
++
++
++# --- Option 1: the instruction exists only inside the conversational block --------------
++
++
++def test_a_single_turn_prompt_is_byte_identical_to_the_question():
++    """The boundary that keeps every frozen single-question measurement valid.
++
++    With no history the composed prompt IS the question — not the question plus a new
++    instruction — and the full user prompt carries no trace of the conversational block.
++    """
++    assert build_conversational_question(ONE_OFF, []) == ONE_OFF
++    assert compose(ONE_OFF, []).for_prompt == ONE_OFF
++
++    prompt = build_user_prompt(ONE_OFF, [Passage(chunk_id=str(uuid4()), text="A passage.")])
++    assert PRIOR_QUESTIONS_HEADING not in prompt
++    assert QUESTION_LEAD_IN not in prompt
++    assert HEADING_FOCUS_FRAGMENT not in prompt
++    assert LEAD_IN_FOCUS_FRAGMENT not in prompt
++
++
++def test_the_focus_instruction_is_present_exactly_when_there_is_history():
++    """Option 1's words are in the block — and only in the block.
++
++    Asserted as text, not only through the constants: a revert of the wording that kept
++    the constants' names would still fail here.
++    """
++    assert HEADING_FOCUS_FRAGMENT in PRIOR_QUESTIONS_HEADING
++    assert LEAD_IN_FOCUS_FRAGMENT in QUESTION_LEAD_IN
++
++    composed = build_conversational_question(FOLLOW_UP, [FIRST])
++    assert PRIOR_QUESTIONS_HEADING in composed
++    assert composed.endswith(f"{QUESTION_LEAD_IN}{FOLLOW_UP}")
++    assert HEADING_FOCUS_FRAGMENT in composed
++    assert LEAD_IN_FOCUS_FRAGMENT in composed
++
++
++# --- Option 2: rank_by_best, the maximum per candidate ----------------------------------
++
++
++def stand_in(embedding):
++    """A candidate for rank(): ranking reads attributes, so no row is needed."""
++    return SimpleNamespace(
++        id=uuid4(),
++        chunk_text="A passage.",
++        embedding=embedding,
++        source_type=SOURCE_TYPES[0],
++        source_id=uuid4(),
++    )
++
++
++def test_rank_by_best_takes_each_candidates_larger_score_in_both_directions():
++    """One candidate wins on the composed vector, the other on the follow-up's.
++
++    near_join: cosine 0.9 against JOIN_VECTOR and 0.0 against FOLLOW_UP_VECTOR — the
++    composed score wins. near_follow_up: 0.2 against JOIN_VECTOR and ~0.98 against
++    FOLLOW_UP_VECTOR — the follow-up's score wins, and wins the ordering, which is the
++    3 November failure inverted: the follow-up's own wording gets a vote.
++    """
++    near_join = stand_in(wide(0.9, 0.0, sqrt(1 - 0.81)))
++    near_follow_up = stand_in(wide(0.2, sqrt(1 - 0.04)))
++
++    ranked = rank_by_best([near_join, near_follow_up], [JOIN_VECTOR, FOLLOW_UP_VECTOR])
++
++    assert [passage.chunk_id for passage in ranked] == [
++        str(near_follow_up.id),
++        str(near_join.id),
++    ]
++    assert ranked[0].score == pytest.approx(sqrt(1 - 0.04))  # the follow-up's cosine won
++    assert ranked[1].score == pytest.approx(0.9)  # the composed cosine won
++
++
++def test_rank_of_one_vector_is_rank_by_best_of_exactly_it():
++    """Single-turn retrieval is unchanged: one vector, the same scores, the same order."""
++    candidates = [stand_in(wide(0.5, sqrt(1 - 0.25))), stand_in(wide(0.9, sqrt(1 - 0.81)))]
++
++    assert rank(candidates, JOIN_VECTOR) == rank_by_best(candidates, [JOIN_VECTOR])
++
++
++def test_rank_by_best_refuses_no_vectors():
++    with pytest.raises(ValueError):
++        rank_by_best([stand_in(wide(1.0))], [])
++
++
++# --- Option 2 in the pipeline: one embed call, scope before ranking ----------------------
++
++
++@pytest.mark.django_db
++def test_a_follow_up_embeds_both_texts_in_one_call(document, monkeypatch):
++    """One ``embed()`` call carries the join AND the follow-up, prefixed, in that order."""
++    employee = document.uploaded_by
++    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, embedding=wide(ABOVE, sqrt(1 - ABOVE**2)))
++    service = follow_up_service()
++    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
++    conversation = make_history(employee)
++
++    answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
++
++    assert service.embed_calls == [
++        [query_text(RETRIEVAL_JOIN.join([FIRST, FOLLOW_UP])), query_text(FOLLOW_UP)]
++    ]
++
++
++@pytest.mark.django_db
++def test_the_follow_ups_own_score_can_win_the_ranking(document, monkeypatch):
++    """End to end: the passage nearest the follow-up outranks the one nearest the join."""
++    employee = document.uploaded_by
++    near_join = make_chunk(
++        document, [EMPLOYEE_ROLE_NAME], index=1,
++        embedding=wide(0.5, 0.0, sqrt(1 - 0.25)), text="The catering contract."
++    )
++    near_follow_up = make_chunk(
++        document, [EMPLOYEE_ROLE_NAME], index=2,
++        embedding=wide(0.0, 0.9, 0.0, sqrt(1 - 0.81)), text="Orders go to book@ridgeline.example."
++    )
++    service = follow_up_service()
++    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
++    conversation = make_history(employee)
++
++    outcome = answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
++
++    assert outcome.answered
++    # Best of the two cosines per candidate: 0.9 (follow-up) beats 0.5 (join).
++    assert [passage.chunk_id for passage in outcome.passages] == [
++        str(near_follow_up.id),
++        str(near_join.id),
++    ]
++    assert outcome.verified_statements[0].chunk_id == str(near_follow_up.id)
++
++
++@pytest.mark.django_db
++def test_the_scope_still_filters_before_ranking_whichever_vector_is_nearest(
++    document, monkeypatch
++):
++    """Invariant 1 under phase 3: the follow-up's vector cannot reach an out-of-scope row.
++
++    The Administrator-only chunk is the NEAREST candidate to the follow-up's own vector —
++    cosine 0.99, far above everything else — so a post-filter shape, or a second
++    candidate set built for the second vector, would rank it first and cite it. It must
++    appear nowhere: not in the passages, not in the prompt, not in the statements.
++    """
++    employee = document.uploaded_by
++    readable = make_chunk(
++        document, [EMPLOYEE_ROLE_NAME], index=1,
++        embedding=wide(ABOVE, sqrt(1 - ABOVE**2)), text="The catering contract."
++    )
++    restricted = make_chunk(
++        document, [ADMINISTRATOR_ROLE_NAME], index=2,
++        embedding=wide(0.0, 0.99, sqrt(1 - 0.99**2)), text="Supplier margins, restricted."
++    )
++    service = follow_up_service()
++    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
++    conversation = make_history(employee)
++
++    outcome = answer_question(question=FOLLOW_UP, user=employee, conversation=conversation)
++
++    assert outcome.answered
++    assert [passage.chunk_id for passage in outcome.passages] == [str(readable.id)]
++    supplied = [
++        passage.chunk_id for _, passages in service.generate_calls for passage in passages
++    ]
++    assert str(restricted.id) not in supplied
++    assert all(statement.chunk_id == str(readable.id) for statement in outcome.verified_statements)
++
++
++# --- The batch embedding: one call, validated as a batch ---------------------------------
++
++
++class CountedService:
++    """Returns ``vector_count`` vectors whatever was asked, to exercise the usability check."""
++
++    def __init__(self, vector_count):
++        self.vector_count = vector_count
++        self.embed_calls: list[list[str]] = []
++
++    def embed(self, texts):
++        self.embed_calls.append(list(texts))
++        return EmbeddingResult(
++            vectors=[wide(1.0) for _ in range(self.vector_count)],
++            model=STUB_EMBEDDING_MODEL,
++            dimension=settings.EMBEDDING_DIMENSION,
++        )
++
++    def generate_statements(self, question, passages):  # pragma: no cover - never called
++        raise AssertionError("not called")
++
++    def health(self):  # pragma: no cover - never called
++        raise AssertionError("not called")
++
++
++def test_embed_query_texts_returns_one_vector_per_text(monkeypatch):
++    service = CountedService(vector_count=2)
++    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
++
++    result = embed_query_texts([FIRST, FOLLOW_UP])
++
++    assert len(result.vectors) == 2
++    assert service.embed_calls == [[query_text(FIRST), query_text(FOLLOW_UP)]]
++
++
++def test_embed_query_texts_refuses_a_count_that_does_not_match(monkeypatch):
++    """The failure path: one vector for two texts is a misconfigured provider, not a retry."""
++    service = CountedService(vector_count=1)
++    monkeypatch.setattr(apps.ai, "get_ai_service", lambda: service)
++
++    with pytest.raises(ProviderUnavailable):
++        embed_query_texts([FIRST, FOLLOW_UP])
++    # Not retried: three identical wrong answers are the same wrong answer three times.
++    assert len(service.embed_calls) == 1

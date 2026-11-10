@@ -58,6 +58,13 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "dashboard",  # Stage 5 item 3: FR-14
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
                     "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
+                    # NIT3004: FR-10's classification routes (D-104, D-105). contribute_content is
+                    # checked inside each method, after the scoped lookup, as the deletes check
+                    # theirs; apps/api/tests/test_document_classification.py proves the 404
+                    # before the 403 on every one of them.
+                    "document-classify", "document-classification", "document-tag-confirm",
+                    "document-tag", "document-proposed-topic-confirm",
+                    "document-proposed-topic-reject",
                     # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
                     "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail"}
 # Routes that need more than a session, with the permission code they check.
@@ -87,6 +94,7 @@ PERMISSIONED_ROUTES = {
 IN_VIEW_PERMISSION_CODES = {
     MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
     MANAGE_MEETINGS_PERMISSION,  # MeetingDetailView.delete (D-99)
+    CONTRIBUTE_CONTENT_PERMISSION,  # FR-10's six classification routes (D-105)
 }
 
 USERS = reverse("user-list")

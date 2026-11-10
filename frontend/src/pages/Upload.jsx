@@ -211,6 +211,9 @@ export default function Upload() {
   // Single polite live region: row status changes are announced here once, rather
   // than every row being its own live region and talking over the others.
   const [announcement, setAnnouncement] = useState('')
+  // What the drop zone says about the last pick or drop, where it happened
+  // (usability findings 1 and 2). The live region above stays as it was.
+  const [dropStatus, setDropStatus] = useState('')
   // Focus goes to the first row missing a title when the queue will not send.
   const titleRefs = useRef(new Map())
 
@@ -245,6 +248,12 @@ export default function Upload() {
       }
     })
     setRows((current) => [...current, ...added])
+    setDropStatus(
+      TEXT.dropZoneAdded(
+        added.map((row) => row.file.name),
+        added.filter((row) => row.state === REJECTED).length,
+      ),
+    )
     const rejected = added.find((row) => row.state === REJECTED)
     if (rejected) announce(rejected.file.name, rejected.message)
   }
@@ -321,6 +330,9 @@ export default function Upload() {
 
     setRuns((count) => count + 1)
     setQueueRunning(true)
+    // The rows now say what happens to each file, so the zone's note about the
+    // last addition has done its job.
+    setDropStatus('')
     try {
       // Sequential: `pending` was read before the first await, and each send()
       // updates only its own row, so the queue is not re-derived mid-flight. That
@@ -420,12 +432,20 @@ export default function Upload() {
         uploaded is in the <Link to="/documents">document repository</Link>.
       </p>
 
+      {/* The whole page takes a dropped file (usability finding 3), and while the
+          queue is sending the zone says why it takes nothing (finding 4). Files
+          are not queued behind a running upload: the queue sends the rows it held
+          when Upload was pressed (see UploadRow), so a file added meanwhile would
+          wait for a second press that nothing on the screen would ask for. */}
       <FileDropZone
         label="Choose files"
         hint={TEXT.uploadDropHint}
         accept={FILE_INPUT_ACCEPT}
         multiple
         disabled={busy}
+        disabledReason={TEXT.dropZoneBusy}
+        status={dropStatus}
+        pageDrop
         onFiles={handleFiles}
       />
 

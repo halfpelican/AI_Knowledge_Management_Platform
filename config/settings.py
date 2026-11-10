@@ -315,9 +315,10 @@ FLM_EMBED_MODEL = env.str("FLM_EMBED_MODEL", default="embed-gemma")
 # D-03). The pgvector column is sized from this and the startup check verifies it.
 EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=768)
 
-# Claude + Voyage: the documented production configuration, not used day to day.
+# Claude + Voyage: the proposal's production configuration, funded since D-113.
 ANTHROPIC_API_KEY = env.str("ANTHROPIC_API_KEY", default="")
-ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-opus-5")
+# Sonnet 5.5, the configuration under test (D-115): half Opus 5.5's per-token price.
+ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-sonnet-5-5")
 VOYAGE_API_KEY = env.str("VOYAGE_API_KEY", default="")
 VOYAGE_MODEL = env.str("VOYAGE_MODEL", default="voyage-4")
 VOYAGE_BASE_URL = env.str("VOYAGE_BASE_URL", default="https://api.voyageai.com/v1")
