@@ -4884,6 +4884,44 @@ the Administrator's gap list (L2).
 - **A throttled search is DRF's 429 with `Retry-After`,** and the search page shows the client's
   rate-limit text with Try again.
 
+**Dated note, 10 November 2026 (night): applying a tag gets a scope, `tagging`, at 30 a minute.**
+The user's decision on finding 4 of the security review in D-105's dated note of the same night (the
+tag corrections). `POST /api/documents/{id}/tags` was unthrottled, and each new Topic name a person
+types there becomes a permanent `Tag`. The Topic is grown, so it joins the scheme of every document
+whose whole audience reads a source carrying it: every document, when it was typed on one every
+role reads. The scheme is what `apps/ai/classification.py` lists in each classification prompt,
+every value with no cap, and what the detail offers as `tag_options`.
+
+- **`TAGGING_THROTTLE_RATE = "30/min"`,** per user, through `ScopedRateThrottle` like the other
+  scopes, on that route alone (`DocumentTagsView`). As with search, the rate is not about the NPU,
+  since applying a tag calls no provider; it bounds how fast one user can grow the vocabulary. The
+  page sends one request per tag a person adds, so a person tagging by hand never meets it, and no
+  script or load test calls the route.
+- **Where the 429 sits.** DRF checks throttles in `initial()`, after authentication and the
+  permission classes and before the view's method runs. The route's one permission class is
+  `IsAuthenticated`, so an anonymous request is still 401, and past the rate the 429 comes before
+  the scoped 404 and `contribute_content`'s 403. It is the same answer for every id, so it
+  discloses nothing, as the search throttle answers before any query runs. Every request the
+  throttle admits counts, a 400, 403, 404 or 409 included, and a throttled apply writes nothing.
+- **The other tag routes stay unthrottled.** Confirming or removing a link and rejecting a proposal
+  create no `Tag`. Confirming a proposed Topic can create one, but only from a proposal the
+  classifier made, and classification is reached over HTTP only through upload, reprocess and
+  classify, which share the `ingestion` budget.
+- **What it does not do.** One user can still create 30 Topics a minute. Each stays in the scheme,
+  and so in every later prompt and `tag_options` its audience reaches, until an Administrator
+  retires it, and a person naming a retired Topic brings it back (D-105's finding 6, accepted).
+  Capping the Topics the prompt lists would change the classifier's input, so it stays deferred.
+- **Tested** in `apps/api/tests/test_throttles.py`, from both roles: past the rate an apply is
+  DRF's 429 with `Retry-After` and writes no `Tag` and no link; past it, an id naming nothing, an
+  Administrator-only document and a readable document the caller may not tag all get the same 429,
+  where below it they were told apart by 404 and 403; and one user's budget is not another's, each
+  way round. `test_configuration.py`'s walk of every route lists this one in the `tagging` scope.
+- **The interface's 429 text** (`6b3e565`). The classification panel answered every 429 in
+  classify's words, "The upload limit has been reached". The Add tag control now says the limit on
+  adding tags was reached, with when to try again from `Retry-After`, and classify keeps its own
+  words. Tested in `frontend/tests/documentClassification.test.jsx`, for the chooser and for a new
+  topic.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -7262,9 +7300,13 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
     manifest's `visible_to_roles`, which `scripts/ingest_objective02.py` writes; not from the
     database. The recorded runs and verdicts stand as records of the old rule, and nothing re-runs
     them.
-  - **4: open.** An unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every
-    classification prompt. A throttle is the user's question, which the lead will put. Capping the
-    prompt would change the classification input, so it is deferred.
+  - **4 (low): the throttle half done, on `fix/FR-10-tag-throttle`; the prompt cap deferred.** An
+    unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every classification
+    prompt. The user decided the same night: a per-user throttle on that route, scope `tagging`, 30
+    a minute (`TAGGING_THROTTLE_RATE`), recorded in D-79's note on tagging. Capping the prompt would
+    change the classification input, so it is deferred, and one user can still create 30 Topics a
+    minute. *Until that branch this read "4: open", and "A throttle is the user's question, which
+    the lead will put."*
   - **5 (low): fixed in the following commit.** Reversing `documents 0009` kept removed AI links,
     which the 0008-era code shows as live tags again. 0009's reverse now deletes them, before it
     drops the column; live links are untouched. 0009 is edited in place rather than followed by a
@@ -8181,6 +8223,10 @@ On the `anthropic` provider, generation and embedding run as API calls (D-113), 
 
 **Status:** Settled by the user (the model); provisional (the call parameters) · **Date:** 2026-11-10 ·
 **Concerns:** D-113, D-102, D-103, D-111, FR-12, FR-13, `config/settings.py`, `apps/ai/anthropic.py`
+
+> **The model was superseded on 10 November 2026 by D-121.** Haiku 5.5 is now the default, after
+> the Haiku round matched this model on every bar. The call parameters below stand: Haiku was
+> measured with them. This entry is left as written, per the rule at the head of this file.
 
 **Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5` in
 `config/settings.py` and `.env.example`. It replaces `claude-opus-5`, which was a release behind.
@@ -9113,3 +9159,53 @@ whose scores it was chosen on (R10).
 
 **Where it applies:** the modules under **Concerns**, `CLAUDE.md` §5 (both rows, with the user's
 adoption of 10 November) and `docs/ai-provider.md` §4.
+
+## D-121 · Haiku 5.5 is the `anthropic` provider's default generation model, after it matched Sonnet 5.5 on every bar
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-115, D-113, D-102, D-120,
+FR-10, FR-12, FR-13, `config/settings.py`, `.env.example`
+
+**Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-haiku-5-5` in
+`config/settings.py` and `.env.example`, replacing D-115's `claude-sonnet-5-5`. The development
+`.env` was changed to match. Sonnet stays one setting away: `ANTHROPIC_MODEL=claude-sonnet-5-5`.
+
+- **Why:** the user asked whether Haiku could cut cost without losing performance. The Haiku round
+  (`corpus/objective-02/runs/2026-11-10/haiku/haiku-round.md`) measured no loss. Haiku costs a
+  twentieth of Sonnet per token ($0.10 / $0.50 against $2 / $10 per million) and was faster.
+- **The bar was fixed before any Haiku call,** in `0f184ca`, from Sonnet's own results. Only the
+  model changed: the embedder stayed Voyage `voyage-4`, with D-120's values, effort `"low"`, and
+  the same database and dump.
+
+| | Sonnet 5.5 | Haiku 5.5 |
+|---|---|---|
+| dev-set-v2 end to end: answered / declined / matched | 32/32 · 8/8 · 32/32 | 32/32 · 8/8 · 32/32 |
+| frozen thirty: runs right | 34/34 | 34/34 |
+| threads: follow-ups with history | 9/9 | 9/9 |
+| fabricated identifiers, leaks | 0, 0 | 0, 0 |
+| frozen thirty: answered question, median | 2.5 s | 1.7 s |
+| Claude spend for the three sets | $1.04 | $0.055 |
+
+- **D-115's call parameters stand.** They are effort `"low"`, thinking at the model's default, no
+  sampling parameters, and `CLAUDE_MAX_TOKENS` 16000. Haiku was measured with them, and Haiku 5.5
+  accepts all four.
+- **Changing the generation model is not a re-index,** as D-115 says: the vectors are Voyage's.
+
+**What it costs, and what remains:**
+
+- **There was one behavioural difference.** Asked t02's follow-up cold ("How often does that get
+  reviewed?"), Sonnet declined and Haiku answered from another document, with genuine citations.
+  - Both score as not correct, and a cold follow-up is predicted to fail, so no bar moved.
+  - It is still the failure the round was watching for: answering an underspecified question.
+- **The sets cannot separate the two models further.** Both scored at the ceiling, each set ran
+  once, and Claude takes no sampling parameters.
+- **FR-10 classification moves to Haiku too, unmeasured.**
+  - `classify_document` reads the same setting.
+  - Classification has not been measured on either Claude model; FR-10's records (D-106) are
+    FLM's.
+  - Measure it, or give it a setting of its own, before relying on it on this provider.
+- **NFR-08 has not run on either Claude model.**
+- **The default provider is still FLM** (D-113). This decision sets the `anthropic` provider's
+  model; it does not choose the provider.
+
+**Where it applies:** `config/settings.py`, `.env.example` and the development `.env`. D-115
+carries a dated note.

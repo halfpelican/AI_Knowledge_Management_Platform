@@ -172,12 +172,15 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 # Every throttled (route, method) and the scope it is counted in: D-26's two anonymous routes and
 # D-79's five per-user ones, as docs/api-contract.md's Stage 5 item 5 table lists them, and FR-10's
 # classify in the ingestion scope (D-105: one provider call, like a reprocess). Every other route
-# and method is unthrottled, the GET beside each throttled POST included, FR-10's confirm, tag and
-# proposed-topic routes too (no provider call), and a signed-in user browsing the repository is
-# never rate limited. FR-19's three knowledge-gap routes are unthrottled as well: D-107 settles no
-# rate for them, they are Administrator-only, and two cycles never run at once (gaps.py's lock).
+# and method is unthrottled, the GET beside each throttled POST included, FR-10's tag confirm, tag
+# removal and proposed-topic routes too (no provider call, and no Tag made but from a proposal the
+# classifier made), and a signed-in user browsing the repository is never rate limited. FR-19's
+# three knowledge-gap routes are unthrottled as well: D-107 settles no rate for them, they are
+# Administrator-only, and two cycles never run at once (gaps.py's lock).
 # Keyword search is throttled in a scope of its own since D-79's note of 10 November 2026: it
-# bounds how fast one user can fill SearchLog, which FR-19's cycle reads.
+# bounds how fast one user can fill SearchLog, which FR-19's cycle reads. A person applying a tag
+# is too, since D-79's note on tagging of the same night: each new Topic name typed there becomes a
+# permanent Tag (D-105's security review, finding 4).
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",
@@ -188,6 +191,7 @@ THROTTLED_ROUTES = {
     ("document-classify", "POST"): "ingestion",
     ("conversation-list", "POST"): "conversation_create",
     ("search", "GET"): "search",
+    ("document-tags", "POST"): "tagging",
 }
 
 

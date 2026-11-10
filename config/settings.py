@@ -19,6 +19,7 @@ from apps.core.constants import (
     CONVERSATION_CREATE_THROTTLE_RATE,
     INGESTION_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
+    TAGGING_THROTTLE_RATE,
     PASSWORD_MINIMUM_LENGTH,
     SESSION_INACTIVITY_MINUTES,
 )
@@ -183,6 +184,8 @@ REST_FRAMEWORK = {
     #   it (D-26).
     # - "ask", "ingestion" and "conversation_create": per signed-in user (D-79, D-80).
     #   "ingestion" is one budget shared by the three routes that ingest.
+    # - "search" and "tagging": per signed-in user too, keyword search and a person applying a
+    #   tag (D-79's two notes of 10 November 2026).
     #
     # The counters live in the default cache. No CACHES is set, so that is Django's
     # per-process LocMemCache: the one Waitress process (D-64) shares them, a restart clears
@@ -193,6 +196,7 @@ REST_FRAMEWORK = {
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
+        "tagging": TAGGING_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit
@@ -319,8 +323,10 @@ EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=768)
 
 # Claude + Voyage: the proposal's production configuration, funded since D-113.
 ANTHROPIC_API_KEY = env.str("ANTHROPIC_API_KEY", default="")
-# Sonnet 5.5, the configuration under test (D-115): half Opus 5.5's per-token price.
-ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-sonnet-5-5")
+# Haiku 5.5 (D-121): it matched Sonnet 5.5 on every bar of the Haiku round, faster and at a
+# twentieth of the price. ANTHROPIC_MODEL=claude-sonnet-5-5 goes back to D-115's model. The same
+# setting selects FR-10's classification model, which is not yet measured on either.
+ANTHROPIC_MODEL = env.str("ANTHROPIC_MODEL", default="claude-haiku-5-5")
 VOYAGE_API_KEY = env.str("VOYAGE_API_KEY", default="")
 VOYAGE_MODEL = env.str("VOYAGE_MODEL", default="voyage-4")
 VOYAGE_BASE_URL = env.str("VOYAGE_BASE_URL", default="https://api.voyageai.com/v1")

@@ -645,6 +645,11 @@ export const TEXT = {
   // left as it was. After either, the tag is among the document's tags.
   tagApplied: (name) => `“${name}” was added as a tag.`,
   tagAlreadyApplied: (name) => `“${name}” was already on this document and is among its tags.`,
+  // The `tagging` limit on adding tags (D-79's dated note; the security review's
+  // finding 4, D-105): its own limit, named as the upload limit is named, with when to
+  // try again from Retry-After.
+  tagLimitReached: (when) =>
+    `The limit on adding tags has been reached, so this tag was not added. You can try again ${when}.`,
   // FR-10's 409, word for word as the server sends it (apps/api/views.py
   // TOPIC_ALREADY_OFFERED_MESSAGE). Shown from this copy, because the screen never
   // renders a backend string; tests/documentClassification.test.jsx fails when the two
