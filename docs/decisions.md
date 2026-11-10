@@ -7795,6 +7795,10 @@ On the `anthropic` provider, generation and embedding run as API calls (D-113), 
 **Status:** Settled by the user (the model); provisional (the call parameters) · **Date:** 2026-11-10 ·
 **Concerns:** D-113, D-102, D-103, D-111, FR-12, FR-13, `config/settings.py`, `apps/ai/anthropic.py`
 
+> **The model was superseded on 10 November 2026 by D-121.** Haiku 5.5 is now the default, after
+> the Haiku round matched this model on every bar. The call parameters below stand: Haiku was
+> measured with them. This entry is left as written, per the rule at the head of this file.
+
 **Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-sonnet-5-5` in
 `config/settings.py` and `.env.example`. It replaces `claude-opus-5`, which was a release behind.
 
@@ -8342,3 +8346,53 @@ whose scores it was chosen on (R10).
 
 **Where it applies:** the modules under **Concerns**, `CLAUDE.md` §5 (both rows, with the user's
 adoption of 10 November) and `docs/ai-provider.md` §4.
+
+## D-121 · Haiku 5.5 is the `anthropic` provider's default generation model, after it matched Sonnet 5.5 on every bar
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-115, D-113, D-102, D-120,
+FR-10, FR-12, FR-13, `config/settings.py`, `.env.example`
+
+**Decision (the user's, 10 November):** `ANTHROPIC_MODEL` defaults to `claude-haiku-5-5` in
+`config/settings.py` and `.env.example`, replacing D-115's `claude-sonnet-5-5`. The development
+`.env` was changed to match. Sonnet stays one setting away: `ANTHROPIC_MODEL=claude-sonnet-5-5`.
+
+- **Why:** the user asked whether Haiku could cut cost without losing performance. The Haiku round
+  (`corpus/objective-02/runs/2026-11-10/haiku/haiku-round.md`) measured no loss. Haiku costs a
+  twentieth of Sonnet per token ($0.10 / $0.50 against $2 / $10 per million) and was faster.
+- **The bar was fixed before any Haiku call,** in `0f184ca`, from Sonnet's own results. Only the
+  model changed: the embedder stayed Voyage `voyage-4`, with D-120's values, effort `"low"`, and
+  the same database and dump.
+
+| | Sonnet 5.5 | Haiku 5.5 |
+|---|---|---|
+| dev-set-v2 end to end: answered / declined / matched | 32/32 · 8/8 · 32/32 | 32/32 · 8/8 · 32/32 |
+| frozen thirty: runs right | 34/34 | 34/34 |
+| threads: follow-ups with history | 9/9 | 9/9 |
+| fabricated identifiers, leaks | 0, 0 | 0, 0 |
+| frozen thirty: answered question, median | 2.5 s | 1.7 s |
+| Claude spend for the three sets | $1.04 | $0.055 |
+
+- **D-115's call parameters stand.** They are effort `"low"`, thinking at the model's default, no
+  sampling parameters, and `CLAUDE_MAX_TOKENS` 16000. Haiku was measured with them, and Haiku 5.5
+  accepts all four.
+- **Changing the generation model is not a re-index,** as D-115 says: the vectors are Voyage's.
+
+**What it costs, and what remains:**
+
+- **There was one behavioural difference.** Asked t02's follow-up cold ("How often does that get
+  reviewed?"), Sonnet declined and Haiku answered from another document, with genuine citations.
+  - Both score as not correct, and a cold follow-up is predicted to fail, so no bar moved.
+  - It is still the failure the round was watching for: answering an underspecified question.
+- **The sets cannot separate the two models further.** Both scored at the ceiling, each set ran
+  once, and Claude takes no sampling parameters.
+- **FR-10 classification moves to Haiku too, unmeasured.**
+  - `classify_document` reads the same setting.
+  - Classification has not been measured on either Claude model; FR-10's records (D-106) are
+    FLM's.
+  - Measure it, or give it a setting of its own, before relying on it on this provider.
+- **NFR-08 has not run on either Claude model.**
+- **The default provider is still FLM** (D-113). This decision sets the `anthropic` provider's
+  model; it does not choose the provider.
+
+**Where it applies:** `config/settings.py`, `.env.example` and the development `.env`. D-115
+carries a dated note.
