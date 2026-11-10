@@ -13,8 +13,9 @@ specific to that call and nothing that is shared with generation is redefined he
 - ``classification_input``: the first CLASSIFICATION_INPUT_TOKENS whitespace tokens of the
   extracted text (D-31's token) and whether anything was cut.
 - ``run_classification_attempts``: the attempt loop, mirroring apps/ai/generation.py's policy
-  exactly — MAXIMUM_CLASSIFY_ATTEMPTS in total, a transport failure or a non-conforming reply
-  is a failed attempt, a 4xx propagates and consumes no retry, then ProviderUnavailable.
+  exactly — MAXIMUM_CLASSIFY_ATTEMPTS in total, then ProviderUnavailable. A transport failure,
+  a non-conforming reply and, since D-118, a 429 are each a failed attempt. Any other 4xx is
+  ProviderRefused, which ends the loop at once.
 
 It is its OWN module, deliberately: nothing in apps/ai/prompting.py or apps/ai/generation.py
 changes for FR-10, so the measured generation prompt and its rates are untouched. Both
@@ -52,6 +53,7 @@ from apps.ai import attempt_log
 from apps.ai.base import (
     Assignment,
     DocumentClassification,
+    ProviderRefused,
     ProviderUnavailable,
     TagScheme,
     TagSuggestion,
@@ -480,12 +482,15 @@ def run_classification_attempts(
     as the total — 1 initial call + 2 retries:
 
     - ``call_once()`` makes one provider call and returns the reply, as a ChatReply or as bare
-      text. It raises ProviderUnavailable for a retryable transport failure — unreachable, timed
-      out, 5xx — and that is a failed attempt.
+      text. It raises ProviderUnavailable for a failed call, and that is a failed attempt. A
+      failed call is one that was unreachable or timed out, or that got a 5xx or, since D-118,
+      a 429. A refused call, any other 4xx, raises ProviderRefused instead, and the loop
+      re-raises it at once. Either 4xx is logged by the provider first (apps/ai/_status.py).
     - A reply that does not parse into CLASSIFICATION_SCHEMA, including one whose type is outside
       the scheme, is a failed attempt, not a partial classification (invariant 10).
-    - Anything else ``call_once`` raises — a 4xx, a misconfiguration — propagates untouched and
-      consumes no retry: it would fail identically three times.
+    - Anything else ``call_once`` raises propagates untouched and consumes no retry. An
+      exception the provider did not decide is a bug, not an outage. Since D-118 a 4xx is not
+      one of these: the providers raise it as ProviderUnavailable or ProviderRefused.
     - After the last attempt, ProviderUnavailable naming ``label`` and the last failure. The
       caller leaves the document unclassified (invariant 8, NFR-20); nothing about its storage
       or indexing depends on this call.
@@ -512,6 +517,8 @@ def run_classification_attempts(
                 attempt_log.cause_of(exc), str(exc),
                 reply=attempt_log.ReplyFacts(max_tokens=max_tokens),
             )
+            if isinstance(exc, ProviderRefused):
+                raise  # D-118: a retry cannot fix a refusal; the caller leaves it unclassified
             continue
         if not isinstance(reply, ChatReply):
             reply = ChatReply(text=reply)

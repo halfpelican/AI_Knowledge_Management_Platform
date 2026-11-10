@@ -16,8 +16,9 @@ place the two format strings are written.
 to EmbeddingGemma, so a future FLM build serving some other embedding model must not
 inherit it, and any name this module does not recognise gets its text back unchanged.
 Voyage is the case that makes "unchanged" load-bearing rather than merely tidy: it
-takes an ``input_type`` parameter on the request instead of a string prefix, so
-prefixing its text would corrupt the documented production path to no purpose.
+takes an ``input_type`` parameter on the request instead of a string prefix (passed
+through ``embed()`` since D-116), so prefixing its text would corrupt the documented
+production path to no purpose.
 
 Applying a prefix is a RE-INDEX EVENT. Vectors built from prefixed text are not
 comparable with vectors built from raw text, and the similarity score does not

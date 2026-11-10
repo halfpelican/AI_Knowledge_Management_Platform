@@ -19,11 +19,23 @@ the sources already rebuilt committed and the rest untouched; the command report
 what it did rather than rolling the whole corpus back, because a half-finished
 re-index that names its own extent is recoverable and an all-or-nothing one over
 thousands of chunks is not.
+
+**A new width needs ``--resize-column`` (D-117).** Migration 0002 sizes the vector
+column from EMBEDDING_DIMENSION when it first runs, and the model reads the same
+setting, so changing the setting leaves ``makemigrations`` with nothing to see and
+``migrate`` with nothing to do. A database restored from an FLM snapshot therefore
+keeps ``vector(768)``, and voyage-4 never embeds at 768. With ``--resize-column``,
+every chunk is deleted and the column resized in one transaction before the rebuild:
+the old vectors cannot be cast to the new width, so none can be kept. The flag's
+value is the connected database's name, typed back. Deleting every chunk nulls every
+answer citation's chunk (D-67), and the name is what stops that happening to the
+wrong database. A source that then fails to rebuild has no chunks left, so its status
+is set to failed rather than left saying it is indexed.
 """
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import connection, transaction
 
 import apps.ai
 from apps.ai.base import ProviderUnavailable
@@ -47,6 +59,30 @@ PROBE_TEXT = "embedding dimension probe"
 VALID_PROVIDERS = ("flm", "anthropic")
 
 
+def stored_column_width() -> int | None:
+    """The width the stored vector column was built with, or None if it has no width.
+
+    Read from the database rather than from settings or the model, because that
+    difference is the whole point: on a restored database the setting can say 1024
+    while the column is still 768. pgvector keeps a ``vector(n)`` column's n as its
+    type modifier, and an unsized column has -1.
+    """
+    table = ContentChunk._meta.db_table
+    column = ContentChunk._meta.get_field("embedding").column
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT a.atttypmod FROM pg_attribute a "
+            "WHERE a.attrelid = %s::regclass AND a.attname = %s",
+            [table, column],
+        )
+        (modifier,) = cursor.fetchone()
+    return modifier if modifier > 0 else None
+
+
+def describe_width(width: int | None) -> str:
+    return "vector" if width is None else f"vector({width})"
+
+
 class Command(BaseCommand):
     help = "Re-embed and re-index every stored chunk with the configured AI provider."
 
@@ -64,10 +100,23 @@ class Command(BaseCommand):
             action="store_true",
             help="report what would be rebuilt and leave every row untouched",
         )
+        parser.add_argument(
+            "--resize-column",
+            metavar="DATABASE",
+            help=(
+                "delete every chunk and resize the stored vector column to "
+                "EMBEDDING_DIMENSION before rebuilding, for a database whose column was "
+                "built at another width (D-117). The value is the connected database's "
+                "name, typed back as confirmation."
+            ),
+        )
 
     def handle(self, *args, **options):
         provider = options["provider"] or settings.AI_PROVIDER
         dry_run = options["dry_run"]
+        # Set once --resize-column has deleted every chunk. A source that then fails to
+        # rebuild has none left, and its status is corrected to say so.
+        self._chunks_deleted = False
 
         # get_ai_service() reads settings.AI_PROVIDER at call time, so assigning it
         # here is what makes --provider take effect for the whole run, including
@@ -76,6 +125,7 @@ class Command(BaseCommand):
         service = apps.ai.get_ai_service()
 
         self._guard_dimension(service, provider)
+        resize_from = self._planned_resize(options["resize_column"])
 
         documents = list(Document.objects.order_by("uploaded_at"))
         meetings = list(Meeting.objects.order_by("created_at"))
@@ -86,6 +136,8 @@ class Command(BaseCommand):
         )
         if dry_run:
             self.stdout.write(self.style.WARNING("--dry-run: nothing will be written."))
+        if resize_from is not None:
+            self._resize_column(resize_from, dry_run)
 
         rebuilt = skipped = failed = 0
         for document in documents:
@@ -103,14 +155,24 @@ class Command(BaseCommand):
         self.stdout.write(self.style.ERROR(summary) if failed else self.style.SUCCESS(summary))
         if not dry_run:
             self.stdout.write(f"Chunks now stored: {ContentChunk.objects.count()}.")
+        if self._chunks_deleted and failed:
+            self.stdout.write(
+                self.style.ERROR(
+                    f"{failed} source(s) failed after the column was resized. They have no "
+                    f"chunks now and are marked failed; run this command again, without "
+                    f"--resize-column, to rebuild them."
+                )
+            )
 
     def _guard_dimension(self, service, provider):
-        """Refuse to start if the provider's width is not the column's width.
+        """Refuse to start if the provider's width is not EMBEDDING_DIMENSION.
 
         The pgvector column is sized from settings.EMBEDDING_DIMENSION (D-03, D-08),
         so a provider returning a different width cannot be stored at all. Checked
         once here, against a probe, rather than discovered part-way through the
-        corpus as an opaque database error on some arbitrary chunk.
+        corpus as an opaque database error on some arbitrary chunk. The stored
+        column's own width is checked separately, in _planned_resize(), because on a
+        restored database the column and the setting can disagree (D-117).
         """
         try:
             result = service.embed([PROBE_TEXT])
@@ -121,14 +183,84 @@ class Command(BaseCommand):
         if result.dimension != expected:
             raise CommandError(
                 f"Provider {provider!r} embeds at {result.dimension} dimensions but "
-                f"EMBEDDING_DIMENSION is {expected}, which is the width of the stored "
-                f"vector column. Set EMBEDDING_DIMENSION to {result.dimension}, run "
-                f"makemigrations and migrate to resize the column, then run this "
-                f"command again."
+                f"EMBEDDING_DIMENSION is {expected}. Set EMBEDDING_DIMENSION to "
+                f"{result.dimension} and run this command again. If the stored column "
+                f"is still another width, the command will say how to resize it (D-117)."
             )
         self.stdout.write(
             f"Provider {provider!r} embeds at {result.dimension} dimensions "
             f"with model {result.model!r}; matches EMBEDDING_DIMENSION."
+        )
+
+    def _planned_resize(self, confirmation):
+        """The column's current type, such as "vector(768)", if it must be resized first.
+
+        None when the column is already EMBEDDING_DIMENSION wide.
+
+        Refuses when the column is the wrong width and no confirmation was given, and
+        whenever the name given is not the connected database's. A wrong name means
+        the caller thinks they are somewhere else, so even an ordinary re-index is
+        refused, because that nulls citations too, one source at a time.
+        """
+        database = connection.settings_dict["NAME"]
+        if confirmation is not None and confirmation != database:
+            raise CommandError(
+                f"--resize-column names {confirmation!r}, but this command is connected "
+                f"to {database!r}. Nothing was changed."
+            )
+        width = stored_column_width()
+        expected = settings.EMBEDDING_DIMENSION
+        if width == expected:
+            if confirmation is not None:
+                self.stdout.write(
+                    f"The stored column is already {describe_width(width)}; nothing to resize."
+                )
+            return None
+        if confirmation is None:
+            raise CommandError(
+                f"The stored vector column is {describe_width(width)}, but "
+                f"EMBEDDING_DIMENSION is {expected}. migrate cannot change it: migration "
+                f"0002 sizes the column from EMBEDDING_DIMENSION when it first runs, and "
+                f"it has already run on this database. To delete every chunk and resize "
+                f"the column before rebuilding, run this command again with "
+                f"--resize-column {database} (D-117). That nulls every answer citation's "
+                f"chunk (D-67), so do it only on a database copied for this provider."
+            )
+        return describe_width(width)
+
+    def _resize_column(self, resize_from, dry_run):
+        """Delete every chunk and resize the column, in one transaction (D-117).
+
+        Through the ORM, so each AnswerCitation's chunk is set null as D-67 requires,
+        the same as a per-source rebuild does. A cast cannot carry the old vectors to
+        the new width, so they are deleted, not converted. There is no vector index on
+        the column to rebuild.
+        """
+        expected = int(settings.EMBEDDING_DIMENSION)
+        resize_to = describe_width(expected)
+        if dry_run:
+            self.stdout.write(
+                f"  would delete {ContentChunk.objects.count()} chunk(s) and resize the "
+                f"column from {resize_from} to {resize_to}"
+            )
+            return
+        table = connection.ops.quote_name(ContentChunk._meta.db_table)
+        column = connection.ops.quote_name(ContentChunk._meta.get_field("embedding").column)
+        with transaction.atomic():
+            deleted, _by_model = ContentChunk.objects.all().delete()
+            # Django makes foreign keys DEFERRABLE INITIALLY DEFERRED, so the delete
+            # leaves deferred checks pending on this table, and Postgres refuses to alter
+            # a table with pending trigger events. Running the checks now clears them.
+            # They pass, because the delete has already set the citations' chunk to null.
+            connection.check_constraints()
+            with connection.cursor() as cursor:
+                cursor.execute(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {resize_to}")
+        self._chunks_deleted = True
+        self.stdout.write(
+            self.style.WARNING(
+                f"Deleted every chunk ({deleted} row(s) in all) and resized the column from "
+                f"{resize_from} to {resize_to}."
+            )
         )
 
     def _reindex_document(self, document, dry_run):
@@ -176,6 +308,10 @@ class Command(BaseCommand):
                 locked.save(update_fields=["status"])
         except Exception as exc:  # noqa: BLE001 - one source failing must not stop the run
             self.stderr.write(f"  FAIL  document {document.title!r}: {type(exc).__name__}: {exc}")
+            if self._chunks_deleted:
+                # The resize deleted this document's chunks for good, so its status must
+                # stop saying it is indexed (D-28's meaning of the status, D-117).
+                Document.objects.filter(pk=document.pk).update(status=DOCUMENT_INDEXING_FAILED)
             return "failed"
 
         note = f" ({failed_chunk_count} chunk(s) failed)" if failed_chunk_count else ""
@@ -219,6 +355,9 @@ class Command(BaseCommand):
                 locked.save(update_fields=["status"])
         except Exception as exc:  # noqa: BLE001 - one source failing must not stop the run
             self.stderr.write(f"  FAIL  meeting {meeting.title!r}: {type(exc).__name__}: {exc}")
+            if self._chunks_deleted:
+                # As for a document: no chunks are left, so the status must say so.
+                Meeting.objects.filter(pk=meeting.pk).update(status=MEETING_PROCESSING_FAILED)
             return "failed"
 
         note = f" ({failed_chunk_count} chunk(s) failed)" if failed_chunk_count else ""

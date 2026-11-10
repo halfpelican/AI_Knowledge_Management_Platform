@@ -22,7 +22,9 @@ Swapping the application's provider to FLM does not change how the code is writt
 
 ```python
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Literal, Protocol
+
+InputType = Literal["query", "document"]   # what embed()'s texts are (D-116)
 
 @dataclass(frozen=True)
 class Passage:
@@ -84,7 +86,7 @@ class DocumentClassification:
     input_truncated: bool         # the text was cut at CLASSIFICATION_INPUT_TOKENS before it was sent
 
 class AIService(Protocol):
-    def embed(self, texts: list[str]) -> EmbeddingResult: ...
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult: ...
     def generate_statements(
         self,
         question: str,
@@ -104,13 +106,20 @@ when its requirement is built, not speculatively before.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
+A transport failure, a 5xx and, since D-118, a 429 each count as a failed attempt. Any
+other 4xx is `ProviderRefused`, a `ProviderUnavailable` that ends the attempts at once,
+because the same request would be refused again (`apps/ai/_status.py`). The provider logs
+every 4xx with its status and body first, a 429 as a WARNING and anything else as an
+ERROR. So a rate limit or an exhausted credit ends in the 503, not a 500.
 A response that does not conform to the statement schema counts as a failed attempt,
 not as an answer.
 
 `classify_document` raises `ProviderUnavailable` after `MAXIMUM_CLASSIFY_ATTEMPTS`; ingestion
 catches it and leaves the document unclassified (invariant 8, NFR-20). A reply that does not
 conform to `CLASSIFICATION_SCHEMA`, including a type outside the fixed list, counts as a failed
-attempt, not as a classification.
+attempt, not as a classification. A 4xx is handled as for generation (D-118), because
+classification makes its calls through the same `_chat_once` and `_claude_once`: a 429 is a
+failed attempt, and any other 4xx ends the attempts at once.
 
 ### `on_attempt` — an observer, not an operation
 
@@ -143,6 +152,26 @@ attempt, and a second route from a raw model reply into `apps/` is not opened fo
 It is declared in the Protocol signature itself, not only in the implementations: a
 contract and its implementations differing by a parameter is the defect this project keeps
 finding in other people's code, and it is not worth shipping deliberately.
+
+### `input_type` — what the texts are (D-116)
+
+`input_type` is keyword-only and defaults to `None`. Callers set it as follows:
+
+- **Retrieval** passes `"query"` when it embeds a question (`apps/retrieval/query_embedding.py`).
+- **Ingestion** passes `"document"` for every chunk (`apps/ingestion/embedding.py`).
+- **The width probes** in `apps/ai/checks.py` and `reindex` pass nothing.
+
+Each provider then does this with it:
+
+- **Voyage** gets it as its own `input_type` field and puts a different instruction in front of
+  each side. Voyage documents better retrieval with it, and says vectors made with and without it
+  stay comparable.
+- **FLM** accepts it and sends nothing. EmbeddingGemma learns the same thing from the task prefix
+  the callers put in the text (`apps/ai/prefixes.py`), and Voyage never receives that prefix.
+
+Unlike `on_attempt`, this parameter changes what the model is asked. So it was argued on its own
+merits, as the paragraph above requires, and settled as D-116. Changing it re-indexes documents,
+just as changing a prefix does.
 
 ---
 
@@ -243,7 +272,9 @@ Rules, enforced in code rather than remembered:
    excluded.
 3. The pgvector column dimension is `settings.EMBEDDING_DIMENSION`, never a literal.
 4. Changing provider or model means re-indexing:
-   `python manage.py reindex --provider <name>`.
+   `python manage.py reindex --provider <name>`. A new width also needs
+   `--resize-column <database>`. Migration 0002 sizes the column from `EMBEDDING_DIMENSION`
+   when it first runs, so `migrate` cannot resize an existing column (D-117).
 5. A startup check compares `EMBEDDING_DIMENSION` against the dimension the provider
    actually returns for a probe string and refuses to start on a mismatch. Silent
    dimension drift is the failure this prevents.
@@ -251,7 +282,11 @@ Rules, enforced in code rather than remembered:
 | Provider | Model | Dimension |
 |---|---|---|
 | `flm` | `embed-gemma` | 768 |
-| `anthropic` | `voyage-4` | per Voyage's model card — confirm before switching |
+| `anthropic` | `voyage-4` | 1024, Voyage's default. 256, 512 and 2048 are offered, never 768 (Voyage's API reference, checked 10 November 2026) |
+
+So moving to Voyage resizes the column. Set `EMBEDDING_DIMENSION=1024`, then run
+`reindex --provider anthropic --resize-column <database>` on a database copied for it
+(D-113, D-117).
 
 Dev and production are therefore **two separate indexes**. Do not point a
 FLM-embedded database at a Voyage query path and wonder why retrieval got worse.

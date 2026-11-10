@@ -16,7 +16,7 @@ from django.conf import settings
 from django.test import override_settings
 
 import apps.ai
-from apps.ai.base import EmbeddingResult, ProviderUnavailable
+from apps.ai.base import INPUT_TYPE_QUERY, EmbeddingResult, ProviderUnavailable
 from apps.ai.prefixes import query_text
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import EMPLOYEE_ROLE_NAME, MAXIMUM_EMBED_ATTEMPTS, SOURCE_TYPES
@@ -67,7 +67,7 @@ class FakeEmbeddingService:
         self.calls = 0
         self.texts: list[list[str]] = []
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type=None) -> EmbeddingResult:
         self.calls += 1  # counted before any failure, so failed attempts count too
         self.texts.append(list(texts))
         if self.always_down or self.calls <= self.fail_first:
@@ -117,6 +117,14 @@ def test_the_question_is_embedded_by_the_suites_stub(stub_ai_service):
     # One batch of one, carrying the model's query task prefix; the tests below
     # assert the prefixed form itself.
     assert stub_ai_service.embed_calls == [[query_text(QUESTION)]]
+
+
+def test_the_question_is_embedded_as_a_query(stub_ai_service):
+    """D-116: the request says it is a question. That is how Voyage learns what
+    EmbeddingGemma reads from the query prefix."""
+    embed_question(QUESTION)
+
+    assert stub_ai_service.embed_input_types == [INPUT_TYPE_QUERY]
 
 
 def test_the_model_name_comes_from_the_response_not_from_settings(monkeypatch):

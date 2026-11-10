@@ -21,7 +21,7 @@ from django.test import override_settings
 
 from apps.ai import attempt_log
 from apps.ai.anthropic import CLAUDE_EFFORT, CLAUDE_MAX_TOKENS, AnthropicService
-from apps.ai.base import DocumentClassification, Passage, ProviderUnavailable, TagScheme
+from apps.ai.base import DocumentClassification, Passage, ProviderRefused, ProviderUnavailable, TagScheme
 from apps.ai.classification import (
     CLASSIFICATION_MAX_TOKENS,
     CLASSIFICATION_SYSTEM_PROMPT,
@@ -236,16 +236,25 @@ def test_flm_treats_an_empty_choices_list_as_a_failed_attempt():
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 422, 429])
-def test_flm_lets_a_client_error_surface_as_itself_after_one_call(status):
-    """A 4xx is a misconfiguration, not an outage: it surfaces unchanged and consumes no retry."""
+def test_flm_ends_a_client_error_in_unavailable_retrying_only_a_rate_limit(status, caplog):
+    """D-118: the caller leaves the document unclassified either way.
+
+    A 429 is retried to MAXIMUM_CLASSIFY_ATTEMPTS like an outage. Any other 4xx is
+    ProviderRefused and stops at the first call, because it would be refused the same way
+    again. Each refused call is logged.
+    """
     handler = scripted(httpx2.Response(status, json={"error": {"message": "nope"}}))
+    calls = MAXIMUM_CLASSIFY_ATTEMPTS if status == 429 else 1
 
-    with pytest.raises(openai.APIStatusError) as excinfo:
-        make_service(handler).classify_document(TITLE, TEXT, SCHEME)
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable) as raised:
+            make_service(handler).classify_document(TITLE, TEXT, SCHEME)
 
-    assert excinfo.value.status_code == status
-    assert not isinstance(excinfo.value, ProviderUnavailable)
-    assert len(handler.seen) == 1
+    assert isinstance(raised.value, ProviderRefused) == (status != 429)
+    assert len(handler.seen) == calls
+    refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    level = logging.WARNING if status == 429 else logging.ERROR
+    assert [r.levelno for r in refusals] == [level] * calls
 
 
 def test_flm_classification_attempts_reach_the_attempt_log(caplog):
@@ -413,15 +422,16 @@ def test_claude_maps_a_server_error_to_a_failed_attempt_and_retries():
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 429])
-def test_claude_lets_a_client_error_surface_as_itself_after_one_call(status):
+def test_claude_ends_a_client_error_in_unavailable_retrying_only_a_rate_limit(status):
+    """D-118, as for FLM. A rate limit is retried; an exhausted credit or a bad key stops
+    at once. Either way the document is left unclassified, instead of an SDK error escaping."""
     client = FakeClaude(status_error(status))
 
-    with pytest.raises(anthropic_sdk.APIStatusError) as excinfo:
+    with pytest.raises(ProviderUnavailable, match=f"HTTP {status}") as raised:
         AnthropicService(anthropic_client=client).classify_document(TITLE, TEXT, SCHEME)
 
-    assert excinfo.value.status_code == status
-    assert not isinstance(excinfo.value, ProviderUnavailable)
-    assert len(client.messages.calls) == 1
+    assert isinstance(raised.value, ProviderRefused) == (status != 429)
+    assert len(client.messages.calls) == (MAXIMUM_CLASSIFY_ATTEMPTS if status == 429 else 1)
 
 
 def test_claude_generation_still_carries_its_own_system_prompt_and_timeout():

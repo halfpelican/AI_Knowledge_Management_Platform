@@ -58,7 +58,7 @@ def test_unavailable_provider_is_a_warning_and_skips_the_probe(monkeypatch):
 
 def test_probe_failure_is_a_warning(monkeypatch):
     class HealthyButCannotEmbed(StubAIService):
-        def embed(self, texts):
+        def embed(self, texts, *, input_type=None):
             raise ProviderUnavailable("embeddings endpoint down")
 
     install(monkeypatch, HealthyButCannotEmbed())

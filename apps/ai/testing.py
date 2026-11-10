@@ -14,12 +14,20 @@ running FLM server. apps/ai/tests/test_no_live_provider.py asserts both layers.
 import hashlib
 import random
 
+# The SDKs are imported here, inside apps/ai, so tests elsewhere can run a real provider
+# against a scripted endpoint without importing a vendor SDK themselves (CLAUDE.md
+# section 4, apps/ai/tests/test_boundary.py). ``import anthropic`` is the installed SDK,
+# never apps/ai/anthropic.py: Python 3 imports are absolute.
+import anthropic as anthropic_sdk
+import httpx2
+import openai
 from django.conf import settings
 
 from apps.ai.base import (
     Assignment,
     DocumentClassification,
     EmbeddingResult,
+    InputType,
     Passage,
     ProviderHealth,
     Statement,
@@ -72,6 +80,9 @@ class StubAIService:
         # DocumentClassification, or a callable of (title, text, scheme). See the method.
         self.classification = classification
         self.embed_calls: list[list[str]] = []
+        # The input_type each embed() call carried (D-116), one entry per call, in step
+        # with embed_calls.
+        self.embed_input_types: list[InputType | None] = []
         self.generate_calls: list[tuple[str, list[Passage]]] = []
         self.classify_calls: list[tuple[str, str, TagScheme]] = []
 
@@ -82,10 +93,11 @@ class StubAIService:
         rng = random.Random(seed)
         return [rng.uniform(-1.0, 1.0) for _ in range(self.dimension)]
 
-    def embed(self, texts: list[str]) -> EmbeddingResult:
+    def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult:
         if not texts:
             raise ValueError("embed() needs at least one text")
         self.embed_calls.append(list(texts))
+        self.embed_input_types.append(input_type)
         return EmbeddingResult(
             vectors=[self.vector_for(text) for text in texts],
             model=STUB_EMBEDDING_MODEL,
@@ -147,3 +159,27 @@ class StubAIService:
             model=STUB_CHAT_MODEL,
             input_truncated=classification_input(text)[1],
         )
+
+
+def scripted_openai_client(base_url: str, handler) -> openai.OpenAI:
+    """An openai client whose every request ``handler`` answers in-process.
+
+    ``handler`` takes an httpx2 request and returns an httpx2 response, as a MockTransport
+    handler does. For instance, it can stand in for Voyage's /embeddings endpoint in the
+    D-118 route tests. ``max_retries=0``, as production builds it (apps/ai/_openai_compat.py).
+    """
+    return openai.OpenAI(
+        base_url=base_url,
+        api_key="test-key",
+        max_retries=0,
+        http_client=httpx2.Client(transport=httpx2.MockTransport(handler)),
+    )
+
+
+def anthropic_status_error(status: int, message: str) -> anthropic_sdk.APIStatusError:
+    """The APIStatusError the anthropic SDK raises for ``status``, built without a live call."""
+    request = httpx2.Request("POST", "https://api.anthropic.test/v1/messages")
+    response = httpx2.Response(
+        status, json={"type": "error", "error": {"message": message}}, request=request
+    )
+    return anthropic_sdk.APIStatusError(message, response=response, body=None)

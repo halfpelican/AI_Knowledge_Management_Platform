@@ -527,7 +527,7 @@ class RecordingService:
     def __init__(self):
         self.embed_calls, self.prompt_questions = [], []
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.embed_calls.append(list(texts))
         return EmbeddingResult(vectors=[unit_vector_at(1.0)], model=STUB_EMBEDDING_MODEL,
                                dimension=settings.EMBEDDING_DIMENSION)

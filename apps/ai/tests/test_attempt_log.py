@@ -144,7 +144,7 @@ class _FlakyEmbedder:
         self.unusable = unusable
         self.calls = 0
 
-    def embed(self, texts):
+    def embed(self, texts, *, input_type=None):
         self.calls += 1
         if self.calls <= self.failures:
             raise _unavailable(openai.APIConnectionError(request=httpx2.Request("POST", FLM_URL)))

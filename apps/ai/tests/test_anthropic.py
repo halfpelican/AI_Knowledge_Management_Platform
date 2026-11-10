@@ -5,9 +5,11 @@ suite never spends: the generation tests below and the health tests inject a fak
 and the embed tests use the openai SDK's MockTransport, as the FLM tests do.
 """
 
+import base64
 import inspect
 import json
 import logging
+import struct
 from types import SimpleNamespace
 
 import anthropic as anthropic_sdk
@@ -18,7 +20,14 @@ from django.test import override_settings
 
 from apps.ai import attempt_log
 from apps.ai.anthropic import CLAUDE_EFFORT, CLAUDE_MAX_TOKENS, AnthropicService
-from apps.ai.base import Passage, ProviderHealth, ProviderUnavailable
+from apps.ai.base import (
+    INPUT_TYPE_DOCUMENT,
+    INPUT_TYPE_QUERY,
+    Passage,
+    ProviderHealth,
+    ProviderRefused,
+    ProviderUnavailable,
+)
 from apps.ai.generation import GENERATION_MAX_TOKENS, GENERATION_TIMEOUT_SECONDS, fewer_statements
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt, statement_cap_sentence
 from apps.core.constants import MAXIMUM_GENERATION_ATTEMPTS, MAXIMUM_STATEMENTS
@@ -117,6 +126,72 @@ def test_embed_without_a_voyage_key_is_unavailable_not_a_crash():
         AnthropicService().embed(["alpha"])
 
 
+@pytest.mark.parametrize("input_type", [INPUT_TYPE_QUERY, INPUT_TYPE_DOCUMENT])
+def test_embed_tells_voyage_whether_the_text_is_a_question_or_a_passage(input_type):
+    """D-116: Voyage is told on the request, not by a prefix in the text."""
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return voyage_response(request)
+
+    AnthropicService(embedding_client=voyage_client(handler)).embed(
+        ["alpha"], input_type=input_type
+    )
+
+    assert sent[0]["input_type"] == input_type
+    assert sent[0]["input"] == ["alpha"]  # the text goes as given, with no prefix added
+
+
+def test_embed_without_an_input_type_sends_none_and_no_width():
+    """A dimension probe passes no input_type, so Voyage's default (null) applies.
+
+    No output_dimension either: the width is voyage-4's default, and EMBEDDING_DIMENSION
+    is what has to match it (D-117).
+    """
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return voyage_response(request)
+
+    AnthropicService(embedding_client=voyage_client(handler)).embed(["probe"])
+
+    assert "input_type" not in sent[0]
+    assert "output_dimension" not in sent[0]
+
+
+def test_embed_decodes_the_base64_float32_vectors_it_asks_voyage_for():
+    """The openai client asks for base64 and decodes it as float32.
+
+    Voyage documents base64 as a float32 NumPy array, which is little-endian on the
+    machines both ends run on. These values are exact in float32, so the round trip is
+    exact too.
+    """
+    values = [0.5, -0.25, 1.0, 0.125]
+    encoded = base64.b64encode(struct.pack(f"<{len(values)}f", *values)).decode("ascii")
+    sent = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        sent.append(body)
+        return httpx2.Response(
+            200,
+            json={
+                "object": "list",
+                "data": [{"object": "embedding", "embedding": encoded, "index": 0}],
+                "model": body["model"],
+                "usage": {"total_tokens": 3},
+            },
+        )
+
+    result = AnthropicService(embedding_client=voyage_client(handler)).embed(["alpha"])
+
+    assert sent[0]["encoding_format"] == "base64"
+    assert result.vectors == [values]
+    assert result.dimension == len(values)
+
+
 def test_health_is_unavailable_when_the_anthropic_key_is_empty():
     client = FakeAnthropicClient()
     health = AnthropicService(anthropic_client=client).health()
@@ -192,11 +267,11 @@ class FakeGeneratingClient:
         self.models = FakeModels()
 
 
-def status_error(status_code):
+def status_error(status_code, message="scripted"):
     """An anthropic APIStatusError carrying ``status_code``, built without a live call."""
     request = httpx2.Request("POST", "https://api.anthropic.test/v1/messages")
-    response = httpx2.Response(status_code, json={"error": {"message": "scripted"}}, request=request)
-    return anthropic_sdk.APIStatusError("scripted", response=response, body=None)
+    response = httpx2.Response(status_code, json={"error": {"message": message}}, request=request)
+    return anthropic_sdk.APIStatusError(message, response=response, body=None)
 
 
 def test_generate_statements_sends_the_shared_prompt_and_returns_statements():
@@ -316,19 +391,61 @@ def test_a_server_error_is_retried_and_a_later_conforming_reply_is_returned():
     assert len(client.messages.calls) == 2
 
 
-@pytest.mark.parametrize("status", [400, 401, 403, 429])
-def test_a_client_error_surfaces_as_itself_and_consumes_no_retries(status):
-    """4xx is a key, model or quota problem, not an outage; a 429 included (see the
-    provider comment: retrying a rate limit inside a 3-attempt budget would exhaust it
-    and report a billing condition as an NPU fault)."""
+@pytest.mark.parametrize(
+    "status, calls", [(400, 1), (401, 1), (403, 1), (429, MAXIMUM_GENERATION_ATTEMPTS)]
+)
+def test_a_client_error_ends_in_unavailable_and_only_a_rate_limit_is_retried(status, calls):
+    """D-118: a key, model, quota or rate problem ends in the NFR-19 503, not a 500.
+
+    Only a 429 is retried. Any other 4xx is ProviderRefused and stops after one call. Until
+    10 November 2026 a 4xx surfaced as itself, and the ask view, which catches only
+    ProviderUnavailable, turned it into a 500.
+    """
     client = FakeGeneratingClient(status_error(status))
 
-    with pytest.raises(anthropic_sdk.APIStatusError) as excinfo:
+    with pytest.raises(ProviderUnavailable, match=f"HTTP {status}") as raised:
         AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
 
-    assert excinfo.value.status_code == status
-    assert not isinstance(excinfo.value, ProviderUnavailable)
+    assert isinstance(raised.value, ProviderRefused) == (status != 429)
+    assert len(client.messages.calls) == calls
+
+
+def test_an_exhausted_credit_is_logged_as_an_error_naming_the_cause(caplog):
+    """Anthropic answers 400 once the monthly credit is spent (D-113). A retry would be
+    refused the same way, so there is one call. The user sees the 503's fixed notice, and
+    the log says why."""
+    client = FakeGeneratingClient(
+        status_error(400, "Your credit balance is too low to access the Anthropic API.")
+    )
+
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderRefused):
+            AnthropicService(anthropic_client=client).generate_statements(QUESTION, PASSAGES)
+
     assert len(client.messages.calls) == 1
+    refusals = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert [r.levelno for r in refusals] == [logging.ERROR]
+    assert "Anthropic API refused the request with HTTP 400" in refusals[0].getMessage()
+    assert "credit balance is too low" in refusals[0].getMessage()
+
+
+@pytest.mark.parametrize("status, level", [(429, logging.WARNING), (401, logging.ERROR)])
+def test_a_voyage_refusal_is_unavailable_and_logged(status, level, caplog):
+    """D-118: a Voyage rate limit or a bad key ends in ProviderUnavailable, which the caller
+    retries, and not in an exception the ask view cannot turn into its 503."""
+
+    def handler(request):
+        return httpx2.Response(status, json={"detail": "refused by voyage"})
+
+    with caplog.at_level(logging.WARNING, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable, match=f"HTTP {status}") as raised:
+            AnthropicService(embedding_client=voyage_client(handler)).embed(["alpha"])
+
+    # A rate limit is retryable; a bad key is a refusal, which callers do not retry.
+    assert isinstance(raised.value, ProviderRefused) == (status != 429)
+    (refusal,) = [r for r in caplog.records if "refused the request" in r.getMessage()]
+    assert refusal.levelno == level
+    assert f"{VOYAGE_URL} refused the request with HTTP {status}" in refusal.getMessage()
 
 
 def test_every_attempt_is_reported_to_on_attempt():
