@@ -43,12 +43,20 @@ def columns_of(table):
         return {row[0] for row in cursor.fetchall()}
 
 
-def test_0010_is_the_leaf_of_documents():
-    leaves = [
+def documents_leaf():
+    [leaf] = [
         key for key in MigrationExecutor(connection).loader.graph.leaf_nodes()
         if key[0] == "documents"
     ]
-    assert leaves == [AFTER]
+    return leaf
+
+
+def test_0010_is_on_the_path_to_the_leaf_of_documents():
+    """0010 was the leaf of ``documents`` until 0011 (the security review's backfill, the same night)
+    followed it, so the test checks that 0010 is on the leaf's path, and the test below ends at the
+    leaf."""
+    graph = MigrationExecutor(connection).loader.graph
+    assert AFTER in graph.forwards_plan(documents_leaf())
 
 
 def test_0010_applies_and_reverses_keeping_the_tags_either_way():
@@ -72,6 +80,6 @@ def test_0010_applies_and_reverses_keeping_the_tags_either_way():
     assert "grown" not in columns_of("tags")
     assert old_apps.get_model("documents", "Tag").objects.filter(pk=topic.pk).exists()
 
-    # --- Forward again, through the current models -------------------------------------------------
-    migrate_documents_to(AFTER)
+    # --- Forward again, to the leaf, through the current models ----------------------------------
+    migrate_documents_to(documents_leaf())
     assert Tag.objects.get(pk=topic.pk).grown is False

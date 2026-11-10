@@ -1138,23 +1138,36 @@ dimension sorted by name and always present:
 }
 ```
 
-- **It discloses nothing to anyone who may read the document.** A value is offered only if every
-  role in the document's audience can read a source carrying it, and a caller reaches the detail
-  only if their role reads the document, so every offered value is on material the caller could
-  open.
-  - An unlinked tag is vocabulary and is offered too: the Project, Process and Topic values a
-    database is seeded with.
-  - Except a Topic that came into use through a name, one a person typed on this route or confirmed
-    as a proposed topic: once nothing links it, it is not offered. Offering it would let applying,
-    removing and applying the name again tell the caller whether a Topic exists on material they
-    cannot see (D-105's dated note of 10 November 2026, night).
+- **It discloses nothing to anyone who may read the document.** A tag is offered if it is **not
+  grown**, whatever its links, or if every role in the document's audience can read a source
+  carrying it. A caller reaches the detail only if their role reads the document, so every grown
+  value offered is on material the caller could open (D-105's dated note of 10 November 2026,
+  night: the security review).
+  - A tag that is not grown is vocabulary, offered to every reader: the Project, Process and Topic
+    values a database is seeded with. Its being offered says nothing about any source.
+  - A grown tag is a Topic a person brought into use by name (typed on this route, or confirmed as a
+    proposed topic), or a value that only material some role cannot read carried when the database
+    was seeded or when `documents 0011` ran.
   - An inactive tag never is.
+- **What can appear or disappear.** Nothing here moves because a link on material the caller cannot
+  read was made or destroyed, but for the one exception below.
+  - A grown tag appears when a source every role in the audience reads comes to carry it, and
+    disappears when the last such link is removed or that source is deleted.
+  - A tag that is not grown never moves while it is active: no link anyone makes or destroys changes
+    whether it is offered. It leaves only when an Administrator retires or deletes it, and a retired
+    Topic a person names again comes back grown.
+  - **One exception is open** (D-105's dated note of 10 November 2026, night). Confirming a proposed
+    topic grows the Topic it fetches, even one that is vocabulary. No route can bring that about
+    today, because the machine links a vocabulary Topic rather than proposing it, but a proposal
+    still pending from before its name became vocabulary can: when the seed script created the
+    Topic after the proposal, or when a person brought the name in on another document before
+    `documents 0010`. Confirmed on restricted material, the Topic then leaves an audience's options
+    once no source that whole audience reads carries it.
 - **It includes tags already on the document,** held, applied or removed: applying one of those
   is the `200` above.
 - **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
-- **A Topic name that is not in this list but exists** (on material outside the document's
-  audience, brought in by a name and now on nothing, or inactive) is linked and answered `201`
-  exactly as a new Topic is,
+- **A Topic name that is not in this list but exists** (grown and on no source the document's
+  whole audience reads, or inactive) is linked and answered `201` exactly as a new Topic is,
   so the answer never tells the caller that a value they cannot see exists. After that the Topic is
   in this document's list. A person who applies a new Topic, removes it and applies it again gets
   `201`, `204`, `201`, whatever exists elsewhere.

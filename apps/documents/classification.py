@@ -134,35 +134,38 @@ def tag_scheme(document: Document) -> TagScheme:
     may read.
 
     **The rule, stated so that it can be checked against the code below.** The audience is every
-    role in ``document.visible_to_roles``. A value is in the scheme only if EVERY role in the
-    audience can read at least one source carrying it, so the prompt — and therefore any
-    suggestion it produces — can never name a value that exists only on material some reader of
-    this document may not see (CLAUDE.md invariant 1: the existence of out-of-scope material
-    "must not be disclosed"). Whether a role can read a source is decided by ``scoped_documents``
-    and ``scoped_meetings`` from apps/retrieval/scoping.py, the one place the FR-11 predicate is
-    written (D-53, D-66); nothing here tests ``visible_to_roles`` itself.
+    role in ``document.visible_to_roles``. A tag is in the scheme if it is **not grown**, whatever its
+    links, or if EVERY role in the audience can read at least one source carrying it. So the prompt,
+    and therefore any suggestion it produces, can never name a grown value that exists only on
+    material some reader of this document may not see (CLAUDE.md invariant 1: the existence of
+    out-of-scope material "must not be disclosed"), and nothing a reader can see moves when links on
+    material they cannot read are made or destroyed, but for one open exception ``tag_options``
+    states. Whether a role can read a source is decided by ``scoped_documents`` and
+    ``scoped_meetings`` from apps/retrieval/scoping.py, the one place the FR-11 predicate is written
+    (D-53, D-66); nothing here tests ``visible_to_roles`` itself.
 
     - ``doc_types`` is DOCUMENT_TYPES: a fixed list that says nothing about the corpus.
     - ``departments`` is the intersection, across the audience, of the distinct non-blank
       ``Documents.department`` values of the documents each role may read. A department carried
       only by documents some role in the audience cannot read is withheld.
-    - ``tags`` holds, for each of REPOSITORY_TAG_DIMENSIONS, the active ``Tag`` names that every
-      role in the audience can read a source of: documents through ``scoped_documents``, meetings
-      through ``scoped_meetings``, since the join table admits both source types. Every link
-      counts, provisional, unconfirmed and removed ones included: a held suggestion, or one a
-      person removed, on a restricted document is still a fact about that document, and a removal
-      must not turn a restricted value into vocabulary every audience is offered.
-    - **A tag with no links at all** is vocabulary only, says nothing about any source, and is in,
-      **unless it is grown** (``Tag.grown``, D-105's dated note of 10 November 2026, night, the
-      lead's review and revision). A grown tag is a Topic that came into use through a name: one a
-      person typed (``apply_tag``'s name form) or confirmed as a proposed topic, created or fetched.
-      While every unlinked tag was admitted and a Topic linked only on restricted material was not,
-      apply, remove and apply again told an Employee whether a restricted Topic name exists: the
-      second apply was a 409 for a name nothing carried and a 201 for a restricted one, and
-      ``tag_options`` differed the same way in between. Marking the Topic a name brought in, and
-      keeping it out once unlinked, makes the answers the same. A seeded Topic, and every Project
-      and Process tag, is never grown, so the scheme of a seeded database is as Objective 05
-      measured it. (``11a610f`` kept every unlinked Topic out; that was narrowed the same night.)
+    - ``tags`` holds, for each of REPOSITORY_TAG_DIMENSIONS, the active ``Tag`` names admitted by
+      the rule above.
+    - **A tag that is not grown is vocabulary** and is in every scheme, unlinked, carried only by
+      restricted material, or carried by readable material alike: its presence says nothing about
+      any source, and no link anyone makes or destroys moves it, but for one open exception
+      (``tag_options`` states it; D-105's dated note of 10 November 2026, night: the security
+      review of ``84b5771``). Until then the scheme read every link of a tag that was not grown,
+      links no reader of the document can see included, so a seeded value vanished from an
+      Employee's options exactly when Administrator-only material still carried it: when an
+      Employee removed its readable person links, when restricted material took it up, or, the
+      other way round, when an Administrator removed the only restricted links.
+    - **A grown tag is in only where every role in the audience reads a source carrying it**:
+      documents through ``scoped_documents``, meetings through ``scoped_meetings``, since the join
+      table admits both source types. Every link counts, provisional, unconfirmed and removed ones
+      included: a held suggestion, or one a person removed, on a readable document is still a
+      carrier. ``grown`` is set on the Topic a person's name brings into use (``apply_tag``'s name
+      form, ``confirm_proposed_topic``: the lead's oracle review), and by ``documents 0011`` and
+      the seed script's linked mode on every tag carried only by material some role cannot read.
 
     **An empty audience gets the full scheme.** A document whose ``visible_to_roles`` is empty is
     readable by nobody (``scoped_*`` fail closed), so there is no reader to protect. D-29 refuses
@@ -172,8 +175,9 @@ def tag_scheme(document: Document) -> TagScheme:
     more roles keeps the values it was classified against; widening should reclassify.
 
     **A role name scoping does not know** (one missing from EFFECTIVE_ROLES) reads nothing, so
-    every linked value, every grown Topic and every department is withheld from a document it is
-    in the audience of. That fails closed, as ``scoped_documents`` does.
+    every grown tag and every department is withheld from a document it is in the audience of, as
+    ``scoped_documents`` fails closed. Vocabulary, a tag that is not grown, is still in: it says
+    nothing about any source, so there is nothing for that reader to be kept from.
     """
     audience = list(dict.fromkeys(document.visible_to_roles))  # distinct, in order
     active_tags = Tag.objects.filter(
@@ -201,16 +205,12 @@ def tag_scheme(document: Document) -> TagScheme:
             readable_tag_ids = (
                 role_tag_ids if readable_tag_ids is None else readable_tag_ids & role_tag_ids
             )
-        linked_tag_ids = set(ContentTag.objects.values_list("tag_id", flat=True).distinct())
 
         def admitted(tag_id, grown) -> bool:
-            # Every role reads one of its sources: in.
-            if tag_id in readable_tag_ids:
-                return True
-            # Otherwise only a tag nothing links, which names no source, and only if no name brought
-            # it in: an unlinked grown Topic is out, or a person's apply, remove and apply again would
-            # answer whether a Topic linked only on restricted material exists.
-            return tag_id not in linked_tag_ids and not grown
+            # Vocabulary is in whatever its links; a grown tag only on a source every role reads.
+            # Links on material some reader cannot see are never consulted for vocabulary, so making
+            # or destroying them moves nothing a reader of this document is offered.
+            return not grown or tag_id in readable_tag_ids
 
     else:
         departments = set(
@@ -252,22 +252,38 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
     and nothing else (``offered_tags``), and the detail route reaches it only after
     ``scoped_documents`` admitted the document for the caller (D-46), so ``visible_to_roles``
     overlaps the effective roles of the caller's role: some audience role R is one the caller's
-    role reads. ``tag_scheme`` admits a linked tag only if EVERY audience role, R included, can
-    read a source carrying it, and EFFECTIVE_ROLES is closed under generalisation (each role reads
-    its own, and an Administrator also reads all an Employee reads, D-66), so what R reads, the
-    caller reads: every linked value offered is on a source the caller could open. An unlinked tag
-    that is not grown is vocabulary only (D-105) and names no source; an unlinked grown Topic is
-    never offered. An inactive tag is never offered. A document with an empty audience would get
-    the full scheme, but ``scoped_*`` fail closed on it, so no caller ever reaches its detail.
+    role reads. ``tag_scheme`` admits a grown tag only if EVERY audience role, R included, can read
+    a source carrying it, and EFFECTIVE_ROLES is closed under generalisation (each role reads its
+    own, and an Administrator also reads all an Employee reads, D-66; apps/core/tests/
+    test_constants.py asserts the closure), so what R reads, the caller reads: every grown value
+    offered is on a source the caller could open. A tag that is not grown is vocabulary (D-105):
+    its name is offered to every reader, and its being offered says nothing about any source. An
+    inactive tag is never offered. A document with an empty audience would get the full scheme, but
+    ``scoped_*`` fail closed on it, so no caller ever reaches its detail.
 
-    **What it does reveal, stated rather than glossed:** the names of unlinked tags that are not
-    grown, which ``tag_scheme`` has always put in every classification prompt: the seeded Project,
-    Process and Topic values a database starts with. A seeded tag whose last link is deleted joins
-    them, and only deleting the documents that carry it does that, which is a ``manage_documents``
-    holder's action. **A Topic that came into use through a name is never offered once nothing
-    links it** (``Tag.grown``, D-105's dated note of 10 November 2026, night), so a person removing
-    their own Topic from its only document cannot make its name appear here, and nor can a
-    document's deletion. A removed AI link is kept, and keeps its tag linked.
+    **What can appear or disappear, stated rather than glossed** (D-105's dated note of 10 November
+    2026, night: the security review of ``84b5771``):
+
+    - **A grown tag appears** when a source every audience role reads comes to carry it, and
+      **disappears** when the last such link is removed or that source is deleted. Links on
+      material some reader cannot see neither add nor remove it.
+    - **A tag that is not grown never moves** while it is active: no link anyone makes or destroys,
+      on readable material or restricted, changes whether it is offered. It leaves only when an
+      Administrator retires or deletes it (``DELETE /api/tags/{id}``), and a retired Topic a person
+      brings back by name returns grown (``apply_tag``, ``confirm_proposed_topic``).
+    - **One exception, open** (D-105's dated note): ``confirm_proposed_topic`` grows the Topic it
+      fetches even when it is active and not grown. That needs a proposal still pending for a name
+      that became vocabulary after it was proposed, since the machine links a vocabulary Topic
+      rather than proposing it, and no route of today's code makes one. The seed script creating
+      that Topic after the proposal does, and so does a Topic a person brought in by name on another
+      document before ``documents 0010``, which 0011 left as vocabulary because a source every role
+      reads carries it. Confirmed on restricted material, the Topic is grown, so it leaves an
+      audience's options once no source that whole audience reads carries it, where vocabulary
+      would have stayed.
+    - So the names of every active tag that is not grown are offered to every reader: the values a
+      database is seeded with, and those vocabulary values restricted material has taken up since.
+      That is what vocabulary means here. The classification prompt lists the same names; before
+      the security review it listed only the unlinked ones and those a readable source carried.
     """
     options = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
     for (dimension, name), tag_id in sorted(offered_tags(document).items(), key=lambda item: item[0][1]):
@@ -642,11 +658,13 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       taxonomy growth). **The 409 and the rule that keeps it from disclosing anything:** a name that
       is an active Topic in this document's scheme raises ``TopicAlreadyOffered``, because the
       caller is already offered it. A Topic of that name that exists but is NOT in the scheme is
-      carried only by material some reader of this document cannot see, is grown and carried by
-      nothing at all, or is inactive. Answering 409 for any of those would tell the caller whether
-      a restricted value exists, directly or by applying, removing and applying again. So it is
-      linked as it stands, reactivated if it was inactive (as ``confirm_proposed_topic`` does), and
-      answered exactly as a new Topic is. Only a name no Topic has creates a Tag.
+      grown and carried by no source every reader of this document can read (only by restricted
+      material, or by nothing at all), or it is inactive; a Topic that is not grown is vocabulary
+      and always in the scheme of an active one. Answering 409 for one outside the scheme would tell
+      the caller whether a restricted value exists, directly or by applying, removing and applying
+      again. So it is linked as it stands, reactivated if it was inactive (as
+      ``confirm_proposed_topic`` does), and answered exactly as a new Topic is. Only a name no Topic
+      has creates a Tag.
     - **The Topic the name form links is marked grown** (``Tag.grown``, D-105's dated note of 10
       November 2026, night), whether it was created or fetched, so that once its link is removed it
       is not vocabulary, whatever it was before. Without the mark, a retired, seeded, unlinked Topic

@@ -231,6 +231,10 @@ SECTION_5_PLAN = [
     ("accounts", "0008_seed_manage_tags"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
+    # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011
+    # depends on it (its backfill reads meetings' visible_to_roles); it was planned after documents
+    # 0010 until then. Its operations are unchanged.
+    ("meetings", "0002_visible_to_roles"),
     ("documents", "0002_content_chunks"),
     ("retrieval", "0001_initial"),
     ("documents", "0003_tags"),
@@ -254,7 +258,9 @@ SECTION_5_PLAN = [
     ("documents", "0009_fr10_tag_corrections"),
     # Tags.grown (the lead's revision of the same night), immediately after 0009.
     ("documents", "0010_tag_grown"),
-    ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
+    # The security review's backfill (D-105's dated note of 10 November 2026, night), immediately
+    # after 0010.
+    ("documents", "0011_grown_marks_withheld_tags"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),

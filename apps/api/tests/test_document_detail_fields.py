@@ -197,10 +197,11 @@ def test_tags_are_listed_by_dimension_sorted_and_only_the_documents_own(session_
     for trace in ("tagged department", "purchasing", "meeting process"):
         assert trace not in own
     assert "purchasing" in [entry["tag_name"] for entry in body["tag_options"]["Process"]]
-    # A Department tag is never an option, and nor is a tag whose only link names no source the
-    # audience can read (here, a meeting that does not exist).
+    # A Department tag is never an option. "meeting process" is not grown, so it is vocabulary and
+    # offered whatever its links (D-105's dated note of 10 November 2026, night: the security
+    # review), though it is none of this document's own tags.
     assert b"tagged department" not in response.content
-    assert b"meeting process" not in response.content
+    assert "meeting process" in [entry["tag_name"] for entry in body["tag_options"]["Process"]]
 
 
 def test_a_document_with_no_tags_has_every_dimension_empty(session_client):

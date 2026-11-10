@@ -36,7 +36,9 @@ def existing_topic(kind, restricted):
     if kind == "created":
         return None
     if kind == "restricted":
-        topic = Tag.objects.create(tag_name=NAME, dimension=TOPIC_DIMENSION)
+        # Grown, as documents 0011 marks a value only restricted material carries. One that is not
+        # grown is vocabulary, in the scheme, so the name form would find it offered (409).
+        topic = Tag.objects.create(tag_name=NAME, dimension=TOPIC_DIMENSION, grown=True)
         ContentTag.objects.create(
             tag=topic, source_type=DOCUMENT_SOURCE_TYPE, source_id=restricted.pk,
             applied_by=USER_APPLIED, confirmed=True,
