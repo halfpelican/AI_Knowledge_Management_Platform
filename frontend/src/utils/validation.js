@@ -1,6 +1,7 @@
 import {
   QUESTION_MAXIMUM_LENGTH,
   QUESTION_MINIMUM_LENGTH,
+  SEARCH_MAXIMUM_LENGTH,
   SEARCH_MINIMUM_LENGTH,
   TRANSCRIPT_SOURCE,
   VALIDATION,
@@ -93,6 +94,8 @@ export function searchTermError(term) {
   const value = term ?? ''
   if (value.length === 0) return VALIDATION.searchTermRequired
   if (value.length < SEARCH_MINIMUM_LENGTH) return VALIDATION.searchTermTooShort
+  // The upper bound (D-79's note of 10 November 2026), refused before any request.
+  if (value.length > SEARCH_MAXIMUM_LENGTH) return VALIDATION.searchTermTooLong
   return null
 }
 

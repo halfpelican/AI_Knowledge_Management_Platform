@@ -20,7 +20,7 @@ import { useLayoutEffect } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
-import { ROLES, TEXT } from '../src/constants.js'
+import { ROLES, SEARCH_MAXIMUM_LENGTH, TEXT } from '../src/constants.js'
 import { formatDate } from '../src/utils/dates.js'
 import { serveApi } from './fakeApi.js'
 
@@ -43,6 +43,12 @@ const EMPTY_DASHBOARD = {
 
 /** FR-12's refusal, naming the minimum, written out so a change to it fails here. */
 const TOO_SHORT = 'Enter at least 2 characters to search.'
+
+/** The upper bound's refusal (D-79's note of 10 November 2026), written out likewise. */
+const TOO_LONG = 'A search term can be at most 500 characters.'
+
+/** The client's text for a rate-limit 429 on a screen that does not name its own. */
+const RATE_LIMITED = 'Too many requests in a short time. Please wait and try again.'
 
 const LEAVE_POLICY = {
   source_type: 'document',
@@ -151,6 +157,46 @@ describe('FR-12: queries shorter than two characters are rejected client-side', 
     expect(refusal.textContent).toContain(TOO_SHORT)
     expect(screen.queryByText(TEXT.searchResultsFor('x'))).toBeNull()
     expect(searches(answered)).toEqual([])
+  })
+})
+
+describe("The search limits: a term's upper bound and the per-user rate (D-79's note of 10 November 2026)", () => {
+  it('refuses a term over the maximum typed into the address without sending it', async () => {
+    // Nothing answers /api/search, so a request for it fails the test.
+    const answered = serveApi({ 'GET /api/auth/me': { body: EMPLOYEE } })
+    renderApp(`/search?q=${'a'.repeat(SEARCH_MAXIMUM_LENGTH + 1)}`)
+
+    const refusal = (await screen.findByText(TEXT.searchFailed)).closest('[role="alert"]')
+    expect(refusal.textContent).toContain(TOO_LONG)
+    expect(searches(answered)).toEqual([])
+  })
+
+  it('searches a term at the maximum', async () => {
+    const longest = 'a'.repeat(SEARCH_MAXIMUM_LENGTH)
+    const answered = serveApi({
+      'GET /api/auth/me': { body: EMPLOYEE },
+      'GET /api/search': { body: searchReply(longest, [], []) },
+    })
+    renderApp(`/search?q=${longest}`)
+
+    expect(await screen.findByText(TEXT.searchResultsFor(longest))).toBeTruthy()
+    expect(searches(answered)).toEqual([`?q=${longest}`])
+  })
+
+  it('says the rate was reached when the server throttles a search, and offers to try again', async () => {
+    serveApi({
+      'GET /api/auth/me': { body: EMPLOYEE },
+      'GET /api/search': {
+        status: 429,
+        body: { detail: 'Request was throttled. Expected available in 20 seconds.' },
+        headers: { 'Retry-After': '20' },
+      },
+    })
+    renderApp('/search?q=leave')
+
+    const notice = (await screen.findByText(TEXT.searchFailed)).closest('[role="alert"]')
+    expect(notice.textContent).toContain(RATE_LIMITED)
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy()
   })
 })
 

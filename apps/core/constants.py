@@ -227,6 +227,12 @@ MAXIMUM_CONVERSATION_TURNS = 3
 # same requirement, not because the two paths share a bound: they do not, and a search
 # term is not a question.
 MINIMUM_SEARCH_LENGTH = 2
+# The upper bound on a search term (D-79's note of 10 November 2026, on the FR-19 security review's
+# L1 and L2). Keyword search bounded a term from below only, so one request could log a term of any
+# length for FR-19's cycle to embed and show. 500, the question's ceiling: a search term is not a
+# question, but no real one comes near it. Enforced by ``search`` alone and not by the check
+# ``search_total`` shares, so the cycle can still recount a term logged before the bound existed.
+MAXIMUM_SEARCH_LENGTH = 500
 
 # --- Dashboard (FR-14) ----------------------------------------------------------------
 # How many items each of the dashboard's recent panels shows: recent documents, recent
@@ -360,6 +366,10 @@ INGESTION_THROTTLE_RATE = "60/hour"
 # POST /api/conversations, scope "conversation_create": the ask rate in a budget of its own, so
 # creating a thread does not spend the ask budget (D-80).
 CONVERSATION_CREATE_THROTTLE_RATE = ASK_THROTTLE_RATE
+# GET /api/search, scope "search" (the user's decision of 10 November 2026, D-79's note). Search
+# spends no NPU time; the rate bounds how fast one user can fill SearchLog, which FR-19's cycle
+# reads (the security review's L1 and L2). The page sends one request per submitted term.
+SEARCH_THROTTLE_RATE = "30/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times

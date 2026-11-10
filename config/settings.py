@@ -18,6 +18,7 @@ from apps.core.constants import (
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
     INGESTION_THROTTLE_RATE,
+    SEARCH_THROTTLE_RATE,
     PASSWORD_MINIMUM_LENGTH,
     SESSION_INACTIVITY_MINUTES,
 )
@@ -191,6 +192,7 @@ REST_FRAMEWORK = {
         "ask": ASK_THROTTLE_RATE,
         "ingestion": INGESTION_THROTTLE_RATE,
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
+        "search": SEARCH_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit

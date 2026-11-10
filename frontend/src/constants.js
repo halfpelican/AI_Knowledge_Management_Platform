@@ -112,6 +112,9 @@ const PARTIALLY_INDEXED_DETAIL =
  * inclusive.
  */
 export const SEARCH_MINIMUM_LENGTH = 2
+// The upper bound on a search term, mirroring MAXIMUM_SEARCH_LENGTH (D-79's note of
+// 10 November 2026). The server answers 400 above it whatever the browser allowed.
+export const SEARCH_MAXIMUM_LENGTH = 500
 export const QUESTION_MINIMUM_LENGTH = 10
 export const QUESTION_MAXIMUM_LENGTH = 500
 
@@ -158,6 +161,8 @@ export const VALIDATION = {
   // message names the minimum, so a refusal says what would be accepted.
   searchTermRequired: 'Enter something to search for.',
   searchTermTooShort: `Enter at least ${SEARCH_MINIMUM_LENGTH} characters to search.`,
+  // The upper bound (D-79's note), named in the message for the same reason.
+  searchTermTooLong: `A search term can be at most ${SEARCH_MAXIMUM_LENGTH} characters.`,
   // FR-12's question bounds. Named in the message for the same reason.
   questionRequired: 'Enter a question.',
   questionTooShort: `A question needs at least ${QUESTION_MINIMUM_LENGTH} characters.`,
