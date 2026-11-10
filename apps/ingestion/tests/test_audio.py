@@ -114,6 +114,16 @@ def test_the_longest_segment_is_accepted_and_one_frame_more_is_too_long():
     assert refused.value.seconds > MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS
 
 
+def test_a_long_upload_is_refused_having_read_one_frame_past_the_limit():
+    """However much audio follows, the reader stops one frame past the longest segment, so a
+    50 MB WAV costs no more memory or time than a 60 s one before it is refused."""
+    rate = 8_000
+    frames = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * rate
+    with pytest.raises(audio.SegmentTooLong) as refused:
+        audio.read_segment(build.wav_from_samples([1000] * (frames * 5), rate=rate))
+    assert refused.value.seconds == (frames + 1) / rate
+
+
 # --- Silence --------------------------------------------------------------------------------------
 
 

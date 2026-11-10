@@ -9,7 +9,8 @@ route's checks and its reply:
   sends, and all Python's ``wave`` reads. The format is decided by the bytes, as FR-08 decides a
   document's, never by a filename or a declared type.
 - **Bounded.** A segment longer than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS is refused before its
-  loudness is measured, so one request stays short. One with no frames at all is refused as empty.
+  loudness is measured, so one request stays short, and no more than one frame past that limit is
+  ever read from it. One with no frames at all is refused as empty.
 - **Measured.** The loudest TRANSCRIPTION_SILENCE_WINDOW_SECONDS of the segment, in dBFS. Below
   TRANSCRIPTION_SILENCE_DBFS the segment is silent and goes no further: Whisper invents text from
   silence, as a silent track showed on 6 November ("E ai E ai...").
@@ -65,7 +66,8 @@ class EmptyAudio(ValueError):
 
 
 class SegmentTooLong(ValueError):
-    """More audio than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS. ``seconds`` is how much there was."""
+    """More audio than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS. ``seconds`` is how much was read, which
+    stops one frame past the limit: a lower bound on the segment's length, not its length."""
 
     def __init__(self, seconds: float):
         super().__init__(f"{seconds:.1f} s of audio, above {MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS} s")
@@ -100,17 +102,21 @@ def read_segment(data: bytes) -> AudioSegment:
             channels = reader.getnchannels()
             width = reader.getsampwidth()
             rate = reader.getframerate()
-            raw = reader.readframes(reader.getnframes())
+            if width != SAMPLE_WIDTH_BYTES:
+                raise UnsupportedAudio(f"{width * 8}-bit samples; only 16-bit PCM is accepted")
+            if channels not in ACCEPTED_CHANNELS:
+                raise UnsupportedAudio(f"{channels} channels; only mono or stereo is accepted")
+            if not MINIMUM_TRANSCRIPTION_SAMPLE_RATE <= rate <= MAXIMUM_TRANSCRIPTION_SAMPLE_RATE:
+                raise UnsupportedAudio(f"a sample rate of {rate} Hz is outside the accepted range")
+            # At most one frame past the longest segment is read, whatever the header declares
+            # and however much data follows it, so a long upload costs no more memory or time
+            # than the longest segment before it is refused.
+            longest = MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS * rate
+            raw = reader.readframes(longest + 1)
     except (wave.Error, EOFError) as exc:
         # wave.Error covers a WAV whose encoding is not PCM, a missing fmt or data chunk and a
         # malformed chunk; EOFError a file cut off inside its header.
         raise UnsupportedAudio(f"not a readable PCM WAV ({exc})") from exc
-    if width != SAMPLE_WIDTH_BYTES:
-        raise UnsupportedAudio(f"{width * 8}-bit samples; only 16-bit PCM is accepted")
-    if channels not in ACCEPTED_CHANNELS:
-        raise UnsupportedAudio(f"{channels} channels; only mono or stereo is accepted")
-    if not MINIMUM_TRANSCRIPTION_SAMPLE_RATE <= rate <= MAXIMUM_TRANSCRIPTION_SAMPLE_RATE:
-        raise UnsupportedAudio(f"a sample rate of {rate} Hz is outside the accepted range")
 
     # The frames actually present, which a header can overstate; a trailing partial frame is
     # dropped.
@@ -118,9 +124,8 @@ def read_segment(data: bytes) -> AudioSegment:
     frame_count = len(raw) // frame_bytes
     if frame_count == 0:
         raise EmptyAudio("the segment holds no audio")
-    seconds = frame_count / rate
-    if seconds > MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS:
-        raise SegmentTooLong(seconds)
+    if frame_count > longest:
+        raise SegmentTooLong(frame_count / rate)
 
     raw = raw[: frame_count * frame_bytes]
     samples = array.array("h")
