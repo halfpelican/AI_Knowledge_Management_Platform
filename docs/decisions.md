@@ -3917,6 +3917,12 @@ reason, is a deviation; the same clause unrecorded is a defect.
 - **The evidence FR-19 will read.** `QueryLog` and `SearchLog` already record every question and
   search with its result count (FR-12's gap-evidence clause), so nothing is lost by deferring.
 
+**Dated note, 10 November 2026: FR-19 supplies the table** (D-107). On `feat/FR-19-knowledge-gaps`
+the dashboard reads `KnowledgeGaps` for a role holding `review_knowledge_gaps`, which migration
+`accounts 0007` gives the Administrator alone: its payload gains `knowledge_gaps`, the number of
+Open entries and up to `DASHBOARD_GAP_ITEMS` of them in the list's order. An Employee's payload keeps
+its keys. This entry's deferral ends when that branch merges to `main`.
+
 ## D-70 · FR-14's filters and totals: department narrows documents, the total counts "Indexed" by type, each type filters on its own date
 
 **Status:** Settled by the user · **Date:** 2026-10-06 · **Concerns:** FR-14's Front-End
@@ -7156,6 +7162,32 @@ in the first case, was overtaken; accepted as written):
   almost nothing. D-79's budgets exist to stop one user's asks and ingestions monopolising the NPU,
   and a cycle adds no NPU work beyond embedding rows already logged.
 
+**Dated note, 10 November 2026 (night): the security review of FR-19 at `45d5c25`.** One
+`security-reviewer` run, read only, taking an authenticated Employee and an Administrator who reads
+the log. It found nothing critical or high. An Employee reaches none of the three routes, nor the
+dashboard key, by any method or path variant. No payload carries an asker, a role, a reason or a
+count of rows left out. The exclusion discloses nothing to anyone who could not already read the
+content, because only the Administrator reads the log and D-66 lets them read every chunk.
+
+| Finding | Severity | What was done |
+|---|---|---|
+| M1. Keyword search bounds a term from below only, and the cycle embedded a kept zero-result term whole. A provider error on one very long term would roll that cycle back, and every later cycle would meet the same row and fail the same way | medium | **Fixed.** A kept term is cut to `MAXIMUM_QUESTION_LENGTH` (500 characters) before it is embedded and stored as a subject; the recount still uses the whole term. A test runs a cycle over a term of about 36,000 characters, then a second cycle |
+| L1. A zero-result search the recount leaves out is never embedded, so whether restricted content contains a term changes how much NPU work a cycle does: a timing signal on a resource every user shares | low | Open, with L2 |
+| L2. Search is unthrottled, so any Employee can repeat a term to put chosen text at the top of the Administrator's list and dashboard. It renders as text, never HTML | low | Open, with L1 |
+| L3. The exclusion discloses nothing only while every holder of `review_knowledge_gaps` reads what the Administrator reads, and nothing enforced that | low, latent | **Tested.** Every role holding the code must have the Administrator's effective roles |
+| I1. `first_seen_at` and `last_seen_at` are exact to the microsecond | informational | Accepted. No route gives an Administrator another user's activity to match them against, and a verbatim subject can identify its author anyway (accepted above) |
+| I2. Zero-result search terms now reach the AI provider, which keyword search never did | informational | **Recorded** in `docs/ai-provider.md`, where `input_type`'s callers are listed |
+| I3. A provider 4xx made `POST /api/knowledge-gaps/cycles` answer 500 | informational | **Closed by the merge with `main`:** under D-118 a 4xx is `ProviderRefused`, a `ProviderUnavailable`, so the route answers its 503 notice |
+| I4. `search_total`'s docstring said it builds no snippets | informational | **Corrected** |
+| I5. D-110's note still said the exclusion admits at `RELEVANCE_THRESHOLD` | informational | **Corrected** there, marked as a correction |
+| I6. `POST /api/knowledge-gaps/cycles` waits on the advisory lock with no timeout | informational | Accepted: the route is the Administrator's alone |
+
+- **L1 and L2 share one fix, and it is not FR-19's:** a throttle on `GET /api/search` and an upper
+  bound on a term, both on FR-12's route. They are left to the user rather than changed here.
+- **Also not FR-19's:** the embedding call sets no timeout of its own, so the client's default of
+  600 seconds applies to every embedding in the system. M1's cut removes the one input only the
+  cycle could send; a provider that hangs affects asks and ingestion the same way.
+
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
@@ -7257,6 +7289,18 @@ step 4 above kept every row with nothing admitted.
   (every one's top passage is readable), so its size is unmeasured.
 - **Tests:** two below-threshold cases replace the old "nothing above the threshold is kept" test;
   the restricted one failed under a break restoring the old condition.
+
+**Dated note, 10 November 2026 (night): two additions, from the requirements audit and the security
+review of that night.**
+
+- **The second development check's table shows the top admitted passage, not the top-ranked one.**
+  Its score and readable columns came from the passages that cleared `RELEVANCE_THRESHOLD`, as the
+  script then stood, so a question the new rule decided below the threshold shows `None` in them.
+  Its outcome column calls the cycle's own function, so the 15 of 15 holds. The script now reports
+  the top-ranked passage.
+- **This entry's argument that the log discloses nothing rests on its readers reading every chunk**
+  (D-66). A test now requires every role holding `review_knowledge_gaps` to have the
+  Administrator's effective roles (D-107's note of the same night, L3).
 
 ## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
 
@@ -7395,9 +7439,11 @@ for Administrator-only phrases.
   `embed-gemma`, under `RELEVANCE_THRESHOLD` 0.30. Neither number carries over to Voyage and a
   re-derived threshold. The thirty stay frozen, so on `anthropic` Objective 06's first clause becomes
   an unscreened test, which is what this entry already names as the acceptance test for a decline fix.
-- **D-108's exclusion inherits the active provider's threshold,** because it admits at
-  `RELEVANCE_THRESHOLD`. Its development check (D-108's known-risk paragraph) is repeated on the new
-  configuration before the thirty are run there.
+- **D-108's exclusion depends on the active provider's embeddings,** because it decides on the
+  top-ranked passage over the Administrator's scope. Its development check (D-108's known-risk
+  paragraph) is repeated on the new configuration before the thirty are run there. *(Corrected the
+  same night: as first written this bullet said the exclusion admits at `RELEVANCE_THRESHOLD`, which
+  stopped being true at `333be14`, D-108's evening note.)*
 - **If M8 runs on `anthropic`,** Objective 06 is verified again on that configuration. Generation on
   Claude is not deterministic (no temperature, D-115), so the seeding is repeated and the outcome
   reported per draw, as D-103 measured FLM's band.

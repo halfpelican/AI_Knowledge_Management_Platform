@@ -793,3 +793,33 @@ def test_a_log_row_in_the_log_cannot_be_deleted_out_from_under_its_count(one_gap
     KnowledgeGapItem.objects.create(gap=one_gap, query=question)
     with pytest.raises(ProtectedError):
         question.delete()
+
+
+# --- The security review of 10 November 2026, M1: an over-long search term ------------------------
+
+
+def test_an_over_long_zero_result_search_is_cut_before_it_is_embedded_and_cycles_go_on(
+    designed, employee
+):
+    """Keyword search has no upper bound on a term, so a cycle must never send one whole to the
+    embedding model: an error there on one row would roll back every later cycle. The term is cut
+    to MAXIMUM_QUESTION_LENGTH for the embedding and the subject; the cycle completes, the search
+    is in the log (clause 1), and a second cycle runs after it."""
+    from apps.core.constants import MAXIMUM_QUESTION_LENGTH
+
+    long_term = ("volcano insurance " * 2000).strip()  # about 36,000 characters, matching nothing
+    cut = long_term[:MAXIMUM_QUESTION_LENGTH]
+    service = designed({cut: unit(7), Q_RECENT: unit(8)})
+    row = searched(employee, long_term, at=hours_ago(2))
+
+    first = run_cycle()
+
+    assert in_log(row)
+    assert gap_of(row).subject == cut
+    assert all(len(call[0]) <= len(query_text(cut)) for call in service.embed_calls)
+    assert first.searches_considered == 1
+
+    later = ask(employee, Q_RECENT, at=timezone.now())
+    second = run_cycle()
+    assert second.pk != first.pk
+    assert in_log(later)

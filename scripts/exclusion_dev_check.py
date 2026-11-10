@@ -99,8 +99,12 @@ def main() -> int:
             embedding = embed_question(question["question"])
             left_out = gaps._question_explained_by_permissions(row, embedding, scope)
             chunks, roles = scope.for_model(embedding.model)
-            admitted = admit(rank(chunks, embedding.vectors[0]))
-            top = admitted[0] if admitted else None
+            ranked = rank(chunks, embedding.vectors[0])
+            admitted = admit(ranked)
+            # The top-ranked passage, whether or not it clears the threshold: what the rule decides
+            # on since D-108's evening note. Until 10 November these columns showed the top
+            # admitted passage, so a question decided below the threshold showed None.
+            top = ranked[0] if ranked else None
             expected = {"scoped": "left out", "no-answer": "kept"}.get(kind, "kept if unanswered")
             outcome = "left out" if left_out else "kept"
             results.append({

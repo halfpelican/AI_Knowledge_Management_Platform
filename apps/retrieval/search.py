@@ -536,7 +536,8 @@ def search_total(*, role_name: str, query_text: str) -> int:
     (``_check_term``) and the scoped match (``_match``), so the total here is the count of the
     very querysets ``search`` builds its two groups from. ``SearchResults.total_count`` is the
     length of those groups, one result per source, so ``.count()`` on the same querysets is
-    the same integer, without building the snippets nobody reads.
+    the same integer. (``_match`` builds the body-match snippets as it always does; nothing
+    here reads them.)
 
     **Why this one takes a role name, when ``search`` refuses to.** ``search``'s module docstring
     argues that a ``role_name`` beside a ``user`` lets a view pass one person's identity with

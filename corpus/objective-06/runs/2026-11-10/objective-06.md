@@ -67,8 +67,8 @@ term) formed one entry with an occurrence count of 3, equal to its number of ite
 ## Not covered
 
 - The verification ran on the FLM configuration only. On `anthropic` (Voyage embeddings and a
-  re-derived threshold) the screening's path-A guarantee does not hold and the exclusion inherits a
-  different threshold, so the objective would be verified again there (D-110's note).
+  re-derived threshold) the screening's path-A guarantee does not hold and the exclusion ranks over
+  different vectors, so the objective would be verified again there (D-110's note).
 - Clause 1's screening: the eight unanswerable asks were screened on retrieval scores (D-110). An
   unscreened wording near the corpus's subject matter is usually answered by FR-12 instead of
   declined, and so would not reach the log (D-102's open finding).

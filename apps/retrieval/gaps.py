@@ -80,6 +80,7 @@ from django.utils import timezone
 from apps.ai.base import EmbeddingResult
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    MAXIMUM_QUESTION_LENGTH,
     CYCLE_GRACE_SECONDS,
     GAP_GROUPING_THRESHOLD,
     KNOWLEDGE_GAP_OPEN,
@@ -203,11 +204,18 @@ def run_cycle(*, triggered_by=None) -> KnowledgeGapCycle:
             # can reach search_total's same two refusals.
             if search_total(role_name=ADMINISTRATOR_ROLE_NAME, query_text=row.query_text) > 0:
                 continue  # left out, and recorded nowhere (D-108)
-            embedding = embed_question(row.query_text)
+            # Keyword search bounds a term from below but not from above, so the term is cut to
+            # the length a question may have before it is embedded or kept as a subject. An
+            # arbitrarily long term must not reach the embedding model: an error on that one row
+            # would roll the cycle back, and every later cycle would meet the same row and fail
+            # the same way (the security review of 10 November 2026, M1; D-107's note). The
+            # recount above uses the whole term, so the exclusion is decided on what was typed.
+            text = row.query_text[:MAXIMUM_QUESTION_LENGTH]
+            embedding = embed_question(text)
             items.append(
                 _Item(
                     timestamp=row.searched_at,
-                    text=row.query_text,
+                    text=text,
                     vector=list(embedding.vectors[0]),
                     model=embedding.model,
                     search=row,

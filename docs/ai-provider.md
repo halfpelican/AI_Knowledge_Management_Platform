@@ -158,6 +158,11 @@ finding in other people's code, and it is not worth shipping deliberately.
 `input_type` is keyword-only and defaults to `None`. Callers set it as follows:
 
 - **Retrieval** passes `"query"` when it embeds a question (`apps/retrieval/query_embedding.py`).
+- **FR-19's aggregation cycle** embeds unanswered questions and zero-result search terms through
+  the same `embed_question`, so they go as `"query"` (`apps/retrieval/gaps.py`). Keyword search
+  never called a provider; since FR-19 a kept zero-result term does, cut to
+  `MAXIMUM_QUESTION_LENGTH`, and on `anthropic` that provider is Voyage (D-107's note of
+  10 November).
 - **Ingestion** passes `"document"` for every chunk (`apps/ingestion/embedding.py`).
 - **The width probes** in `apps/ai/checks.py` and `reindex` pass nothing.
 

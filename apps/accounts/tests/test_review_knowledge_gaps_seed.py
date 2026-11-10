@@ -113,3 +113,28 @@ def test_the_migration_reverses_through_the_executor(employee_role, administrato
     migrate_accounts_to(THIS_MIGRATION)
     assert REVIEW_KNOWLEDGE_GAPS_PERMISSION in permission_names(administrator_role)
     assert REVIEW_KNOWLEDGE_GAPS_PERMISSION not in permission_names(employee_role)
+
+
+def test_every_role_holding_the_code_has_the_administrators_scope():
+    """The security review of 10 November 2026, L3. D-108's argument that the gap log discloses
+    nothing rests on its readers already reading every chunk (D-66). A role given
+    review_knowledge_gaps with a narrower scope would read other users' verbatim questions about
+    content it may not see, and could use its own zero-result searches as an oracle over
+    restricted text. So every role holding the code must have the Administrator's effective
+    roles."""
+    from apps.accounts.models import RolePermission
+    from apps.core.constants import (
+        ADMINISTRATOR_ROLE_NAME,
+        EFFECTIVE_ROLES,
+        REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    )
+
+    holders = set(
+        RolePermission.objects.filter(
+            permission__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION
+        ).values_list("role__role_name", flat=True)
+    )
+    assert holders, "the code must be held by some role, or the log has no readers"
+    full_scope = set(EFFECTIVE_ROLES[ADMINISTRATOR_ROLE_NAME])
+    for role_name in holders:
+        assert full_scope <= set(EFFECTIVE_ROLES.get(role_name, ())), role_name
