@@ -19,6 +19,14 @@ both halves, and it makes the fresh database they start from.
         recreates NAME from the dump and replaces MEDIA_ROOT with the copy. Stop the server
         before a restore, and restart it after (D-82 rule 7).
 
+    restore --database NAME --into COPY --media-root DIR --from-dir DIR
+        A copy of NAME's snapshot as a NEW database, for a provider switch that must not
+        touch the measurement database it starts from (D-113, D-117). NAME is only checked
+        against snapshot.json: nothing is run against it. The dump is restored into COPY,
+        which createdb refuses if it already exists. The media go into a MEDIA_ROOT that
+        must be new or empty. Nothing is dropped or replaced, except a COPY this run
+        created and failed to restore.
+
 Usage, in PowerShell (docs/measurement-runbook.md has the whole run)::
 
     .venv\\Scripts\\python.exe scripts\\snapshot_measurement_db.py snapshot `
@@ -40,7 +48,9 @@ PostgreSQL has any role or user name in it redacted before it is shown.
   a checkout is that checkout's ``media/``, which for the main one is kmp's;
 - an output folder that already holds files, so a snapshot is never overwritten;
 - for a restore: a dump or media copy whose hash differs from snapshot.json, or a
-  snapshot.json naming a different database.
+  snapshot.json naming a different database;
+- for ``--into``: a COPY that is the snapshot's own database, or a protected name, and a
+  MEDIA_ROOT that already holds files, which would be another database's media.
 """
 
 from __future__ import annotations
@@ -295,6 +305,46 @@ def restore(database: str, media_root: Path, from_dir: Path, container: str) -> 
     return record
 
 
+def restore_into(database: str, copy: str, media_root: Path, from_dir: Path, container: str) -> dict:
+    """``restore --into``: the snapshot of ``database``, restored as the NEW database ``copy``.
+
+    ``database`` is checked against snapshot.json and nothing else. No command names it,
+    so the measurement database the snapshot came from is untouched whatever happens here.
+    """
+    check_name(database, frozenset())
+    check_name(copy, measurement_record.NEVER_RESTORED)
+    if copy.lower() == database.lower():
+        raise Refused(
+            f"--into names the snapshot's own database {database!r}. A copy needs a new name; "
+            "to put that database itself back, run restore without --into."
+        )
+    media_root = media_root.resolve()
+    from_dir = from_dir.resolve()
+    check_outside_checkouts(media_root, "MEDIA_ROOT")
+    if media_root.exists() and (not media_root.is_dir() or any(media_root.iterdir())):
+        raise Refused(
+            f"MEDIA_ROOT {media_root} already holds files. A copy's media go into a new or "
+            "empty folder, so they can never replace another database's."
+        )
+    record = verify_snapshot(database, from_dir)
+    check_container(container)
+
+    in_container(container, CREATEDB, copy)  # fails if it exists: nothing is ever replaced
+    try:
+        with (from_dir / record["dump_file"]).open("rb") as handle:
+            in_container(container, PG_RESTORE, copy, stdin=handle, interactive=True)
+    except Failed:
+        # The copy was created by this run and holds a partial restore. Remove it, so a
+        # second attempt starts from nothing instead of refusing at createdb.
+        in_container(container, DROPDB, copy)
+        raise
+    shutil.copytree(from_dir / record["media_copy"], media_root, dirs_exist_ok=True)
+    restored = media_tree(media_root)
+    if restored["tree_sha256"] != record["media"]["tree_sha256"]:
+        raise Failed(f"MEDIA_ROOT {media_root} does not match the snapshot after the copy")
+    return record
+
+
 def create(database: str, container: str) -> None:
     """An empty database for the measurement. createdb itself fails if it exists."""
     check_name(database, measurement_record.NEVER_RESTORED)
@@ -316,6 +366,12 @@ def main(argv: list[str] | None = None) -> int:
         command.add_argument(folder, type=Path, required=True, dest="folder",
                              help="the snapshot folder, outside every git checkout")
         command.add_argument("--container", default=DEFAULT_CONTAINER)
+        if name == "restore":
+            command.add_argument(
+                "--into", metavar="COPY",
+                help=("restore the snapshot as this NEW database instead, leaving --database "
+                      "untouched; MEDIA_ROOT must be new or empty (D-117)"),
+            )
     arguments = parser.parse_args(argv)
 
     try:
@@ -333,6 +389,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  FLM         : {record['flm_version']['cli']} (flm version), "
                   f"server {record['flm_version']['server']}")
             print(f"\nPass it on: --dump-sha256 {record['dump_sha256']}")
+        elif arguments.into:
+            record = restore_into(arguments.database, arguments.into, arguments.media_root,
+                                  arguments.folder, arguments.container)
+            print(f"Restored the snapshot of {arguments.database} into the new database "
+                  f"{arguments.into}, and its media into {arguments.media_root} "
+                  f"(dump sha256 {record['dump_sha256']}). {arguments.database} was not touched.")
+            print("Next: manage.py migrate against it, for any migration newer than the snapshot.")
         else:
             record = restore(arguments.database, arguments.media_root, arguments.folder,
                              arguments.container)
