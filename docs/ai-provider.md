@@ -3,16 +3,21 @@
 Every AI call in this system goes through one interface with two implementations.
 Nothing else in the codebase knows which model is answering.
 
-- **`flm`** — FastFlowLM on the AMD Ryzen AI NPU. Local, free, offline. **The default.**
-- **`anthropic`** — Claude for generation, Voyage for embeddings. The production
-  configuration documented in the proposal. **Funded and brought into use from
-  10 November 2026** by the Max plan's monthly Claude API credits (D-113); M8 can be
-  hosted on any device with the platform in place (D-114). The default and M8's
-  provider are chosen by measurement; a switch is a full re-index (§4).
+- **`anthropic`** — Claude for generation and classification (Haiku 5.5, D-121), Voyage
+  `voyage-4` for embeddings. The production configuration documented in the proposal.
+  **The default since 10 November 2026 (D-122),** after every tuned value was re-derived on
+  it, each per model. **Funded from 10 November 2026** by the Max plan's monthly Claude
+  API credits (D-113); M8 can be hosted on any device with the platform in place (D-114).
+- **`flm`** — FastFlowLM on the AMD Ryzen AI NPU. Local, free, offline. **The default until
+  10 November 2026,** when every earlier measurement ran on it, and now the offline
+  alternative.
+
+Which provider is the default, and which one M8 runs on, is chosen by measurement; a switch
+is a full re-index (§4).
 
 Two things are easy to confuse and worth separating once: **Claude Code is the tool
-building this repository; FLM is what the built application calls at runtime.**
-Swapping the application's provider to FLM does not change how the code is written.
+building this repository; the provider is what the built application calls at runtime.**
+Swapping the application's provider does not change how the code is written.
 
 ---
 

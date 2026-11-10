@@ -31,12 +31,11 @@ jobs:
       SECRET_KEY: ci-only-value-not-a-secret
       DEBUG: "False"
       DATABASE_URL: postgres://kmp:kmp@localhost:5432/kmp
-      AI_PROVIDER: flm
-      # No FLM server exists in CI. The startup check reports a warning, never an
-      # error, when the provider is unreachable, and the test suite uses the stub
-      # AIService fixture, so nothing here reaches a live model.
-      FLM_BASE_URL: http://127.0.0.1:8625/v1
-      EMBEDDING_DIMENSION: "768"
+      # The default provider since D-122. CI holds no API key: the startup check reports
+      # a warning ("ANTHROPIC_API_KEY is not set"), never an error, and calls nothing; the
+      # test suite uses the stub AIService fixture, so nothing here reaches a live model.
+      AI_PROVIDER: anthropic
+      EMBEDDING_DIMENSION: "1024"
       # The workspace is discarded after the job, so this only has to be writable, not durable
       MEDIA_ROOT: ${{ github.workspace }}/media
 
