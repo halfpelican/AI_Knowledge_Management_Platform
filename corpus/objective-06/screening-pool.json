@@ -1,0 +1,37 @@
+{
+  "name": "Objective 06 screening pool: candidate wordings for the eight genuinely unanswerable asks",
+  "status": "DEVELOPMENT MATERIAL (D-110). Screened once on retrieval scores only (scripts/citation_harness.py --scores-only: embed and rank, no generation), on kmp_obj0506_20261101, when FLM is free. The eight kept are those with a top in-scope score of at most 0.25 for the asking role, two per subject; the rest are discarded. The kept eight replace U01, U02, U04, U05, U07, U08, U10, U11 in queries.json, which is then frozen. The lead's decision of 9 November 2026: screening is a verification choice and not a fix; FR-12's decline weakness stays an open finding (D-102's 8 November note), and an unscreened re-run of the frozen thirty is the acceptance test for any future decline fix.",
+  "corpus": "corpus/objective-02, the 1 November snapshot",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "Every candidate is genuinely unanswerable: the corpus has nothing on salaries or pay, credit or corporate cards, a Christmas or year-end closure, or jury service.",
+    "Wordings avoid the corpus's own vocabulary where the subject allows it: no 'leave', 'office', 'card', 'company', 'policy', 'room', 'staff', 'manager'. The pre-measurement (runs/2026-11-08/pre-measurement/) showed those words pull a readable passage over 0.30 and the model answers from it.",
+    "Roles are assigned so that each subject keeps one Employee and one Administrator ask if the scores allow; otherwise the two lowest-scoring wordings are kept and their roles recorded."
+  ],
+  "questions": [
+    {"id": "S1a", "kind": "no-answer", "role": "Employee", "source": null, "question": "When are salaries reviewed each year?", "expected_answer": null, "note": "subject 1, salary review; the draft U01 (0.346 in the pre-measurement), kept for comparison"},
+    {"id": "S1b", "kind": "no-answer", "role": "Employee", "source": null, "question": "How do I ask for a pay rise?", "expected_answer": null, "note": "subject 1; the draft U02 (0.328, declined by generation)"},
+    {"id": "S1c", "kind": "no-answer", "role": "Employee", "source": null, "question": "Is there an annual salary review, and when does it happen?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1d", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What is the process for requesting a pay increase?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1e", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Who decides whether someone gets a pay rise?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S1f", "kind": "no-answer", "role": "Employee", "source": null, "question": "Are pay rises linked to inflation here?", "expected_answer": null, "note": "subject 1"},
+    {"id": "S2a", "kind": "no-answer", "role": "Employee", "source": null, "question": "Can I get a corporate credit card for work purchases?", "expected_answer": null, "note": "subject 2, corporate card; the draft U04 (0.327)"},
+    {"id": "S2b", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Who is allowed to hold a company credit card?", "expected_answer": null, "note": "subject 2; the draft U05 (0.319)"},
+    {"id": "S2c", "kind": "no-answer", "role": "Employee", "source": null, "question": "Is there a corporate credit card I can be issued with?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S2d", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What are the rules for using a corporate credit card?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S2e", "kind": "no-answer", "role": "Employee", "source": null, "question": "How does someone apply for a corporate Amex or Visa?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S2f", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What is the spending limit on a corporate credit card?", "expected_answer": null, "note": "subject 2"},
+    {"id": "S3a", "kind": "no-answer", "role": "Employee", "source": null, "question": "Is the office closed between Christmas and New Year?", "expected_answer": null, "note": "subject 3, christmas shutdown; the draft U07 (0.415)"},
+    {"id": "S3b", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Do we have a shutdown period over the Christmas holidays?", "expected_answer": null, "note": "subject 3; the draft U08 (0.332)"},
+    {"id": "S3c", "kind": "no-answer", "role": "Employee", "source": null, "question": "Are we shut down between Christmas Day and New Year's Day?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3d", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Is there a Christmas closure this year?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3e", "kind": "no-answer", "role": "Employee", "source": null, "question": "Which days around Christmas is everything closed?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S3f", "kind": "no-answer", "role": "Administrator", "source": null, "question": "When does the Christmas shutdown start and finish?", "expected_answer": null, "note": "subject 3"},
+    {"id": "S4a", "kind": "no-answer", "role": "Employee", "source": null, "question": "Do I still get paid if I'm called up for jury duty?", "expected_answer": null, "note": "subject 4, jury duty; the draft U10 (0.250, declined before generation)"},
+    {"id": "S4b", "kind": "no-answer", "role": "Administrator", "source": null, "question": "How much notice does someone need to give before taking jury service leave?", "expected_answer": null, "note": "subject 4; the draft U11 (0.408)"},
+    {"id": "S4c", "kind": "no-answer", "role": "Administrator", "source": null, "question": "What happens if someone is summoned for jury service?", "expected_answer": null, "note": "subject 4"},
+    {"id": "S4d", "kind": "no-answer", "role": "Employee", "source": null, "question": "Is jury duty paid?", "expected_answer": null, "note": "subject 4"},
+    {"id": "S4e", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Does jury service count as paid time?", "expected_answer": null, "note": "subject 4"},
+    {"id": "S4f", "kind": "no-answer", "role": "Employee", "source": null, "question": "I've been summoned for jury duty next month, what do I do?", "expected_answer": null, "note": "subject 4"}
+  ]
+}

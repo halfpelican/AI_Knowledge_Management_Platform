@@ -68,6 +68,13 @@ function rangeIsInverted({ date_from: from, date_to: to }) {
  * does not change under the user, and blanking it while the next reply is in
  * flight would do exactly that.
  *
+ * `gapsOffered` says whether the last reply carried FR-19's `knowledge_gaps`, and
+ * survives a reload for the same reason: while the next reply is in flight the
+ * panel shows FR-14's loading state like the others, instead of vanishing and
+ * coming back. It starts false, so before any reply has arrived there is no panel
+ * at all, and it is set only from a reply, never from the user's role: the server
+ * decides who gets the panel (D-107).
+ *
  * @param {string} query The canonical query string; '' for no filters.
  * @param {boolean} blocked True where the filters were refused client-side and
  *   nothing is to be sent.
@@ -76,6 +83,7 @@ function useDashboardSummary(query, blocked) {
   const [attempt, setAttempt] = useState(0)
   const [settled, setSettled] = useState({ key: null, payload: null, error: null })
   const [departments, setDepartments] = useState([])
+  const [gapsOffered, setGapsOffered] = useState(false)
   const key = `${attempt}?${query}`
 
   useEffect(() => {
@@ -87,6 +95,7 @@ function useDashboardSummary(query, blocked) {
         if (controller.signal.aborted) return
         setSettled({ key, payload, error: null })
         if (Array.isArray(payload?.departments)) setDepartments(payload.departments)
+        setGapsOffered(carriesKnowledgeGaps(payload))
       },
       (caught) => {
         // This screen cancelling its own request, because the filters moved on.
@@ -109,8 +118,18 @@ function useDashboardSummary(query, blocked) {
     error: current ? settled.error : null,
     loading: !blocked && !current,
     departments,
+    gapsOffered,
     retry,
   }
+}
+
+/**
+ * True where a reply carries FR-19's panel: `knowledge_gaps` is present only for
+ * a role holding `review_knowledge_gaps`, and absent for every other (D-107).
+ */
+function carriesKnowledgeGaps(payload) {
+  const gaps = payload?.knowledge_gaps
+  return gaps !== null && typeof gaps === 'object'
 }
 
 /* ---- Filter form --------------------------------------------------------- */
@@ -392,6 +411,49 @@ function RecentQuestions({ questions }) {
   )
 }
 
+/**
+ * FR-19's panel on FR-14's dashboard (D-69, closed by D-107): how many entries in
+ * the knowledge-gap log are Open, and the ones that came up most often, each
+ * subject with its occurrence count, in the order the server sent them. The
+ * heading opens the full list.
+ *
+ * Each subject is a question or a search term a user typed, rendered as text and
+ * never as HTML. No asker, role or reason is shown, because none arrives
+ * (D-107, D-108). The dashboard's filters narrow neither the count nor the list
+ * (the contract), and the panel says so, as D-70 has the department filter say
+ * what it narrows.
+ */
+function KnowledgeGapsSummary({ gaps }) {
+  const top = Array.isArray(gaps?.top) ? gaps.top : []
+  return (
+    <>
+      <dl className="dashboard-totals">
+        <div className="dashboard-totals__item">
+          <dt>{TEXT.dashboardGapsOpen}</dt>
+          <dd>{figure(gaps?.open_count)}</dd>
+        </div>
+      </dl>
+      {top.length > 0 ? (
+        <ul className="dashboard-list">
+          {top.map((entry) => (
+            <li key={entry.gap_id}>
+              <p className="dashboard-list__question">{entry.subject}</p>
+              {Number.isFinite(entry.occurrence_count) ? (
+                <p className="dashboard-list__meta">
+                  <span>{TEXT.gapOccurrences(entry.occurrence_count)}</span>
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="dashboard-panel__state">{TEXT.dashboardNoGaps}</p>
+      )}
+      <p className="dashboard-panel__note">{TEXT.dashboardGapsNote}</p>
+    </>
+  )
+}
+
 /* ---- The page ------------------------------------------------------------ */
 
 /**
@@ -420,7 +482,7 @@ export default function Dashboard() {
   // The form refuses an inverted range before it reaches the address, so one here
   // was typed or pasted. It is refused the same way: nothing is sent.
   const inverted = rangeIsInverted(applied)
-  const { payload, error, loading, departments, retry } = useDashboardSummary(query, inverted)
+  const { payload, error, loading, departments, gapsOffered, retry } = useDashboardSummary(query, inverted)
 
   // A 400 names the parameter it refused. Its message, DRF's validation text for
   // that parameter, goes under the control it concerns (src/utils/fieldErrors.js);
@@ -472,6 +534,10 @@ export default function Dashboard() {
   const meetings = payload?.recent_meetings ?? []
   const questions = payload?.recent_questions ?? []
   const panelState = { loading, failed }
+  // FR-19's panel: shown when this reply carries `knowledge_gaps`, and while a
+  // reply is awaited or has failed, when the last one did. A reply without the
+  // key means no panel, no heading and no placeholder (D-107).
+  const showGaps = payload ? carriesKnowledgeGaps(payload) : gapsOffered
 
   return (
     <div className="dashboard">
@@ -531,6 +597,18 @@ export default function Dashboard() {
         >
           <RecentQuestions questions={questions} />
         </DashboardPanel>
+        {/* FR-19's addition, after the proposal's four (D-69, closed by D-107). */}
+        {showGaps ? (
+          <DashboardPanel
+            headingId="dashboard-gaps-heading"
+            heading={TEXT.gapsHeading}
+            to="/admin/knowledge-gaps"
+            loadingText={TEXT.dashboardLoadingGaps}
+            {...panelState}
+          >
+            <KnowledgeGapsSummary gaps={payload?.knowledge_gaps} />
+          </DashboardPanel>
+        ) : null}
       </div>
     </div>
   )

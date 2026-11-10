@@ -893,4 +893,86 @@ export const TEXT = {
   dashboardUploaded: 'Uploaded',
   dashboardHeld: 'Held',
   dashboardAsked: 'Asked',
+
+  /* ---- FR-19 knowledge-gap log (NIT3004, Objective 06) ------------------ */
+  // FR-19: "A list, visible to Administrators, of questions the system could not
+  // answer and searches returning no results, grouped by subject with an
+  // occurrence count and the ability to mark an entry as addressed." The screen
+  // (src/pages/KnowledgeGaps.jsx) and FR-14's panel show what an entry carries and
+  // nothing else. No payload names who asked, their role, or why a question was
+  // left out of the log, and none counts what was left out (D-107, D-108), so no
+  // sentence here mentions any of them or implies that they exist.
+  // The page heading, the navigation link and the dashboard panel's heading: the
+  // link and the panel name the screen they open.
+  gapsHeading: 'Knowledge gaps',
+  // D-107: `subject` is the first member's wording, verbatim, and no model writes it.
+  gapsIntro:
+    'Questions the knowledge base could not answer and searches that returned no results, grouped by subject. ' +
+    'Each entry is named by the first question or search in it, worded as it was typed, and counts how many times its subject came up. ' +
+    'Mark an entry addressed once the knowledge base covers it.',
+  gapsListHeading: 'Entries',
+  loadingGaps: 'Loading the knowledge-gap log…',
+  gapsLoadFailed: 'Could not load the knowledge-gap log',
+  // The 200 with an empty list: before the first cycle, or when nothing has gone
+  // unanswered since.
+  noGaps: 'No knowledge gaps have been recorded.',
+  // The server's order, which the screen keeps (docs/api-contract.md).
+  gapsTableCaption: 'Knowledge gaps: open entries first, the most frequent at the top, then addressed entries.',
+  gapsColumnSubject: 'Subject',
+  gapsColumnOccurrences: 'Occurrences',
+  gapsColumnStatus: 'Status',
+  gapsColumnFirstSeen: 'First seen',
+  gapsColumnLastSeen: 'Last seen',
+  gapsColumnAction: 'Action',
+  // One action per entry: "Mark addressed" on an Open entry, "Reopen" on an
+  // Addressed one (PATCH's two values). A column of buttons all named "Mark
+  // addressed" names nothing to someone moving between controls, so each one's
+  // accessible name adds its entry, after the visible words (WCAG 2.1 SC 2.4.6,
+  // SC 2.5.3).
+  gapMarkAddressed: 'Mark addressed',
+  gapReopen: 'Reopen',
+  gapMarkAddressedLabel: (subject) => `Mark addressed: ${subject}`,
+  gapReopenLabel: (subject) => `Reopen: ${subject}`,
+  gapUpdateFailed: 'Could not change the entry',
+  // The PATCH 404: the entry is gone, so the list on screen is out of date and is
+  // read again.
+  gapNotFound: 'That entry no longer exists. The list has been reloaded.',
+  // A 403 on a change or on a cycle: the role does not hold review_knowledge_gaps
+  // now, whatever it held when the list was read. Every action is withdrawn.
+  gapsNotPermitted:
+    'Your role may not review the knowledge-gap log, so its entries cannot be changed and the aggregation cannot be run.',
+  // "Run aggregation now" runs one cycle synchronously (D-107). The hint does not
+  // promise a schedule: whether one is set up is the deployment's, not the screen's.
+  gapsCycleHeading: 'Aggregation',
+  gapsCycleHint:
+    'Questions and searches are added to the log when the aggregation runs. Run it now to add the ones recorded since it last ran.',
+  gapsCycleRun: 'Run aggregation now',
+  gapsCycleRunning: 'Running aggregation…',
+  // Announced as well as shown while the cycle runs: it embeds every new question
+  // and search, so it is not instant.
+  gapsCycleWait: 'Running the aggregation. This can take a minute.',
+  // The 201 in words, from the four counts it carries and no others. Its two
+  // "added" counts are the rows that entered the log (the contract), so nothing
+  // here says how many were read. When any of the four is missing, only
+  // `gapsCycleDone` is said, so no number appears that the reply did not carry.
+  gapsCycleDone: 'Aggregation finished.',
+  gapsCycleQuestions: (count) =>
+    count === 1 ? '1 question that could not be answered' : `${count} questions that could not be answered`,
+  gapsCycleSearches: (count) =>
+    count === 1 ? '1 search that returned no results' : `${count} searches that returned no results`,
+  gapsCycleAdded: (questions, searches) => `Added to the log: ${questions} and ${searches}.`,
+  gapsCycleCreated: (count) => (count === 1 ? '1 new entry started' : `${count} new entries started`),
+  gapsCycleUpdated: (count) => (count === 1 ? '1 existing entry updated' : `${count} existing entries updated`),
+  gapsCycleEntries: (created, updated) => `In the list: ${created} and ${updated}.`,
+  gapsCycleFailed: 'Could not run the aggregation',
+  // The 503 (NFR-19), after the client's own 503 sentence: the cycle rolled back.
+  gapsCycleNotRun: 'No aggregation ran and nothing in the log was changed.',
+  gapOccurrences: (count) => (count === 1 ? '1 occurrence' : `${count} occurrences`),
+  // FR-14's panel (D-69, closed by D-107). Present only when the payload carries
+  // `knowledge_gaps`; there is no copy for its absence, because nothing is shown.
+  dashboardGapsOpen: 'Open entries',
+  dashboardLoadingGaps: 'Loading knowledge gaps…',
+  dashboardNoGaps: 'No open entries to show.',
+  // The contract: the dashboard's filters narrow neither the count nor the list.
+  dashboardGapsNote: 'The open entries that came up most often. The filters above do not apply to this panel.',
 }

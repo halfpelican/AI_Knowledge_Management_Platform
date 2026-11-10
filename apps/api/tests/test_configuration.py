@@ -174,7 +174,8 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 # classify in the ingestion scope (D-105: one provider call, like a reprocess). Every other route
 # and method is unthrottled, the GET beside each throttled POST included, FR-10's confirm, tag and
 # proposed-topic routes too (no provider call), and a signed-in user browsing the repository is
-# never rate limited.
+# never rate limited. FR-19's three knowledge-gap routes are unthrottled as well: D-107 settles no
+# rate for them, they are Administrator-only, and two cycles never run at once (gaps.py's lock).
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",

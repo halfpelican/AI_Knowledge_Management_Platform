@@ -1,0 +1,26 @@
+{
+  "name": "Objective 06 pre-measurement: the 14 asks whose no-answer outcome the gap log depends on",
+  "status": "DEVELOPMENT MATERIAL, 8 November 2026. The 8 unanswerable and 6 permission-only asks of the draft thirty (objective-06 queries.json), in scripts/citation_harness.py's question-set shape so the shipped pipeline measures them with nothing written. Run three times before the thirty are frozen, as the lead decided on 8 November. Not a frozen set; not tuned against.",
+  "corpus": "corpus/objective-02, on kmp_obj0506_20261101 restored from the 1 November dump",
+  "manifest": "corpus/objective-02/manifest.json",
+  "notes": [
+    "kind no-answer: the corpus holds nothing on the subject. kind scoped, role Employee: the answer exists only in an Administrator-only item, so the Employee's run expects no answer.",
+    "The harness calls the pipeline's own embed, rank, admit, generate and verify and records nothing in QueryLog, so these runs leave the database as they found it."
+  ],
+  "questions": [
+    {"id": "U01", "kind": "no-answer", "role": "Employee", "source": null, "question": "When are salaries reviewed each year?", "expected_answer": null, "note": "subject: salary review"},
+    {"id": "U02", "kind": "no-answer", "role": "Employee", "source": null, "question": "How do I ask for a pay rise?", "expected_answer": null, "note": "subject: salary review"},
+    {"id": "U04", "kind": "no-answer", "role": "Employee", "source": null, "question": "Can I get a corporate credit card for work purchases?", "expected_answer": null, "note": "subject: corporate card"},
+    {"id": "U05", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Who is allowed to hold a company credit card?", "expected_answer": null, "note": "subject: corporate card"},
+    {"id": "U07", "kind": "no-answer", "role": "Employee", "source": null, "question": "Is the office closed between Christmas and New Year?", "expected_answer": null, "note": "subject: christmas shutdown"},
+    {"id": "U08", "kind": "no-answer", "role": "Administrator", "source": null, "question": "Do we have a shutdown period over the Christmas holidays?", "expected_answer": null, "note": "subject: christmas shutdown"},
+    {"id": "U10", "kind": "no-answer", "role": "Employee", "source": null, "question": "Do I still get paid if I'm called up for jury duty?", "expected_answer": null, "note": "subject: jury duty"},
+    {"id": "U11", "kind": "no-answer", "role": "Administrator", "source": null, "question": "How much notice does someone need to give before taking jury service leave?", "expected_answer": null, "note": "subject: jury duty"},
+    {"id": "P01", "kind": "scoped", "role": "Employee", "source": "D09", "question": "Who is the project manager for Project Atlas?", "expected_answer": "head of digital services", "note": "D09 is Administrator-only"},
+    {"id": "P02", "kind": "scoped", "role": "Employee", "source": "D09", "question": "What gets decided at the Quartz Harbour milestone gate?", "expected_answer": "steering group", "note": "D09 is Administrator-only"},
+    {"id": "P04", "kind": "scoped", "role": "Employee", "source": "D16", "question": "Who on the team is rated four in project management?", "expected_answer": "Ben Carter", "accepted": ["Grace Tan"], "note": "D16 is Administrator-only"},
+    {"id": "P06", "kind": "scoped", "role": "Employee", "source": "T02", "question": "How much is in the Fernwood contingency reserve?", "expected_answer": "two million", "accepted": ["2 million", "$2m", "2,000,000"], "note": "T02 is Administrator-only"},
+    {"id": "P07", "kind": "scoped", "role": "Employee", "source": "T02", "question": "What did the risk committee decide to do about supplier concentration?", "expected_answer": "alternatives", "note": "T02 is Administrator-only"},
+    {"id": "P08", "kind": "scoped", "role": "Employee", "source": "T05", "question": "How many people reported the Cobalt Reef phishing email to the service desk?", "expected_answer": "ninety", "accepted": ["90"], "note": "T05 is Administrator-only; D02 (Employee-readable) says how to report phishing"}
+  ]
+}

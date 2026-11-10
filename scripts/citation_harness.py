@@ -193,7 +193,7 @@ from apps.retrieval.partial_matches import partial_matches  # noqa: E402
 # verbatim at items 3 and 5, so importing them changes nothing the baseline measured and
 # removes three more definitions that could drift. The threshold is applied by this
 # module rather than by ranking.admit(), because --threshold sweeps it for tuning (D-37)
-# and admit() correctly reads the settled constant.
+# and admit() reads the embedding model's settled value (D-120); so does the default here.
 from apps.retrieval.ranking import (  # noqa: E402
     RankedPassage,
     rank,

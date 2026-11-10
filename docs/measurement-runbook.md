@@ -612,3 +612,43 @@ database.
 | 12a threads | the thread run's records | `$runs\threads.json` |
 | 12b HTTP check | 3 conversations, 6 asks, their citations; sign-ins; record | `$db`, `$root\logs`; `$runs\http_check.json` |
 | 13 NFR-09 | up to 1,210 uploads; summary, with the server observed and its queueing | `$db`, `$root\media`; `$runs\nfr09_summary.json` |
+
+## A copy for another provider (D-113, D-117)
+
+Measuring the `anthropic` provider needs the same corpus, indexed by Voyage. The FLM measurement
+database must stay as it is. So the copy is made from its snapshot, under a new name, in a new
+session:
+
+```powershell
+$py      = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe'
+$from    = 'kmp_obj02_20261101'                    # the snapshot's database: checked, never touched
+$copy    = 'kmp_voyage_20261110'
+$copyRoot = 'C:\kmp-measurement\2026-11-10-voyage'  # outside every checkout
+
+& $py scripts\snapshot_measurement_db.py restore --database $from --into $copy `
+    --media-root "$copyRoot\media" --from-dir C:\kmp-measurement\2026-11-01\snapshot
+
+$line = Get-Content .env | Where-Object { $_ -match '^DATABASE_URL=' } | Select-Object -First 1
+$env:DATABASE_URL = (($line -replace '^DATABASE_URL=', '').Trim()) -replace '/[^/]+$', "/$copy"
+$env:MEDIA_ROOT   = "$copyRoot\media"
+& $py manage.py migrate                            # migrations newer than the snapshot
+```
+
+**`restore --into`** checks the dump and media against `snapshot.json`, as a restore does. It then
+creates `$copy`, failing if it exists, and restores into it. The media go into a folder that must be
+new or empty. Nothing runs against `$from`.
+
+**Then the switch,** in the same session, with the Voyage key in `.env`:
+
+```powershell
+$env:AI_PROVIDER = 'anthropic'
+$env:EMBEDDING_DIMENSION = '1024'
+& $py manage.py check                              # one Voyage probe: 1024 wide
+& $py manage.py reindex --provider anthropic --resize-column $copy
+& $py scripts\snapshot_measurement_db.py snapshot --database $copy --media-root "$copyRoot\media" --out-dir "$copyRoot\snapshot"
+```
+
+- **Leave `.env` as it is.** The variables set in a session override it, so the everyday setup
+  stays on FLM.
+- **The copy gets its own snapshot.** Later restores of the Voyage copy are plain restores of that
+  snapshot. They need no re-index and spend no Voyage calls.
