@@ -7405,11 +7405,16 @@ and gap 9 of the requirements audit (D-119).
   9.3 to 17.8 s each, and one second attempt after a reply that was not valid JSON. D04, 26 pages
   and outside the bound, took 61.3 s against 33.3 s, above this entry's estimate of 41 to 55 s.
 - **Evidence:** `corpus/objective-02/runs/2026-11-10/ingestion-classify-flm/` (`results.json`,
-  `results.md`, `retime.md`).
+  `results.md`, `retime.md`, and the run's own log lines).
+- **At twenty pages, timed directly the same night** (the user's request), because the corpus has
+  no document near the bound: its only multi-page PDF has 26 pages.
+  - **The result:** five uploads of D04's first twenty pages took 43.5 to 51.6 s, each with one
+    classification attempt (15.1 to 17.1 s), so all were within the bound.
+  - **Not measured:** a retry adds one more attempt of about 9 to 17 s, which on that arithmetic
+    takes some twenty-page uploads past 60 s. No retry happened at twenty pages, and the night saw
+    one in 26 calls.
+  - **Evidence:** `corpus/objective-02/runs/2026-11-10/ingestion-twenty-pages-flm/`.
 - **Not shown:**
-  - **A document near twenty pages.** The corpus's only multi-page PDF has 26 pages, and with a
-    classification retry such a document could come close to 60 s. Timing one directly would
-    settle it.
   - **The bound on `anthropic`.** D-114 chooses M8's host with its provider, and D-122 is about to
     make `anthropic` the default. If M8 runs there, the bound is re-timed on a Voyage-indexed
     database, and this FLM run does not stand in for it.

@@ -1,0 +1,1 @@
+2026-11-10 21:59:43,106 WARNING apps.ai.attempts classification attempt 1 of 3 failed after 9.4 s [finish_reason=stop completion_tokens=87 prompt_tokens=1197 max_tokens=400 max_statements=unreported] (account not set): SchemaViolation: not valid JSON: Expecting value: line 1 column 224 (char 223)

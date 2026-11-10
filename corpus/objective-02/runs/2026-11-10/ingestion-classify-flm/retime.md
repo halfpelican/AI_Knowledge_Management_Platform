@@ -18,7 +18,9 @@ upload").
   checkout, which this session does not use.
 - **The run had its own database**, `kmp_obj02_20261110classify`, made empty by
   `scripts/snapshot_measurement_db.py create` and migrated from nothing. Its media and logs were in
-  `C:\kmp-measurement\2026-11-10-classify`, outside every checkout.
+  `C:\kmp-measurement\2026-11-10-classify`, outside every checkout. The user approved dropping the
+  database and deleting that folder after the twenty-page measurement. This run's lines from its
+  logs are copied beside this file first: `attempts.log`, `waitress.log` and `errors.log`.
 - **The accounts:**
   - an Administrator made by `createsuperuser --noinput`;
   - an Employee registered through FR-01's own route;
@@ -36,8 +38,8 @@ upload").
   - The process list, read after the run while the server still answered, showed PID 59592
     running `waitress-serve.exe --listen=127.0.0.1:8000 --threads=24 config.wsgi:application`.
   - `DEBUG` was off: an unmatched `/api/` path answered handler404's JSON.
-  - The server's log has its "Serving on" line and no "Task queue depth" line, so no request
-    waited for a thread.
+  - The server's log (`waitress.log`) has its "Serving on" line and no "Task queue depth" line, so
+    no request waited for a thread.
 
 ## What classification added
 
@@ -68,7 +70,7 @@ upload").
   The invalid items were unchanged.
 - "—" is a format with no pages in the file (DOCX, XLSX, TXT). The script holds those to the bound
   too: a document with no page count counts as twenty pages or fewer.
-- **The classification calls,** from the run's attempts log (`C:\kmp-measurement\2026-11-10-classify\logs\attempts.log`):
+- **The classification calls,** from the run's attempts log (`attempts.log` beside this file; its one failure is also the whole of `errors.log`):
   - 21 calls for 20 documents, from 9.3 s to 17.8 s each, with a median of 11.9 s.
   - **One upload needed a second attempt:** a reply that was not valid JSON (`SchemaViolation`)
     after 9.4 s, then a parse after 13.1 s. By its timestamp it was D19, which is why D19 took
@@ -76,19 +78,15 @@ upload").
 
 ## What this does not show
 
-- **A twenty-page document.** The corpus's only multi-page PDF, D04, has 26 pages, so it is
-  outside the bound. It took 61.3 s with one classification attempt, against D-105's estimate of
-  41 to 55 s.
-  - Every document the bound covers here is one page, or a format with no pages.
-  - So the margin for a document near twenty pages is **not measured**. The parts are measured,
-    though:
-    - ingestion time grows with pages (D04);
-    - each classification attempt adds 9 to 18 s;
-    - up to three attempts are made (`MAXIMUM_CLASSIFY_ATTEMPTS`).
+- **A twenty-page document, in this corpus.** The corpus's only multi-page PDF, D04, has 26 pages,
+  so it is outside the bound. It took 61.3 s with one classification attempt, against D-105's
+  estimate of 41 to 55 s. Every document the bound covers here is one page, or a format with no
+  pages.
 
-    A document near twenty pages whose classification needs a retry could come close to sixty
-    seconds, or pass it. Timing a document of about twenty pages directly, several times, would
-    settle that.
+  **Measured separately, the same night:** `../ingestion-twenty-pages-flm/twenty-pages.md`. Five
+  uploads of D04's first twenty pages each took 43.5 to 51.6 s with one classification attempt, so
+  all were within the bound. A retry, which happened once in 26 calls that night, would add a
+  further attempt of about 9 to 17 s, and could take a twenty-page document past sixty seconds.
 - **The M8 host.** This is FLM on the NPU laptop, one of the hosts D-114 allows. D-114 chooses the
   host with the provider, and D-122 is about to make `anthropic` the default. If M8 runs on
   `anthropic` (Claude Haiku 5.5 with Voyage), the bound is re-timed there, on a Voyage-indexed
