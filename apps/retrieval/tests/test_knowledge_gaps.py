@@ -338,7 +338,10 @@ Q_RESTRICTED = "Who is on the succession register for the chair?"  # top: the re
 Q_READABLE = "How many days a week can I work from home?"  # top: the readable chunk
 Q_RESTRICTED_FIRST = "Is the chair's succession linked to home working?"  # both admitted, restricted top
 Q_READABLE_FIRST = "Do home working days affect the chair's succession?"  # both admitted, readable top
-Q_NOTHING = "What colour are the new staff lanyards going to be?"  # nothing above the threshold
+# Below RELEVANCE_THRESHOLD everywhere (0.25 with one chunk, 0 with the other): the top-ranked
+# passage still decides (D-108's note of 10 November 2026).
+Q_RESTRICTED_BELOW = "Is the chair's succession being talked about?"  # top: the restricted chunk, 0.25
+Q_READABLE_BELOW = "Are the home working days changing next year?"  # top: the readable chunk, 0.25
 S_RESTRICTED = "succession register"  # matches the restricted chunk only
 S_NOWHERE = "volcano insurance"  # matches nothing anywhere
 
@@ -362,7 +365,8 @@ def corpus(administrator, designed):
             # RELEVANCE_THRESHOLD, and the restricted one ranks first.
             Q_RESTRICTED_FIRST: at_cosine(0.9, axis=0, towards=1),
             Q_READABLE_FIRST: at_cosine(0.9, axis=1, towards=0),
-            Q_NOTHING: unit(5),
+            Q_RESTRICTED_BELOW: at_cosine(0.25, axis=0, towards=5),
+            Q_READABLE_BELOW: at_cosine(0.25, axis=1, towards=5),
             S_NOWHERE: unit(6),
         }
     )
@@ -416,9 +420,21 @@ def test_an_administrators_unanswered_question_is_always_kept(corpus, administra
     assert all(in_log(row) for row in rows)
 
 
-def test_a_question_nothing_answers_for_anybody_is_kept(corpus, employee):
-    """Nothing above RELEVANCE_THRESHOLD over the whole corpus: nobody could have been answered."""
-    row = ask(employee, Q_NOTHING, at=hours_ago(1))
+def test_a_question_whose_best_passage_is_restricted_is_left_out_below_the_threshold(corpus, employee):
+    """Objective 06's P02, in miniature: nothing clears RELEVANCE_THRESHOLD, but the best evidence
+    for an answer is Administrator-only, so the no-answer is a permission matter (D-108's note of
+    10 November 2026). The rule as first built kept this row."""
+    assert 0.25 < RELEVANCE_THRESHOLD  # the premise: below the threshold
+    row = ask(employee, Q_RESTRICTED_BELOW, at=hours_ago(1))
+
+    run_cycle()
+
+    assert not in_log(row)
+
+
+def test_a_question_whose_best_passage_is_readable_is_kept_below_the_threshold(corpus, employee):
+    """Nothing clears RELEVANCE_THRESHOLD and the best passage is one the asker may read: a gap."""
+    row = ask(employee, Q_READABLE_BELOW, at=hours_ago(1))
 
     run_cycle()
 

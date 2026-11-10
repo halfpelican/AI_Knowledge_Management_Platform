@@ -25,14 +25,21 @@ re-scan safe in any case. Nothing here depends on two timestamps differing: Wind
 question is embedded on its own wording with the query prefix, through ``embed_question``, the
 pipeline's one embedding path. It is ranked over ``candidate_chunks(role_name="Administrator")``,
 which since D-66 is every stamped chunk, through the one scoping helper, so no new unscoped query
-shape exists. It is admitted at ``RELEVANCE_THRESHOLD`` with ``rank`` and ``admit``, unchanged.
-Then:
+shape exists. Then, on the top-ranked passage, **whether or not it clears ``RELEVANCE_THRESHOLD``**
+(the user's decision of 10 November 2026, D-108's note):
 
-- nothing admitted: nobody could have been answered, and the row is a gap;
-- the top admitted passage's ``visible_to_roles`` has no overlap with the asker's effective roles:
-  the row is permission-affected and is left out;
+- no passage of the question's embedding model exists: nothing restricted can explain the
+  no-answer, and the row is a gap;
+- the top-ranked passage's ``visible_to_roles`` has no overlap with the asker's effective roles:
+  the best evidence for an answer is where the asker cannot read it, so the row is
+  permission-affected and is left out;
 - otherwise the best match was readable by the asker, so their no-answer was not a permission
   matter, and the row is a gap.
+
+As first built the rule admitted at ``RELEVANCE_THRESHOLD`` first and kept every row with nothing
+admitted. Objective 06's first cycle on the frozen thirty then kept P02, whose answer exists only
+in an Administrator-only document scoring 0.2977 to 0.2983, inside D-40's drift of the threshold;
+the change was made after, and because of, that result, and is disclosed as such.
 
 For a search, the same keyword search is counted again as the Administrator through
 ``search_total``, which writes no ``SearchLog`` row. Above zero, the asker's role withheld it and
@@ -85,7 +92,7 @@ from apps.retrieval.models import (
     SearchLog,
 )
 from apps.retrieval.query_embedding import embed_question
-from apps.retrieval.ranking import admit, cosine_similarity, rank
+from apps.retrieval.ranking import cosine_similarity, rank
 from apps.retrieval.scoping import candidate_chunks, effective_roles
 from apps.retrieval.search import search_total
 
@@ -245,14 +252,15 @@ def _window(started_at: datetime) -> tuple[QuerySet[QueryLog], QuerySet[SearchLo
 def _question_explained_by_permissions(
     row: QueryLog, embedding: EmbeddingResult, scope: _AdministratorScope
 ) -> bool:
-    """D-108's rule for a question: True when the top admitted passage over the Administrator's
-    scope is one the asker's role cannot read."""
+    """D-108's rule for a question: True when the top-ranked passage over the Administrator's
+    scope, whether or not it clears RELEVANCE_THRESHOLD, is one the asker's role cannot read
+    (D-108's note of 10 November 2026)."""
     chunks, roles = scope.for_model(embedding.model)
-    admitted = admit(rank(chunks, embedding.vectors[0]))
-    if not admitted:
-        # Nothing cleared RELEVANCE_THRESHOLD for anybody: a gap.
+    ranked = rank(chunks, embedding.vectors[0])
+    if not ranked:
+        # No passage of this embedding model anywhere: nothing restricted explains it, a gap.
         return False
-    top = admitted[0]
+    top = ranked[0]
     asker_roles = set(effective_roles(row.user.role.role_name))
     # A role missing from EFFECTIVE_ROLES reads nothing, so every top passage is unreadable to
     # it and its rows are left out: the list never shows a question whose answer may exist.

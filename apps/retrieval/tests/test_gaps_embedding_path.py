@@ -34,7 +34,7 @@ from django.utils import timezone
 import apps.ai
 from apps.ai.base import EmbeddingResult
 from apps.ai.testing import STUB_EMBEDDING_MODEL
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, NO_RELEVANT_PASSAGE, SOURCE_TYPES
+from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EFFECTIVE_ROLES, NO_RELEVANT_PASSAGE, SOURCE_TYPES
 from apps.documents.models import ContentChunk, Document
 from apps.retrieval import gaps, query_embedding
 from apps.retrieval.gaps import run_cycle
@@ -50,7 +50,7 @@ PREFIXES_MODULE = "apps.ai.prefixes"
 # --- 1. Behaviour: every text through embed_question, nothing to the provider ----------------
 
 Q_LEFT_OUT = "Who is on the succession register for the chair?"  # top passage Administrator-only
-Q_KEPT = "What colour are the new staff lanyards going to be?"  # nothing above the threshold
+Q_KEPT = "What colour are the new staff lanyards going to be?"  # top passage readable by both roles
 Q_TURN = "And who orders the lanyards?"  # a conversation turn, embedded on its own wording
 Q_ANSWERED = "How much annual leave do I get each year?"  # answered: never considered
 S_LEFT_OUT = "succession register"  # the Administrator's recount finds it
@@ -60,6 +60,13 @@ S_KEPT = "volcano insurance"  # nobody finds it
 def unit(axis: int) -> list[float]:
     vector = [0.0] * settings.EMBEDDING_DIMENSION
     vector[axis] = 1.0
+    return vector
+
+
+def between(first: int, second: int) -> list[float]:
+    """A unit vector at equal angles to ``unit(first)`` and ``unit(second)`` (cosine 0.707 with each)."""
+    vector = [0.0] * settings.EMBEDDING_DIMENSION
+    vector[first] = vector[second] = 0.5 ** 0.5
     return vector
 
 
@@ -127,6 +134,19 @@ def test_every_considered_text_goes_through_embed_question_and_nothing_reaches_t
         chunk_text="The succession register names two candidates for the chair.",
         embedding=unit(0), embedding_model=STUB_EMBEDDING_MODEL,
         embedding_dimension=settings.EMBEDDING_DIMENSION, visible_to_roles=[ADMINISTRATOR_ROLE_NAME],
+    )
+    # Since D-108's note of 10 November 2026 the top-ranked passage decides even below the
+    # threshold, so the questions that stay in the log need a readable passage nearest to them.
+    readable = Document.objects.create(
+        title="Lanyard supplies", file_type="pdf", uploaded_by=administrator,
+        visible_to_roles=list(EFFECTIVE_ROLES[ADMINISTRATOR_ROLE_NAME]),
+    )
+    ContentChunk.objects.create(
+        source_type=SOURCE_TYPES[0], source_id=readable.id, chunk_index=0,
+        chunk_text="Lanyards are ordered from the stationery supplier each quarter.",
+        embedding=between(5, 6), embedding_model=STUB_EMBEDDING_MODEL,
+        embedding_dimension=settings.EMBEDDING_DIMENSION,
+        visible_to_roles=list(EFFECTIVE_ROLES[ADMINISTRATOR_ROLE_NAME]),
     )
     thread = Conversation.objects.create(user=employee, title="Lanyards")
     left_out = ask(employee, Q_LEFT_OUT, hours_ago=6)
