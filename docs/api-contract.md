@@ -104,9 +104,28 @@ Response bodies the front end relies on (Stage 2 implementation):
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
 - CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
   `POST /api/auth/login` when the browser already holds a session.
+  - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
+    (D-124).** That is so the check never reads the request body. Every client already sends the
+    header.
+  - **A refusal is `403 {"detail": "CSRF Failed: ..."}`,** given before any permission check,
+    throttle or body is read.
 - `POST /api/auth/register` starts no session (D-23).
 - Any endpoint, a request body that is not `application/json`: `415`. The API parses
   JSON only, which is what stops a cross-site form from posting credentials (D-24).
+- Any endpoint that reads a JSON body, one declaring more than 2.5 MiB:
+  `400 {"detail": "Bad request."}`, refused unread.
+  - **Why:** DRF parses JSON from `request.body`, which applies Django's
+    `DATA_UPLOAD_MAX_MEMORY_SIZE` to the declared length.
+  - **Not new:** it held from the start and was first written down at D-124. The one body it does
+    not cover is FR-09's pasted transcript above 50 MB, which gets the upload ceiling's `413`.
+- Any endpoint, a body declaring `MAX_REQUEST_BODY_BYTES` (54,525,952) or more: `413` from Waitress,
+  not from the API (D-124).
+  - **It is Waitress's own plain-text page, not JSON.** Waitress gives it at the request's headers,
+    before reading the body, then closes the connection. A client still sending may see the
+    connection reset instead.
+  - **A chunked body declares no length.** Waitress counts it as it arrives and refuses it when it
+    reaches the cap, so up to the cap is received first.
+  - **It applies only where the server is started as `docs/alpha-deployment.md` starts it.**
 
 ## Stage 3 — FR-08, FR-09
 
@@ -152,10 +171,33 @@ content than may be inflated — the same step, a different rejection**), then s
 says why the permission is first — "it is the cheapest rejection, and the user's role
 may have changed during a transfer of up to 50 MB".
 
-**The size ceiling is applied twice**: once against the declared `Content-Length`,
-before the body is parsed, so a 50 MB transfer is refused without being buffered; and
-once against the bytes actually received, for a client that lies about or omits the
-header.
+**The size ceiling is applied twice**: once against the declared `Content-Length`, before the
+body is read, and once against the bytes actually received. The second is defence in depth:
+Django reads no more of a body than its declared length, so a body cannot carry a larger file than
+it declares.
+
+- **One step runs ahead of the order above, as it has since Stage 3.** The declared-length 413
+  comes before the signature's 415, because the signature cannot be read without reading the body.
+  So an oversized disguised file is `413`, not `415`.
+- **Every step after it** runs in §7.2's order.
+- **Nothing reads the body before the view** (D-124). The view reads it only after the 403, the 429
+  and the declared-length 413.
+
+> **Corrected 11 November 2026 (D-124).** From Stage 3 until then, this paragraph said the first
+> check refused a 50 MB transfer "without being buffered".
+>
+> - **For every signed-in browser session it did not.** DRF's CSRF check read `request.POST`, which
+>   parsed the whole body, spooling the upload to temporary files. That happened before the 403,
+>   the 429 and this 413, so §7.2's "cheapest rejection" was not cheap.
+> - **The suite did not catch it,** because the test client enforces CSRF only when asked.
+> - **The fix:** the CSRF check now reads its token from the `X-CSRFToken` header and parses
+>   nothing.
+
+**What is not refused unread: receiving.** Waitress reads the whole body before Django sees the
+request. The serve command's `--max-request-body-size` caps that, on every route, at
+`MAX_REQUEST_BODY_BYTES`: 54,525,952 bytes, 2 MiB over the upload ceiling (D-124). A body at or
+over that cap is refused by Waitress itself (see Stage 2's last bullet), as is a chunked one when it
+reaches the cap. A body over 50 MB and under the cap gets this route's JSON `413`.
 
 **A third size rejection shares the 413 and does not share the message** (Stage 4
 item 12b). Both checks above are checks on the *upload*, and a 199 KB DOCX whose
@@ -250,7 +292,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `413 {"detail": "Transcript exceeds the maximum permitted size of 50 MB."}` a body, pasted or a file, declaring more than 50 MB, refused before it is read, after the 403 and the 429, nothing stored (*convention*, D-124: FR-09 enumerates only 201 and 400, and a body refused unread has no field to report on); `400 {"detail": "Bad request."}` a pasted transcript whose JSON body declares between 2.5 MiB and 50 MB, refused unread by Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`, nothing stored (always so; first written down at D-124); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope |
 | DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body (D-99; not in the proposal, see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission; `403` the meeting is in scope and the role lacks `manage_meetings` |
@@ -1040,7 +1082,7 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
 | a file in the build, such as `/assets/index-<hash>.js` or `/favicon.svg` | `200` the file. Under `/assets/`, `Cache-Control: max-age=315360000, public, immutable`, because Vite puts a content hash in every name there; anything else, `max-age=60, public` |
 | `/assets/...` naming no file in the build | `404 {"detail": "Not found."}`, never `index.html` |
 | any other path, for `GET` or `HEAD` | `200` the build's `index.html`, `Cache-Control: no-cache`, so the React router answers a reload or a typed address on a client route |
-| any other path, another method | `405`, or Django's `403` page first when the CSRF check refuses it |
+| any other path, another method | `405`, and nothing is read. Until D-124, Django's CSRF check ran first: it could answer its `403` page, and it parsed a multipart body to look for a form-field token. The catch-all is exempt now, because it makes no write |
 | any path outside `/api/`, with no build in `SPA_DIST_DIR` | `404 {"detail": "Not found."}`, as before item 9 |
 
 - **`/media/` is a client route like any other.** It answers `index.html` and never a stored file.

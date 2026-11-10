@@ -984,6 +984,22 @@ administration surface, and is out of the M6 gate.
   is enforcement machinery with its own test, not a demonstrable restriction; say
   that plainly rather than presenting it as access control that does something.
 
+**Dated note, 11 November 2026: the 403 came first among the answers, but not before the body
+was read (D-124).** This entry says the permission "precedes the signature, size and title checks
+exactly as §7.2 `validateUpload()` orders them". Its rationale quotes §7.2's reason: "it is the
+cheapest rejection".
+
+- **The order of the answers was true. The cheapness was not.** Until D-124, every signed-in
+  session holding the CSRF cookie had its whole request body parsed by DRF's CSRF check while it
+  authenticated, before this 403. A multipart upload was parsed whole, with its files spooled to
+  temporary files. A JSON transcript was read and parsed if it was within Django's 2.5 MiB
+  `DATA_UPLOAD_MAX_MEMORY_SIZE`, and refused unread if it was larger. The security review of
+  `feat/FR-09-recording-transcription` found it on 11 November 2026.
+- **D-124 makes the reason true.** The CSRF check reads its token from the header only, so nothing
+  reads the body before this 403, and Waitress's `--max-request-body-size` caps what is received.
+- **`DocumentsView`'s docstring** cited this entry for "before the body is parsed at all". It is
+  corrected, with the same date.
+
 ## D-31 · A token is a whitespace-delimited word
 
 **Status:** Settled by the user · **Date:** 2026-09-21
@@ -5584,6 +5600,17 @@ slice of item 9 that the measurement needs · **Concerns:** Objective 03, NFR-08
 >   shows that window exists. For a retry the server's in-flight 429 closes it; for a removal
 >   nothing does.
 
+**Dated note, 11 November 2026: the serve command gains a body cap (D-124).** Decision 2's command
+becomes
+`waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`.
+
+- **What the flag does:** it caps any request body at `MAX_REQUEST_BODY_BYTES`. Waitress's default
+  is 1 GB.
+- **What it does not touch:** anything a measurement measures. `scripts/server_record.py` neither
+  records nor checks the flag. Its `D85_COMMAND`, the command the scripts print when they refuse a
+  server, now includes it.
+- **Runs recorded before this date** were served without it.
+
 ## D-86 · FR-13 is measured end to end on frozen two-turn threads, built beside Objective 03 and never ahead of it
 
 **Status:** Settled by the user · **Date:** 2026-10-27 · **Stage:** 5 item 6 · **Concerns:**
@@ -9336,3 +9363,222 @@ stub provider and passed locally under that configuration.
   `apps/documents/classification.py`, `scripts/objective05_verify.py`.
 - **Documentation:** `README.md`, `CLAUDE.md` §3 and §4, `docs/ai-provider.md`. D-106 and D-109
   carry dated notes.
+
+## D-124 · Request bodies are bounded before they are read: no CSRF check reads a body, and Waitress caps every body at 54,525,952 bytes
+
+**Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-08, FR-09, FR-02, FR-06,
+D-21, D-30, D-85, D-123, `apps/api/authentication.py`, `apps/api/views.py`, `config/spa.py`,
+`apps/core/constants.py`, `config/settings.py`, `scripts/server_record.py`,
+`scripts/ingest_objective02.py`, `docs/api-contract.md`, `docs/alpha-deployment.md`,
+`docs/measurement-runbook.md`, `tests/load/README.md`
+
+**The defect.** The security review of `feat/FR-09-recording-transcription` found it (D-123). That
+branch recorded it as open and left the shared fix out of its scope. It was verified again here.
+
+- **Django's CSRF check reads `request.POST`**, looking for a `csrfmiddlewaretoken` form field,
+  before it falls back to the `X-CSRFToken` header. That read parses the body. The check ran on two
+  paths.
+  - **DRF's session authentication** (`SessionAuthentication.enforce_csrf`), on every request from a
+    signed-in session. There `request.POST` runs the view's parser.
+    - A multipart upload was parsed whole, its files spooled to temporary files past
+      `FILE_UPLOAD_MAX_MEMORY_SIZE`.
+    - A JSON body was read and parsed if it was within Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`
+      (2.5 MiB). DRF 3.18 parses JSON from `request.body`, which refuses a larger declared length
+      unread, with a 400.
+  - **Django itself, before DRF ran,** signed in or not.
+    - **Where:** `ensure_csrf_cookie` ran it on `POST /api/auth/login` and `/api/auth/me`, and
+      `CsrfViewMiddleware` ran it on the SPA's catch-all, which was not exempt.
+    - **What it took:** a well-formed `csrftoken` cookie, which a client can make up.
+    - **What it read:** Django parses a multipart body whole to answer `request.POST`.
+- **So a body was parsed before any refusal:**
+  - the 401, the 403 and the 429;
+  - the upload routes' declared-length 413;
+  - CSRF's own 403 for a missing header.
+
+  Only a multipart body's files had no ceiling of their own. Their only limit was Waitress's, which
+  the alpha's serve command left at its default, 1 GB. A signed-in Employee could send 1 GB uploads
+  again and again, each received, spooled and parsed before it was refused. On the three routes
+  Django checked, anyone could, signed in or not.
+- **The suite did not see it.** The test client enforces CSRF only when asked, and with CSRF off
+  Django's check returns before it reads anything. The one test that claimed the body went
+  unparsed used such a client.
+- **Measured here,** by running the new tests against the old CSRF paths:
+  - the whole 52,428,801-byte upload was read on both upload routes, before the 403, the 429 and
+    the 413, from both roles;
+  - the whole upload was read on login, `/api/auth/me`, `/` and `/documents`, from a client with a
+    made-up cookie and no session;
+  - 2,048-byte JSON bodies were read on reprocess, and on the ask route before its 429.
+
+**The options weighed.** The choice touched FR-08's documented order of refusals, which §7.2
+`validateUpload()` fixes as permission first, so the user decided it (`CLAUDE.md` §9).
+
+- **(a) Waitress's `--max-request-body-size` on the serve command.** It bounds receiving, on every
+  route. A body under the cap was still parsed before the 403.
+- **(b) A middleware ahead of DRF** that answers 413 when the declared length is over the route's
+  ceiling.
+  - It bounds parsing only above the ceiling.
+  - It puts that 413 before the 401, the 403 and the 429, which changes FR-08's documented order.
+  - It does not bound what Waitress receives.
+- **(c) Both (a) and (b).**
+- **(d) The CSRF check takes its token from the header only,** so nothing parses a body before the
+  view. Offered together with (a).
+
+**The user chose (a) with (d), on 11 November 2026.** The three Django-checked routes came to light
+in review, after the choice. Removing the check there is (d) carried to its end, and changes no
+documented answer except the one in decision 2.
+
+**Decision.**
+
+1. **DRF's CSRF check reads the `X-CSRFToken` header only** (`apps/api/authentication.py`).
+   - **How:** the project's `SessionAuthentication` runs DRF's own `enforce_csrf` on a stand-in
+     for the request whose `POST` is empty. Django's check then goes straight to the header.
+   - **Unchanged:** everything else Django checks, which is the CSRF cookie, the token's match
+     against it, and the Origin and Referer headers.
+   - **Given up:** the `csrfmiddlewaretoken` form field as a second place for the token. Nothing
+     uses it. The SPA, the measurement scripts and the load test all send the header, which is
+     what D-21 and the contract already describe.
+2. **Django no longer runs its own check on the three routes that had it.**
+   - **Login and `/api/auth/me` drop `ensure_csrf_cookie`.** `SendsCsrfCookieMixin` in
+     `apps/api/views.py` keeps what the decorator was there for: the `csrftoken` cookie, sent with
+     every response, a 401 or 429 included. It calls `get_token()` in `finalize_response`.
+   - **Why that loses nothing:** the check the decorator ran never refused anything, because
+     `ensure_csrf_cookie` does not reject. A session's unsafe request to these views is still
+     checked by DRF.
+   - **The SPA's catch-all (`config/spa.py`) is `csrf_exempt`.** It makes no write: `require_safe`
+     answers every unsafe method 405, and that 405 now comes first. The contract's "or Django's
+     `403` page first" for such a request goes with it.
+3. **So nothing reads a body before the view, on any route, under Waitress** (runserver is below).
+   - **DRF views:** decision 1.
+   - **Login, `/api/auth/me` and the catch-all:** decision 2.
+   - **A path that matches no route:** never reaches a view or a CSRF check.
+   - **A built file:** WhiteNoise answers an unsafe method 405 without reading the body.
+   - **The upload's order:** FR-08's order now holds for reading as well as for answering: 401,
+     403, 429, the declared-length 413, then the rest of §7.2. The upload's 403 is now "the
+     cheapest rejection" in fact (D-30's dated note).
+   - **Unchanged since Stage 3:** the declared-length 413 still comes before the signature's 415,
+     because the signature cannot be read without reading the body. The contract now says so.
+4. **`POST /api/meetings` gets the upload's declared-length check.**
+   - **The answer:** a body over `MAX_UPLOAD_BYTES` is 413 `TRANSCRIPT_TOO_LARGE_MESSAGE`. It comes
+     after the 403 and the 429, and before the body is read.
+   - **A *convention*:** FR-09 enumerates only 201 and 400, and a body refused unread has no field
+     to report an error on.
+   - **A transcript file** had no ceiling before this but Waitress's 1 GB.
+   - **A pasted transcript** was already held to 2.5 MiB by Django. Between 2.5 MiB and 50 MB it is
+     `400 {"detail": "Bad request."}`, refused unread, which the contract now lists. Above 50 MB the
+     new 413 replaces that 400.
+   - **One helper serves both upload routes:** `declares_a_body_over_the_upload_ceiling` in
+     `apps/api/views.py`.
+5. **`POST /api/documents/{id}/reprocess` takes no body, and now reads none,** so it needs no
+   ceiling of its own.
+6. **Waitress caps every request body at `MAX_REQUEST_BODY_BYTES`, 54,525,952 bytes,** which is
+   2 MiB over `MAX_UPLOAD_BYTES`.
+   - **Where:** `--max-request-body-size=54525952` is on every documented serve command:
+     `docs/alpha-deployment.md`, `docs/measurement-runbook.md`, `tests/load/README.md`, and
+     `scripts/server_record.py`'s `D85_COMMAND` (D-85's dated note).
+   - **How Waitress refuses:** a declared length at or over the cap is refused at the headers,
+     before the body is read, with Waitress's own plain-text 413, and the connection is closed. A
+     chunked body declares no length, so Waitress counts it as it arrives and refuses it at the
+     cap.
+   - **Why 2 MiB of margin:** a body a little over the upload ceiling still gets the API's JSON
+     413. That includes the Objective 02 ingestion's oversized item I02, which is generated 1 MiB
+     past the ceiling, so its recorded outcome is unchanged.
+
+**Claims corrected, each with its date:**
+
+- the `FILE_UPLOAD_MAX_MEMORY_SIZE` comment in `config/settings.py`;
+- D-30, in a dated note: the 403 came first among the answers, but not before the reading;
+- `docs/api-contract.md`:
+  - Stage 3's "The size ceiling is applied twice: once against the declared `Content-Length`,
+    before the body is parsed";
+  - item 9's "or Django's `403` page first";
+- in `apps/api/views.py`:
+  - `DocumentsView`'s docstring and its `post` comment;
+  - `MeetingsView._transcript_from`'s "the transcript path cannot answer 413";
+- the docstring of `test_an_oversized_body_is_refused_before_it_is_parsed` in
+  `apps/api/tests/test_document_upload.py`;
+- the comment in `scripts/ingest_objective02.py` that had the view's 413 answer "before reading
+  the whole body". Under Waitress, the view answers only after the whole body has been received.
+
+**What it covers:**
+
+- **Every route, for reading before the view, under Waitress** (decision 3).
+- **The two upload routes' bodies over `MAX_UPLOAD_BYTES`,** refused unread by their declared
+  length.
+- **Every route's body declared at or over `MAX_REQUEST_BODY_BYTES`,** refused by Waitress before
+  it is received, where the server is started as documented. A chunked one is refused when it
+  reaches the cap.
+
+**What it does not cover:**
+
+- **A server started without the flag.** The cap is a command-line option, so nothing in the
+  application can enforce it.
+  - `scripts/server_record.py` records the observed command line, which shows the flag when it is
+    there, but it checks only the server and the thread count.
+  - A server started with an old command still takes bodies up to 1 GB. The application still
+    refuses such a body unread past the upload ceiling, but Waitress has already received it and
+    spooled it to a temporary file.
+- **Receiving under the cap.** Waitress reads a body of up to 54,525,952 bytes before Django sees
+  it, whatever the route, and whether or not the body is then refused. A chunked body is received
+  up to the cap before Waitress refuses it.
+- **Django's runserver.** After the response, runserver's handler reads whatever the application
+  left unread, in a single read, and runserver has no body limit. So "refused unread" holds under
+  Waitress only. Runserver is for development.
+- **JSON bodies under Django's ceiling.**
+  - **The cost:** a JSON body of up to 2.5 MiB is read and parsed in memory, now in the view, after
+    the 403 and the 429. The security review measured `json.load`'s peak at about 25 times the
+    body for a body of many small objects: 126 MB for a 5 MB body, measured outside the app. That
+    is about 60 MB at the ceiling.
+  - **Who can send them:** a route without a throttle takes such bodies as fast as it answers them.
+    Login and registration take them from signed-out clients, within the auth throttle's 20 a
+    minute per address.
+  - **Not part of this change:** a smaller JSON ceiling.
+- **`POST /api/transcriptions` (D-123) is not on main.**
+  - Its own declared-length check runs before `request.data`, so once both branches are merged a
+    body over the ceiling is refused unread there too. Two statements on that branch then become
+    untrue: the view's docstring ("These order the answers, not the reading of the body") and the
+    comment in `post` ("does not spare the parse").
+  - That is not tested here. The merge should add the route to
+    `apps/api/tests/test_request_body_bound.py` and give D-123's open item a dated note.
+  - Whether that route should accept bodies up to `MAX_UPLOAD_BYTES` at all is D-123's own
+    question. A valid segment is about 1.92 MB.
+- **The response above the cap.** Waitress's 413 is plain text, not the contract's JSON, and a
+  client still sending when Waitress closes the connection may see a reset instead. The SPA never
+  sends that much: the upload and meeting forms screen a file's size before sending it.
+- **The meeting form's answers.** It shows its generic refusal for the 413, which the page reaches
+  only with a pasted transcript over 50 MB, and for Django's 400 between 2.5 MiB and 50 MB.
+- **A file within a few hundred bytes of 50 MB.** The declared-length check refuses it, because the
+  body adds the multipart framing to the file. That is unchanged since Stage 3.
+
+**Tests:** `apps/api/tests/test_request_body_bound.py`.
+
+- **How each request is sent:** as the SPA sends it, with CSRF enforced and the `csrftoken` cookie
+  from `GET /api/auth/me` returned in `X-CSRFToken`, from an Employee session and an Administrator
+  session. The exceptions are signed-out requests carrying a made-up cookie.
+- **How a read is detected:** the body is a stream that counts what is read from it, installed as
+  `wsgi.input`, so it sees any reader. A multipart body is a well-formed upload of one file. Bytes
+  read are asserted before status.
+- **What they check:**
+  - an oversized body gets a 413 and is not read, on both upload routes, multipart and JSON;
+  - a pasted transcript between 2.5 MiB and 50 MB gets Django's 400, unread;
+  - no body is read before the 401, the 403 or the 429 on either upload route, and the 403 comes
+    before the 413;
+  - reprocess reads no body, and `/api/ask` reads none before its 429;
+  - login, `/api/auth/me`, `/` and `/documents` read nothing, signed out with a made-up cookie or
+    signed in, and login and `/api/auth/me` still send the cookie;
+  - the CSRF check still refuses, without reading: no header, a wrong token, the token only in a
+    form field, a foreign Origin, no cookie;
+  - an upload and a transcript sent with the header are stored;
+  - Waitress refuses a body at the cap at its headers, without calling the application;
+  - every documented serve command carries the flag, `D85_COMMAND` included, and I02 stays under
+    the cap.
+- **Checked against the code before the fix:** the old `apps/api/authentication.py`, the two
+  `ensure_csrf_cookie` decorators and the old `config/spa.py` were put back. Then 32 of the new
+  tests fail.
+  - 30 fail because the body was read: 52,428,801, 2,048 or 136 bytes.
+  - 2 fail because Django answered its own 400 where the 413 is expected, for a JSON transcript
+    over 2.5 MiB, which it refused unread even then.
+
+**Reviewed on 11 November 2026.** A security review and a requirements audit ran on the first
+version of this change, and found the three Django-checked routes and a false premise about JSON.
+This entry and the code carry both corrections, and the tests above were re-run against the old
+code.
