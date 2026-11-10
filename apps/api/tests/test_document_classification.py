@@ -37,6 +37,7 @@ from apps.core.constants import (
     PROJECT_DIMENSION,
     SOURCE_TYPES,
     TOPIC_DIMENSION,
+    USER_APPLIED,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
@@ -544,6 +545,15 @@ def test_the_detail_carries_the_classification_and_every_link_sorted_by_dimensio
     for dimension, name in ((PROJECT_DIMENSION, "bridge maintenance"), (PROCESS_DIMENSION, "procurement"),
                             (TOPIC_DIMENSION, "safety"), (PROJECT_DIMENSION, "harbour upgrade")):
         Tag.objects.create(tag_name=name, dimension=dimension)
+    # A Topic is in the scheme only when another source the audience reads carries it (D-105's
+    # dated note of 10 November 2026, night); until then an unlinked Topic was vocabulary, and this
+    # test relied on that. The other document's link is not this document's, so tag_details below
+    # is unchanged.
+    ContentTag.objects.create(
+        tag=Tag.objects.get(tag_name="safety"), source_type=DOCUMENT_SOURCE_TYPE,
+        source_id=make_document(session_client.user, title="Site rules").pk,
+        applied_by=USER_APPLIED, confirmed=True,
+    )
     stub_ai_service.classification = classification(
         department="People",
         tags=[

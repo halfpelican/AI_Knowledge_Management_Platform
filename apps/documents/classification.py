@@ -146,14 +146,21 @@ def tag_scheme(document: Document) -> TagScheme:
     - ``departments`` is the intersection, across the audience, of the distinct non-blank
       ``Documents.department`` values of the documents each role may read. A department carried
       only by documents some role in the audience cannot read is withheld.
-    - ``tags`` holds, for each of REPOSITORY_TAG_DIMENSIONS, the active ``Tag`` names, except a
-      tag that has at least one ``ContentTag`` link and, for some role in the audience, no link to
-      a source that role may read: documents through ``scoped_documents``, meetings through
-      ``scoped_meetings``, since the join table admits both source types. A tag with no links is
-      vocabulary only, says nothing about any source, and is always in. Every link counts,
-      provisional, unconfirmed and removed ones included: a held suggestion, or one a person
-      removed, on a restricted document is still a fact about that document, and a removal must
-      not turn a restricted value into vocabulary every audience is offered.
+    - ``tags`` holds, for each of REPOSITORY_TAG_DIMENSIONS, the active ``Tag`` names that every
+      role in the audience can read a source of: documents through ``scoped_documents``, meetings
+      through ``scoped_meetings``, since the join table admits both source types. Every link
+      counts, provisional, unconfirmed and removed ones included: a held suggestion, or one a
+      person removed, on a restricted document is still a fact about that document, and a removal
+      must not turn a restricted value into vocabulary every audience is offered.
+    - **A Project or Process tag with no links at all** is vocabulary only, says nothing about any
+      source, and is in. **A Topic with no links is not** (D-105's dated note of 10 November
+      2026, night, from the lead's review). A Topic is the one name a person can type
+      (``apply_tag``). While an unlinked Topic was admitted as vocabulary and a Topic linked only
+      on restricted material was not, apply, remove and apply again told an Employee whether a
+      restricted Topic name exists: the second apply was a 409 for a name nothing carried and a 201
+      for a restricted one, and ``tag_options`` differed the same way in between. So a Topic is in
+      only if every audience role reads a source carrying it. Nobody can type a Project or Process
+      name, and ``tag_id`` accepts only offered tags, so their vocabulary stays.
 
     **An empty audience gets the full scheme.** A document whose ``visible_to_roles`` is empty is
     readable by nobody (``scoped_*`` fail closed), so there is no reader to protect. D-29 refuses
@@ -163,8 +170,8 @@ def tag_scheme(document: Document) -> TagScheme:
     more roles keeps the values it was classified against; widening should reclassify.
 
     **A role name scoping does not know** (one missing from EFFECTIVE_ROLES) reads nothing, so
-    every linked value and every department is withheld from a document it is in the audience
-    of. That fails closed, as ``scoped_documents`` does.
+    every linked value, every Topic and every department is withheld from a document it is in
+    the audience of. That fails closed, as ``scoped_documents`` does.
     """
     audience = list(dict.fromkeys(document.visible_to_roles))  # distinct, in order
     active_tags = Tag.objects.filter(
@@ -194,21 +201,26 @@ def tag_scheme(document: Document) -> TagScheme:
             )
         linked_tag_ids = set(ContentTag.objects.values_list("tag_id", flat=True).distinct())
 
-        def admitted(tag_id) -> bool:
-            # Unlinked: vocabulary only, always in. Linked: every role must read one of its sources.
-            return tag_id not in linked_tag_ids or tag_id in readable_tag_ids
+        def admitted(tag_id, dimension) -> bool:
+            # Every role reads one of its sources: in, in any dimension.
+            if tag_id in readable_tag_ids:
+                return True
+            # Otherwise only an unlinked Project or Process tag, vocabulary that names no source.
+            # An unlinked Topic is out: a person can name a Topic, and admitting it while a Topic
+            # linked only on restricted material is out answers whether that one exists.
+            return dimension != TOPIC_DIMENSION and tag_id not in linked_tag_ids
 
     else:
         departments = set(
             Document.objects.exclude(department="").values_list("department", flat=True).distinct()
         )
 
-        def admitted(tag_id) -> bool:
+        def admitted(tag_id, dimension) -> bool:
             return True
 
     names = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
     for tag_id, dimension, tag_name in active_tags:
-        if admitted(tag_id):
+        if admitted(tag_id, dimension):
             names[dimension].append(tag_name)
     return TagScheme(
         doc_types=tuple(DOCUMENT_TYPES),
@@ -241,15 +253,19 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
     role reads. ``tag_scheme`` admits a linked tag only if EVERY audience role, R included, can
     read a source carrying it, and EFFECTIVE_ROLES is closed under generalisation (each role reads
     its own, and an Administrator also reads all an Employee reads, D-66), so what R reads, the
-    caller reads: every linked value offered is on a source the caller could open. An unlinked tag
-    is vocabulary only (D-105) and names no source. An inactive tag is never offered. A document
+    caller reads: every linked value offered is on a source the caller could open, and every
+    Topic offered is linked, since an unlinked Topic is in no scheme. An unlinked Project or Process
+    tag is vocabulary only (D-105) and names no source. An inactive tag is never offered. A document
     with an empty audience would get the full scheme, but ``scoped_*`` fail closed on it, so no
     caller ever reaches its detail.
 
-    **What it does reveal, stated rather than glossed:** the names of unlinked tags, which
-    ``tag_scheme`` has always put in every classification prompt. A tag whose last link was deleted
-    joins them: a person's own tag removed from its only document, or the only document carrying
-    a tag deleted. A removed AI link is kept, and keeps its tag linked.
+    **What it does reveal, stated rather than glossed:** the names of unlinked Project and Process
+    tags, which ``tag_scheme`` has always put in every classification prompt, and which nobody can
+    type or apply except from this list. One whose last link is deleted joins them, and only
+    deleting the documents that carry it does that, which is a ``manage_documents`` holder's
+    action. **An unlinked Topic is not offered** (D-105's dated note of 10 November 2026, night),
+    so a person removing their own Topic from its only document cannot make a Topic name appear
+    here, and nor can a document's deletion. A removed AI link is kept, and keeps its tag linked.
     """
     options = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
     for (dimension, name), tag_id in sorted(offered_tags(document).items(), key=lambda item: item[0][1]):
@@ -624,10 +640,12 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       taxonomy growth). **The 409 and the rule that keeps it from disclosing anything:** a name that
       is an active Topic in this document's scheme raises ``TopicAlreadyOffered``, because the
       caller is already offered it. A Topic of that name that exists but is NOT in the scheme is
-      carried only by material some reader of this document cannot see, or is inactive; answering
-      409 for it would tell the caller a restricted value exists. So it is linked as it stands,
-      reactivated if it was inactive (as ``confirm_proposed_topic`` does), and answered exactly as a
-      new Topic is. Only a name no Topic has creates a Tag.
+      carried only by material some reader of this document cannot see, carried by nothing at all
+      (``tag_scheme`` admits no unlinked Topic), or inactive. Answering 409 for any of those would
+      tell the caller whether a restricted value exists, directly or by applying, removing and
+      applying again. So it is linked as it stands, reactivated if it was inactive (as
+      ``confirm_proposed_topic`` does), and answered exactly as a new Topic is. Only a name no Topic
+      has creates a Tag.
 
     Then the link (``_apply_link``): a new one is ``applied_by="user"``, ``confirmed=True`` (as the
     D-74 seed sets a person's links), not provisional, not removed, ``confidence`` null, and

@@ -239,7 +239,10 @@ def test_a_new_topic_is_created_and_linked_as_the_persons(session_client):
 
 def test_a_topic_name_already_offered_is_409(session_client):
     document = make_document(session_client.user)
-    offered = Tag.objects.create(tag_name="safety", dimension=TOPIC_DIMENSION)  # unlinked: offered
+    offered = Tag.objects.create(tag_name="safety", dimension=TOPIC_DIMENSION)
+    # Offered because another document both roles read carries it. Until D-105's dated note of 10
+    # November 2026 (night) an unlinked Topic was offered as vocabulary, and this test relied on it.
+    link(offered, make_document(session_client.user, title="Site rules"))
 
     response = apply(session_client.client, document.id, dimension=TOPIC_DIMENSION, tag_name=" SAFETY ")
 
@@ -373,3 +376,52 @@ def test_apply_tag_refuses_a_name_that_normalises_to_nothing(document):
         apply_tag(document, tag_name="   ")
     assert not Tag.objects.exists()
     assert not links_of(document).exists()
+
+
+# --- Apply, remove, apply again: the same answers either way (D-105's dated note, the lead's review)
+
+
+def three_steps(client, doc_id, name):
+    """Apply a new Topic name, remove the link that made, read the options, apply the name again.
+    Returns the three status codes and the document's ``tag_options`` after the removal."""
+    first = apply(client, doc_id, dimension=TOPIC_DIMENSION, tag_name=name)
+    entry = next(item for item in first.json()["tag_details"] if item["name"] == name)
+    removed = client.delete(f"{DOCUMENTS_URL}/{doc_id}/tags/{entry['content_tag_id']}")
+    options = detail(client, doc_id)["tag_options"]
+    second = apply(client, doc_id, dimension=TOPIC_DIMENSION, tag_name=name)
+    return (first.status_code, removed.status_code, second.status_code), options
+
+
+def test_apply_remove_apply_answers_alike_whether_or_not_a_restricted_topic_exists(
+    employee, employee_client, restricted
+):
+    """The oracle the lead's review found in the 409 rule as first built. An Employee applies a
+    Topic name to a document both roles read, removes it (a person's link is deleted) and applies it
+    again. While an unlinked Topic was vocabulary, the second apply was a 409 for a name nothing
+    else carried and a 201 for one carried only by Administrator-only material, and the options
+    in between differed the same way. Now both runs answer 201, 204, 201 and offer the same."""
+    document = make_document(employee)
+    name = "merger talks"
+    as_new = answered_then_undone(lambda: three_steps(employee_client, document.id, name))
+    assert not Tag.objects.filter(tag_name=name).exists()
+
+    topic = Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION)
+    link(topic, restricted)  # the restricted Topic: on the Administrator-only document alone
+    as_restricted = three_steps(employee_client, document.id, name)
+
+    assert as_new[0] == as_restricted[0] == (201, 204, 201)
+    assert as_new[1] == as_restricted[1]
+    assert name not in [entry["tag_name"] for entry in as_new[1][TOPIC_DIMENSION]]
+
+
+def test_applying_removing_and_applying_a_new_topic_again_is_201_204_201(session_client):
+    """The mirror from both roles, each on a document of their own role: the Employee on an
+    Employee-only document, the Administrator on an Administrator-only one. A name a person applied
+    and removed is not offered afterwards, and applying it again links it again."""
+    document = make_document(session_client.user, roles=[session_client.role_name])
+
+    codes, options = three_steps(session_client.client, document.id, "night shifts")
+
+    assert codes == (201, 204, 201)
+    assert options[TOPIC_DIMENSION] == []
+    assert Tag.objects.filter(tag_name="night shifts", dimension=TOPIC_DIMENSION).count() == 1

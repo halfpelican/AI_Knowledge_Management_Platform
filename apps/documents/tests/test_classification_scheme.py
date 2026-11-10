@@ -96,11 +96,14 @@ def test_a_tag_linked_only_to_an_administrator_only_document_is_withheld_from_an
     assert RESTRICTED_PROJECT in tag_scheme(administrator_document).tags[PROJECT_DIMENSION]
 
 
-def test_an_unlinked_tag_is_vocabulary_only_and_in_both_schemes(
+def test_the_corpus_unlinked_topic_is_in_neither_scheme(
     corpus, employee_document, administrator_document
 ):
-    assert UNLINKED_TOPIC in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
-    assert UNLINKED_TOPIC in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
+    """Until D-105's dated note of 10 November 2026 (night) an unlinked tag of any dimension was
+    vocabulary and in both schemes, and this test asserted it. An unlinked Topic is now in neither:
+    the section below says why."""
+    assert UNLINKED_TOPIC not in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
+    assert UNLINKED_TOPIC not in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
 
 
 def test_a_tag_both_audiences_can_read_a_source_of_is_in_both_schemes(
@@ -156,6 +159,52 @@ def test_a_tag_linked_only_to_a_restricted_meeting_is_withheld_the_table_admits_
     assert BOARD_TOPIC in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
 
 
+# --- A Topic must be on a source the audience reads (D-105's dated note of 10 November 2026, night)
+#
+# From the lead's review: an unlinked Topic admitted as vocabulary, beside a Topic linked only on
+# restricted material and withheld, let apply, remove and apply again tell an Employee whether a
+# restricted Topic name exists. A Topic is now in only if every audience role reads a source carrying
+# it; unlinked Project and Process tags stay vocabulary, since nobody can type their names.
+
+TOPIC_LINK_STATES = {"removed": {"removed": True}, "held": {"provisional": True}}
+
+
+def test_an_unlinked_topic_is_in_no_scheme(employee_document, administrator_document):
+    Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)
+    for document in (employee_document, administrator_document):
+        assert "night shifts" not in tag_scheme(document).tags[TOPIC_DIMENSION]
+
+
+def test_unlinked_project_and_process_tags_are_still_vocabulary(employee_document, administrator_document):
+    Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION)
+    Tag.objects.create(tag_name="purchasing", dimension=PROCESS_DIMENSION)
+    for document in (employee_document, administrator_document):
+        the_scheme = tag_scheme(document)
+        assert "harbour upgrade" in the_scheme.tags[PROJECT_DIMENSION]
+        assert "purchasing" in the_scheme.tags[PROCESS_DIMENSION]
+
+
+@pytest.mark.parametrize("state", sorted(TOPIC_LINK_STATES))
+def test_a_topic_whose_only_link_is_removed_or_held_on_a_readable_source_is_in(
+    employee_document, administrator_document, state
+):
+    topic = Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)
+    link(topic, DOCUMENT_SOURCE_TYPE, employee_document.pk, applied_by=AI_APPLIED, confirmed=False,
+         **TOPIC_LINK_STATES[state])
+    # Both audiences read the Employee-visible document, an Administrator through D-66.
+    for document in (employee_document, administrator_document):
+        assert "night shifts" in tag_scheme(document).tags[TOPIC_DIMENSION]
+
+
+@pytest.mark.parametrize("state", sorted(TOPIC_LINK_STATES))
+def test_the_same_topic_on_a_restricted_source_is_out(employee_document, administrator_document, state):
+    topic = Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)
+    link(topic, DOCUMENT_SOURCE_TYPE, administrator_document.pk, applied_by=AI_APPLIED,
+         confirmed=False, **TOPIC_LINK_STATES[state])
+    assert "night shifts" not in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
+    assert "night shifts" in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
+
+
 # --- The edges of the audience -----------------------------------------------------------------
 
 
@@ -174,7 +223,8 @@ def test_a_role_scoping_does_not_know_fails_closed(corpus, employee):
     assert the_scheme.departments == ()
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
     assert the_scheme.tags[PROCESS_DIMENSION] == ()
-    assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
+    # The unlinked Topic was offered here too until D-105's dated note of 10 November 2026 (night).
+    assert the_scheme.tags[TOPIC_DIMENSION] == ()
 
 
 def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
@@ -188,7 +238,9 @@ def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
     assert the_scheme.departments == ()
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
     assert the_scheme.tags[PROCESS_DIMENSION] == ()
-    assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
+    # The unlinked Topic was in until D-105's dated note of 10 November 2026 (night): a Topic, like
+    # a linked value, now needs a source the helpers say every audience role reads.
+    assert the_scheme.tags[TOPIC_DIMENSION] == ()
 
 
 # --- Shape -----------------------------------------------------------------------------------

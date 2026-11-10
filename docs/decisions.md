@@ -7043,14 +7043,16 @@ decision is recorded with its reason, and each build choice the brief left open 
     document's audience" is true of linked values only. An unlinked tag is in every scheme as
     vocabulary (this entry's rule), and so in every document's `tag_options`, readable through no
     source at all. That has always reached the classification prompt; `tag_options` now lists it
-    to every reader.
+    to every reader. Since the oracle bullet below, this holds for unlinked Project and Process
+    tags only.
   - **A residual, for the lead.** A tag becomes unlinked when its last link is deleted, and two
     paths delete links: removing a person's own tag (this note's rule, since it holds no machine
     assignment) and deleting a document (D-73). So a Topic a person typed on an Administrator-only
     document and then removed would be listed, by name, to Employees. The kept AI removal does not
     do this, because a removed AI link still counts as a link. Two changes would close the path:
     keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
-    route). Neither is built as a rule; the decision is the lead's.
+    route). Neither is built as a rule; the decision is the lead's. The lead's review found the
+    worse half of it the same night, and the oracle bullet below closes it for Topics.
 - **An Administrator retires a tag (finding 5).** FR-10: "Tags are deactivated rather than deleted
   where content still references them, preserving historical classification", and its CRUD line
   gives Tags "Delete". Only the schema held either (`Tags.active`, and `PROTECT`, D-12).
@@ -7084,6 +7086,45 @@ decision is recorded with its reason, and each build choice the brief left open 
     as a new Topic would be (a retired value is in no scheme, so a 409 would disclose it). A
     retired Project or Process tag stays retired. *Declined:* a route that only reactivates, which
     nothing in FR-10 asks for.
+- **The 409 rule's existence oracle, closed (the lead's review, the same night).** The rule as first
+  built (`90ebc51`) left one, found in the lead's review of `4b5cf65`. Two roles suffice:
+  1. An Employee holding `contribute_content` applies a Topic name to a document their role reads.
+     It answers 201 whether or not a Topic of that name exists on Administrator-only material, as
+     intended.
+  2. They remove it. A person's link is deleted, so it answers 204 either way.
+  3. They apply the name again. A name nothing else carried was now an unlinked Tag, admitted as
+     vocabulary and offered, so it answered 409. A name carried only by Administrator-only material
+     was still linked and unreadable, not offered, so it answered 201. `tag_options` differed the
+     same way after step 2.
+
+  So the three steps told an Employee whether a restricted Topic name exists, which breaks invariant
+  1. Deleting the only document carrying a tag does the same, but only a `manage_documents` holder
+  can delete.
+  - **The rule change (the lead's decision).** The root cause: an unlinked tag was admitted while a
+    tag linked only on unreadable material was not, and Topics are the only names a person can
+    probe. In `tag_scheme` an unlinked Topic is no longer vocabulary: a Topic is in only if every
+    audience role reads a source carrying it, every link counting as before. Unlinked Project and
+    Process tags stay vocabulary, since nobody can type their names and `tag_id` accepts only
+    offered tags. The empty-audience branch is unchanged, and so is `reject_tag`.
+  - **What follows.** A person naming an unlinked Topic links it as it stands, answered 201, like
+    any out-of-scheme Topic. `tag_options` no longer offers an unlinked Topic, and the
+    classification prompt no longer lists one, so the model's suggestion of an unlinked Topic is
+    proposed rather than linked. The residual in this note's `tag_options` bullet is closed for
+    Topics. For Project and Process tags it stands, reachable only by deleting the documents that
+    carry the tag.
+  - **Objective 05's runs did meet unlinked Topics.** Both recorded runs began with all six seeded
+    Topic values (compliance, finance, people, safety, technology, workplace) unlinked:
+    - the first after `seed_objective02_tags.py --scheme-only` created the fourteen values with no
+      links (`corpus/objective-05/runs/2026-11-10/objective-05.md`, "before the run"; the script's
+      `--scheme-only` mode exists for this database, D-106);
+    - the informed re-run after the first run's 38 AI links were deleted (`rerun/rerun.md`).
+
+    Under the rule as it then was, all six were in the scheme when each run began. Under this rule
+    none is in any scheme until a link to a readable source exists. The run creates no such link:
+    it links only values already in the scheme and proposes the rest. So a re-run on a scheme-only
+    database would propose every Topic suggestion rather than link it. The recorded runs and
+    their verdicts stand as records of the rule as it was, and nothing re-runs them. This is shown
+    from the seed script and the committed run records, not from the database.
 
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 

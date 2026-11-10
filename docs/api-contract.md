@@ -1140,14 +1140,20 @@ dimension sorted by name and always present:
 - **It discloses nothing to anyone who may read the document.** A value is offered only if every
   role in the document's audience can read a source carrying it, and a caller reaches the detail
   only if their role reads the document, so every offered value is on material the caller could
-  open. An unlinked tag is vocabulary and is offered too; an inactive tag never is.
+  open.
+  - An unlinked Project or Process tag is vocabulary and is offered too.
+  - An unlinked Topic is not. A person can type a Topic name, and offering an unlinked one would let
+    applying, removing and applying a name again tell the caller whether a Topic exists on
+    material they cannot see (D-105's dated note of 10 November 2026, night).
+  - An inactive tag never is.
 - **It includes tags already on the document,** held, applied or removed: applying one of those
   is the `200` above.
 - **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
 - **A Topic name that is not in this list but exists** (on material outside the document's
-  audience, or inactive) is linked and answered `201` exactly as a new Topic is, so the answer
-  never tells the caller that a value they cannot see exists. After that the Topic is in this
-  document's list.
+  audience, on nothing at all, or inactive) is linked and answered `201` exactly as a new Topic is,
+  so the answer never tells the caller that a value they cannot see exists. After that the Topic is
+  in this document's list. A person who applies a new Topic, removes it and applies it again gets
+  `201`, `204`, `201`, whatever exists elsewhere.
 
 **The 201 bodies** of `POST /api/documents` and `POST /api/documents/{id}/reprocess` carry
 `classification` (section 7.8 line 100): the object, or `null` when classification failed or the
