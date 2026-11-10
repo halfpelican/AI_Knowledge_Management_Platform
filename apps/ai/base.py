@@ -64,9 +64,10 @@ class TagScheme:
     Built by apps/documents/classification.py for the document's own audience, every role
     in its ``visible_to_roles`` (D-105): a value linked only to documents some member of that
     audience cannot read is left out, so a suggestion can never name a restricted project to
-    a reader who may not know it exists (invariant 1). A Project or Process value with no links
-    at all is vocabulary only and is in; a Topic is in only if every role in the audience reads
-    a source carrying it (D-105's dated note of 10 November 2026, night).
+    a reader who may not know it exists (invariant 1). A value with no links at all is
+    vocabulary only and is in, unless it is a Topic a person brought into use by name
+    (``Tag.grown``), which is in only while every role in the audience reads a source carrying it
+    (D-105's dated note of 10 November 2026, night).
     ``doc_types`` is DOCUMENT_TYPES; ``departments`` are
     distinct non-blank ``Documents.department`` values; ``tags`` maps each of Project,
     Process and Topic to its active tag names.

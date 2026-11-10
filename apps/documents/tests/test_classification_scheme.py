@@ -13,6 +13,7 @@ department each.
 """
 
 import datetime
+import sys
 
 import pytest
 
@@ -96,14 +97,14 @@ def test_a_tag_linked_only_to_an_administrator_only_document_is_withheld_from_an
     assert RESTRICTED_PROJECT in tag_scheme(administrator_document).tags[PROJECT_DIMENSION]
 
 
-def test_the_corpus_unlinked_topic_is_in_neither_scheme(
+def test_an_unlinked_seeded_tag_is_vocabulary_only_and_in_both_schemes(
     corpus, employee_document, administrator_document
 ):
-    """Until D-105's dated note of 10 November 2026 (night) an unlinked tag of any dimension was
-    vocabulary and in both schemes, and this test asserted it. An unlinked Topic is now in neither:
-    the section below says why."""
-    assert UNLINKED_TOPIC not in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
-    assert UNLINKED_TOPIC not in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
+    """The corpus fixture's Topic that nothing carries was made as a seed makes it, so it is not
+    grown: vocabulary, in both schemes. 11a610f inverted this, keeping every unlinked Topic out, and
+    was narrowed the same night (D-105's dated note of 10 November 2026, night)."""
+    assert UNLINKED_TOPIC in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
+    assert UNLINKED_TOPIC in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
 
 
 def test_a_tag_both_audiences_can_read_a_source_of_is_in_both_schemes(
@@ -159,20 +160,67 @@ def test_a_tag_linked_only_to_a_restricted_meeting_is_withheld_the_table_admits_
     assert BOARD_TOPIC in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
 
 
-# --- A Topic must be on a source the audience reads (D-105's dated note of 10 November 2026, night)
+# --- A grown Topic must be on a source the audience reads (D-105's dated note of 10 November 2026,
+#     night, the lead's review and revision)
 #
-# From the lead's review: an unlinked Topic admitted as vocabulary, beside a Topic linked only on
-# restricted material and withheld, let apply, remove and apply again tell an Employee whether a
-# restricted Topic name exists. A Topic is now in only if every audience role reads a source carrying
-# it; unlinked Project and Process tags stay vocabulary, since nobody can type their names.
+# An unlinked Topic admitted as vocabulary, beside a Topic linked only on restricted material and
+# withheld, let apply, remove and apply again tell an Employee whether a restricted Topic name
+# exists. 11a610f kept every unlinked Topic out; that changed the scheme Objective 05 was measured
+# with, six seeded, unlinked Topics, so it was narrowed: only a Topic that came into use through a
+# name (Tag.grown) is out once nothing links it. Seeded Topics, and Project and Process tags, are
+# vocabulary while unlinked.
 
 TOPIC_LINK_STATES = {"removed": {"removed": True}, "held": {"provisional": True}}
 
 
-def test_an_unlinked_topic_is_in_no_scheme(employee_document, administrator_document):
-    Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)
-    for document in (employee_document, administrator_document):
+def test_an_unlinked_seeded_topic_is_in_every_scheme(employee, employee_document, administrator_document):
+    Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)  # as a seed makes it
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    nobody = make_document(employee, "Orphaned", [])
+    for document in (employee_document, administrator_document, both, nobody):
+        assert "night shifts" in tag_scheme(document).tags[TOPIC_DIMENSION]
+
+
+def test_an_unlinked_grown_topic_is_in_no_scheme_but_an_empty_audiences(
+    employee, employee_document, administrator_document
+):
+    """Renamed from 11a610f's test_an_unlinked_topic_is_in_no_scheme, whose Topic is now grown: the
+    one kind of unlinked Topic that stays out."""
+    Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION, grown=True)
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    for document in (employee_document, administrator_document, both):
         assert "night shifts" not in tag_scheme(document).tags[TOPIC_DIMENSION]
+    # The empty-audience branch is unchanged: nobody reads that document, so nobody is protected.
+    nobody = make_document(employee, "Orphaned", [])
+    assert "night shifts" in tag_scheme(nobody).tags[TOPIC_DIMENSION]
+
+
+def test_the_objective_05_scheme_only_seed_puts_all_its_topics_in_the_scheme(
+    employee_document, administrator_document, monkeypatch
+):
+    """Objective 05 was measured on a database seeded by ``seed_objective02_tags.py --scheme-only``:
+    the manifest's fourteen values as Tags rows and no links (D-106; the run record's "before the
+    run"). The seed is run here as it ran there, and every value, its six Topics included, is in
+    the scheme of a document of either audience, as it was when the runs began."""
+    import django
+
+    from scripts import seed_objective02_tags as seed
+
+    monkeypatch.setattr(sys, "argv", ["seed_objective02_tags.py", "--scheme-only"])
+    monkeypatch.setattr(sys, "path", list(sys.path))  # the script inserts the repository root
+    monkeypatch.setattr(django, "setup", lambda: None)  # pytest has set Django up already
+
+    assert seed.main() == 0
+
+    assert not ContentTag.objects.exists()
+    assert not Tag.objects.filter(grown=True).exists()
+    seeded = set(Tag.objects.values_list("dimension", "tag_name"))
+    topics = {name for dimension, name in seeded if dimension == TOPIC_DIMENSION}
+    assert len(topics) == 6  # compliance, finance, people, safety, technology, workplace
+    for document in (employee_document, administrator_document):
+        the_scheme = tag_scheme(document)
+        assert set(the_scheme.tags[TOPIC_DIMENSION]) == topics
+        assert {(dimension, name) for dimension, names in the_scheme.tags.items() for name in names} == seeded
 
 
 def test_unlinked_project_and_process_tags_are_still_vocabulary(employee_document, administrator_document):
@@ -223,8 +271,7 @@ def test_a_role_scoping_does_not_know_fails_closed(corpus, employee):
     assert the_scheme.departments == ()
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
     assert the_scheme.tags[PROCESS_DIMENSION] == ()
-    # The unlinked Topic was offered here too until D-105's dated note of 10 November 2026 (night).
-    assert the_scheme.tags[TOPIC_DIMENSION] == ()
+    assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
 
 
 def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
@@ -238,9 +285,7 @@ def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
     assert the_scheme.departments == ()
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
     assert the_scheme.tags[PROCESS_DIMENSION] == ()
-    # The unlinked Topic was in until D-105's dated note of 10 November 2026 (night): a Topic, like
-    # a linked value, now needs a source the helpers say every audience role reads.
-    assert the_scheme.tags[TOPIC_DIMENSION] == ()
+    assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
 
 
 # --- Shape -----------------------------------------------------------------------------------

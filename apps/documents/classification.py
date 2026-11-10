@@ -152,15 +152,17 @@ def tag_scheme(document: Document) -> TagScheme:
       counts, provisional, unconfirmed and removed ones included: a held suggestion, or one a
       person removed, on a restricted document is still a fact about that document, and a removal
       must not turn a restricted value into vocabulary every audience is offered.
-    - **A Project or Process tag with no links at all** is vocabulary only, says nothing about any
-      source, and is in. **A Topic with no links is not** (D-105's dated note of 10 November
-      2026, night, from the lead's review). A Topic is the one name a person can type
-      (``apply_tag``). While an unlinked Topic was admitted as vocabulary and a Topic linked only
-      on restricted material was not, apply, remove and apply again told an Employee whether a
-      restricted Topic name exists: the second apply was a 409 for a name nothing carried and a 201
-      for a restricted one, and ``tag_options`` differed the same way in between. So a Topic is in
-      only if every audience role reads a source carrying it. Nobody can type a Project or Process
-      name, and ``tag_id`` accepts only offered tags, so their vocabulary stays.
+    - **A tag with no links at all** is vocabulary only, says nothing about any source, and is in,
+      **unless it is grown** (``Tag.grown``, D-105's dated note of 10 November 2026, night, the
+      lead's review and revision). A grown tag is a Topic that came into use through a name: one a
+      person typed (``apply_tag``'s name form) or confirmed as a proposed topic, created or fetched.
+      While every unlinked tag was admitted and a Topic linked only on restricted material was not,
+      apply, remove and apply again told an Employee whether a restricted Topic name exists: the
+      second apply was a 409 for a name nothing carried and a 201 for a restricted one, and
+      ``tag_options`` differed the same way in between. Marking the Topic a name brought in, and
+      keeping it out once unlinked, makes the answers the same. A seeded Topic, and every Project
+      and Process tag, is never grown, so the scheme of a seeded database is as Objective 05
+      measured it. (``11a610f`` kept every unlinked Topic out; that was narrowed the same night.)
 
     **An empty audience gets the full scheme.** A document whose ``visible_to_roles`` is empty is
     readable by nobody (``scoped_*`` fail closed), so there is no reader to protect. D-29 refuses
@@ -170,13 +172,13 @@ def tag_scheme(document: Document) -> TagScheme:
     more roles keeps the values it was classified against; widening should reclassify.
 
     **A role name scoping does not know** (one missing from EFFECTIVE_ROLES) reads nothing, so
-    every linked value, every Topic and every department is withheld from a document it is in
-    the audience of. That fails closed, as ``scoped_documents`` does.
+    every linked value, every grown Topic and every department is withheld from a document it is
+    in the audience of. That fails closed, as ``scoped_documents`` does.
     """
     audience = list(dict.fromkeys(document.visible_to_roles))  # distinct, in order
     active_tags = Tag.objects.filter(
         active=True, dimension__in=REPOSITORY_TAG_DIMENSIONS
-    ).values_list("id", "dimension", "tag_name")
+    ).values_list("id", "dimension", "tag_name", "grown")
 
     if audience:
         departments: set[str] | None = None
@@ -201,26 +203,26 @@ def tag_scheme(document: Document) -> TagScheme:
             )
         linked_tag_ids = set(ContentTag.objects.values_list("tag_id", flat=True).distinct())
 
-        def admitted(tag_id, dimension) -> bool:
-            # Every role reads one of its sources: in, in any dimension.
+        def admitted(tag_id, grown) -> bool:
+            # Every role reads one of its sources: in.
             if tag_id in readable_tag_ids:
                 return True
-            # Otherwise only an unlinked Project or Process tag, vocabulary that names no source.
-            # An unlinked Topic is out: a person can name a Topic, and admitting it while a Topic
-            # linked only on restricted material is out answers whether that one exists.
-            return dimension != TOPIC_DIMENSION and tag_id not in linked_tag_ids
+            # Otherwise only a tag nothing links, which names no source, and only if no name brought
+            # it in: an unlinked grown Topic is out, or a person's apply, remove and apply again would
+            # answer whether a Topic linked only on restricted material exists.
+            return tag_id not in linked_tag_ids and not grown
 
     else:
         departments = set(
             Document.objects.exclude(department="").values_list("department", flat=True).distinct()
         )
 
-        def admitted(tag_id, dimension) -> bool:
+        def admitted(tag_id, grown) -> bool:
             return True
 
     names = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
-    for tag_id, dimension, tag_name in active_tags:
-        if admitted(tag_id, dimension):
+    for tag_id, dimension, tag_name, grown in active_tags:
+        if admitted(tag_id, grown):
             names[dimension].append(tag_name)
     return TagScheme(
         doc_types=tuple(DOCUMENT_TYPES),
@@ -253,19 +255,19 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
     role reads. ``tag_scheme`` admits a linked tag only if EVERY audience role, R included, can
     read a source carrying it, and EFFECTIVE_ROLES is closed under generalisation (each role reads
     its own, and an Administrator also reads all an Employee reads, D-66), so what R reads, the
-    caller reads: every linked value offered is on a source the caller could open, and every
-    Topic offered is linked, since an unlinked Topic is in no scheme. An unlinked Project or Process
-    tag is vocabulary only (D-105) and names no source. An inactive tag is never offered. A document
-    with an empty audience would get the full scheme, but ``scoped_*`` fail closed on it, so no
-    caller ever reaches its detail.
+    caller reads: every linked value offered is on a source the caller could open. An unlinked tag
+    that is not grown is vocabulary only (D-105) and names no source; an unlinked grown Topic is
+    never offered. An inactive tag is never offered. A document with an empty audience would get
+    the full scheme, but ``scoped_*`` fail closed on it, so no caller ever reaches its detail.
 
-    **What it does reveal, stated rather than glossed:** the names of unlinked Project and Process
-    tags, which ``tag_scheme`` has always put in every classification prompt, and which nobody can
-    type or apply except from this list. One whose last link is deleted joins them, and only
-    deleting the documents that carry it does that, which is a ``manage_documents`` holder's
-    action. **An unlinked Topic is not offered** (D-105's dated note of 10 November 2026, night),
-    so a person removing their own Topic from its only document cannot make a Topic name appear
-    here, and nor can a document's deletion. A removed AI link is kept, and keeps its tag linked.
+    **What it does reveal, stated rather than glossed:** the names of unlinked tags that are not
+    grown, which ``tag_scheme`` has always put in every classification prompt: the seeded Project,
+    Process and Topic values a database starts with. A seeded tag whose last link is deleted joins
+    them, and only deleting the documents that carry it does that, which is a ``manage_documents``
+    holder's action. **A Topic that came into use through a name is never offered once nothing
+    links it** (``Tag.grown``, D-105's dated note of 10 November 2026, night), so a person removing
+    their own Topic from its only document cannot make its name appear here, and nor can a
+    document's deletion. A removed AI link is kept, and keeps its tag linked.
     """
     options = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
     for (dimension, name), tag_id in sorted(offered_tags(document).items(), key=lambda item: item[0][1]):
@@ -640,12 +642,17 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       taxonomy growth). **The 409 and the rule that keeps it from disclosing anything:** a name that
       is an active Topic in this document's scheme raises ``TopicAlreadyOffered``, because the
       caller is already offered it. A Topic of that name that exists but is NOT in the scheme is
-      carried only by material some reader of this document cannot see, carried by nothing at all
-      (``tag_scheme`` admits no unlinked Topic), or inactive. Answering 409 for any of those would
-      tell the caller whether a restricted value exists, directly or by applying, removing and
-      applying again. So it is linked as it stands, reactivated if it was inactive (as
-      ``confirm_proposed_topic`` does), and answered exactly as a new Topic is. Only a name no Topic
-      has creates a Tag.
+      carried only by material some reader of this document cannot see, is grown and carried by
+      nothing at all, or is inactive. Answering 409 for any of those would tell the caller whether
+      a restricted value exists, directly or by applying, removing and applying again. So it is
+      linked as it stands, reactivated if it was inactive (as ``confirm_proposed_topic`` does), and
+      answered exactly as a new Topic is. Only a name no Topic has creates a Tag.
+    - **The Topic the name form links is marked grown** (``Tag.grown``, D-105's dated note of 10
+      November 2026, night), whether it was created or fetched, so that once its link is removed it
+      is not vocabulary, whatever it was before. Without the mark, a retired, seeded, unlinked Topic
+      a person names would come back as vocabulary after the removal, and apply, remove and apply
+      again would answer 201, 204, 409 where a new name answers 201, 204, 201. The ``tag_id`` form
+      marks nothing: an offered tag is already readable or vocabulary.
 
     Then the link (``_apply_link``): a new one is ``applied_by="user"``, ``confirmed=True`` (as the
     D-74 seed sets a person's links), not provisional, not removed, ``confidence`` null, and
@@ -672,10 +679,23 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
             if (TOPIC_DIMENSION, name) in offered:
                 raise TopicAlreadyOffered(offered[(TOPIC_DIMENSION, name)])
             tag, _ = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
-            if not tag.active:
-                tag.active = True
-                tag.save(update_fields=["active"])
+            _bring_into_use(tag)
         return _apply_link(locked, tag)
+
+
+def _bring_into_use(topic: Tag) -> None:
+    """A Topic a person brought into use by name (``apply_tag``'s name form, or
+    ``confirm_proposed_topic``), created or fetched: active, and grown, so that once nothing links
+    it, it is not vocabulary (``tag_scheme``; D-105's dated note of 10 November 2026, night)."""
+    changed = []
+    if not topic.active:
+        topic.active = True
+        changed.append("active")
+    if not topic.grown:
+        topic.grown = True
+        changed.append("grown")
+    if changed:
+        topic.save(update_fields=changed)
 
 
 def _apply_link(document: Document, tag: Tag) -> AppliedTag:
@@ -721,10 +741,12 @@ def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
 
     FR-10: a new value "may be proposed only in the Topic dimension and requires user
     confirmation before it is created". The Topic Tag is fetched or created by normalised name
-    (reactivated if it had been deactivated), the document's link is created or confirmed with
-    ``applied_by="ai"`` — the suggestion was the machine's — and the proposal leaves
-    ``proposed_topics``. Raises ``NotOnThisDocument`` when ``value`` is not proposed on this
-    document.
+    (reactivated if it had been deactivated, and marked grown either way, as ``apply_tag``'s name
+    form marks the Topic it links: a Topic a person brought in by name is not vocabulary once
+    nothing links it, D-105's dated note of 10 November 2026, night), the document's link is
+    created or confirmed with ``applied_by="ai"`` — the suggestion was the machine's — and the
+    proposal leaves ``proposed_topics``. Raises ``NotOnThisDocument`` when ``value`` is not proposed
+    on this document.
     """
     name = normalise_tag_name(value or "")
     with transaction.atomic():
@@ -733,9 +755,7 @@ def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
         if len(name) > NAME_MAX_LENGTH:
             raise InvalidClassification(f"A tag name may not exceed {NAME_MAX_LENGTH} characters.")
         tag, _ = Tag.objects.get_or_create(tag_name=name, dimension=TOPIC_DIMENSION)
-        if not tag.active:
-            tag.active = True
-            tag.save(update_fields=["active"])
+        _bring_into_use(tag)
         confidence = proposal.get("confidence")
         confidence = None if confidence is None else _as_decimal(confidence)
         link = (

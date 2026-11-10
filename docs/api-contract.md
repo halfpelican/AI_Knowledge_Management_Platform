@@ -1141,16 +1141,19 @@ dimension sorted by name and always present:
   role in the document's audience can read a source carrying it, and a caller reaches the detail
   only if their role reads the document, so every offered value is on material the caller could
   open.
-  - An unlinked Project or Process tag is vocabulary and is offered too.
-  - An unlinked Topic is not. A person can type a Topic name, and offering an unlinked one would let
-    applying, removing and applying a name again tell the caller whether a Topic exists on
-    material they cannot see (D-105's dated note of 10 November 2026, night).
+  - An unlinked tag is vocabulary and is offered too: the Project, Process and Topic values a
+    database is seeded with.
+  - Except a Topic that came into use through a name, one a person typed on this route or confirmed
+    as a proposed topic: once nothing links it, it is not offered. Offering it would let applying,
+    removing and applying the name again tell the caller whether a Topic exists on material they
+    cannot see (D-105's dated note of 10 November 2026, night).
   - An inactive tag never is.
 - **It includes tags already on the document,** held, applied or removed: applying one of those
   is the `200` above.
 - **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
 - **A Topic name that is not in this list but exists** (on material outside the document's
-  audience, on nothing at all, or inactive) is linked and answered `201` exactly as a new Topic is,
+  audience, brought in by a name and now on nothing, or inactive) is linked and answered `201`
+  exactly as a new Topic is,
   so the answer never tells the caller that a value they cannot see exists. After that the Topic is
   in this document's list. A person who applies a new Topic, removes it and applies it again gets
   `201`, `204`, `201`, whatever exists elsewhere.

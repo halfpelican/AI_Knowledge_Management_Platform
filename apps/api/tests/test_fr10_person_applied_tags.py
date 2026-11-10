@@ -239,10 +239,7 @@ def test_a_new_topic_is_created_and_linked_as_the_persons(session_client):
 
 def test_a_topic_name_already_offered_is_409(session_client):
     document = make_document(session_client.user)
-    offered = Tag.objects.create(tag_name="safety", dimension=TOPIC_DIMENSION)
-    # Offered because another document both roles read carries it. Until D-105's dated note of 10
-    # November 2026 (night) an unlinked Topic was offered as vocabulary, and this test relied on it.
-    link(offered, make_document(session_client.user, title="Site rules"))
+    offered = Tag.objects.create(tag_name="safety", dimension=TOPIC_DIMENSION)  # seeded, unlinked: offered
 
     response = apply(session_client.client, document.id, dimension=TOPIC_DIMENSION, tag_name=" SAFETY ")
 
@@ -425,3 +422,39 @@ def test_applying_removing_and_applying_a_new_topic_again_is_201_204_201(session
     assert codes == (201, 204, 201)
     assert options[TOPIC_DIMENSION] == []
     assert Tag.objects.filter(tag_name="night shifts", dimension=TOPIC_DIMENSION).count() == 1
+
+
+def test_apply_remove_apply_answers_alike_for_a_new_a_restricted_and_a_retired_seeded_topic(
+    employee, employee_client, restricted
+):
+    """The lead's revision kept a seeded, unlinked Topic as vocabulary and marks grown the Topic a
+    person's name brings in, fetched or created. Three runs of the Employee's sequence, each undone
+    before the next: a name nothing has, a Topic carried only by Administrator-only material, and a
+    retired, seeded, unlinked Topic. Each answers 201, 204, 201 and offers the same in between.
+    Without marking a fetched Topic grown, the retired one would come back as vocabulary after the
+    removal and answer 201, 204, 409."""
+    document = make_document(employee)
+    name = "merger talks"
+
+    def run_with(setup):
+        def send():
+            setup()
+            return three_steps(employee_client, document.id, name)
+        return answered_then_undone(send)
+
+    def restricted_topic():
+        link(Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION), restricted)
+
+    def retired_seeded_topic():
+        Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION, active=False)
+
+    results = {
+        "new": run_with(lambda: None),
+        "restricted": run_with(restricted_topic),
+        "retired, seeded, unlinked": run_with(retired_seeded_topic),
+    }
+
+    assert not Tag.objects.filter(tag_name=name).exists()  # every run was undone
+    for label, (codes, options) in results.items():
+        assert codes == (201, 204, 201), label
+        assert options == results["new"][1], label

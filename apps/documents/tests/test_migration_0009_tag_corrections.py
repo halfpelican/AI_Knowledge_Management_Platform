@@ -52,12 +52,20 @@ def columns_of(table):
         return {row[0] for row in cursor.fetchall()}
 
 
-def test_0009_is_the_leaf_of_documents():
-    leaves = [
+def documents_leaf():
+    [leaf] = [
         key for key in MigrationExecutor(connection).loader.graph.leaf_nodes()
         if key[0] == "documents"
     ]
-    assert leaves == [AFTER]
+    return leaf
+
+
+def test_0009_is_on_the_path_to_the_leaf_of_documents():
+    """0009 was the leaf of ``documents`` until 0010 (``Tags.grown``, the lead's revision of the same
+    night) followed it, so the test checks that 0009 is on the leaf's path, and the test below ends
+    at the leaf."""
+    graph = MigrationExecutor(connection).loader.graph
+    assert AFTER in graph.forwards_plan(documents_leaf())
 
 
 def test_0009_applies_and_reverses_keeping_the_rows_either_way(document):
@@ -96,7 +104,7 @@ def test_0009_applies_and_reverses_keeping_the_rows_either_way(document):
     ]
     assert old_apps.get_model("documents", "DocumentAnalysis").objects.filter(pk=analysis.pk).exists()
 
-    # --- Forward again, through the current models -------------------------------------------------
-    migrate_documents_to(AFTER)
+    # --- Forward again, to the leaf, through the current models ----------------------------------
+    migrate_documents_to(documents_leaf())
     assert ContentTag.objects.get(pk=link.pk).removed is False
     assert DocumentAnalysis.objects.get(pk=analysis.pk).department_applied_by is None

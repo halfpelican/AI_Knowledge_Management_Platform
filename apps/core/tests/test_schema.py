@@ -67,7 +67,13 @@ SCHEMA_V1 = {
          # keeps the cited identifier when the chunk is deleted (docs/schema-v1.md §1).
          "chunk_uuid"},
     ),
-    "tags": (("tag_id",), {"tag_id", "tag_name", "dimension", "active"}),
+    "tags": (
+        ("tag_id",),
+        {"tag_id", "tag_name", "dimension", "active",
+         # documents 0010, 10 November 2026 (FR-10, D-105's dated note, the lead's revision): a
+         # Topic brought into use by a name, which is not vocabulary once unlinked.
+         "grown"},
+    ),
     "content_tags": (
         ("content_tag_id",),
         {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
@@ -246,6 +252,8 @@ SECTION_5_PLAN = [
     # FR-10's tag corrections (D-119 findings 3 and 10), 10 November 2026: ContentTags.removed and
     # DocumentAnalysis.department_applied_by, immediately after 0008, where its dependency puts it.
     ("documents", "0009_fr10_tag_corrections"),
+    # Tags.grown (the lead's revision of the same night), immediately after 0009.
+    ("documents", "0010_tag_grown"),
     ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).

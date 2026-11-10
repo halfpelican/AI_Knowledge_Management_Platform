@@ -7043,8 +7043,8 @@ decision is recorded with its reason, and each build choice the brief left open 
     document's audience" is true of linked values only. An unlinked tag is in every scheme as
     vocabulary (this entry's rule), and so in every document's `tag_options`, readable through no
     source at all. That has always reached the classification prompt; `tag_options` now lists it
-    to every reader. Since the oracle bullet below, this holds for unlinked Project and Process
-    tags only.
+    to every reader. Since the oracle bullet below, this holds for unlinked tags that are not
+    grown: Project and Process tags, and seeded Topics.
   - **A residual, for the lead.** A tag becomes unlinked when its last link is deleted, and two
     paths delete links: removing a person's own tag (this note's rule, since it holds no machine
     assignment) and deleting a document (D-73). So a Topic a person typed on an Administrator-only
@@ -7052,7 +7052,8 @@ decision is recorded with its reason, and each build choice the brief left open 
     do this, because a removed AI link still counts as a link. Two changes would close the path:
     keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
     route). Neither is built as a rule; the decision is the lead's. The lead's review found the
-    worse half of it the same night, and the oracle bullet below closes it for Topics.
+    worse half of it the same night, and the oracle bullet below closes it for every Topic a
+    person brought in by name.
 - **An Administrator retires a tag (finding 5).** FR-10: "Tags are deactivated rather than deleted
   where content still references them, preserving historical classification", and its CRUD line
   gives Tags "Delete". Only the schema held either (`Tags.active`, and `PROTECT`, D-12).
@@ -7100,31 +7101,50 @@ decision is recorded with its reason, and each build choice the brief left open 
   So the three steps told an Employee whether a restricted Topic name exists, which breaks invariant
   1. Deleting the only document carrying a tag does the same, but only a `manage_documents` holder
   can delete.
-  - **The rule change (the lead's decision).** The root cause: an unlinked tag was admitted while a
-    tag linked only on unreadable material was not, and Topics are the only names a person can
-    probe. In `tag_scheme` an unlinked Topic is no longer vocabulary: a Topic is in only if every
-    audience role reads a source carrying it, every link counting as before. Unlinked Project and
-    Process tags stay vocabulary, since nobody can type their names and `tag_id` accepts only
-    offered tags. The empty-audience branch is unchanged, and so is `reject_tag`.
-  - **What follows.** A person naming an unlinked Topic links it as it stands, answered 201, like
-    any out-of-scheme Topic. `tag_options` no longer offers an unlinked Topic, and the
-    classification prompt no longer lists one, so the model's suggestion of an unlinked Topic is
-    proposed rather than linked. The residual in this note's `tag_options` bullet is closed for
-    Topics. For Project and Process tags it stands, reachable only by deleting the documents that
-    carry the tag.
-  - **Objective 05's runs did meet unlinked Topics.** Both recorded runs began with all six seeded
-    Topic values (compliance, finance, people, safety, technology, workplace) unlinked:
+  - **The rule change (the lead's decisions).** The root cause: an unlinked tag was admitted while
+    a tag linked only on unreadable material was not, and Topics are the only names a person can
+    probe. `documents 0010` adds `Tags.grown`, additive and reversible. It is set on the Topic a
+    person's `apply_tag` name form links and on the Topic `confirm_proposed_topic` links, whether
+    created or fetched (restricted or inactive), and by nothing else. The `tag_id` form does not
+    set it, because an offered tag is already readable or vocabulary. In `tag_scheme` a tag is in
+    if every audience role reads a source carrying it, or if nothing links it and it is not grown.
+    Project and Process tags are never grown, so they are unchanged, and a seeded, unlinked Topic is
+    vocabulary. The empty-audience branch is unchanged, and so is `reject_tag`. A fetched Topic is
+    marked as well as a created one: otherwise a retired, seeded, unlinked Topic a person names
+    would come back as vocabulary after the removal, and answer 201, 204, 409 where a new name
+    answers 201, 204, 201.
+  - *Dated line, 10 November 2026 (night): narrowed the same night.* `11a610f` first took every
+    unlinked Topic out of every scheme. That changed Objective 05's measured configuration, six
+    seeded, unlinked Topics shown to the classifier, and FR-10's "established scheme" for anyone who
+    seeds Topics, so the lead narrowed it the same night to the rule above. The configuration is now
+    as measured.
+  - **What follows.** A person naming a grown Topic that nothing links links it as it stands,
+    answered 201, like any out-of-scheme Topic. `tag_options` and the classification prompt list a
+    seeded, unlinked Topic as vocabulary, as they did before `11a610f`, and never list a grown one
+    that nothing links. The residual in this note's `tag_options` bullet is closed for every Topic
+    a person brought in by name. For a seeded tag of any dimension it stands, reachable only by
+    deleting the documents that carry it.
+  - **What this does not close.** A seeded tag whose only links are on restricted material is
+    withheld from a narrower audience, so watching `tag_options` over time can show that restricted
+    material has taken up a seeded value. That was so under this entry's rule from the start, for
+    every dimension, and neither `11a610f` nor this rule changes it. An Employee cannot bring it
+    about.
+  - **Objective 05's runs met unlinked Topics, and this rule keeps them in.** Both recorded runs
+    began with all six seeded Topic values (compliance, finance, people, safety, technology,
+    workplace) unlinked:
     - the first after `seed_objective02_tags.py --scheme-only` created the fourteen values with no
       links (`corpus/objective-05/runs/2026-11-10/objective-05.md`, "before the run"; the script's
       `--scheme-only` mode exists for this database, D-106);
     - the informed re-run after the first run's 38 AI links were deleted (`rerun/rerun.md`).
 
-    Under the rule as it then was, all six were in the scheme when each run began. Under this rule
-    none is in any scheme until a link to a readable source exists. The run creates no such link:
-    it links only values already in the scheme and proposes the rest. So a re-run on a scheme-only
-    database would propose every Topic suggestion rather than link it. The recorded runs and
-    their verdicts stand as records of the rule as it was, and nothing re-runs them. This is shown
-    from the seed script and the committed run records, not from the database.
+    Under the rule as it then was, all six were in the scheme when each run began. `11a610f`'s rule
+    would have kept all six out, because the run creates no link to a readable source before
+    classifying (it links only values already in the scheme and proposes the rest), so a re-run
+    under it on a scheme-only database would have proposed every Topic suggestion rather than
+    linked it. Under this rule the six are seeded and not grown, so they are in the scheme exactly
+    as when the runs began. A test runs `seed_objective02_tags.py --scheme-only` and checks that
+    all of its Topics are in the scheme. The runs' starting state is shown from the seed script and
+    the committed run records, not from the database.
 
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 

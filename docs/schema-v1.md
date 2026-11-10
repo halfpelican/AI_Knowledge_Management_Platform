@@ -220,6 +220,7 @@ cascade deleted the row.
 | `tag_name` | text | unique within a dimension, case- and whitespace-normalised |
 | `dimension` | text | `Department`, `Project`, `Process`, `Topic` |
 | `active` | boolean | deactivated rather than deleted while content references it |
+| `grown` | boolean | **`documents 0010`** — a Topic that came into use through a name: the one a person's `POST /api/documents/{id}/tags` name form links, or a person's confirmation of a proposed topic links, created or fetched. A grown Topic that nothing links is in no document's scheme; every other unlinked tag is vocabulary and is in (D-105's dated note of 10 November 2026, night). False for every seeded tag and every Project and Process tag |
 
 ### ContentTags — FR-10, FR-15
 
@@ -536,8 +537,9 @@ Migrate in dependency order: Roles → Permissions → RolePermissions → Users
 Documents → ExtractedContent → Meetings → MeetingAttendees → ContentChunks →
 Conversations → QueryLog → SearchLogs → AnswerCitations → Tags → ContentTags.
 `DocumentAnalysis` (v2, `documents 0008`) follows Documents and ContentTags; the executor
-plans it immediately after `documents 0007`, and `documents 0009` (`ContentTags.removed`,
-`DocumentAnalysis.department_applied_by`) immediately after 0008.
+plans it immediately after `documents 0007`, `documents 0009` (`ContentTags.removed`,
+`DocumentAnalysis.department_applied_by`) immediately after 0008, and `documents 0010`
+(`Tags.grown`) immediately after 0009.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and
