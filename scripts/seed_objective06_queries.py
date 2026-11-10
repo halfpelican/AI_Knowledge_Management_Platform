@@ -133,7 +133,7 @@ def main() -> int:
             if query["via"] == "ask":
                 outcome = answer_question(question=query["query"], user=user)
                 row.update({"answered": outcome.answered, "result_count": outcome.result_count,
-                            "statements": len(outcome.statements)})
+                            "statements": len(outcome.verified_statements)})
                 shown = "answered" if outcome.answered else "no-answer"
             elif query["via"] == "search":
                 results_ = search(query_text=query["query"], user=user)
