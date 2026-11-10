@@ -17,7 +17,12 @@ import pytest
 from django.conf import settings
 
 from apps.ai.testing import STUB_EMBEDDING_MODEL
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, SOURCE_TYPES
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    EMPLOYEE_ROLE_NAME,
+    MAXIMUM_SEARCH_LENGTH,
+    SOURCE_TYPES,
+)
 from apps.documents.models import ContentChunk, Document
 from apps.meetings.models import Meeting
 from apps.retrieval.models import SearchLog
@@ -122,3 +127,12 @@ def test_a_term_too_short_is_refused_as_search_refuses_it(term):
 def test_a_null_character_is_refused_as_search_refuses_it():
     with pytest.raises(SearchQueryContainsNullCharacter):
         search_total(role_name=ADMINISTRATOR_ROLE_NAME, query_text="ab\x00cd")
+
+
+def test_a_term_over_the_search_maximum_is_still_counted():
+    """``search`` refuses a term over MAXIMUM_SEARCH_LENGTH (D-79's note of 10 November 2026), but
+    ``search_total`` must not. FR-19's cycle recounts terms logged before that bound existed, and a
+    refusal there would roll back that cycle and every later one (the security review's M1)."""
+    term = "z" * (MAXIMUM_SEARCH_LENGTH + 100)
+
+    assert search_total(role_name=ADMINISTRATOR_ROLE_NAME, query_text=term) == 0

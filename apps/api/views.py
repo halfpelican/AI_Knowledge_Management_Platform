@@ -86,6 +86,7 @@ from apps.retrieval.pipeline import (
 from apps.retrieval.scoping import permission_scope, scoped_documents, scoped_meetings
 from apps.retrieval.search import (
     SearchQueryContainsNullCharacter,
+    SearchQueryTooLong,
     SearchQueryTooShort,
     search,
 )
@@ -1035,10 +1036,19 @@ class SearchView(APIView):
     row, with the same post-filter total the caller is given. This view must not write a
     second, and a test counts the rows.
 
+    **Throttled per user, scope "search"** (``SEARCH_THROTTLE_RATE``, D-79's note of 10 November
+    2026), and a term over ``MAXIMUM_SEARCH_LENGTH`` is FR-12's 400. Both bound how fast and how
+    much one user can put into ``SearchLog``, which FR-19's cycle reads (the security review's L1
+    and L2). DRF checks the throttle after authentication, so an anonymous request is still 401,
+    and a throttled search writes no row.
+
     ``UnscopedRequestError`` is not caught. Behind ``IsAuthenticated`` it is unreachable,
     and turning it into a 200 would answer a request whose scope could not be established
     — the same backstop, uncaught, as on the answer path.
     """
+
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "search"
 
     def get(self, request):
         query_text = request.query_params.get("q")
@@ -1053,7 +1063,7 @@ class SearchView(APIView):
             # was actually typed (FR-19's evidence) and the term reaches the database only
             # as a bound parameter of an ORM lookup.
             results = search(query_text=query_text, user=request.user)
-        except (SearchQueryTooShort, SearchQueryContainsNullCharacter) as exc:
+        except (SearchQueryTooShort, SearchQueryTooLong, SearchQueryContainsNullCharacter) as exc:
             # FR-12's 400. The rule and its message belong to the search module; this
             # maps the exception rather than re-checking the length, so there is one
             # definition of "too short" and the two cannot drift. An empty ``q=`` arrives

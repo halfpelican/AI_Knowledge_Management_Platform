@@ -26,6 +26,7 @@ from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     EMPLOYEE_ROLE_NAME,
+    MAXIMUM_SEARCH_LENGTH,
     MINIMUM_SEARCH_LENGTH,
     SOURCE_TYPES,
 )
@@ -296,6 +297,32 @@ def test_a_term_below_the_minimum_is_400_and_records_no_search(
     assert set(response.json()) == {"q"}
     assert str(MINIMUM_SEARCH_LENGTH) in response.json()["q"][0]
     assert not SearchLog.objects.exists()
+
+
+def test_a_term_over_the_maximum_is_400_and_records_no_search(session_client, shared_corpus):
+    """The upper bound (D-79's note of 10 November 2026): keyword search bounded a term from
+    below only, so one request could log a term of any length for FR-19's cycle to embed and
+    show. The view maps ``SearchQueryTooLong`` as it maps the other two refusals, from both
+    roles, and no row is written."""
+    term = "a" * (MAXIMUM_SEARCH_LENGTH + 1)
+
+    response = session_client.client.get(SEARCH_URL, {"q": term})
+
+    assert response.status_code == 400
+    assert set(response.json()) == {"q"}
+    assert str(MAXIMUM_SEARCH_LENGTH) in response.json()["q"][0]
+    assert not SearchLog.objects.exists()
+
+
+def test_a_term_at_the_maximum_is_searched_and_logged(employee_client, shared_corpus):
+    """The bound is inclusive, as the question's is."""
+    term = "a" * MAXIMUM_SEARCH_LENGTH
+
+    response = employee_client.get(SEARCH_URL, {"q": term})
+
+    assert response.status_code == 200
+    [log] = SearchLog.objects.all()
+    assert log.query_text == term
 
 
 # --- 401 ----------------------------------------------------------------------------------

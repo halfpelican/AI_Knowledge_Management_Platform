@@ -117,7 +117,7 @@ from datetime import date, datetime
 
 from django.db.models import F, Func, Q, TextField, Value
 
-from apps.core.constants import MINIMUM_SEARCH_LENGTH, SOURCE_TYPES
+from apps.core.constants import MAXIMUM_SEARCH_LENGTH, MINIMUM_SEARCH_LENGTH, SOURCE_TYPES
 from apps.retrieval.models import SearchLog
 from apps.retrieval.scoping import (
     permission_scope,
@@ -210,6 +210,16 @@ class SearchQueryContainsNullCharacter(ValueError):
     It is checked here rather than in the view so that the rule lives with the query that
     cannot survive it, and so the two rejections are one shape — the view maps exceptions and
     re-checks nothing.
+    """
+
+
+class SearchQueryTooLong(ValueError):
+    """The search term is longer than MAXIMUM_SEARCH_LENGTH (D-79's note of 10 November 2026).
+
+    Raised by ``search`` only, and turned into FR-12's 400 by the view, with no ``SearchLog`` row,
+    as the other two refusals are. ``search_total`` does not raise it: FR-19's cycle recounts
+    terms logged before the bound existed, and a refusal there would roll back that cycle and
+    every later one (the security review's M1, D-107's note).
     """
 
 
@@ -480,12 +490,18 @@ def search(*, query_text: str, user) -> SearchResults:
     request was largely doomed anyway. Unlike ``record_query`` there is no second table, so
     no transaction is needed for one row.
 
-    Raises SearchQueryTooShort for a term under MINIMUM_SEARCH_LENGTH, and
-    SearchQueryContainsNullCharacter for a term carrying a NUL byte, both before any query
-    runs and before any row is written. Two exceptions rather than one because they are two
+    Raises SearchQueryTooShort for a term under MINIMUM_SEARCH_LENGTH,
+    SearchQueryContainsNullCharacter for a term carrying a NUL byte, and SearchQueryTooLong
+    for a term over MAXIMUM_SEARCH_LENGTH, all before any query runs and before any row is
+    written. Two exceptions rather than one because they are two
     different things to tell the user; see SearchQueryContainsNullCharacter.
     """
     _check_term(query_text)
+    if len(query_text) > MAXIMUM_SEARCH_LENGTH:
+        # Here and not in _check_term, which search_total shares: see SearchQueryTooLong.
+        raise SearchQueryTooLong(
+            f"A search term can be at most {MAXIMUM_SEARCH_LENGTH} characters."
+        )
 
     role_name = permission_scope(user)
     match = _match(role_name=role_name, query_text=query_text)
@@ -560,7 +576,8 @@ def search_total(*, role_name: str, query_text: str) -> int:
 def _check_term(query_text: str) -> None:
     """FR-12's two refusals of a search term, raised before any query runs.
 
-    Shared by ``search`` and ``search_total`` so the two cannot accept different terms.
+    Shared by ``search`` and ``search_total`` so the two cannot accept different terms. The
+    upper bound is not here: ``search`` alone applies it (SearchQueryTooLong).
     """
     if len(query_text) < MINIMUM_SEARCH_LENGTH:
         raise SearchQueryTooShort(
