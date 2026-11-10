@@ -1152,7 +1152,8 @@ dimension sorted by name and always present:
 - **What can appear or disappear.** Nothing here moves because a link on material the caller cannot
   read was made or destroyed.
   - A grown tag appears when a source every role in the audience reads comes to carry it, and
-    disappears only when the last such source is deleted: a removed link is kept and still counts.
+    disappears only when the last such source is deleted, or the tag is retired: a removed link is
+    kept and still counts.
   - A tag that is not grown never moves while it is active: no link anyone makes or destroys changes
     whether it is offered, a person confirming a proposal of its name made before it was vocabulary
     included. It leaves only when an Administrator retires or deletes it, and a retired Topic a
@@ -1161,8 +1162,10 @@ dimension sorted by name and always present:
   is the `200` above.
 - **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
 - **A Topic name that is not in this list but exists** (grown and on no source the document's
-  whole audience reads, or inactive) is linked and answered `201` exactly as a new Topic is,
-  so the answer never tells the caller that a value they cannot see exists. After that the Topic is
+  whole audience reads, or inactive) is linked and answered `201` exactly as a new Topic is, unless
+  this document already holds a link to it, live or removed: that link is kept, or restored if
+  removed, and the answer is `200`. Either answer depends only on this document's own links, so it
+  never tells the caller that a value they cannot see exists. After that the Topic is
   in this document's list, and it stays there after a person removes it, since the removed link is
   kept: a person who applies a new Topic, removes it and applies it again by name gets `201`, `204`,
   `409`, whatever exists elsewhere, and the `409` names the Topic, which its id restores (`200`).
@@ -1176,11 +1179,17 @@ D-33 part 1). A 422 body does not carry it, and neither do the list and browse r
 in the detail's `tags`, not a browse facet value and not a filter hit until it is confirmed.
 `tag_details` is where a held suggestion is seen.
 
-**Removed links (D-105's dated note of 10 November 2026, night).** An AI link a person removed is
-in **no** read: not the detail's `tags` or `tag_details`, not the classify, confirm or
-proposed-topic replies' `tag_details`, not a browse facet value and not a filter hit. Its id
-answers `404` on the confirm and remove routes, exactly as an unknown id does. It stays in the
-database only so that the machine's assignment is kept beside the person's decision.
+**Removed links (D-105's dated note of 10 November 2026, night).** A link a person removed, the
+machine's or a person's, is in **no** read: not the detail's `tags` or `tag_details`, not the
+classify, confirm or proposed-topic replies' `tag_details`, not a browse facet value and not a
+filter hit. Its id answers `404` on the confirm and remove routes, exactly as an unknown id does.
+It stays in the database for FR-10's correction clause, for two reasons:
+
+- an AI link, so that the machine's assignment is kept beside the person's decision;
+- a person's link, so that a later classify or reprocess neither links the value again nor
+  proposes it again ("not overwritten by later reprocessing").
+
+Applying the tag again restores the link (`200`).
 
 **The management command** `python manage.py classify_documents --all | --document <uuid>...
 [--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:
@@ -1218,8 +1227,9 @@ The tag entry, in the list and in the `DELETE`'s `200`:
   (D-72), so it is still in their `tags` and `tag_details`, a facet value and a filter.
 - **There is no reactivation route.** A retired Topic comes back when a person types its name on
   `POST /api/documents/{id}/tags`, where it is linked and reactivated and answered `201` exactly as
-  a new Topic would be, or confirms it as a proposed topic, which has always reactivated a retired
-  Topic. A retired Project or Process tag stays retired.
+  a new Topic would be, unless that document already holds a link to it, live or removed, which is
+  kept or restored: `200`. Or a person confirms it as a proposed topic, which has always reactivated
+  a retired Topic. A retired Project or Process tag stays retired.
 
 ## NIT3004 — FR-19, Objective 06
 

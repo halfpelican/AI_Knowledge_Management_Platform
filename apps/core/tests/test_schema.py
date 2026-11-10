@@ -80,8 +80,9 @@ SCHEMA_V1 = {
          # Migration v2, 8 November 2026 (FR-10, D-105): the model's confidence for an AI link,
          # and whether the link is held for confirmation (docs/schema-v1.md §1).
          "confidence", "provisional",
-         # documents 0009, 10 November 2026 (FR-10, D-119 finding 3): an AI link a person removed,
-         # kept beside the machine's assignment (docs/schema-v1.md §1).
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 3): a link a person removed,
+         # an AI link kept beside the machine's assignment and a person's so that no later run
+         # links it again (docs/schema-v1.md §1).
          "removed"},
     ),
     # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by

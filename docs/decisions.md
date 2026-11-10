@@ -7050,7 +7050,11 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
     carries, one nothing links included, or an inactive one, as `classification.py` and the
     contract say.* Answering 409 for it would tell the caller that a value they cannot see exists.
     So it is linked as it stands, reactivated if it was inactive (as `confirm_proposed_topic`
-    already does), and answered 201 exactly as a new Topic is. A test
+    already does), and answered 201 exactly as a new Topic is. *Corrected the same night, after the
+    focused re-audit of `88a488d`: unless this document already holds a link to it, live or
+    removed, which is kept or restored: 200. Since a person's removal is kept, a Topic typed,
+    removed, retired and typed again on the same document is that case. The answer depends only on
+    the document's own links.* A test
     compares the two replies byte for byte, with only the new link's id masked: `Tags` has no
     timestamp, and the reply carries no tag id, so nothing in it tells them apart. Timing is not
     claimed to be indistinguishable. This entry's "the 409 is not reachable by design" is
@@ -7070,10 +7074,12 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
   `GET /api/documents/{id}`, so `tag_options` is carried there, recorded as a correction to the
   brief. It is `tag_scheme`'s tags with their ids, `{Project, Process, Topic: [{tag_id, tag_name}]}`
   (`offered_tags`, `tag_options`).
-  - **Why every value in it is readable by the caller.** A linked value is offered only if every
-    role in the audience reads a source carrying it. A caller reaches the detail only if their role
-    reads the document, so some audience role is one the caller's role reads, and EFFECTIVE_ROLES
-    is closed under generalisation (D-66).
+  - **Why every value in it is readable by the caller.** *Corrected the same night, after the
+    focused re-audit of `88a488d`: every grown value in it. A tag that is not grown is vocabulary,
+    readable through no source and disclosing none, as the correction after the next bullet says.*
+    A linked value is offered only if every role in the audience reads a source carrying it. A
+    caller reaches the detail only if their role reads the document, so some audience role is one
+    the caller's role reads, and EFFECTIVE_ROLES is closed under generalisation (D-66).
   - **What the brief's sentence overstates.** "Every value in it is readable by every role in the
     document's audience" is true of linked values only. An unlinked tag is in every scheme as
     vocabulary (this entry's rule), and so in every document's `tag_options`, readable through no
@@ -7126,9 +7132,11 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
     historical classification".
   - **No reactivation route.** A retired Topic comes back the way `confirm_proposed_topic` has
     always brought one back: a person names it, and `apply_tag` links and reactivates it, answered
-    as a new Topic would be (a retired value is in no scheme, so a 409 would disclose it). A
-    retired Project or Process tag stays retired. *Declined:* a route that only reactivates, which
-    nothing in FR-10 asks for.
+    as a new Topic would be (a retired value is in no scheme, so a 409 would disclose it).
+    *Corrected the same night, after the focused re-audit of `88a488d`: answered 200 instead when
+    the document already holds a link to it, live or removed, which is kept or restored.* A retired
+    Project or Process tag stays retired. *Declined:* a route that only reactivates, which nothing
+    in FR-10 asks for.
 - **The 409 rule's existence oracle, closed (the lead's review, the same night).** The rule as first
   built (`90ebc51`) left one, found in the lead's review of `4b5cf65`. Two roles suffice:
   1. An Employee holding `contribute_content` applies a Topic name to a document their role reads.
@@ -7333,7 +7341,8 @@ landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
     reference it. It deletes only a tag nothing references.
   - **Links are now deleted only with their source,** a document (D-73) or a meeting. So removing a
     link never takes a tag out of anyone's options; a grown tag leaves an audience's options when
-    the last source that audience reads carrying it is deleted.
+    the last source that audience reads carrying it is deleted, or the tag is retired (*"or the tag
+    is retired" added the same night, after the focused re-audit of `88a488d`*).
   - **What the sequences no longer show.** Whether a Topic a name brings in is grown, created or
     reactivated, no longer shows in them, since the document carries the name either way. A route
     test holds it instead: a new name, or a retired seeded Topic, named on Administrator-only

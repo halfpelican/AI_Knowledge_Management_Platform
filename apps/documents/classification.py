@@ -264,8 +264,9 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
     2026, night: the security review of ``84b5771``):
 
     - **A grown tag appears** when a source every audience role reads comes to carry it, and
-      **disappears** only when the last such source is deleted: a removed link is kept and still
-      counts (``reject_tag``). Links on material some reader cannot see neither add nor remove it.
+      **disappears** only when the last such source is deleted, or the tag is retired: a removed
+      link is kept and still counts (``reject_tag``). Links on material some reader cannot see
+      neither add nor remove it.
     - **A tag that is not grown never moves** while it is active: no link anyone makes or destroys,
       on readable material or restricted, changes whether it is offered. That includes a person
       confirming a proposal of its name made before it was vocabulary, which links it and leaves it
@@ -653,8 +654,10 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       and always in the scheme of an active one. Answering 409 for one outside the scheme would tell
       the caller whether a restricted value exists, directly or by applying, removing and applying
       again. So it is linked as it stands, reactivated if it was inactive (as
-      ``confirm_proposed_topic`` does), and answered exactly as a new Topic is. Only a name no Topic
-      has creates a Tag.
+      ``confirm_proposed_topic`` does), and answered exactly as a new Topic is, unless this document
+      already holds a link to it, live or removed, which ``_apply_link`` keeps or restores:
+      ``created`` is False, the route's 200. Either answer depends only on this document's own
+      links. Only a name no Topic has creates a Tag.
     - **The Topic the name form links is grown** (``Tag.grown``, D-105's dated note of 10 November
       2026, night), whether it was created or fetched, so that it is never vocabulary, whatever it
       was before: it is offered only where every audience role reads a source carrying it.

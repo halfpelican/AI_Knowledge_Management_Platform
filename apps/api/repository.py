@@ -41,9 +41,11 @@ as a tag, offered as a facet value nor matched by a filter until a person confir
 ``tag_details_of`` is where it is seen, provisional included, for the detail view.
 
 **Nor is a removed one (D-105's dated note of 10 November 2026, night).** ``ContentTag.removed``
-marks an AI link a person removed, kept only so the machine's assignment survives beside the
-person's decision. Every read here excludes it, ``tag_details_of`` included: removed is gone, as
-far as any screen is concerned.
+marks a link a person removed, the machine's or a person's. It is kept for FR-10's correction
+clause: an AI link so that the machine's assignment survives beside the person's decision, and a
+person's so that a later classify or reprocess neither links the value again nor proposes it.
+Every read here excludes it, ``tag_details_of`` included: removed is gone, as far as any screen is
+concerned.
 """
 
 from dataclasses import dataclass, fields
@@ -205,7 +207,8 @@ def tag_details_of(document):
     The detail view's ``tag_details`` (D-105): where a held suggestion is seen, with its
     provenance, so a person can accept or remove it. Unlike ``tags_of`` this is one entry per
     LINK, so a document linked twice to one tag shows two entries with two ids. A link a person
-    removed is kept in the table for the machine's assignment and is not one of them.
+    removed is kept in the table, an AI link for the machine's assignment and a person's so that no
+    later run links it again, and is not one of them.
     """
     return (
         ContentTag.objects.filter(

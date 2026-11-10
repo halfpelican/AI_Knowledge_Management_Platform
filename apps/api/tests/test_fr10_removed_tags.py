@@ -150,6 +150,28 @@ def test_a_removed_link_is_the_same_404_when_confirmed_or_removed_again(session_
     assert (kept.removed, kept.confirmed) == (True, False)
 
 
+def test_a_persons_removed_link_is_the_same_404_when_confirmed_or_removed_again(session_client):
+    """The person's-link twin of the test above (the focused re-audit of ``88a488d``): a person's
+    removal is kept since the requirements re-audit of ``5377e3a``, and its id is "not here" too."""
+    client = session_client.client
+    document = make_document(session_client.user)
+    tag = Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION)
+    link = ContentTag.objects.create(
+        tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk,
+        applied_by=USER_APPLIED, confirmed=True,
+    )
+    assert remove(client, document.id, link.id).status_code == 204
+
+    for response in (
+        client.post(f"{DOCUMENTS_URL}/{document.id}/tags/{link.id}/confirm", {}, format="json"),
+        remove(client, document.id, link.id),
+    ):
+        assert response.status_code == 404, response.content
+        assert response.json() == NOT_FOUND_BODY
+    kept = links_of(document).get()
+    assert (kept.pk, kept.removed, kept.applied_by, kept.confirmed) == (link.pk, True, USER_APPLIED, True)
+
+
 # --- FR-15's reads, one read per test -----------------------------------------------------------
 
 

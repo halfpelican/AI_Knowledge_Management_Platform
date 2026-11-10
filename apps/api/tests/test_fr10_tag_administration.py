@@ -269,7 +269,9 @@ def test_a_retired_tag_leaves_the_options_and_stays_on_the_documents_that_carry_
 def test_typing_a_retired_topics_name_brings_it_back(session_client, administrator_client):
     """There is no reactivation route. A retired Topic comes back the way confirm_proposed_topic
     has always brought one back: a person names it, and it is linked and reactivated, answered as a
-    new Topic would be, since a retired value is in no scheme."""
+    new Topic would be, since a retired value is in no scheme. That is on a document holding no link
+    to it, as here; on one that holds a link, live or removed, the link is kept or restored and the
+    answer is 200 (the next test; the focused re-audit of ``88a488d``)."""
     document = make_document(session_client.user)
     other = make_document(session_client.user, title="Site rules")
     topic = Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)
@@ -285,3 +287,36 @@ def test_typing_a_retired_topics_name_brings_it_back(session_client, administrat
     topic.refresh_from_db()
     assert topic.active is True
     assert Tag.objects.filter(tag_name="night shifts").count() == 1
+
+
+def test_typing_a_retired_topic_again_on_the_document_holding_its_removed_link_restores_it(
+    session_client, administrator_client
+):
+    """D2 of the focused re-audit of ``88a488d``. A person types T on D (201) and removes it (204: the
+    link is kept, removed). The Administrator retires T: 200, deactivated, because the removed link
+    still references it. The person types T on D again: T is reactivated and D's own link restored,
+    the same row, and the answer is 200. It depends only on D's own links, so it discloses nothing
+    about other material. The person acts from both roles; only an Administrator retires."""
+    client = session_client.client
+    document = make_document(session_client.user)
+    body = {"dimension": TOPIC_DIMENSION, "tag_name": "Night shifts"}
+
+    typed = client.post(f"{DOCUMENTS_URL}/{document.id}/tags", body, format="json")
+    assert typed.status_code == 201, typed.content
+    [first] = typed.json()["tag_details"]
+    removed = client.delete(f"{DOCUMENTS_URL}/{document.id}/tags/{first['content_tag_id']}")
+    assert removed.status_code == 204, removed.content
+    topic = Tag.objects.get(tag_name="night shifts", dimension=TOPIC_DIMENSION)
+    retired = delete(administrator_client, topic.pk)
+    assert retired.status_code == 200, retired.content
+    assert retired.json() == entry(topic, 0, active=False)
+
+    again = client.post(f"{DOCUMENTS_URL}/{document.id}/tags", body, format="json")
+
+    assert again.status_code == 200, again.content
+    assert [item["content_tag_id"] for item in again.json()["tag_details"]] == [first["content_tag_id"]]
+    restored = ContentTag.objects.get(pk=first["content_tag_id"])
+    assert (restored.removed, restored.confirmed, restored.applied_by) == (False, True, USER_APPLIED)
+    assert ContentTag.objects.filter(tag=topic).count() == 1
+    topic.refresh_from_db()
+    assert (topic.active, topic.grown) == (True, True)

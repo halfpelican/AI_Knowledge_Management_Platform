@@ -301,18 +301,20 @@ def test_a_new_name_in_another_dimension_is_400(session_client):
 
 
 @pytest.mark.parametrize(
-    "body",
+    "body, field",
     [
-        {},
-        {"tag_id": "<tag>", "dimension": TOPIC_DIMENSION, "tag_name": "night shifts"},
-        {"tag_name": "night shifts"},
-        {"dimension": TOPIC_DIMENSION},
-        {"dimension": TOPIC_DIMENSION, "tag_name": "   "},
-        {"tag_id": "not-a-uuid"},
+        ({}, "non_field_errors"),
+        ({"tag_id": "<tag>", "dimension": TOPIC_DIMENSION, "tag_name": "night shifts"}, "non_field_errors"),
+        ({"tag_name": "night shifts"}, "dimension"),
+        ({"dimension": TOPIC_DIMENSION}, "tag_name"),
+        ({"dimension": TOPIC_DIMENSION, "tag_name": "   "}, "tag_name"),
+        ({"tag_id": "not-a-uuid"}, "tag_id"),
     ],
     ids=["neither form", "both forms", "no dimension", "no name", "a blank name", "a malformed id"],
 )
-def test_a_body_that_is_not_exactly_one_form_is_400(session_client, body):
+def test_a_body_that_is_not_exactly_one_form_is_400(session_client, body, field):
+    """Each 400 names the field the contract's 400 list gives it (the focused re-audit of ``88a488d``
+    asked that the missing dimension's be checked as ``dimension``, not by its status alone)."""
     document = make_document(session_client.user)
     tag = Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)
     body = {key: str(tag.pk) if value == "<tag>" else value for key, value in body.items()}
@@ -320,6 +322,7 @@ def test_a_body_that_is_not_exactly_one_form_is_400(session_client, body):
     response = apply(session_client.client, document.id, **body)
 
     assert response.status_code == 400, response.content
+    assert set(response.json()) == {field}
     assert not links_of(document).exists()
     assert not Tag.objects.filter(tag_name="night shifts").exists()
 
