@@ -1,0 +1,23 @@
+Classifying against database 'kmp_obj0506_20261101'.
+910d0241-38de-4305-b901-a10bf40b8781  'Employee Leave Policy 2026'                type Policy/applied  department 'Human Resources'/provisional  tags 0 applied, 2 held, 0 proposed, 0 discarded  8.613s
+e65ad9ac-df6b-4a48-9d41-9b11af281c3f  'IT Acceptable Use Policy'                  type Policy/applied  department 'Legal and Compliance'/provisional  tags 0 applied, 3 held, 0 proposed, 0 discarded  8.987s
+9862c3e2-bd78-4061-a535-2e6f8649d008  'Health and Safety Induction Guide'         type Policy/applied  department 'Health and Safety'/discarded  tags 0 applied, 1 held, 0 proposed, 1 discarded  30.361s
+b17e1c8a-3f89-4b59-8740-06cec1913505  'Records Management Handbook'               type Procedure/applied  department 'Information Technology'/provisional  tags 0 applied, 2 held, 0 proposed, 0 discarded  12.9s
+937a4447-e94f-4c63-a025-0bd5afa94057  'Procurement Guidelines'                    type Policy/applied  department 'Finance'/provisional  tags 0 applied, 2 held, 0 proposed, 0 discarded  11.448s
+46f78870-1670-45fb-8a00-1d1b53f2cba1  'Customer Complaints Procedure'             type Procedure/applied  department 'Customer Experience'/discarded  tags 0 applied, 2 held, 0 proposed, 1 discarded  13.567s
+3899e26b-b3dd-4478-9845-093046a99ab8  'Remote Work Agreement Template'            type Policy/applied  department 'Human Resources'/provisional  tags 0 applied, 3 held, 0 proposed, 0 discarded  13.763s
+9b5631b9-6175-4830-a353-56b2d0abb817  'Onboarding Checklist for New Starters'     type Procedure/applied  department 'Human Resources'/applied  tags 1 applied, 1 held, 0 proposed, 0 discarded  11.635s
+0d5a2e7b-f85f-4b3c-b1cf-24910a56ac99  'Project Atlas Kickoff Brief'               type Meeting Paper/applied  department 'Projects'/provisional  tags 1 applied, 2 held, 0 proposed, 0 discarded  13.425s
+f9621aa3-d664-44af-a25e-94734780119e  'Expense Claims Guide'                      type Policy/applied  department 'Finance'/applied  tags 1 applied, 1 held, 0 proposed, 0 discarded  11.434s
+ab0dcd1f-0bbf-43d4-8241-58e175a7336b  'Data Privacy Notice'                       type Policy/applied  department 'Legal and Compliance'/provisional  tags 1 applied, 1 held, 1 proposed, 0 discarded  13.724s
+6971af02-ec47-4a5f-b3ac-cd481571abdd  'Vendor Register 2026'                      type Policy/applied  department 'Legal and Compliance'/provisional  tags 0 applied, 2 held, 0 proposed, 0 discarded  11.957s
+d703ccb2-c424-4dfe-8b0e-a78a6513b6c3  'Training Schedule Q4'                      type Meeting Paper/applied  department 'Human Resources'/provisional  tags 0 applied, 3 held, 0 proposed, 0 discarded  13.995s
+fd77e898-d2f3-4af0-8f9f-3d44a52d91b2  'Asset Inventory Melbourne Office'          type Report/provisional  department 'Information Technology'/provisional  tags 0 applied, 1 held, 0 proposed, 1 discarded  11.863s
+862c2739-c8a8-45b2-8d24-4e8434266333  'Project Budget Tracker FY27'               type Procedure/applied  department 'Operations'/provisional  tags 0 applied, 1 held, 0 proposed, 1 discarded  11.879s
+054d33f3-c2cd-4476-8ad3-6b054886a7ba  'Team Roster and Skills Matrix'             type Policy/applied  department 'Human Resources'/provisional  tags 1 applied, 1 held, 0 proposed, 0 discarded  11.658s
+2e101ba3-2d3f-4d92-82b9-53f4da8f2fae  'Meeting Room Booking Rules'                type Meeting Paper/applied  department 'Operations'/provisional  tags 0 applied, 1 held, 0 proposed, 1 discarded  8.334s
+a3aee338-142e-4f4e-ba38-2d1b7408cb29  'IT Helpdesk Frequently Asked Questions'    type Procedure/applied  department 'Information Technology'/provisional  tags 1 applied, 0 held, 1 proposed, 0 discarded  11.766s
+49c56238-3aa7-465c-a426-de0bbc739a7d  'Fleet Vehicle Usage Notes'                 type Policy/applied  department 'Fleet'/discarded  tags 0 applied, 1 held, 0 proposed, 1 discarded  8.273s
+483170de-7f0f-4750-b259-3fb2f5c22c2b  'Office Relocation Announcement'            type Meeting Paper/applied  department 'Operations'/provisional  tags 0 applied, 2 held, 0 proposed, 0 discarded  11.849s
+Done: 20 classified, 0 failed.
+Record written to corpus\objective-05\runs\2026-11-10\classify\classify.json.

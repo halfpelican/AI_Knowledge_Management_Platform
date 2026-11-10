@@ -33,7 +33,11 @@ const LEAVE = {
   uploaded_by: 'erin@example.com',
 }
 
-/** A classification whose type and department were both applied: at or above the threshold. */
+/**
+ * A classification whose type and department were both applied. The confidences
+ * are arbitrary: the screen applies no threshold of its own (D-106's is the
+ * server's) and shows the outcome the server recorded.
+ */
 function classificationOf(overrides = {}) {
   return {
     doc_type: 'Policy',
@@ -300,7 +304,7 @@ describe('FR-10: confirming and editing the type and department', () => {
           machine_department_confidence: 0.6,
         }),
       }),
-      { [`POST ${DOC}/classification`]: { body: { classification: after } } },
+      { [`POST ${DOC}/classification`]: { body: { classification: after, department: 'Finance' } } },
     )
     expect(assignment(TEXT.classificationFieldType).value).toBe(TEXT.classificationNotAssigned)
     expect(assignment(TEXT.classificationFieldDepartment).value).toBe(TEXT.documentNotRecorded)
@@ -312,8 +316,8 @@ describe('FR-10: confirming and editing the type and department', () => {
 
     await waitFor(() => expect(assignment(TEXT.classificationFieldType).value).toBe('Report'))
     expect(assignment(TEXT.classificationFieldType).provenance).toContain(TEXT.classificationConfirmed)
-    // The held department was applied by the confirm (D-105), and the metadata
-    // list above the section says the same.
+    // The confirm wrote the held department into a blank one, and the page shows the
+    // department the reply carries, in the section and in the metadata list above it.
     expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Finance')
     expect(metadata(TEXT.documentFieldDepartment)).toBe('Finance')
     expect(screen.getByRole('status').textContent).toBe(TEXT.classificationConfirmedAll)
@@ -336,7 +340,9 @@ describe('FR-10: confirming and editing the type and department', () => {
     const answered = await renderDetail(detailOf({ classification: classificationOf() }), {
       [`POST ${DOC}/classification`]: () => {
         attempts += 1
-        return attempts === 1 ? { status: 400, body: { doc_type: [refusal] } } : { body: { classification: after } }
+        return attempts === 1
+          ? { status: 400, body: { doc_type: [refusal] } }
+          : { body: { classification: after, department: 'Finance' } }
       },
     })
 
@@ -371,6 +377,120 @@ describe('FR-10: confirming and editing the type and department', () => {
     // Both attempts carried both values, trimmed, in the contract's names.
     const sent = { doc_type: 'Meeting Paper', department: 'Finance' }
     expect(requestsTo(answered, 'POST', `${DOC}/classification`).map((request) => request.body)).toEqual([sent, sent])
+  })
+})
+
+/**
+ * D-105's note of 10 November: Human Resources is already on the document, and
+ * the AI suggests Finance. The department stays, and the suggestion is held
+ * for a person to accept, at 97% as at any confidence.
+ */
+function heldDepartmentDetail(overrides = {}) {
+  return detailOf({
+    department: 'Human Resources',
+    classification: classificationOf({
+      department_outcome: 'provisional',
+      machine_department: 'Finance',
+      machine_department_confidence: 0.97,
+    }),
+    ...overrides,
+  })
+}
+
+describe('D-105, 10 November: a department already on the document stays current while a different suggestion waits', () => {
+  it('shows the document’s department as current and the suggestion as awaiting confirmation, then after Confirm the department the server stored', async () => {
+    const confirmed = classificationOf({
+      doc_type_outcome: 'confirmed',
+      department_outcome: 'confirmed',
+      machine_department: 'Finance',
+      machine_department_confidence: 0.97,
+      user_edited: true,
+    })
+    const answered = await renderDetail(heldDepartmentDetail(), {
+      [`POST ${DOC}/classification`]: { body: { classification: confirmed, department: 'Finance' } },
+    })
+
+    const before = assignment(TEXT.classificationFieldDepartment)
+    expect(before.value).toBe('Human Resources')
+    expect(before.provenance).toContain(TEXT.classificationAwaiting)
+    expect(before.provenance).toContain(`${TEXT.classificationSuggestion('Finance')}, ${TEXT.classificationConfidence(97)}`)
+    // What Confirm will do to the department on screen, said before it is pressed.
+    expect(before.provenance).toContain(TEXT.classificationConfirmReplaces('Human Resources', 'Finance'))
+    expect(shownValues()).not.toContain('Finance')
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Human Resources')
+
+    press(screen.getByRole('button', { name: TEXT.classificationConfirmAll }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Finance'))
+    expect(assignment(TEXT.classificationFieldDepartment).provenance).toBe(TEXT.classificationConfirmed)
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Finance')
+    expect(requestsTo(answered, 'POST', `${DOC}/classification`).map((request) => request.body)).toEqual([{}])
+  })
+
+  it.each([
+    ['the department already on the document, not the different suggestion', 'Human Resources', 'Human Resources'],
+    ['the held suggestion when the document has no department', '', 'Finance'],
+  ])('Edit starts the department field from %s', async (_case, onDocument, expected) => {
+    await renderDetail(heldDepartmentDetail({ department: onDocument }))
+
+    press(screen.getByRole('button', { name: TEXT.classificationEdit }))
+    expect(screen.getByLabelText(TEXT.classificationFieldDepartment).value).toBe(expected)
+  })
+})
+
+describe('the department after a confirm is the one the reply carries (docs/api-contract.md, FR-10)', () => {
+  it('shows the department the reply carries, even where the page would have worked out another', async () => {
+    // Another session confirmed Operations after this page loaded, so this confirm
+    // found nothing held and changed nothing, and the reply says Operations.
+    // Worked out from the outcome, as the page did before the reply carried a
+    // department, it would have read Finance, the suggestion on screen.
+    const confirmed = classificationOf({
+      doc_type_outcome: 'confirmed',
+      department_outcome: 'confirmed',
+      machine_department: 'Finance',
+      machine_department_confidence: 0.97,
+      user_edited: true,
+    })
+    await renderDetail(heldDepartmentDetail(), {
+      [`POST ${DOC}/classification`]: { body: { classification: confirmed, department: 'Operations' } },
+    })
+
+    press(screen.getByRole('button', { name: TEXT.classificationConfirmAll }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Operations'))
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Operations')
+    expect(shownValues()).not.toContain('Finance')
+    // The machine's value is still named beside the person's, as FR-10 keeps it.
+    expect(assignment(TEXT.classificationFieldDepartment).provenance).toContain(TEXT.classificationSuggestion('Finance'))
+  })
+
+  it('falls back, for a reply without department from a server before 10 November, to the department the confirm stored', async () => {
+    const confirmed = classificationOf({
+      doc_type_outcome: 'confirmed',
+      department_outcome: 'confirmed',
+      machine_department: 'Finance',
+      machine_department_confidence: 0.6,
+      user_edited: true,
+    })
+    await renderDetail(
+      detailOf({
+        department: '',
+        classification: classificationOf({
+          department_outcome: 'provisional',
+          machine_department: 'Finance',
+          machine_department_confidence: 0.6,
+        }),
+      }),
+      // The reply as it was before 10 November: `{classification}` alone. Not the
+      // contract now; it is here only to defend the fallback.
+      { [`POST ${DOC}/classification`]: { body: { classification: confirmed } } },
+    )
+    expect(assignment(TEXT.classificationFieldDepartment).value).toBe(TEXT.documentNotRecorded)
+
+    press(screen.getByRole('button', { name: TEXT.classificationConfirmAll }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Finance'))
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Finance')
   })
 })
 
@@ -587,7 +707,9 @@ describe('FR-10: a document that has never been classified', () => {
     expect(screen.getByRole('status').textContent).toBe(TEXT.classifyingStatus)
     expect(screen.queryByText(TEXT.classificationNone)).toBeTruthy()
 
-    classify.release({ body: { classification: classificationOf(), tag_details: [AI_TAG] } })
+    classify.release({
+      body: { classification: classificationOf(), tag_details: [AI_TAG], department: LEAVE.department },
+    })
 
     await waitFor(() => expect(assignment(TEXT.classificationFieldType).value).toBe('Policy'))
     expect(screen.queryByText(TEXT.classificationNone)).toBeNull()
@@ -598,6 +720,44 @@ describe('FR-10: a document that has never been classified', () => {
     expect(metadata(TEXT.documentFieldProject)).toBe(AI_TAG.name)
     expect(screen.getByRole('status').textContent).toBe(TEXT.classifyDone)
     expect(requestsTo(answered, 'POST', `${DOC}/classify`)).toHaveLength(1)
+  })
+
+  it('shows the department the classify reply carries, filling a blank one, beside the AI label', async () => {
+    // A run fills a blank department with an applied suggestion (D-105), and the
+    // reply says what the department now is.
+    const answered = await renderDetail(detailOf({ department: '' }), {
+      [`POST ${DOC}/classify`]: {
+        body: {
+          classification: classificationOf({ machine_department: 'Finance', machine_department_confidence: 0.97 }),
+          tag_details: [],
+          department: 'Finance',
+        },
+      },
+    })
+    expect(metadata(TEXT.documentFieldDepartment)).toBe(TEXT.documentNotRecorded)
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Finance'))
+    expect(assignment(TEXT.classificationFieldDepartment).provenance).toBe(
+      `${TEXT.classificationSuggestedByAI}, ${TEXT.classificationConfidence(97)}`,
+    )
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Finance')
+    expect(requestsTo(answered, 'POST', `${DOC}/classify`)).toHaveLength(1)
+  })
+
+  it('keeps the department as it was when a classify reply carries none, as from a server before the field', async () => {
+    await renderDetail(detailOf({ department: 'Human Resources' }), {
+      // The classify reply before the field: `{classification, tag_details}`. Not the
+      // contract now; it is here only to defend the fallback.
+      [`POST ${DOC}/classify`]: { body: { classification: classificationOf(), tag_details: [] } },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: TEXT.classifyNow }))
+
+    await waitFor(() => expect(assignment(TEXT.classificationFieldType).value).toBe('Policy'))
+    expect(assignment(TEXT.classificationFieldDepartment).value).toBe('Human Resources')
+    expect(metadata(TEXT.documentFieldDepartment)).toBe('Human Resources')
   })
 
   it('says in words that there was no text to classify on a 422, never showing the backend text', async () => {

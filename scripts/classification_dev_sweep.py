@@ -50,12 +50,16 @@ REQUIRED_FLM = "v0.9.39"
 
 
 def document_text(path: Path) -> str:
-    if path.suffix.lower() == ".docx":
-        import docx  # python-docx, already a dependency of extraction
+    """The document's text as ingestion would store it: the project's own extractor, by format.
 
-        parsed = docx.Document(str(path))
-        return "\n".join(paragraph.text for paragraph in parsed.paragraphs)
-    return path.read_text(encoding="utf-8")
+    Since 10 November 2026 (D-106's note), so that a spreadsheet reaches the classifier exactly
+    as a reference spreadsheet's ExtractedContent does. The first two sweeps read .txt directly
+    and .docx paragraphs with python-docx, which gives the same text for those files.
+    """
+    from apps.ingestion.extraction import extract_plain_text
+
+    with path.open("rb") as handle:
+        return extract_plain_text(handle, path.suffix.lower().lstrip("."))
 
 
 def corpus_scheme():
