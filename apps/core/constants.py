@@ -197,8 +197,10 @@ MAXIMUM_STATEMENTS = 6
 MAXIMUM_GENERATION_ATTEMPTS = 3
 # Same policy: one attempt plus two retries, after which the item is flagged.
 MAXIMUM_EMBED_ATTEMPTS = 3
-# Same policy for classification (FR-10, NIT3004). Named here now so the retry
-# policy is uniform across every AI call, not so anything uses it before Stage 6.
+# Same policy for classification (FR-10, NIT3004; D-104): apps/ai/classification.py's attempt
+# loop makes at most this many classify_document calls (1 initial call + 2 retries), then
+# raises ProviderUnavailable, which POST /api/documents/{id}/classify answers 503 and the
+# ingestion hook answers by leaving the document indexed and unclassified (invariant 8).
 MAXIMUM_CLASSIFY_ATTEMPTS = 3
 
 # --- Question bounds (FR-12, FR-13), in characters -----------------------------------
@@ -537,7 +539,8 @@ MANAGE_DOCUMENTS_PERMISSION = "manage_documents"
 # D-66 puts every Employee-only meeting in an Administrator's scope, so none is undeletable.
 MANAGE_MEETINGS_PERMISSION = "manage_meetings"
 
-# Provenance of a ContentTags row (FR-10, FR-15).
+# Provenance of a ContentTags row (FR-10, FR-15), and of the department a document carries
+# (DocumentAnalysis.department_applied_by, D-119 finding 10): the machine's, or a person's.
 TAG_APPLIED_BY_VALUES = ("ai", "user")
 AI_APPLIED, USER_APPLIED = TAG_APPLIED_BY_VALUES
 

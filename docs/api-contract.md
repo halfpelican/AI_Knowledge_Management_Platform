@@ -1077,8 +1077,8 @@ proposal or an analysis that is not this document's gets that same 404, word for
 |---|---|---|---|---|
 | POST | `/api/documents/{id}/classify` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...], "department": "Finance"}` after one provider call and the apply rules, in one transaction; a second call updates the one analysis. `department` is the document's `department` column after the classification, re-read from the row: an applied in-scheme suggestion fills a blank department, and a different department already there is kept, with the suggestion held as `department_outcome: "provisional"` (D-105's note of 10 November) | `401`; `404`; `403`; `422 {"detail": "..."}` no extracted text (FR-10: "where insufficient text was extracted"), before any provider call; `503 {"detail": "..."}` the provider failed after `MAXIMUM_CLASSIFY_ATTEMPTS` (NFR-19), nothing written; `429` past the ingestion rate, one budget with upload, meeting ingest and reprocess (D-79); no in-flight slot |
 | POST | `/api/documents/{id}/classification` | session + `contribute_content` | `200 {"classification": ..., "department": "Finance"}`, where `department` is the document's `department` column after the confirm or edit, so the client need not infer it from the outcome. Body `{"doc_type"?: string, "department"?: string}`: both omitted confirms as it stands (a provisional type is applied; a provisional department is written to `department`); `doc_type` must be one of `DOCUMENT_TYPES`; `department` may be blank, which clears it; `null` means omitted | `401`; `404`, also when the document has no classification yet; `403`; `400 {"doc_type": ["..."]}` or `{"department": ["..."]}` |
-| POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's; `403` |
-| DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the link is removed (FR-10: "accepted or removed in a single action"); the `Tags` row stays | `401`; `404`, also when the link is not this document's; `403` |
+| POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
+| DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). An AI link (`applied_by: "ai"`, held or applied, confirmed or not) is **kept, marked removed**, with the confidence the machine gave it, and no read lists it again; a later classify or reprocess neither links it again nor alters it. A person's link (`applied_by: "user"`) is deleted. The `Tags` row stays either way | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
 | POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
 | POST | `/api/documents/{id}/proposed-topics/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created | the same |
 
@@ -1086,6 +1086,7 @@ The classification object (`null` for a document never classified):
 
 ```json
 {"doc_type": "Policy", "doc_type_outcome": "applied", "department_outcome": "provisional",
+ "department_applied_by": "user",
  "machine_doc_type": "Policy", "machine_doc_type_confidence": 0.9,
  "machine_department": "Finance", "machine_department_confidence": 0.6,
  "user_edited": false, "proposed_topics": [{"value": "budget planning", "confidence": 0.8}],
@@ -1093,13 +1094,27 @@ The classification object (`null` for a document never classified):
 ```
 
 - **The effective department is the document object's `department`** (D-72); `department_outcome`
-  says how it got there. `doc_type` is `null` while the type is provisional. The outcomes are
-  `applied`, `provisional`, `discarded` and `confirmed` (`docs/schema-v1.md` §3). Confidences are
-  numbers to three places. `discarded_suggestions` is not exposed: it is a record for the
-  Objective 05 measurement (D-106).
+  says how the machine's suggestion was disposed of. `doc_type` is `null` while the type is
+  provisional. The outcomes are `applied`, `provisional`, `discarded` and `confirmed`
+  (`docs/schema-v1.md` §3). Confidences are numbers to three places. `discarded_suggestions` is not
+  exposed: it is a record for the Objective 05 measurement (D-106).
+- **`department_applied_by`** says whose value the document's department is, in the tags'
+  provenance vocabulary (D-119 finding 10; D-105's dated note of 10 November 2026, night):
+  - `"user"`: a person gave it, typed at upload or written through the confirm route. With
+    `department_outcome: "applied"` this is a department a person supplied that the machine's
+    suggestion **matched**: show it as the person's, not as "Suggested by AI".
+  - `"ai"`: a classification run wrote its suggestion into a blank department, and no person has
+    written the department since. A person who confirms that value as it stands keeps it `"ai"`,
+    with `department_outcome: "confirmed"`, as a confirmed AI tag keeps `applied_by: "ai"`.
+  - `null`: the document has no department, or its classification was recorded before
+    `documents 0009` and no run or confirmation has set the field since. Treat it as before the
+    field existed.
+
+  It is in the object wherever the object is: the detail, the classify and confirm replies, the
+  proposed-topic replies and the upload's and reprocess's 201 bodies.
 
 A `tag_details` entry, one per `ContentTags` link in Project, Process or Topic, provisional
-included, sorted by dimension then name:
+included and removed excluded, sorted by dimension then name:
 
 ```json
 {"content_tag_id": "uuid", "dimension": "Project", "name": "bridge maintenance",
@@ -1117,6 +1132,12 @@ D-33 part 1). A 422 body does not carry it, and neither do the list and browse r
 **FR-15's reads and provisional links (D-105).** A provisional link is held, not applied: it is not
 in the detail's `tags`, not a browse facet value and not a filter hit until it is confirmed.
 `tag_details` is where a held suggestion is seen.
+
+**Removed links (D-105's dated note of 10 November 2026, night).** An AI link a person removed is
+in **no** read: not the detail's `tags` or `tag_details`, not the classify, confirm or
+proposed-topic replies' `tag_details`, not a browse facet value and not a filter hit. Its id
+answers `404` on the confirm and remove routes, exactly as an unknown id does. It stays in the
+database only so that the machine's assignment is kept beside the person's decision.
 
 **The management command** `python manage.py classify_documents --all | --document <uuid>...
 [--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:

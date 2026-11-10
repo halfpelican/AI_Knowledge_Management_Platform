@@ -196,8 +196,9 @@ class DocumentDetailSerializer(DocumentSerializer):
 
     **FR-10 adds two more (D-105):** ``classification``, the ``ClassificationSerializer`` object
     or ``None`` for a document never classified, and ``tag_details``, one entry per tag link,
-    provisional included, with its provenance. ``tags`` keeps its shape and lists applied links
-    only. The effective department is the ``department`` field already in the object (D-72).
+    provisional included and a link a person removed excluded, with its provenance. ``tags``
+    keeps its shape and lists applied links only. The effective department is the
+    ``department`` field already in the object (D-72).
 
     The list routes keep ``DocumentSerializer``: a list of fifty documents should not carry
     fifty documents' whole text, as ``MeetingListSerializer`` leaves out the transcript.
@@ -275,13 +276,17 @@ class ClassificationSerializer(serializers.Serializer):
     Confidences are numbers, not DRF's default string rendering of a Decimal, because the client
     compares them with a threshold rather than displaying them verbatim. The effective department
     is NOT here: it is the document object's ``department`` (D-72), and ``department_outcome``
-    says how it got there. ``discarded_suggestions`` is not exposed: it is a record for the
-    Objective 05 measurement (D-106), not for the interface.
+    says how the machine's suggestion was disposed of. ``department_applied_by`` says whose value
+    that department is, "user", "ai" or null (D-119 finding 10): an outcome of "applied" with
+    "user" is a department a person gave that the machine's suggestion matched, which the
+    interface must not label as the machine's. ``discarded_suggestions`` is not exposed: it is a
+    record for the Objective 05 measurement (D-106), not for the interface.
     """
 
     doc_type = serializers.CharField(read_only=True, allow_null=True)
     doc_type_outcome = serializers.CharField(read_only=True, allow_null=True)
     department_outcome = serializers.CharField(read_only=True, allow_null=True)
+    department_applied_by = serializers.CharField(read_only=True, allow_null=True)
     machine_doc_type = serializers.CharField(read_only=True, allow_null=True)
     machine_doc_type_confidence = serializers.FloatField(read_only=True, allow_null=True)
     machine_department = serializers.CharField(read_only=True, allow_blank=True)
@@ -315,7 +320,8 @@ def classification_payload(analysis) -> dict | None:
 
 
 def tag_details_payload(document) -> list[dict]:
-    """The document's ``tag_details``, through ``tag_details_of`` (provisional included)."""
+    """The document's ``tag_details``, through ``tag_details_of`` (provisional included, removed
+    excluded)."""
     return TagDetailSerializer(tag_details_of(document), many=True).data
 
 

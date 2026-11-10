@@ -1467,8 +1467,11 @@ class DocumentTagConfirmView(APIView):
 
 
 class DocumentTagView(APIView):
-    """``DELETE /api/documents/{id}/tags/{content_tag_id}`` — remove a tag "in a single action". The
-    link goes; the ``Tags`` row, a vocabulary, stays (D-73's note). 204 with no body."""
+    """``DELETE /api/documents/{id}/tags/{content_tag_id}`` — remove a tag "in a single action". 204
+    with no body. An AI link is kept, marked removed, with the machine's confidence, and no read
+    lists it again; a person's link is deleted (``reject_tag``, D-105's dated note of 10 November
+    2026, night). The ``Tags`` row, a vocabulary, stays (D-73's note). A link already removed is
+    the same 404 as an unknown one."""
 
     permission_classes = [IsAuthenticated]
 

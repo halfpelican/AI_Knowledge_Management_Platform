@@ -73,7 +73,10 @@ SCHEMA_V1 = {
         {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
          # Migration v2, 8 November 2026 (FR-10, D-105): the model's confidence for an AI link,
          # and whether the link is held for confirmation (docs/schema-v1.md §1).
-         "confidence", "provisional"},
+         "confidence", "provisional",
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 3): an AI link a person removed,
+         # kept beside the machine's assignment (docs/schema-v1.md §1).
+         "removed"},
     ),
     # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by
     # documents 0008, when FR-10 was built. The columns are docs/schema-v1.md §1's.
@@ -82,7 +85,9 @@ SCHEMA_V1 = {
         {"analysis_id", "doc_id", "machine_doc_type", "machine_doc_type_confidence",
          "machine_department", "machine_department_confidence", "doc_type", "doc_type_outcome",
          "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
-         "model", "input_truncated", "classified_at"},
+         "model", "input_truncated", "classified_at",
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 10): whose department it is.
+         "department_applied_by"},
     ),
     # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
     # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
@@ -235,6 +240,9 @@ SECTION_5_PLAN = [
     # provisional columns. Immediately after 0007 because that is where its dependency puts it
     # in the plan, the rule D-51 records.
     ("documents", "0008_fr10_document_analysis"),
+    # FR-10's tag corrections (D-119 findings 3 and 10), 10 November 2026: ContentTags.removed and
+    # DocumentAnalysis.department_applied_by, immediately after 0008, where its dependency puts it.
+    ("documents", "0009_fr10_tag_corrections"),
     ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).

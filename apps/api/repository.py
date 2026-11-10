@@ -39,6 +39,11 @@ suggestion held below CLASSIFICATION_CONFIDENCE_THRESHOLD for confirmation. ``ta
 filters and the tag facets read ``provisional=False`` only, so a held suggestion is neither shown
 as a tag, offered as a facet value nor matched by a filter until a person confirms it.
 ``tag_details_of`` is where it is seen, provisional included, for the detail view.
+
+**Nor is a removed one (D-105's dated note of 10 November 2026, night).** ``ContentTag.removed``
+marks an AI link a person removed, kept only so the machine's assignment survives beside the
+person's decision. Every read here excludes it, ``tag_details_of`` included: removed is gone, as
+far as any screen is concerned.
 """
 
 from dataclasses import dataclass, fields
@@ -163,7 +168,8 @@ def tags_of(document) -> dict[str, list[str]]:
     Every dimension is present, with an empty list where the document has none, so the shape
     does not change from one document to the next. Department is not here: it is the document's
     ``department`` field (D-72). A provisional link is not here either (D-105): it is held for
-    confirmation, not applied, and ``tag_details_of`` is where it shows.
+    confirmation, not applied, and ``tag_details_of`` is where it shows. A removed link is in
+    neither.
     """
     tags = {parameter: [] for parameter in TAG_PARAMETERS}
     rows = (
@@ -172,6 +178,7 @@ def tags_of(document) -> dict[str, list[str]]:
             source_id=document.pk,
             tag__dimension__in=REPOSITORY_TAG_DIMENSIONS,
             provisional=False,
+            removed=False,
         )
         .values_list("tag__dimension", "tag__tag_name")
         .distinct()
@@ -192,17 +199,20 @@ def classification_of(document):
 
 def tag_details_of(document):
     """Every ``ContentTag`` link of the document in Project, Process and Topic, provisional
-    included, with its ``Tag`` loaded, ordered by dimension, then name, then primary key.
+    included and removed excluded, with its ``Tag`` loaded, ordered by dimension, then name, then
+    primary key.
 
     The detail view's ``tag_details`` (D-105): where a held suggestion is seen, with its
     provenance, so a person can accept or remove it. Unlike ``tags_of`` this is one entry per
-    LINK, so a document linked twice to one tag shows two entries with two ids.
+    LINK, so a document linked twice to one tag shows two entries with two ids. A link a person
+    removed is kept in the table for the machine's assignment and is not one of them.
     """
     return (
         ContentTag.objects.filter(
             source_type=DOCUMENT_SOURCE_TYPE,
             source_id=document.pk,
             tag__dimension__in=REPOSITORY_TAG_DIMENSIONS,
+            removed=False,
         )
         .select_related("tag")
         .order_by("tag__dimension", "tag__tag_name", "pk")
@@ -226,6 +236,7 @@ def _tagged(dimension: str, name: str):
     return ContentTag.objects.filter(
         source_type=DOCUMENT_SOURCE_TYPE, tag__dimension=dimension, tag__tag_name=name,
         provisional=False,  # a held suggestion is not a tag (D-105)
+        removed=False,  # nor is one a person removed
     ).values("source_id")
 
 
@@ -279,6 +290,7 @@ def _facet(name: str, documents) -> list[dict]:
                 source_id__in=documents.values("id"),
                 tag__dimension=TAG_PARAMETERS[name],
                 provisional=False,  # a held suggestion is not offered as a value (D-105)
+                removed=False,  # nor is one a person removed
             )
             .values("tag__tag_name")
             .annotate(count=Count("source_id", distinct=True))

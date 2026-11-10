@@ -142,7 +142,8 @@ def test_upload_limit_is_fifty_megabytes():
 
 def test_attempt_counts_are_one_attempt_plus_two_retries():
     # docs/decisions.md D-19: three total attempts, uniform across every AI call,
-    # including classification (FR-10, NIT3004) which is named now but unused.
+    # including classification (FR-10, NIT3004), whose attempt loop in apps/ai/classification.py
+    # has used it since D-104.
     assert constants.MAXIMUM_GENERATION_ATTEMPTS == 3
     assert constants.MAXIMUM_EMBED_ATTEMPTS == 3
     assert constants.MAXIMUM_CLASSIFY_ATTEMPTS == 3

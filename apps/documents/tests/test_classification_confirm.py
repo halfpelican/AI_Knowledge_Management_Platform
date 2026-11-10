@@ -172,9 +172,12 @@ def test_confirming_a_held_tag_applies_it_and_keeps_its_provenance(document, hel
     assert link.confidence == Decimal(str(BELOW_THRESHOLD))
 
 
-def test_rejecting_a_tag_deletes_the_link_and_keeps_the_vocabulary(document, held_link):
+def test_rejecting_an_ai_tag_keeps_the_link_removed_and_keeps_the_vocabulary(document, held_link):
+    """Until D-105's dated note of 10 November 2026 (night) this deleted the link. An AI link is now
+    kept, marked removed, with the machine's assignment (test_classification_removal.py)."""
     reject_tag(document, held_link.pk)
-    assert not links_of(document).exists()
+    kept = links_of(document).get()
+    assert (kept.pk, kept.removed, kept.provisional) == (held_link.pk, True, True)
     assert Tag.objects.filter(tag_name="bridge maintenance").exists()
 
 

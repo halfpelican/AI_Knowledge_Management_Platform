@@ -6941,6 +6941,64 @@ step 4), before the status is decided, as this entry's note on the upload's cost
 The rest of the paragraph stands: the call has its own savepoint, catches and logs every exception,
 and never changes the document's status. Found by the requirements audit (D-119, its finding 7).
 
+**Dated note, 10 November 2026 (night): the tag corrections (D-119's findings 3, 4, 5 and 10).**
+The user's decisions on the requirements audit (D-119's table), built on
+`feat/FR-10-tag-corrections`, server side only; the interface half follows on the same branch. Each
+decision is recorded with its reason, and each build choice the brief left open is named as one.
+
+- **A removal is kept (finding 3).** FR-10's correction clause: "any value a user edits are retained
+  and is not overwritten by later reprocessing, and the machine assignment is retained alongside
+  it". `reject_tag` deleted the link, so the machine's assignment was lost and the next classify or
+  reprocess linked the tag again. `documents 0009` adds `ContentTags.removed`, additive and
+  reversible.
+  - **Removing an AI link** (held or applied, confirmed or not) sets `removed` and keeps the row,
+    with the confidence and provisional flag the machine gave it. **Removing a person's link
+    deletes it**: it holds no machine assignment to keep. The route keeps its URL and its 204.
+  - **No read lists a removed link.** Every read that excluded a provisional link excludes it: FR-15's
+    facets, filters and the detail's `tags`. So does `tag_details`, which does list provisional
+    links: a held suggestion waits for a decision, and a removed one has had it.
+  - **Reprocessing respects it.** A later classify or reprocess neither links the tag again nor
+    alters the removed row, so the confidence it keeps is the machine's at the time of the removal.
+    A Topic removed from a document is not proposed for it again, even once its Tag is retired.
+  - **`tag_scheme` still counts a removed link as a link,** as it counts a provisional one. A removed
+    suggestion on a restricted document is still a fact about that document, and not counting it
+    would turn a value carried only by restricted material into vocabulary every audience is
+    offered (invariant 1).
+  - *Build choices:* a removed link's id is the same 404 as an unknown one on the confirm and remove
+    routes, because nothing ever shows it; confirming a proposed Topic whose link was removed
+    restores that link; `manage.py classify_documents` flags removed links in its record and counts
+    them apart in its summary line.
+  - *Declined:* recording the removal in a table of its own, which is a second home for one boolean.
+- **The department label (finding 10).** When the department the uploader typed equals the AI's
+  suggestion, the outcome is "applied", and the interface labelled the department "Suggested by AI"
+  although a person supplied it. The outcome cannot tell that case from a run that wrote its
+  suggestion into a blank department: both read "applied" with the department equal to the
+  machine's value. `documents 0009` adds `DocumentAnalysis.department_applied_by`, in the tags'
+  provenance vocabulary:
+  - `"user"`: a person gave the department, typed at upload or written through the confirm route.
+  - `"ai"`: a run wrote it into a blank department, and no person has written it since. A person
+    confirming that value as it stands keeps `"ai"`, as a confirmed AI tag keeps
+    `applied_by: "ai"`.
+  - `null`: no department.
+
+  Rule 3 of `apply_classification` sets it, and `confirm_classification` sets it where a person
+  writes the department. It needs history, which is why it is a column rather than something worked
+  out on each read: a second run that finds the machine's own earlier value equal to its suggestion
+  is the same state as finding 10's case, except for who wrote the value.
+  - **Rows classified before 0009 read null** until their next run or confirmation, and the
+    interface treats null as before. Their history is recorded nowhere, so none is guessed. A
+    department a run wrote into a blank before 0009 reads as the person's after its next run, which
+    is the one way this field can still be wrong. The Objective 05 twenty should hold none: all
+    twenty carry uploader departments (this entry's note of 10 November), and both measurement runs
+    (`aee5374`, `caf9e22`) descend from `2a85c9a`, where the machine began filling only a blank
+    department. That is checked against the git history, not against the database.
+  - *Declined:* a fifth outcome, which would change what "applied" means in Objective 05's records
+    and in `scripts/objective05_verify.py`; marking a typed department "confirmed", which this
+    entry's note of 10 November already declined.
+- **The stale comment (finding 10).** The comment above `MAXIMUM_CLASSIFY_ATTEMPTS` said it was named
+  "not so anything uses it before Stage 6". `apps/ai/classification.py`'s attempt loop has used it
+  since D-104. Corrected, and the same stale phrase in `apps/core/tests/test_constants.py` with it.
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,

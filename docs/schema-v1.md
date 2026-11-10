@@ -233,6 +233,7 @@ cascade deleted the row.
 | `confirmed` | boolean | a user-confirmed tag is not altered by reprocessing |
 | `confidence` | decimal(4,3), nullable | **v2** — the model's confidence for an AI-applied link, to three places; null for a link a person applied (FR-10, D-105; `documents 0008`) |
 | `provisional` | boolean | **v2** — an AI link whose confidence was below `CLASSIFICATION_CONFIDENCE_THRESHOLD`: held for confirmation and not a tag of the document until confirmed (FR-10, D-105; `documents 0008`) |
+| `removed` | boolean | **v2** — a person removed this AI link: kept with its `confidence` and `provisional` as the machine set them, read by nothing, and neither re-linked nor altered by reprocessing (FR-10's correction clause; D-105's dated note of 10 November 2026, night; `documents 0009`) |
 
 **Tags and ContentTags are in v1 even though FR-10 is NIT3004 work.** FR-15 is a
 MUST-HAVE and its browse mode queries `ContentTags` directly. The tables will be
@@ -247,6 +248,14 @@ a tag of the document: FR-15's readers in `apps/api/repository.py` (`tags_of`, t
 the tag filters) must exclude `provisional=True`, a change that follows the apply layer. A
 confirmation (`confirm_tag`) sets `confirmed=True, provisional=False` and leaves `applied_by`
 as `ai`, so provenance survives the confirmation; a rejection deletes the link.
+
+> **10 November 2026 (night), `documents 0009`: a rejection no longer deletes an AI link.** It
+> sets `removed=True` and keeps the row, so the machine's assignment survives beside the
+> person's decision (FR-10: "the machine assignment is retained alongside it") and the next
+> classify or reprocess does not link the tag again. A link a person applied is still deleted:
+> it holds no machine assignment. Every reader that excludes `provisional=True` excludes
+> `removed=True` as well, `tag_details` included, while `tag_scheme` still counts a removed
+> link as a link (D-105's dated note of that night; D-119 finding 3).
 
 ### DocumentAnalysis — FR-10
 
@@ -265,6 +274,7 @@ by nothing else.
 | `doc_type` | text, nullable | the **effective** type, one of `DOCUMENT_TYPES`; null while a provisional suggestion awaits confirmation |
 | `doc_type_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` — see §3 |
 | `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
+| `department_applied_by` | text, nullable | **`documents 0009`** — whose value `Documents.department` holds, in `TAG_APPLIED_BY_VALUES`: `user` a person gave it (typed at upload, or written through the confirm route); `ai` a run wrote its suggestion into a blank department and no person has written it since; null for no department, or a row classified before 0009 and not set since (D-119 finding 10) |
 | `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
 | `proposed_topics` | jsonb | out-of-scheme Topic suggestions awaiting confirmation, `[{"value", "confidence"}]`, deduplicated by normalised value; replaced by each run |
 | `discarded_suggestions` | jsonb | out-of-scheme Project and Process suggestions, `[{"dimension", "value", "confidence"}]`; evidence of the scheme clause, never shown as tags; replaced by each run |
@@ -526,7 +536,8 @@ Migrate in dependency order: Roles → Permissions → RolePermissions → Users
 Documents → ExtractedContent → Meetings → MeetingAttendees → ContentChunks →
 Conversations → QueryLog → SearchLogs → AnswerCitations → Tags → ContentTags.
 `DocumentAnalysis` (v2, `documents 0008`) follows Documents and ContentTags; the executor
-plans it immediately after `documents 0007`.
+plans it immediately after `documents 0007`, and `documents 0009` (`ContentTags.removed`,
+`DocumentAnalysis.department_applied_by`) immediately after 0008.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`.

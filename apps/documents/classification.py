@@ -15,13 +15,16 @@ model:
   Department, Project or Process dimensions are discarded." Rules 3 and 4 of
   ``apply_classification``.
 - **provenance** — an AI link is ``applied_by="ai"`` and unconfirmed; a person's ``confirm_tag``
-  marks it confirmed and ``reject_tag`` deletes it ("either may be accepted or removed in a single
-  action").
+  marks it confirmed and ``reject_tag`` removes it ("either may be accepted or removed in a single
+  action"). ``DocumentAnalysis.department_applied_by`` says, in the same vocabulary, whose value
+  the document's department is.
 - **correction** — "any value a user edits [is] retained and is not overwritten by later
   reprocessing, and the machine assignment is retained alongside it":
   ``DocumentAnalysis.user_edited`` guards the effective type, ``Documents.department`` and the two
   outcomes, while the ``machine_*`` columns take every run's values. A confirmed tag "is not
-  altered by later reprocessing".
+  altered by later reprocessing". A removed AI tag is kept, marked ``removed``, with the machine's
+  confidence, and later reprocessing neither links it again nor alters it (D-105's dated note of
+  10 November 2026, night).
 
 **The scheme is built for the document's own audience** (``tag_scheme``), so a suggestion can
 never name a value that exists only on material some reader of this document may not see
@@ -120,8 +123,9 @@ def tag_scheme(document: Document) -> TagScheme:
       a source that role may read: documents through ``scoped_documents``, meetings through
       ``scoped_meetings``, since the join table admits both source types. A tag with no links is
       vocabulary only, says nothing about any source, and is always in. Every link counts,
-      provisional and unconfirmed ones included: a held suggestion on a restricted document is
-      still a fact about that document.
+      provisional, unconfirmed and removed ones included: a held suggestion, or one a person
+      removed, on a restricted document is still a fact about that document, and a removal must
+      not turn a restricted value into vocabulary every audience is offered.
 
     **An empty audience gets the full scheme.** A document whose ``visible_to_roles`` is empty is
     readable by nobody (``scoped_*`` fail closed), so there is no reader to protect. D-29 refuses
@@ -248,16 +252,21 @@ def apply_classification(
        is, and the outcome is applied; a column holding a different value is left as it is, and
        the suggestion is provisional, held for a person to accept. That value was typed by the
        uploader, confirmed, or written by an earlier run, and FR-10 says a value a person gives
-       "is not overwritten by later reprocessing".
+       "is not overwritten by later reprocessing". ``department_applied_by`` records whose value
+       the column now holds (``_department_provenance``): "ai" when this run wrote it, or an
+       earlier run did and nobody has written it since; "user" for any other non-blank value,
+       which a person gave; null for a blank one.
     4. **Tags**, for each suggestion whose dimension is one of REPOSITORY_TAG_DIMENSIONS, by its
-       normalised name. In ``scheme.tags[dimension]`` and still an active Tag: a link that a
-       person applied or confirmed is left alone; an unconfirmed AI link takes the new confidence
-       and provisional flag; otherwise a link is created, ``applied_by="ai"``, unconfirmed,
-       provisional when below the threshold. Outside the scheme: a Topic goes to
-       ``proposed_topics`` (deduplicated by normalised value, the higher confidence kept), a
-       Project or Process to ``discarded_suggestions``; both lists are REPLACED by each run. A
-       suggestion in any other dimension, or with an empty name, is ignored and logged. Links
-       this run does not mention are left alone.
+       normalised name. In ``scheme.tags[dimension]`` and still an active Tag: a link a person
+       REMOVED is left exactly as it is (FR-10's correction clause; D-105's dated note of 10
+       November 2026, night), as is a link that a person applied or confirmed; an unconfirmed AI
+       link takes the new confidence and provisional flag; otherwise a link is created,
+       ``applied_by="ai"``, unconfirmed, provisional when below the threshold. Outside the
+       scheme: a Topic goes to ``proposed_topics`` (deduplicated by normalised value, the higher
+       confidence kept) unless a person removed that Topic from this document, a Project or
+       Process to ``discarded_suggestions``; both lists are REPLACED by each run. A suggestion in
+       any other dimension, or with an empty name, is ignored and logged. Links this run does not
+       mention are left alone.
 
     The document row is locked first, as deletion and reprocess lock it, so a classification
     cannot write links for a document a concurrent delete is removing.
@@ -296,25 +305,42 @@ def apply_classification(
                 analysis.doc_type = classification.doc_type.value
                 analysis.doc_type_outcome = ASSIGNMENT_APPLIED
             # Rule 3: the department.
+            current = (locked.department or "").strip()
+            machine_wrote = False
             if department_value not in scheme.departments:
                 analysis.department_outcome = ASSIGNMENT_DISCARDED
             elif _is_provisional(classification.department.confidence):
                 analysis.department_outcome = ASSIGNMENT_PROVISIONAL
-            elif (locked.department or "").strip() == department_value:
-                # Already the document's department: nothing to write.
+            elif current == department_value:
+                # Already the document's department: nothing to write. Whose value it is, the
+                # uploader's or an earlier run's, is department_applied_by's to say.
                 analysis.department_outcome = ASSIGNMENT_APPLIED
-            elif (locked.department or "").strip():
+            elif current:
                 # A department is already there and it is not the machine's to replace: held for
                 # a person to accept (FR-10's correction clause; D-105's note of 10 November).
                 analysis.department_outcome = ASSIGNMENT_PROVISIONAL
             else:
                 analysis.department_outcome = ASSIGNMENT_APPLIED
                 _write_department(document, department_value)
+                current, machine_wrote = department_value, True
+            analysis.department_applied_by = _department_provenance(
+                analysis.department_applied_by, current, machine_wrote=machine_wrote
+            )
 
         # Rule 4: the tags.
         proposed: dict[str, float] = {}
         discarded: dict[tuple[str, str], float] = {}
         ignored = 0
+        # Topics a person removed from this document. A Topic whose Tag is still active is in the
+        # scheme through that very link (tag_scheme counts a removed link) and reaches _link_tag,
+        # which leaves it alone; one deactivated since, or withheld from the scheme, would
+        # otherwise be proposed again, and a person has already said no to it here.
+        removed_topics = set(
+            ContentTag.objects.filter(
+                source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk, removed=True,
+                tag__dimension=TOPIC_DIMENSION,
+            ).values_list("tag__tag_name", flat=True)
+        )
         for suggestion in classification.tags:
             name = normalise_tag_name(suggestion.value or "")
             if suggestion.dimension not in REPOSITORY_TAG_DIMENSIONS or not name:
@@ -329,6 +355,8 @@ def apply_classification(
                     continue
                 # Deactivated since the scheme was built: treated as outside it.
             if suggestion.dimension == TOPIC_DIMENSION:
+                if name in removed_topics:
+                    continue  # removed by a person on this document: not proposed again
                 if suggestion.confidence > proposed.get(name, -1.0):
                     proposed[name] = suggestion.confidence
             else:
@@ -372,9 +400,28 @@ def _write_department(document: Document, value: str) -> None:
     document.save(update_fields=["department"])
 
 
+def _department_provenance(previous: str | None, current: str, *, machine_wrote: bool) -> str | None:
+    """Whose value ``Documents.department`` holds after a run decided it (D-119 finding 10).
+
+    ``current`` is the department as the run leaves it, and ``previous`` the analysis row's
+    ``department_applied_by`` before the run. A blank department is nobody's (None). One this run
+    wrote is the machine's. One already there is the machine's only if an earlier run wrote it,
+    which is what a ``previous`` of "ai" records: the machine fills only a blank department, and a
+    person who writes it afterwards does so through ``confirm_classification``, which sets
+    ``user_edited`` and so keeps every later run out of rule 3. Any other value already there was
+    given by a person: the uploader typed it. That is the case finding 10 found mislabelled, where
+    the suggestion equals the uploader's department and the outcome reads "applied".
+    """
+    if not current:
+        return None
+    if machine_wrote or previous == AI_APPLIED:
+        return AI_APPLIED
+    return USER_APPLIED
+
+
 def _link_tag(document: Document, tag: Tag, confidence: float) -> ContentTag:
     """Rule 4's in-scheme case: create the AI link, refresh an unconfirmed one, or leave a
-    person's alone."""
+    person's decision alone: a link a person removed, confirmed or applied."""
     link = (
         ContentTag.objects.filter(tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk)
         .order_by("pk")
@@ -390,6 +437,10 @@ def _link_tag(document: Document, tag: Tag, confidence: float) -> ContentTag:
             provisional=_is_provisional(confidence),
             confidence=_as_decimal(confidence),
         )
+    if link.removed:
+        # A person removed it: neither linked again nor altered, so the confidence it keeps is
+        # the machine's assignment at the time of the removal (FR-10's correction clause).
+        return link
     if link.confirmed or link.applied_by == USER_APPLIED:
         return link  # a person's decision: "not altered by later reprocessing"
     link.confidence = _as_decimal(confidence)
@@ -416,6 +467,11 @@ def confirm_classification(
     Each outcome becomes ``confirmed`` where a value now stands, and ``user_edited`` is set, after
     which a re-run writes only the machine's values. Raises ``NotOnThisDocument`` when the
     document has no classification.
+
+    ``department_applied_by`` follows the department (D-119 finding 10): a department a person
+    gives is "user" (null when blank); a held suggestion confirmed as it stands is written and
+    keeps "ai", its provenance, as ``confirm_tag`` keeps an AI tag's ``applied_by``; an applied
+    department confirmed as it stands keeps whatever it was.
     """
     if doc_type is not None and doc_type not in DOCUMENT_TYPES:
         raise InvalidClassification(f"doc_type must be one of {', '.join(DOCUMENT_TYPES)}.")
@@ -438,9 +494,11 @@ def confirm_classification(
         if department is not None:
             _write_department(document, department)
             analysis.department_outcome = ASSIGNMENT_CONFIRMED
+            analysis.department_applied_by = USER_APPLIED if department else None
         elif analysis.department_outcome in (ASSIGNMENT_APPLIED, ASSIGNMENT_PROVISIONAL):
             if analysis.department_outcome == ASSIGNMENT_PROVISIONAL:
                 _write_department(document, analysis.machine_department)
+                analysis.department_applied_by = AI_APPLIED if analysis.machine_department else None
             analysis.department_outcome = ASSIGNMENT_CONFIRMED
         # Discarded, or never classified: left as it is.
 
@@ -460,9 +518,28 @@ def confirm_tag(document: Document, content_tag_id) -> ContentTag:
 
 
 def reject_tag(document: Document, content_tag_id) -> None:
-    """Remove a tag "in a single action": the link is deleted; the Tag row, a vocabulary, stays."""
+    """Remove a tag "in a single action" (FR-10's provenance clause), keeping a machine's assignment.
+
+    **An AI link** (``applied_by="ai"``: held or applied, confirmed or not) is KEPT and marked
+    ``removed``, with the confidence and provisional flag the machine gave it. FR-10's correction
+    clause: "any value a user edits [is] retained and is not overwritten by later reprocessing, and
+    the machine assignment is retained alongside it". Deleting the row, as this did until D-119
+    finding 3, lost the machine's assignment and let the next classify or reprocess link the tag
+    again; ``_link_tag`` now leaves a removed link alone. No read lists it.
+
+    **A person's link** (``applied_by="user"``) is deleted: there is no machine assignment to keep.
+    The ``Tag`` row, a vocabulary, stays either way.
+
+    A link already removed is not found here (``_link_on``), so removing it again is the same
+    "not on this document" as an unknown id.
+    """
     with transaction.atomic():
-        _link_on(document, content_tag_id).delete()
+        link = _link_on(document, content_tag_id)
+        if link.applied_by == AI_APPLIED:
+            link.removed = True
+            link.save(update_fields=["removed"])
+        else:
+            link.delete()
 
 
 def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
@@ -507,9 +584,10 @@ def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
         else:
             link.confirmed = True
             link.provisional = False
+            link.removed = False  # a person confirming the Topic wants it on the document
             if link.confidence is None:
                 link.confidence = confidence
-            link.save(update_fields=["confirmed", "provisional", "confidence"])
+            link.save(update_fields=["confirmed", "provisional", "removed", "confidence"])
         _drop_proposal(analysis, name)
     return link
 
@@ -535,11 +613,17 @@ def _analysis_of(document: Document, *, for_update: bool = False) -> DocumentAna
 
 
 def _link_on(document: Document, content_tag_id) -> ContentTag:
-    """The ``ContentTag`` with this id on THIS document, locked; any other id is "not here"."""
+    """The ``ContentTag`` with this id on THIS document, locked; any other id is "not here".
+
+    A removed link is "not here" too: it is no longer a tag of the document, no read lists it, and
+    confirming or removing it by id would act on something the caller is never shown."""
     try:
         link = (
             ContentTag.objects.select_for_update()
-            .filter(pk=content_tag_id, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk)
+            .filter(
+                pk=content_tag_id, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk,
+                removed=False,
+            )
             .first()
         )
     except (ValueError, ValidationError):  # not a UUID at all

@@ -184,9 +184,17 @@ class ContentTag(models.Model):
     # an AI link whose confidence was below CLASSIFICATION_CONFIDENCE_THRESHOLD: it is HELD for
     # confirmation and is not a tag of the document until ``confirm_tag`` clears it (FR-10:
     # "presented for confirmation rather than applied silently"). FR-15's readers in
-    # apps/api/repository.py must exclude a provisional link; that change follows this one.
+    # apps/api/repository.py exclude a provisional link, and a removed one (below).
     confidence = models.DecimalField(max_digits=4, decimal_places=3, null=True, blank=True)
     provisional = models.BooleanField(default=False)
+    # ``documents 0009`` (D-105's dated note of 10 November 2026, night; D-119 finding 3). A person
+    # removed this AI link. It is no longer a tag of its document and no read lists it, but the
+    # row stays with ``confidence`` and ``provisional`` as the machine set them: FR-10's correction
+    # clause keeps "the machine assignment ... alongside" the person's decision, and reprocessing
+    # neither re-links nor alters it (apps/documents/classification.py ``_link_tag``). A link a
+    # person applied is deleted on removal instead, because it holds no machine assignment.
+    # ``tag_scheme`` still counts a removed link as a link, as it counts a provisional one.
+    removed = models.BooleanField(default=False)
 
     class Meta:
         db_table = "content_tags"
@@ -196,7 +204,7 @@ class DocumentAnalysis(models.Model):
     """FR-10's record of one document's classification: one row per document (D-105).
 
     The proposal's field table gives DocumentAnalysis ``doc_type``, ``department``, one
-    ``confidence`` and ``user_edited``. This departs from it in four places, each for a clause
+    ``confidence`` and ``user_edited``. This departs from it in five places, each for a clause
     of FR-10's own text (docs/schema-v1.md section 1 records the same list):
 
     - **Two machine assignments, each with its own confidence.** "A confidence value is
@@ -217,6 +225,9 @@ class DocumentAnalysis(models.Model):
       may exist for it while it waits in ``proposed_topics``. A Project or Process outside the
       scheme is "discarded"; ``discarded_suggestions`` keeps the discard as evidence of that
       clause, and nothing reads it as a tag.
+    - **Whose department it is** (``department_applied_by``, ``documents 0009``): FR-10's
+      provenance clause tells a machine's value from a person's, and the outcome alone cannot
+      when the machine's suggestion equals the department a person typed (D-119 finding 10).
 
     ``user_edited`` protects a person's decision from reprocessing ("any value a user edits
     [is] retained and is not overwritten by later reprocessing"): once set, a re-run writes the
@@ -241,6 +252,19 @@ class DocumentAnalysis(models.Model):
     doc_type = vocabulary_field(DOCUMENT_TYPES, null=True, blank=True)
     doc_type_outcome = vocabulary_field(ASSIGNMENT_OUTCOMES, null=True, blank=True)
     department_outcome = vocabulary_field(ASSIGNMENT_OUTCOMES, null=True, blank=True)
+    # Who supplied the department the document carries, in the tags' provenance vocabulary
+    # (``documents 0009``; D-119 finding 10). ``department_outcome`` says how the machine's
+    # suggestion was disposed of; this says whose value ``Documents.department`` holds, which the
+    # outcome cannot: "applied" is recorded both when a run wrote its suggestion into a blank
+    # department and when the suggestion merely equalled the department the uploader typed.
+    #   "user"  a person gave it: typed at upload, or written through the confirm route;
+    #   "ai"    a run wrote its suggestion into a blank department, and no person has written
+    #           the department since (a person confirming that value keeps "ai", as a confirmed
+    #           AI tag keeps ``applied_by="ai"``);
+    #   null    the document has no department, or the row was classified before 0009 and no
+    #           run or confirmation has set it since.
+    # Written by apps/documents/classification.py wherever it decides the department.
+    department_applied_by = vocabulary_field(TAG_APPLIED_BY_VALUES, null=True, blank=True)
     user_edited = models.BooleanField(default=False)
     # [{"value": <normalised name>, "confidence": <float>}], replaced by each run.
     proposed_topics = models.JSONField(default=list, blank=True)

@@ -3,8 +3,9 @@
 Follows ``apps/retrieval/tests/test_migration_0003_citation_set_null.py``: the executor itself is
 driven, for ``documents`` only, from 0007 to 0008 and back, in the ordinary per-test transaction.
 PostgreSQL's DDL is transactional, so the CREATE, the ALTERs, the ``django_migrations`` rows and
-the data all roll back when the test ends, and the test ends at 0008 anyway so that the schema the
-rest of the suite expects is the one it leaves.
+the data all roll back when the test ends, and the test ends at the leaf of ``documents`` anyway so
+that the schema the rest of the suite expects is the one it leaves (0008 itself until 0009 followed
+it).
 
 ``SET CONSTRAINTS ALL IMMEDIATE`` first, for the reason that file gives: a ``content_tags`` row
 inserted in this transaction leaves a pending deferred foreign-key check on the table, and
@@ -53,12 +54,20 @@ def columns_of(table):
         return {row[0] for row in cursor.fetchall()}
 
 
-def test_0008_is_the_leaf_of_documents():
-    leaves = [
+def documents_leaf():
+    [leaf] = [
         key for key in MigrationExecutor(connection).loader.graph.leaf_nodes()
         if key[0] == "documents"
     ]
-    assert leaves == [AFTER]
+    return leaf
+
+
+def test_0008_is_on_the_path_to_the_leaf_of_documents():
+    """0008 was the leaf of ``documents`` until 0009 (D-105's dated note of 10 November 2026,
+    night) followed it, so the test now checks that 0008 is on the leaf's path, and the test
+    below ends at the leaf rather than at 0008."""
+    graph = MigrationExecutor(connection).loader.graph
+    assert AFTER in graph.forwards_plan(documents_leaf())
 
 
 def test_0008_applies_and_reverses_keeping_the_tag_links_either_way(document):
@@ -104,7 +113,8 @@ def test_0008_applies_and_reverses_keeping_the_tag_links_either_way(document):
         (link.pk, document.pk, True)
     ]
 
-    # --- Forward again, through the current models ----------------------------------------------
-    migrate_documents_to(AFTER)
+    # --- Forward again, to the leaf, through the current models ---------------------------------
+    # To the leaf and not to 0008: the current models carry 0009's columns as well.
+    migrate_documents_to(documents_leaf())
     assert ContentTag.objects.get(pk=link.pk).provisional is False
     assert Tag.objects.filter(pk=tag.pk).exists()
