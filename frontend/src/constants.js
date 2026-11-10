@@ -1036,4 +1036,56 @@ export const TEXT = {
   dashboardNoGaps: 'No open entries to show.',
   // The contract: the dashboard's filters narrow neither the count nor the list.
   dashboardGapsNote: 'The open entries that came up most often. The filters above do not apply to this panel.',
+
+  /* ---- FR-10 tag administration (D-119 finding 5) ----------------------- */
+  // FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content
+  // still references them, preserving historical classification", and its CRUD line
+  // gives Tags "Delete". The screen is src/pages/Tags.jsx, an Administrator's; the
+  // server checks `manage_tags` on every request whatever it shows (invariant 4).
+  // The page heading and the navigation link, which names the screen it opens.
+  tagsHeading: 'Tags',
+  tagsIntro:
+    'Every Project, Process and Topic tag, active or retired. Deleting a tag that no document or meeting references removes it. A tag that content still references is deactivated instead and shown as retired, so past classification is kept.',
+  // Why a count of 0 does not promise a deletion: held suggestions and removed links
+  // reference a tag without being counted (docs/api-contract.md, `item_count`).
+  tagsCountNote:
+    'The count is the number of documents and meetings carrying the tag. Suggestions awaiting confirmation and tags removed from a document are not counted, but they still reference it, so a tag with a count of 0 may be deactivated rather than deleted.',
+  tagsListHeading: 'All tags',
+  loadingTags: 'Loading the tags…',
+  tagsLoadFailed: 'Could not load the tags',
+  noTags: 'There are no tags to show.',
+  // The server's order, which the screen keeps.
+  tagsTableCaption:
+    'Tags by dimension, then by name, with whether each is active and how many documents and meetings carry it.',
+  tagsColumnName: 'Name',
+  tagsColumnDimension: 'Dimension',
+  tagsColumnState: 'State',
+  tagsColumnItems: 'Documents and meetings carrying it',
+  tagsColumnAction: 'Action',
+  tagStateActive: 'Active',
+  tagStateRetired: 'Retired',
+  // One action per row. A column of "Delete" buttons names nothing to someone moving
+  // between controls, so each one's accessible name adds its tag, after the visible
+  // word (WCAG 2.1 SC 2.4.6, SC 2.5.3).
+  tagDelete: 'Delete',
+  tagDeleteLabel: (dimension, name) => `Delete ${dimension} tag ${name}`,
+  tagDeleteConfirm: (dimension, name) => `Delete the ${dimension} tag “${name}”?`,
+  // What the DELETE will do, said before it is sent. The server decides which from
+  // the references it finds, so the sentence gives both.
+  tagDeleteBody:
+    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, it is shown as retired, and it can no longer be applied.',
+  tagDeleteConfirmLabel: 'Delete tag',
+  tagDeleting: 'Deleting…',
+  tagDeleteCancel: 'Cancel',
+  // The 200: deactivated, because content still references it.
+  tagDeactivated: (name) =>
+    `“${name}” was deactivated rather than deleted, because content still references it. It is now retired, and past classification is kept.`,
+  // The 204: nothing referenced it, so it is gone.
+  tagDeleted: (name) => `“${name}” was deleted.`,
+  // The 404: it no longer exists, so its row goes.
+  tagGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
+  tagDeleteFailed: 'Could not delete the tag',
+  // A 403 on a delete: the role does not hold `manage_tags` now, whatever it held when
+  // the list was read. Every action is withdrawn.
+  tagsNotPermitted: 'Your role may not manage tags, so they cannot be deleted or deactivated.',
 }
