@@ -4862,6 +4862,28 @@ user's asks can hold: one Waitress thread.
 >   - **Where it does matter.** The record only matters when the user leaves the empty thread and
 >     then presses "Start a new topic". A test for that was added, and the break then failed it.
 
+**Dated note, 10 November 2026 (night): keyword search gets a scope, `search`, at 30 a minute, and a
+term an upper bound of 500 characters.** The user's decision on the FR-19 security review's L1 and
+L2 (D-107's note; D-119). Keyword search was unthrottled and bounded a term from below only. So one
+Employee could log terms as fast and as long as they liked into `SearchLog`, which FR-19's cycle
+reads. That opened a timing signal on the shared NPU (L1) and let them put chosen text at the top of
+the Administrator's gap list (L2).
+
+- **`SEARCH_THROTTLE_RATE = "30/min"`,** per user, through `ScopedRateThrottle` like the other
+  scopes. Search spends no NPU time, so the rate is not about the NPU, as the ask rate is; it bounds
+  how fast one user can fill the log. The page sends one request per submitted term, so a person
+  searching never meets it, and no load test calls search.
+- **`MAXIMUM_SEARCH_LENGTH = 500`,** the question's ceiling, refused with FR-12's 400 before any
+  query runs and before any row is written, and refused in the browser first with a message that
+  names it. `search` applies it and `search_total` does not: FR-19's cycle recounts terms logged
+  before the bound existed, and a refusal there would roll back that cycle and every later one. The
+  cycle's own cut to `MAXIMUM_QUESTION_LENGTH` (D-107's note, M1) stays for those rows.
+- **What it does not do:** a user can still repeat one term 30 times a minute. The rate slows L2 and
+  shrinks L1's signal, but does not remove either, and occurrence counts still count rows rather
+  than people, which Objective 06's "accurate occurrence count" requires.
+- **A throttled search is DRF's 429 with `Retry-After`,** and the search page shows the client's
+  rate-limit text with Try again.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -7235,6 +7257,10 @@ step, and D-114 has since let M8 run on any device. The user's decision: a daily
 - **This supersedes "Task Scheduler on the laptop" above.**
 - **Tests** pin the script's contract: it runs the command from the checkout's venv, daily, and
   takes no password; the runbook names it.
+
+**Dated note, 10 November 2026 (night): L1 and L2 are taken up** by a `search` throttle and an upper
+bound on a search term, on FR-12's route (D-79's note of the same night). Each is reduced, not
+removed: that note says what remains.
 
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 

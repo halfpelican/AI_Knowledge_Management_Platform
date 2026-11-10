@@ -21,7 +21,8 @@ text and runs no JavaScript, so it passes on a machine with nothing but Python.
 **What it holds**, enumerated from ``constants.js`` on 2 November 2026, every export that
 copies a value of ``apps/core/constants.py``:
 
-- ``SEARCH_MINIMUM_LENGTH``, ``QUESTION_MINIMUM_LENGTH``, ``QUESTION_MAXIMUM_LENGTH`` and
+- ``SEARCH_MINIMUM_LENGTH``, ``SEARCH_MAXIMUM_LENGTH`` (since 10 November 2026),
+  ``QUESTION_MINIMUM_LENGTH``, ``QUESTION_MAXIMUM_LENGTH`` and
   ``MAX_UPLOAD_BYTES``: each equal to its server constant.
 - ``MAX_UPLOAD_LABEL``: the ceiling in whole megabytes, as the server's value states it.
 - ``ACCEPTED_EXTENSIONS`` and ``ACCEPTED_FORMATS_LABEL``: D-15's four, no more, no fewer.
@@ -60,6 +61,7 @@ MEGABYTE = 1024 * 1024
 # (the client's export, the server constant it copies)
 BOUNDS = [
     ("SEARCH_MINIMUM_LENGTH", "MINIMUM_SEARCH_LENGTH"),
+    ("SEARCH_MAXIMUM_LENGTH", "MAXIMUM_SEARCH_LENGTH"),
     ("QUESTION_MINIMUM_LENGTH", "MINIMUM_QUESTION_LENGTH"),
     ("QUESTION_MAXIMUM_LENGTH", "MAXIMUM_QUESTION_LENGTH"),
     ("MAX_UPLOAD_BYTES", "MAX_UPLOAD_BYTES"),

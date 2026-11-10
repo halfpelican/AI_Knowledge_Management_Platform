@@ -65,7 +65,7 @@ cannot drift.
 
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
 per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
-and thread creation are limited per user as well; "Stage 5 item 5" below lists every throttled
+and thread creation are limited per user as well, and keyword search since 10 November 2026; "Stage 5 item 5" below lists every throttled
 route (D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
@@ -310,7 +310,7 @@ query; the codes below are its own except where marked *convention*.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| GET | `/api/search?q=<term>` | session | `200` grouped results, scoped to the caller's role; also `200` when nothing matched | `400 {"q": ["..."]}` `q` was not sent, or the term is shorter than `MINIMUM_SEARCH_LENGTH` (2 characters), which includes `?q=`; `401` |
+| GET | `/api/search?q=<term>` | session | `200` grouped results, scoped to the caller's role; also `200` when nothing matched | `400 {"q": ["..."]}` `q` was not sent, or the term is shorter than `MINIMUM_SEARCH_LENGTH` (2 characters), which includes `?q=`, or longer than `MAXIMUM_SEARCH_LENGTH` (500, D-79's note of 10 November 2026), and no `SearchLog` row is written; `401`; `429` past `SEARCH_THROTTLE_RATE`, with DRF's body and `Retry-After`, and no row written (D-79's note) |
 
 The reply:
 
@@ -968,6 +968,7 @@ not grant it, and it does not grant `manage_documents`.
 | `ask` | `POST /api/ask` | 10/min |
 | `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess` and, since FR-10, `POST /api/documents/{id}/classify` (D-105), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
+| `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
