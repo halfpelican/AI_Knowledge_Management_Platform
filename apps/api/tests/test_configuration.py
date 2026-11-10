@@ -176,6 +176,8 @@ def test_registration_is_rate_limited_per_client(api_client, monkeypatch):
 # proposed-topic routes too (no provider call), and a signed-in user browsing the repository is
 # never rate limited. FR-19's three knowledge-gap routes are unthrottled as well: D-107 settles no
 # rate for them, they are Administrator-only, and two cycles never run at once (gaps.py's lock).
+# Keyword search is throttled in a scope of its own since D-79's note of 10 November 2026: it
+# bounds how fast one user can fill SearchLog, which FR-19's cycle reads.
 THROTTLED_ROUTES = {
     ("auth-register", "POST"): "auth",
     ("auth-login", "POST"): "auth",
@@ -185,6 +187,7 @@ THROTTLED_ROUTES = {
     ("document-reprocess", "POST"): "ingestion",
     ("document-classify", "POST"): "ingestion",
     ("conversation-list", "POST"): "conversation_create",
+    ("search", "GET"): "search",
 }
 
 
