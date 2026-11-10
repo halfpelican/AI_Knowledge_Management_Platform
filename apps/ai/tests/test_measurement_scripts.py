@@ -530,6 +530,109 @@ def test_postgres_errors_have_role_and_user_names_redacted(snapshot_module):
     assert '"<redacted>"' in snapshot_module.redact('FATAL:  role "kmp" does not exist')
 
 
+# --- restore --into: a copy for a provider switch (D-117) ------------------------------------
+#
+# The Voyage re-index needs a copy of the FLM measurement database, made from its snapshot,
+# that leaves the database itself untouched. Plain restore can only drop and recreate the
+# database the snapshot names, which here is the FLM baseline.
+
+
+def restore_into(module, folder, *, media_root, copy="kmp_voyage_test"):
+    return module.main(["restore", "--database", "kmp_obj02_test", "--into", copy,
+                        "--media-root", str(media_root), "--from-dir", str(folder)])
+
+
+@pytest.mark.parametrize("copy", ["kmp_obj02_test", "KMP_OBJ02_TEST", "kmp", "postgres", "bad-name"])
+def test_restore_into_refuses_the_snapshots_own_database_and_protected_names(
+    snapshot_module, tmp_path, copy, capsys
+):
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+
+    assert restore_into(snapshot_module, folder, copy=copy, media_root=tmp_path / "copy-media") == 2
+    assert "Nothing was run in the container." in capsys.readouterr().out
+    assert not (tmp_path / "copy-media").exists()
+
+
+def test_restore_into_refuses_a_media_root_that_already_holds_files(snapshot_module, tmp_path, capsys):
+    """Another database's media, such as the snapshot's own MEDIA_ROOT, are never replaced."""
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+    occupied = tmp_path / "baseline-media"
+    (occupied / "documents").mkdir(parents=True)
+    (occupied / "documents" / "kept.txt").write_bytes(b"the baseline's upload")
+
+    assert restore_into(snapshot_module, folder, media_root=occupied) == 2
+    assert "already holds files" in capsys.readouterr().out
+    assert (occupied / "documents" / "kept.txt").read_bytes() == b"the baseline's upload"
+
+
+def test_restore_into_still_verifies_the_snapshot(snapshot_module, tmp_path, capsys):
+    folder, record = make_snapshot(tmp_path, recorded_bytes=b"a different dump")
+    write_record(snapshot_module, folder, record)
+
+    assert restore_into(snapshot_module, folder, media_root=tmp_path / "copy-media") == 2
+    assert "it is not the snapshot" in capsys.readouterr().out
+
+
+@pytest.fixture
+def container(snapshot_module, monkeypatch):
+    """Records each container command, as (command, database), instead of running it.
+
+    Add a command to ``failing`` to make it fail the way in_container fails.
+    """
+    from types import SimpleNamespace
+
+    state = SimpleNamespace(calls=[], failing=set())
+
+    def fake_in_container(container_name, script, database, **kwargs):
+        state.calls.append((script, database))
+        if script in state.failing:
+            raise snapshot_module.Failed(f"`{script.split()[1]}` exited 1: scripted")
+        return subprocess.CompletedProcess([], 0, b"", b"")
+
+    monkeypatch.setattr(snapshot_module, "check_container", lambda container_name: None)
+    monkeypatch.setattr(snapshot_module, "in_container", fake_in_container)
+    return state
+
+
+def test_restore_into_creates_the_copy_and_never_names_the_snapshots_database(
+    snapshot_module, container, tmp_path, capsys
+):
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+    media_root = tmp_path / "copy-media"
+    media_root.mkdir()  # an empty folder is accepted, as a new one is
+
+    assert restore_into(snapshot_module, folder, media_root=media_root) == 0
+
+    # No dropdb at all, and every command names the copy: the snapshot's database is untouched.
+    assert container.calls == [
+        (snapshot_module.CREATEDB, "kmp_voyage_test"),
+        (snapshot_module.PG_RESTORE, "kmp_voyage_test"),
+    ]
+    assert snapshot_module.media_tree(media_root) == record["media"]
+    assert "kmp_obj02_test was not touched" in capsys.readouterr().out
+
+
+def test_a_failed_restore_into_removes_only_the_copy_it_created(
+    snapshot_module, container, tmp_path, capsys
+):
+    folder, record = make_snapshot(tmp_path)
+    write_record(snapshot_module, folder, record)
+    container.failing.add(snapshot_module.PG_RESTORE)
+
+    assert restore_into(snapshot_module, folder, media_root=tmp_path / "copy-media") == 1
+
+    assert container.calls == [
+        (snapshot_module.CREATEDB, "kmp_voyage_test"),
+        (snapshot_module.PG_RESTORE, "kmp_voyage_test"),
+        (snapshot_module.DROPDB, "kmp_voyage_test"),
+    ]
+    assert "FAILED" in capsys.readouterr().out
+    assert not (tmp_path / "copy-media").exists()
+
+
 # --- accepted alternatives (1 November 2026, frozen with both sets) ---------------------------
 
 
