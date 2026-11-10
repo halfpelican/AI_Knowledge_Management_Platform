@@ -220,7 +220,7 @@ cascade deleted the row.
 | `tag_name` | text | unique within a dimension, case- and whitespace-normalised |
 | `dimension` | text | `Department`, `Project`, `Process`, `Topic` |
 | `active` | boolean | deactivated rather than deleted while content references it |
-| `grown` | boolean | **`documents 0010`** — a Topic that came into use through a name: the one a person's `POST /api/documents/{id}/tags` name form links, or a person's confirmation of a proposed topic links, created or fetched. A grown Topic that nothing links is in no document's scheme; every other unlinked tag is vocabulary and is in (D-105's dated note of 10 November 2026, night). False for every seeded tag and every Project and Process tag |
+| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. Never unset |
 
 ### ContentTags — FR-10, FR-15
 
@@ -538,8 +538,11 @@ Documents → ExtractedContent → Meetings → MeetingAttendees → ContentChun
 Conversations → QueryLog → SearchLogs → AnswerCitations → Tags → ContentTags.
 `DocumentAnalysis` (v2, `documents 0008`) follows Documents and ContentTags; the executor
 plans it immediately after `documents 0007`, `documents 0009` (`ContentTags.removed`,
-`DocumentAnalysis.department_applied_by`) immediately after 0008, and `documents 0010`
-(`Tags.grown`) immediately after 0009.
+`DocumentAnalysis.department_applied_by`) immediately after 0008, `documents 0010`
+(`Tags.grown`) immediately after 0009, and `documents 0011` (the backfill that marks grown every tag
+only restricted material carries) immediately after 0010. 0011's backfill reads meetings'
+`visible_to_roles`, so it depends on `meetings 0002`, and a clean start now plans `meetings 0002`
+directly after `meetings 0001`, before `documents 0002`.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

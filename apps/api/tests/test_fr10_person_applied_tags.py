@@ -145,7 +145,7 @@ def test_applying_an_offered_tag_links_it_as_the_persons(session_client):
 def test_a_tag_that_cannot_be_offered_gets_one_400_whatever_the_reason(session_client, restricted):
     document = make_document(session_client.user)
     inactive = Tag.objects.create(tag_name="retired project", dimension=PROJECT_DIMENSION, active=False)
-    withheld = Tag.objects.create(tag_name="succession planning", dimension=PROJECT_DIMENSION)
+    withheld = Tag.objects.create(tag_name="succession planning", dimension=PROJECT_DIMENSION, grown=True)
     link(withheld, restricted)  # carried only by material the Employee in the audience cannot read
     department = Tag.objects.create(tag_name="people", dimension=DEPARTMENT_DIMENSION)
     cases = {
@@ -268,7 +268,8 @@ def test_an_existing_topic_outside_the_scheme_answers_exactly_as_a_new_one(
     assert not Tag.objects.filter(tag_name=name).exists()  # the first answer left nothing behind
 
     if existing == "restricted":
-        topic = Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION)
+        # Grown, as documents 0011 marks a value only restricted material carries.
+        topic = Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION, grown=True)
         restricted_link = link(topic, restricted)
     else:
         topic = Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION, active=False)
@@ -332,7 +333,7 @@ def test_the_detail_offers_the_documents_scheme_with_ids(session_client, restric
     harbour = Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION)
     purchasing = Tag.objects.create(tag_name="purchasing", dimension=PROCESS_DIMENSION)
     link(purchasing, document)
-    withheld = Tag.objects.create(tag_name="succession planning", dimension=TOPIC_DIMENSION)
+    withheld = Tag.objects.create(tag_name="succession planning", dimension=TOPIC_DIMENSION, grown=True)
     link(withheld, restricted)
     Tag.objects.create(tag_name="retired topic", dimension=TOPIC_DIMENSION, active=False)
     Tag.objects.create(tag_name="people", dimension=DEPARTMENT_DIMENSION)
@@ -359,7 +360,7 @@ def test_the_administrator_is_offered_a_restricted_value_on_the_restricted_docum
 ):
     """The mirror of the test above: the value withheld from a document both roles read is offered
     on the document only the Administrator reads, so the options are not simply empty."""
-    withheld = Tag.objects.create(tag_name="succession planning", dimension=TOPIC_DIMENSION)
+    withheld = Tag.objects.create(tag_name="succession planning", dimension=TOPIC_DIMENSION, grown=True)
     link(withheld, restricted)
 
     options = detail(administrator_client, restricted.id)["tag_options"]
@@ -402,8 +403,8 @@ def test_apply_remove_apply_answers_alike_whether_or_not_a_restricted_topic_exis
     as_new = answered_then_undone(lambda: three_steps(employee_client, document.id, name))
     assert not Tag.objects.filter(tag_name=name).exists()
 
-    topic = Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION)
-    link(topic, restricted)  # the restricted Topic: on the Administrator-only document alone
+    topic = Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION, grown=True)
+    link(topic, restricted)  # the restricted Topic: on the Administrator-only document alone, grown
     as_restricted = three_steps(employee_client, document.id, name)
 
     assert as_new[0] == as_restricted[0] == (201, 204, 201)
@@ -443,7 +444,7 @@ def test_apply_remove_apply_answers_alike_for_a_new_a_restricted_and_a_retired_s
         return answered_then_undone(send)
 
     def restricted_topic():
-        link(Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION), restricted)
+        link(Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION, grown=True), restricted)
 
     def retired_seeded_topic():
         Tag.objects.create(tag_name=name, dimension=TOPIC_DIMENSION, active=False)

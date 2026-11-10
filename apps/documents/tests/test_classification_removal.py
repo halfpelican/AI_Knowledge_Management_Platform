@@ -167,7 +167,9 @@ def test_tag_scheme_counts_a_removed_link_on_a_restricted_document(employee, adm
         title="Board pack", file_type="pdf", uploaded_by=administrator,
         visible_to_roles=[ADMINISTRATOR_ROLE_NAME],
     )
-    topic = Tag.objects.create(tag_name="succession planning", dimension=TOPIC_DIMENSION)
+    # Grown, as documents 0011 marks a value only restricted material carries; a value that is not
+    # grown is vocabulary and in every scheme whatever its links (the security review's rule).
+    topic = Tag.objects.create(tag_name="succession planning", dimension=TOPIC_DIMENSION, grown=True)
     ContentTag.objects.create(
         tag=topic, source_type=DOCUMENT_SOURCE_TYPE, source_id=board.pk,
         applied_by=AI_APPLIED, confirmed=False, provisional=False, removed=True,

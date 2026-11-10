@@ -15,12 +15,26 @@ interface labelled both "Suggested by AI". Existing rows take null, which the in
 it read every row before: their history is not recorded anywhere, so none is guessed here. A
 row's next classification run or confirmation sets it.
 
-Additive and reversible: two ``AddField`` operations, no data migration, and the reverse drops
-exactly what the forward added. apps/documents/tests/test_migration_0009_tag_corrections.py drives
-it both ways through the executor.
+Additive and reversible: two ``AddField`` operations and no data migration forwards. **The reverse
+deletes every link marked removed** before it drops the column (the security review of ``84b5771``,
+its finding 5; D-105's dated note of 10 November 2026, night). Kept rows with the column gone would
+read as live tags to the code before 0009, which knew no removal: under it a removal deleted the
+link, and the reverse makes the database say what that code expects. Live links are untouched.
+apps/documents/tests/test_migration_0009_tag_corrections.py drives it both ways through the
+executor.
+
+**Edited after it was written, before it was pushed.** The ``RunPython`` was appended on 10 November
+2026 (night), by the decision recorded in D-105's dated note. Its forward does nothing, so a database
+that applied this migration before the edit is in the state one applying it now reaches, and
+reversing either runs the reverse written here.
 """
 
 from django.db import migrations, models
+
+
+def delete_removed_links(apps, schema_editor):
+    """The reverse: a removed link is deleted, as a removal deleted it before this migration."""
+    apps.get_model("documents", "ContentTag").objects.filter(removed=True).delete()
 
 
 class Migration(migrations.Migration):
@@ -40,4 +54,6 @@ class Migration(migrations.Migration):
             name='department_applied_by',
             field=models.CharField(blank=True, choices=[('ai', 'ai'), ('user', 'user')], max_length=32, null=True),
         ),
+        # After the AddField of ``removed``, so that reversing runs it while the column still exists.
+        migrations.RunPython(migrations.RunPython.noop, reverse_code=delete_removed_links),
     ]

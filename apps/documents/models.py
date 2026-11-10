@@ -155,13 +155,13 @@ class Tag(models.Model):
     dimension = vocabulary_field(CLASSIFICATION_DIMENSIONS)
     # Deactivated rather than deleted while content references it (D-12).
     active = models.BooleanField(default=True)
-    # ``documents 0010`` (D-105's dated note of 10 November 2026, night, the lead's revision). True
-    # for a Topic that came into use through a name: one a person typed (``apply_tag``'s name form)
-    # or confirmed as a proposed topic (``confirm_proposed_topic``), created or fetched. Such a Topic
-    # is not vocabulary once nothing links it, so applying, removing and applying a name again
-    # cannot tell anyone whether a restricted Topic exists (``tag_scheme``). A seeded Topic, and
-    # every Project and Process tag, stays False and stays vocabulary while unlinked, as Objective
-    # 05 measured it.
+    # ``documents 0010``; its meaning since ``documents 0011``: not vocabulary (D-105's dated note
+    # of 10 November 2026, night: the security review of ``84b5771``). A tag that is not grown is in
+    # every document's scheme whatever its links; a grown one only where every audience role reads
+    # a source carrying it (``tag_scheme``). Set on a Topic a person's name creates or reactivates
+    # (``apply_tag``'s name form, ``confirm_proposed_topic``; an active one either fetches keeps its
+    # value, ``_bring_into_use``), and by ``documents 0011`` and the seed script's linked mode on
+    # every tag that only material some role cannot read carries. Never unset.
     grown = models.BooleanField(default=False)
 
     class Meta:
