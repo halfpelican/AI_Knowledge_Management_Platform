@@ -32,6 +32,7 @@ from apps.core.constants import (
     EMPLOYEE_ROLE_NAME,
     MAXIMUM_CONTEXT_TOKENS,
     RELEVANCE_THRESHOLD,
+    RELEVANCE_THRESHOLD_BY_MODEL,
     SOURCE_TYPES,
     TOP_K,
 )
@@ -42,8 +43,14 @@ from apps.retrieval.ranking import (
     admit,
     cosine_similarity,
     rank,
+    relevance_threshold,
     truncate_to_context,
 )
+
+# EmbeddingGemma, which the per-model table does not list, so RELEVANCE_THRESHOLD applies to it
+# (D-120). The threshold tests below are about that default unless they name another model.
+UNLISTED_MODEL = "embed-gemma"
+VOYAGE = "voyage-4"
 from apps.retrieval.scoping import candidate_chunks, permission_scope
 from apps.retrieval.tests.scopes import unreadable_scope
 
@@ -195,7 +202,7 @@ def test_a_ranked_passage_carries_its_identifier_text_and_source(document):
 def test_an_empty_candidate_set_ranks_to_an_empty_list(document):
     """Failure path: nothing to score is not an error here, just an empty list."""
     assert rank([], QUERY) == []
-    assert admit(rank([], QUERY)) == []
+    assert admit(rank([], QUERY), embedding_model=UNLISTED_MODEL) == []
 
 
 # --- The cap: TOP_K binds, and the sort precedes it ------------------------------------
@@ -297,14 +304,14 @@ def test_a_passage_exactly_on_the_threshold_is_admitted():
     test is about the operator, not about pgvector's precision.
     """
     on_the_floor = passage_scoring(RELEVANCE_THRESHOLD)
-    assert admit([on_the_floor]) == [on_the_floor]
+    assert admit([on_the_floor], embedding_model=UNLISTED_MODEL) == [on_the_floor]
 
 
 def test_one_above_the_threshold_is_admitted_and_one_below_is_excluded():
     above = passage_scoring(RELEVANCE_THRESHOLD + 0.01, text="above")
     below = passage_scoring(RELEVANCE_THRESHOLD - 0.01, text="below")
 
-    admitted = admit([above, below])
+    admitted = admit([above, below], embedding_model=UNLISTED_MODEL)
 
     assert admitted == [above]
     assert below not in admitted
@@ -314,7 +321,7 @@ def test_one_above_the_threshold_is_admitted_and_one_below_is_excluded():
 
 def test_admit_keeps_the_ranked_order():
     passages = [passage_scoring(score) for score in (0.9, 0.6, RELEVANCE_THRESHOLD, 0.1)]
-    assert admit(passages) == passages[:3]
+    assert admit(passages, embedding_model=UNLISTED_MODEL) == passages[:3]
 
 
 def test_nothing_clearing_the_threshold_returns_an_empty_list():
@@ -324,8 +331,41 @@ def test_nothing_clearing_the_threshold_returns_an_empty_list():
     all, and the ``no_relevant_passage`` reason code — is item 4's, not this
     function's.
     """
-    assert admit([passage_scoring(RELEVANCE_THRESHOLD - 0.001)]) == []
-    assert admit([passage_scoring(0.0), passage_scoring(-0.5)]) == []
+    assert admit([passage_scoring(RELEVANCE_THRESHOLD - 0.001)], embedding_model=UNLISTED_MODEL) == []
+    assert admit([passage_scoring(0.0), passage_scoring(-0.5)], embedding_model=UNLISTED_MODEL) == []
+
+
+# --- The threshold is the embedding model's own (D-120) -----------------------------------
+
+
+def test_each_embedding_model_gets_its_own_threshold():
+    """D-120's values. Voyage's was chosen on Voyage's scores, and any model not listed,
+    EmbeddingGemma included, keeps RELEVANCE_THRESHOLD."""
+    assert relevance_threshold(VOYAGE) == RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE] == 0.2687
+    assert relevance_threshold(UNLISTED_MODEL) == RELEVANCE_THRESHOLD == 0.30
+    assert relevance_threshold("a-model-nobody-measured") == RELEVANCE_THRESHOLD
+
+
+def test_a_score_between_the_two_thresholds_is_admitted_only_for_voyage():
+    """u07's case on dev-set-v2: its expected source scored 0.2968 on Voyage, which 0.30
+    would have declined before generation."""
+    between = passage_scoring((RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE] + RELEVANCE_THRESHOLD) / 2)
+
+    assert admit([between], embedding_model=VOYAGE) == [between]
+    assert admit([between], embedding_model=UNLISTED_MODEL) == []
+
+
+def test_voyages_threshold_is_inclusive_like_the_default():
+    on_it = passage_scoring(RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE])
+    under = passage_scoring(RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE] - 0.001)
+
+    assert admit([on_it, under], embedding_model=VOYAGE) == [on_it]
+
+
+def test_admit_needs_the_embedding_model():
+    """Required, so no caller can quietly get EmbeddingGemma's threshold for Voyage's scores."""
+    with pytest.raises(TypeError):
+        admit([passage_scoring(0.9)])
 
 
 # --- End to end: candidate_chunks -> rank -> admit, with a restricted top scorer -------
@@ -367,7 +407,7 @@ def test_end_to_end_a_restricted_chunk_that_would_have_scored_highest_is_absent(
         role_name=EMPLOYEE_ROLE_NAME, embedding_model=STUB_EMBEDDING_MODEL
     )
     ranked = rank(candidates, QUERY)
-    admitted = admit(ranked)
+    admitted = admit(ranked, embedding_model=UNLISTED_MODEL)
 
     assert [passage.chunk_text for passage in ranked] == [
         "Best permitted.",
@@ -407,7 +447,7 @@ def test_end_to_end_from_both_role_sessions(session_client, document):
         role_name=permission_scope(session_client.user), embedding_model=STUB_EMBEDDING_MODEL
     )
     ranked = rank(candidates, QUERY)
-    admitted = admit(ranked)
+    admitted = admit(ranked, embedding_model=UNLISTED_MODEL)
 
     assert [passage.chunk_text for passage in admitted] == ["Best permitted.", "Also permitted."]
     assert str(restricted.id) not in [passage.chunk_id for passage in ranked]
@@ -552,7 +592,7 @@ def test_the_three_operations_compose_over_the_real_candidate_set(document):
     candidates = candidate_chunks(
         role_name=EMPLOYEE_ROLE_NAME, embedding_model=STUB_EMBEDDING_MODEL
     )
-    supplied = truncate_to_context(admit(rank(candidates, QUERY)))
+    supplied = truncate_to_context(admit(rank(candidates, QUERY), embedding_model=UNLISTED_MODEL))
 
     assert len(supplied) == 1
     assert supplied[0].score == pytest.approx(0.80)

@@ -7520,3 +7520,75 @@ version's cost: a mistyped model name or a bad key no longer spends two wasted c
 
 **Where it applies:** the modules under **Concerns**, `docs/ai-provider.md` §1, and D-117's free-tier
 note.
+
+## D-120 · The relevance threshold and the partial-match floor are per embedding model: `voyage-4` gets 0.2687 and 0.2468, and EmbeddingGemma keeps 0.30 and no floor
+
+**Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-12, D-37, D-56, D-101,
+D-102, D-113, D-117, R10, `apps/core/constants.py`, `apps/retrieval/ranking.py`,
+`apps/retrieval/partial_matches.py`, `apps/retrieval/pipeline.py`, `scripts/citation_harness.py`,
+`scripts/conversation_http_check.py`, `CLAUDE.md` §5
+
+**What prompted it.** D-113 requires the threshold to be re-derived on development material before
+the `anthropic` provider is relied on. `RELEVANCE_THRESHOLD = 0.30` and `PARTIAL_MATCH_FLOOR = 0.0`
+were chosen on EmbeddingGemma's scores (D-102). A cosine value means something only for the model
+whose scores it was chosen on (R10).
+
+**The measurement used D-101's and D-102's procedure, unchanged.** The evidence is in
+`corpus/objective-02/runs/2026-11-10/voyage-threshold/`.
+
+- **The database** is `kmp_voyage_20261110`, the 1 November snapshot re-indexed with Voyage (D-117,
+  PR #71).
+- **Scores:** dev-set-v2's 40 runs, each embedded three times, with D-101's margin rule
+  (`m = 0.006`).
+  - It gave T 0.2687 and F 0.2468.
+  - It declines 4 of 8 no-answer runs with margin (EmbeddingGemma: 1 of 8) and keeps all 32
+    answerable runs.
+  - The floor holds (F ≤ T − m), which it could not on EmbeddingGemma.
+- **End to end:** both values against 0.30 with no floor, on v2, with Claude Sonnet 5.5 (D-115)
+  and the cap of 6. Every ask was rolled back.
+
+| dev-set-v2 | EmbeddingGemma 0.30 (D-102) | Voyage 0.30 | **Voyage 0.2687 / 0.2468** |
+|---|---|---|---|
+| answered where expected | 29/32 | 31/32 | **32/32** |
+| declined where no answer is expected | 7/8 | 8/8 | **8/8** |
+| match with an expected source | 22/32 | 31/32 | **32/32** |
+| median seconds per ask | 16.1 | 2.8 | **2.6** |
+
+- **The difference between the two Voyage settings is u07,** whose expected source scores 0.2968.
+  0.30 declines it before generation.
+- **The floor stops unrelated offers.** At 0.30 with no floor, every no-answer run was offered its
+  five nearest items, down to 0.12. At 0.2468, the four runs declined before generation were offered
+  nothing.
+
+**Decision (the user's, 10 November): adopt Voyage's values, as values of the embedding model.**
+
+- **The tables:** `RELEVANCE_THRESHOLD_BY_MODEL = {"voyage-4": 0.2687}` and
+  `PARTIAL_MATCH_FLOOR_BY_MODEL = {"voyage-4": 0.2468}`, in `apps/core/constants.py`.
+- **The default:** a model not listed, EmbeddingGemma included, keeps `RELEVANCE_THRESHOLD = 0.30`
+  and `PARTIAL_MATCH_FLOOR = 0.0`. Both are unchanged, so FLM's behaviour and its measurements are
+  untouched.
+- **The code:** `ranking.admit()` and `partial_matches.partial_matches()` take the embedding model as
+  a required keyword and look the value up (`relevance_threshold`, `partial_match_floor`).
+  - The pipeline passes the model the question was embedded with, which is the model every
+    candidate chunk was recorded against (R10).
+  - The keyword is required, so a caller cannot forget it and quietly use EmbeddingGemma's value
+    for Voyage's scores.
+- **The measurement scripts:** the citation harness and the HTTP check pass the model too. The
+  harness's default threshold is now the model's own, and `--threshold` still overrides it.
+- **The key is the model name the provider answers with** (`settings.VOYAGE_MODEL`). Another Voyage
+  model falls back to the default until it is measured, because these values are `voyage-4`'s.
+
+**What it costs, and what remains:**
+
+- **A small, contaminated set.** It is 40 runs, and v2 was written after the frozen results were
+  seen (D-101's note). So the frozen thirty does not independently test this value.
+- **The scores still overlap.** Three no-answer runs score above an answerable one. Generation
+  declined them on this set.
+- **D-56 is narrowed on Voyage and stays open on EmbeddingGemma.**
+- **Next:** the frozen thirty, the nine threads, the HTTP check and NFR-08 on Voyage with these
+  values (D-113), within D-113's spend rule.
+- **FR-19's exclusion check** (`scripts/exclusion_dev_check.py`, on its branch) calls `admit`, and it
+  needs the model once the two branches meet.
+
+**Where it applies:** the modules under **Concerns**, `CLAUDE.md` §5 (both rows, with the user's
+adoption of 10 November) and `docs/ai-provider.md` §4.

@@ -278,11 +278,14 @@ Rules, enforced in code rather than remembered:
 5. A startup check compares `EMBEDDING_DIMENSION` against the dimension the provider
    actually returns for a probe string and refuses to start on a mismatch. Silent
    dimension drift is the failure this prevents.
+6. The relevance threshold and the partial-match floor belong to the model too (D-120).
+   `ranking.admit` and `partial_matches` are given the question's embedding model and look
+   up its own values. A model that is not listed gets EmbeddingGemma's.
 
-| Provider | Model | Dimension |
-|---|---|---|
-| `flm` | `embed-gemma` | 768 |
-| `anthropic` | `voyage-4` | 1024, Voyage's default. 256, 512 and 2048 are offered, never 768 (Voyage's API reference, checked 10 November 2026) |
+| Provider | Model | Dimension | Threshold / floor |
+|---|---|---|---|
+| `flm` | `embed-gemma` | 768 | 0.30 / none (D-102) |
+| `anthropic` | `voyage-4` | 1024, Voyage's default. 256, 512 and 2048 are offered, never 768 (Voyage's API reference, checked 10 November 2026) | 0.2687 / 0.2468 (D-120) |
 
 So moving to Voyage resizes the column. Set `EMBEDDING_DIMENSION=1024`, then run
 `reindex --provider anthropic --resize-column <database>` on a database copied for it

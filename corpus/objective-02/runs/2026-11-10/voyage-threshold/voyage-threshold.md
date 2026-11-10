@@ -99,9 +99,9 @@ The evidence is in `e2e/`, with the console output in `e2e_T3000_console.txt` an
 
 ## What this does not settle
 
-- **Adoption and wiring.** `RELEVANCE_THRESHOLD` and `PARTIAL_MATCH_FLOOR` are single values in
-  `apps/core/constants.py`, and both are `embed-gemma` values. Giving Voyage its own values is the
-  user's decision.
+- **Adoption and wiring:** settled as D-120 on 10 November. The user adopted 0.2687 / 0.2468 for
+  `voyage-4` as values of the embedding model (`RELEVANCE_THRESHOLD_BY_MODEL`,
+  `PARTIAL_MATCH_FLOOR_BY_MODEL`). EmbeddingGemma keeps 0.30 with no floor.
 - **The test sets.** Once a value is chosen, the frozen thirty, the threads, the HTTP check and
   NFR-08 run on it, as D-101's "after" did on FLM.
 - **The scores still overlap.** Three no-answer runs score above an answerable one. Generation

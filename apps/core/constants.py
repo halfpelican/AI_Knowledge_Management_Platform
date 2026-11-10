@@ -156,6 +156,8 @@ TOP_K = 25
 # most no-answer questions reach generation. Generation, capped at MAXIMUM_STATEMENTS, carries
 # most of the declining (path B). On users' wording no threshold separates answerable from
 # unanswerable questions (D-37's finding). Re-measure with the corpus or the embedding model.
+# This is EmbeddingGemma's value, and the default for any model RELEVANCE_THRESHOLD_BY_MODEL
+# below does not list. Voyage has its own (D-120).
 RELEVANCE_THRESHOLD = 0.30
 
 # Cosine-similarity floor for OFFERING an item as one of FR-12's partial matches beside a
@@ -171,6 +173,23 @@ RELEVANCE_THRESHOLD = 0.30
 # under the ceiling, but it would also remove the offers that point u07 and u24 at their
 # expected sources (D02 at 0.280085, T03 at 0.291925).
 PARTIAL_MATCH_FLOOR = 0.0
+
+# Per embedding model (D-120, 10 November 2026). A cosine value means something only for the
+# model whose scores it was chosen on (risk R10). Voyage's questions and passages score in a
+# different band from EmbeddingGemma's, so a model listed here uses its own threshold and
+# floor, and any other, EmbeddingGemma included, uses the two values above. The names are the
+# ones a provider answers with and every chunk records (settings.VOYAGE_MODEL for Voyage).
+# Read through apps/retrieval/ranking.relevance_threshold and
+# apps/retrieval/partial_matches.partial_match_floor, never directly.
+#
+# voyage-4: D-101's margin rule (m = 0.006) on dev-set-v2's Voyage scores gave T 0.2687 and
+# F 0.2468. It declines 4 of 8 no-answer runs with margin, against 1 of 8 on EmbeddingGemma,
+# and keeps all 32 answerable runs. End to end on the same set, with Claude Sonnet 5.5, it
+# answered 32/32, declined 8/8 and matched 32/32, where 0.30 lost u07 (0.2968) at path A. The
+# floor holds here (F <= T - m), so D-56's unrelated offers stop for runs declined at path A.
+# Evidence: corpus/objective-02/runs/2026-11-10/voyage-threshold/voyage-threshold.md.
+RELEVANCE_THRESHOLD_BY_MODEL = {"voyage-4": 0.2687}
+PARTIAL_MATCH_FLOOR_BY_MODEL = {"voyage-4": 0.2468}
 
 # PROVISIONAL: ceiling on grounding-context tokens per generation call. Tuned in
 # Stage 4 once the prompt and the model's context window are measured.

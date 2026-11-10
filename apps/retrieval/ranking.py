@@ -60,7 +60,12 @@ from math import sqrt
 from typing import Iterable
 from uuid import UUID
 
-from apps.core.constants import MAXIMUM_CONTEXT_TOKENS, RELEVANCE_THRESHOLD, TOP_K
+from apps.core.constants import (
+    MAXIMUM_CONTEXT_TOKENS,
+    RELEVANCE_THRESHOLD,
+    RELEVANCE_THRESHOLD_BY_MODEL,
+    TOP_K,
+)
 from apps.documents.models import ContentChunk
 from apps.ingestion.chunking import length_in_tokens
 
@@ -154,8 +159,22 @@ def rank(candidates: Iterable[ContentChunk], query_vector: list[float]) -> list[
     return scored[:TOP_K]
 
 
-def admit(ranked: list[RankedPassage]) -> list[RankedPassage]:
-    """Drop every passage scoring below RELEVANCE_THRESHOLD, keeping the order.
+def relevance_threshold(embedding_model: str) -> float:
+    """The admission floor for passages scored against ``embedding_model``'s vectors (D-120).
+
+    A model RELEVANCE_THRESHOLD_BY_MODEL lists gets its own value, chosen on that model's
+    scores. Any other, EmbeddingGemma included, gets RELEVANCE_THRESHOLD. Both names are read
+    at call time, so a measurement script that reassigns either in its own process is honoured.
+    """
+    return RELEVANCE_THRESHOLD_BY_MODEL.get(embedding_model, RELEVANCE_THRESHOLD)
+
+
+def admit(ranked: list[RankedPassage], *, embedding_model: str) -> list[RankedPassage]:
+    """Drop every passage scoring below the embedding model's threshold, keeping the order.
+
+    ``embedding_model`` is the model the question was embedded with, which is the model every
+    candidate was recorded against (risk R10). Its threshold is ``relevance_threshold``'s. It
+    is required, so a caller cannot forget it and quietly get EmbeddingGemma's value (D-120).
 
     The comparison is ``>=``, matching proposal 7.10 line 61 exactly: a passage sitting
     precisely on the floor is admitted. FR-12 gives the reason for having a floor at
@@ -172,7 +191,8 @@ def admit(ranked: list[RankedPassage]) -> list[RankedPassage]:
     D-38, and was re-tuned in step 7 phase 2b on the Objective 02 development set
     (``apps/core/constants.py`` has the rule and the scores). It is not tuned here.
     """
-    return [passage for passage in ranked if passage.score >= RELEVANCE_THRESHOLD]
+    threshold = relevance_threshold(embedding_model)
+    return [passage for passage in ranked if passage.score >= threshold]
 
 
 def truncate_to_context(passages: list[RankedPassage]) -> list[RankedPassage]:

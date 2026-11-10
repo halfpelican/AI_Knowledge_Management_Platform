@@ -42,7 +42,9 @@ from apps.core.constants import (
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
     PARTIAL_MATCH_FLOOR,
+    PARTIAL_MATCH_FLOOR_BY_MODEL,
     RELEVANCE_THRESHOLD,
+    RELEVANCE_THRESHOLD_BY_MODEL,
     SOURCE_TYPES,
 )
 from apps.documents.models import ContentChunk, Document
@@ -103,15 +105,21 @@ def at_cosine(value: float) -> list[float]:
     return wide(value, sqrt(1.0 - value * value))
 
 
-def make_chunk(document, visible_to_roles, *, index, cosine, text="A passage."):
-    """A chunk stamped with a visibility scope (D-17), at a known angle to QUERY."""
+def make_chunk(
+    document, visible_to_roles, *, index, cosine, text="A passage.", embedding_model=STUB_EMBEDDING_MODEL
+):
+    """A chunk stamped with a visibility scope (D-17), at a known angle to QUERY.
+
+    ``embedding_model`` is the stub's unless a test names another, such as Voyage's for
+    D-120's per-model threshold; the ControlledService must then answer with the same name.
+    """
     return ContentChunk.objects.create(
         source_type=SOURCE_TYPES[0],
         source_id=document.id,
         chunk_index=index,
         chunk_text=text,
         embedding=at_cosine(cosine),
-        embedding_model=STUB_EMBEDDING_MODEL,
+        embedding_model=embedding_model,
         embedding_dimension=settings.EMBEDDING_DIMENSION,
         visible_to_roles=visible_to_roles,
     )
@@ -269,6 +277,58 @@ def test_a_chunk_from_another_embedding_model_leaves_nothing_to_answer_from(docu
     assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
     assert outcome.result_count == 0
     assert "Indexed earlier." not in [passage.chunk_text for passage in outcome.passages]
+    assert double.generate_calls == []
+
+
+# --- The threshold and the floor are the embedding model's own (D-120) -----------------
+
+VOYAGE = "voyage-4"
+# Between Voyage's threshold and the default one: u07's band on dev-set-v2 (0.2968).
+BETWEEN_THE_THRESHOLDS = (RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE] + RELEVANCE_THRESHOLD) / 2
+
+
+@pytest.mark.django_db
+def test_a_voyage_question_is_held_to_voyages_threshold(document, monkeypatch):
+    """The pipeline passes the model the question was embedded with, so a passage scoring
+    between the two thresholds is admitted for a Voyage question and generation is called."""
+    chunk = make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BETWEEN_THE_THRESHOLDS,
+        text="Twenty days.", embedding_model=VOYAGE,
+    )
+    double = install(monkeypatch, ControlledService(model=VOYAGE))
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.answered is True
+    assert [passage.chunk_id for passage in outcome.passages] == [str(chunk.id)]
+    assert len(double.generate_calls) == 1
+
+
+@pytest.mark.django_db
+def test_the_same_score_under_a_model_without_its_own_threshold_takes_path_a(document, service):
+    """The other side of the test above: the stub's model is not listed, so 0.30 applies."""
+    make_chunk(document, [EMPLOYEE_ROLE_NAME], index=1, cosine=BETWEEN_THE_THRESHOLDS, text="Twenty days.")
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert service.generate_calls == []
+
+
+@pytest.mark.django_db
+def test_a_voyage_no_answer_offers_nothing_below_voyages_floor(document, monkeypatch):
+    """D-56 on Voyage: an item scoring under 0.2468 is not offered beside a no-answer, where
+    the default floor (none) would offer it."""
+    make_chunk(
+        document, [EMPLOYEE_ROLE_NAME], index=1, cosine=PARTIAL_MATCH_FLOOR_BY_MODEL[VOYAGE] - 0.02,
+        text="Unrelated.", embedding_model=VOYAGE,
+    )
+    double = install(monkeypatch, ControlledService(model=VOYAGE))
+
+    outcome = answer_question(question=QUESTION, user=document.uploaded_by)
+
+    assert outcome.no_answer_reason == NO_RELEVANT_PASSAGE
+    assert outcome.partial_matches == ()
     assert double.generate_calls == []
 
 

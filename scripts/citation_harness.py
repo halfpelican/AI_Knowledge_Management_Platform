@@ -168,6 +168,7 @@ from apps.core.constants import (  # noqa: E402
     MAXIMUM_QUESTION_LENGTH,
     MINIMUM_QUESTION_LENGTH,
     RELEVANCE_THRESHOLD,
+    RELEVANCE_THRESHOLD_BY_MODEL,
     TOP_K,
 )
 from apps.documents.models import ContentChunk, Document  # noqa: E402
@@ -193,7 +194,12 @@ from apps.retrieval.partial_matches import partial_matches  # noqa: E402
 # removes three more definitions that could drift. The threshold is applied by this
 # module rather than by ranking.admit(), because --threshold sweeps it for tuning (D-37)
 # and admit() correctly reads the settled constant.
-from apps.retrieval.ranking import RankedPassage, rank, truncate_to_context  # noqa: E402
+from apps.retrieval.ranking import (  # noqa: E402
+    RankedPassage,
+    rank,
+    relevance_threshold,
+    truncate_to_context,
+)
 
 # Citation verification, as the pipeline performs it: set membership against the
 # identifiers actually supplied to the prompt (apps/retrieval/verification.py, FR-12 step
@@ -476,8 +482,12 @@ def best_ranked(ranked: list[RankedPassage], sources: SourceIndex | None, items)
     return min(placed) if placed else (None, None)
 
 
-def offered_record(ranked: list[RankedPassage], sources: SourceIndex | None) -> list[dict]:
+def offered_record(
+    ranked: list[RankedPassage], sources: SourceIndex | None, embedding_model: str
+) -> list[dict]:
     """partial_matches(ranked), each with its source's best score and manifest item.
+
+    ``embedding_model`` is the question's, so the floor is that model's own (D-120).
 
     The list is the shipped derivation's. The score is the first appearance of the source
     in ``ranked``, which is its best, because ``ranked`` is ordered best first.
@@ -492,7 +502,7 @@ def offered_record(ranked: list[RankedPassage], sources: SourceIndex | None) -> 
             "item": sources.item_of(match.source_id) if sources else None,
             "score": best[(match.source_type, str(match.source_id))],
         }
-        for match in partial_matches(ranked)
+        for match in partial_matches(ranked, embedding_model=embedding_model)
     ]
 
 
@@ -500,7 +510,7 @@ def run_question(
     question: dict,
     chunks: list[ContentChunk],
     service,
-    threshold: float = RELEVANCE_THRESHOLD,
+    threshold: float | None = None,
     with_history: bool = False,
     sources: SourceIndex | None = None,
 ) -> QuestionResult:
@@ -567,8 +577,10 @@ def measure(
     ranked = rank(candidates, query_vector)
     result.top_score = ranked[0].score if ranked else None
     result.source_rank, result.source_score = best_ranked(ranked, sources, result.source)
-    result.offered = offered_record(ranked, sources)
-    admitted = [candidate for candidate in ranked if candidate.score >= threshold]
+    result.offered = offered_record(ranked, sources, embedding.model)
+    # The embedding model's own threshold unless the caller overrides it (D-120).
+    floor = relevance_threshold(embedding.model) if threshold is None else threshold
+    admitted = [candidate for candidate in ranked if candidate.score >= floor]
 
     # The chunks this role may NOT see. Computed only so the harness can assert
     # that none of them reached the prompt or the answer; never printed, never
@@ -948,7 +960,7 @@ def score_distribution(
             "top_score": ranked[0].score if ranked else None,
             "source_rank": source_rank,
             "source_score": source_score,
-            "partial_matches": offered_record(ranked, sources),
+            "partial_matches": offered_record(ranked, sources, embedding.model),
         })
 
     print("\n" + "=" * 100)
@@ -1270,8 +1282,9 @@ def main() -> int:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=RELEVANCE_THRESHOLD,
-        help=f"cosine floor for admitting a passage (default: RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD})",
+        default=None,
+        help=("cosine floor for admitting a passage (default: the embedding model's own, "
+              f"RELEVANCE_THRESHOLD={RELEVANCE_THRESHOLD} or RELEVANCE_THRESHOLD_BY_MODEL={RELEVANCE_THRESHOLD_BY_MODEL}, D-120)"),
     )
     parser.add_argument(
         "--scores-only",
@@ -1445,7 +1458,7 @@ def main() -> int:
     print(f"  schema          : apps/ai/schema.py, required key(s) "
           f"{STATEMENT_LIST_SCHEMA['required']}, per statement "
           f"{sorted(STATEMENT_LIST_SCHEMA['properties']['statements']['items']['required'])}")
-    if arguments.threshold != RELEVANCE_THRESHOLD:
+    if arguments.threshold is not None:
         print(f"  THRESHOLD       : {arguments.threshold} (overriding the constant, for tuning)")
     if arguments.with_history:
         # Printed in full, because a recorded run has to say exactly which block produced
@@ -1480,7 +1493,8 @@ def main() -> int:
     constants = {
         "TOP_K": TOP_K,
         "RELEVANCE_THRESHOLD": RELEVANCE_THRESHOLD,
-        "threshold_used": arguments.threshold,
+        "RELEVANCE_THRESHOLD_BY_MODEL": dict(RELEVANCE_THRESHOLD_BY_MODEL),
+        "threshold_used": arguments.threshold if arguments.threshold is not None else "the embedding model's own (D-120)",
         "MAXIMUM_CONTEXT_TOKENS": MAXIMUM_CONTEXT_TOKENS,
         "MAXIMUM_GENERATION_ATTEMPTS": MAXIMUM_GENERATION_ATTEMPTS,
     }
