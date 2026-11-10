@@ -33,6 +33,12 @@ already in the caller's scope, which is what D-53's implementation note asks of 
 a status and a sort from their fixed vocabularies, a department and tag names for shape only.
 Nothing here checks whether a department or tag exists, so an unknown value and one used only
 on restricted documents match the same nothing.
+
+**A provisional link is not a tag (FR-10, D-105).** ``ContentTag.provisional`` marks an AI
+suggestion held below CLASSIFICATION_CONFIDENCE_THRESHOLD for confirmation. ``tags_of``, the tag
+filters and the tag facets read ``provisional=False`` only, so a held suggestion is neither shown
+as a tag, offered as a facet value nor matched by a filter until a person confirms it.
+``tag_details_of`` is where it is seen, provisional included, for the detail view.
 """
 
 from dataclasses import dataclass, fields
@@ -46,7 +52,7 @@ from apps.core.constants import (
     REPOSITORY_TAG_DIMENSIONS,
     SOURCE_TYPES,
 )
-from apps.documents.models import ContentTag
+from apps.documents.models import ContentTag, DocumentAnalysis
 from apps.retrieval.scoping import scoped_documents
 from apps.retrieval.search import _collapsed, collapse_whitespace
 
@@ -152,11 +158,12 @@ def extracted_text_of(document) -> str | None:
 
 
 def tags_of(document) -> dict[str, list[str]]:
-    """The document's tag names in each of Project, Process and Topic, sorted and distinct.
+    """The document's APPLIED tag names in each of Project, Process and Topic, sorted and distinct.
 
     Every dimension is present, with an empty list where the document has none, so the shape
     does not change from one document to the next. Department is not here: it is the document's
-    ``department`` field (D-72).
+    ``department`` field (D-72). A provisional link is not here either (D-105): it is held for
+    confirmation, not applied, and ``tag_details_of`` is where it shows.
     """
     tags = {parameter: [] for parameter in TAG_PARAMETERS}
     rows = (
@@ -164,6 +171,7 @@ def tags_of(document) -> dict[str, list[str]]:
             source_type=DOCUMENT_SOURCE_TYPE,
             source_id=document.pk,
             tag__dimension__in=REPOSITORY_TAG_DIMENSIONS,
+            provisional=False,
         )
         .values_list("tag__dimension", "tag__tag_name")
         .distinct()
@@ -172,6 +180,33 @@ def tags_of(document) -> dict[str, list[str]]:
     for dimension, name in rows:
         tags[dimension.lower()].append(name)
     return tags
+
+
+def classification_of(document):
+    """The document's ``DocumentAnalysis``, or ``None`` where it has never been classified (D-105).
+
+    Read through the document the caller's scoped lookup resolved, as ``extracted_text_of`` is.
+    """
+    return DocumentAnalysis.objects.filter(document_id=document.pk).first()
+
+
+def tag_details_of(document):
+    """Every ``ContentTag`` link of the document in Project, Process and Topic, provisional
+    included, with its ``Tag`` loaded, ordered by dimension, then name, then primary key.
+
+    The detail view's ``tag_details`` (D-105): where a held suggestion is seen, with its
+    provenance, so a person can accept or remove it. Unlike ``tags_of`` this is one entry per
+    LINK, so a document linked twice to one tag shows two entries with two ids.
+    """
+    return (
+        ContentTag.objects.filter(
+            source_type=DOCUMENT_SOURCE_TYPE,
+            source_id=document.pk,
+            tag__dimension__in=REPOSITORY_TAG_DIMENSIONS,
+        )
+        .select_related("tag")
+        .order_by("tag__dimension", "tag__tag_name", "pk")
+    )
 
 
 # --- The query, in parts ---------------------------------------------------------------------
@@ -189,7 +224,8 @@ def _tagged(dimension: str, name: str):
     caller's and no others, and no tag row is returned from it.
     """
     return ContentTag.objects.filter(
-        source_type=DOCUMENT_SOURCE_TYPE, tag__dimension=dimension, tag__tag_name=name
+        source_type=DOCUMENT_SOURCE_TYPE, tag__dimension=dimension, tag__tag_name=name,
+        provisional=False,  # a held suggestion is not a tag (D-105)
     ).values("source_id")
 
 
@@ -242,6 +278,7 @@ def _facet(name: str, documents) -> list[dict]:
                 source_type=DOCUMENT_SOURCE_TYPE,
                 source_id__in=documents.values("id"),
                 tag__dimension=TAG_PARAMETERS[name],
+                provisional=False,  # a held suggestion is not offered as a value (D-105)
             )
             .values("tag__tag_name")
             .annotate(count=Count("source_id", distinct=True))

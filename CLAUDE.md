@@ -92,14 +92,19 @@ embedding are written in the same ACID transaction (NFR-21).
 ## 4. AI provider — the most important rule in this file
 
 **No application code may import an AI vendor SDK directly.** Every AI call goes
-through `apps/ai/provider.py`, which exposes exactly three operations:
+through `apps/ai/base.py`, which exposes exactly the operations listed here:
 
 ```python
 class AIService(Protocol):
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
     def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
+    def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
 ```
+
+The list, not a count, is the source of truth. `classify_document` arrived with FR-10 on 9 November
+2026 (D-104). Summarisation (FR-16) is added the same way when its
+requirement is built, not before.
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:
 

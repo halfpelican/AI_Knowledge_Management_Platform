@@ -1,0 +1,188 @@
+/* FR-10's classification section on the document detail view. Tokens only. Its
+   own file: the shared stylesheets are being changed on another branch. */
+
+.classification {
+  margin: 0 0 var(--space-6);
+}
+
+.classification__intro,
+.classification__note {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The live region for the latest outcome. Empty, it takes no room and stays in
+   the accessibility tree: a live region that was display: none is not reliably
+   announced when it fills. */
+.classification__announcement {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.classification__announcement:empty {
+  margin: 0;
+}
+
+.classification__state {
+  max-width: var(--measure-text);
+}
+
+/* The type and the department, each with its provenance under the value. The
+   same key/value grid as the record's metadata; one column on a narrow screen. */
+.classification__assignments {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.classification__assignments dt {
+  font-weight: var(--weight-medium);
+}
+
+.classification__assignments dd {
+  margin: 0;
+}
+
+.classification__value {
+  display: block;
+}
+
+/* Provenance is a sentence in words, muted but above the body-text ratio
+   (muted on surface 7.56:1), never a colour alone. */
+.classification__provenance {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.classification__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+/* The edit form, in a panel so it reads as one step with a Save and a Cancel. */
+.classification__form {
+  max-width: var(--layout-field-max-width);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
+}
+
+.classification__fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.classification__legend {
+  margin-bottom: var(--space-3);
+  padding: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.classification__subheading {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-lg);
+}
+
+/* ---- Tags ---------------------------------------------------------------- */
+
+.tag-group {
+  margin: 0 0 var(--space-4);
+}
+
+.tag-group__heading {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-base);
+}
+
+.tag-group__empty,
+.tag-group__intro {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tag-group__intro {
+  max-width: var(--measure-text);
+}
+
+.tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One tag link: its name, its provenance in words, and its actions. Wraps on a
+   narrow screen, with the actions dropping to a row of their own. */
+.tag {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+/* A machine's tag has a dashed boundary and a person's a solid one — a second
+   cue beside the words, never the only one (SC 1.4.1). */
+.tag--ai {
+  border-style: dashed;
+}
+
+.tag--user {
+  border-style: solid;
+}
+
+.tag__dimension {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tag__dimension::after {
+  content: ' ·';
+}
+
+.tag__name {
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+.tag__provenance {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.tag__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+@media (max-width: 30rem) {
+  .classification__assignments {
+    grid-template-columns: 1fr;
+  }
+
+  .classification__assignments dd {
+    margin-bottom: var(--space-2);
+  }
+
+  .tag__actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+}

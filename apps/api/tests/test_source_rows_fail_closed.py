@@ -47,6 +47,7 @@ from pathlib import Path
 import pytest
 from django.conf import settings
 from django.core.files.base import ContentFile
+from django.utils import timezone
 
 import apps.ai
 from apps.ai.base import EmbeddingResult, Statement, StatementList
@@ -58,7 +59,7 @@ from apps.core.constants import (
     RELEVANCE_THRESHOLD,
     SOURCE_TYPES,
 )
-from apps.documents.models import ContentChunk, ContentTag, Document, Tag
+from apps.documents.models import ContentChunk, ContentTag, Document, DocumentAnalysis, Tag
 from apps.meetings.models import Meeting
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
@@ -419,6 +420,46 @@ def _browses(client, case, monkeypatch):
     return case.disclosed_in(response) or DOCUMENT_TAG in response.content.decode()
 
 
+# FR-10's routes (D-105) act on a document by id, so each is a status-code probe like the delete:
+# 404 says nothing, anything else confirms the id is real. Each probe first gives the disagreeing
+# document what its route acts on (an analysis, a proposed topic, a tag link), so that the
+# Administrator's mirror reaches the work and answers non-404, and the Employee's 404 can only be
+# the scope's. contribute_content is held by both roles, so the Employee's 404 is not a 403 hidden
+# behind one: it is resolved before the permission (D-73's order).
+PROPOSED_TOPIC = "succession planning"
+
+
+def _classified(document) -> DocumentAnalysis:
+    analysis, _ = DocumentAnalysis.objects.get_or_create(
+        document=document,
+        defaults={
+            "classified_at": timezone.now(),
+            "proposed_topics": [{"value": PROPOSED_TOPIC, "confidence": 0.8}],
+        },
+    )
+    return analysis
+
+
+def _linked(document) -> ContentTag:
+    tag, _ = Tag.objects.get_or_create(tag_name=DOCUMENT_TAG, dimension="Project")
+    link, _ = ContentTag.objects.get_or_create(
+        tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.id,
+        defaults={"applied_by": "ai", "confirmed": False, "provisional": True},
+    )
+    return link
+
+
+def _acts_on(method, path, body=None, prepare=None):
+    def probe(client, case, monkeypatch):
+        if prepare is not None:
+            prepare(case.document)
+        url = f"/api/documents/{case.document.id}/{path(case)}"
+        response = getattr(client, method)(url, body or {}, format="json")
+        return response.status_code != 404
+
+    return probe
+
+
 ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/documents", "GET"): _lists("/api/documents"),
     ("api/documents/<uuid:pk>", "GET"): _is_found(lambda case: f"/api/documents/{case.document.id}"),
@@ -450,6 +491,26 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     # so the Employee gets 404 and the Administrator's mirror is the 204.
     ("api/meetings/<uuid:pk>", "DELETE"): _is_found(
         lambda case: f"/api/meetings/{case.meeting.id}", method="delete"
+    ),
+    # FR-10 (D-105). Classify: the document has no extracted text, so the Administrator's mirror is
+    # the 422, which no provider call precedes; the Employee's answer is the scope's 404.
+    ("api/documents/<uuid:pk>/classify", "POST"): _acts_on("post", lambda case: "classify"),
+    ("api/documents/<uuid:pk>/classification", "POST"): _acts_on(
+        "post", lambda case: "classification", prepare=_classified
+    ),
+    ("api/documents/<uuid:pk>/tags/<uuid:content_tag_id>/confirm", "POST"): _acts_on(
+        "post", lambda case: f"tags/{_linked(case.document).id}/confirm"
+    ),
+    ("api/documents/<uuid:pk>/tags/<uuid:content_tag_id>", "DELETE"): _acts_on(
+        "delete", lambda case: f"tags/{_linked(case.document).id}"
+    ),
+    ("api/documents/<uuid:pk>/proposed-topics/confirm", "POST"): _acts_on(
+        "post", lambda case: "proposed-topics/confirm", body={"value": PROPOSED_TOPIC},
+        prepare=_classified,
+    ),
+    ("api/documents/<uuid:pk>/proposed-topics/reject", "POST"): _acts_on(
+        "post", lambda case: "proposed-topics/reject", body={"value": PROPOSED_TOPIC},
+        prepare=_classified,
     ),
 }
 

@@ -23,12 +23,21 @@ from django.conf import settings
 
 from apps.ai import _openai_compat, attempt_log
 from apps.ai.base import (
+    DocumentClassification,
     EmbeddingResult,
     InputType,
     Passage,
     ProviderHealth,
     ProviderUnavailable,
     StatementList,
+    TagScheme,
+)
+from apps.ai.classification import (
+    CLASSIFICATION_SYSTEM_PROMPT,
+    CLASSIFICATION_TIMEOUT_SECONDS,
+    build_classification_user_prompt,
+    classification_input,
+    run_classification_attempts,
 )
 from apps.ai.generation import (
     GENERATION_TIMEOUT_SECONDS,
@@ -136,17 +145,26 @@ class AnthropicService:
             max_tokens=max_tokens,
         )
 
-    def _claude_once(self, user_prompt: str, *, max_tokens: int) -> ChatReply:
+    def _claude_once(
+        self,
+        user_prompt: str,
+        *,
+        max_tokens: int,
+        system: str = SYSTEM_PROMPT,
+        timeout: int = GENERATION_TIMEOUT_SECONDS,
+    ) -> ChatReply:
         """One messages.create call. Returns the reply text and what Claude reported about it.
 
         The system prompt goes in the SDK's own ``system`` parameter rather than as a
         message, which is this API's shape; the string is the one FLM receives as its
-        system message. Every failed call becomes ProviderUnavailable, as on the embed
-        path: a transport failure, a 5xx, or (since D-118) a 4xx, which is logged first
-        with its status and body. That covers a 429 under load, and the 400 Anthropic
-        sends once the monthly credit has run out. ``stop_reason`` and the usage counts are
-        read for the attempt log only (apps/ai/attempt_log.py), and None where the reply
-        leaves them out.
+        system message — generation's unless the caller passes its own, as classification
+        does with CLASSIFICATION_SYSTEM_PROMPT and CLASSIFICATION_TIMEOUT_SECONDS (FR-10).
+        Every failed call becomes ProviderUnavailable, as on the embed path: a transport
+        failure, a 5xx, or (since D-118) a 4xx, which is logged first with its status and
+        body. That covers a 429 under load, and the 400 Anthropic sends once the monthly
+        credit has run out, for generation and classification alike. ``stop_reason`` and the
+        usage counts are read for the attempt log only (apps/ai/attempt_log.py), and None
+        where the reply leaves them out.
 
         No ``temperature``, unlike FLM's call: the pinned SDK has no sampling parameters
         and current Claude models refuse them, so this path is not deterministic run to
@@ -159,9 +177,9 @@ class AnthropicService:
                 model=settings.ANTHROPIC_MODEL,
                 max_tokens=max_tokens,
                 output_config={"effort": CLAUDE_EFFORT},
-                system=SYSTEM_PROMPT,
+                system=system,
                 messages=[{"role": "user", "content": user_prompt}],
-                timeout=GENERATION_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except (anthropic_sdk.APITimeoutError, anthropic_sdk.APIConnectionError) as exc:
             raise ProviderUnavailable(f"Anthropic API unreachable: {exc}") from exc
@@ -184,6 +202,41 @@ class AnthropicService:
             finish_reason=getattr(response, "stop_reason", None),
             completion_tokens=getattr(usage, "output_tokens", None),
             prompt_tokens=getattr(usage, "input_tokens", None),
+        )
+
+    def classify_document(
+        self, title: str, text: str, scheme: TagScheme
+    ) -> DocumentClassification:
+        """FR-10 classification through Claude (D-104): the same prompt, schema and loop as FLM.
+
+        Not yet exercised against the live API, like generation: the path was dormant under
+        D-35 until D-113 funded it, and the suite tests it against mocked SDK responses.
+        ``_claude_once`` carries the classification system prompt in the SDK's own parameter
+        and the classification timeout; everything else is apps/ai/classification.py's,
+        shared with the FLM provider, which is what keeps the two symmetrical.
+
+        **The ceiling is Claude's, not FLM's.** CLASSIFICATION_MAX_TOKENS (400) is sized for
+        gemma3:4b's short reply. Claude's thinking counts against ``max_tokens`` (D-115), so
+        the same 400 would cut a reply off before its JSON; classification takes
+        CLAUDE_MAX_TOKENS, generation's Claude ceiling, for the same reason generation does.
+        """
+        body, truncated = classification_input(text)
+        user_prompt = build_classification_user_prompt(title, body, scheme)
+        # One value for the request and for the attempt log's record of it. Claude's ceiling,
+        # because thinking counts against it (see the docstring).
+        max_tokens = CLAUDE_MAX_TOKENS
+        return run_classification_attempts(
+            lambda: self._claude_once(
+                user_prompt,
+                max_tokens=max_tokens,
+                system=CLASSIFICATION_SYSTEM_PROMPT,
+                timeout=CLASSIFICATION_TIMEOUT_SECONDS,
+            ),
+            scheme=scheme,
+            label=f"Claude ({settings.ANTHROPIC_MODEL})",
+            model=settings.ANTHROPIC_MODEL,
+            input_truncated=truncated,
+            max_tokens=max_tokens,
         )
 
     def health(self) -> ProviderHealth:

@@ -70,12 +70,25 @@ SCHEMA_V1 = {
     "tags": (("tag_id",), {"tag_id", "tag_name", "dimension", "active"}),
     "content_tags": (
         ("content_tag_id",),
-        {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed"},
+        {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
+         # Migration v2, 8 November 2026 (FR-10, D-105): the model's confidence for an AI link,
+         # and whether the link is held for confirmation (docs/schema-v1.md §1).
+         "confidence", "provisional"},
+    ),
+    # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by
+    # documents 0008, when FR-10 was built. The columns are docs/schema-v1.md §1's.
+    "document_analysis": (
+        ("analysis_id",),
+        {"analysis_id", "doc_id", "machine_doc_type", "machine_doc_type_confidence",
+         "machine_department", "machine_department_confidence", "doc_type", "doc_type_outcome",
+         "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
+         "model", "input_truncated", "classified_at"},
     ),
 }
 
-# schema-v1.md section 2: deferred to NIT3004, must not exist in v1
-SECTION_2_TABLES = {"login_attempts", "document_analysis", "mfa_recovery_codes", "knowledge_gaps"}
+# schema-v1.md section 2: deferred to NIT3004, must not exist in v1. document_analysis left this
+# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105).
+SECTION_2_TABLES = {"login_attempts", "mfa_recovery_codes", "knowledge_gaps"}
 SECTION_2_USER_COLUMNS = {"mfa_enabled", "mfa_secret"}
 
 OUR_APPS = ("core", "accounts", "documents", "meetings", "retrieval")
@@ -198,6 +211,10 @@ SECTION_5_PLAN = [
     # every chunk failed"; a document refused over MAXIMUM_CHUNKS_PER_SOURCE was never
     # attempted, and the vocabulary already separated those two kinds (schema-v1.md §3).
     ("documents", "0007_document_status_too_large_to_index"),
+    # FR-10 (D-105), 8 November 2026: DocumentAnalysis, and ContentTags' confidence and
+    # provisional columns. Immediately after 0007 because that is where its dependency puts it
+    # in the plan, the rule D-51 records.
+    ("documents", "0008_fr10_document_analysis"),
     ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).

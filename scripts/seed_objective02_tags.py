@@ -46,6 +46,10 @@ SEEDED_DIMENSIONS = ("Project", "Process", "Topic")
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--dry-run", action="store_true", help="report what would be written, write nothing")
+    # D-106: the Objective 05 measurement database needs the SCHEME (the Tag rows) and no
+    # document links, so the twenty arrive untagged for FR-10 to classify. Needs no corpus.
+    parser.add_argument("--scheme-only", action="store_true",
+                        help="write the Tag rows only, no document links; the corpus need not be ingested (D-106)")
     args = parser.parse_args()
 
     sys.path.insert(0, str(REPOSITORY_ROOT))
@@ -70,7 +74,7 @@ def main() -> int:
     # Resolve every document first, so a missing corpus stops the run before any write.
     documents = {}
     problems = []
-    for item in tagged:
+    for item in ([] if args.scheme_only else tagged):
         matches = list(Document.objects.filter(title=item["title"]))
         if len(matches) != 1:
             problems.append(f"{item['id']} {item['title']!r}: {len(matches)} documents")
@@ -83,7 +87,7 @@ def main() -> int:
     created_tags = created_links = existing_links = 0
     with transaction.atomic():
         for item in tagged:
-            document = documents[item["id"]]
+            document = documents.get(item["id"])
             for dimension, values in item["tags"].items():
                 if dimension not in SEEDED_DIMENSIONS:
                     raise ValueError(f"{item['id']}: {dimension!r} is not seeded (D-72, D-74)")
@@ -92,6 +96,8 @@ def main() -> int:
                         tag_name=normalise_tag_name(value), dimension=dimension
                     )
                     created_tags += tag_created
+                    if args.scheme_only:
+                        continue
                     _, link_created = ContentTag.objects.get_or_create(
                         tag=tag,
                         source_type=document_source_type,

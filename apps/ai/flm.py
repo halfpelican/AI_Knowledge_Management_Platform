@@ -12,12 +12,21 @@ from django.conf import settings
 
 from apps.ai import _openai_compat, attempt_log
 from apps.ai.base import (
+    DocumentClassification,
     EmbeddingResult,
     InputType,
     Passage,
     ProviderHealth,
     ProviderUnavailable,
     StatementList,
+    TagScheme,
+)
+from apps.ai.classification import (
+    CLASSIFICATION_MAX_TOKENS,
+    CLASSIFICATION_TIMEOUT_SECONDS,
+    build_classification_messages,
+    classification_input,
+    run_classification_attempts,
 )
 from apps.ai.generation import (
     GENERATION_MAX_TOKENS,
@@ -83,14 +92,20 @@ class FLMService:
             max_tokens=max_tokens,
         )
 
-    def _chat_once(self, messages: list[dict], *, max_tokens: int) -> ChatReply:
+    def _chat_once(
+        self, messages: list[dict], *, max_tokens: int, timeout: int = GENERATION_TIMEOUT_SECONDS
+    ) -> ChatReply:
         """One chat completion. Returns the reply text and what FLM reported about it.
+
+        ``timeout`` is generation's unless the caller passes its own: classification passes
+        CLASSIFICATION_TIMEOUT_SECONDS (FR-10). Every FLM call carries one.
 
         Raises ProviderUnavailable for any failed call, as ``_openai_compat.embed`` does:
         a transport failure, a 5xx, or (since D-118) a 4xx, which is logged first with its
         status and body. A 4xx surfaced as itself would reach the user as a 500, not the
         NFR-19 503. A misconfiguration such as a mistyped model name is now retried and
-        answered with the 503 like an outage, and its cause shows in the log.
+        answered with the 503 like an outage, and its cause shows in the log. Classification
+        calls come through here too, so the same holds for them.
 
         ``finish_reason`` and the usage counts are read for the attempt log only
         (apps/ai/attempt_log.py), and None where FLM leaves them out. FLM v0.9.39 was seen
@@ -104,7 +119,7 @@ class FLMService:
                 temperature=0.0,  # the same reply for the same passages, run to run
                 max_tokens=max_tokens,
                 stream=False,
-                timeout=GENERATION_TIMEOUT_SECONDS,
+                timeout=timeout,
             )
         except (openai.APITimeoutError, openai.APIConnectionError) as exc:
             raise ProviderUnavailable(f"{settings.FLM_BASE_URL} unreachable: {exc}") from exc
@@ -133,6 +148,32 @@ class FLMService:
             finish_reason=getattr(choices[0], "finish_reason", None),
             completion_tokens=completion_tokens,
             prompt_tokens=prompt_tokens,
+        )
+
+    def classify_document(
+        self, title: str, text: str, scheme: TagScheme
+    ) -> DocumentClassification:
+        """FR-10 classification through FLM (D-104): one structured call, the shared loop.
+
+        The prompt, the schema, the input cut and the retry policy are all in
+        apps/ai/classification.py, shared with the Anthropic provider so the two cannot
+        drift; this method supplies the one call (``_chat_once``, with its error mapping)
+        and names the model that answered. Whether the suggestions are applied is decided
+        in apps/documents (D-105), not here.
+        """
+        body, truncated = classification_input(text)
+        messages = build_classification_messages(title, body, scheme)
+        # One value for the request and for the attempt log's record of it.
+        max_tokens = CLASSIFICATION_MAX_TOKENS
+        return run_classification_attempts(
+            lambda: self._chat_once(
+                messages, max_tokens=max_tokens, timeout=CLASSIFICATION_TIMEOUT_SECONDS
+            ),
+            scheme=scheme,
+            label=f"FLM at {settings.FLM_BASE_URL}",
+            model=settings.FLM_CHAT_MODEL,
+            input_truncated=truncated,
+            max_tokens=max_tokens,
         )
 
     def health(self) -> ProviderHealth:
