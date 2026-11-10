@@ -374,12 +374,16 @@ Rules, all of them mandatory:
 3. "doc_type" is an object with exactly two keys: "value", one of the document types
    listed, copied exactly; and "confidence", a number from 0 to 1. Choose the type by the
    document's purpose:
-   - Policy: states the organisation's rules or entitlements, what is allowed or required.
-   - Procedure: sets out the steps to follow to get something done.
-   - Report: presents information, figures or results, about a period, a register, an
-     inventory or an audit.
-   - Meeting Paper: is written for a committee, board or meeting, to put a proposal, a
-     decision or a briefing before it. It usually names the meeting or the decision sought.
+   - Policy: states the organisation's rules or entitlements: what is allowed, required or
+     forbidden.
+   - Procedure: tells the reader how to do something: steps, instructions or a guide to
+     follow, even where it mentions rules along the way.
+   - Report: presents information rather than rules or steps: results, figures or news,
+     data laid out as a register, inventory, schedule, roster, tracker or table, or an
+     announcement.
+   - Meeting Paper: is addressed to a committee, board or meeting, putting a proposal, a
+     decision or a briefing before it. A document is not a Meeting Paper because its title
+     or subject mentions a meeting, a room, a session or an event.
 4. "department" is an object with the same two keys. Its "value" is one of the
    departments listed, copied exactly. Only if no department is listed, give the
    department the document itself names, or "Unknown" if it names none.

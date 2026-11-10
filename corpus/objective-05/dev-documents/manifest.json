@@ -4,17 +4,121 @@
   "written": "8 November 2026, eleven one-page documents written for the purpose in the corpus's house style, plus corpus/demo's D21. Three per type.",
   "scheme": "The run classifies each document against the corpus scheme: DOCUMENT_TYPES, the six departments and the fourteen tag values of corpus/objective-02/manifest.json, as the twenty will see it on kmp_obj0506_20261101.",
   "documents": [
-    {"id": "X01", "file": "X01_gifts_and_hospitality_policy.txt", "title": "Gifts and Hospitality Policy", "doc_type": "Policy"},
-    {"id": "X02", "file": "X02_social_media_policy.txt", "title": "Social Media Policy", "doc_type": "Policy"},
-    {"id": "X03", "file": "X03_workplace_visitors_policy.txt", "title": "Workplace Visitors Policy", "doc_type": "Policy"},
-    {"id": "X04", "file": "X04_access_card_replacement_procedure.txt", "title": "Access Card Replacement Procedure", "doc_type": "Procedure"},
-    {"id": "X05", "file": "X05_month_end_close_procedure.txt", "title": "Month-End Close Procedure", "doc_type": "Procedure"},
-    {"id": "D21", "file": "../../demo/D21_bicycle_end_of_trip_facilities.docx", "title": "Bicycle Parking and End-of-Trip Facilities Guide", "doc_type": "Procedure", "note": "corpus/demo's document, a how-to guide: access request, locker rules, abandoned bicycles"},
-    {"id": "X06", "file": "X06_customer_satisfaction_report_q3.txt", "title": "Customer Satisfaction Report, Third Quarter 2026", "doc_type": "Report"},
-    {"id": "X07", "file": "X07_energy_usage_report_2026.txt", "title": "Energy Usage Report, Financial Year 2026", "doc_type": "Report"},
-    {"id": "X08", "file": "X08_recruitment_activity_report_q3.txt", "title": "Recruitment Activity Report, Third Quarter 2026", "doc_type": "Report"},
-    {"id": "X09", "file": "X09_steering_committee_paper_telephone_system.txt", "title": "Replacement of the Office Telephone System", "doc_type": "Meeting Paper"},
-    {"id": "X10", "file": "X10_audit_committee_paper_internal_audit_plan.txt", "title": "Internal Audit Plan for 2027", "doc_type": "Meeting Paper"},
-    {"id": "X11", "file": "X11_finance_committee_paper_payroll_provider.txt", "title": "Options for a New Payroll Provider", "doc_type": "Meeting Paper"}
-  ]
+    {
+      "id": "X01",
+      "file": "X01_gifts_and_hospitality_policy.txt",
+      "title": "Gifts and Hospitality Policy",
+      "doc_type": "Policy"
+    },
+    {
+      "id": "X02",
+      "file": "X02_social_media_policy.txt",
+      "title": "Social Media Policy",
+      "doc_type": "Policy"
+    },
+    {
+      "id": "X03",
+      "file": "X03_workplace_visitors_policy.txt",
+      "title": "Workplace Visitors Policy",
+      "doc_type": "Policy"
+    },
+    {
+      "id": "X04",
+      "file": "X04_access_card_replacement_procedure.txt",
+      "title": "Access Card Replacement Procedure",
+      "doc_type": "Procedure"
+    },
+    {
+      "id": "X05",
+      "file": "X05_month_end_close_procedure.txt",
+      "title": "Month-End Close Procedure",
+      "doc_type": "Procedure"
+    },
+    {
+      "id": "D21",
+      "file": "../../demo/D21_bicycle_end_of_trip_facilities.docx",
+      "title": "Bicycle Parking and End-of-Trip Facilities Guide",
+      "doc_type": "Procedure",
+      "note": "corpus/demo's document, a how-to guide: access request, locker rules, abandoned bicycles"
+    },
+    {
+      "id": "X06",
+      "file": "X06_customer_satisfaction_report_q3.txt",
+      "title": "Customer Satisfaction Report, Third Quarter 2026",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X07",
+      "file": "X07_energy_usage_report_2026.txt",
+      "title": "Energy Usage Report, Financial Year 2026",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X08",
+      "file": "X08_recruitment_activity_report_q3.txt",
+      "title": "Recruitment Activity Report, Third Quarter 2026",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X09",
+      "file": "X09_steering_committee_paper_telephone_system.txt",
+      "title": "Replacement of the Office Telephone System",
+      "doc_type": "Meeting Paper"
+    },
+    {
+      "id": "X10",
+      "file": "X10_audit_committee_paper_internal_audit_plan.txt",
+      "title": "Internal Audit Plan for 2027",
+      "doc_type": "Meeting Paper"
+    },
+    {
+      "id": "X11",
+      "file": "X11_finance_committee_paper_payroll_provider.txt",
+      "title": "Options for a New Payroll Provider",
+      "doc_type": "Meeting Paper"
+    },
+    {
+      "id": "X12",
+      "file": "X12_software_licence_register_2026.xlsx",
+      "title": "Software Licence Register 2026",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X13",
+      "file": "X13_marketing_campaign_spend_tracker_fy27.xlsx",
+      "title": "Marketing Campaign Spend Tracker FY27",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X14",
+      "file": "X14_volunteer_day_roster_2026.xlsx",
+      "title": "Volunteer Day Roster 2026",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X15",
+      "file": "X15_quarterly_customer_webinar_schedule.xlsx",
+      "title": "Quarterly Customer Webinar Schedule",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X16",
+      "file": "X16_meeting_free_friday_guidelines.txt",
+      "title": "Meeting-Free Friday Guidelines",
+      "doc_type": "Policy"
+    },
+    {
+      "id": "X17",
+      "file": "X17_car_park_resurfacing_announcement.txt",
+      "title": "Car Park Resurfacing Announcement",
+      "doc_type": "Report"
+    },
+    {
+      "id": "X18",
+      "file": "X18_guide_to_booking_an_interpreter.docx",
+      "title": "Guide to Booking an Interpreter",
+      "doc_type": "Procedure"
+    }
+  ],
+  "added_10_november": "Seven documents added on 10 November 2026, after the frozen reference set's first run, by the user's decision: one disclosed revision informed by that run's misses (D-106's note). They have the three shapes the first twelve lacked: spreadsheet registers, trackers, rosters and schedules (Report); a rules document whose title mentions meetings (Policy); an announcement (Report); and a guide made of steps (Procedure). None is one of the twenty and none shares a subject with them. From then on the sweep reads every document through the ingestion extractor (apps/ingestion/extraction.py), as the twenty are read."
 }

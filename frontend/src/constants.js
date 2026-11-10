@@ -532,6 +532,11 @@ export const TEXT = {
   // A provisional value, named beside the "not yet assigned" effective value, so
   // the reader sees what confirming would apply.
   classificationSuggestion: (value) => `The AI suggested ${value}`,
+  // A held department suggestion beside a different department already on the
+  // document, which since 10 November stays until a person accepts the suggestion
+  // (D-105's note). The empty-body confirm writes the suggestion over it, and this
+  // says so, so "Confirm" is not read as confirming the department on screen.
+  classificationConfirmReplaces: (current, suggested) => `Confirming replaces ${current} with ${suggested}.`,
   // A department outside the known departments is discarded, never written
   // (FR-10's controlled taxonomy growth). The department shown is the document's
   // own, and this sentence says what happened to the suggestion.
