@@ -14,11 +14,10 @@ from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404, JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.decorators import method_decorator
 from django.utils.text import Truncator
-from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -183,6 +182,10 @@ UNSUPPORTED_FORMAT_MESSAGE = (
 NO_FILE_SUBMITTED_MESSAGE = "No file was submitted."
 # FR-08 Responses: "413 Payload Too Large beyond the size limit".
 FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
+# FR-09's transcript body, pasted or a file, held to the same ceiling as an upload and refused
+# the same way, by its declared length before it is parsed (D-124). FR-09 enumerates only 201 and
+# 400; the 413 is a *convention*, because a body refused unread has no field to put an error on.
+TRANSCRIPT_TOO_LARGE_MESSAGE = "Transcript exceeds the maximum permitted size of 50 MB."
 # Stage 4 item 12b: a DOCX or XLSX whose own table of contents declares more decompressed
 # content than the detector will let a parser inflate (signatures.MEMBER_MAXIMUM_BYTES).
 #
@@ -340,6 +343,30 @@ def ingestion_in_flight():
     )
 
 
+def declares_a_body_over_the_upload_ceiling(request) -> bool:
+    """Whether the request declares a body longer than ``MAX_UPLOAD_BYTES`` (D-124).
+
+    Read from ``CONTENT_LENGTH`` alone, so it is answered without reading the body. An upload
+    route asks it before anything touches ``request.data``. Since D-124 nothing reads the body
+    before the view either, because the CSRF check takes its token from the header
+    (``apps/api/authentication.py``), so a body refused here is never parsed.
+
+    **Why the declared length can be trusted.** Under WSGI, Django reads no more of the body than
+    ``CONTENT_LENGTH`` declares, and with no length, or a malformed one, it reads none. Waitress
+    reads exactly the declared number of bytes, and it reassembles a chunked body and declares its
+    length before the request reaches Django.
+
+    **What it does not bound: receiving.** Waitress has read the whole body by the time Django
+    sees the request. Waitress's own ``--max-request-body-size`` bounds that
+    (``MAX_REQUEST_BODY_BYTES``, D-124).
+    """
+    try:
+        declared_length = int(request.META.get("CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        declared_length = 0
+    return declared_length > MAX_UPLOAD_BYTES
+
+
 # --- FR-01 registration --------------------------------------------------------------
 
 
@@ -424,8 +451,28 @@ def _record_failed_attempt(email: str) -> None:
         user.save(update_fields=["failed_attempts", "locked_until"])
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class LoginView(APIView):
+class SendsCsrfCookieMixin:
+    """Send the ``csrftoken`` cookie with every response from the view, as Django's
+    ``ensure_csrf_cookie`` did, without running Django's CSRF check first (D-124).
+
+    The SPA reads its token from that cookie (D-21). ``ensure_csrf_cookie`` used to set it on
+    login and ``/api/auth/me``. Before the view, it runs a full CSRF check on the raw request, and
+    for an unsafe method that check reads ``request.POST``. Django parses a multipart body to
+    answer that, spooling its files. This happened before DRF's throttle, signed in or not, for
+    anyone holding a well-formed ``csrftoken`` cookie, and a client can make one up. The check
+    never refused anything there, and the cookie came from its one other effect, ``get_token()``.
+    So this keeps only ``get_token()``, in ``finalize_response``, which DRF runs for every
+    response the view returns, its 401s and 429s included. ``get_token()`` marks the cookie for
+    ``CsrfViewMiddleware`` to send. A session's unsafe request to these views is still checked by
+    DRF (``apps/api/authentication.py``).
+    """
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        get_token(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
+class LoginView(SendsCsrfCookieMixin, APIView):
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
@@ -508,8 +555,7 @@ class LogoutView(APIView):
 # --- Current user ----------------------------------------------------------------------
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class MeView(APIView):
+class MeView(SendsCsrfCookieMixin, APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
@@ -626,8 +672,12 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
     check comes first: "it is the cheapest rejection, and the user's role may have
     changed during a transfer of up to 50 MB". ``CanContributeContent`` is returned
     by ``get_permissions()`` for POST, so DRF runs it in ``initial()`` before this
-    method is entered and before the body is parsed at all (D-30). Processing is
-    synchronous, as FR-08 states, with the interface displaying progress.
+    method is entered (D-30). Since D-124 nothing reads the body before it either, because
+    the CSRF check takes its token from the header (``apps/api/authentication.py``). Before
+    D-124 that was not so. A signed-in session's whole body was parsed while DRF checked CSRF,
+    before this 403, the 429 and the 413 below, and this docstring said otherwise from Stage 3
+    until 11 November 2026. Processing is synchronous, as FR-08 states, with the interface
+    displaying progress.
 
     **POST is throttled per user in the "ingestion" scope** (D-79), one budget with meeting
     ingest and reprocess. DRF checks it in ``initial()`` after the permission and before this
@@ -674,18 +724,19 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
         return Response(DocumentSerializer(documents, many=True).data)
 
     def post(self, request):
-        # Enforced against the declared length BEFORE request.data is touched, so
-        # an oversized body is refused without being parsed or buffered: FR-08 wants
-        # the ceiling applied "before the file is written to storage", and reading
-        # 50 MB into memory to discover it is 50 MB is the thing to avoid. A client
-        # that lies about or omits Content-Length is caught by the second check
-        # below, against the size Django actually received.
-        declared_length = request.META.get("CONTENT_LENGTH") or 0
-        try:
-            declared_length = int(declared_length)
-        except (TypeError, ValueError):
-            declared_length = 0
-        if declared_length > MAX_UPLOAD_BYTES:
+        # Enforced against the declared length BEFORE request.data is touched. Since D-124
+        # nothing upstream reads the body either, so an oversized body is refused without
+        # being parsed: FR-08 wants the ceiling applied "before the file is written to
+        # storage". Before D-124 this comment claimed the same, and it was untrue for every
+        # signed-in browser session: the CSRF check had already parsed the body, spooling a
+        # multipart upload to temporary files, before this line ran.
+        #
+        # It is not refused without being RECEIVED. Waitress reads the whole body before
+        # Django sees the request, and only its --max-request-body-size bounds that
+        # (MAX_REQUEST_BODY_BYTES, D-124). The second check below, against the bytes
+        # received, is defence in depth: Django reads no more than the declared length, so a
+        # body cannot carry a larger file than it declares.
+        if declares_a_body_over_the_upload_ceiling(request):
             return Response(
                 {"detail": FILE_TOO_LARGE_MESSAGE},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -1121,6 +1172,21 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
     throttled per user in the same "ingestion" scope as the upload and reprocess (D-79). GET is
     not throttled.
 
+    **A body over the upload ceiling is 413, refused unread** (D-124). It is checked against its
+    declared length after the 401, the 403 and the 429, and before anything touches
+    ``request.data``, as the document upload checks.
+
+    - **A transcript file** had no ceiling before D-124 but Waitress's default of 1 GB.
+    - **A pasted transcript** was and is held to Django's ``DATA_UPLOAD_MAX_MEMORY_SIZE``
+      (2.5 MiB). DRF parses JSON from ``request.body``, so a larger JSON body is
+      ``400 {"detail": "Bad request."}``, refused unread. The 413 replaces that only above 50 MB.
+    - **Before D-124 either form was parsed while DRF checked CSRF,** before the 403 and the 429.
+
+    FR-09 enumerates only 201 and 400, so the 413 is a *convention*: a body refused unread has no
+    field to report on. The meeting form screens a transcript file's size before sending it
+    (``screenFile``). So the page reaches the 413 only with a pasted transcript over 50 MB, and
+    Django's 400 with one between 2.5 MiB and 50 MB.
+
     **One ingestion in flight per user** (D-85), the upload's slot. It is taken after every 400
     and 403, and an uploaded transcript file is extracted before that, because the minimum-length
     400 needs its text. So the slot bounds chunking and embedding here, and a file's extraction
@@ -1146,6 +1212,13 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
         return Response(MeetingListSerializer(meetings, many=True).data)
 
     def post(self, request):
+        # D-124: refused by its declared length, before request.data parses it.
+        if declares_a_body_over_the_upload_ceiling(request):
+            return Response(
+                {"detail": TRANSCRIPT_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
         serializer = MeetingIngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)  # 400: FR-09's own code
         data = serializer.validated_data
@@ -1211,10 +1284,11 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
             file_format = read_file_signature(uploaded_file)
         except OversizedArchiveContentError:
             # The same bound as FR-08's upload (Stage 4 item 12b), reported in this
-            # endpoint's own shape: FR-09 enumerates only 201 and 400, so the transcript
-            # path cannot answer 413, and a field error carrying the accurate message is
-            # closer to the truth than FR-08's code on a response FR-09 does not define.
-            # The two rejections stay distinguishable by their text.
+            # endpoint's own shape: FR-09 enumerates only 201 and 400, and a field error
+            # carrying the accurate message is closer to the truth than FR-08's code on a
+            # response FR-09 does not define. The two rejections stay distinguishable by their
+            # text. The route's one 413 is D-124's, for a body refused before it is read,
+            # when there is no field yet to put an error on.
             return None, {"file": [COMPRESSED_CONTENT_TOO_LARGE_MESSAGE]}
         if file_format is None:
             # The same four formats as FR-08, decided the same way: by content. A
@@ -1323,6 +1397,11 @@ class DocumentReprocessView(APIView):
     any chunk is deleted. The cause and the document go to the error log, not to the client.
     **Not covered:** a file removed between this check and that open still raises inside the
     transaction, which rolls back and answers 500.
+
+    **It takes no body, and nothing reads one** (D-124). Before D-124, DRF's CSRF check read and
+    parsed a JSON body sent here, up to Django's 2.5 MiB ``DATA_UPLOAD_MAX_MEMORY_SIZE``, before the
+    403 and the 429. Now none is read at all, so the route needs no ceiling of its own. Waitress
+    bounds what it receives (``MAX_REQUEST_BODY_BYTES``).
     """
 
     permission_classes = [IsAuthenticated, CanContributeContent]

@@ -261,8 +261,17 @@ MEDIA_ROOT = Path(env.str("MEDIA_ROOT", default=str(BASE_DIR / "media")))
 MEDIA_URL = "/media/"
 # Django buffers an upload in memory below this and spools it to a temporary file
 # above it. Held well under MAX_UPLOAD_BYTES so a 50 MB upload is never held in
-# memory: the size ceiling is checked against the declared length before the body is
-# parsed at all (FR-08: "enforced before the file is written to storage").
+# memory. A body over the ceiling never gets this far: the upload routes refuse it by its
+# declared length before it is parsed (FR-08: "enforced before the file is written to
+# storage"), and nothing upstream parses it (D-124).
+#
+# **Corrected 11 November 2026 (D-124).** From Stage 3 until then, this comment said the
+# declared-length check ran "before the body is parsed at all". For any signed-in session
+# holding the CSRF cookie it did not: DRF's CSRF check read request.POST, which parsed the whole
+# body, multipart spooled past this threshold, before the 403, the 429 and the 413. Only
+# Waitress's default 1 GB body limit bounded it. Now the CSRF check reads the header only
+# (apps/api/authentication.py), and waitress-serve's --max-request-body-size
+# (MAX_REQUEST_BODY_BYTES) bounds what is received on every route.
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024  # 2 MB
 # Nothing serves MEDIA_ROOT. No URL pattern maps MEDIA_URL, WhiteNoise's root is the SPA build
 # below and not this folder, and a stored original leaves only through FR-15's scoped download.
