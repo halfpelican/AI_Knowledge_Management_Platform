@@ -28,6 +28,10 @@ copies a value of ``apps/core/constants.py``:
   ``NAME_MAX_LENGTH``, which is a column width in ``apps/core/models.py`` and not a value of
   ``apps/core/constants.py``, so it is read from there.
 - ``MAX_UPLOAD_LABEL``: the ceiling in whole megabytes, as the server's value states it.
+- ``MAXIMUM_RECORDING_BYTES``, ``MAXIMUM_RECORDING_LABEL`` and ``TRANSCRIPTION_SAMPLE_RATE``
+  (since 10 November 2026, D-123): the largest recording the page decodes, which only the
+  client enforces because the recording never reaches the server, its label in whole megabytes,
+  and the rate the page resamples to before cutting.
 - ``ACCEPTED_EXTENSIONS`` and ``ACCEPTED_FORMATS_LABEL``: D-15's four, no more, no fewer.
 - ``DOCUMENT_STATUS``, ``ROLES`` and ``SOURCE_TYPE``: the server's whole vocabulary, each
   value once. Equality and not inclusion, for ``DOCUMENT_STATUS`` especially: D-51 is the
@@ -69,6 +73,8 @@ BOUNDS = [
     ("QUESTION_MINIMUM_LENGTH", "MINIMUM_QUESTION_LENGTH"),
     ("QUESTION_MAXIMUM_LENGTH", "MAXIMUM_QUESTION_LENGTH"),
     ("MAX_UPLOAD_BYTES", "MAX_UPLOAD_BYTES"),
+    ("MAXIMUM_RECORDING_BYTES", "MAXIMUM_RECORDING_BYTES"),
+    ("TRANSCRIPTION_SAMPLE_RATE", "TRANSCRIPTION_SAMPLE_RATE"),
 ]
 
 # (the client's export, the column width in apps/core/models.py it copies). The new Topic
@@ -168,6 +174,15 @@ def test_the_clients_upload_ceiling_label_states_the_servers_ceiling(client_sour
     assert label == f"{constants.MAX_UPLOAD_BYTES // MEGABYTE} MB", (
         f"constants.js tells the user the ceiling is {label!r}; the server's is "
         f"{constants.MAX_UPLOAD_BYTES} bytes."
+    )
+
+
+def test_the_clients_recording_ceiling_label_states_the_servers_ceiling(client_source):
+    assert constants.MAXIMUM_RECORDING_BYTES % MEGABYTE == 0, "the recording ceiling is no longer whole MB"
+    label = _javascript_string(_exported(client_source, "MAXIMUM_RECORDING_LABEL"))
+    assert label == f"{constants.MAXIMUM_RECORDING_BYTES // MEGABYTE} MB", (
+        f"constants.js tells the user the recording ceiling is {label!r}; the server's constant is "
+        f"{constants.MAXIMUM_RECORDING_BYTES} bytes."
     )
 
 

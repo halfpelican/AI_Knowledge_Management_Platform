@@ -34,6 +34,7 @@ from apps.ai.base import (
     StatementList,
     TagScheme,
     TagSuggestion,
+    Transcription,
 )
 from apps.ai.classification import classification_input
 from apps.core.constants import REPOSITORY_TAG_DIMENSIONS
@@ -53,6 +54,15 @@ STUB_EMBEDDING_MODEL = "stub-embed"
 STUB_CHAT_MODEL = "stub-chat"
 STUB_CONFIDENCE = 1.0
 STUB_OUT_OF_SCHEME_DEPARTMENT = "stub department"
+# What the stub's transcribe reports (D-123): a model name no provider has, and a fixed
+# text per segment, numbered by call so a test that sends several segments can see each one's
+# text land in order.
+STUB_ASR_MODEL = "stub-asr"
+
+
+def stub_transcript_text(number: int) -> str:
+    """The stub's text for the ``number``-th segment it transcribes, counting from 1."""
+    return f"Stub transcript of segment {number}."
 
 # Port 9 (discard) is closed on every development machine and CI runner, so a
 # connect is actively refused rather than left to time out: about 2 s per attempt
@@ -64,7 +74,7 @@ UNROUTABLE_PROVIDER_URL = f"{UNROUTABLE_PROVIDER_HOST}/v1"
 
 class StubAIService:
     """Deterministic AIService: fixed vectors, fixed statements, a scheme-derived
-    classification, no network, a call log."""
+    classification, a numbered transcript per segment, no network, a call log."""
 
     def __init__(
         self,
@@ -72,6 +82,8 @@ class StubAIService:
         available: bool = True,
         detail: str = "stub provider",
         classification=None,
+        transcription=None,
+        transcription_available: bool = True,
     ):
         self.dimension = settings.EMBEDDING_DIMENSION if dimension is None else dimension
         self.available = available
@@ -79,12 +91,18 @@ class StubAIService:
         # What classify_document returns instead of the scheme-derived default: a
         # DocumentClassification, or a callable of (title, text, scheme). See the method.
         self.classification = classification
+        # What transcribe returns instead of the numbered default: a Transcription, or a
+        # callable of (audio, filename). See the method. And what transcription_health reports.
+        self.transcription = transcription
+        self.transcription_available = transcription_available
         self.embed_calls: list[list[str]] = []
         # The input_type each embed() call carried (D-116), one entry per call, in step
         # with embed_calls.
         self.embed_input_types: list[InputType | None] = []
         self.generate_calls: list[tuple[str, list[Passage]]] = []
         self.classify_calls: list[tuple[str, str, TagScheme]] = []
+        # One (audio bytes, filename) per transcribe() call (D-123).
+        self.transcribe_calls: list[tuple[bytes, str]] = []
 
     def vector_for(self, text: str) -> list[float]:
         # Seeded from a content hash so the same text embeds to the same vector in
@@ -158,6 +176,34 @@ class StubAIService:
             ),
             model=STUB_CHAT_MODEL,
             input_truncated=classification_input(text)[1],
+        )
+
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:
+        """D-123's operation, deterministic: the n-th call returns ``stub_transcript_text(n)``.
+
+        It does not read TRANSCRIPTION_PROVIDER: the route asks ``apps.ai.transcription_enabled()``
+        before it calls this, and the providers' own refusal is tested against them
+        (apps/ai/tests/test_transcription.py).
+
+        **Overriding it.** Pass ``transcription=`` to the constructor, or set the attribute on an
+        instance (the autouse ``stub_ai_service`` fixture's, for example). A Transcription is
+        returned as-is for every call. A callable is called with ``(audio, filename)`` and its
+        return value returned, so a test can raise ProviderUnavailable or ProviderRefused to stand
+        in for an outage or a refusal. Either way the call is recorded in ``transcribe_calls``
+        first.
+        """
+        self.transcribe_calls.append((audio, filename))
+        override = self.transcription
+        if callable(override):
+            return override(audio, filename)
+        if override is not None:
+            return override
+        return Transcription(text=stub_transcript_text(len(self.transcribe_calls)), model=STUB_ASR_MODEL)
+
+    def transcription_health(self) -> ProviderHealth:
+        return ProviderHealth(
+            available=self.transcription_available,
+            detail="stub transcription" if self.transcription_available else "stub transcription down",
         )
 
 

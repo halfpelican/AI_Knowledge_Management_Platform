@@ -1,4 +1,10 @@
-import { ACCEPTED_EXTENSIONS, MAX_UPLOAD_BYTES, VALIDATION } from '../constants.js'
+import {
+  ACCEPTED_EXTENSIONS,
+  MAX_UPLOAD_BYTES,
+  MAXIMUM_RECORDING_BYTES,
+  RECORDING_ACCEPT,
+  VALIDATION,
+} from '../constants.js'
 
 /**
  * The checks the upload control makes before a byte is transferred (FR-08).
@@ -48,4 +54,25 @@ export function screenFile(file) {
   if (!ACCEPTED_EXTENSIONS.includes(extensionOf(file.name))) return VALIDATION.fileTypeUnsupported
   if (file.size > MAX_UPLOAD_BYTES) return VALIDATION.fileTooLarge
   return null
+}
+
+/** The filename suffixes the recording picker offers, read from the one `accept` list. */
+const RECORDING_EXTENSIONS = RECORDING_ACCEPT.split(',').filter((entry) => entry.startsWith('.'))
+
+/**
+ * The checks made before a meeting recording is read (D-123): its size,
+ * which bounds the page's memory since the recording is decoded in it, and that it
+ * claims to be audio or video. Conveniences, like `screenFile`'s: a file that
+ * passes can still be one the browser cannot decode, which is said when it is read,
+ * and the server judges every segment by its own bytes.
+ *
+ * @param {File} file
+ * @returns {string | null} The message to show, or null.
+ */
+export function screenRecording(file) {
+  if (file.size > MAXIMUM_RECORDING_BYTES) return VALIDATION.recordingTooLarge
+  const type = file.type ?? ''
+  if (type.startsWith('audio/') || type.startsWith('video/')) return null
+  if (RECORDING_EXTENSIONS.includes(extensionOf(file.name))) return null
+  return VALIDATION.recordingTypeUnsupported
 }

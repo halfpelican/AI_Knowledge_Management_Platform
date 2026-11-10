@@ -16,9 +16,9 @@ values the views send, as ``apps/accounts/tests/test_password_policy_agreement.p
 password policy. It reads each ``export const`` line as text and runs no JavaScript, so it
 passes on a machine with nothing but Python.
 
-Beyond the two the client branches on today, every ``*_CODE`` the client exports must name a
-constant of ``apps/api/views.py`` with the same value, so a third copy is held to the same rule
-from the day it is added.
+Beyond the copies listed in ``CLIENT_COPIES``, every ``*_CODE`` the client exports must name a
+constant of ``apps/api/views.py`` with the same value, so a new copy is held to the same rule from
+the day it is added.
 """
 
 from __future__ import annotations
@@ -38,6 +38,12 @@ FRONTEND_SOURCE = Path(settings.BASE_DIR) / "frontend" / "src"
 CLIENT_COPIES = [
     ("ASK_IN_FLIGHT_CODE", FRONTEND_SOURCE / "api" / "ask.js"),
     ("INGESTION_IN_FLIGHT_CODE", FRONTEND_SOURCE / "api" / "ingestion.js"),
+    # D-123: the recording screen tells the in-flight 429 from the rate's, and the
+    # disabled 503 from the unavailable one, by these.
+    ("TRANSCRIPTION_IN_FLIGHT_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
+    ("TRANSCRIPTION_DISABLED_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
+    ("TRANSCRIPTION_UNAVAILABLE_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
+    ("TRANSCRIPTION_BUSY_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
 ]
 
 # `export const NAME_CODE = '...'`, a single-quoted string on one line, as both files write it.

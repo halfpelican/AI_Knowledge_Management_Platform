@@ -63,6 +63,12 @@ urlpatterns = [
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
     # D-99 adds can_delete to its GET, and the DELETE method, mirroring documents/<uuid:pk>.
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
+    # D-123: a meeting recording becomes a draft transcript, one WAV segment per POST, and
+    # nothing is stored. The confirmed draft goes in through "meetings" above. The status first,
+    # for the reading habit's sake; "status" is not a segment of the POST's path either way.
+    path("transcriptions/status", views.TranscriptionStatusView.as_view(),
+         name="transcription-status"),
+    path("transcriptions", views.TranscriptionsView.as_view(), name="transcription-list"),
     # Stage 4: FR-12 keyword search, the Front-End clause's grouped results (D-41).
     path("search", views.SearchView.as_view(), name="search"),
     # Stage 4: FR-12's question-and-answer path, which is also FR-13's turn when the body

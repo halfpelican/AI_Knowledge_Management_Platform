@@ -4,8 +4,10 @@ The operations are exactly the ones listed on ``AIService`` below, and the list 
 source of truth, not a count. Every AI call in the system goes through an AIService
 obtained from apps.ai.get_ai_service(); no module outside apps/ai imports a vendor SDK
 (CLAUDE.md section 4). ``classify_document`` arrived with FR-10 on 9 November 2026
-(docs/decisions.md D-104), when NIT3004 asked for it and not before. Summarisation (FR-16)
-gets its own method the same way, then, not speculatively now.
+(docs/decisions.md D-104), when NIT3004 asked for it and not before. ``transcribe`` and
+``transcription_health`` arrived on 10 November 2026 with recording transcription
+(D-123), when the user asked for it. Summarisation (FR-16) gets its own method the same
+way, then, not speculatively now.
 """
 
 from dataclasses import dataclass
@@ -113,6 +115,22 @@ class DocumentClassification:
     input_truncated: bool
 
 
+# --- Recording transcription (D-123) ---------------------------------------------
+
+
+@dataclass(frozen=True)
+class Transcription:
+    """What ``transcribe`` returns for one recording segment: its text and the model that wrote it.
+
+    ``text`` is the speech model's text as returned, with surrounding whitespace removed, and may
+    be empty for a segment it found nothing to say about. It is a draft: nothing here is indexed,
+    and a person corrects and confirms the whole transcript before FR-09 ingests it.
+    """
+
+    text: str
+    model: str
+
+
 class ProviderUnavailable(Exception):
     """The provider could not be reached or did not respond usably.
 
@@ -133,6 +151,16 @@ class ProviderRefused(ProviderUnavailable):
     leaves the document unclassified. The provider logs the cause before raising it
     (apps/ai/attempt_log.py). A 429 is not this: a rate limit passes, so it is a plain
     ProviderUnavailable and is retried.
+    """
+
+
+class TranscriptionDisabled(ProviderUnavailable):
+    """Recording transcription is switched off on this server: ``TRANSCRIPTION_PROVIDER=none``.
+
+    Raised by ``transcribe`` before any call is made (D-123). It is a ProviderUnavailable,
+    so a caller that only knows about outages still answers 503; the transcription route catches
+    it first, to tell the page that transcription is not enabled here rather than that FLM is
+    down. Never retried: the setting does not change between attempts.
     """
 
 
@@ -189,5 +217,29 @@ class AIService(Protocol):
         no reply: retried to MAXIMUM_CLASSIFY_ATTEMPTS (1 initial call + 2 retries), then
         ProviderUnavailable. The scheme rule, the provisional rule and provenance are
         application code over the returned suggestions, not the model's judgement (D-105).
+        """
+        ...
+
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:
+        """The text of one recording segment, a 16-bit PCM WAV, as a draft (D-123).
+
+        Only FLM has speech-to-text, so both providers send it to FLM's
+        ``/v1/audio/transcriptions`` with ``FLM_ASR_MODEL``, whatever ``AI_PROVIDER`` is
+        (apps/ai/transcription.py). Raises TranscriptionDisabled at once when
+        ``TRANSCRIPTION_PROVIDER`` is ``none``. Otherwise a transport failure, a 5xx or a 429 is
+        retried to MAXIMUM_TRANSCRIBE_ATTEMPTS (1 initial call + 2 retries), then
+        ProviderUnavailable; any other 4xx is ProviderRefused at once (D-118).
+
+        The caller has already refused a silent segment (apps/ingestion/audio.py): Whisper
+        invents text from silence, so a segment that reaches this method is one worth sending.
+        """
+        ...
+
+    def transcription_health(self) -> ProviderHealth:
+        """Whether a segment sent now could be transcribed: a report that never raises.
+
+        Unavailable when ``TRANSCRIPTION_PROVIDER`` is ``none`` or FLM does not answer. Available
+        means FLM answered; it cannot mean that Whisper is loaded, because FLM's model list names
+        its chat catalogue and not the speech model (D-123, "What it does not cover").
         """
         ...
