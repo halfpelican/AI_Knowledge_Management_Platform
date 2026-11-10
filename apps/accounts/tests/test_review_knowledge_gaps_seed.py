@@ -24,6 +24,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 
@@ -37,6 +38,9 @@ EARLIER_ADMINISTRATOR_CODES = {
     MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
 }
+# accounts 0008 (D-119 finding 5) seeds manage_tags after this migration, so unseeding 0007's own
+# code alone leaves it in place.
+LATER_ADMINISTRATOR_CODES = {MANAGE_TAGS_PERMISSION}
 
 
 def permission_names(role):
@@ -81,8 +85,9 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION
     ).exists()
-    # 0003's to 0006's seeds are untouched: unseeding one migration must not undo another.
-    assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
+    # 0003's to 0006's seeds, and 0008's, are untouched: unseeding one migration must not undo
+    # another.
+    assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES | LATER_ADMINISTRATOR_CODES
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's
 
@@ -100,17 +105,20 @@ def migrate_accounts_to(node):
 
 def test_the_migration_reverses_through_the_executor(employee_role, administrator_role):
     """Migrating ``accounts`` back to 0006 runs ``unseed_permissions`` as Django would, and
-    forward again restores the seed. This also proves 0007 is the leaf of ``accounts``."""
-    leaves = [
-        key for key in MigrationExecutor(connection).loader.graph.leaf_nodes() if key[0] == "accounts"
-    ]
-    assert leaves == [THIS_MIGRATION]
+    forward again restores the seed.
+
+    0007 was the leaf of ``accounts`` until 0008 (D-119 finding 5) followed it, so the test now
+    checks that 0007 is on the leaf's path and migrates forward to the leaf, which reapplies 0008
+    too, as 0006's test does since 0007."""
+    graph = MigrationExecutor(connection).loader.graph
+    [leaf] = [key for key in graph.leaf_nodes() if key[0] == "accounts"]
+    assert THIS_MIGRATION in graph.forwards_plan(leaf)
 
     migrate_accounts_to(PREVIOUS_MIGRATION)
     assert not Permission.objects.filter(permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
     assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
 
-    migrate_accounts_to(THIS_MIGRATION)
+    migrate_accounts_to(leaf)
     assert REVIEW_KNOWLEDGE_GAPS_PERMISSION in permission_names(administrator_role)
     assert REVIEW_KNOWLEDGE_GAPS_PERMISSION not in permission_names(employee_role)
 

@@ -3,6 +3,7 @@ import {
   QUESTION_MINIMUM_LENGTH,
   SEARCH_MAXIMUM_LENGTH,
   SEARCH_MINIMUM_LENGTH,
+  TAG_NAME_MAXIMUM_LENGTH,
   TRANSCRIPT_SOURCE,
   VALIDATION,
 } from '../constants.js'
@@ -117,5 +118,37 @@ export function questionError(question) {
   if (value.length === 0) return VALIDATION.questionRequired
   if (value.length < QUESTION_MINIMUM_LENGTH) return VALIDATION.questionTooShort
   if (value.length > QUESTION_MAXIMUM_LENGTH) return VALIDATION.questionTooLong
+  return null
+}
+
+/**
+ * FR-10's new Topic name as it is sent: trimmed, and each run of whitespace one
+ * space. The server matches a name after trimming, single-spacing and lower-casing
+ * it (docs/api-contract.md, NIT3004 FR-10); the case is left to the server.
+ *
+ * Sent in this form because the server measures `tag_name` against its column after
+ * trimming but before single-spacing (DRF's `CharField`, then `normalise_tag_name`),
+ * so a name sent single-spaced is measured exactly as `tagNameError` measured it.
+ *
+ * @param {string} value As typed.
+ * @returns {string}
+ */
+export function spacedTagName(value) {
+  return (value ?? '').trim().split(/\s+/).join(' ')
+}
+
+/**
+ * FR-10's client-side check of a new Topic name, already spaced by
+ * `spacedTagName`: required, and at most TAG_NAME_MAXIMUM_LENGTH characters.
+ * Counted in characters (code points), as the server's `len()` counts them, not in
+ * UTF-16 units, so a name of emoji is not refused here sooner than there. The server
+ * answers 400 `{"tag_name": [...]}` regardless (CLAUDE.md §6, invariant 4).
+ *
+ * @param {string} name
+ * @returns {string | null} The message to show beside the field, or null.
+ */
+export function tagNameError(name) {
+  if (name.length === 0) return VALIDATION.tagNameRequired
+  if ([...name].length > TAG_NAME_MAXIMUM_LENGTH) return VALIDATION.tagNameTooLong
   return null
 }

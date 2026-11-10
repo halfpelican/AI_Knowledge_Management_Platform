@@ -871,8 +871,8 @@ AND. `sort` is not a filter: it never causes a 204.
 - **`documents`** is the document object `GET /api/documents` returns, filtered and sorted, with
   no paging.
 
-**The detail object adds three fields** to the document object (D-63, D-73), and since FR-10 two
-more, `classification` and `tag_details` (NIT3004 — FR-10, at the end of this file):
+**The detail object adds three fields** to the document object (D-63, D-73), and since FR-10 three
+more, `classification`, `tag_details` and `tag_options` (NIT3004 — FR-10, at the end of this file):
 
 ```json
 {
@@ -1078,15 +1078,17 @@ proposal or an analysis that is not this document's gets that same 404, word for
 |---|---|---|---|---|
 | POST | `/api/documents/{id}/classify` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...], "department": "Finance"}` after one provider call and the apply rules, in one transaction; a second call updates the one analysis. `department` is the document's `department` column after the classification, re-read from the row: an applied in-scheme suggestion fills a blank department, and a different department already there is kept, with the suggestion held as `department_outcome: "provisional"` (D-105's note of 10 November) | `401`; `404`; `403`; `422 {"detail": "..."}` no extracted text (FR-10: "where insufficient text was extracted"), before any provider call; `503 {"detail": "..."}` the provider failed after `MAXIMUM_CLASSIFY_ATTEMPTS` (NFR-19), nothing written; `429` past the ingestion rate, one budget with upload, meeting ingest and reprocess (D-79); no in-flight slot |
 | POST | `/api/documents/{id}/classification` | session + `contribute_content` | `200 {"classification": ..., "department": "Finance"}`, where `department` is the document's `department` column after the confirm or edit, so the client need not infer it from the outcome. Body `{"doc_type"?: string, "department"?: string}`: both omitted confirms as it stands (a provisional type is applied; a provisional department is written to `department`); `doc_type` must be one of `DOCUMENT_TYPES`; `department` may be blank, which clears it; `null` means omitted | `401`; `404`, also when the document has no classification yet; `403`; `400 {"doc_type": ["..."]}` or `{"department": ["..."]}` |
-| POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's; `403` |
-| DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the link is removed (FR-10: "accepted or removed in a single action"); the `Tags` row stays | `401`; `404`, also when the link is not this document's; `403` |
-| POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
+| POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
+| DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). The link is **kept, marked removed**, a person's (`applied_by: "user"`) as well as an AI link (`applied_by: "ai"`, held or applied, confirmed or not, with the confidence the machine gave it), and no read lists it again; a later classify, reprocess or `classify_documents` run neither links it again nor alters it, and a removed Topic is not proposed again. Applying the tag again restores it (`200` on the POST below). A person's link was deleted until the requirements re-audit of 10 November 2026 (D-105). The `Tags` row stays | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
+| POST | `/api/documents/{id}/tags` | session + `contribute_content` | A person applies a tag (D-105's dated note of 10 November 2026, night). Body, exactly one of: `{"tag_id": "uuid"}`, an existing tag from the detail's `tag_options`; or `{"dimension": "Topic", "tag_name": string}`, a new Topic, matched after normalisation (trimmed, single spaces, lower case). `201 {"tag_details": [...]}` when a new link was made: `applied_by: "user"`, `confirmed: true`, `provisional: false`, `confidence: null`. `200` with the same shape when the tag was already on the document: a held AI link is confirmed, a removed one is restored and confirmed (its `applied_by` and confidence kept), and an applied or confirmed one is left as it is. `tag_details` is the document's whole current list | `401`; `404`; `403`; `400 {"tag_id": ["Choose a tag from this document's tag options."]}` for a `tag_id` that is unknown, inactive, a Department tag or not offered for this document, **one body for all of them**; `400 {"dimension": ["..."]}` a dimension other than `Topic` in the name form, or none given with `tag_name`; `400 {"tag_name": ["..."]}` blank, over 255 characters or missing; `400 {"tag_id": ["..."]}` not a UUID; `400 {"non_field_errors": ["..."]}` neither form, or both; `409 {"detail": "A Topic with this name is already offered for this document. Choose it from the tag options.", "tag_id": "uuid"}` the name is a Topic already in `tag_options`, whose id this is |
+| POST | `/api/documents/{id}/proposed-topics/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"value": string}`, matched after normalisation (lower case, single spaces); the Topic tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`; a Topic it creates or reactivates is grown, and an active one it reuses keeps its state, so a vocabulary Topic stays vocabulary (D-105); the proposal leaves `proposed_topics` | `401`; `404`, also when the value is not proposed on this document; `403`; `400 {"value": ["..."]}` blank or over 255 characters |
 | POST | `/api/documents/{id}/proposed-topics/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created | the same |
 
 The classification object (`null` for a document never classified):
 
 ```json
 {"doc_type": "Policy", "doc_type_outcome": "applied", "department_outcome": "provisional",
+ "department_applied_by": "user",
  "machine_doc_type": "Policy", "machine_doc_type_confidence": 0.9,
  "machine_department": "Finance", "machine_department_confidence": 0.6,
  "user_edited": false, "proposed_topics": [{"value": "budget planning", "confidence": 0.8}],
@@ -1094,13 +1096,27 @@ The classification object (`null` for a document never classified):
 ```
 
 - **The effective department is the document object's `department`** (D-72); `department_outcome`
-  says how it got there. `doc_type` is `null` while the type is provisional. The outcomes are
-  `applied`, `provisional`, `discarded` and `confirmed` (`docs/schema-v1.md` §3). Confidences are
-  numbers to three places. `discarded_suggestions` is not exposed: it is a record for the
-  Objective 05 measurement (D-106).
+  says how the machine's suggestion was disposed of. `doc_type` is `null` while the type is
+  provisional. The outcomes are `applied`, `provisional`, `discarded` and `confirmed`
+  (`docs/schema-v1.md` §3). Confidences are numbers to three places. `discarded_suggestions` is not
+  exposed: it is a record for the Objective 05 measurement (D-106).
+- **`department_applied_by`** says whose value the document's department is, in the tags'
+  provenance vocabulary (D-119 finding 10; D-105's dated note of 10 November 2026, night):
+  - `"user"`: a person gave it, typed at upload or written through the confirm route. With
+    `department_outcome: "applied"` this is a department a person supplied that the machine's
+    suggestion **matched**: show it as the person's, not as "Suggested by AI".
+  - `"ai"`: a classification run wrote its suggestion into a blank department, and no person has
+    written the department since. A person who confirms that value as it stands keeps it `"ai"`,
+    with `department_outcome: "confirmed"`, as a confirmed AI tag keeps `applied_by: "ai"`.
+  - `null`: the document has no department, or its classification was recorded before
+    `documents 0009` and no run or confirmation has set the field since. Treat it as before the
+    field existed.
+
+  It is in the object wherever the object is: the detail, the classify and confirm replies, the
+  proposed-topic replies and the upload's and reprocess's 201 bodies.
 
 A `tag_details` entry, one per `ContentTags` link in Project, Process or Topic, provisional
-included, sorted by dimension then name:
+included and removed excluded, sorted by dimension then name:
 
 ```json
 {"content_tag_id": "uuid", "dimension": "Project", "name": "bridge maintenance",
@@ -1109,6 +1125,50 @@ included, sorted by dimension then name:
 
 **The detail** `GET /api/documents/{id}` carries both, `classification` and `tag_details`, beside
 FR-15's fields. `tags` is unchanged in shape and lists **applied** links only.
+
+**The detail also carries `tag_options`** (D-105's dated note of 10 November 2026, night): the tags a
+person may apply to this document, which are the document's own classification scheme, each
+dimension sorted by name and always present:
+
+```json
+"tag_options": {
+  "Project": [{"tag_id": "uuid", "tag_name": "bridge maintenance"}],
+  "Process": [{"tag_id": "uuid", "tag_name": "purchasing"}],
+  "Topic":   []
+}
+```
+
+- **It discloses nothing to anyone who may read the document.** A tag is offered if it is **not
+  grown**, whatever its links, or if every role in the document's audience can read a source
+  carrying it. A caller reaches the detail only if their role reads the document, so every grown
+  value offered is on material the caller could open (D-105's dated note of 10 November 2026,
+  night: the security review).
+  - A tag that is not grown is vocabulary, offered to every reader: the Project, Process and Topic
+    values a database is seeded with. Its being offered says nothing about any source.
+  - A grown tag is a Topic a person's name created or brought back from retirement (typed on this
+    route, or confirmed as a proposed topic), or a value that only material some role cannot read
+    carried when the database was seeded or when `documents 0011` ran.
+  - An inactive tag never is.
+- **What can appear or disappear.** Nothing here moves because a link on material the caller cannot
+  read was made or destroyed.
+  - A grown tag appears when a source every role in the audience reads comes to carry it, and
+    disappears only when the last such source is deleted, or the tag is retired: a removed link is
+    kept and still counts.
+  - A tag that is not grown never moves while it is active: no link anyone makes or destroys changes
+    whether it is offered, a person confirming a proposal of its name made before it was vocabulary
+    included. It leaves only when an Administrator retires or deletes it, and a retired Topic a
+    person names again comes back grown.
+- **It includes tags already on the document,** held, applied or removed: applying one of those
+  is the `200` above.
+- **A `409` names a tag in this list:** the interface can select it rather than create a duplicate.
+- **A Topic name that is not in this list but exists** (grown and on no source the document's
+  whole audience reads, or inactive) is linked and answered `201` exactly as a new Topic is, unless
+  this document already holds a link to it, live or removed: that link is kept, or restored if
+  removed, and the answer is `200`. Either answer depends only on this document's own links, so it
+  never tells the caller that a value they cannot see exists. After that the Topic is
+  in this document's list, and it stays there after a person removes it, since the removed link is
+  kept: a person who applies a new Topic, removes it and applies it again by name gets `201`, `204`,
+  `409`, whatever exists elsewhere, and the `409` names the Topic, which its id restores (`200`).
 
 **The 201 bodies** of `POST /api/documents` and `POST /api/documents/{id}/reprocess` carry
 `classification` (section 7.8 line 100): the object, or `null` when classification failed or the
@@ -1119,10 +1179,57 @@ D-33 part 1). A 422 body does not carry it, and neither do the list and browse r
 in the detail's `tags`, not a browse facet value and not a filter hit until it is confirmed.
 `tag_details` is where a held suggestion is seen.
 
+**Removed links (D-105's dated note of 10 November 2026, night).** A link a person removed, the
+machine's or a person's, is in **no** read: not the detail's `tags` or `tag_details`, not the
+classify, confirm or proposed-topic replies' `tag_details`, not a browse facet value and not a
+filter hit. Its id answers `404` on the confirm and remove routes, exactly as an unknown id does.
+It stays in the database for FR-10's correction clause, for two reasons:
+
+- an AI link, so that the machine's assignment is kept beside the person's decision;
+- a person's link, so that a later classify or reprocess neither links the value again nor
+  proposes it again ("not overwritten by later reprocessing").
+
+Applying the tag again restores the link (`200`).
+
 **The management command** `python manage.py classify_documents --all | --document <uuid>...
 [--out record.json]` runs the same path per document and writes the Objective 05 record (D-106:
 database, commit, per-document values, outcomes, links, seconds or error). It refuses the
 database `kmp`.
+
+### Tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night)
+
+FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content still references
+them, preserving historical classification"; its CRUD line gives Tags "Delete". Both routes need a
+session **and** `manage_tags`, which accounts 0008 gives the Administrator alone: `401` without a
+session, `403` for a role that lacks the code (invariant 4), checked before anything else on the
+request, since nothing on these routes is scoped.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/tags` | session + `manage_tags` | `200` a list of tag entries (below): every Tag in Project, Process and Topic, active or not, ordered by dimension (alphabetically: Process, Project, Topic) then name. `[]` when there are none. No pagination | `401`; `403` |
+| DELETE | `/api/tags/{id}` | session + `manage_tags` | `200` the tag entry, now `active: false`, when any `ContentTags` row references the tag, in **any** state (held and removed links included); `200` again for a tag already inactive and still referenced. `204` no body when nothing references it: the tag is deleted | `401`; `403`, before the id is looked at; `404 {"detail": "No Tag matches the given query."}` no tag with that id in Project, Process or Topic (a Department tag included) |
+
+The tag entry, in the list and in the `DELETE`'s `200`:
+
+```json
+{"tag_id": "uuid", "dimension": "Project", "tag_name": "bridge maintenance", "active": true,
+ "item_count": 3}
+```
+
+- **`item_count`** is the number of sources, documents and meetings alike, with a link to the tag
+  that is neither provisional nor removed, each source counted once. It is not scoped: an
+  Administrator reads every source (D-66), so a count discloses nothing to the one role that may
+  ask for it, and a test holds that every role given `manage_tags` has the Administrator's scope.
+- **A retired tag** (`active: false`) leaves every document's `tag_options` and cannot be applied
+  by `tag_id` (the `400`). The classifier is no longer shown it, and a suggestion of it is never
+  linked: a Project or Process one is discarded, and a Topic one is proposed, which a person may
+  confirm. It stays on the documents that carry it: FR-15's reads do not consult `active`
+  (D-72), so it is still in their `tags` and `tag_details`, a facet value and a filter.
+- **There is no reactivation route.** A retired Topic comes back when a person types its name on
+  `POST /api/documents/{id}/tags`, where it is linked and reactivated and answered `201` exactly as
+  a new Topic would be, unless that document already holds a link to it, live or removed, which is
+  kept or restored: `200`. Or a person confirms it as a proposed topic, which has always reactivated
+  a retired Topic. A retired Project or Process tag stays retired.
 
 ## NIT3004 — FR-19, Objective 06
 

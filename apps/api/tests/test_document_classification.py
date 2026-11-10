@@ -63,6 +63,8 @@ CLASSIFICATION_KEYS = {
     "doc_type", "doc_type_outcome", "department_outcome", "machine_doc_type",
     "machine_doc_type_confidence", "machine_department", "machine_department_confidence",
     "user_edited", "proposed_topics", "classified_at", "model", "input_truncated",
+    # D-119 finding 10: whose department it is ("user", "ai" or null).
+    "department_applied_by",
 }
 TAG_DETAIL_KEYS = {
     "content_tag_id", "dimension", "name", "applied_by", "confirmed", "provisional", "confidence",
@@ -132,6 +134,11 @@ ROUTES = {
     "DELETE tag": lambda client, doc_id, link_id: remove_tag(client, doc_id, link_id),
     "POST proposed-topics/confirm": lambda client, doc_id, link_id: confirm_topic(client, doc_id),
     "POST proposed-topics/reject": lambda client, doc_id, link_id: reject_topic(client, doc_id),
+    # A person applies a tag (D-105's dated note of 10 November 2026, night): the same guards.
+    "POST tags": lambda client, doc_id, link_id: client.post(
+        f"{DOCUMENTS_URL}/{doc_id}/tags", {"dimension": TOPIC_DIMENSION, "tag_name": "night shifts"},
+        format="json",
+    ),
 }
 
 
@@ -420,13 +427,16 @@ def test_accepting_a_held_tag_returns_the_entry_confirmed_with_its_provenance(se
 
 
 def test_removing_a_tag_is_204_and_the_vocabulary_stays(session_client, held_link):
+    """The held AI link is kept, marked removed, beside the machine's assignment, and is in no read
+    (D-105's dated note of 10 November 2026, night; until then the row was deleted)."""
     document, link = held_link
 
     response = remove_tag(session_client.client, document.id, link.id)
 
     assert response.status_code == 204
     assert not response.content
-    assert not links_of(document).exists()
+    kept = links_of(document).get()
+    assert (kept.pk, kept.removed, kept.provisional) == (link.pk, True, True)
     assert Tag.objects.filter(tag_name="bridge maintenance").exists()
     assert detail(session_client.client, document.id).json()["tag_details"] == []
 

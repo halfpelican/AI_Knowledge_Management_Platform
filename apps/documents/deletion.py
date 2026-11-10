@@ -46,8 +46,12 @@ def delete_document(document: Document) -> None:
        and the FR-12 record of what was answered survives with ``chunk_uuid`` naming what was
        cited and no text (D-67).
     3. **Its ``ContentTag`` rows**, by the same key. The ``Tag`` rows they pointed at are a
-       vocabulary and stay; FR-15's facets never read ``Tag`` on its own (D-72), so a tag left
-       with no links is never offered to anyone.
+       vocabulary and stay. FR-15's facets never read ``Tag`` on its own (D-72), so a tag left with
+       no links is never a facet value. FR-10's ``tag_options`` and classification prompt do read
+       the vocabulary: a tag that is not grown stays offered to every reader whatever this deletion
+       removes, and a grown tag left without a source every audience role reads is offered nowhere
+       (``tag_scheme``; D-105's dated note of 10 November 2026, night: the security review).
+       Deleting a document therefore never makes a restricted value appear anywhere.
     4. **The document**, and with it its ``ExtractedContent`` rows, through their CASCADE
        foreign key.
 

@@ -512,6 +512,11 @@ ROUTES_RETURNING_SOURCE_ROWS = {
         "post", lambda case: "proposed-topics/reject", body={"value": PROPOSED_TOPIC},
         prepare=_classified,
     ),
+    # A person applies a tag (D-105's dated note of 10 November 2026, night): a new Topic, so the
+    # Administrator's mirror is the 201 and the Employee's answer is the scope's 404.
+    ("api/documents/<uuid:pk>/tags", "POST"): _acts_on(
+        "post", lambda case: "tags", body={"dimension": "Topic", "tag_name": "board succession"}
+    ),
 }
 
 ROUTES_RETURNING_NO_SOURCE_ROWS = {
@@ -541,6 +546,11 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/knowledge-gaps", "GET"): "Gap entries: a subject, a count, a status and two dates.",
     ("api/knowledge-gaps/cycles", "POST"): "The cycle row: its times and four counts.",
     ("api/knowledge-gaps/<uuid:pk>", "PATCH"): "The updated gap entry.",
+    # FR-10's tag administration (D-119 finding 5), Administrator-only through manage_tags. Tag rows
+    # and counts of the sources carrying them, read by a role that reads every source (D-66); no
+    # Document or Meeting row is read or returned.
+    ("api/tags", "GET"): "Tags and their counts of sources, for the Administrator alone.",
+    ("api/tags/<uuid:pk>", "DELETE"): "The retired tag's entry, or nothing.",
 }
 
 

@@ -151,9 +151,10 @@ export default function DocumentDetail() {
 
   /**
    * FR-10's section reports what one of its routes returned — the
-   * classification, the tag links, the effective department — and the record
-   * takes it. When the links changed, `tags` is rebuilt from them so the
-   * metadata list above stays the same list the server would send.
+   * classification, the tag links, the effective department, or the
+   * `tag_options` it read again after a person applied a tag — and the record
+   * takes it, each key as sent. When the links changed, `tags` is rebuilt from
+   * them so the metadata list above stays the same list the server would send.
    */
   function applyClassificationChange(patch) {
     setData((current) => {
@@ -250,12 +251,14 @@ export default function DocumentDetail() {
       </div>
 
       {/* FR-10: the AI-suggested type, department and tags, each marked as such
-          and confirmable, editable or removable in one action (D-104, D-105). The
-          department it shows is the record's own field, the effective one. */}
+          and confirmable, editable or removable in one action (D-104, D-105), and
+          the tags a person may add from `tag_options`. The department it shows is
+          the record's own field, the effective one. */}
       <Classification
         docId={record.doc_id}
         classification={record.classification ?? null}
         tagDetails={record.tag_details ?? []}
+        tagOptions={record.tag_options}
         department={record.department ?? ''}
         onChange={applyClassificationChange}
       />

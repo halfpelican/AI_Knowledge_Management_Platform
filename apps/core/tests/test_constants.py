@@ -142,7 +142,8 @@ def test_upload_limit_is_fifty_megabytes():
 
 def test_attempt_counts_are_one_attempt_plus_two_retries():
     # docs/decisions.md D-19: three total attempts, uniform across every AI call,
-    # including classification (FR-10, NIT3004) which is named now but unused.
+    # including classification (FR-10, NIT3004), whose attempt loop in apps/ai/classification.py
+    # has used it since D-104.
     assert constants.MAXIMUM_GENERATION_ATTEMPTS == 3
     assert constants.MAXIMUM_EMBED_ATTEMPTS == 3
     assert constants.MAXIMUM_CLASSIFY_ATTEMPTS == 3
@@ -266,3 +267,14 @@ def test_the_knowledge_gap_constants_are_d107s_and_d109s():
 def test_session_inactivity_is_sixty_minutes():
     # FR-04, docs/decisions.md D-10.
     assert constants.SESSION_INACTIVITY_MINUTES == 60
+
+
+def test_effective_roles_are_closed_under_generalisation():
+    """The security review's finding 7 (D-105's dated note of 10 November 2026, night). FR-10's
+    tag_options discloses nothing only because whatever a role in a role's effective set reads,
+    that role reads too: for every role C and every R in EFFECTIVE_ROLES[C], EFFECTIVE_ROLES[R] is a
+    subset of EFFECTIVE_ROLES[C]. A role missing from the map reads nothing, which is a subset of
+    anything."""
+    for role, effective in constants.EFFECTIVE_ROLES.items():
+        for included in effective:
+            assert set(constants.EFFECTIVE_ROLES.get(included, ())) <= set(effective), (role, included)

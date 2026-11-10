@@ -182,16 +182,20 @@ export function heldResponse() {
 
 /**
  * A fixed text of the server's, read from the one place it is defined
- * (apps/core/constants.py, D-27) rather than copied into the test, so the test
- * cannot agree with a front-end copy that has drifted from the server's.
+ * (apps/core/constants.py, D-27, unless another file is named) rather than copied
+ * into the test, so the test cannot agree with a front-end copy that has drifted
+ * from the server's.
  *
  * Written on one line, or as adjacent literals in parentheses, which Python joins.
- * Neither form uses an escape in that file, and anything else fails loudly here.
+ * Neither form uses an escape in either file, and anything else fails loudly here.
+ *
+ * @param {string} name The constant's name.
+ * @param {string[]} [file] Its file, as path parts from the repository root.
  */
-function serverText(name) {
-  const source = readFileSync(join(import.meta.dirname, '..', '..', 'apps', 'core', 'constants.py'), 'utf8')
+function serverText(name, file = ['apps', 'core', 'constants.py']) {
+  const source = readFileSync(join(import.meta.dirname, '..', '..', ...file), 'utf8')
   const match = source.match(new RegExp(`^${name} = (?:"(.+)"|\\(((?:\\s*"[^"\\r\\n]*")+)\\s*\\))\\s*$`, 'm'))
-  if (!match) throw new Error(`${name} not found in apps/core/constants.py`)
+  if (!match) throw new Error(`${name} not found in ${file.join('/')}`)
   if (match[1] !== undefined) return match[1]
   return [...match[2].matchAll(/"([^"\r\n]*)"/g)].map((literal) => literal[1]).join('')
 }
@@ -201,6 +205,12 @@ export const NO_ANSWER_MESSAGE = serverText('NO_ANSWER_MESSAGE')
 
 /** What a stored turn says when none of its citations still points at a chunk. */
 export const PROVENANCE_REMOVED_MESSAGE = serverText('PROVENANCE_REMOVED_MESSAGE')
+
+/**
+ * FR-10's 409 on `POST /api/documents/{id}/tags`: the name is a Topic the document
+ * already offers. Defined in apps/api/views.py, not apps/core/constants.py.
+ */
+export const TOPIC_ALREADY_OFFERED_MESSAGE = serverText('TOPIC_ALREADY_OFFERED_MESSAGE', ['apps', 'api', 'views.py'])
 
 export const CONVERSATION = {
   conversation_id: '6f1c2a54-0000-4000-8000-000000000001',

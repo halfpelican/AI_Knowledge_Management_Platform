@@ -1,18 +1,20 @@
 """``tag_scheme``: the scheme a document is classified against is the vocabulary its own audience
 may read (D-105, CLAUDE.md invariant 1).
 
-The rule under test, from the function's docstring: a value is in the scheme only if EVERY role
-in ``document.visible_to_roles`` can read at least one source carrying it; a value with no links
-is vocabulary only and is always in; readability comes from ``scoped_documents`` and
-``scoped_meetings`` and from nothing written here.
+The rule under test, from the function's docstring: a tag that is not grown is vocabulary and is
+in every scheme, whatever its links; a grown tag is in only if EVERY role in
+``document.visible_to_roles`` can read at least one source carrying it (D-105's dated note of 10
+November 2026, night: the security review of ``84b5771``); readability comes from
+``scoped_documents`` and ``scoped_meetings`` and from nothing written here.
 
 The fixtures build the smallest corpus that tells the cases apart: an Employee-visible document
-and an Administrator-only one, a Project linked only to the restricted document, a Process both
-carry, a Topic nothing carries, a Topic held provisionally on the restricted document, and a
-department each.
+and an Administrator-only one, a grown Project linked only to the restricted document, a Process
+both carry, a Topic nothing carries, a grown Topic held provisionally on the restricted document,
+and a department each.
 """
 
 import datetime
+import sys
 
 import pytest
 
@@ -72,13 +74,16 @@ def administrator_document(administrator):
 
 @pytest.fixture
 def corpus(employee_document, administrator_document):
-    restricted = Tag.objects.create(tag_name=RESTRICTED_PROJECT, dimension=PROJECT_DIMENSION)
+    # A value only restricted material carries is grown, as documents 0011's backfill and the seed's
+    # linked mode mark it (D-105's dated note of 10 November 2026, night: the security review); one
+    # that is not grown is vocabulary and in every scheme, whatever its links.
+    restricted = Tag.objects.create(tag_name=RESTRICTED_PROJECT, dimension=PROJECT_DIMENSION, grown=True)
     link(restricted, DOCUMENT_SOURCE_TYPE, administrator_document.pk)
     shared = Tag.objects.create(tag_name=SHARED_PROCESS, dimension=PROCESS_DIMENSION)
     link(shared, DOCUMENT_SOURCE_TYPE, administrator_document.pk)
     link(shared, DOCUMENT_SOURCE_TYPE, employee_document.pk)
     Tag.objects.create(tag_name=UNLINKED_TOPIC, dimension=TOPIC_DIMENSION)
-    held = Tag.objects.create(tag_name=HELD_TOPIC, dimension=TOPIC_DIMENSION)
+    held = Tag.objects.create(tag_name=HELD_TOPIC, dimension=TOPIC_DIMENSION, grown=True)
     link(held, DOCUMENT_SOURCE_TYPE, administrator_document.pk,
          applied_by=AI_APPLIED, confirmed=False, provisional=True)
     Tag.objects.create(tag_name=RETIRED_PROJECT, dimension=PROJECT_DIMENSION, active=False)
@@ -96,9 +101,12 @@ def test_a_tag_linked_only_to_an_administrator_only_document_is_withheld_from_an
     assert RESTRICTED_PROJECT in tag_scheme(administrator_document).tags[PROJECT_DIMENSION]
 
 
-def test_an_unlinked_tag_is_vocabulary_only_and_in_both_schemes(
+def test_an_unlinked_seeded_tag_is_vocabulary_only_and_in_both_schemes(
     corpus, employee_document, administrator_document
 ):
+    """The corpus fixture's Topic that nothing carries was made as a seed makes it, so it is not
+    grown: vocabulary, in both schemes. 11a610f inverted this, keeping every unlinked Topic out, and
+    was narrowed the same night (D-105's dated note of 10 November 2026, night)."""
     assert UNLINKED_TOPIC in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
     assert UNLINKED_TOPIC in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
 
@@ -146,7 +154,8 @@ def test_a_tag_linked_only_to_a_restricted_meeting_is_withheld_the_table_admits_
         title="Board meeting", meeting_date=datetime.date(2026, 11, 2),
         transcript_text="Minutes.", visible_to_roles=[ADMINISTRATOR_ROLE_NAME],
     )
-    board = Tag.objects.create(tag_name=BOARD_TOPIC, dimension=TOPIC_DIMENSION)
+    # Only restricted material carries it: grown, as documents 0011 and the seed mark it.
+    board = Tag.objects.create(tag_name=BOARD_TOPIC, dimension=TOPIC_DIMENSION, grown=True)
     link(board, MEETING_SOURCE_TYPE, meeting.pk)
     assert BOARD_TOPIC not in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
     assert BOARD_TOPIC in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
@@ -154,6 +163,135 @@ def test_a_tag_linked_only_to_a_restricted_meeting_is_withheld_the_table_admits_
     # Widen the meeting and the Employee-visible document's scheme gains the value.
     Meeting.objects.filter(pk=meeting.pk).update(visible_to_roles=list(ROLE_NAMES))
     assert BOARD_TOPIC in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
+
+
+# --- A grown Topic must be on a source the audience reads (D-105's dated note of 10 November 2026,
+#     night, the lead's review and revision)
+#
+# An unlinked Topic admitted as vocabulary, beside a Topic linked only on restricted material and
+# withheld, let apply, remove and apply again tell an Employee whether a restricted Topic name
+# exists. 11a610f kept every unlinked Topic out; that changed the scheme Objective 05 was measured
+# with, six seeded, unlinked Topics, so it was narrowed: only a Topic that came into use through a
+# name (Tag.grown) is out once nothing links it. Seeded Topics, and Project and Process tags, are
+# vocabulary while unlinked.
+
+TOPIC_LINK_STATES = {"removed": {"removed": True}, "held": {"provisional": True}}
+
+
+def test_an_unlinked_seeded_topic_is_in_every_scheme(employee, employee_document, administrator_document):
+    Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION)  # as a seed makes it
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    nobody = make_document(employee, "Orphaned", [])
+    for document in (employee_document, administrator_document, both, nobody):
+        assert "night shifts" in tag_scheme(document).tags[TOPIC_DIMENSION]
+
+
+def test_an_unlinked_grown_topic_is_in_no_scheme_but_an_empty_audiences(
+    employee, employee_document, administrator_document
+):
+    """Renamed from 11a610f's test_an_unlinked_topic_is_in_no_scheme, whose Topic is now grown: the
+    one kind of unlinked Topic that stays out."""
+    Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION, grown=True)
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    for document in (employee_document, administrator_document, both):
+        assert "night shifts" not in tag_scheme(document).tags[TOPIC_DIMENSION]
+    # The empty-audience branch is unchanged: nobody reads that document, so nobody is protected.
+    nobody = make_document(employee, "Orphaned", [])
+    assert "night shifts" in tag_scheme(nobody).tags[TOPIC_DIMENSION]
+
+
+def test_the_objective_05_scheme_only_seed_puts_all_its_topics_in_the_scheme(
+    employee_document, administrator_document, monkeypatch
+):
+    """Objective 05 was measured on a database seeded by ``seed_objective02_tags.py --scheme-only``:
+    the manifest's fourteen values as Tags rows and no links (D-106; the run record's "before the
+    run"). The seed is run here as it ran there, and every value, its six Topics included, is in
+    the scheme of a document of either audience, as it was when the runs began."""
+    import django
+
+    from scripts import seed_objective02_tags as seed
+
+    monkeypatch.setattr(sys, "argv", ["seed_objective02_tags.py", "--scheme-only"])
+    monkeypatch.setattr(sys, "path", list(sys.path))  # the script inserts the repository root
+    monkeypatch.setattr(django, "setup", lambda: None)  # pytest has set Django up already
+
+    assert seed.main() == 0
+
+    assert not ContentTag.objects.exists()
+    assert not Tag.objects.filter(grown=True).exists()
+    seeded = set(Tag.objects.values_list("dimension", "tag_name"))
+    topics = {name for dimension, name in seeded if dimension == TOPIC_DIMENSION}
+    assert len(topics) == 6  # compliance, finance, people, safety, technology, workplace
+    for document in (employee_document, administrator_document):
+        the_scheme = tag_scheme(document)
+        assert set(the_scheme.tags[TOPIC_DIMENSION]) == topics
+        assert {(dimension, name) for dimension, names in the_scheme.tags.items() for name in names} == seeded
+
+
+def test_unlinked_project_and_process_tags_are_still_vocabulary(employee_document, administrator_document):
+    Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION)
+    Tag.objects.create(tag_name="purchasing", dimension=PROCESS_DIMENSION)
+    for document in (employee_document, administrator_document):
+        the_scheme = tag_scheme(document)
+        assert "harbour upgrade" in the_scheme.tags[PROJECT_DIMENSION]
+        assert "purchasing" in the_scheme.tags[PROCESS_DIMENSION]
+
+
+@pytest.mark.parametrize("state", sorted(TOPIC_LINK_STATES))
+def test_a_topic_whose_only_link_is_removed_or_held_on_a_readable_source_is_in(
+    employee_document, administrator_document, state
+):
+    # Grown, so that only its links can admit it: a held or removed one, on readable material, does.
+    topic = Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION, grown=True)
+    link(topic, DOCUMENT_SOURCE_TYPE, employee_document.pk, applied_by=AI_APPLIED, confirmed=False,
+         **TOPIC_LINK_STATES[state])
+    # Both audiences read the Employee-visible document, an Administrator through D-66.
+    for document in (employee_document, administrator_document):
+        assert "night shifts" in tag_scheme(document).tags[TOPIC_DIMENSION]
+
+
+@pytest.mark.parametrize("state", sorted(TOPIC_LINK_STATES))
+def test_the_same_topic_on_a_restricted_source_is_out(employee_document, administrator_document, state):
+    topic = Tag.objects.create(tag_name="night shifts", dimension=TOPIC_DIMENSION, grown=True)
+    link(topic, DOCUMENT_SOURCE_TYPE, administrator_document.pk, applied_by=AI_APPLIED,
+         confirmed=False, **TOPIC_LINK_STATES[state])
+    assert "night shifts" not in tag_scheme(employee_document).tags[TOPIC_DIMENSION]
+    assert "night shifts" in tag_scheme(administrator_document).tags[TOPIC_DIMENSION]
+
+
+# --- Vocabulary does not move with links (D-105's dated note of 10 November 2026, night: the
+#     security review of 84b5771)
+
+VOCABULARY_LINKS = ["unlinked", "only on restricted material", "on readable material"]
+
+
+@pytest.mark.parametrize("links", VOCABULARY_LINKS)
+def test_a_tag_that_is_not_grown_is_in_every_scheme_whatever_its_links(
+    employee, employee_document, administrator_document, links
+):
+    value = Tag.objects.create(tag_name="purchasing", dimension=PROCESS_DIMENSION)
+    if links == "only on restricted material":
+        link(value, DOCUMENT_SOURCE_TYPE, administrator_document.pk)
+    elif links == "on readable material":
+        link(value, DOCUMENT_SOURCE_TYPE, employee_document.pk)
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    for document in (employee_document, administrator_document, both):
+        assert "purchasing" in tag_scheme(document).tags[PROCESS_DIMENSION]
+
+
+def test_a_grown_tag_is_in_only_where_every_audience_role_reads_a_source_carrying_it(
+    employee, employee_document, administrator_document
+):
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    on_restricted = Tag.objects.create(tag_name="atlas", dimension=PROJECT_DIMENSION, grown=True)
+    link(on_restricted, DOCUMENT_SOURCE_TYPE, administrator_document.pk)
+    on_readable = Tag.objects.create(tag_name="office move", dimension=PROJECT_DIMENSION, grown=True)
+    link(on_readable, DOCUMENT_SOURCE_TYPE, employee_document.pk)
+    Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION, grown=True)  # unlinked
+    assert tag_scheme(employee_document).tags[PROJECT_DIMENSION] == ("office move",)
+    assert tag_scheme(both).tags[PROJECT_DIMENSION] == ("office move",)
+    # An Administrator reads the Employee document too (D-66).
+    assert tag_scheme(administrator_document).tags[PROJECT_DIMENSION] == ("atlas", "office move")
 
 
 # --- The edges of the audience -----------------------------------------------------------------
@@ -169,25 +307,28 @@ def test_an_empty_audience_gets_the_full_scheme(corpus, employee):
 
 
 def test_a_role_scoping_does_not_know_fails_closed(corpus, employee):
+    """Every grown tag and every department is withheld. Vocabulary, a tag that is not grown, is in
+    whatever its links: the shared Process as well as the unlinked Topic, since the security
+    review's rule (D-105's dated note of 10 November 2026, night). It names no source."""
     unknown = make_document(employee, "Audit file", ["Auditor"], "Audit")
     the_scheme = tag_scheme(unknown)
     assert the_scheme.departments == ()
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
-    assert the_scheme.tags[PROCESS_DIMENSION] == ()
+    assert the_scheme.tags[PROCESS_DIMENSION] == (SHARED_PROCESS,)
     assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
 
 
 def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
     corpus, administrator_document, monkeypatch
 ):
-    """With the helpers answering nothing, every linked value and every department is withheld:
-    the function has no predicate of its own on ``visible_to_roles``."""
+    """With the helpers answering nothing, every grown value and every department is withheld:
+    the function has no predicate of its own on ``visible_to_roles``. Vocabulary needs no reader."""
     monkeypatch.setattr(module, "scoped_documents", lambda *, role_name: Document.objects.none())
     monkeypatch.setattr(module, "scoped_meetings", lambda *, role_name: Meeting.objects.none())
     the_scheme = tag_scheme(administrator_document)
     assert the_scheme.departments == ()
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
-    assert the_scheme.tags[PROCESS_DIMENSION] == ()
+    assert the_scheme.tags[PROCESS_DIMENSION] == (SHARED_PROCESS,)
     assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
 
 

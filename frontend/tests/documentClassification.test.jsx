@@ -1,7 +1,8 @@
 /**
  * FR-10's classification section of the document detail view, rendered against a
- * faked `GET /api/documents/{id}` carrying `classification` and `tag_details`,
- * and the six FR-10 actions (D-104, D-105; docs/api-contract.md).
+ * faked `GET /api/documents/{id}` carrying `classification`, `tag_details` and
+ * `tag_options`, and the FR-10 actions, a person applying a tag among them (D-104,
+ * D-105 and its dated note of 10 November 2026, night; docs/api-contract.md).
  *
  * Each test defends one clause only the interface can satisfy — what the screen
  * shows, withholds or offers. The threshold, the scheme rule, who may confirm,
@@ -14,10 +15,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
-import { messageForStatus } from '../src/api/client.js'
-import { TEXT } from '../src/constants.js'
+import { NETWORK_ERROR_STATUS, messageForStatus } from '../src/api/client.js'
+import { TAG_NAME_MAXIMUM_LENGTH, TEXT, VALIDATION } from '../src/constants.js'
 import DocumentDetail from '../src/pages/DocumentDetail.jsx'
-import { heldResponse, serveApi } from './fakeApi.js'
+import { TOPIC_ALREADY_OFFERED_MESSAGE, heldResponse, serveApi } from './fakeApi.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
 
@@ -43,6 +44,8 @@ function classificationOf(overrides = {}) {
     doc_type: 'Policy',
     doc_type_outcome: 'applied',
     department_outcome: 'applied',
+    // A run wrote its suggestion into a blank department (D-119 finding 10).
+    department_applied_by: 'ai',
     machine_doc_type: 'Policy',
     machine_doc_type_confidence: 0.92,
     machine_department: 'Human Resources',
@@ -276,6 +279,50 @@ describe('FR-10: the type and department are shown with their provenance in word
     expect(department.value).toBe('Human Resources')
     expect(department.provenance).toBe(TEXT.classificationDiscardedDepartment('Payroll'))
     expect(shownValues()).not.toContain('Payroll')
+  })
+})
+
+describe('D-119 finding 6: the notice that only the opening of a long document was read (D-104)', () => {
+  it('says so when the classification has input_truncated true', async () => {
+    await renderDetail(detailOf({ classification: classificationOf({ input_truncated: true }) }))
+
+    expect(within(section()).getByText(TEXT.classificationTruncated)).toBeTruthy()
+  })
+
+  it('says nothing about it when input_truncated is false', async () => {
+    await renderDetail(detailOf({ classification: classificationOf({ input_truncated: false }) }))
+
+    // The assignments rendered, so the notice's absence is not a section that never drew.
+    expect(assignment(TEXT.classificationFieldType).value).toBe('Policy')
+    expect(within(section()).queryByText(TEXT.classificationTruncated)).toBeNull()
+  })
+})
+
+describe('D-119 finding 10: whose department it is, from department_applied_by', () => {
+  it('says an applied department a person gave, which the AI’s suggestion matched, is the person’s and not "Suggested by AI"', async () => {
+    await renderDetail(detailOf({ classification: classificationOf({ department_applied_by: 'user' }) }))
+
+    const department = assignment(TEXT.classificationFieldDepartment)
+    expect(department.value).toBe('Human Resources')
+    expect(department.provenance).toBe(
+      `${TEXT.classificationGivenByPerson}. ${TEXT.classificationSuggestionMatched}, ${TEXT.classificationConfidence(81)}.`,
+    )
+    expect(department.provenance).not.toContain(TEXT.classificationSuggestedByAI)
+    // The type beside it was the machine's, and still says so: the field is the department's alone.
+    expect(assignment(TEXT.classificationFieldType).provenance).toBe(
+      `${TEXT.classificationSuggestedByAI}, ${TEXT.classificationConfidence(92)}`,
+    )
+  })
+
+  it.each([
+    ['"ai", a run having written it into a blank department', 'ai'],
+    ['null, as on a classification recorded before the field', null],
+  ])('keeps "Suggested by AI" on an applied department whose department_applied_by is %s', async (_case, appliedBy) => {
+    await renderDetail(detailOf({ classification: classificationOf({ department_applied_by: appliedBy }) }))
+
+    const department = assignment(TEXT.classificationFieldDepartment)
+    expect(department.provenance).toBe(`${TEXT.classificationSuggestedByAI}, ${TEXT.classificationConfidence(81)}`)
+    expect(department.provenance).not.toContain(TEXT.classificationGivenByPerson)
   })
 })
 
@@ -845,5 +892,392 @@ describe('FR-10: a 403 and a 404 on an action', () => {
     expect(alert.textContent).toContain(TEXT.documentRecordNotFound)
     expect(document.body.textContent).not.toContain('Not found.')
     expect(document.body.textContent).not.toMatch(/permi/i)
+  })
+})
+
+/* ---- A person adds a tag (FR-10's provenance clause, UC-09 A3) ----------- */
+
+/*
+ * `tag_options` as the detail carries it (docs/api-contract.md, NIT3004 FR-10):
+ * all three keys, each list sorted by name. A `tag_id` is the Tag's own id, not a
+ * link's `content_tag_id`.
+ */
+const BRIDGE = { tag_id: 'tag-bridge', tag_name: 'bridge maintenance' }
+const REFRESH = { tag_id: 'tag-refresh', tag_name: 'policy refresh' }
+const ONBOARDING = { tag_id: 'tag-onboarding', tag_name: 'onboarding' }
+const PURCHASING = { tag_id: 'tag-purchasing', tag_name: 'purchasing' }
+const BUDGET = { tag_id: 'tag-budget', tag_name: 'budget planning' }
+
+function optionsOf(overrides = {}) {
+  return { Project: [BRIDGE, REFRESH], Process: [ONBOARDING, PURCHASING], Topic: [BUDGET], ...overrides }
+}
+
+/** A link the apply route made: a person's, confirmed, with no confidence (the contract's 201). */
+function personLink(contentTagId, dimension, name) {
+  return {
+    content_tag_id: contentTagId,
+    dimension,
+    name,
+    applied_by: 'user',
+    confirmed: true,
+    provisional: false,
+    confidence: null,
+  }
+}
+
+/** The add-a-tag part of the section, or null while it is not offered. */
+function addSection() {
+  return screen.queryByRole('region', { name: TEXT.tagAddHeading })
+}
+
+/** The form that applies a tag the document offers. */
+function chooser() {
+  return within(screen.getByRole('form', { name: TEXT.tagChooseLegend }))
+}
+
+/** The form that applies a new Topic by name. */
+function topicForm() {
+  return within(screen.getByRole('form', { name: TEXT.tagNewTopicLegend }))
+}
+
+/** The names a select offers, in order. */
+function offeredNames(select) {
+  return Array.from(select.options, (option) => option.textContent)
+}
+
+/** What the section's live region says: the latest outcome. */
+function announcement() {
+  return section().querySelector('.classification__announcement').textContent
+}
+
+/** Everything that describes a field to assistive technology: its hint and its error. */
+function descriptionOf(field) {
+  return (field.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ')
+}
+
+/** The detail's GET answered with `first` once, and with `later` on every read after it. */
+function detailReads(first, later) {
+  let reads = 0
+  return () => {
+    reads += 1
+    return { body: reads === 1 ? first : later }
+  }
+}
+
+describe('FR-10 (UC-09 A3): a person adds a tag the document offers, or a new topic', () => {
+  it('offers each dimension’s tags from tag_options, sends the chosen one by tag_id, announces the 201, and offers what the options read again say', async () => {
+    const before = detailOf({
+      tags: { project: ['policy refresh'], process: [], topic: [] },
+      classification: classificationOf(),
+      tag_details: [AI_TAG],
+      tag_options: optionsOf(),
+    })
+    // The second read of the detail: a Topic another session added meanwhile.
+    const after = { ...before, tag_options: optionsOf({ Topic: [BUDGET, { tag_id: 'tag-safety', tag_name: 'site safety' }] }) }
+    const answered = await renderDetail(before, {
+      [`GET ${DOC}`]: detailReads(before, after),
+      [`POST ${DOC}/tags`]: {
+        status: 201,
+        body: { tag_details: [AI_TAG, personLink('ct-purchasing', 'Process', PURCHASING.tag_name)] },
+      },
+    })
+
+    const dimension = chooser().getByLabelText(TEXT.tagDimensionLabel)
+    expect(Array.from(dimension.options, (option) => option.value)).toEqual(['Project', 'Process', 'Topic'])
+    expect(offeredNames(chooser().getByLabelText(TEXT.tagChooseLabel))).toEqual([BRIDGE.tag_name, REFRESH.tag_name])
+
+    fireEvent.change(dimension, { target: { value: 'Process' } })
+    const tag = chooser().getByLabelText(TEXT.tagChooseLabel)
+    expect(offeredNames(tag)).toEqual([ONBOARDING.tag_name, PURCHASING.tag_name])
+    fireEvent.change(tag, { target: { value: PURCHASING.tag_id } })
+    press(chooser().getByRole('button', { name: TEXT.tagAddLabel(PURCHASING.tag_name) }))
+
+    await waitFor(() => expect(announcement()).toBe(TEXT.tagApplied(PURCHASING.tag_name)))
+    // The new link as the reply lists it, marked as a person's, and in the metadata above.
+    const process = within(tagGroup(TEXT.documentFieldProcess))
+    expect(process.getByText(PURCHASING.tag_name)).toBeTruthy()
+    expect(process.getByText(TEXT.tagAddedByPerson)).toBeTruthy()
+    expect(metadata(TEXT.documentFieldProcess)).toBe(PURCHASING.tag_name)
+    // One request in the contract's form, then one read of the detail for its options.
+    expect(requestsTo(answered, 'POST', `${DOC}/tags`).map((request) => request.body)).toEqual([
+      { tag_id: PURCHASING.tag_id },
+    ])
+    expect(requestsTo(answered, 'GET', DOC)).toHaveLength(2)
+    // The chooser now offers what that read said.
+    fireEvent.change(chooser().getByLabelText(TEXT.tagDimensionLabel), { target: { value: 'Topic' } })
+    expect(offeredNames(chooser().getByLabelText(TEXT.tagChooseLabel))).toEqual([BUDGET.tag_name, 'site safety'])
+  })
+
+  it('announces a 200, a tag already on the document, in other words than a 201', async () => {
+    // "onboarding" is held as a suggestion; applying it confirms it, which is the 200.
+    const confirmed = { ...HELD_TAG, confirmed: true, provisional: false }
+    const answered = await renderDetail(
+      detailOf({ classification: classificationOf(), tag_details: [HELD_TAG], tag_options: optionsOf() }),
+      { [`POST ${DOC}/tags`]: { status: 200, body: { tag_details: [confirmed] } } },
+    )
+
+    fireEvent.change(chooser().getByLabelText(TEXT.tagDimensionLabel), { target: { value: 'Process' } })
+    press(chooser().getByRole('button', { name: TEXT.tagAddLabel(ONBOARDING.tag_name) }))
+
+    await waitFor(() => expect(announcement()).toBe(TEXT.tagAlreadyApplied(ONBOARDING.tag_name)))
+    expect(announcement()).not.toBe(TEXT.tagApplied(ONBOARDING.tag_name))
+    // The suggestion is among the document's tags now, as the reply lists it.
+    expect(heldGroup()).toBeNull()
+    expect(
+      within(tagGroup(TEXT.documentFieldProcess)).getByText(`${TEXT.tagConfirmedAI}, ${TEXT.classificationConfidence(55)}`),
+    ).toBeTruthy()
+    expect(requestsTo(answered, 'POST', `${DOC}/tags`).map((request) => request.body)).toEqual([
+      { tag_id: ONBOARDING.tag_id },
+    ])
+  })
+
+  it('sends a new topic single-spaced as {dimension: "Topic", tag_name}, announces the name stored, clears the field, and offers it from the options read again', async () => {
+    const before = detailOf({ classification: classificationOf(), tag_details: [], tag_options: optionsOf() })
+    const reforecast = { tag_id: 'tag-reforecast', tag_name: 'budget reforecast' }
+    const after = { ...before, tag_options: optionsOf({ Topic: [BUDGET, reforecast] }) }
+    const answered = await renderDetail(before, {
+      [`GET ${DOC}`]: detailReads(before, after),
+      [`POST ${DOC}/tags`]: {
+        status: 201,
+        body: { tag_details: [personLink('ct-reforecast', 'Topic', reforecast.tag_name)] },
+      },
+    })
+
+    const field = topicForm().getByLabelText(TEXT.tagNewTopicLabel)
+    fireEvent.change(field, { target: { value: '  Budget \t  Reforecast  ' } })
+    press(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd }))
+
+    // In the server's lower case, from the reply, as the list beside it shows it.
+    await waitFor(() => expect(announcement()).toBe(TEXT.tagApplied(reforecast.tag_name)))
+    expect(field.value).toBe('')
+    expect(within(tagGroup(TEXT.documentFieldTopic)).getByText(reforecast.tag_name)).toBeTruthy()
+    expect(requestsTo(answered, 'POST', `${DOC}/tags`).map((request) => request.body)).toEqual([
+      { dimension: 'Topic', tag_name: 'Budget Reforecast' },
+    ])
+    fireEvent.change(chooser().getByLabelText(TEXT.tagDimensionLabel), { target: { value: 'Topic' } })
+    expect(offeredNames(chooser().getByLabelText(TEXT.tagChooseLabel))).toEqual([BUDGET.tag_name, reforecast.tag_name])
+  })
+
+  it('refuses an empty name, and one longer than TAG_NAME_MAXIMUM_LENGTH once single-spaced, beside the field and before any request', async () => {
+    const answered = await renderDetail(detailOf({ classification: classificationOf(), tag_options: optionsOf() }), {
+      [`POST ${DOC}/tags`]: { status: 201, body: { tag_details: [] } },
+    })
+    const field = () => topicForm().getByLabelText(TEXT.tagNewTopicLabel)
+    const add = () => topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd })
+    const posts = () => requestsTo(answered, 'POST', `${DOC}/tags`)
+
+    fireEvent.change(field(), { target: { value: '  \t ' } })
+    press(add())
+    await waitFor(() => expect(document.activeElement).toBe(field()))
+    expect(field().getAttribute('aria-invalid')).toBe('true')
+    expect(descriptionOf(field())).toContain(VALIDATION.tagNameRequired)
+
+    fireEvent.change(field(), { target: { value: 'x'.repeat(TAG_NAME_MAXIMUM_LENGTH + 1) } })
+    press(add())
+    await waitFor(() => expect(descriptionOf(field())).toContain(VALIDATION.tagNameTooLong))
+    expect(field().getAttribute('aria-invalid')).toBe('true')
+    expect(posts()).toEqual([])
+
+    // The bound as the name is sent: inclusive, after single-spacing, and in characters
+    // rather than UTF-16 units, as the server's len() counts.
+    const accepted = [
+      'x'.repeat(TAG_NAME_MAXIMUM_LENGTH),
+      `a${' '.repeat(TAG_NAME_MAXIMUM_LENGTH)}b`,
+      '😀'.repeat(TAG_NAME_MAXIMUM_LENGTH),
+    ]
+    for (const [index, typed] of accepted.entries()) {
+      fireEvent.change(field(), { target: { value: typed } })
+      press(add())
+      await waitFor(() => expect(posts()).toHaveLength(index + 1))
+      await waitFor(() => expect(field().value).toBe(''))
+    }
+    expect(posts().map((request) => request.body.tag_name)).toEqual([
+      'x'.repeat(TAG_NAME_MAXIMUM_LENGTH),
+      'a b',
+      '😀'.repeat(TAG_NAME_MAXIMUM_LENGTH),
+    ])
+  })
+
+  it('on a 409 shows its sentence and selects the Topic it names in the chooser, with focus on its Add, so one press applies it', async () => {
+    let posts = 0
+    const answered = await renderDetail(
+      detailOf({ classification: classificationOf(), tag_details: [], tag_options: optionsOf() }),
+      {
+        [`POST ${DOC}/tags`]: () => {
+          posts += 1
+          return posts === 1
+            ? { status: 409, body: { detail: TOPIC_ALREADY_OFFERED_MESSAGE, tag_id: BUDGET.tag_id } }
+            : { status: 201, body: { tag_details: [personLink('ct-budget', 'Topic', BUDGET.tag_name)] } }
+        },
+      },
+    )
+
+    fireEvent.change(topicForm().getByLabelText(TEXT.tagNewTopicLabel), { target: { value: 'Budget Planning' } })
+    press(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd }))
+
+    const add = await chooser().findByRole('button', { name: TEXT.tagAddLabel(BUDGET.tag_name) })
+    await waitFor(() => expect(document.activeElement).toBe(add))
+    expect(chooser().getByLabelText(TEXT.tagDimensionLabel).value).toBe('Topic')
+    expect(chooser().getByLabelText(TEXT.tagChooseLabel).value).toBe(BUDGET.tag_id)
+    expect(within(addSection()).getByRole('status').textContent).toBe(
+      `${TEXT.tagAlreadyOffered} ${TEXT.tagAlreadyOfferedSelected}`,
+    )
+    // Nothing was added, nothing failed, and the options held had the tag: no second read.
+    expect(within(tagGroup(TEXT.documentFieldTopic)).queryByText(BUDGET.tag_name)).toBeNull()
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(requestsTo(answered, 'GET', DOC)).toHaveLength(1)
+
+    fireEvent.click(add)
+
+    await waitFor(() => expect(announcement()).toBe(TEXT.tagApplied(BUDGET.tag_name)))
+    expect(within(tagGroup(TEXT.documentFieldTopic)).getByText(BUDGET.tag_name)).toBeTruthy()
+    expect(within(addSection()).queryByRole('status')).toBeNull()
+    expect(requestsTo(answered, 'POST', `${DOC}/tags`).map((request) => request.body)).toEqual([
+      { dimension: 'Topic', tag_name: 'Budget Planning' },
+      { tag_id: BUDGET.tag_id },
+    ])
+  })
+
+  it('on a 409 naming a tag the options held here lack, reads them again first and then selects it, showing the client’s sentence and never the body’s', async () => {
+    const before = detailOf({ classification: classificationOf(), tag_details: [], tag_options: optionsOf() })
+    const wellbeing = { tag_id: 'tag-wellbeing', tag_name: 'wellbeing' }
+    const after = { ...before, tag_options: optionsOf({ Topic: [BUDGET, wellbeing] }) }
+    const backendText = 'IntegrityError: duplicate key value violates unique constraint "tags_unique_name_per_dimension"'
+    const answered = await renderDetail(before, {
+      [`GET ${DOC}`]: detailReads(before, after),
+      [`POST ${DOC}/tags`]: { status: 409, body: { detail: backendText, tag_id: wellbeing.tag_id } },
+    })
+
+    fireEvent.change(topicForm().getByLabelText(TEXT.tagNewTopicLabel), { target: { value: 'Wellbeing' } })
+    press(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd }))
+
+    const add = await chooser().findByRole('button', { name: TEXT.tagAddLabel(wellbeing.tag_name) })
+    await waitFor(() => expect(document.activeElement).toBe(add))
+    expect(chooser().getByLabelText(TEXT.tagChooseLabel).value).toBe(wellbeing.tag_id)
+    expect(requestsTo(answered, 'GET', DOC)).toHaveLength(2)
+    expect(within(addSection()).getByRole('status').textContent).toContain(TEXT.tagAlreadyOffered)
+    expect(document.body.textContent).not.toContain(backendText)
+  })
+
+  it.each([
+    {
+      field: 'tag_id',
+      form: 'the chooser',
+      message: "Choose a tag from this document's tag options.",
+      control: () => chooser().getByLabelText(TEXT.tagChooseLabel),
+      submit: () => press(chooser().getByRole('button', { name: TEXT.tagAddLabel(BRIDGE.tag_name) })),
+    },
+    {
+      field: 'tag_name',
+      form: 'the new topic',
+      message: 'Ensure this field has no more than 255 characters.',
+      control: () => topicForm().getByLabelText(TEXT.tagNewTopicLabel),
+      submit: () => {
+        fireEvent.change(topicForm().getByLabelText(TEXT.tagNewTopicLabel), { target: { value: 'site safety' } })
+        press(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd }))
+      },
+    },
+  ])('places a 400 on $field beside its field in $form, and moves focus to it', async ({ field, message, control, submit }) => {
+    await renderDetail(detailOf({ classification: classificationOf(), tag_options: optionsOf() }), {
+      [`POST ${DOC}/tags`]: { status: 400, body: { [field]: [message] } },
+    })
+
+    submit()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.classificationCheckFields)
+    await waitFor(() => expect(document.activeElement).toBe(control()))
+    expect(control().getAttribute('aria-invalid')).toBe('true')
+    expect(descriptionOf(control())).toContain(message)
+    expect(announcement()).toBe('')
+  })
+
+  it('says a dimension offers nothing rather than showing an empty list, and offers no Add there', async () => {
+    await renderDetail(
+      detailOf({ classification: classificationOf(), tag_options: { Project: [], Process: [PURCHASING], Topic: [] } }),
+    )
+
+    expect(chooser().getByText(TEXT.tagChooseNone(TEXT.documentFieldProject))).toBeTruthy()
+    expect(chooser().queryByLabelText(TEXT.tagChooseLabel)).toBeNull()
+    expect(chooser().queryByRole('button')).toBeNull()
+    fireEvent.change(chooser().getByLabelText(TEXT.tagDimensionLabel), { target: { value: 'Process' } })
+    expect(chooser().getByRole('button', { name: TEXT.tagAddLabel(PURCHASING.tag_name) })).toBeTruthy()
+    // A new topic can still be typed.
+    expect(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd })).toBeTruthy()
+  })
+
+  it('renders an offered tag’s name as text, never as HTML', async () => {
+    const hostile = '<img src="x" onerror="window.__fr10OptionInjected = true"><b>bridge</b>'
+    await renderDetail(
+      detailOf({
+        classification: classificationOf(),
+        tag_options: optionsOf({ Project: [{ tag_id: 'tag-hostile', tag_name: hostile }] }),
+      }),
+    )
+
+    expect(chooser().getByLabelText(TEXT.tagChooseLabel).options[0].textContent).toBe(hostile)
+    expect(chooser().getByRole('button', { name: TEXT.tagAddLabel(hostile) })).toBeTruthy()
+    expect(document.querySelectorAll('img, b')).toHaveLength(0)
+    expect(window.__fr10OptionInjected).toBeUndefined()
+  })
+})
+
+describe('FR-10: the add control’s refusals', () => {
+  it('is offered on a document never classified, and goes with every other control on a 403', async () => {
+    const backendText = "Your role does not hold the 'contribute_content' permission."
+    await renderDetail(detailOf({ tag_options: optionsOf() }), {
+      [`POST ${DOC}/tags`]: { status: 403, body: { detail: backendText } },
+    })
+    expect(screen.getByText(TEXT.classificationNone)).toBeTruthy()
+    expect(addSection()).toBeTruthy()
+
+    press(chooser().getByRole('button', { name: TEXT.tagAddLabel(BRIDGE.tag_name) }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.classificationNotPermitted)
+    expect(document.body.textContent).not.toContain(backendText)
+    expect(addSection()).toBeNull()
+    expect(screen.queryByLabelText(TEXT.tagNewTopicLabel)).toBeNull()
+    expect(within(section()).queryAllByRole('button')).toEqual([])
+  })
+
+  it.each([
+    {
+      failure: 'a 404',
+      route: { status: 404, body: { detail: 'No Document matches the given query.' } },
+      text: TEXT.documentRecordNotFound,
+    },
+    {
+      failure: 'a network failure',
+      route: () => {
+        throw new TypeError('Failed to fetch')
+      },
+      text: messageForStatus(NETWORK_ERROR_STATUS),
+    },
+  ])('answers $failure with the panel’s own failure notice, adds nothing and keeps the controls', async ({ route, text }) => {
+    await renderDetail(detailOf({ classification: classificationOf(), tag_options: optionsOf() }), {
+      [`POST ${DOC}/tags`]: route,
+    })
+
+    fireEvent.change(topicForm().getByLabelText(TEXT.tagNewTopicLabel), { target: { value: 'site safety' } })
+    press(topicForm().getByRole('button', { name: TEXT.tagNewTopicAdd }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.classificationFailed)
+    expect(alert.textContent).toContain(text)
+    expect(document.body.textContent).not.toContain('No Document matches')
+    expect(within(tagGroup(TEXT.documentFieldTopic)).queryByText('site safety')).toBeNull()
+    // What was typed stays, so the attempt can be made again.
+    expect(topicForm().getByLabelText(TEXT.tagNewTopicLabel).value).toBe('site safety')
+    expect(addSection()).toBeTruthy()
+  })
+})
+
+describe('FR-10’s 409 sentence', () => {
+  it('is word for word the server’s TOPIC_ALREADY_OFFERED_MESSAGE (apps/api/views.py)', () => {
+    expect(TEXT.tagAlreadyOffered).toBe(TOPIC_ALREADY_OFFERED_MESSAGE)
   })
 })

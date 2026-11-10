@@ -24,9 +24,11 @@ from apps.core.constants import (
     DOCUMENT_PROCESSING,
     DOCUMENT_TYPES,
     EMPLOYEE_ROLE_NAME,
+    PROJECT_DIMENSION,
 )
 from apps.documents.management.commands import classify_documents as command_module
-from apps.documents.models import Document, DocumentAnalysis, ExtractedContent
+from apps.documents.classification import reject_tag
+from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
 
 pytestmark = pytest.mark.django_db
 
@@ -159,3 +161,22 @@ def test_the_kmp_database_is_refused(employee, monkeypatch, stub_ai_service):
 
     assert stub_ai_service.classify_calls == []
     assert not DocumentAnalysis.objects.exists()
+
+
+def test_a_removed_link_is_recorded_as_removed_and_counted_apart(employee, tmp_path):
+    """D-105's dated note of 10 November 2026 (night): a link a person removed stays beside the
+    machine's assignment, so the record lists it with ``removed: true``, and the summary line counts
+    it as removed rather than as applied."""
+    document = make_document(employee, "Bridge works")
+    Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)  # in the scheme
+    run("--document", str(document.id))
+    link = ContentTag.objects.get(source_id=document.id)
+    reject_tag(document, link.pk)
+    record_path = tmp_path / "record.json"
+
+    out, _ = run("--document", str(document.id), "--out", str(record_path))
+
+    [entry] = json.loads(record_path.read_text(encoding="utf-8"))["documents"]
+    [tag] = entry["tags"]
+    assert (tag["name"], tag["removed"], tag["provisional"]) == ("bridge maintenance", True, False)
+    assert "tags 0 applied, 0 held, 1 removed" in out

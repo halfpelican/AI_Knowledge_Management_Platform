@@ -44,6 +44,7 @@ from apps.core.constants import (
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
+    MANAGE_TAGS_PERMISSION,
     MAX_UPLOAD_BYTES,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
@@ -55,6 +56,9 @@ from apps.documents.classification import (
     InsufficientText,
     InvalidClassification,
     NotOnThisDocument,
+    TagNotOffered,
+    TopicAlreadyOffered,
+    apply_tag,
     classify_document_now,
     confirm_classification,
     confirm_proposed_topic,
@@ -64,7 +68,8 @@ from apps.documents.classification import (
 )
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
-from apps.documents.models import Document
+from apps.documents.models import Document, Tag
+from apps.documents.taxonomy import retire_tag, tag_inventory
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.errors import (
@@ -124,7 +129,9 @@ from .serializers import (
     RoleChangeSerializer,
     RoleSerializer,
     SearchResultsSerializer,
+    TagApplySerializer,
     TagDetailSerializer,
+    TagEntrySerializer,
     UserSerializer,
     classification_payload,
     tag_details_payload,
@@ -223,6 +230,15 @@ CLASSIFICATION_UNAVAILABLE_MESSAGE = (
     "The knowledge service is temporarily unavailable. The document was not classified; "
     "please try again shortly."
 )
+# POST /api/documents/{id}/tags (D-105's dated note of 10 November 2026, night). One 400 for a
+# tag_id that is unknown, inactive or outside the document's scheme, keyed on the field, so the
+# answer never tells a tag that does not exist from one the caller may not see (invariant 1).
+TAG_NOT_OFFERED_MESSAGE = "Choose a tag from this document's tag options."
+# FR-10 Responses: "409 Conflict on a duplicate tag name within a dimension". Answered only for a
+# Topic already in the document's scheme, which the caller is offered anyway.
+TOPIC_ALREADY_OFFERED_MESSAGE = (
+    "A Topic with this name is already offered for this document. Choose it from the tag options."
+)
 # FR-15's download answers a document whose original is not stored, is gone from disk, or is
 # named by a path outside MEDIA_ROOT, with
 # exactly the 404 body its scoped lookup gives an unknown id or one outside the caller's scope
@@ -234,6 +250,9 @@ CLASSIFICATION_UNAVAILABLE_MESSAGE = (
 # a GET for bytes that are not there is "not found", while reprocess is an action that cannot
 # proceed, and says so with a 422.
 DOCUMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Document._meta.object_name
+# DELETE /api/tags/{id} for an id that names no tag it acts on: get_object_or_404's own wording, as
+# DOCUMENT_NOT_FOUND_MESSAGE above restates it for documents.
+TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
 # FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
 # restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
 # exception (D-41).
@@ -288,6 +307,10 @@ CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
 # before anything else. Nothing on those routes is scoped, so there is nothing for a 403 to
 # disclose by preceding a 404: an entry's existence is the Administrator's to know.
 CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMISSION)
+# FR-10's tag administration (D-119 finding 5): the same arrangement as FR-19's, for the same
+# reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an unknown
+# tag; a tag's existence is the Administrator's to know, since they read every source (D-66).
+CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -1365,7 +1388,8 @@ class DocumentReprocessView(APIView):
 
 # --- FR-10 classification (D-104, D-105) -----------------------------------------------------
 #
-# Six routes over one document, and one rule for all of them, in this order: the document is
+# Seven routes over one document (the seventh, a person applying a tag, since D-105's dated note
+# of 10 November 2026, night), and one rule for all of them, in this order: the document is
 # resolved through the caller's scope (404 for an unknown id and one outside the scope alike,
 # D-46); then ``contribute_content`` is checked, 403 without it (D-105 settles the permission,
 # D-73 the order, so a 403 can never confirm that a document the caller cannot see exists); then
@@ -1476,9 +1500,55 @@ class DocumentTagConfirmView(APIView):
         return Response(TagDetailSerializer(link).data)
 
 
+class DocumentTagsView(APIView):
+    """``POST /api/documents/{id}/tags`` — a person applies a tag (FR-10's provenance clause; UC-09
+    A3; D-105's dated note of 10 November 2026, night).
+
+    The FR-10 order: the scoped 404, then ``contribute_content``'s 403, then the body
+    (``TagApplySerializer``: exactly one of ``{tag_id}`` and ``{dimension: "Topic", tag_name}``),
+    then ``apply_tag``. A ``tag_id`` not offered for this document, for whatever reason, is one 400
+    keyed on ``tag_id``. A new Topic whose name is already offered is FR-10's 409, carrying that
+    tag's id, which the detail's ``tag_options`` already shows the caller; a Topic of that name that
+    exists only beyond the document's audience, or inactive, is linked and answered as a new one.
+
+    201 ``{"tag_details": [...]}`` when a new link was made; 200 with the same shape when the tag was
+    already on the document and was confirmed, restored or left as it was. ``tag_details`` is the
+    document's whole current list, as the classify reply carries it.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        document = scoped_document_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = TagApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            applied = apply_tag(document, tag_id=data.get("tag_id"), tag_name=data.get("tag_name"))
+        except NotOnThisDocument:
+            raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
+        except TagNotOffered:
+            return Response({"tag_id": [TAG_NOT_OFFERED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+        except TopicAlreadyOffered as exc:
+            return Response(
+                {"detail": TOPIC_ALREADY_OFFERED_MESSAGE, "tag_id": str(exc.tag_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except InvalidClassification as exc:
+            return Response({"tag_name": [str(exc)]}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"tag_details": tag_details_payload(document)},
+            status=status.HTTP_201_CREATED if applied.created else status.HTTP_200_OK,
+        )
+
+
 class DocumentTagView(APIView):
-    """``DELETE /api/documents/{id}/tags/{content_tag_id}`` — remove a tag "in a single action". The
-    link goes; the ``Tags`` row, a vocabulary, stays (D-73's note). 204 with no body."""
+    """``DELETE /api/documents/{id}/tags/{content_tag_id}`` — remove a tag "in a single action". 204
+    with no body. The link is kept, marked removed, a person's as well as an AI link with the
+    machine's confidence, and no read lists it again (``reject_tag``, D-105's dated note of 10
+    November 2026, night). The ``Tags`` row, a vocabulary, stays (D-73's note). A link already
+    removed is the same 404 as an unknown one."""
 
     permission_classes = [IsAuthenticated]
 
@@ -1536,6 +1606,47 @@ class DocumentProposedTopicRejectView(_ProposedTopicView):
 
     def act(self, document, value):
         reject_proposed_topic(document, value)
+
+
+# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night) --
+
+
+class TagListView(APIView):
+    """``GET /api/tags`` — every Tag in Project, Process and Topic, active or not, ordered by dimension
+    then name, each with ``item_count`` (``apps/documents/taxonomy.py::tag_inventory``).
+
+    ``manage_tags`` is a permission class, so 401 and then 403 come before anything else, as on
+    FR-19's routes. The list is not scoped and needs no scope: its one reader, the Administrator,
+    reads every source (D-66), and the seed's test holds every holder of the code to that. 200 with a
+    bare list, ``[]`` for none.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def get(self, request):
+        return Response(TagEntrySerializer(tag_inventory(), many=True).data)
+
+
+class TagDetailView(APIView):
+    """``DELETE /api/tags/{id}`` — retire a tag (FR-10: "Tags are deactivated rather than deleted
+    where content still references them, preserving historical classification").
+
+    401, then 403 without ``manage_tags``, then 404 for an id naming no tag in the three dimensions.
+    A tag any link references, in any state, is deactivated and answered 200 with its entry, again
+    for one already inactive; an unreferenced tag is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_tag``). There is no route that reactivates a tag.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            tag = retire_tag(pk)
+        except Tag.DoesNotExist:
+            raise Http404(TAG_NOT_FOUND_MESSAGE)
+        if tag is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(TagEntrySerializer(tag).data)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------

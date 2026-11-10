@@ -67,13 +67,23 @@ SCHEMA_V1 = {
          # keeps the cited identifier when the chunk is deleted (docs/schema-v1.md §1).
          "chunk_uuid"},
     ),
-    "tags": (("tag_id",), {"tag_id", "tag_name", "dimension", "active"}),
+    "tags": (
+        ("tag_id",),
+        {"tag_id", "tag_name", "dimension", "active",
+         # documents 0010, 10 November 2026 (FR-10, D-105's dated note, the lead's revision): a
+         # Topic brought into use by a name, which is not vocabulary once unlinked.
+         "grown"},
+    ),
     "content_tags": (
         ("content_tag_id",),
         {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
          # Migration v2, 8 November 2026 (FR-10, D-105): the model's confidence for an AI link,
          # and whether the link is held for confirmation (docs/schema-v1.md §1).
-         "confidence", "provisional"},
+         "confidence", "provisional",
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 3): a link a person removed,
+         # an AI link kept beside the machine's assignment and a person's so that no later run
+         # links it again (docs/schema-v1.md §1).
+         "removed"},
     ),
     # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by
     # documents 0008, when FR-10 was built. The columns are docs/schema-v1.md §1's.
@@ -82,7 +92,9 @@ SCHEMA_V1 = {
         {"analysis_id", "doc_id", "machine_doc_type", "machine_doc_type_confidence",
          "machine_department", "machine_department_confidence", "doc_type", "doc_type_outcome",
          "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
-         "model", "input_truncated", "classified_at"},
+         "model", "input_truncated", "classified_at",
+         # documents 0009, 10 November 2026 (FR-10, D-119 finding 10): whose department it is.
+         "department_applied_by"},
     ),
     # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
     # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
@@ -215,8 +227,15 @@ SECTION_5_PLAN = [
     ("accounts", "0006_seed_manage_meetings"),
     # FR-19 (D-107): the knowledge-gap permission, Administrator only, immediately after 0006.
     ("accounts", "0007_seed_review_knowledge_gaps"),
+    # FR-10's tag administration (D-119 finding 5): manage_tags, Administrator only, immediately
+    # after 0007.
+    ("accounts", "0008_seed_manage_tags"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
+    # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011
+    # depends on it (its backfill reads meetings' visible_to_roles); it was planned after documents
+    # 0010 until then. Its operations are unchanged.
+    ("meetings", "0002_visible_to_roles"),
     ("documents", "0002_content_chunks"),
     ("retrieval", "0001_initial"),
     ("documents", "0003_tags"),
@@ -235,7 +254,14 @@ SECTION_5_PLAN = [
     # provisional columns. Immediately after 0007 because that is where its dependency puts it
     # in the plan, the rule D-51 records.
     ("documents", "0008_fr10_document_analysis"),
-    ("meetings", "0002_visible_to_roles"),  # D-16: visible_to_roles on Meetings
+    # FR-10's tag corrections (D-119 findings 3 and 10), 10 November 2026: ContentTags.removed and
+    # DocumentAnalysis.department_applied_by, immediately after 0008, where its dependency puts it.
+    ("documents", "0009_fr10_tag_corrections"),
+    # Tags.grown (the lead's revision of the same night), immediately after 0009.
+    ("documents", "0010_tag_grown"),
+    # The security review's backfill (D-105's dated note of 10 November 2026, night), immediately
+    # after 0010.
+    ("documents", "0011_grown_marks_withheld_tags"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),

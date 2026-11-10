@@ -6963,6 +6963,393 @@ step 4), before the status is decided, as this entry's note on the upload's cost
 The rest of the paragraph stands: the call has its own savepoint, catches and logs every exception,
 and never changes the document's status. Found by the requirements audit (D-119, its finding 7).
 
+**Dated note, 10 November 2026 (night): the tag corrections (D-119's findings 3, 4, 5 and 10).**
+The user's decisions on the requirements audit (D-119's table), built on
+`feat/FR-10-tag-corrections`, server side only; the interface half follows on the same branch. Each
+decision is recorded with its reason, and each build choice the brief left open is named as one.
+*Corrected the same night, after the requirements re-audit of `5377e3a`: the interface half
+landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
+
+- **A removal is kept (finding 3).** FR-10's correction clause: "any value a user edits are retained
+  and is not overwritten by later reprocessing, and the machine assignment is retained alongside
+  it". `reject_tag` deleted the link, so the machine's assignment was lost and the next classify or
+  reprocess linked the tag again. `documents 0009` adds `ContentTags.removed`, additive and
+  reversible.
+  - **Removing an AI link** (held or applied, confirmed or not) sets `removed` and keeps the row,
+    with the confidence and provisional flag the machine gave it. **Removing a person's link
+    deletes it**: it holds no machine assignment to keep. The route keeps its URL and its 204.
+    *Changed the same night, after the requirements re-audit of `5377e3a`: a person's link is kept
+    and marked removed too, because deleting it let the next run link the value again (the last
+    bullet of this note).*
+  - **No read lists a removed link.** Every read that excluded a provisional link excludes it: FR-15's
+    facets, filters and the detail's `tags`. So does `tag_details`, which does list provisional
+    links: a held suggestion waits for a decision, and a removed one has had it.
+  - **Reprocessing respects it.** A later classify or reprocess neither links the tag again nor
+    alters the removed row, so the confidence it keeps is the machine's at the time of the removal.
+    A Topic removed from a document is not proposed for it again, even once its Tag is retired.
+  - **`tag_scheme` still counts a removed link as a link,** as it counts a provisional one. A removed
+    suggestion on a restricted document is still a fact about that document, and not counting it
+    would turn a value carried only by restricted material into vocabulary every audience is
+    offered (invariant 1). *Corrected the same night, after the requirements re-audit of
+    `5377e3a`: the behaviour stands, but this reason has not held since `824c536`, where a tag that
+    is not grown is vocabulary whatever its links and a grown one never is. What counting a removed
+    link does now: the tag stays in its own document's scheme, offered there to be applied again
+    (`200`) and shown to the classifier, which leaves the removed link alone.*
+  - *Build choices:* a removed link's id is the same 404 as an unknown one on the confirm and remove
+    routes, because nothing ever shows it; confirming a proposed Topic whose link was removed
+    restores that link; `manage.py classify_documents` flags removed links in its record and counts
+    them apart in its summary line.
+  - *Declined:* recording the removal in a table of its own, which is a second home for one boolean.
+- **The department label (finding 10).** When the department the uploader typed equals the AI's
+  suggestion, the outcome is "applied", and the interface labelled the department "Suggested by AI"
+  although a person supplied it. The outcome cannot tell that case from a run that wrote its
+  suggestion into a blank department: both read "applied" with the department equal to the
+  machine's value. `documents 0009` adds `DocumentAnalysis.department_applied_by`, in the tags'
+  provenance vocabulary:
+  - `"user"`: a person gave the department, typed at upload or written through the confirm route.
+  - `"ai"`: a run wrote it into a blank department, and no person has written it since. A person
+    confirming that value as it stands keeps `"ai"`, as a confirmed AI tag keeps
+    `applied_by: "ai"`.
+  - `null`: no department.
+
+  Rule 3 of `apply_classification` sets it, and `confirm_classification` sets it where a person
+  writes the department. It needs history, which is why it is a column rather than something worked
+  out on each read: a second run that finds the machine's own earlier value equal to its suggestion
+  is the same state as finding 10's case, except for who wrote the value.
+  - **Rows classified before 0009 read null** until their next run or confirmation, and the
+    interface treats null as before. Their history is recorded nowhere, so none is guessed. A
+    department a run wrote into a blank before 0009 reads as the person's after its next run, which
+    is the one way this field can still be wrong. The Objective 05 twenty should hold none: all
+    twenty carry uploader departments (this entry's note of 10 November), and both measurement runs
+    (`aee5374`, `caf9e22`) descend from `2a85c9a`, where the machine began filling only a blank
+    department. That is checked against the git history, not against the database.
+  - *Declined:* a fifth outcome, which would change what "applied" means in Objective 05's records
+    and in `scripts/objective05_verify.py`; marking a typed department "confirmed", which this
+    entry's note of 10 November already declined.
+- **The stale comment (finding 10).** The comment above `MAXIMUM_CLASSIFY_ATTEMPTS` said it was named
+  "not so anything uses it before Stage 6". `apps/ai/classification.py`'s attempt loop has used it
+  since D-104. Corrected, and the same stale phrase in `apps/core/tests/test_constants.py` with it.
+- **A person applies a tag (finding 4).** FR-10's provenance clause speaks of tags "applied by a
+  person", and UC-09 A3 of a person who "adds one it did not", but only the D-74 seed script ever
+  wrote a person's link. `POST /api/documents/{id}/tags` (`apply_tag`) is guarded as the other FR-10
+  routes are: 401, then the scoped 404, then `contribute_content`'s 403 (D-73's order). Its body is
+  exactly one of two forms:
+  - `{"tag_id"}`: an existing tag, which must be active and in the document's scheme.
+  - `{"dimension": "Topic", "tag_name"}`: a new Topic, normalised as `Tags` normalises a name.
+    Only Topic may grow, by FR-10's controlled taxonomy growth, so any other dimension is a 400.
+  - **One 400 for a `tag_id` that cannot be applied.** Unknown, inactive, a Department tag or
+    withheld from the document's audience all get the same body, so the route cannot be used to
+    learn that a restricted tag exists (invariant 1).
+  - **The 409, and why an out-of-scheme name answers as created.** FR-10's "409 Conflict on a
+    duplicate tag name within a dimension" is answered only for a Topic already in the document's
+    scheme. The caller is offered that Topic anyway, and the 409 carries its id. A Topic of that
+    name that exists but is outside the scheme is carried only by material some reader of the
+    document cannot see, or is inactive. *Corrected the same night, after the requirements re-audit
+    of `5377e3a`: since `84b5771` it may also be a grown Topic that nothing links, and since
+    `824c536` it is always a grown Topic that no source every reader of the document can read
+    carries, one nothing links included, or an inactive one, as `classification.py` and the
+    contract say.* Answering 409 for it would tell the caller that a value they cannot see exists.
+    So it is linked as it stands, reactivated if it was inactive (as `confirm_proposed_topic`
+    already does), and answered 201 exactly as a new Topic is. *Corrected the same night, after the
+    focused re-audit of `88a488d`: unless this document already holds a link to it, live or
+    removed, which is kept or restored: 200. Since a person's removal is kept, a Topic typed,
+    removed, retired and typed again on the same document is that case. The answer depends only on
+    the document's own links.* A test
+    compares the two replies byte for byte, with only the new link's id masked: `Tags` has no
+    timestamp, and the reply carries no tag id, so nothing in it tells them apart. Timing is not
+    claimed to be indistinguishable. This entry's "the 409 is not reachable by design" is
+    superseded: it is reachable now, for an offered name.
+  - **The new link** is `applied_by: "user"`, `confirmed: true` (the D-74 seed's choice: a person's
+    tag is a decision already made), not provisional, not removed, confidence null, and the route
+    answers 201. A tag already on the document answers 200 with no new row:
+    - held: confirmed, as the confirm route does;
+    - removed: restored and confirmed, keeping its `applied_by` and the machine's confidence;
+    - applied or confirmed: left as it is, which includes an applied AI link nobody has confirmed.
+  - *Build choices:* a restored link is also no longer provisional, since a confirmed link is never
+    held (`confirm_tag` clears both together); the brief named the other fields and not this one.
+    The reply is `{"tag_details": [...]}`, the document's whole list in the classify reply's
+    shape, wrapped as the proposed-topic replies wrap theirs. The 409 carries the offered tag's id.
+- **`tag_options`, the choices (finding 4).** The brief asked for the document's scheme on "the
+  classification GET route". There is no such route: the interface reads the classification from
+  `GET /api/documents/{id}`, so `tag_options` is carried there, recorded as a correction to the
+  brief. It is `tag_scheme`'s tags with their ids, `{Project, Process, Topic: [{tag_id, tag_name}]}`
+  (`offered_tags`, `tag_options`).
+  - **Why every value in it is readable by the caller.** *Corrected the same night, after the
+    focused re-audit of `88a488d`: every grown value in it. A tag that is not grown is vocabulary,
+    readable through no source and disclosing none, as the correction after the next bullet says.*
+    A linked value is offered only if every role in the audience reads a source carrying it. A
+    caller reaches the detail only if their role reads the document, so some audience role is one
+    the caller's role reads, and EFFECTIVE_ROLES is closed under generalisation (D-66).
+  - **What the brief's sentence overstates.** "Every value in it is readable by every role in the
+    document's audience" is true of linked values only. An unlinked tag is in every scheme as
+    vocabulary (this entry's rule), and so in every document's `tag_options`, readable through no
+    source at all. That has always reached the classification prompt; `tag_options` now lists it
+    to every reader. Since the oracle bullet below, this holds for unlinked tags that are not
+    grown: Project and Process tags, and seeded Topics.
+    *Corrected the same night, after the requirements re-audit of `5377e3a`: since `824c536` (the
+    security review's bullet below) a tag that is not grown is offered whatever its links, and only
+    a grown tag needs every audience role to read a source carrying it. Read "linked values" in
+    these two bullets as grown ones, and "unlinked tags that are not grown" as every tag that is not
+    grown.*
+  - **A residual, for the lead.** A tag becomes unlinked when its last link is deleted, and two
+    paths delete links: removing a person's own tag (this note's rule, since it holds no machine
+    assignment) and deleting a document (D-73). So a Topic a person typed on an Administrator-only
+    document and then removed would be listed, by name, to Employees. The kept AI removal does not
+    do this, because a removed AI link still counts as a link. Two changes would close the path:
+    keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
+    route). Neither is built as a rule; the decision is the lead's. The lead's review found the
+    worse half of it the same night, and the oracle bullet below closes it for every Topic a
+    person brought in by name. *Since the requirements re-audit of `5377e3a` a person's removed link
+    is kept too (the last bullet of this note), so only deleting a document or a meeting deletes a
+    link.*
+- **An Administrator retires a tag (finding 5).** FR-10: "Tags are deactivated rather than deleted
+  where content still references them, preserving historical classification", and its CRUD line
+  gives Tags "Delete". Only the schema held either (`Tags.active`, and `PROTECT`, D-12).
+  - **`manage_tags`,** a new permission code (`MANAGE_TAGS_PERMISSION`), seeded to the Administrator
+    alone by `accounts 0008`, additive and reversible, as 0007 seeds `review_knowledge_gaps`. Its
+    test holds that every role given the code has the Administrator's scope, as FR-19's seed test
+    does (the security review's L3). *Declined:* `manage_documents`, so that granting one never
+    grants the other, D-99's reason.
+  - **`GET /api/tags`**: 401, then 403 without `manage_tags`, checked before anything else, because
+    nothing on the route is scoped. It lists every Tag in Project, Process and Topic, active or
+    not, ordered by dimension then name, each with `item_count`: the sources, documents and
+    meetings alike, with a link to it that is neither provisional nor removed, each counted once.
+    An Administrator reads every source (D-66), so no count tells them anything they could not
+    read. This is the Administrator's list of every value with its count; FR-15's facets, recorded
+    above as FR-10's tag browser, are unchanged.
+  - **`DELETE /api/tags/{id}`: deactivate versus delete.** 401, then 403, then 404 for an id that
+    names no tag in those three dimensions (a Department tag included, since nothing reads one,
+    D-72). A tag any `ContentTag` row references, in **any** state, is deactivated and kept, and
+    the route answers 200 with it in the list's shape; again for one already inactive. A tag
+    nothing references is deleted, 204. Any reference keeps it, a removed or held link included:
+    `PROTECT` refuses the delete, and a removed link exists precisely to keep the machine's
+    assignment, which needs its tag. The tag row is locked for the check and the delete.
+  - **What retiring does, and does not, do.** An inactive tag leaves `tag_scheme`, so neither the
+    machine nor a person can newly apply it by id, and it leaves every document's `tag_options`.
+    FR-15's reads keep their treatment of `active` unchanged: they do not consult it (D-72's
+    clarification of 7 October). So a retired tag still shows on the documents that carry it, in
+    `tags` and `tag_details`, as a facet value and as a filter. That is FR-10's "preserving
+    historical classification".
+  - **No reactivation route.** A retired Topic comes back the way `confirm_proposed_topic` has
+    always brought one back: a person names it, and `apply_tag` links and reactivates it, answered
+    as a new Topic would be (a retired value is in no scheme, so a 409 would disclose it).
+    *Corrected the same night, after the focused re-audit of `88a488d`: answered 200 instead when
+    the document already holds a link to it, live or removed, which is kept or restored.* A retired
+    Project or Process tag stays retired. *Declined:* a route that only reactivates, which nothing
+    in FR-10 asks for.
+- **The 409 rule's existence oracle, closed (the lead's review, the same night).** The rule as first
+  built (`90ebc51`) left one, found in the lead's review of `4b5cf65`. Two roles suffice:
+  1. An Employee holding `contribute_content` applies a Topic name to a document their role reads.
+     It answers 201 whether or not a Topic of that name exists on Administrator-only material, as
+     intended.
+  2. They remove it. A person's link is deleted, so it answers 204 either way. *(Since the
+     requirements re-audit of `5377e3a` the link is kept and marked removed; still 204.)*
+  3. They apply the name again. A name nothing else carried was now an unlinked Tag, admitted as
+     vocabulary and offered, so it answered 409. A name carried only by Administrator-only material
+     was still linked and unreadable, not offered, so it answered 201. `tag_options` differed the
+     same way after step 2.
+
+  So the three steps told an Employee whether a restricted Topic name exists, which breaks invariant
+  1. Deleting the only document carrying a tag does the same, but only a `manage_documents` holder
+  can delete.
+  - **The rule change (the lead's decisions).** The root cause: an unlinked tag was admitted while
+    a tag linked only on unreadable material was not, and Topics are the only names a person can
+    probe. `documents 0010` adds `Tags.grown`, additive and reversible. It is set on the Topic a
+    person's `apply_tag` name form links and on the Topic `confirm_proposed_topic` links, whether
+    created or fetched (restricted or inactive), and by nothing else. The `tag_id` form does not
+    set it, because an offered tag is already readable or vocabulary. In `tag_scheme` a tag is in
+    if every audience role reads a source carrying it, or if nothing links it and it is not grown.
+    Project and Process tags are never grown, so they are unchanged, and a seeded, unlinked Topic is
+    vocabulary. The empty-audience branch is unchanged, and so is `reject_tag`. A fetched Topic is
+    marked as well as a created one: otherwise a retired, seeded, unlinked Topic a person names
+    would come back as vocabulary after the removal, and answer 201, 204, 409 where a new name
+    answers 201, 204, 201. *Superseded the same night, marked after the requirements re-audit of
+    `5377e3a`: `824c536` admits a tag that is not grown whatever its links (the security review's
+    bullet below), `c99857c` grows only a Topic a name creates or reactivates, and since the
+    re-audit a person's removal is kept, so the sequence answers 201, 204, 409 in every variant.*
+  - *Dated line, 10 November 2026 (night): narrowed the same night.* `11a610f` first took every
+    unlinked Topic out of every scheme. That changed Objective 05's measured configuration, six
+    seeded, unlinked Topics shown to the classifier, and FR-10's "established scheme" for anyone who
+    seeds Topics, so the lead narrowed it the same night to the rule above. The configuration is now
+    as measured.
+  - **What follows.** A person naming a grown Topic that nothing links links it as it stands,
+    answered 201, like any out-of-scheme Topic. `tag_options` and the classification prompt list a
+    seeded, unlinked Topic as vocabulary, as they did before `11a610f`, and never list a grown one
+    that nothing links. The residual in this note's `tag_options` bullet is closed for every Topic
+    a person brought in by name. For a seeded tag of any dimension it stood, and not only by
+    deleting the documents that carry it: an Employee removing its readable person links reached it
+    too (the security review's finding 1, below). *Corrected the same night: this said "reachable
+    only by deleting the documents".* The vocabulary rule below closes it.
+  - **What this does not close.** A seeded tag whose only links are on restricted material is
+    withheld from a narrower audience, so watching `tag_options` over time can show that restricted
+    material has taken up a seeded value. That was so under this entry's rule from the start, for
+    every dimension, and neither `11a610f` nor this rule changed it. *Corrected the same night: this
+    said "An Employee cannot bring it about". The security review's finding 1, below, shows one
+    could, by removing a seeded value's readable person links.* The vocabulary rule below closes it.
+  - **Objective 05's runs met unlinked Topics, and this rule keeps them in.** Both recorded runs
+    began with all six seeded Topic values (compliance, finance, people, safety, technology,
+    workplace) unlinked:
+    - the first after `seed_objective02_tags.py --scheme-only` created the fourteen values with no
+      links (`corpus/objective-05/runs/2026-11-10/objective-05.md`, "before the run"; the script's
+      `--scheme-only` mode exists for this database, D-106);
+    - the informed re-run after the first run's 38 AI links were deleted (`rerun/rerun.md`).
+
+    Under the rule as it then was, all six were in the scheme when each run began. `11a610f`'s rule
+    would have kept all six out, because the run creates no link to a readable source before
+    classifying (it links only values already in the scheme and proposes the rest), so a re-run
+    under it on a scheme-only database would have proposed every Topic suggestion rather than
+    linked it. Under this rule the six are seeded and not grown, so they are in the scheme exactly
+    as when the runs began. A test runs `seed_objective02_tags.py --scheme-only` and checks that
+    all of its Topics are in the scheme. The runs' starting state is shown from the seed script and
+    the committed run records, not from the database.
+- **The security review of `84b5771` (the same night): the vocabulary rule.** The review found the
+  oracle's root cause still open in `tag_scheme`. Its vocabulary half read every `ContentTag`, links
+  nobody in the document's audience can read included, so what a reader was offered moved when
+  links on material they cannot read were made or destroyed. The lead checked findings 1 to 3
+  against the code. The dispositions:
+  - **1 (high): fixed.** An Employee holding `contribute_content` removed the readable person links
+    of a seeded value: the D-74 seed's links are a person's, `reject_tag` deleted a person's link
+    (*until the requirements re-audit of `5377e3a`, the last bullet of this note*), and there is no
+    ownership check. The value then vanished from `tag_options` exactly when
+    Administrator-only material still carried it. The name form's 201 against 409, and the
+    `tag_id` form's 400 against 201, said the same. On the objective-02 manifest, `purchasing`,
+    `onboarding`, `finance` and `people` have such carriers (D15, D16). This refutes "An Employee
+    cannot bring it about", above, corrected in place.
+  - **2 (medium): fixed.** An unlinked seeded value dropped out of every Employee's `tag_options`
+    when Administrator-only material took it up, a held AI suggestion at upload included, and any
+    reader saw it with a GET.
+  - **3 (medium): fixed.** An Administrator removing the person links of a value only
+    Administrator-only material carried, or deleting those documents, left it unlinked and not
+    grown, so every Employee was offered it. That contradicted `classification.py`, `deletion.py`
+    ("a tag left with no links is never offered to anyone") and the contract.
+  - **The rule (the lead's decision).** `tag_scheme` admits a tag if every audience role reads a
+    source carrying it, or if it is not grown, and no longer reads which tags have links at all.
+    `grown` now means "not vocabulary": a tag that is not grown is in every scheme whatever its
+    links, and a grown one only where every audience role reads a source carrying it, every link
+    counting as before. Nothing a reader can see moves when links on material they cannot read are
+    made or destroyed. One exception, found while building the rule, was closed the same night: the
+    last item below.
+  - **`documents 0011`** marks grown every Tag, of any dimension, with at least one link and no link
+    on a source readable by every role. Documents and meetings both count; "readable by role r" is
+    the source's `visible_to_roles` overlapping r's effective roles, as `_in_scope` reads it; and
+    every link counts, held and removed ones included. That is exactly the set today's rule withholds
+    from some audience, so nothing becomes visible anywhere that was not.
+    - It is a RunPython whose reverse does nothing, with the role mapping frozen as literals and
+      historical models only, as accounts 0007 and 0008 freeze their names.
+    - It depends on `meetings 0002`, so a clean start now plans that migration before `documents
+      0002`. Its operations are unchanged.
+  - **The seed's linked mode** marks the same way after linking; on the objective-02 manifest that
+    is `atlas` alone, carried only by D09 and D15. `--scheme-only` links nothing and marks nothing.
+  - **Consequences.** For an audience role that scoping does not know, every grown tag is withheld,
+    as `scoped_documents` fails closed, while vocabulary that is not grown is in: it names no
+    source. Tests that model "a value only restricted material carries" now set `grown=True`, as
+    the backfill and the seed do; a value on restricted material that is not grown is in, as
+    vocabulary.
+  - **Objective 05: a departure from the measured configuration.** Its scheme-only start is
+    unchanged, fourteen unlinked values and none grown; what differs is during a run. Under the
+    rule the runs used, a seeded value first linked only on material some audience role could not
+    read dropped out of later documents' schemes. It happened once in each recorded run:
+    - in the first run, the ninth document, D09 (Administrator-only), applied `atlas` before any
+      other document carried it, so `atlas` was out of the schemes of the nine later Employee-
+      visible documents, D10 to D14 and D17 to D20;
+    - in the re-run, the sixteenth, D16 (Administrator-only), held `people` first, so `people` was
+      out of D17 to D20's schemes.
+
+    Under this rule both stay. The old rule's behaviour there was finding 2's leak, seen in the
+    measurement itself: the scheme an Employee-visible document's prompt received, the same scheme
+    its `tag_options` offers, changed because Administrator-only material had taken up a seeded
+    value. This is shown from the runs' `classify.json` records, in their processing order, and the
+    manifest's `visible_to_roles`, which `scripts/ingest_objective02.py` writes; not from the
+    database. The recorded runs and verdicts stand as records of the old rule, and nothing re-runs
+    them.
+  - **4: open.** An unthrottled `POST /api/documents/{id}/tags`, and Topic growth reaching every
+    classification prompt. A throttle is the user's question, which the lead will put. Capping the
+    prompt would change the classification input, so it is deferred.
+  - **5 (low): fixed in the following commit.** Reversing `documents 0009` kept removed AI links,
+    which the 0008-era code shows as live tags again. 0009's reverse now deletes them, before it
+    drops the column; live links are untouched. 0009 is edited in place rather than followed by a
+    new migration. It is unpushed (CLAUDE.md §7 forbids editing a pushed migration's operations),
+    its author applied it only to test databases, and the appended operation does nothing forwards,
+    so a database that did apply it is in the state the edited migration reaches.
+  - **6, accepted residual.** An Employee holding `contribute_content` can undo an Administrator's
+    retirement: naming a retired Topic reactivates it (`_bring_into_use`). The oracle closure
+    depends on that, because linking without reactivating would make `tag_options` differ between
+    a retired name and a new one. Also, nothing records who removed a person's tag.
+  - **7 (info): tested.** `tag_options`' guarantee needs EFFECTIVE_ROLES to be closed under
+    generalisation. `apps/core/tests/test_constants.py` now asserts it.
+  - **8 (info): fixed.** Topics confirmed before `documents 0010` read not grown. 0011 marks those
+    that only restricted material carries; one a readable source carries is vocabulary, which
+    every reader of that source could already see. Confirming a proposal of such a Topic's name
+    made before it existed leaves it vocabulary (the last item below).
+  - **9, accepted residual (integrity, not disclosure).** `normalise_tag_name` does no Unicode
+    normalisation (NFC/NFKC) or casefolding, and keeps zero-width and bidi characters, so
+    look-alike duplicate Topics get past FR-10's `409`. No `500` was found: DRF's `CharField`
+    rejects NUL and lone surrogates, and `apply_tag` re-checks the length after normalising.
+  - **10, accepted residual.** Races give rare `500`s and no corruption:
+    - a link racing `retire_tag`'s delete fails its deferred foreign-key check at commit
+      (`taxonomy.py` says so);
+    - `_bring_into_use`'s save on a tag deleted in the meantime raises `DatabaseError`;
+    - `Tag.objects.get` can miss after the offered check.
+
+    Applies on one document are serialised by the document lock, and `get_or_create` absorbs the
+    concurrent-create `IntegrityError`.
+  - **11, accepted residual.** Timing:
+    - The name form's first probe of a name does different database work: an insert plus an update
+      for a new name, an update for an inactive one, neither for an already-grown one. That is one
+      sample per name and sub-millisecond, and D-105 makes no timing claim.
+    - The detail's cost grows with the total number of tag links, restricted ones included. That
+      reveals volume only.
+  - **Found while building the rule, not one of the review's findings: one exception, fixed the
+    same night, two commits after the rule.** `confirm_proposed_topic` grew the Topic it fetched:
+    `_bring_into_use` marked it whether it was created or fetched (the lead's oracle review), and
+    that included an active vocabulary Topic.
+    - No route could bring that about. A vocabulary Topic is in every scheme, so the machine links
+      it rather than proposing it, and the name form answers `409` for it.
+    - A proposal still pending from before its name became vocabulary could. Two ways make one:
+      `seed_objective02_tags.py` creating the Topic after the proposal; or a person bringing the
+      name in on another document before `documents 0010`, when 0011 then left it as vocabulary
+      because a source every role reads carries it.
+    - Confirmed on restricted material, the Topic was grown and left an audience's options once no
+      source that whole audience reads carried it: at once in the first case, and in the second
+      when its readable links went.
+    - **The fix (the lead's decision):** `_bring_into_use` grows a Topic only when it creates it or
+      reactivates it, and an active one keeps its value, so vocabulary stays vocabulary. The name
+      form never fetches an active vocabulary Topic, since it answers `409` first, so only
+      confirmation changed. A retired seeded Topic a person names is still grown, which 84b5771's
+      three-sequence test covers.
+    - The seed script's docstring says to run it before any document is classified, which is still
+      good advice: a document classified first holds its seeded suggestions as proposals or
+      discarded suggestions until a person acts or it is classified again.
+- **The requirements re-audit of `5377e3a` (the same night): a person's removed link is kept too.**
+  The re-audit's finding 3, partial. `reject_tag` deleted a person's link, so the next classify
+  route, reprocess or `classify_documents` run that suggested the value linked it again, through
+  `_link_tag`'s create branch, as `applied_by: "ai"`, and a Topic the person had typed was proposed
+  again. That breaks FR-10's correction clause, "any value a user edits [is] retained and is not
+  overwritten by later reprocessing" (UC-09 A3 step 3), and nothing tested or recorded it.
+  - **The decision (the lead's, the re-audit's option (a)).** `reject_tag` keeps a person's link
+    too, marked `removed`, exactly as it keeps an AI link. `_link_tag`, `removed_topics` and
+    `_apply_link` already handled a removed row, so nothing else in the apply layer changed.
+  - **The apply, remove, apply sequences** now answer 201, 204, 409 for a new name, a Topic only
+    restricted material carries and a retired seeded Topic alike, and list the name in
+    `tag_options` after the removal in every variant. The removed link still counts as a link, so
+    the document itself carries the name, and the name form answers the 409 that names it. The
+    answers are still identical, so the oracle stays closed. Each variant's Topic is its own row
+    with a random id (`uuid4`), which says nothing about whether it existed before.
+  - **Applying the tag again restores the link,** 200, by its id, as `_apply_link` restores a
+    removed AI link.
+  - **`DELETE /api/tags/{id}`** deactivates a tag whose only links are removed (200): they still
+    reference it. It deletes only a tag nothing references.
+  - **Links are now deleted only with their source,** a document (D-73) or a meeting. So removing a
+    link never takes a tag out of anyone's options; a grown tag leaves an audience's options when
+    the last source that audience reads carrying it is deleted, or the tag is retired (*"or the tag
+    is retired" added the same night, after the focused re-audit of `88a488d`*).
+  - **What the sequences no longer show.** Whether a Topic a name brings in is grown, created or
+    reactivated, no longer shows in them, since the document carries the name either way. A route
+    test holds it instead: a new name, or a retired seeded Topic, named on Administrator-only
+    material stays out of the Employee's options.
+  - **The contract** says a person's link is kept, and its 400 list for the name form now names a
+    missing `dimension` too (`serializers.py`).
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
@@ -8274,6 +8661,390 @@ twelve.
 > - **Outside the FR text, not counted as gaps:** UC-09 E1's queue and A1's "undetermined" record; UC-10 E2 (sensitive questions kept verbatim), E3 (spurious questions), A2 (outdated knowledge) and A3 (partial answers). None of these is recorded.
 >
 > **One line:** FR-10 INCOMPLETE, FR-19 INCOMPLETE, Objective 05 NOT MET (clause 1), Objective 06 NOT MET on its independent run (clause 3).
+
+**Dated note, 10 November 2026 (night): the tag corrections were re-audited twice, and both verdicts
+are recorded here verbatim.** Two `requirements-auditor` runs, read only, on
+`feat/FR-10-tag-corrections`, after this entry's decisions on findings 3, 4, 5, 6 and 10 were built,
+together with two rounds of security fixes (D-105's dated note of the same night). Each verdict is
+recorded here, rather than left in a terminal, for the reason this entry gives.
+
+| Run | At | Its one line | What followed |
+|---|---|---|---|
+| First | `5377e3a` | The tag corrections INCOMPLETE. Findings 4, 5, 6 and 10 MET. Finding 3 PARTIAL: a tag a person applied came back on the next classify after it was removed, untested and unrecorded. Neither suite shown passing at that commit | Finding 3 took the auditor's option (a) in `88a488d`: a person's removed link is kept, as an AI link is (D-105's dated note). The stale passages it listed were corrected or marked in place in the same commit. The suites at `5377e3a`, run while it audited: pytest 3031 passed on a fresh test database, dual-role matrix 36/36; npm test 353 passed; lint and build clean |
+| Second, focused | `88a488d` | Findings 3, 4, 5, 6 and 10 MET. Not ready to merge, for two contradictions in the contract (D1, D2) and one trivial wording (D3), all in the docs. FR-10 overall INCOMPLETE only for reasons already decided | D1 to D3 fixed, and its three optional tests added, in `ece4f32`. That commit has not been re-audited. The suites at `88a488d`: pytest 3043 passed on a fresh test database, matrix 36/36; npm test 353 passed; lint and build clean |
+
+**Where FR-10 stands.** As a requirement it is INCOMPLETE, by decision: the summary, key points,
+sectioned summarising and grounding are not built (D-104's dated note), and the tag browser is FR-15's
+facets plus an Administrator-only inventory (D-105). The tag corrections decided on 10 November are MET
+on the second audit, with the doc corrections it asked for made after it.
+
+**The first re-audit, verbatim** (at `5377e3a`).
+
+> ## Audit: FR-10 tag corrections (D-119 findings 3, 4, 5, 6, 10), feat/FR-10-tag-corrections at 5377e3a, 10 November 2026
+>
+> **One line:** The tag corrections are INCOMPLETE. Findings 4, 5, 6 and 10 are MET. Finding 3 is PARTIAL: a tag a *person* applied still comes back on the next classify after it is removed. Neither suite has been shown passing at 5377e3a. FR-10 overall is INCOMPLETE.
+>
+> **Verdict:** INCOMPLETE
+>
+> Method: read only. I ran no pytest, npm, manage.py or migration. I checked against FR-10's text in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt` (lines 681-697) and UC-09 A3 (lines 2067-2070). All code paths below are under `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\`, and I give each one in full.
+>
+> ---
+>
+> ### Finding 3: a removed AI tag comes back. **PARTIAL**
+>
+> **What is met: the case D-119 named, an AI link.**
+> 1. **Behaviour.**
+>    - `reject_tag` keeps an AI link with `removed=True`, leaving its confidence and provisional flag alone: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\classification.py:614-637` (633-635).
+>    - `_link_tag` leaves a removed link alone (same file, 534-537).
+>    - A Topic removed from a document is not proposed for it again (432-437, 452-453).
+>    - `_link_on` treats a removed link as not found (835-854, `removed=False` at 846).
+>    - Every FR-15 read excludes removed links: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\repository.py:181, 215, 239, 293`. I checked every other reader of `ContentTag`: only the `classify_documents` record lists removed links, and it flags them.
+>    - The column comes from `documents 0009`.
+> 2. **Error paths.** A removed link's id gets the same 404 body as an unknown id, on both confirm and remove. The DELETE route keeps its 204.
+> 3. **Both roles.** All 11 tests in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_removed_tags.py` use `session_client`, which is parametrised over `ROLE_NAMES` (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\conftest.py:270-275`):
+>    - keep: 106
+>    - 404: 130-140
+>    - the four reads: 146-163
+>    - re-classify: 169-185
+>    - reprocess: 188-215
+>
+>    The unit tests are in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_removal.py` (6 tests, 8 cases).
+> 4. **Front end.** No interface change was needed: the URL and the 204 are unchanged. Existing Remove tests are at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\tests\documentClassification.test.jsx:575, 583, 889`.
+> 5. **Happy path and failure path:** both tested.
+>
+> **What is not met: the correction clause (proposal.txt:692; UC-09 A3 step 3, :2070) for a link a person applied.**
+> - `reject_tag` deletes a person's link (classification.py:636-637). Nothing then records that a person took that value off the document.
+> - So the next classify route call, reprocess or `manage.py classify_documents` that suggests the value creates it again through `_link_tag`'s create branch (classification.py:524-533), now as `applied_by="ai"`:
+>   - at or above the threshold it is applied: in `tags`, in the facets, a filter hit, labelled "Suggested by AI";
+>   - below it, it is held and the person is asked again.
+> - This covers every D-74 seeded link, which is a person's link, and every link the new apply route makes.
+> - The interface offers Remove on a person's tag (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\src\components\Classification.jsx:253-261`). It offers "Classify now" only on an unclassified document, but the classify route and the command re-run on any document.
+> - **No test covers this.** The only person-removal tests are `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_confirm.py:202-209` and test_fr10_removed_tags.py:115-127, and neither re-classifies.
+> - **It is not recorded.** D-105's note (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\docs\decisions.md:6977-6978`) gives the choice ("it holds no machine assignment to keep"). That reason answers the clause's machine-assignment half, not its "not overwritten by later reprocessing" half.
+>
+> **Smallest fix (the lead's decision).** Either:
+> - **(a)** Have `reject_tag` mark a person's link `removed=True` too. `_link_tag`, `removed_topics` and `_apply_link` already handle a removed row correctly. This changes some expected results:
+>   - the apply–remove–apply tests' third code goes from 201 to 409, for the new name and the restricted name alike, so the two answers stay identical and the oracle stays closed;
+>   - the two person-removal tests change.
+> - **(b)** Record it in D-105 as an accepted deviation from the correction clause.
+>
+> Add a test either way: remove a person's link, then classify with that value suggested.
+>
+> ---
+>
+> ### Finding 4: a person cannot apply a tag. **MET** (open items are recorded)
+> 1. **Behaviour.**
+>    - `POST /api/documents/{id}/tags`: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\urls.py:49`, `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\views.py:1503-1543`, classification.py:640-695, and `_apply_link` at 725-760.
+>    - `tag_options` on the detail: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\serializers.py:220, 243` and classification.py:233-283.
+>    - A new link is `applied_by "user"`, confirmed, confidence null, and gets 201. An existing link gets 200: a held one is confirmed, a removed one restored, an applied one left alone.
+>    - A person's link is shown "Added by a person" (Classification.jsx:226-230).
+> 2. **Error paths.**
+>    - 401: the route walk in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_rbac.py:167-177`.
+>    - The scoped 404, then the 403: `ROUTES` in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_document_classification.py:130-140`, used at 263-307.
+>    - In `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_person_applied_tags.py`:
+>      - one 400 body for an unknown, inactive, withheld or Department tag: 145-165;
+>      - shape 400s: 303-324;
+>      - another dimension: 291-300;
+>      - the 409 with `tag_id`: 240-251;
+>      - an existing Topic outside the scheme answered byte for byte as a new one: 254-288.
+> 3. **Both roles.** That file uses `session_client` throughout, except:
+>    - the Administrator mirror (358-368);
+>    - the function-level guard (371-376);
+>    - two Employee oracle sequences (393-412, 428-461), whose mirror runs from both roles (415-425).
+> 4. **Front end.** documentClassification.test.jsx:970-1283 has 14 tests:
+>    - the chooser, its 201 and the re-read of options;
+>    - a 200 worded differently from a 201;
+>    - a new Topic sent single-spaced;
+>    - the client-side checks;
+>    - the 409 selecting the tag and moving focus, and re-reading options without showing backend text;
+>    - a 400 on each field;
+>    - an empty dimension;
+>    - a name rendered as text;
+>    - a 403 removing the control;
+>    - a 404 and a network failure;
+>    - the 409 sentence tied to views.py.
+> 5. **Happy path and failure path:** both tested.
+>
+> **FR-10's 409 (proposal.txt:695)** is answered only for a Topic already in the document's scheme. An existing Topic outside the scheme is linked and answered 201. **Declined in part, D-105** (decisions.md:7034-7044), for invariant 1. I checked the stated reason against the code and the byte-for-byte test, and it holds. No duplicate row is created in either case (get_or_create, classification.py:693).
+>
+> **Open items, recorded:**
+> - the route is unthrottled (decisions.md:7232-7234);
+> - an Employee can reactivate a Topic the Administrator retired (residual 6, 7241-7244), which weakens finding 5 for Topics;
+> - names that differ only by look-alike Unicode get past the 409 (residual 9, 7251-7254).
+>
+> ---
+>
+> ### Finding 5: nothing deactivates or deletes a tag. **MET**
+> 1. **Behaviour.**
+>    - `GET /api/tags` and `DELETE /api/tags/{id}`: urls.py:92-93; views.py:1614-1649; `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\taxonomy.py:38-94`.
+>    - A tag referenced in any state is deactivated and answered 200 with its entry; an unreferenced tag is deleted, 204. The tag row is locked for the check (taxonomy.py:80-87).
+>    - A retired tag stays on the documents that carry it and leaves `tag_scheme` and `tag_options`. That is "preserving historical classification".
+>    - `manage_tags` goes to the Administrator alone (accounts 0008).
+>    - `ContentTag` is the only foreign key to `Tag` (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\models.py:185`), so the reference check is complete.
+> 2. **Error paths**, in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_tag_administration.py`:
+>    - 401: 96-97;
+>    - 403 before the lookup: 83-93, 140-152, 198-206;
+>    - 404 for an unknown tag and for a Department tag: 198-218;
+>    - 200 again for a tag already retired: 186-195.
+> 3. **Both roles.** Tests at 83, 140, 198, 224 and 250 use `session_client`. The Administrator-only behaviour tests (100, 155, 186, 209) are matched for the Employee by the 403 tests. The seed test holds every holder of `manage_tags` to the Administrator's scope: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\accounts\tests\test_manage_tags_seed.py:120-133`.
+> 4. **Front end.** `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\tests\tags.test.jsx` has 14 tests covering:
+>    - the list: order, count, name as text;
+>    - the confirmation's wording;
+>    - the rows and notices after a 200, 204 and 404;
+>    - one DELETE per confirmation;
+>    - a 403 withdrawing every action;
+>    - a 500 in fixed words;
+>    - the empty, loading, failed and retry states, and a 403 on the list;
+>    - the guards for each role.
+> 5. **Happy path and failure path:** both tested.
+>
+> **Note:** a retired Project or Process tag has no way back except the shell. A reactivation route was declined (decisions.md:7107-7111).
+>
+> ---
+>
+> ### Finding 6: the truncation notice had no front-end test. **MET**
+> documentClassification.test.jsx:285-299:
+> - `input_truncated: true` shows `TEXT.classificationTruncated`;
+> - `false` does not, and the test checks the assignments rendered so the absence is real.
+>
+> The component is Classification.jsx:818-820. This clause belongs to the interface alone, so no server test is needed.
+>
+> ---
+>
+> ### Finding 10: the department label and the stale comment. **MET** (with a recorded residual)
+> - **Server.** `documents 0009` adds `department_applied_by`. It is set by rule 3 (classification.py:401-422, `_department_provenance` at 497-513) and by `confirm_classification` (588-596), and serialised at serializers.py:301.
+> - **Both roles.** test_fr10_removed_tags.py:221-256 checks the classify, confirm and detail replies. The unit tests are in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_department_provenance.py` (9 tests, 10 cases).
+> - **Front end.** Classification.jsx:150-158. documentClassification.test.jsx:301-327 tests three cases:
+>   - `"user"` reads "Given by a person…" and not "Suggested by AI";
+>   - `"ai"` and `null` keep "Suggested by AI".
+> - **Stale comment.** Fixed at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\core\constants.py:219-222`, which now carries §5's "1 initial call + 2 retries", and in `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\core\tests\test_constants.py:145-146`.
+> - **Residual, recorded** (decisions.md:7010-7016):
+>   - rows classified before 0009 read `null`, so they keep the old mislabel until their next run or confirmation;
+>   - a department a run wrote into a blank before 0009 reads `"user"` after its next run.
+>
+>   The note's "should hold none" covers the Objective 05 twenty only, checked against git history. Other databases are not addressed.
+>
+> ---
+>
+> ### FR-10 overall, after this branch
+> | Clause | Status |
+> |---|---|
+> | 683 type and department, AI-marked, editable | Satisfied (label fixed) |
+> | 684 summary and key points | **Declined, D-104** (dated note, 10 Nov night) |
+> | 685 four dimensions shown separately | Satisfied |
+> | 685 tag browser | **Partial, recorded (D-105).** An Administrator-only inventory now lists every value with its count; Employees still have FR-15's scoped facets |
+> | 687 one request returns classification, summary and tags | Partial: no summary (**D-104**) |
+> | 688 fixed type list; unique names | Satisfied (residual 9 accepted) |
+> | 688 sectioned summarising | **Declined, D-104.** The notice is now tested in the front end |
+> | 689, 690 | Satisfied |
+> | 691 provenance | Satisfied |
+> | 692 correction | **Partial, unrecorded** (finding 3's residual) |
+> | 693 grounding | **Declined, D-104** |
+> | 694 deactivate rather than delete | Satisfied |
+> | 695 the 200 | Partial: no summary (**D-104**) |
+> | 695 the 409 | Satisfied for an offered name; **narrowed by D-105** for invariant 1 |
+> | 695 the 422 | Satisfied |
+> | 697 CRUD | Satisfied. Tags Delete now exists. Removing an AI link is a soft delete, as the correction clause requires |
+>
+> ### Decision log and contract against the code
+> **Accurate**, checked against the code:
+> - the guard order;
+> - the one-body 400;
+> - the 409 rule and the byte-for-byte 201;
+> - the new link's fields and the 200 cases;
+> - "no read lists a removed link";
+> - `tag_options` is `tag_scheme`'s tags;
+> - the final `tag_scheme` rule (classification.py:208-212), as the contract's `tag_options` bullets state it;
+> - `grown` is set only on create or reactivate (`_bring_into_use`, 698-722), by 0011 and by the seed script's linked mode;
+> - 0011's frozen literals equal constants.py:531-545, and its overlap predicate matches `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\retrieval\scoping.py:114-126`;
+> - the `DELETE /api/tags` semantics and `manage_tags`;
+> - `docs\schema-v1.md`'s rows for `grown`, `removed` and `department_applied_by`.
+>
+> **Stale or wrong: the docs claim what the code does not do.**
+> 1. **decisions.md:7060-7069** (D-105 note, the `tag_options` bullet) says:
+>    - "A linked value is offered only if every role in the audience reads a source carrying it";
+>    - "true of linked values only… holds for unlinked tags that are not grown".
+>
+>    Since 824c536, a tag that is not grown is offered whatever its links. By design, that includes a seeded value carried only by Administrator-only material. Neither sentence was corrected in place, unlike the two that 824c536 did correct (7149-7150, 7154-7156). Add a dated line.
+> 2. **decisions.md:7128-7134** states 84b5771's rule ("…or if nothing links it and it is not grown") with no superseded marker. The code follows the vocabulary rule at 7192-7196.
+> 3. **decisions.md:6985-6988.** The reason given for counting a removed link ("would turn a value… into vocabulary") no longer holds under the final rule. The behaviour itself is still true.
+> 4. **decisions.md:7036-7038** leaves out a grown Topic that nothing links. classification.py:652-655 and the contract both include it.
+> 5. **decisions.md:6968** says "server side only; the interface half follows". The interface has landed (1641693, c6f59d4, 607feaa, 4d53cb7), and the note does not say so.
+> 6. **`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\frontend\src\api\documents.js:220`** says "Nothing in it is on material a reader… may not see". That is false for vocabulary linked on restricted material. The contract's wording, "discloses nothing", is the right one.
+> 7. **`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_classification_scheme.py:4-7`**: the module docstring states the original rule.
+>
+> **The reverse: the code does what the docs do not say.** Finding 3's residual. The contract truthfully says a person's link "is deleted", but not that reprocessing then brings it back.
+>
+> **Trivial.** The contract lists a `dimension` 400 only for "a dimension other than Topic". A missing `dimension` gives the same key (serializers.py:411).
+>
+> ### Migrations
+> - **documents 0009** is additive: two AddFields, plus a RunPython that does nothing forwards. It is reversible, tested through the executor (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\documents\tests\test_migration_0009_tag_corrections.py:72-116`). The reverse deliberately deletes removed links (decisions.md:7235-7240).
+> - **The 0009 edit in place (880448b) is consistent with §7's wording.** §7 forbids editing a *pushed* migration.
+>   - No remote-tracking ref contains eb203ba, 880448b or 5377e3a. The only FR-10 remote branch is `origin/fix/FR-10-objective-05` at 6357fe0.
+>   - The appended operation does nothing forwards.
+>   - The edit is logged in the docstring (lines 26-29) and in D-105.
+>   - "Applied only to test databases" cannot be verified, and does not matter given the no-op forward.
+>   - Note: the worktree `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506-fr19` sits at 8c06f13, which has the 0009 from before the edit.
+> - **documents 0010** is one AddField, reversible and tested.
+> - **documents 0011** is a data UPDATE with a no-op reverse. Django can reverse it, and the test asserts the marks survive the reverse. It is not strictly additive, and reversing it does not restore the old values. The docstring explains why, and I confirmed that direction is safe for invariant 1. Its new dependency on meetings 0002 creates no cycle.
+> - **accounts 0008** has a real reverse, tested through the executor (test_manage_tags_seed.py:81-117).
+>
+> ### Overstatement
+> - **Test counts in the commit messages match the files:** 11/22, 6/8, 9/10, 13/38, 14 and 14. The npm totals (322, 325, 339, 353) are consistent with the tests added.
+> - **Run claims are honest, and they show the gap.**
+>   - The last full pytest run is claimed at 11a610f: 2965 passed, matrix 36/36.
+>   - Every later commit claims targeted runs only: 728, 422, 789, 796, 108.
+>   - npm is last claimed at 4d53cb7: 353 passed.
+>   - So **at 5377e3a neither suite is shown, and CI has not run**: nothing is pushed, and there is no PR.
+> - The "every test failed under a deliberate break" claims cannot be verified read-only.
+> - I found no other overstatement.
+>
+> ### Invariant check
+> - **1 (no disclosure): pass**, on what I read. The one-body 400, the byte-for-byte 201, the apply–remove–apply tests and the vocabulary-movement tests (`C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506\apps\api\tests\test_fr10_tag_vocabulary.py`) all support it.
+> - **3 (meetings by role): pass.** Meetings are scoped through `scoped_meetings`.
+> - **4 (server-side authorisation): pass.**
+> - **8 and 9: pass.**
+> - **2, 5, 6, 7 and 10:** not applicable.
+> - **Set-level: pass.**
+>   - No AI SDK is imported outside `apps/ai`.
+>   - No tuned literal sits inline. The front end's `TAG_NAME_MAXIMUM_LENGTH = 255` is tied by pytest to `NAME_MAX_LENGTH`.
+>   - This slice writes no chunks.
+>   - Nothing is enforced only in the interface.
+>   - 0011 and the seed script's `mark_restricted_only_values_grown` compute the same set in two places. That is necessary, because a migration cannot import app code, and each is tested.
+>
+> ### CLAUDE.md §8
+> | | 3 | 4 | 5 | 6 | 10 |
+> |---|---|---|---|---|---|
+> | 1. Behaves as specified | No (person-link residual) | Yes | Yes | Yes | Yes |
+> | 2. Both suites pass, both roles, front-end tests where needed | Both roles and tests exist; **passing not shown at HEAD** | same | same | same | same |
+> | 3. Happy path and failure path | Yes | Yes | Yes | Yes | Yes |
+> | 4. Committed with the FR ID | Yes | Yes | Yes | Yes | Yes |
+> | 5. Auditor reports no gaps | No | Yes | Yes | Yes | Yes |
+>
+> ### Gate impact
+> - FR-10 is not in the M6 twelve, and M6 has passed.
+> - The branch does change FR-15 (a MUST):
+>   - every repository read gains `removed=False`;
+>   - `GET /api/documents/{id}` now computes `tag_scheme` for every reader, and its cost grows with the total number of links (residual 11).
+> - FR-15's regression evidence at HEAD is targeted runs only until the full run finishes.
+>
+> **Smallest fixes:**
+> 1. Decide finding 3's residual and add its test.
+> 2. Add dated corrections to D-105's stale lines (items 1-5 above).
+> 3. Run full pytest and npm at 5377e3a, then open the PR so CI runs.
+>
+> ### Could not check
+> - Any test result. The full run was in progress, and I did not read its output.
+> - The deliberate-break claims.
+> - Any database: where 0009 was applied, and the pre-0009 rows.
+> - Live interface behaviour.
+> - Pushes from another clone.
+>
+> **One line:** The tag corrections are INCOMPLETE: findings 4, 5, 6 and 10 are MET, and finding 3 is PARTIAL because a removed person's tag returns on re-classification, unrecorded and untested. Neither suite is shown passing at 5377e3a. FR-10 overall is INCOMPLETE.
+
+**The second re-audit, verbatim** (at `88a488d`).
+
+> ## Audit: FR-10 tag corrections, follow-up on finding 3 at 88a488d (10 November 2026)
+>
+> **Verdict.** Findings 3, 4, 5, 6 and 10 are MET against FR-10's text at 88a488d, but the branch is not ready to merge: 88a488d left the contract contradicting itself in two places (defects D1 and D2 below). Both are doc-only fixes. Finding 3 now satisfies the correction clause and is tested from both roles. Findings 4, 5, 6 and 10: 88a488d changed only docstrings on their paths, so they stand as MET from my 5377e3a audit. FR-10 overall stays INCOMPLETE, and only for reasons already decided: the summary clauses the user declined (D-104's dated note) and the recorded tag-browser deviation (D-105). I did not run or see the suites at 88a488d.
+>
+> Read-only throughout. HEAD is 88a488d and the tree is clean. Root: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-obj0506
+>
+> ---
+>
+> ### Check 1: finding 3 against proposal.txt:692 and UC-09 A3 — MET
+>
+> proposal.txt is at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt. Line 692 says a user's value "is not overwritten by later reprocessing". UC-09 A3 (lines 2071-2074) says "retains both" and "The corrected classification governs how the document is found from that point".
+>
+> | Clause | Status | Evidence |
+> |---|---|---|
+> | `reject_tag` keeps a person's link, marked removed | Satisfied | ...\apps\documents\classification.py:632-635. Every link is set `removed=True`; there is no longer a branch on `applied_by`. The route still answers 204 (...\apps\api\views.py:1546-1562). Test: ...\apps\api\tests\test_fr10_removed_tags.py:119-137 checks the same pk, `removed`, `applied_by` "user" and empty `tag_details`. Unit test: ...\apps\documents\tests\test_classification_confirm.py:202-212 |
+> | A later classify does not link it again | Satisfied | The route (views.py:1428) calls `classify_document_now`. An in-scheme suggestion reaches `_link_tag` (classification.py:443-449), which finds any existing row, removed ones included (519-523), and returns a removed one untouched (534-537). The create branch (524-533) runs only when no row exists. `tag_scheme` counts removed links (195-200 has no `removed` filter), so a typed grown Topic stays in its own document's scheme. Test: test_fr10_removed_tags.py:248-285, classify case, for a seeded Process value and a typed Topic |
+> | …and does not propose it again | Satisfied | An in-scheme suggestion stops at line 449. An out-of-scheme Topic (retired, or withheld from the scheme) is skipped through `removed_topics` (432-437, no `applied_by` filter; skip at 452-453). The test asserts there is no proposal (test_fr10_removed_tags.py:283-285) |
+> | A reprocess does not undo it | Satisfied | Reprocess deletes only `ExtractedContent` and chunks, never `ContentTag` (...\apps\ingestion\documents.py:181-184), then classifies through `classify_document_now` (:323). Test: the same test's reprocess case asserts one classify call |
+> | A `classify_documents` run does not undo it | Satisfied by construction; no test for a person's link | ...\apps\documents\management\commands\classify_documents.py:221 calls the same `classify_document_now`. Its own test covers a removed AI link only (...\apps\documents\tests\test_classify_documents_command.py:166-185) |
+> | Re-applying restores the link | Satisfied | The restore branch of `_apply_link` (classification.py:740-748) returns `created=False`, which the view answers 200 (views.py:1542). Test, both roles: ...\apps\api\tests\test_fr10_person_applied_tags.py:423-447 asserts 201, 204, 409, then 200 by `tag_id` with the same pk, `removed` False, `confirmed` True and `applied_by` "user". Re-applying by name is a 409 that names the tag; the screen then selects it so one press restores it (...\frontend\src\components\Classification.jsx:691-699, 721-733) |
+> | Nothing else overwrites the removal | Satisfied | `ContentTag` rows are deleted only with their source: ...\apps\documents\deletion.py:75-77 and ...\apps\meetings\deletion.py:72-74. The seed script's `get_or_create` (...\scripts\seed_objective02_tags.py:122-127) finds a removed row and leaves it removed |
+> | Reads exclude a person's removed link | Satisfied | Every reader filters `removed=False` whatever `applied_by` says: ...\apps\api\repository.py:174-185, 208-216, 236-240 and 288-300, and ...\apps\documents\taxonomy.py:53 |
+> | The change is recorded | Satisfied | D-105's closing bullet (...\docs\decisions.md:7315-7342), the contract's DELETE row (...\docs\api-contract.md:1082), and ...\docs\schema-v1.md:237 and 253-261 |
+> | Tested from both roles, happy path and a failure path | Satisfied | `session_client` runs every test as both roles (...\conftest.py:270-275). Failure paths from both roles: the 409 on re-applying by name (test_fr10_person_applied_tags.py:423-447), and the 404 for confirming or removing a link that is already removed (test_fr10_removed_tags.py:140-150). That 404 test uses an **AI link only**. A person's link goes through the same filter (classification.py:845) but has no 404 test of its own. Minor gap |
+>
+> Reading the code, the new classify/reprocess test would fail at 5377e3a: the Topic case would propose "night shifts", and the Process case would create an AI link. I did not re-run the commit's mutation checks.
+>
+> ### Check 2: the stale passages
+>
+> | Passage (5377e3a line numbers) | At 88a488d |
+> |---|---|
+> | decisions.md 6968, "server side only; the interface half follows" | Marked at 6970-6971. The four commits it names (1641693, c6f59d4, 607feaa, 4d53cb7) each touch `frontend/`. Accurate |
+> | 6985-6988, counting a removed link "for invariant 1" | Marked at 6993-6997. The new reason matches `tag_scheme` (classification.py:208-212) |
+> | 7036-7038, what an out-of-scheme Topic can be | Marked at 7047-7051. Matches the code and the `apply_tag` docstring (classification.py:648-653) |
+> | 7060-7069, "linked value" | Marked at 7083-7087. Acceptable. The substitution it asks for is loose: "readable through no source at all" doesn't fit every non-grown tag, and the heading "every value in it is readable" is still broad. The next bullet qualifies both |
+> | 7128-7134, the rule change | Marked superseded at 7158-7161. Accurate |
+> | frontend\src\api\documents.js:220 | Corrected. It now matches the `tag_options` docstring (classification.py:250-261) |
+> | Module docstring of test_classification_scheme.py | Corrected. It matches the fixtures: grown Project at line 80, grown held Topic at line 86. It omits the retired-Project fixture at line 89, which is harmless |
+> | The contract's 400 for a missing dimension | Corrected at api-contract.md:1083. Matches serializers.py:411-412. The test checks only the status code, not the `dimension` key (test_fr10_person_applied_tags.py:308, 315-324). Minor gap |
+> | The four more passages 88a488d marked: person link deleted (6978), the residual (7088), the oracle's step 2 (7137), the review's finding 1 (7202) | All four marked: at 6981-6983, 7096-7098, 7137-7138 and 7203-7205 |
+>
+> ### Check 3: contradictions or overstatement 88a488d introduced
+>
+> **What holds:**
+> - **The oracle stays closed.** All three variants answer 201, 204, 409 and list the name in `tag_options` after the removal. That works because the document's own removed link counts, and `scoped_documents` has no status filter (...\apps\retrieval\scoping.py:143-159), so every role in the audience reads the document. I also traced a retired Topic that restricted material still links, and it gives the same answers. The options before step 1 are the same in every variant. The 409's `tag_id` is a uuid4 the Employee has never seen in any other reply.
+> - **`DELETE /api/tags/{id}` with only removed links answers 200 and deactivates the tag, and the contract says so.** api-contract.md:1201 says any reference "in any state (held and removed links included)", and `item_count` excludes removed links (:1210-1211). The new test is ...\apps\api\tests\test_fr10_tag_administration.py:198-214. The Tags page already expects this (...\frontend\src\pages\Tags.jsx:97-105).
+>
+> **Defects:**
+>
+> **D1. The contract's "Removed links" paragraph still describes AI links only.** api-contract.md:1179-1183 reads "An AI link a person removed is in **no** read … It stays in the database only so that the machine's assignment is kept beside the person's decision." That contradicts the DELETE row at :1082 and D-105's closing bullet. A person's removed link has no machine assignment; it is kept so that a later run neither links it again nor proposes it. The same stale wording is in:
+> - ...\apps\api\repository.py:43-46 and :208
+> - ...\apps\core\tests\test_schema.py:83-84
+> - ...\apps\documents\migrations\0009_fr10_tag_corrections.py:3 (a historical description; fixing it is optional)
+>
+> Fix: cover both kinds of link, and give both reasons.
+>
+> **D2. The claim that a retired Topic, typed again, is answered 201 no longer holds on an ordinary path.**
+> 1. A person types T on document D: 201.
+> 2. They remove it: 204, and the link is kept.
+> 3. The Administrator deletes T on the Tags page. It shows `item_count` 0, but the removed link still references it, so the answer is 200 and T is deactivated. Before 88a488d this was 204 and T was gone.
+> 4. The person types T on D again:
+>    - classification.py:690-694 fetches the inactive T;
+>    - `_bring_into_use` reactivates it (711-721);
+>    - `_apply_link` restores the removed row (740-748);
+>    - the answer is **200**.
+>
+> These places still say 201:
+> - api-contract.md:1163-1165 ("or inactive) is linked and answered `201` exactly as a new Topic is") and :1219-1221
+> - decisions.md:7053 and 7128-7129
+> - classification.py:655-656
+> - the docstring at test_fr10_tag_administration.py:270-272. The test itself types the name on a different document (`other`, :275-287), so it cannot catch this.
+>
+> Nothing is disclosed: the 200 depends only on D's own links, which the caller can read. Fix: add "unless this document already holds a link to it, live or removed, which is restored: 200" to each statement, and optionally add a test for the same-document sequence.
+>
+> **D3. Trivial wording.** "disappears only when the last such source is deleted" (api-contract.md:1155; classification.py:266-268). The "only" leaves out retirement, which is stated nearby at :1151 and :1158.
+>
+> **Usability (not an FR-10 clause).** Restoring a removed tag is now the normal result of re-adding one a person just removed. The screen announces it as "“X” was already on this document and is among its tags." (...\frontend\src\constants.js:647, chosen at Classification.jsx:657). The models.py comment says a removed link "is no longer a tag of its document".
+>
+> I found no other contradiction in the code, in schema-v1.md, or in the front-end client's comments (documents.js:311-330 already describes the 200 restore).
+>
+> ### Check 4: suites
+> I did not run them, as instructed, and I cannot see the run in progress, so I am not counting it as a gap. Two things I could check by reading:
+> - 88a488d changes only comments in models.py, so it should not affect migrations.
+> - No test outside the files 88a488d changed expects a person's removed link to be deleted. The removal tests elsewhere all use AI links: test_document_classification.py:429-441, test_fr15_reads_exclude_provisional.py:79-90 and test_classify_documents_command.py:166-185.
+>
+> ### Invariant check
+> - 1 (filter before ranking, no disclosure): pass. `tag_scheme` is unchanged, the oracle stays closed, and D2's 200 depends only on a document the caller can read.
+> - 4 (server-side authorisation): pass. No route changed; the order is still the scoped 404, then the 403 (views.py:1556-1557).
+> - 9 (atomic writes): pass. `reject_tag` runs inside `transaction.atomic` (classification.py:632).
+> - 8: not touched. No new literal constants in app code, no AI SDK import, no chunk writes.
+>
+> ### Gate impact
+> FR-10 is a SHOULD for NIT3004 and not one of the M6 twelve, so there is no M6 impact. The smallest fix before merge is doc-only: rewrite api-contract.md:1179-1183 (D1) and add the qualification to the D2 statements. Optional additions:
+> - a test for typing a retired Topic again on the same document;
+> - a 404 test for removing a person's link a second time;
+> - an assertion on the `dimension` key in the missing-dimension 400.
+>
+> ### What I could not check
+> - pytest, npm test, lint, build, `makemigrations --check` and CI at 88a488d.
+> - The commit's mutation checks ("breaks").
+> - D2's 200 comes from tracing the code. I did not run it, and no test exercises it.
 
 ## D-120 · The relevance threshold and the partial-match floor are per embedding model: `voyage-4` gets 0.2687 and 0.2468, and EmbeddingGemma keeps 0.30 and no floor
 

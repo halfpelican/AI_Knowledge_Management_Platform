@@ -216,8 +216,10 @@ MAXIMUM_STATEMENTS = 6
 MAXIMUM_GENERATION_ATTEMPTS = 3
 # Same policy: one attempt plus two retries, after which the item is flagged.
 MAXIMUM_EMBED_ATTEMPTS = 3
-# Same policy for classification (FR-10, NIT3004). Named here now so the retry
-# policy is uniform across every AI call, not so anything uses it before Stage 6.
+# Same policy for classification (FR-10, NIT3004; D-104): apps/ai/classification.py's attempt
+# loop makes at most this many classify_document calls (1 initial call + 2 retries), then
+# raises ProviderUnavailable, which POST /api/documents/{id}/classify answers 503 and the
+# ingestion hook answers by leaving the document indexed and unclassified (invariant 8).
 MAXIMUM_CLASSIFY_ATTEMPTS = 3
 
 # --- Question bounds (FR-12, FR-13), in characters -----------------------------------
@@ -543,9 +545,9 @@ EFFECTIVE_ROLES = {
 }
 
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
-# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, and 0007 for
-# REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below); a test asserts the constants
-# and the seed agree.
+# role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, 0007 for
+# REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below) and 0008 for
+# MANAGE_TAGS_PERMISSION; a test asserts the constants and the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -565,8 +567,15 @@ MANAGE_DOCUMENTS_PERMISSION = "manage_documents"
 # one never grants the other. Held by Administrator only, seeded by accounts migration 0006.
 # D-66 puts every Employee-only meeting in an Administrator's scope, so none is undeletable.
 MANAGE_MEETINGS_PERMISSION = "manage_meetings"
+# FR-10's taxonomy administered (D-119 finding 5; D-105's dated note of 10 November 2026, night):
+# GET /api/tags lists every tag with its count of sources, and DELETE /api/tags/{id} deactivates
+# a tag content still references or deletes an unused one. Held by Administrator only, seeded by
+# accounts migration 0008. The inventory is unscoped, which is safe only for a role that reads
+# every source (D-66); apps/accounts/tests/test_manage_tags_seed.py holds every holder to that.
+MANAGE_TAGS_PERMISSION = "manage_tags"
 
-# Provenance of a ContentTags row (FR-10, FR-15).
+# Provenance of a ContentTags row (FR-10, FR-15), and of the department a document carries
+# (DocumentAnalysis.department_applied_by, D-119 finding 10): the machine's, or a person's.
 TAG_APPLIED_BY_VALUES = ("ai", "user")
 AI_APPLIED, USER_APPLIED = TAG_APPLIED_BY_VALUES
 
