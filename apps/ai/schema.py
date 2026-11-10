@@ -120,6 +120,16 @@ def _outermost_json_object(text: str) -> str:
     raise SchemaViolation("unbalanced JSON object in the response")
 
 
+# Public names for the three repairs, added on 9 November 2026 for FR-10 (D-104):
+# apps/ai/classification.py applies exactly this tolerance to a classification reply by
+# importing these rather than copying them, so there is one definition of what is
+# repaired. The private names stay bound, for the parser below and anything that reached
+# for them.
+strip_code_fences = _strip_code_fences
+outermost_json_object = _outermost_json_object
+TRAILING_COMMA_PATTERN = _TRAILING_COMMA
+
+
 def parse_statement_list(raw: str, *, max_statements: int | None = None) -> StatementList:
     """Parse a raw model reply into a StatementList, or raise SchemaViolation.
 

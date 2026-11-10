@@ -29,6 +29,7 @@ from apps.api.permissions import HasRolePermission
 from apps.api.tests.dual_role_matrix import enumerate_endpoints
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
     EMPLOYEE_ROLE_NAME,
     MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION,
@@ -55,7 +56,14 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
                     "dashboard",  # Stage 5 item 3: FR-14
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
-                    "document-download"}  # Stage 5 item 2a: FR-15's download link (D-75)
+                    "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
+                    # NIT3004: FR-10's classification routes (D-104, D-105). contribute_content is
+                    # checked inside each method, after the scoped lookup, as the deletes check
+                    # theirs; apps/api/tests/test_document_classification.py proves the 404
+                    # before the 403 on every one of them.
+                    "document-classify", "document-classification", "document-tag-confirm",
+                    "document-tag", "document-proposed-topic-confirm",
+                    "document-proposed-topic-reject"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -72,6 +80,7 @@ PERMISSIONED_ROUTES = {"user-list": MANAGE_ROLES_PERMISSION, "user-role": MANAGE
 IN_VIEW_PERMISSION_CODES = {
     MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
     MANAGE_MEETINGS_PERMISSION,  # MeetingDetailView.delete (D-99)
+    CONTRIBUTE_CONTENT_PERMISSION,  # FR-10's six classification routes (D-105)
 }
 
 USERS = reverse("user-list")

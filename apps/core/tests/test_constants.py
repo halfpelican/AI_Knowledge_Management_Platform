@@ -43,6 +43,9 @@ VOCABULARIES = [
     "NO_ANSWER_REASONS",
     "ROLE_NAMES",
     "TAG_APPLIED_BY_VALUES",
+    # FR-10 (D-105), 8 November 2026: the fixed type list and the per-assignment outcomes.
+    "DOCUMENT_TYPES",
+    "ASSIGNMENT_OUTCOMES",
 ]
 
 

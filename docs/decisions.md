@@ -6707,6 +6707,317 @@ console record, which quotes ~25 frozen questions — while studying the overlap
 drafting. The drafts avoided those topics and the identifier-only automated check is the control.
 On the record; whether that console file should be redacted from the repository is open.
 
+## D-104 · FR-10's classification is the fourth AI operation, `classify_document`, in its own module
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** CLAUDE.md §4,
+docs/ai-provider.md §1, `apps/ai/base.py`, invariant 10, D-19, D-33 · **Stage:** Objectives 05 and 06
+(NIT3004), due 13 November 2026 · **Builds on:** D-33 part 1, which deferred FR-08's classification
+hand-off to FR-10
+
+**The question.** CLAUDE.md §4 said the AI service exposes "exactly three operations", and
+`apps/ai/base.py` said classification "gets its own method then". NIT3004 asked for it on 8 November
+(Objective 05). The lead chose the shape; the alternatives are at the end.
+
+**Decision.**
+
+- **A fourth operation,** `classify_document(title: str, text: str, scheme: TagScheme) ->
+  DocumentClassification`, on `AIService`, implemented by `FLMService`, `AnthropicService` and the
+  test stub. CLAUDE.md §4, `docs/ai-provider.md` §1 and `apps/ai/base.py` now name the operations as a
+  list rather than a count ("exactly the operations listed here"), with the date, so the next
+  operation leaves no stale number behind. CLAUDE.md §4 also names `apps/ai/base.py`, the file the
+  contract has always lived in (it said `apps/ai/provider.py`, which never existed).
+- **One structured request returns the type, the department and the tag suggestions together,**
+  FR-10's Server-End clause: "a single structured request issued at upload returns the classification,
+  the summary and key points, and the tag assignments together, at the cost of one call rather than
+  three". The summary and key points are not requested yet: the lead's decision of 7 November is
+  breadth over depth, and they are built only if time allows after both verifications pass. The schema
+  gains them then.
+- **The reply schema, `CLASSIFICATION_SCHEMA`** (`apps/ai/classification.py`): `doc_type` and
+  `department`, each `{value, confidence}`, and `tags`, a list of `{dimension, value, confidence}`,
+  every confidence a number in [0, 1]. `doc_type.value` must be one of `DOCUMENT_TYPES` (Policy,
+  Procedure, Report, Meeting Paper, FR-10's fixed list); any other value is a schema violation, because
+  a type outside the fixed list is not a classification. A reply that does not conform is no reply:
+  retried to `MAXIMUM_CLASSIFY_ATTEMPTS`, a total of 1 initial call + 2 retries (D-19), then
+  `ProviderUnavailable`. Invariant 10 applies to this operation exactly as to generation.
+- **Its own module.** The prompt, the schema, the tolerant parser and the attempt loop live together in
+  `apps/ai/classification.py`. `prompting.py` and `generation.py` are untouched: a sibling branch
+  (`fix/FR-13-follow-up-focus`) is changing `prompting.py`, and the generation loop carries the
+  statement-cap policy (D-100) that classification does not share. The JSON extraction is shared with
+  `schema.py` through public aliases, so there is one copy of it.
+- **What is sent:** the title and the opening `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens
+  of the extracted text, D-31's token. The record keeps `input_truncated`. FR-10's "summarised in
+  sections and consolidated" for long documents is deferred with the summary; the opening of a
+  document is where its kind is stated, and the one corpus document over the limit (D04, 8,357 words)
+  says in its first chapter that it holds procedures.
+- **The prompt shows the model the scheme** (D-105's audience-scoped scheme: the four types, the
+  departments, the tag values per dimension) and asks for values from it, allowing a new value in Topic
+  only. The application enforces the scheme rule regardless of what the model says.
+- **The provisional rule, the scheme rule and provenance are application code** (D-105), never the
+  model's judgement: the same division invariant 5 makes for citations. The operation returns the
+  suggestions as made.
+
+**Why not the alternatives.**
+
+- *Generalise `run_generation_attempts` into one shared loop first.* Cleaner in the long run, and about
+  a day of the five, on the path NFR-19's fault-injection test guards.
+- *Prompt in `prompting.py`, schema in `schema.py`.* One file for prompts, and a near-certain merge
+  conflict with the FR-13 branch.
+
+**Not covered:** the confidence threshold's value and how it is chosen (D-106); the summary and key
+points; FR-16's summarisation, which gets its own method the same way, when it is built.
+
+## D-105 · Schema v2 for FR-10: `DocumentAnalysis`, two `ContentTags` columns, the audience-scoped scheme, and how a suggestion becomes a record
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-10, FR-15, invariants 1, 4
+and 8, D-17, D-30, D-33, D-72, D-73, D-74, docs/schema-v1.md §1 and §2 · **Builds on:** D-104
+
+**The tables.** `docs/schema-v1.md` §2 deferred `DocumentAnalysis` to migration v2 "when its
+requirement is built". It is built now, as `documents 0008`, additive and reversible.
+
+**`DocumentAnalysis`, one row per document,** with these departures from the proposal's field table
+(`analysis_id, doc_id, doc_type, department, confidence, user_edited`), each for a stated reason:
+
+- **Two confidences, not one:** `machine_doc_type_confidence` and `machine_department_confidence`.
+  FR-10 says "any assignment falling below the configured confidence threshold must be marked
+  provisional"; the type and the department are two assignments, and one column cannot hold one
+  provisional and the other applied.
+- **The machine's values are kept beside the person's:** `machine_doc_type` and `machine_department`
+  are always the latest machine assignment; `doc_type` is the effective type, null while a provisional
+  suggestion waits. FR-10: "the machine assignment is retained alongside it so that classification
+  accuracy can be measured over time". Only the latest machine value is kept; a history is not.
+- **The effective department is `Documents.department`,** not a column here. D-72 made that column the
+  one source FR-14 and FR-15 read and said FR-10 "should write this column, so there stays one source".
+- **An outcome per assignment,** `doc_type_outcome` and `department_outcome`, from a fixed vocabulary
+  `ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")` in
+  `apps/core/constants.py`: *applied*, at or above `CLASSIFICATION_CONFIDENCE_THRESHOLD` and written
+  to the effective field, still marked AI-generated and editable; *provisional*, below it, held and not
+  written; *discarded*, outside the scheme (the department only: the parser refuses a type outside the
+  fixed list); *confirmed*, a person confirmed or edited it. The lead approved two booleans for this;
+  the vocabulary holds the same facts plus the discarded state, which a boolean could not.
+- **`user_edited`:** true once a person confirmed or edited the type or the department. From then on a
+  re-run records new machine values and touches nothing else (FR-10: "any value a user edits are
+  retained and is not overwritten by later reprocessing").
+- **`proposed_topics`, JSON:** out-of-scheme Topic suggestions awaiting confirmation, as
+  `{value, confidence}`. FR-10 says a new value "requires user confirmation before it is created", so
+  no `Tags` row may exist for it until then. **`discarded_suggestions`, JSON:** out-of-scheme Project
+  and Process suggestions, kept for Objective 05's evidence of the scheme clause and never shown as
+  tags.
+- **`model`, `input_truncated`, `classified_at`:** provenance of the record.
+
+**`ContentTags` gains `confidence` and `provisional`.** A provisional AI tag is held, not applied: it is
+not read by FR-15's browse facets, filters or the detail's `tags`, and appears only as a suggestion
+awaiting confirmation. `applied_by` and `confirmed` keep their meaning (D-74).
+
+**The scheme a document is classified against is the vocabulary readable by its own audience.**
+`apps/documents/classification.py::tag_scheme(document)` builds it for every role in the document's
+`visible_to_roles`: the four types; the distinct non-blank `Documents.department` values, except one
+that some role in the audience can read no document of; the active `Tags` per dimension, except one
+that is linked only to sources some role in the audience cannot read. A tag with no links is vocabulary
+only and is always in; a document nobody may read gets the full scheme. The scope predicates are
+`scoped_documents` and `scoped_meetings` (invariant 1's one helper), never a hand-written one.
+**Why:** D-74 built the demonstration so that an Employee "is never offered" the Project value
+`atlas`, which exists only on Administrator-only documents. A classifier proposing `atlas` on an
+Employee-visible document would hand every Employee that name. The same holds for the department
+`Projects`, carried only by D09 and D15.
+
+**How a suggestion becomes a record** (`apply_classification`, one transaction):
+
+1. The analysis row is created or updated; the machine values, `model`, `input_truncated` and
+   `classified_at` are always overwritten.
+2. **The type:** provisional below the threshold, applied at or above it; `doc_type` is written only
+   when applied. Untouched when `user_edited`.
+3. **The department:** discarded when not in the scheme; provisional below the threshold, with
+   `Documents.department` untouched; applied at or above it, written to `Documents.department`.
+   Untouched when `user_edited`.
+4. **Each tag suggestion,** normalised with `normalise_tag_name`: in the scheme, a `ContentTags` link
+   is created with `applied_by="ai"`, `confirmed=False`, its confidence and `provisional` by the
+   threshold; an existing confirmed or user-applied link is left alone (FR-10: "a tag confirmed by a
+   user is marked confirmed and is not altered by later reprocessing"); an earlier unconfirmed AI link
+   takes the new confidence. Out of the scheme, Topic goes to `proposed_topics` and Project or Process
+   to `discarded_suggestions` (FR-10's controlled taxonomy growth). Links a re-run no longer mentions
+   are left in place.
+
+**Who may confirm, edit or reject: `contribute_content`, on documents in the caller's scope.** FR-10
+says "users holding the appropriate permission" and names none. Both roles hold `contribute_content`
+(D-30), so an uploader confirms the suggestions on their own document, which is the demonstration
+flow. The server checks it on every confirm, edit and reject, after the scoped 404 (D-73's order,
+invariant 4). *Declined:* `manage_documents` only, which would stop Employees acting on their own
+uploads; a new code, which nothing yet needs.
+
+**The routes** (built in the step after this entry; recorded here so the contract has one source):
+`GET /api/documents/{id}` gains `classification` and `tag_details`; one confirm-or-edit action for
+the type and department; one confirm and one reject action each for a tag link and for a proposed
+topic; `POST /api/documents/{id}/classify` re-runs classification (200 with the classification, 422
+where no text was extracted, FR-10's code, 503 after `MAXIMUM_CLASSIFY_ATTEMPTS`); and
+`manage.py classify_documents` for the Objective 05 run, calling the same function. Exact paths and
+bodies are in `docs/api-contract.md`.
+
+**Classification at upload** (D-33 part 1, invariant 8): after the ingestion pipeline has decided the
+document's status, inside a savepoint of its own, with every exception caught and logged. A failed
+classification leaves no analysis row, which is what "unclassified" means; the document's status is
+never changed by it, and a reprocess (D-32) runs it again while confirmed and edited values survive.
+
+**FR-10's `409 Conflict on a duplicate tag name within a dimension` is not reachable by design,**
+and is recorded as a convention: matching against the scheme happens at suggestion time, and
+confirming a proposed topic finds or creates the `Tags` row by normalised name.
+
+**Not covered:** the tag browser with item counts (FR-15's facets already count tags); the summary and
+key points; a history of machine assignments; meetings, which nothing classifies.
+
+**Build notes, 9 November 2026** (the django-backend agent's choices where the brief was silent,
+accepted as written):
+
+- The provisional comparison uses the float the model reported; the columns store it quantised to
+  three decimals, so a confidence within 0.0005 of the threshold can read differently from its
+  outcome. `discarded_suggestions`, like `proposed_topics`, is replaced on every run, deduplicated by
+  dimension and normalised value. An empty department suggestion is `discarded`. A type outside
+  `DOCUMENT_TYPES` reaching the apply layer raises before anything is written. The document row is
+  locked for the apply, as deletion and reprocess lock it.
+- Confirming or editing the classification of a document that has no analysis is a 404: the type of a
+  never-classified document is edited after `classify` runs, not instead of it. A blank department
+  given by a person is written blank and marked confirmed.
+- **Open, recorded rather than built:** a rejected proposed topic is proposed again by a later run; a
+  document's scheme is built for its audience at classification time, so widening its visibility later
+  does not reclassify it; a suggestion in a dimension outside the three is logged and counted nowhere
+  durable. `confirm_proposed_topic` reactivates a deactivated Topic tag of the same name rather than
+  creating a duplicate.
+- The routes: `POST /api/documents/{id}/classify` (200, 422 insufficient text, 503 provider; the
+  "ingestion" throttle scope, no in-flight slot), `POST /api/documents/{id}/classification`
+  (confirm or edit; 400 invalid type), `POST .../tags/{content_tag_id}/confirm`, `DELETE
+  .../tags/{content_tag_id}`, `POST .../proposed-topics/confirm` and `.../reject`; the detail gains
+  `classification` and `tag_details`, and the 201 upload and reprocess bodies gain `classification`.
+  Lists and browse do not. `manage.py classify_documents --all|--document <uuid> --out <json>` is the
+  Objective 05 instrument.
+
+**Dated note, 10 November 2026: two decisions after the routes were built** (the user's, on the
+django-backend agent's report).
+
+- **The machine fills only a blank department.** As first built, an in-scheme department suggestion
+  at or above the threshold replaced the department the uploader typed, on upload and on every
+  reprocess, until someone confirmed. FR-10 says a value a person gives "is not overwritten by later
+  reprocessing". Now: a blank `Documents.department` takes an applied suggestion; one that already
+  holds the suggested value stays and the outcome is applied; one holding a different value stays,
+  and the suggestion is provisional, held for a person to accept. The value already there may have
+  been typed by the uploader, confirmed, or written by an earlier run; none of them is replaced by a
+  later run. Out of scheme is still discarded, and below the threshold still provisional. On the
+  twenty, which all carry uploader departments, Objective 05's department outcomes stay measurable
+  and no department is changed. *Declined:* marking a typed department confirmed, which would show
+  no department behaviour on the reference set; keeping the overwrite.
+- **Classification stays at upload, and its cost is recorded.** Every upload and reprocess now waits
+  for one classification call, inside the ingestion transaction and holding the document's row lock,
+  where the proposal's 7.8 places it and where it cannot fail the document. On FLM one call took
+  7.6 to 21.2 s in D-106's sweeps, and up to `MAXIMUM_CLASSIFY_ATTEMPTS` are made. **An estimate,
+  not a measurement:** D04 (26 pages) ingested in 33.3 s on 1 November, so with classification about
+  41 to 55 s, and a retry could take a large document past Objective 02's 60-second bound for a
+  document of twenty pages or fewer. **Owed before M8:** re-time that bound with classification on,
+  on the host D-114's choice lands on. *Declined:* moving the call after the ingestion commit, which
+  does not shorten the upload; re-timing now on a throwaway database.
+
+## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
+
+**Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
+D-88, D-93, `CLASSIFICATION_CONFIDENCE_THRESHOLD` · **Builds on:** D-104, D-105
+
+**The reference set.** `corpus/objective-05/reference.json` gives each of the twenty indexed
+documents its reference type, decided from the document's own text with the evidence quoted
+(`reference.md`). The lead approved it as drafted on 8 November: Policy 7, Procedure 6, Report 6,
+Meeting Paper 1; eight strong fits, eight fair, four weak and flagged (D07, a template, as Policy; D09,
+a kickoff brief, as Meeting Paper; D13, a schedule, and D20, an announcement, as Report). The
+alternatives for the weak fits are recorded in the file and were not taken. Department and the
+Project, Process and Topic tags come from `corpus/objective-02/manifest.json`. **The set is frozen:**
+a test set, never a tuning set (D-93's rule), and nothing is chosen against it after this date.
+
+**What the verification counts.** The 75% type match is computed over all twenty suggested types,
+provisional or not: a held suggestion is still "a suggested document type", and holding it is the
+second clause, not an exemption from the first. Department is reported beside it and is not in the
+75%. Tags are reported against the manifest for information, and for the provisional and scheme
+behaviours the objective names.
+
+**The database: `kmp_obj0506_20261101`,** created on 8 November from the 1 November dump
+`3bf98403…6f59` (D-84's snapshot, the one D-88 restored the alpha from), after the checks ran first:
+the snapshot folder's `snapshot.json` equal to the committed copy, the dump's SHA-256 equal to the
+recorded one, the name not a protected one, and `createdb` refusing an existing name, so nothing could
+be overwritten. **No media copy:** classification reads `ExtractedContent` and asks read chunks, so
+no file is needed, and downloads are not measured. Migration v2 is applied to it with FR-10's pull
+request. The fourteen tag values are seeded as the scheme only, `Tags` rows and no links, so the
+documents arrive untagged and the scheme exists. Objective 06's writes go to the same database.
+`kmp`, `kmp_demo_20261101` and `kmp_obj02_20261101` are untouched. The worktree's own `.env` names
+`kmp_obj0506`, pytest's base name, which is never created.
+
+**The confidence threshold is chosen on development documents, never on the twenty.** The
+development set is `corpus/demo/D21_bicycle_end_of_trip_facilities.docx` and eleven one-page
+documents written for the purpose under `corpus/objective-05/dev-documents/`, three per type,
+none on a subject the twenty cover. Each is classified three times against the corpus's scheme (its
+six departments and fourteen tag values). **The rule, fixed before the run:** the threshold that best
+separates correct from wrong type assignments on the development set, the value maximising the
+number of correct assignments at or above it plus wrong assignments below it; a tie goes to the
+higher value; then a margin, the threshold is capped at the lowest confidence seen on a correct
+assignment minus 0.05. If the model's confidences do not separate correct from wrong at all, that is
+reported as the finding, and the threshold is set at the lowest confidence seen on a correct
+assignment. The result replaces the PROVISIONAL 0.70 in `apps/core/constants.py`, with the sweep
+recorded under `corpus/objective-05/runs/`.
+
+**Before the run:** `scripts/check_flm.py` passes, FLM is v0.9.39 (D-83), and the record carries the
+commit SHA, the dump hash and the FLM version, as every measurement does (D-84).
+
+**Declined:** a fixed 0.70 declared untuned, which D-93's rule rules out for a tunable; the five
+transcripts as the development set, which are all one kind.
+
+**Not covered:** Objective 06, whose decisions follow.
+
+**Dated note, 10 November 2026: the threshold is 0.95, and on gemma3:4b the type's confidence does
+not separate right from wrong.** Two development sweeps ran, 12 documents three times each, on FLM
+v0.9.39 with nothing read from or written to a database. The evidence is
+`corpus/objective-05/runs/2026-11-09/dev-sweep/` and
+`corpus/objective-05/runs/2026-11-10/dev-sweep-2/`. The twenty reference documents were not
+consulted.
+
+| | First sweep, `fb9e18a` | Second sweep, `b40dc0f` |
+|---|---|---|
+| type matches | 24 of 33 (72.7%) | **33 of 36 (91.7%)** |
+| Meeting Paper suggested where expected | 0 of 9 | 6 of 9 |
+| classifications that failed | 3 (D21, every attempt) | 0 |
+| type confidence, right | 0.95 to 0.98 | 0.95 to 0.98 |
+| type confidence, wrong | 0.95 to 0.96 | 0.95 |
+| what the rule gives | 0.90 | **0.95** |
+
+- **One prompt revision between the two, by the user's decision of 9 November, on development
+  material only** (`b40dc0f`). The first sweep never suggested Meeting Paper. It also failed D21 on
+  every attempt, because the model gave a tag an empty value and temperature 0 repeated it. The
+  prompt now defines each type by its purpose, and it forbids an empty value, telling the model to
+  leave the dimension out instead.
+- **The rule's first branch, with the cap, on the first sweep.** The separating value was 0.98,
+  which held all 9 wrong types and 7 of 24 right ones. The cap, at the lowest right confidence minus
+  0.05, lowered it to 0.90, where nothing is held. The cap defeats any separation found at the top
+  of the range; that is a flaw in how the rule was drafted. The user kept the rule as fixed, cap
+  included, and applied it to the second sweep.
+- **The rule's second branch on the second sweep.** No threshold beats applying everything: all
+  three wrong types score 0.95, the same as the lowest right ones. So, as the rule fixed in advance
+  says, the confidences do not separate correct from wrong, and the threshold is the lowest
+  confidence seen on a correct assignment: **`CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95`**.
+- **What 0.95 does:**
+  - **No type is held.** Every type suggestion scored at least 0.95, so the type is always applied
+    as an AI suggestion that a person can confirm or edit.
+  - **Departments and tags are held.** On the second sweep, 24 of 36 department suggestions and 71
+    of 84 tag suggestions fall below 0.95 and would be held for confirmation, against 12 and 13
+    applied.
+  - **So Objective 05's provisional clause is exercised on departments and tags, not on types.** The
+    model's own confidence is close to a constant for the type, and that is recorded as a finding
+    about gemma3:4b, not hidden by the value.
+- **An FLM-configuration value** (D-113, D-114). The threshold was chosen on gemma3:4b's
+  self-reported confidences, and a threshold chosen on one model's confidences does not carry over
+  to another's. Before the `anthropic` provider is relied on, it is re-derived on the same
+  development documents by this rule. Claude is not deterministic on this path (no temperature,
+  D-115), so each development document is classified over repeated draws there, as D-103 measured
+  FLM's band. `scripts/classification_dev_sweep.py` gates on FLM today, so that run needs a
+  provider-aware gate, built when the re-derivation is.
+- **If M8 runs on `anthropic`,** Objective 05 is verified again on that configuration, its
+  type-match rate over repeated draws.
+- **Every Objective 05 result records its configuration** from now on: the provider, the chat model
+  and the embedding model. The two sweeps above ran on `flm`, `gemma3:4b`; classification calls no
+  embedding model.
+- **Not covered:** a confidence derived from anything but the model's own report.
+
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,

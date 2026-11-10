@@ -75,13 +75,14 @@ def test_the_body_is_the_object_the_repository_list_returns(session_client, empl
     detail screen, so the field set has to be the list's or the two would drift apart.
 
     Since Stage 5 item 2 the detail carries FR-15's three detail fields as well (D-63, D-73),
-    and nothing else differs: ``test_document_detail_fields.py`` asserts the exact key set."""
+    and since FR-10 its two (D-105), and nothing else differs: ``test_document_detail_fields.py``
+    asserts the exact key set."""
     document = make_document(employee)
 
     listed = session_client.client.get(DOCUMENTS_URL).json()
     detailed = detail(session_client.client, document.id).json()
 
-    detail_fields = {"extracted_text", "tags", "can_delete"}
+    detail_fields = {"extracted_text", "tags", "can_delete", "classification", "tag_details"}
     assert [{key: value for key, value in detailed.items() if key not in detail_fields}] == listed
 
 

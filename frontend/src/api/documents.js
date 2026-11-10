@@ -187,3 +187,116 @@ export function uploadDocument({ file, title, department, visibleToRoles }, opti
 export function reprocessDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/reprocess`, {}, options)
 }
+
+/* ---- FR-10 classification (D-104, D-105) --------------------------------- */
+
+/*
+ * The detail object (`fetchDocument`) carries two more fields since FR-10, read
+ * by src/components/Classification.jsx:
+ *
+ * - `classification` — `null` while the document has never been classified, else
+ *   `{doc_type, doc_type_outcome, department_outcome, machine_doc_type,
+ *   machine_doc_type_confidence, machine_department, machine_department_confidence,
+ *   user_edited, proposed_topics: [{value, confidence}], classified_at, model,
+ *   input_truncated}`. An outcome is `applied` (at or above the confidence
+ *   threshold and written), `provisional` (below it: held, not the document's type,
+ *   and `doc_type` is null), `discarded` (the department only: outside the known
+ *   departments, nothing written) or `confirmed` (a person confirmed or edited
+ *   it). `doc_type` is the effective type; the effective department is the
+ *   document's own `department` field (D-72).
+ * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
+ *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
+ *   "user". A link with `provisional: true` is a held suggestion and is not among
+ *   `tags`.
+ *
+ * Every action below needs a session and `contribute_content`, which both roles
+ * hold (D-30, D-105). 404 for an unknown id or a document outside the caller's
+ * scope, checked before the permission, so a refusal never says whether the id
+ * names something (CLAUDE.md §6, invariant 1); 403 for a role without the
+ * permission. The screen hides its controls on a 403 and the server checks on
+ * every call whatever the screen showed (invariant 4).
+ */
+
+/**
+ * `POST /api/documents/{id}/classify` — runs FR-10's classification over the
+ * document's extracted text, which takes the AI service ten to sixty seconds.
+ *
+ * 200 `{classification, tag_details}`, both as the detail carries them; 422 no
+ * text was extracted, so there is nothing to classify (FR-10's own code); 503
+ * NFR-19's notice, after `MAXIMUM_CLASSIFY_ATTEMPTS`; 429 past the ingestion
+ * rate it shares with upload, meeting ingestion and reprocess (D-79), with a
+ * `Retry-After` in seconds.
+ */
+export function classifyDocument(docId, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/classify`, {}, options)
+}
+
+/**
+ * `POST /api/documents/{id}/classification` — a person confirms or edits the
+ * type and the department, in one request.
+ *
+ * With neither value given the body is empty, `{}`, and the suggestions are
+ * confirmed as they stand: a provisional type becomes the document's type and a
+ * provisional department is written. With values, those are written instead and
+ * marked confirmed; the machine's values are kept beside them (FR-10: "the
+ * machine assignment is retained alongside it"). Either way the outcomes read
+ * `confirmed` and later reprocessing leaves them alone.
+ *
+ * 200 `{classification}`; 400 `{"doc_type": ["..."]}` for a type outside Policy,
+ * Procedure, Report and Meeting Paper; 404 also for a document that has no
+ * classification yet (D-105's build notes: the type of a never-classified
+ * document is edited after `classifyDocument`, not instead of it).
+ *
+ * @param {string} docId
+ * @param {{docType?: string, department?: string}} [values] Omitted fields are
+ *   not sent, so an empty object confirms.
+ */
+export function confirmClassification(docId, { docType, department } = {}, options = {}) {
+  const body = {}
+  if (docType !== undefined) body.doc_type = docType
+  if (department !== undefined) body.department = department
+  return post(`/documents/${encodeURIComponent(docId)}/classification`, body, options)
+}
+
+/**
+ * `POST /api/documents/{id}/tags/{content_tag_id}/confirm` — a person confirms
+ * one tag link the AI applied or held. 200 with the `tag_details` entry as it now
+ * is: `confirmed` true, `provisional` false. A confirmed tag is not altered by
+ * later reprocessing (FR-10).
+ */
+export function confirmTag(docId, contentTagId, options = {}) {
+  return post(
+    `/documents/${encodeURIComponent(docId)}/tags/${encodeURIComponent(contentTagId)}/confirm`,
+    {},
+    options,
+  )
+}
+
+/**
+ * `DELETE /api/documents/{id}/tags/{content_tag_id}` — removes one tag link:
+ * rejecting a held suggestion and removing an applied tag are the same action
+ * (FR-10: "either may be accepted or removed in a single action"). 204, no body.
+ */
+export function removeTag(docId, contentTagId, options = {}) {
+  return del(`/documents/${encodeURIComponent(docId)}/tags/${encodeURIComponent(contentTagId)}`, options)
+}
+
+/**
+ * `POST /api/documents/{id}/proposed-topics/confirm`, body `{value}` — creates
+ * the Topic tag the AI proposed outside the scheme and links it (FR-10: a new
+ * value "requires user confirmation before it is created"). 200
+ * `{classification, tag_details}`: the value leaves `proposed_topics` and a link
+ * appears in `tag_details`.
+ */
+export function confirmProposedTopic(docId, value, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/proposed-topics/confirm`, { value }, options)
+}
+
+/**
+ * `POST /api/documents/{id}/proposed-topics/reject`, body `{value}` — drops a
+ * proposed Topic value without creating anything. 200 `{classification,
+ * tag_details}`, the value gone from `proposed_topics`.
+ */
+export function rejectProposedTopic(docId, value, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/proposed-topics/reject`, { value }, options)
+}

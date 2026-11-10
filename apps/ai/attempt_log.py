@@ -52,6 +52,13 @@ reading, not observed", because nothing recorded how a reply ended.
   ``max_tokens`` (20 of 20, mid-list). So the completion-token count against
   ``max_tokens`` is logged beside it, and a reader compares the two.
 
+**Classification attempts (9 November 2026, FR-10, D-104).** The loop in
+``apps/ai/classification.py`` records each attempt the same way, under the step
+``classification``: a failed attempt is a WARNING and a parsed attempt an INFO line ending
+``: 2 tag(s)``. The bracket's ``max_statements`` reads ``unreported`` on those lines, because a
+classification request carries no statement cap. As everywhere in this file, nothing of the
+reply is quoted: not the type, the department or a tag.
+
 **It observes; it does not decide.** No attempt count, timeout or reply changes because
 of it. A logging call does not raise into its caller: a handler that fails reports through
 ``logging``'s own ``handleError``.
@@ -148,9 +155,9 @@ def failed_attempt(
     *,
     reply: ReplyFacts | None = None,
 ) -> None:
-    """One failed attempt of ``step``, "generation" or "question embedding".
+    """One failed attempt of ``step``: "generation", "question embedding" or "classification".
 
-    ``reply`` is passed for a generation attempt, and adds the bracket.
+    ``reply`` is passed for a generation or a classification attempt, and adds the bracket.
     """
     logger.warning(
         "%s attempt %d of %d failed after %.1f s%s (account %s): %s: %s",
@@ -179,6 +186,24 @@ def parsed_attempt(number: int, of: int, seconds: float, statements: int, *, rep
         _bracket(reply),
         _account.get() or "not set",
         statements,
+    )
+
+
+def parsed_classification(number: int, of: int, seconds: float, tags: int, *, reply: ReplyFacts) -> None:
+    """One classification attempt whose reply parsed into CLASSIFICATION_SCHEMA, at INFO (FR-10).
+
+    ``parsed_attempt``'s counterpart for ``classify_document`` (D-104). Like it, the line says how
+    many items the reply held and nothing of what they were: a suggested type, department or
+    tag is the model's reply, and this module quotes no reply.
+    """
+    logger.info(
+        "classification attempt %d of %d parsed after %.1f s%s (account %s): %d tag(s)",
+        number,
+        of,
+        seconds,
+        _bracket(reply),
+        _account.get() or "not set",
+        tags,
     )
 
 

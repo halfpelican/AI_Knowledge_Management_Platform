@@ -58,6 +58,31 @@ class GenerationAttempt:          # apps/ai/generation.py — the observer's rec
     detail: str | None = None     # the violation message or the failure description
     statements: int | None = None
 
+@dataclass(frozen=True)
+class TagScheme:                  # FR-10 — the scheme one document is classified against (D-104)
+    doc_types: tuple[str, ...]    # DOCUMENT_TYPES
+    departments: tuple[str, ...]  # distinct non-blank Documents.department values in the audience
+    tags: dict[str, tuple[str, ...]]  # Project, Process, Topic -> active tag names
+
+@dataclass(frozen=True)
+class Assignment:
+    value: str
+    confidence: float             # the model's own estimate, in [0, 1]
+
+@dataclass(frozen=True)
+class TagSuggestion:
+    dimension: str                # Project, Process or Topic
+    value: str
+    confidence: float
+
+@dataclass(frozen=True)
+class DocumentClassification:
+    doc_type: Assignment          # value is one of the scheme's doc_types; any other reply is rejected
+    department: Assignment        # as suggested; whether it is in the scheme is apps/documents' call (D-105)
+    tags: tuple[TagSuggestion, ...]
+    model: str                    # the chat model that answered, for the DocumentAnalysis record
+    input_truncated: bool         # the text was cut at CLASSIFICATION_INPUT_TOKENS before it was sent
+
 class AIService(Protocol):
     def embed(self, texts: list[str]) -> EmbeddingResult: ...
     def generate_statements(
@@ -68,17 +93,26 @@ class AIService(Protocol):
         on_attempt: Callable[[GenerationAttempt], None] | None = None,
     ) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
+    def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
 ```
 
-Three operations, deliberately. Classification (FR-10) and summarisation (FR-16) are
-NIT3004 work and get their own methods later — do not add them speculatively.
+The operations are the ones listed on `AIService`, and the list is the source of truth, not a
+count. `classify_document` arrived with FR-10 on 9 November 2026 (D-104), when NIT3004 asked for
+it; it lives in its own module, `apps/ai/classification.py`, so nothing in the generation prompt
+or its loop changed for it — section 5b. Summarisation (FR-16) gets its own method the same way
+when its requirement is built, not speculatively before.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
 A response that does not conform to the statement schema counts as a failed attempt,
 not as an answer.
 
-### `on_attempt` — an observer, not a fourth operation
+`classify_document` raises `ProviderUnavailable` after `MAXIMUM_CLASSIFY_ATTEMPTS`; ingestion
+catches it and leaves the document unclassified (invariant 8, NFR-20). A reply that does not
+conform to `CLASSIFICATION_SCHEMA`, including a type outside the fixed list, counts as a failed
+attempt, not as a classification.
+
+### `on_attempt` — an observer, not an operation
 
 `on_attempt` is keyword-only, defaults to `None`, and is called once per generation
 attempt with a `GenerationAttempt` the method already computes and would otherwise
@@ -99,12 +133,12 @@ retry loop, and a second retry loop beside the shipped one is exactly the duplic
 Stage 4 item 5 removed. `apps/ai/tests/test_observer_is_not_used_in_application_code.py`
 reads the source of every module under `apps/` and fails if one appears as a caller.
 
-This is still three operations. The sentence above means no classification method and no
-summarisation method until NIT3004 asks for them; it is not a rule about keyword
-arguments, and an observer on an existing operation adds nothing to the interface a
-caller must implement — every implementation already computes what it reports. A
-parameter that changed what the model is asked, such as FR-13's conversation history,
-would be a different question and is argued on its own merits when item 9 reaches it.
+The observer is not an operation: the operations are the ones listed above, and a keyword on an
+existing one adds nothing to the interface a caller must implement — every implementation
+already computes what it reports. A parameter that changed what the model is asked, such as
+FR-13's conversation history, would be a different question and is argued on its own merits
+when item 9 reaches it. `classify_document` has no observer: nothing measures classification per
+attempt, and a second route from a raw model reply into `apps/` is not opened for it.
 
 It is declared in the Protocol signature itself, not only in the implementations: a
 contract and its implementations differing by a parameter is the defect this project keeps
@@ -284,6 +318,104 @@ Record the numbers in `docs/flm-baseline.md`. They are worth having at the
 demonstration: "our local model conforms to the citation schema 97% of the time and
 fabricated an identifier in 2% of responses, which verification then stripped" is a
 much stronger answer than an assurance.
+
+---
+
+## 5b. Classification output (FR-10)
+
+`apps/ai/classification.py`, added with FR-10 on 9 November 2026 (D-104). One structured call
+returns a document's type, department and tags against the scheme the caller passes
+(`TagScheme`, built by `apps/documents/classification.py` for the document's own audience). The
+same approach as section 5, because it is the same risk: a small local model and free-form JSON.
+
+**Required schema** (`CLASSIFICATION_SCHEMA`)
+
+```json
+{
+  "doc_type":   {"value": "Procedure", "confidence": 0.92},
+  "department": {"value": "Lantern Room", "confidence": 0.88},
+  "tags": [
+    {"dimension": "Process", "value": "wick trimming", "confidence": 0.9}
+  ]
+}
+```
+
+- Exactly three keys. `doc_type.value` **must be one of the scheme's `doc_types`** (DOCUMENT_TYPES:
+  Policy, Procedure, Report, Meeting Paper), or the reply is a `SchemaViolation` — a type outside
+  the fixed list is not a classification (invariant 10; FR-10: "selected from a fixed list rather
+  than generated freely"). `department.value` is any non-empty string; whether it is in the scheme
+  is decided in `apps/documents` (D-105), never by the provider.
+- `tags` holds at most `MAXIMUM_TAG_SUGGESTIONS` (8) objects, each with `dimension` one of
+  Project, Process or Topic, a non-empty `value` and a `confidence`. More than the cap is a
+  violation, counted as returned; nothing is trimmed to fit.
+- Every `confidence` is a number in [0, 1]. A string, a boolean or a number outside the range is a
+  violation, not repaired.
+- A tag with the same dimension and name as an earlier one, after `normalise_tag_name` (lower
+  case, single spaces), is dropped and the first kept. That is a shape tolerance — two spellings of
+  one tag are one suggestion — not a repair of content.
+
+**Prompt strategy, in order** (`CLASSIFICATION_SYSTEM_PROMPT`, `build_classification_messages`)
+
+1. A strict system prompt: JSON only; the type from the fixed list, copied exactly; the department
+   from the listed departments; tags only from the values listed per dimension, except that a NEW
+   Topic value may be proposed when no listed one fits — never a new Project, Process or
+   department; at most eight tags; confidence as the model's honest estimate; no explanation.
+2. One worked example whose subject (lighthouse keeping) and whose departments and tag values are
+   alien to any organisation, for the reason the comment above `SYSTEM_PROMPT` in
+   `apps/ai/prompting.py` records: a worked example is training data for the response, and this
+   prompt carries no identifiers, so the lesson applies to content. The example's reply uses
+   listed values only and proposes no new Topic — a demonstrated invention would be copied onto
+   every document. The only values it shares with a real prompt are the four fixed types.
+   `apps/ai/tests/test_classification_prompt.py` asserts the example's values appear in no real
+   scheme (the corpus manifest) and in no real user turn.
+3. The user turn carries the scheme's lists (document types, departments, Project, Process and
+   Topic tags — `(none listed)` where a dimension is empty), then the title, then the text, then
+   the instruction to reply with the JSON object only.
+4. The same tolerant parser as generation — code fence, preamble, trailing comma, nothing else —
+   through the same three pieces of code, imported from `apps/ai/schema.py` under public names
+   rather than copied.
+5. A reply that does not parse is a failed attempt (below).
+
+**Untrusted text.** The title and text are an uploaded document's. Nothing in them is transformed:
+this prompt cites no identifier, so unlike the generation prompt (D-45) it has no delimiter whose
+forgery converts into an accepted citation, and no neutralisation is applied. The residual is a
+body that steers the model in prose or forges a scheme line; shape validation cannot detect it.
+What bounds it: the type is held to the fixed list by the parser, the department and tag values
+are held to the scheme by the application (D-105), and a person confirms the suggestions.
+
+**Truncation** (`classification_input`). The model reads the title and the first
+`CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text — D-31's token —
+joined by single spaces. Whether anything was cut is returned as `input_truncated` on the
+`DocumentClassification` and kept on the record rather than hidden. The cut is made by the
+provider and again at the prompt boundary (it is idempotent), so no caller can send more.
+
+**Retry policy** (`run_classification_attempts`): `run_generation_attempts`' exactly, with
+`MAXIMUM_CLASSIFY_ATTEMPTS` (3) as the total — 1 initial call + 2 retries. A transport failure
+or a 5xx is a failed attempt; a non-conforming reply is a failed attempt; a 4xx propagates after
+one call and consumes no retry; after the last attempt, `ProviderUnavailable` naming the
+provider and the last failure. Every attempt is recorded through `apps/ai/attempt_log.py` under
+the step `classification`, at WARNING when it failed and INFO when it parsed, quoting nothing of
+the reply. On FLM, `temperature` is 0.0 and `max_tokens` is `CLASSIFICATION_MAX_TOKENS` (400).
+On Claude there is no sampling parameter, which current models refuse, and `max_tokens` is
+`CLAUDE_MAX_TOKENS`, generation's Claude ceiling, because thinking counts against it and 400 would
+cut the reply off before its JSON (#67, D-115). Every call carries
+`CLASSIFICATION_TIMEOUT_SECONDS` (300). Both providers call the one loop; `model` on
+the result is `FLM_CHAT_MODEL` or `ANTHROPIC_MODEL`, whichever answered.
+
+**The stub** (`StubAIService.classify_document`). Deterministic and derived from the scheme: the
+first document type, the first department (or `STUB_OUT_OF_SCHEME_DEPARTMENT` when the scheme
+lists none), one tag per dimension that lists a value, every confidence `STUB_CONFIDENCE`,
+`model` `STUB_CHAT_MODEL`, and the real `input_truncated`. Every call is recorded in
+`classify_calls`. A test overrides it with `StubAIService(classification=...)` or by setting the
+`classification` attribute on the suite's stub: a `DocumentClassification` is returned as-is, a
+callable is called with `(title, text, scheme)` and may raise `ProviderUnavailable` to stand in
+for an outage.
+
+**Not measured yet.** Section 5's rates were established with `scripts/citation_harness.py`
+before anything was built on them. The classification prompt has no harness run behind it: its
+conformance rate on `gemma3:4b` is unmeasured, and D-106's sweep on the development documents is
+where it gets one. Until then, treat the prompt as a first version with a tested parser and a
+tested retry path, not as a measured one.
 
 ---
 
