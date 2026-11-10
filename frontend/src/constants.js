@@ -531,6 +531,12 @@ export const TEXT = {
   // place (FR-10: "presented for confirmation rather than applied silently").
   classificationNotAssigned: 'Not yet assigned',
   classificationSuggestedByAI: 'Suggested by AI',
+  // D-119 finding 10: an applied department whose `department_applied_by` is "user" is
+  // one a person gave, typed at upload or written through the confirm route, which the
+  // machine's suggestion matched. It is the person's, so it does not read "Suggested by
+  // AI"; the second sentence keeps the machine's assignment beside it (FR-10).
+  classificationGivenByPerson: 'Given by a person',
+  classificationSuggestionMatched: 'The AI’s suggestion matched it',
   classificationAwaiting: 'Awaiting your confirmation',
   classificationConfirmed: 'Confirmed by a person',
   classificationConfidence: (percent) => `${percent}% confidence`,

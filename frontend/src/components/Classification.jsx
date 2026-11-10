@@ -33,8 +33,12 @@ const OUTCOME = {
   confirmed: 'confirmed',
 }
 
-/** `applied_by` on a tag link (TAG_APPLIED_BY_VALUES, D-74). */
+/**
+ * `applied_by` on a tag link (TAG_APPLIED_BY_VALUES, D-74), and since D-119 finding 10
+ * the classification's `department_applied_by` in the same vocabulary.
+ */
 const APPLIED_BY_AI = 'ai'
+const APPLIED_BY_USER = 'user'
 
 /** The fields the edit form can place a 400's message under. */
 const EDIT_FIELDS = ['doc_type', 'department']
@@ -83,10 +87,17 @@ function isUnconfirmedAi(tag) {
  * @param {number|null} confidence Its confidence.
  * @param {string|null} effectiveValue What the document carries now.
  * @param {boolean} isDepartment Only the department has the `discarded` outcome.
+ * @param {string|null} [appliedBy] The department's `department_applied_by`: "user",
+ *   "ai", or null for a classification recorded before the field.
  */
-function provenanceFor(outcome, machineValue, confidence, effectiveValue, isDepartment) {
+function provenanceFor(outcome, machineValue, confidence, effectiveValue, isDepartment, appliedBy = null) {
   switch (outcome) {
     case OUTCOME.applied:
+      // D-119 finding 10: a department a person gave, which the suggestion matched,
+      // is the person's, so it is not called the AI's. "ai" and null read as before.
+      if (isDepartment && appliedBy === APPLIED_BY_USER) {
+        return `${TEXT.classificationGivenByPerson}. ${withConfidence(TEXT.classificationSuggestionMatched, confidence)}.`
+      }
       return withConfidence(TEXT.classificationSuggestedByAI, confidence)
     case OUTCOME.provisional: {
       if (!machineValue) return `${TEXT.classificationAwaiting}.`
@@ -264,7 +275,9 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  * **A department already on the document is the current one** while a different
  * suggestion waits (D-105's note of 10 November): the value shown is the
  * document's, the suggestion is named as awaiting confirmation, and the sentence
- * says that confirming replaces the one with the other.
+ * says that confirming replaces the one with the other. And a department a person
+ * gave that the suggestion matched (`department_applied_by` "user" with the outcome
+ * `applied`) is said to be the person's, not the AI's (D-119 finding 10).
  *
  * **Authorisation is the server's.** The controls are offered to everyone who can
  * read the document, because both roles hold `contribute_content` (D-105); a 403
@@ -540,6 +553,7 @@ export default function Classification({ docId, classification, tagDetails, depa
         classification.machine_department_confidence,
         department,
         true,
+        classification.department_applied_by ?? null,
       )
     : null
   const confirmable =

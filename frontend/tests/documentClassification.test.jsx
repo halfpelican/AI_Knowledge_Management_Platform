@@ -43,6 +43,8 @@ function classificationOf(overrides = {}) {
     doc_type: 'Policy',
     doc_type_outcome: 'applied',
     department_outcome: 'applied',
+    // A run wrote its suggestion into a blank department (D-119 finding 10).
+    department_applied_by: 'ai',
     machine_doc_type: 'Policy',
     machine_doc_type_confidence: 0.92,
     machine_department: 'Human Resources',
@@ -292,6 +294,34 @@ describe('D-119 finding 6: the notice that only the opening of a long document w
     // The assignments rendered, so the notice's absence is not a section that never drew.
     expect(assignment(TEXT.classificationFieldType).value).toBe('Policy')
     expect(within(section()).queryByText(TEXT.classificationTruncated)).toBeNull()
+  })
+})
+
+describe('D-119 finding 10: whose department it is, from department_applied_by', () => {
+  it('says an applied department a person gave, which the AI’s suggestion matched, is the person’s and not "Suggested by AI"', async () => {
+    await renderDetail(detailOf({ classification: classificationOf({ department_applied_by: 'user' }) }))
+
+    const department = assignment(TEXT.classificationFieldDepartment)
+    expect(department.value).toBe('Human Resources')
+    expect(department.provenance).toBe(
+      `${TEXT.classificationGivenByPerson}. ${TEXT.classificationSuggestionMatched}, ${TEXT.classificationConfidence(81)}.`,
+    )
+    expect(department.provenance).not.toContain(TEXT.classificationSuggestedByAI)
+    // The type beside it was the machine's, and still says so: the field is the department's alone.
+    expect(assignment(TEXT.classificationFieldType).provenance).toBe(
+      `${TEXT.classificationSuggestedByAI}, ${TEXT.classificationConfidence(92)}`,
+    )
+  })
+
+  it.each([
+    ['"ai", a run having written it into a blank department', 'ai'],
+    ['null, as on a classification recorded before the field', null],
+  ])('keeps "Suggested by AI" on an applied department whose department_applied_by is %s', async (_case, appliedBy) => {
+    await renderDetail(detailOf({ classification: classificationOf({ department_applied_by: appliedBy }) }))
+
+    const department = assignment(TEXT.classificationFieldDepartment)
+    expect(department.provenance).toBe(`${TEXT.classificationSuggestedByAI}, ${TEXT.classificationConfidence(81)}`)
+    expect(department.provenance).not.toContain(TEXT.classificationGivenByPerson)
   })
 })
 

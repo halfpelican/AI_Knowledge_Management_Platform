@@ -195,10 +195,13 @@ export function reprocessDocument(docId, options = {}) {
  * by src/components/Classification.jsx:
  *
  * - `classification` — `null` while the document has never been classified, else
- *   `{doc_type, doc_type_outcome, department_outcome, machine_doc_type,
- *   machine_doc_type_confidence, machine_department, machine_department_confidence,
- *   user_edited, proposed_topics: [{value, confidence}], classified_at, model,
- *   input_truncated}`. An outcome is `applied` (at or above the confidence
+ *   `{doc_type, doc_type_outcome, department_outcome, department_applied_by,
+ *   machine_doc_type, machine_doc_type_confidence, machine_department,
+ *   machine_department_confidence, user_edited, proposed_topics: [{value,
+ *   confidence}], classified_at, model, input_truncated}`. `department_applied_by` is
+ *   whose value the department is, "user", "ai" or null (D-119 finding 10; null for
+ *   no department, or a classification recorded before the field). An outcome is
+ *   `applied` (at or above the confidence
  *   threshold and written), `provisional` (below it: held, not the document's type,
  *   and `doc_type` is null; for the department also a suggestion that differs from
  *   a department already on the document, which since 10 November stays until a
