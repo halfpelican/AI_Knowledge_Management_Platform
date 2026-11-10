@@ -10,11 +10,13 @@ next classify or reprocess linked the tag again. Now:
   machine gave it, whether it was held, applied or confirmed;
 - a later run neither links it again nor alters it, and a removed Topic is not proposed again;
 - a removed link is no longer found by id, so it cannot be confirmed or removed a second time;
-- ``tag_scheme`` still counts it as a link, so a removal on a restricted document cannot turn a
-  restricted value into vocabulary every audience is offered.
+- ``tag_scheme`` still counts it as a link, so the tag stays in its own document's scheme: offered
+  there to be applied again, and shown to the classifier, which leaves the removed link alone.
 
-A person's own link is deleted on removal: ``test_classification_confirm.py`` holds that case
-(``test_a_persons_own_tag_can_be_removed_in_the_same_action``).
+A person's own link is kept the same way since the requirements re-audit of ``5377e3a`` (D-105's
+dated note): ``test_classification_confirm.py`` holds that case
+(``test_a_persons_own_tag_is_removed_in_the_same_action_and_kept_marked_removed``), and
+``apps/api/tests/test_fr10_removed_tags.py`` the later classify and reprocess.
 """
 
 from decimal import Decimal

@@ -217,8 +217,8 @@ export function reprocessDocument(docId, options = {}) {
  * - `tag_options` — `{Project: [{tag_id, tag_name}], Process: [...], Topic: [...]}`,
  *   the tags a person may apply to this document, which are its own
  *   classification scheme: always all three keys, each sorted by name, tags
- *   already on the document included. Nothing in it is on material a reader of the
- *   document may not see (CLAUDE.md §6, invariant 1).
+ *   already on the document included. It discloses nothing to anyone who may read
+ *   the document (CLAUDE.md §6, invariant 1).
  *
  * Every action below needs a session and `contribute_content`, which both roles
  * hold (D-30, D-105). 404 for an unknown id or a document outside the caller's

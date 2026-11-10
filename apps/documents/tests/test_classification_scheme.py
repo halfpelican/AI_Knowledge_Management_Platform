@@ -1,15 +1,16 @@
 """``tag_scheme``: the scheme a document is classified against is the vocabulary its own audience
 may read (D-105, CLAUDE.md invariant 1).
 
-The rule under test, from the function's docstring: a value is in the scheme only if EVERY role
-in ``document.visible_to_roles`` can read at least one source carrying it; a value with no links
-is vocabulary only and is always in; readability comes from ``scoped_documents`` and
-``scoped_meetings`` and from nothing written here.
+The rule under test, from the function's docstring: a tag that is not grown is vocabulary and is
+in every scheme, whatever its links; a grown tag is in only if EVERY role in
+``document.visible_to_roles`` can read at least one source carrying it (D-105's dated note of 10
+November 2026, night: the security review of ``84b5771``); readability comes from
+``scoped_documents`` and ``scoped_meetings`` and from nothing written here.
 
 The fixtures build the smallest corpus that tells the cases apart: an Employee-visible document
-and an Administrator-only one, a Project linked only to the restricted document, a Process both
-carry, a Topic nothing carries, a Topic held provisionally on the restricted document, and a
-department each.
+and an Administrator-only one, a grown Project linked only to the restricted document, a Process
+both carry, a Topic nothing carries, a grown Topic held provisionally on the restricted document,
+and a department each.
 """
 
 import datetime

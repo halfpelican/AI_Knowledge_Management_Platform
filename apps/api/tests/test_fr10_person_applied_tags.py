@@ -390,14 +390,22 @@ def three_steps(client, doc_id, name):
     return (first.status_code, removed.status_code, second.status_code), options
 
 
+def option_names(options):
+    """``tag_options`` by name. Each variant's Topic is its own row, with its own random id (uuid4),
+    which says nothing about whether the row existed before."""
+    return {dimension: [entry["tag_name"] for entry in entries] for dimension, entries in options.items()}
+
+
 def test_apply_remove_apply_answers_alike_whether_or_not_a_restricted_topic_exists(
     employee, employee_client, restricted
 ):
     """The oracle the lead's review found in the 409 rule as first built. An Employee applies a
-    Topic name to a document both roles read, removes it (a person's link is deleted) and applies it
-    again. While an unlinked Topic was vocabulary, the second apply was a 409 for a name nothing
-    else carried and a 201 for one carried only by Administrator-only material, and the options
-    in between differed the same way. Now both runs answer 201, 204, 201 and offer the same."""
+    Topic name to a document both roles read, removes it and applies it again. While an unlinked
+    Topic was vocabulary, the second apply was a 409 for a name nothing else carried and a 201 for
+    one carried only by Administrator-only material, and the options in between differed the same
+    way. Since the requirements re-audit of ``5377e3a`` the removed link is kept and still counts,
+    so the document itself carries the name: both runs answer 201, 204, 409 and list the name after
+    the removal. The answers are the same either way, so the oracle stays closed."""
     document = make_document(employee)
     name = "merger talks"
     as_new = answered_then_undone(lambda: three_steps(employee_client, document.id, name))
@@ -407,33 +415,49 @@ def test_apply_remove_apply_answers_alike_whether_or_not_a_restricted_topic_exis
     link(topic, restricted)  # the restricted Topic: on the Administrator-only document alone, grown
     as_restricted = three_steps(employee_client, document.id, name)
 
-    assert as_new[0] == as_restricted[0] == (201, 204, 201)
-    assert as_new[1] == as_restricted[1]
-    assert name not in [entry["tag_name"] for entry in as_new[1][TOPIC_DIMENSION]]
+    assert as_new[0] == as_restricted[0] == (201, 204, 409)
+    assert option_names(as_new[1]) == option_names(as_restricted[1])
+    assert name in option_names(as_new[1])[TOPIC_DIMENSION]
 
 
-def test_applying_removing_and_applying_a_new_topic_again_is_201_204_201(session_client):
+def test_applying_removing_and_applying_a_new_topic_again_is_201_204_409_and_its_id_restores_it(
+    session_client,
+):
     """The mirror from both roles, each on a document of their own role: the Employee on an
-    Employee-only document, the Administrator on an Administrator-only one. A name a person applied
-    and removed is not offered afterwards, and applying it again links it again."""
+    Employee-only document, the Administrator on an Administrator-only one. Since the requirements
+    re-audit of ``5377e3a`` a person's removed link is kept and counts, so the name is still offered
+    after the removal, applying it again by name is the 409 that names it, and applying its id
+    restores the same link: 200 (``_apply_link``)."""
     document = make_document(session_client.user, roles=[session_client.role_name])
 
     codes, options = three_steps(session_client.client, document.id, "night shifts")
 
-    assert codes == (201, 204, 201)
-    assert options[TOPIC_DIMENSION] == []
-    assert Tag.objects.filter(tag_name="night shifts", dimension=TOPIC_DIMENSION).count() == 1
+    assert codes == (201, 204, 409)
+    topic = Tag.objects.get(tag_name="night shifts", dimension=TOPIC_DIMENSION)  # one row, not two
+    assert options[TOPIC_DIMENSION] == [{"tag_id": str(topic.pk), "tag_name": "night shifts"}]
+    [kept] = links_of(document).filter(tag=topic)
+    assert (kept.removed, kept.applied_by) == (True, USER_APPLIED)
+
+    restored = apply(session_client.client, document.id, tag_id=str(topic.pk))
+
+    assert restored.status_code == 200, restored.content
+    [after] = links_of(document).filter(tag=topic)
+    assert (after.pk, after.removed, after.confirmed, after.applied_by) == (
+        kept.pk, False, True, USER_APPLIED,
+    )
 
 
 def test_apply_remove_apply_answers_alike_for_a_new_a_restricted_and_a_retired_seeded_topic(
     employee, employee_client, restricted
 ):
-    """The lead's revision kept a seeded, unlinked Topic as vocabulary and marks grown the Topic a
-    person's name brings in, fetched or created. Three runs of the Employee's sequence, each undone
-    before the next: a name nothing has, a Topic carried only by Administrator-only material, and a
-    retired, seeded, unlinked Topic. Each answers 201, 204, 201 and offers the same in between.
-    Without marking a fetched Topic grown, the retired one would come back as vocabulary after the
-    removal and answer 201, 204, 409."""
+    """Three runs of the Employee's sequence, each undone before the next: a name nothing has, a
+    Topic carried only by Administrator-only material, and a retired, seeded, unlinked Topic. Since
+    the requirements re-audit of ``5377e3a`` a person's removed link is kept and counts, so each run
+    answers 201, 204, 409 and lists the name after the removal: the same answers in every variant,
+    so the oracle stays closed. The options are compared by name, each variant's Topic having its
+    own random id. Whether the retired Topic is grown as it comes back no longer shows here, since
+    the document carries the name either way; ``test_fr10_tag_vocabulary.py`` holds it at the
+    route."""
     document = make_document(employee)
     name = "merger talks"
 
@@ -457,5 +481,6 @@ def test_apply_remove_apply_answers_alike_for_a_new_a_restricted_and_a_retired_s
 
     assert not Tag.objects.filter(tag_name=name).exists()  # every run was undone
     for label, (codes, options) in results.items():
-        assert codes == (201, 204, 201), label
-        assert options == results["new"][1], label
+        assert codes == (201, 204, 409), label
+        assert option_names(options) == option_names(results["new"][1]), label
+        assert name in option_names(options)[TOPIC_DIMENSION], label

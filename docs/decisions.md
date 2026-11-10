@@ -6967,6 +6967,8 @@ and never changes the document's status. Found by the requirements audit (D-119,
 The user's decisions on the requirements audit (D-119's table), built on
 `feat/FR-10-tag-corrections`, server side only; the interface half follows on the same branch. Each
 decision is recorded with its reason, and each build choice the brief left open is named as one.
+*Corrected the same night, after the requirements re-audit of `5377e3a`: the interface half
+landed on the same branch, in `1641693`, `c6f59d4`, `607feaa` and `4d53cb7`.*
 
 - **A removal is kept (finding 3).** FR-10's correction clause: "any value a user edits are retained
   and is not overwritten by later reprocessing, and the machine assignment is retained alongside
@@ -6976,6 +6978,9 @@ decision is recorded with its reason, and each build choice the brief left open 
   - **Removing an AI link** (held or applied, confirmed or not) sets `removed` and keeps the row,
     with the confidence and provisional flag the machine gave it. **Removing a person's link
     deletes it**: it holds no machine assignment to keep. The route keeps its URL and its 204.
+    *Changed the same night, after the requirements re-audit of `5377e3a`: a person's link is kept
+    and marked removed too, because deleting it let the next run link the value again (the last
+    bullet of this note).*
   - **No read lists a removed link.** Every read that excluded a provisional link excludes it: FR-15's
     facets, filters and the detail's `tags`. So does `tag_details`, which does list provisional
     links: a held suggestion waits for a decision, and a removed one has had it.
@@ -6985,7 +6990,11 @@ decision is recorded with its reason, and each build choice the brief left open 
   - **`tag_scheme` still counts a removed link as a link,** as it counts a provisional one. A removed
     suggestion on a restricted document is still a fact about that document, and not counting it
     would turn a value carried only by restricted material into vocabulary every audience is
-    offered (invariant 1).
+    offered (invariant 1). *Corrected the same night, after the requirements re-audit of
+    `5377e3a`: the behaviour stands, but this reason has not held since `824c536`, where a tag that
+    is not grown is vocabulary whatever its links and a grown one never is. What counting a removed
+    link does now: the tag stays in its own document's scheme, offered there to be applied again
+    (`200`) and shown to the classifier, which leaves the removed link alone.*
   - *Build choices:* a removed link's id is the same 404 as an unknown one on the confirm and remove
     routes, because nothing ever shows it; confirming a proposed Topic whose link was removed
     restores that link; `manage.py classify_documents` flags removed links in its record and counts
@@ -7035,9 +7044,13 @@ decision is recorded with its reason, and each build choice the brief left open 
     duplicate tag name within a dimension" is answered only for a Topic already in the document's
     scheme. The caller is offered that Topic anyway, and the 409 carries its id. A Topic of that
     name that exists but is outside the scheme is carried only by material some reader of the
-    document cannot see, or is inactive. Answering 409 for it would tell the caller that a value
-    they cannot see exists. So it is linked as it stands, reactivated if it was inactive (as
-    `confirm_proposed_topic` already does), and answered 201 exactly as a new Topic is. A test
+    document cannot see, or is inactive. *Corrected the same night, after the requirements re-audit
+    of `5377e3a`: since `84b5771` it may also be a grown Topic that nothing links, and since
+    `824c536` it is always a grown Topic that no source every reader of the document can read
+    carries, one nothing links included, or an inactive one, as `classification.py` and the
+    contract say.* Answering 409 for it would tell the caller that a value they cannot see exists.
+    So it is linked as it stands, reactivated if it was inactive (as `confirm_proposed_topic`
+    already does), and answered 201 exactly as a new Topic is. A test
     compares the two replies byte for byte, with only the new link's id masked: `Tags` has no
     timestamp, and the reply carries no tag id, so nothing in it tells them apart. Timing is not
     claimed to be indistinguishable. This entry's "the 409 is not reachable by design" is
@@ -7067,6 +7080,11 @@ decision is recorded with its reason, and each build choice the brief left open 
     source at all. That has always reached the classification prompt; `tag_options` now lists it
     to every reader. Since the oracle bullet below, this holds for unlinked tags that are not
     grown: Project and Process tags, and seeded Topics.
+    *Corrected the same night, after the requirements re-audit of `5377e3a`: since `824c536` (the
+    security review's bullet below) a tag that is not grown is offered whatever its links, and only
+    a grown tag needs every audience role to read a source carrying it. Read "linked values" in
+    these two bullets as grown ones, and "unlinked tags that are not grown" as every tag that is not
+    grown.*
   - **A residual, for the lead.** A tag becomes unlinked when its last link is deleted, and two
     paths delete links: removing a person's own tag (this note's rule, since it holds no machine
     assignment) and deleting a document (D-73). So a Topic a person typed on an Administrator-only
@@ -7075,7 +7093,9 @@ decision is recorded with its reason, and each build choice the brief left open 
     keeping a person's removed link too, or an Administrator deleting the unused tag (finding 5's
     route). Neither is built as a rule; the decision is the lead's. The lead's review found the
     worse half of it the same night, and the oracle bullet below closes it for every Topic a
-    person brought in by name.
+    person brought in by name. *Since the requirements re-audit of `5377e3a` a person's removed link
+    is kept too (the last bullet of this note), so only deleting a document or a meeting deletes a
+    link.*
 - **An Administrator retires a tag (finding 5).** FR-10: "Tags are deactivated rather than deleted
   where content still references them, preserving historical classification", and its CRUD line
   gives Tags "Delete". Only the schema held either (`Tags.active`, and `PROTECT`, D-12).
@@ -7114,7 +7134,8 @@ decision is recorded with its reason, and each build choice the brief left open 
   1. An Employee holding `contribute_content` applies a Topic name to a document their role reads.
      It answers 201 whether or not a Topic of that name exists on Administrator-only material, as
      intended.
-  2. They remove it. A person's link is deleted, so it answers 204 either way.
+  2. They remove it. A person's link is deleted, so it answers 204 either way. *(Since the
+     requirements re-audit of `5377e3a` the link is kept and marked removed; still 204.)*
   3. They apply the name again. A name nothing else carried was now an unlinked Tag, admitted as
      vocabulary and offered, so it answered 409. A name carried only by Administrator-only material
      was still linked and unreadable, not offered, so it answered 201. `tag_options` differed the
@@ -7134,7 +7155,10 @@ decision is recorded with its reason, and each build choice the brief left open 
     vocabulary. The empty-audience branch is unchanged, and so is `reject_tag`. A fetched Topic is
     marked as well as a created one: otherwise a retired, seeded, unlinked Topic a person names
     would come back as vocabulary after the removal, and answer 201, 204, 409 where a new name
-    answers 201, 204, 201.
+    answers 201, 204, 201. *Superseded the same night, marked after the requirements re-audit of
+    `5377e3a`: `824c536` admits a tag that is not grown whatever its links (the security review's
+    bullet below), `c99857c` grows only a Topic a name creates or reactivates, and since the
+    re-audit a person's removal is kept, so the sequence answers 201, 204, 409 in every variant.*
   - *Dated line, 10 November 2026 (night): narrowed the same night.* `11a610f` first took every
     unlinked Topic out of every scheme. That changed Objective 05's measured configuration, six
     seeded, unlinked Topics shown to the classifier, and FR-10's "established scheme" for anyone who
@@ -7176,8 +7200,9 @@ decision is recorded with its reason, and each build choice the brief left open 
   links on material they cannot read were made or destroyed. The lead checked findings 1 to 3
   against the code. The dispositions:
   - **1 (high): fixed.** An Employee holding `contribute_content` removed the readable person links
-    of a seeded value: the D-74 seed's links are a person's, `reject_tag` deletes a person's link,
-    and there is no ownership check. The value then vanished from `tag_options` exactly when
+    of a seeded value: the D-74 seed's links are a person's, `reject_tag` deleted a person's link
+    (*until the requirements re-audit of `5377e3a`, the last bullet of this note*), and there is no
+    ownership check. The value then vanished from `tag_options` exactly when
     Administrator-only material still carried it. The name form's 201 against 409, and the
     `tag_id` form's 400 against 201, said the same. On the objective-02 manifest, `purchasing`,
     `onboarding`, `finance` and `people` have such carriers (D15, D16). This refutes "An Employee
@@ -7287,6 +7312,34 @@ decision is recorded with its reason, and each build choice the brief left open 
     - The seed script's docstring says to run it before any document is classified, which is still
       good advice: a document classified first holds its seeded suggestions as proposals or
       discarded suggestions until a person acts or it is classified again.
+- **The requirements re-audit of `5377e3a` (the same night): a person's removed link is kept too.**
+  The re-audit's finding 3, partial. `reject_tag` deleted a person's link, so the next classify
+  route, reprocess or `classify_documents` run that suggested the value linked it again, through
+  `_link_tag`'s create branch, as `applied_by: "ai"`, and a Topic the person had typed was proposed
+  again. That breaks FR-10's correction clause, "any value a user edits [is] retained and is not
+  overwritten by later reprocessing" (UC-09 A3 step 3), and nothing tested or recorded it.
+  - **The decision (the lead's, the re-audit's option (a)).** `reject_tag` keeps a person's link
+    too, marked `removed`, exactly as it keeps an AI link. `_link_tag`, `removed_topics` and
+    `_apply_link` already handled a removed row, so nothing else in the apply layer changed.
+  - **The apply, remove, apply sequences** now answer 201, 204, 409 for a new name, a Topic only
+    restricted material carries and a retired seeded Topic alike, and list the name in
+    `tag_options` after the removal in every variant. The removed link still counts as a link, so
+    the document itself carries the name, and the name form answers the 409 that names it. The
+    answers are still identical, so the oracle stays closed. Each variant's Topic is its own row
+    with a random id (`uuid4`), which says nothing about whether it existed before.
+  - **Applying the tag again restores the link,** 200, by its id, as `_apply_link` restores a
+    removed AI link.
+  - **`DELETE /api/tags/{id}`** deactivates a tag whose only links are removed (200): they still
+    reference it. It deletes only a tag nothing references.
+  - **Links are now deleted only with their source,** a document (D-73) or a meeting. So removing a
+    link never takes a tag out of anyone's options; a grown tag leaves an audience's options when
+    the last source that audience reads carrying it is deleted.
+  - **What the sequences no longer show.** Whether a Topic a name brings in is grown, created or
+    reactivated, no longer shows in them, since the document carries the name either way. A route
+    test holds it instead: a new name, or a retired seeded Topic, named on Administrator-only
+    material stays out of the Employee's options.
+  - **The contract** says a person's link is kept, and its 400 list for the name form now names a
+    missing `dimension` too (`serializers.py`).
 
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 

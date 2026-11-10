@@ -196,12 +196,13 @@ class ContentTag(models.Model):
     confidence = models.DecimalField(max_digits=4, decimal_places=3, null=True, blank=True)
     provisional = models.BooleanField(default=False)
     # ``documents 0009`` (D-105's dated note of 10 November 2026, night; D-119 finding 3). A person
-    # removed this AI link. It is no longer a tag of its document and no read lists it, but the
-    # row stays with ``confidence`` and ``provisional`` as the machine set them: FR-10's correction
-    # clause keeps "the machine assignment ... alongside" the person's decision, and reprocessing
-    # neither re-links nor alters it (apps/documents/classification.py ``_link_tag``). A link a
-    # person applied is deleted on removal instead, because it holds no machine assignment.
-    # ``tag_scheme`` still counts a removed link as a link, as it counts a provisional one.
+    # removed this link, the machine's or a person's. It is no longer a tag of its document and no
+    # read lists it, but the row stays, an AI link with ``confidence`` and ``provisional`` as the
+    # machine set them: FR-10's correction clause keeps "the machine assignment ... alongside" the
+    # person's decision, and reprocessing neither re-links nor alters it (apps/documents/
+    # classification.py ``_link_tag``). A person's link was deleted on removal until the
+    # requirements re-audit of ``5377e3a``, and the next run then linked the value again as the
+    # machine's. ``tag_scheme`` still counts a removed link as a link, as it counts a provisional one.
     removed = models.BooleanField(default=False)
 
     class Meta:

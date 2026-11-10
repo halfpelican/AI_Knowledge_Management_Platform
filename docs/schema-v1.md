@@ -234,7 +234,7 @@ cascade deleted the row.
 | `confirmed` | boolean | a user-confirmed tag is not altered by reprocessing |
 | `confidence` | decimal(4,3), nullable | **v2** — the model's confidence for an AI-applied link, to three places; null for a link a person applied (FR-10, D-105; `documents 0008`) |
 | `provisional` | boolean | **v2** — an AI link whose confidence was below `CLASSIFICATION_CONFIDENCE_THRESHOLD`: held for confirmation and not a tag of the document until confirmed (FR-10, D-105; `documents 0008`) |
-| `removed` | boolean | **v2** — a person removed this AI link: kept with its `confidence` and `provisional` as the machine set them, read by nothing, and neither re-linked nor altered by reprocessing (FR-10's correction clause; D-105's dated note of 10 November 2026, night; `documents 0009`) |
+| `removed` | boolean | **v2** — a person removed this link, the machine's or a person's: kept, an AI link with its `confidence` and `provisional` as the machine set them, read by nothing, and neither re-linked nor altered by reprocessing (FR-10's correction clause; D-105's dated note of 10 November 2026, night; `documents 0009`). A person's link was deleted on removal until the requirements re-audit of that night |
 
 **Tags and ContentTags are in v1 even though FR-10 is NIT3004 work.** FR-15 is a
 MUST-HAVE and its browse mode queries `ContentTags` directly. The tables will be
@@ -253,10 +253,12 @@ as `ai`, so provenance survives the confirmation; a rejection deletes the link.
 > **10 November 2026 (night), `documents 0009`: a rejection no longer deletes an AI link.** It
 > sets `removed=True` and keeps the row, so the machine's assignment survives beside the
 > person's decision (FR-10: "the machine assignment is retained alongside it") and the next
-> classify or reprocess does not link the tag again. A link a person applied is still deleted:
-> it holds no machine assignment. Every reader that excludes `provisional=True` excludes
-> `removed=True` as well, `tag_details` included, while `tag_scheme` still counts a removed
-> link as a link (D-105's dated note of that night; D-119 finding 3).
+> classify or reprocess does not link the tag again. A link a person applied was still deleted,
+> holding no machine assignment, until the requirements re-audit the same night: deleted, it was
+> linked again by the next run that suggested it, so it is kept, marked removed, too. Every reader
+> that excludes `provisional=True` excludes `removed=True` as well, `tag_details` included, while
+> `tag_scheme` still counts a removed link as a link (D-105's dated note of that night; D-119
+> finding 3).
 
 ### DocumentAnalysis — FR-10
 

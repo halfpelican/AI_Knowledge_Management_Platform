@@ -2,10 +2,12 @@
 
 ``DELETE /api/documents/{id}/tags/{content_tag_id}`` keeps its URL and its 204, and since D-105's
 dated note of 10 November 2026 (night) an AI link it removes is kept, marked removed, beside the
-machine's confidence; a person's link is deleted. A removed link is in no read: not the detail's
-``tags`` or ``tag_details``, not the classify reply's ``tag_details``, not a browse facet value and
-not a filter hit. A later classify or reprocess neither links the tag again nor alters it. A removed
-link is the same 404 as an unknown one when it is confirmed or removed again.
+machine's confidence. Since the requirements re-audit of ``5377e3a`` a person's link is kept the same
+way: deleted, it was linked again as the machine's by the next classify or reprocess that suggested
+it. A removed link is in no read: not the detail's ``tags`` or ``tag_details``, not the classify
+reply's ``tag_details``, not a browse facet value and not a filter hit. A later classify or reprocess
+neither links the tag again nor alters it, and a removed Topic is not proposed again. A removed link
+is the same 404 as an unknown one when it is confirmed or removed again.
 
 The classification object's ``department_applied_by`` (finding 10) is read here through the classify,
 confirm and detail replies.
@@ -27,12 +29,14 @@ from apps.core.constants import (
     DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
     MAXIMUM_EMBED_ATTEMPTS,
+    PROCESS_DIMENSION,
     PROJECT_DIMENSION,
     SOURCE_TYPES,
+    TOPIC_DIMENSION,
     USER_APPLIED,
 )
-from apps.documents.models import ContentTag, Document, ExtractedContent, Tag
-from apps.documents.tests.classification_builders import BELOW_THRESHOLD, classification
+from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.tests.classification_builders import ABOVE_THRESHOLD, BELOW_THRESHOLD, classification
 from apps.ingestion.tests.ai_doubles import ScriptedEmbedService, install
 
 pytestmark = pytest.mark.django_db
@@ -112,7 +116,9 @@ def test_removing_an_ai_tag_keeps_it_removed_beside_the_machines_assignment(sess
     assert Tag.objects.filter(tag_name=BRIDGE).exists()
 
 
-def test_removing_a_persons_tag_deletes_it(session_client):
+def test_removing_a_persons_tag_keeps_it_marked_removed(session_client):
+    """As an AI link is kept, since the requirements re-audit of ``5377e3a``: FR-10's correction
+    clause, "not overwritten by later reprocessing" (D-105's dated note)."""
     document = make_document(session_client.user)
     tag = Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION)
     link = ContentTag.objects.create(
@@ -123,7 +129,11 @@ def test_removing_a_persons_tag_deletes_it(session_client):
     response = remove(session_client.client, document.id, link.id)
 
     assert response.status_code == 204
-    assert not links_of(document).exists()
+    kept = links_of(document).get()
+    assert (kept.pk, kept.removed, kept.applied_by, kept.confirmed, kept.confidence) == (
+        link.pk, True, USER_APPLIED, True, None,
+    )
+    assert detail(session_client.client, document.id)["tag_details"] == []
     assert Tag.objects.filter(pk=tag.pk).exists()
 
 
@@ -213,6 +223,66 @@ def test_a_reprocess_leaves_a_removed_tag_removed(session_client, upload, monkey
     assert (kept.pk, kept.removed, kept.provisional) == (link.pk, True, False)
     assert kept.confidence == Decimal(str(STUB_CONFIDENCE))
     assert detail(client, document.id)["tag_details"] == []
+
+
+PERSON_VALUES = ["a seeded Process value", "a Topic a person typed"]
+
+
+def apply_then_remove(client, document, kind):
+    """A person applies a tag through the route, then removes it through the route; its Tag."""
+    if kind == "a seeded Process value":
+        seeded = Tag.objects.create(tag_name="purchasing", dimension=PROCESS_DIMENSION)  # vocabulary
+        body = {"tag_id": str(seeded.pk)}
+    else:
+        body = {"dimension": TOPIC_DIMENSION, "tag_name": "Night shifts"}
+    applied = client.post(f"{DOCUMENTS_URL}/{document.id}/tags", body, format="json")
+    assert applied.status_code == 201, applied.content
+    [entry] = applied.json()["tag_details"]
+    assert entry["applied_by"] == USER_APPLIED
+    assert remove(client, document.id, entry["content_tag_id"]).status_code == 204
+    return ContentTag.objects.get(pk=entry["content_tag_id"]).tag
+
+
+@pytest.mark.parametrize("kind", PERSON_VALUES)
+@pytest.mark.parametrize("run", ["classify", "reprocess"])
+def test_a_persons_removed_tag_is_neither_linked_nor_proposed_again(
+    session_client, upload, monkeypatch, stub_ai_service, run, kind
+):
+    """The requirements re-audit of ``5377e3a`` (its finding 3): a person's link was deleted on
+    removal, so the next run that suggested the value linked it again, ``applied_by="ai"``, through
+    ``_link_tag``'s create branch, and a Topic the person had typed was proposed again. FR-10's
+    correction clause: "not overwritten by later reprocessing" (UC-09 A3 step 3)."""
+    client = session_client.client
+    if run == "classify":
+        document = make_document(session_client.user)
+    else:
+        # The first attempt fails to index, so the document can be reprocessed (D-32). Nothing is
+        # in the scheme yet, so its classification suggests no tag.
+        install(monkeypatch, ScriptedEmbedService(failures=MAXIMUM_EMBED_ATTEMPTS))
+        failed = client.post(DOCUMENTS_URL, {"file": upload("sample.txt"), "title": "Sample"},
+                             format="multipart")
+        assert failed.status_code == 422, failed.content
+        document = Document.objects.get(pk=failed.json()["doc_id"])
+    tag = apply_then_remove(client, document, kind)
+    suggestion = classification(tags=[(tag.dimension, tag.tag_name, ABOVE_THRESHOLD)])
+
+    if run == "classify":
+        stub_ai_service.classification = suggestion
+        response = classify(client, document.id)
+        assert response.status_code == 200, response.content
+    else:
+        healthy = ScriptedEmbedService()
+        healthy.classification = suggestion
+        install(monkeypatch, healthy)
+        response = client.post(f"{DOCUMENTS_URL}/{document.id}/reprocess", {}, format="json")
+        assert response.status_code == 201, response.content
+        assert len(healthy.classify_calls) == 1  # the reprocess did classify again
+
+    kept = list(links_of(document).filter(tag=tag))
+    assert [(link.removed, link.applied_by) for link in kept] == [(True, USER_APPLIED)]
+    assert detail(client, document.id)["tag_details"] == []
+    proposals = DocumentAnalysis.objects.get(document=document).proposed_topics
+    assert tag.tag_name not in [proposal["value"] for proposal in proposals]
 
 
 # --- department_applied_by in the three replies (finding 10) -------------------------------------

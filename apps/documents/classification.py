@@ -264,8 +264,8 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
     2026, night: the security review of ``84b5771``):
 
     - **A grown tag appears** when a source every audience role reads comes to carry it, and
-      **disappears** when the last such link is removed or that source is deleted. Links on
-      material some reader cannot see neither add nor remove it.
+      **disappears** only when the last such source is deleted: a removed link is kept and still
+      counts (``reject_tag``). Links on material some reader cannot see neither add nor remove it.
     - **A tag that is not grown never moves** while it is active: no link anyone makes or destroys,
       on readable material or restricted, changes whether it is offered. That includes a person
       confirming a proposal of its name made before it was vocabulary, which links it and leaves it
@@ -612,29 +612,27 @@ def confirm_tag(document: Document, content_tag_id) -> ContentTag:
 
 
 def reject_tag(document: Document, content_tag_id) -> None:
-    """Remove a tag "in a single action" (FR-10's provenance clause), keeping a machine's assignment.
+    """Remove a tag "in a single action" (FR-10's provenance clause), keeping the link, marked removed.
 
-    **An AI link** (``applied_by="ai"``: held or applied, confirmed or not) is KEPT and marked
-    ``removed``, with the confidence and provisional flag the machine gave it. FR-10's correction
+    **Every link is KEPT and marked ``removed``,** a person's as well as the machine's: held or
+    applied, confirmed or not, with the confidence and provisional flag it had. FR-10's correction
     clause: "any value a user edits [is] retained and is not overwritten by later reprocessing, and
-    the machine assignment is retained alongside it". Deleting the row, as this did until D-119
-    finding 3, lost the machine's assignment and let the next classify or reprocess link the tag
-    again; ``_link_tag`` now leaves a removed link alone. No read lists it.
-
-    **A person's link** (``applied_by="user"``) is deleted: there is no machine assignment to keep.
-    The ``Tag`` row, a vocabulary, stays either way.
+    the machine assignment is retained alongside it" (UC-09 A3 step 3). A deleted row records no
+    decision, so the next classify route, reprocess or ``classify_documents`` run that suggested the
+    value linked it again, ``applied_by="ai"``, through ``_link_tag``'s create branch: for an AI link
+    until D-119 finding 3, and for a person's link until the requirements re-audit of ``5377e3a``
+    (D-105's dated note of 10 November 2026, night). ``_link_tag`` leaves a removed link alone, a
+    removed Topic is not proposed again (``apply_classification``'s ``removed_topics``), and no read
+    lists it. The ``Tag`` row, a vocabulary, stays.
 
     A link already removed is not found here (``_link_on``), so removing it again is the same
     "not on this document" as an unknown id. A person puts it back by applying the tag
-    (``apply_tag``).
+    (``apply_tag``), which restores the row (``_apply_link``).
     """
     with transaction.atomic():
         link = _link_on(document, content_tag_id)
-        if link.applied_by == AI_APPLIED:
-            link.removed = True
-            link.save(update_fields=["removed"])
-        else:
-            link.delete()
+        link.removed = True
+        link.save(update_fields=["removed"])
 
 
 def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -> AppliedTag:
@@ -658,13 +656,14 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       ``confirm_proposed_topic`` does), and answered exactly as a new Topic is. Only a name no Topic
       has creates a Tag.
     - **The Topic the name form links is grown** (``Tag.grown``, D-105's dated note of 10 November
-      2026, night), whether it was created or fetched, so that once its link is removed it is not
-      vocabulary, whatever it was before. ``_bring_into_use`` marks one it creates or reactivates;
-      an active one it fetches is grown already, since an active Topic that is not grown is
-      vocabulary, offered, and answered 409 above. Without the mark, a retired, seeded, unlinked
-      Topic a person names would come back as vocabulary after the removal, and apply, remove and
-      apply again would answer 201, 204, 409 where a new name answers 201, 204, 201. The ``tag_id``
-      form marks nothing: an offered tag is already readable or vocabulary.
+      2026, night), whether it was created or fetched, so that it is never vocabulary, whatever it
+      was before: it is offered only where every audience role reads a source carrying it.
+      ``_bring_into_use`` marks one it creates or reactivates; an active one it fetches is grown
+      already, since an active Topic that is not grown is vocabulary, offered, and answered 409
+      above. Without the mark, a Topic a person brings in by name on material some reader cannot
+      see, new or retired, would be vocabulary, offered to that reader too
+      (apps/api/tests/test_fr10_tag_vocabulary.py). The ``tag_id`` form marks nothing: an offered
+      tag is already readable or vocabulary.
 
     Then the link (``_apply_link``): a new one is ``applied_by="user"``, ``confirmed=True`` (as the
     D-74 seed sets a person's links), not provisional, not removed, ``confidence`` null, and
@@ -698,8 +697,8 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
 def _bring_into_use(topic: Tag, created: bool) -> None:
     """A Topic a person brought into use by name (``apply_tag``'s name form, or
     ``confirm_proposed_topic``): one this call ``created``, or an inactive one it fetched, is made
-    active and grown, so that once nothing links it, it is not vocabulary (``tag_scheme``; D-105's
-    dated note of 10 November 2026, night).
+    active and grown, so that it is never vocabulary: it is offered only where every audience role
+    reads a source carrying it (``tag_scheme``; D-105's dated note of 10 November 2026, night).
 
     **An active Topic it fetched keeps its value** (the lead's decision after the security review
     of ``84b5771``, D-105's dated note). A grown one is grown already. One that is not grown is
@@ -766,8 +765,8 @@ def confirm_proposed_topic(document: Document, value: str) -> ContentTag:
     FR-10: a new value "may be proposed only in the Topic dimension and requires user
     confirmation before it is created". The Topic Tag is fetched or created by normalised name. One
     created, or reactivated because it had been deactivated, is marked grown, as ``apply_tag``'s
-    name form marks it: a Topic a person brought in by name is not vocabulary once nothing links it
-    (D-105's dated note of 10 November 2026, night). An active one fetched keeps its value
+    name form marks it: a Topic a person brought in by name is never vocabulary (D-105's dated note
+    of 10 November 2026, night). An active one fetched keeps its value
     (``_bring_into_use``), so confirming a proposal made before its name became vocabulary links the
     vocabulary Topic and leaves it vocabulary. The document's link is created or confirmed with
     ``applied_by="ai"`` — the suggestion was the machine's — and the proposal leaves

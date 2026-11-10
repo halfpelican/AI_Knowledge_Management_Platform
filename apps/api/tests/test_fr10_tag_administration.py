@@ -195,6 +195,25 @@ def test_deleting_a_retired_tag_that_is_still_referenced_answers_200_again(admin
     assert Tag.objects.filter(pk=tag.pk, active=False).exists()
 
 
+def test_a_tag_whose_only_link_a_person_removed_is_deactivated_not_deleted(
+    session_client, administrator_client
+):
+    """Since the requirements re-audit of ``5377e3a`` a person's removed link is kept, so it still
+    references its tag: retiring the tag deactivates it (200) rather than deleting it (204). The
+    removal runs from both roles; only an Administrator retires (``manage_tags``)."""
+    document = make_document(session_client.user)
+    tag = Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)
+    kept = link(tag, document.pk)  # a person's
+    removed = session_client.client.delete(f"/api/documents/{document.id}/tags/{kept.id}")
+    assert removed.status_code == 204, removed.content
+
+    response = delete(administrator_client, tag.pk)
+
+    assert response.status_code == 200, response.content
+    assert response.json() == entry(tag, 0, active=False)
+    assert ContentTag.objects.filter(pk=kept.pk, removed=True).exists()
+
+
 def test_an_unknown_tag_is_404_for_the_administrator_and_403_before_it_for_an_employee(session_client):
     response = delete(session_client.client, uuid.uuid4())
 

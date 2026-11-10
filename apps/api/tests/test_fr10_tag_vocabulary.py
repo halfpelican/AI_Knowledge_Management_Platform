@@ -7,7 +7,7 @@ made or destroyed, and it moved in exactly the cases that told them restricted m
 value:
 
 1. An Employee holding ``contribute_content`` removes a seeded value's readable person links (the D-74
-   seed's links are a person's, and a person's link is deleted on removal). The value stayed offered
+   seed's links are a person's, and a person's link was deleted on removal). The value stayed offered
    if nothing else carried it, and vanished if Administrator-only material did; the name form's 409
    against 201 and the ``tag_id`` form's 201 against 400 said the same.
 2. Administrator-only material taking up an unlinked seeded value, by a person's link or a held AI
@@ -20,10 +20,13 @@ audience role reads a source carrying it; ``documents 0011`` marks grown the tag
 material carries. Routes run from both roles wherever a route is involved; the stub answers
 classification and no provider is reached.
 
-The last two tests close the one exception found while building the rule: confirming a proposal
-made before its name became vocabulary grew the vocabulary Topic, so confirmed on restricted
-material it left every Employee's options. ``_bring_into_use`` now grows only a Topic it creates or
-reactivates (the lead's decision, D-105's dated note).
+The two stale-proposal tests close the one exception found while building the rule: confirming a
+proposal made before its name became vocabulary grew the vocabulary Topic, so confirmed on
+restricted material it left every Employee's options. ``_bring_into_use`` now grows only a Topic it
+creates or reactivates (the lead's decision, D-105's dated note). The last test holds that growth at
+the route for a Topic a name brings in on restricted material, new or retired, which the apply,
+remove, apply sequences stopped telling apart once a person's removed link was kept (the
+requirements re-audit of ``5377e3a``).
 """
 
 import importlib
@@ -190,7 +193,10 @@ def test_a_backfilled_restricted_value_stays_out_of_an_employees_options_when_it
     else:
         response = administrator_client.delete(f"{DOCUMENTS_URL}/{restricted.id}")
     assert response.status_code == 204, response.content
-    assert not ContentTag.objects.filter(tag=value).exists()
+    # A removal keeps the link, marked removed (the requirements re-audit of 5377e3a); a deletion
+    # takes it with the document. Either way no live link carries the value.
+    assert not ContentTag.objects.filter(tag=value, removed=False).exists()
+    assert ContentTag.objects.filter(tag=value).exists() == (how == "its links are removed")
 
     assert "atlas" not in names(options(employee_client, staff)[PROJECT_DIMENSION])
 
@@ -244,3 +250,30 @@ def test_confirming_a_stale_proposal_on_a_document_every_role_reads_keeps_the_to
     assert ContentTag.objects.filter(tag=value, source_id=shared.pk, confirmed=True).exists()
     value.refresh_from_db()
     assert (value.grown, value.active) == (False, True)
+
+
+# --- A Topic a name brings in on restricted material (the requirements re-audit) ------------------
+
+
+@pytest.mark.parametrize("brought_in", ["a new name", "a retired seeded Topic"])
+def test_a_topic_named_on_restricted_material_stays_out_of_an_employees_options(
+    employee, employee_client, administrator_client, restricted, brought_in
+):
+    """The name form grows the Topic it creates or reactivates, so a name brought in on
+    Administrator-only material is offered nowhere an Employee reads. Without the mark it would be
+    vocabulary, offered to every Employee because of a link they cannot read."""
+    staff = make_document(employee, title="Staff handbook", roles=[EMPLOYEE_ROLE_NAME])
+    if brought_in == "a retired seeded Topic":
+        Tag.objects.create(tag_name="merger talks", dimension=TOPIC_DIMENSION, active=False)
+    before = options(employee_client, staff)
+    assert "merger talks" not in names(before[TOPIC_DIMENSION])
+
+    response = administrator_client.post(
+        f"{DOCUMENTS_URL}/{restricted.id}/tags",
+        {"dimension": TOPIC_DIMENSION, "tag_name": "Merger talks"}, format="json",
+    )
+
+    assert response.status_code == 201, response.content
+    topic = Tag.objects.get(tag_name="merger talks", dimension=TOPIC_DIMENSION)
+    assert (topic.active, topic.grown) == (True, True)
+    assert options(employee_client, staff) == before

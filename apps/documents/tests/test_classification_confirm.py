@@ -199,14 +199,17 @@ def test_an_id_that_is_not_a_link_is_not_on_this_document(document, held_link, b
     assert links_of(document).count() == 1
 
 
-def test_a_persons_own_tag_can_be_removed_in_the_same_action(document):
+def test_a_persons_own_tag_is_removed_in_the_same_action_and_kept_marked_removed(document):
+    """Kept, as an AI link is, since the requirements re-audit of ``5377e3a``: FR-10's correction
+    clause, "not overwritten by later reprocessing" (D-105's dated note)."""
     tag = Tag.objects.create(tag_name="leave", dimension=TOPIC_DIMENSION)
     link = ContentTag.objects.create(
         tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk,
         applied_by=USER_APPLIED, confirmed=True,
     )
     reject_tag(document, link.pk)
-    assert not links_of(document).exists()
+    kept = links_of(document).get()
+    assert (kept.pk, kept.removed, kept.applied_by, kept.confirmed) == (link.pk, True, USER_APPLIED, True)
 
 
 # --- Proposed topics -----------------------------------------------------------------------------
