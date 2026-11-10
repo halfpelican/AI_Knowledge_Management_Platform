@@ -192,6 +192,8 @@ THROTTLED_ROUTES = {
     ("conversation-list", "POST"): "conversation_create",
     ("search", "GET"): "search",
     ("document-tags", "POST"): "tagging",
+    # D-123: one recording segment per request. The status route beside it is not throttled.
+    ("transcription-list", "POST"): "transcription",
 }
 
 
