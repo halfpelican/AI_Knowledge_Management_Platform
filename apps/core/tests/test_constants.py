@@ -283,3 +283,11 @@ def test_effective_roles_are_closed_under_generalisation():
     for role, effective in constants.EFFECTIVE_ROLES.items():
         for included in effective:
             assert set(constants.EFFECTIVE_ROLES.get(included, ())) <= set(effective), (role, included)
+
+
+def test_fr10s_confidence_threshold_is_per_classifying_model():
+    """D-122: claude-haiku-5-5's own value, by D-106's rule on the development documents (10 November
+    2026, corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/): the lowest confidence on a correct type
+    assignment, since Haiku typed all 57 right. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
+    assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.72}
+    assert 0.0 < constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0

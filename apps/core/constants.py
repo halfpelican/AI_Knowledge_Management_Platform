@@ -608,6 +608,17 @@ CLASSIFICATION_INPUT_TOKENS = 1500
 # corpus/objective-05/runs/2026-11-09/dev-sweep/ and corpus/objective-05/runs/2026-11-10/dev-sweep-2/.
 CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95
 
+# Per classification model (D-122): a confidence belongs to the model that reported it, as a cosine
+# belongs to the embedding model (D-120). claude-haiku-5-5's value comes from D-106's rule, run on the
+# development documents through the shipped classify_document, 19 documents three times each
+# (10 November 2026, corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/). Haiku typed all 57 right,
+# so nothing beats applying everything, and the rule's fallback applies: the lowest confidence seen on
+# a correct assignment, 0.72. The development set has seven more documents than when 0.95 was chosen
+# (caf9e22, D-106's note). Any model not listed, gemma3:4b included, keeps
+# CLASSIFICATION_CONFIDENCE_THRESHOLD; apps/documents/classification.py's confidence_threshold()
+# reads both.
+CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
+
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
 # recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):
 #   applied      at or above CLASSIFICATION_CONFIDENCE_THRESHOLD and written to the effective
