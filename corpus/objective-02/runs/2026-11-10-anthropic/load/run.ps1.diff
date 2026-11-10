@@ -1,0 +1,139 @@
+--- tests/load/run.ps1
++++ corpus/objective-02/runs/2026-11-10-anthropic/load/run.ps1
+@@ -1,5 +1,12 @@
+ <#
+ .SYNOPSIS
++    THIS COPY (D-113): tests/load/run.ps1 at bfe7207, for the anthropic provider (Claude Haiku
++    5.5 and Voyage voyage-4), changed only where FLM is named. Steps 3 and 4 (`flm version` and
++    scripts/check_flm.py) are replaced by the provider gate beside this file, provider_gate.py,
++    and k6 is given the provider and the gate's result in place of the FLM version and
++    check_flm.py's. The k6 script it runs is this folder's copy, because tests/load/common.js
++    refuses to start without an FLM version. The original synopsis follows.
++
+     Runs one k6 load test, only after scripts/check_flm.py has passed (D-83) and the server
+     has been observed to be D-85's, with DEBUG off and restarted since the last run (D-87).
+ 
+@@ -110,9 +117,9 @@
+ Set-StrictMode -Version 2.0
+ $ErrorActionPreference = 'Stop'
+ 
+-# D-83 decision 1. A different version is a decision and a full re-index first,
+-# not an edit to this line.
+-$RequiredFlmVersion = 'v0.9.39'
++# This copy: no FLM version is required, because FLM takes no part (D-113). The provider
++# gate beside this file checks the anthropic configuration instead.
++$ProviderGateScript = Join-Path $PSScriptRoot 'provider_gate.py'
+ 
+ # D-85 decisions 2 and 3: the measured run is served by Waitress with 24 threads.
+ # These are this script's statement; the pre-flight observes the server against them.
+@@ -174,8 +181,8 @@
+ 
+ # --- 1. Arguments and programs: cheap checks first, before the slow FLM check -----
+ 
+-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+-$scriptRelative = 'tests/load/' + $ScriptFiles[$Test]
++$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..\..')).Path  # this copy: corpus/objective-02/runs/<run>/load
++$scriptRelative = 'corpus/objective-02/runs/2026-11-10-anthropic/load/' + $ScriptFiles[$Test]  # this copy: the copied k6 scripts
+ if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $scriptRelative) -PathType Leaf)) {
+     Stop-Run "$scriptRelative is not in $repoRoot."
+ }
+@@ -256,17 +263,15 @@
+     # interpreter without the project's environment.
+     Stop-Run "the venv's python is not at $Python. Pass -Python <path to the venv's python.exe>."
+ }
+-$checkScript = Join-Path $repoRoot 'scripts\check_flm.py'
+-if (-not (Test-Path -LiteralPath $checkScript -PathType Leaf)) {
+-    Stop-Run "scripts\check_flm.py is not in $repoRoot."
++if (-not (Test-Path -LiteralPath $ProviderGateScript -PathType Leaf)) {
++    Stop-Run "the provider gate's script is not at $ProviderGateScript (this copy)."
+ }
+ $serverRecordScript = Join-Path $repoRoot 'scripts\server_record.py'
+ if (-not (Test-Path -LiteralPath $serverRecordScript -PathType Leaf)) {
+     Stop-Run "scripts\server_record.py is not in $repoRoot."
+ }
+ 
+-$flm = Find-Program 'flm'
+-if ($null -eq $flm) { Stop-Run 'flm is not on PATH, so its version cannot be recorded.' }
++# This copy: flm is not needed, because FLM takes no part.
+ $git = Find-Program 'git'
+ if ($null -eq $git) { Stop-Run 'git is not on PATH, so the commit cannot be recorded.' }
+ $k6 = Find-Program 'k6'
+@@ -300,46 +305,27 @@
+                 "$D85ServerThreads. It is not D-85's measured run.") -ForegroundColor Yellow
+ }
+ 
+-# --- 3. The FLM version (D-83 decision 1) ------------------------------------------
+-
+-Write-Step 'flm version'
+-$version = Invoke-Native $flm @('version') -Echo
+-if ($version.ExitCode -ne 0) {
+-    Stop-Run "flm version exited $($version.ExitCode)."
+-}
+-$versionText = $version.Lines -join ' '
+-if ($versionText -notmatch '\bv(\d+\.\d+\.\d+\S*)') {
+-    Stop-Run "could not read a version from flm version's output: '$versionText'."
+-}
+-$flmVersion = 'v' + $Matches[1]
+-if ($flmVersion -ne $RequiredFlmVersion) {
+-    Stop-Run ("FLM is $flmVersion; the measurement runs need $RequiredFlmVersion (D-83 decision 1). " +
+-              'From v1.0.4 its embeddings are noise, and a build whose vectors differ from the ' +
+-              "snapshot's needs a full re-index first.")
+-}
+-Write-Host "FLM version: $flmVersion (the pinned version)"
+-
+-# --- 4. The gate: scripts/check_flm.py (D-83 decision 3) ---------------------------
+-
+-Write-Step "scripts\check_flm.py, with $Python"
+-Write-Host ('FLM_BASE_URL = ' + $(if ($env:FLM_BASE_URL) { $env:FLM_BASE_URL } else { "(not set: check_flm.py's default)" }))
++# --- 3 and 4. This copy: the provider gate, in place of `flm version` and check_flm.py --
++
++Write-Step "the provider gate, $ProviderGateScript, with $Python"
+ # -u: unbuffered, so the checks print as they run rather than all at the end.
+-$check = Invoke-Native $Python @('-u', $checkScript) -Echo
+-if ($check.ExitCode -ne 0) {
+-    Stop-Run "scripts\check_flm.py exited $($check.ExitCode). FLM is not fit to measure (D-83 decision 3)."
+-}
+-# Exit 0 alone is not trusted: an interpreter that ran nothing also exits 0. The
+-# script prints this line only when every check passed.
+-$passLine = $check.Lines | Where-Object { $_ -match '^RESULT: PASS\b' } | Select-Object -First 1
+-$failLine = $check.Lines | Where-Object { $_ -match '^RESULT: FAIL\b' } | Select-Object -First 1
++$gate = Invoke-Native $Python @('-u', $ProviderGateScript) -Echo
++if ($gate.ExitCode -ne 0) {
++    Stop-Run "the provider gate exited $($gate.ExitCode): this window is not the anthropic run's configuration."
++}
++# Exit 0 alone is not trusted, as with check_flm.py: the gate prints this line only when every
++# check passed.
++$passLine = $gate.Lines | Where-Object { $_ -match '^PROVIDER GATE: PASS\b' } | Select-Object -First 1
++$failLine = $gate.Lines | Where-Object { $_ -match '^PROVIDER GATE: REFUSED\b' } | Select-Object -First 1
+ if ($null -eq $passLine -or $null -ne $failLine) {
+-    Stop-Run ('scripts\check_flm.py exited 0 but did not print "RESULT: PASS", so the check is ' +
+-              'treated as not passed. If its output format changed, change this test with it.')
+-}
+-$checkedUrl = ''
+-if ($passLine -match '\bagainst\s+(\S+?)\)?\s*$') { $checkedUrl = $Matches[1] }
++    Stop-Run 'the provider gate exited 0 but did not print "PROVIDER GATE: PASS", so it is treated as not passed.'
++}
++# The gate refused anything but these, so they are what k6 is given.
++$provider = 'anthropic'
++$chatModel = 'claude-haiku-5-5'
++$embedModel = 'voyage-4'
+ $checkedAt = Get-UtcStamp
+-Write-Host "check_flm.py passed at $checkedAt"
++Write-Host "the provider gate passed at $checkedAt"
+ 
+ # --- 5. The server, observed (D-87 decisions 1 and 2) ---------------------------------
+ 
+@@ -437,9 +423,10 @@
+ $k6Env = [ordered]@{
+     GIT_SHA                  = $sha
+     GIT_TRACKED_CHANGES      = $trackedChanges
+-    FLM_VERSION              = $flmVersion
+-    FLM_CHECK_PASSED_AT      = $checkedAt
+-    FLM_CHECK_URL            = $checkedUrl
++    PROVIDER                 = $provider
++    CHAT_MODEL               = $chatModel
++    EMBED_MODEL              = $embedModel
++    PROVIDER_GATE_PASSED_AT  = $checkedAt
+     DB_DUMP_SHA256           = $dumpHash
+     # Observed by the pre-flight (D-87 decision 2).
+     SERVER                   = Get-Observed 'SERVER'
