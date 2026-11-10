@@ -1,0 +1,233 @@
+--- scripts/conversation_http_check.py
++++ corpus/objective-02/runs/2026-11-10/voyage-http-check/conversation_http_check_voyage.py
+@@ -1,4 +1,35 @@
+-"""FR-13 through the server: the history a turn reads from QueryLog is wired (D-86 decision 6).
++"""D-113 (10 November 2026): the HTTP check, on the Voyage-indexed copy with Claude.
++
++A copy of scripts/conversation_http_check.py at 4c31d78, changed only where FLM was named, so
++that FR-13's three http_check threads go through a server running the ``anthropic`` provider
++against kmp_voyage_20261110, with D-120's values for voyage-4. The changes:
++
++- **The environment is set here, before Django starts.** DATABASE_URL is .env's with the
++  database name swapped (never printed). AI_PROVIDER is ``anthropic`` (Voyage voyage-4 at 1024,
++  Claude Sonnet 5.5, D-115) and EMBEDDING_DIMENSION is 1024. This process's logs go to this
++  folder's ``logs/``. The server is started separately, with the same database and provider.
++- **The paths** point at scripts/ and the repository root from this folder.
++- **Gate 5** (scripts/check_flm.py's checks and the FLM version, D-83) is replaced by a provider
++  gate. It refuses unless the provider, both models and the dimension are the ones above, both
++  keys are present (their values are never printed), the database is kmp_voyage_20261110, and
++  the threshold and floor for voyage-4 are D-120's 0.2687 and 0.2468.
++- **The corpus gate** checks the chunks against VOYAGE_MODEL, not FLM's embedding model.
++- **The record** names the provider and models instead of an FLM version.
++- **Voyage's jitter, measured per thread.** The original compares the server's turn-two passages
++  with this process's own retrieval of the same strings, which relied on FLM returning the same
++  vector for the same text (check_flm.py's determinism check). Voyage does not, quite: two passes
++  over the frozen thirty differed by up to 0.00047 in 12 of 34 top scores
++  (runs/2026-11-10/voyage-frozen/). Each thread therefore records, for the composed and the bare
++  follow-up, a second in-process retrieval and its margin: the smallest distance between any
++  candidate's score and the threshold, and, where the context budget cut the admitted list, the
++  smallest score gap between neighbours up to the first passage it dropped. A set whose margin
++  is wider than twice the jitter cannot change between two embeddings, so its verdict cannot
++  have been made or broken by the jitter. The verdict rule itself is the original's.
++
++Everything else, the verdict rule, the scoring and the record included, is the original's. The
++original docstring follows.
++
++FR-13 through the server: the history a turn reads from QueryLog is wired (D-86 decision 6).
+ 
+ The harness's ``--threads`` mode measures FR-13 in-process, with ``compose()``. This check
+ proves the other half: that ``POST /api/ask``, given a ``conversation_id``, reads the
+@@ -66,11 +97,108 @@
+ import time
+ from pathlib import Path
+ 
+-SCRIPTS_DIRECTORY = Path(__file__).resolve().parent
+-REPOSITORY_ROOT = SCRIPTS_DIRECTORY.parent
++HERE = Path(__file__).resolve().parent
++REPOSITORY_ROOT = HERE.parents[4]  # corpus/objective-02/runs/2026-11-10/<this folder>
++SCRIPTS_DIRECTORY = REPOSITORY_ROOT / "scripts"
+ if str(SCRIPTS_DIRECTORY) not in sys.path:
+     sys.path.insert(0, str(SCRIPTS_DIRECTORY))
+ 
++# This copy: the Voyage-indexed database and the anthropic provider, set before Django reads
++# its settings, so this process cannot reach FLM's database or FLM (D-113).
++VOYAGE_DATABASE = "kmp_voyage_20261110"
++EXPECTED_SETTINGS = {
++    "AI_PROVIDER": "anthropic",
++    "ANTHROPIC_MODEL": "claude-sonnet-5-5",  # D-115
++    "VOYAGE_MODEL": "voyage-4",
++    "EMBEDDING_DIMENSION": 1024,
++}
++EXPECTED_THRESHOLD = 0.2687  # D-120, RELEVANCE_THRESHOLD_BY_MODEL["voyage-4"]
++EXPECTED_FLOOR = 0.2468  # D-120, PARTIAL_MATCH_FLOOR_BY_MODEL["voyage-4"]
++
++
++def voyage_database_url() -> str:
++    """.env's DATABASE_URL with the database name swapped. Never printed."""
++    import re
++
++    for line in (REPOSITORY_ROOT / ".env").read_text(encoding="utf-8").splitlines():
++        if line.startswith("DATABASE_URL="):
++            return re.sub(r"/[^/]+$", f"/{VOYAGE_DATABASE}", line.split("=", 1)[1].strip())
++    raise SystemExit("no DATABASE_URL in .env")
++
++
++LOGS = HERE / "logs"
++LOGS.mkdir(exist_ok=True)
++os.environ["DATABASE_URL"] = voyage_database_url()
++os.environ["AI_PROVIDER"] = "anthropic"
++os.environ["EMBEDDING_DIMENSION"] = "1024"
++for _name, _file in (("ERROR_LOG_PATH", "errors.log"), ("AUDIT_LOG_PATH", "audit.log"),
++                     ("WAITRESS_LOG_PATH", "waitress.log"), ("ATTEMPTS_LOG_PATH", "attempts.log")):
++    os.environ[_name] = str(LOGS / _file)
++
++
++def provider_problems(settings, database: str) -> list[str]:
++    """Why this run is not the anthropic provider on the Voyage copy at D-120's values."""
++    from apps.retrieval.partial_matches import partial_match_floor
++    from apps.retrieval.ranking import relevance_threshold
++
++    problems = []
++    for name, expected in EXPECTED_SETTINGS.items():
++        actual = getattr(settings, name)
++        if actual != expected:
++            problems.append(f"settings.{name} is {actual!r}, not {expected!r}")
++    for name in ("ANTHROPIC_API_KEY", "VOYAGE_API_KEY"):
++        if not getattr(settings, name):
++            problems.append(f"settings.{name} is empty")  # the value itself is never printed
++    if database != VOYAGE_DATABASE:
++        problems.append(f"the database is {database!r}, not {VOYAGE_DATABASE!r}")
++    threshold = relevance_threshold(settings.VOYAGE_MODEL)
++    floor = partial_match_floor(settings.VOYAGE_MODEL)
++    if threshold != EXPECTED_THRESHOLD:
++        problems.append(f"the threshold for {settings.VOYAGE_MODEL} is {threshold}, not D-120's {EXPECTED_THRESHOLD}")
++    if floor != EXPECTED_FLOOR:
++        problems.append(f"the partial-match floor for {settings.VOYAGE_MODEL} is {floor}, not D-120's {EXPECTED_FLOOR}")
++    return problems
++
++
++def provider_record(settings) -> dict:
++    from apps.retrieval.partial_matches import partial_match_floor
++    from apps.retrieval.ranking import relevance_threshold
++
++    return {
++        "provider": settings.AI_PROVIDER,
++        "chat_model": settings.ANTHROPIC_MODEL,
++        "embed_model": settings.VOYAGE_MODEL,
++        "embedding_dimension": settings.EMBEDDING_DIMENSION,
++        "voyage_base_url": settings.VOYAGE_BASE_URL,
++        "threshold": relevance_threshold(settings.VOYAGE_MODEL),
++        "partial_match_floor": partial_match_floor(settings.VOYAGE_MODEL),
++    }
++
++
++def supplied_margin(text: str, role: str) -> dict:
++    """This copy: a second retrieval of ``text`` and how far its supplied set is from changing.
++
++    The margin is the smallest of: any candidate's distance from the threshold; and, when the
++    context budget cut the admitted list, any score gap between neighbours up to the first
++    passage it dropped, since an order swap there can move the cut. The pipeline's functions,
++    in its order, as supplied_ids uses them.
++    """
++    from apps.retrieval.query_embedding import embed_question
++    from apps.retrieval.ranking import admit, rank, relevance_threshold, truncate_to_context
++    from apps.retrieval.scoping import candidate_chunks
++
++    embedding = embed_question(text)
++    ranked = rank(candidate_chunks(role_name=role, embedding_model=embedding.model), embedding.vectors[0])
++    threshold = relevance_threshold(embedding.model)
++    admitted = admit(ranked, embedding_model=embedding.model)
++    kept = truncate_to_context(admitted)
++    gaps = [abs(passage.score - threshold) for passage in ranked]
++    if len(kept) < len(admitted):
++        scores = [passage.score for passage in admitted[: len(kept) + 1]]
++        gaps += [higher - lower for higher, lower in zip(scores, scores[1:])]
++    return {"supplied": [passage.chunk_id for passage in kept], "admitted": len(admitted),
++            "kept": len(kept), "threshold": threshold, "margin": min(gaps) if gaps else None}
++
+ import measurement_record  # noqa: E402  scripts/measurement_record.py
+ import server_record  # noqa: E402  scripts/server_record.py
+ import thread_set  # noqa: E402  scripts/thread_set.py
+@@ -171,9 +299,10 @@
+ def verdict(*, server: list[str], with_history: list[str], cold: list[str]) -> str:
+     """Turn two's supplied passages on the server, against compose() with and without history.
+ 
+-    Compared as sets: the same strings embed to the same vector on a deterministic FLM
+-    (check_flm.py's gate), but a score tied at the threshold or the context budget could
+-    still order differently, so the order is recorded beside the verdict, not decided on.
++    Compared as sets. In this copy the embedder is Voyage, which is not bit-for-bit
++    deterministic (see the header), so each thread also records its jitter margin: a verdict
++    whose sets have a margin wider than twice the jitter cannot have been changed by it. The
++    order is recorded beside the verdict, not decided on.
+     """
+     served, composed, alone = set(server), set(with_history), set(cold)
+     if served == composed and composed != alone:
+@@ -304,6 +433,12 @@
+     }
+     served = out["query_log"][1]["retrieved_chunk_ids"]
+     out["in_process"] = {**expected, "with_history_retrieval_text": composed.for_retrieval}
++    # This copy: Voyage's jitter, measured and bounded per thread (see the header).
++    out["jitter"] = {
++        way: {**margin, "same_set_as_first_pass": set(margin["supplied"]) == set(expected[way])}
++        for way, margin in (("with_history", supplied_margin(composed.for_retrieval, role)),
++                            ("cold", supplied_margin(alone.for_retrieval, role)))
++    }
+     out["verdict"] = verdict(server=served, with_history=expected["with_history"], cold=expected["cold"])
+     out["same_order_as_compose"] = served == expected["with_history"]
+     out["first_turn_matches_a_one_off"] = set(out["query_log"][0]["retrieved_chunk_ids"]) == set(expected["first_turn"])
+@@ -360,7 +495,6 @@
+     django_setup()
+     from django.conf import settings
+ 
+-    import check_flm
+     import citation_harness as harness  # its gates' helpers; importing it asks nothing
+ 
+     # 2. The thread set, and the threads this check runs.
+@@ -385,23 +519,19 @@
+     if problems:
+         return refuse(problems)
+ 
+-    # 5. FLM: this process embeds for the comparison, through the same FLM as the server.
+-    print("FLM gate: scripts/check_flm.py's checks (D-83)")
+-    checks = check_flm.run_checks(
+-        settings.FLM_BASE_URL, settings.FLM_API_KEY, settings.FLM_CHAT_MODEL, settings.FLM_EMBED_MODEL
+-    )
+-    if not check_flm.checks_passed(checks):
+-        failed = "; ".join(f"{name}: {status}" for name, status, _ in checks if status != "PASS")
+-        return refuse([f"scripts/check_flm.py's checks did not pass ({failed})"])
+-    version = check_flm.flm_version(settings.FLM_BASE_URL, settings.FLM_API_KEY)
+-    if recorded and version.problems():
+-        return refuse(version.problems())
++    # 5. In this copy: the provider gate (D-113, D-115, D-120). This process embeds for the
++    # comparison through Voyage, as the server does; FLM takes no part.
++    print("Provider gate: anthropic (Voyage voyage-4 at 1024, Claude), the Voyage copy, D-120's values")
++    problems = provider_problems(settings, database)
++    if problems:
++        return refuse(problems)
++    print("Provider gate: PASS")
+ 
+     # 6. The corpus this process reads is exactly the manifest's.
+     chunks = harness.load_corpus()
+     manifest_items = json.loads((REPOSITORY_ROOT / payload["manifest"]).read_text(encoding="utf-8"))["items"]
+     sources = harness.index_sources(chunks, manifest_items)
+-    mismatch = harness.corpus_problems(chunks, sources, manifest_items, settings.FLM_EMBED_MODEL)
++    mismatch = harness.corpus_problems(chunks, sources, manifest_items, settings.VOYAGE_MODEL)
+     for problem in mismatch:
+         print(f"CORPUS: {problem}")
+     if mismatch and recorded:
+@@ -422,12 +552,13 @@
+ 
+     try:
+         record = measurement_record.run_record(
+-            dump_sha256=arguments.dump_sha256, database=database, flm=version.as_record()
++            dump_sha256=arguments.dump_sha256, database=database, flm=None
+         )
+     except measurement_record.RecordError as exc:
+         if recorded:
+             return refuse([f"the run cannot be recorded: {exc}"], ONE_GET_SENT)
+-        record = {"commit_sha": None, "error": str(exc), "flm_version": version.as_record()}
++        record = {"commit_sha": None, "error": str(exc), "flm_version": None}
++    record["provider_record"] = provider_record(settings)
+     record.update({
+         "recorded": recorded,
+         "base_url": arguments.base_url,
