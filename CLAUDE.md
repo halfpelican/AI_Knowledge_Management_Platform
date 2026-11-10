@@ -181,8 +181,8 @@ set during evaluation, not guessed in a code review.
 | `CHUNK_SIZE` | 500 tokens |
 | `CHUNK_OVERLAP` | 50 tokens |
 | `TOP_K` | 25 initially, *tune* |
-| `RELEVANCE_THRESHOLD` | **0.30** — cosine similarity floor for admitting a passage. Kept after step 7 tested higher and lower values (D-102) |
-| `PARTIAL_MATCH_FLOOR` | **0.0**, i.e. no floor — a near miss is offered as a partial match only at or above this; D-56 stays open (D-102) |
+| `RELEVANCE_THRESHOLD` | **0.30** — cosine similarity floor for admitting a passage. Kept after step 7 tested higher and lower values (D-102). Per embedding model since D-120: **0.2687** for `voyage-4` (`RELEVANCE_THRESHOLD_BY_MODEL`); 0.30 for EmbeddingGemma and any model not listed |
+| `PARTIAL_MATCH_FLOOR` | **0.0**, i.e. no floor — a near miss is offered as a partial match only at or above this; D-56 stays open (D-102). Per embedding model since D-120: **0.2468** for `voyage-4` (`PARTIAL_MATCH_FLOOR_BY_MODEL`) |
 | `MAXIMUM_CONTEXT_TOKENS` | *tune* — ceiling on grounding context per call |
 | `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |

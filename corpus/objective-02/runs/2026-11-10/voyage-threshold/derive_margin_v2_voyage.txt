@@ -1,0 +1,14 @@
+source: scores_v2_voyage.json, set dev-set-v2.json, measured 2026-11-10T12:54:09+11:00, offers unfloored: True
+margin m = 0.006
+T <= 0.296776 (u07) - m = 0.290776
+Declinable with margin: 4 of 8: ['u30@Employee', 'u31@Employee', 'u36', 'u34']
+Not declinable: [('u35', 0.287472), ('u32@Employee', 0.310201), ('u33', 0.370509), ('u37', 0.497612)]
+Tie interval: [0.246720, 0.290776] -> middle 0.2687480
+T = 0.2687 (the middle rounded to the nearest four-place value; |T - middle| = 0.0000480)
+  distance to the highest declined no-answer top (u34): 0.027980
+  distance to the lowest answerable expected-source score (u07): 0.028076
+Runs path A declines at T: ['u30@Employee', 'u31@Employee', 'u34', 'u36']
+Highest partial match offered to them: 0.24072 (u34, D10)
+F >= 0.24072 + m = 0.246720 -> rounded up to four places: 0.2468
+F <= T - m = 0.2627: holds
+  band offered on path A: [0.2468, 0.2687), 0.0219 wide; F is 0.006080 above u34's D10
