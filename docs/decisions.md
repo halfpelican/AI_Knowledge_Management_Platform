@@ -7018,6 +7018,42 @@ consulted.
   embedding model.
 - **Not covered:** a confidence derived from anything but the model's own report.
 
+**Dated note, 10 November 2026 (evening): Objective 05's verification. Clause 1 is not met on the FLM
+configuration; clauses 2 and 3 are met.** The evidence is under `corpus/objective-05/runs/2026-11-10/`:
+`objective-05.md` for the first run and `rerun/rerun.md` for the second.
+
+| | First run, `aee5374` | Re-run, `caf9e22` |
+|---|---|---|
+| status | **the independent test** | informed by the first run |
+| clause 1, types matching the frozen reference | **12 of 20 (60%)**, not met | **14 of 20 (70%)**, not met |
+| clause 2, below-threshold assignments held | 48 of 48, met | 47 of 47, met |
+| clause 3, out-of-scheme values | 3 departments and 6 Project or Process values discarded, 2 Topics proposed, none linked; met | 1 department and 6 Project or Process values discarded, 2 Topics proposed, none linked; met |
+
+- **The first run is the frozen reference set's one independent use.** It ran on provider `flm`,
+  `gemma3:4b`, FLM v0.9.39, `kmp_obj0506_20261101` (dump `3bf98403…6f59`), threshold 0.95, after
+  `documents 0008` and `accounts 0006` were applied and the 14 tag values seeded without links. Its
+  eight misses were three shapes the twelve development documents lacked: spreadsheet registers and
+  trackers, a schedule, a booking-rules document and an announcement called Meeting Paper, and two
+  guides given the reference's own alternative. Every miss scored 0.95.
+- **The user's decision: one disclosed revision, then one re-run.** The type definitions were revised
+  once and seven development documents of the failing shapes were added (`caf9e22`; the manifest says
+  when and why). On the third development sweep the first twelve stayed at 35 of 35 and the seven new
+  ones matched 7 of 21: the register and the guide were fixed, while a roster, an announcement and a
+  rules document whose title mentions meetings were still called Meeting Paper. Type confidences
+  still did not separate, so the threshold stayed 0.95. The first run's 20 analysis rows and 38 AI
+  tag links were deleted, after their counts were checked, and the twenty were classified again.
+- **The re-run gained two:** D03, D12 and D17 were fixed and D04 was lost. **It is not an independent
+  test:** the revision was made because of the first run, so the frozen twenty no longer
+  independently test classification, as D-101's note said of the thirty. The 60% stands as the
+  independent figure.
+- **For information only, not the rule:** counting the reference's recorded alternatives would give
+  14 of 20 on the first run and 16 of 20 on the re-run. The frozen rule counts the reference column.
+- **No further revision is made** (the user's decision: one). What remains is recorded rather than
+  fixed: on gemma3:4b the type's confidence carries almost no information, and Meeting Paper attracts
+  documents that mention meetings, schedules or events whatever the prompt says. Whether Claude does
+  better is unmeasured; it would be measured as its own configuration, over repeated draws (this
+  entry's note on the FLM configuration).
+
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,
