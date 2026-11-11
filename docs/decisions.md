@@ -8797,7 +8797,8 @@ over from D-103").
   model. On three draws under a rule fixed first, the resolving half is now recorded as met.
 - **"Haiku has no HTTP check".** It has one now.
 - **"Left without an owner yet": `scripts/server_record.py:263`.** A Listen row that names
-  process 0 is now reported as unknown, with a note (`6124822`, two tests).
+  process 0 is now reported as unknown, with a note (`6124822`, two tests). The line number is
+  the verdict's, at `bd95f92`. Since #93 the guard is in `_listen_row_process`.
   - **#93 merged first** (`25f6179`, on 11 November at 20:27; D-87's note of that day). The lookup
     now falls back to netstat and to the port's own row, and it takes a Listen row only with a
     readable command line, so a row naming process 0 no longer ends the search.
