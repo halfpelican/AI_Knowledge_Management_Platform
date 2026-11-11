@@ -5822,6 +5822,116 @@ D-85, D-86, Objective 03, NFR-08, NFR-09
 > - **Nothing checks that the server was restarted before the HTTP check.**
 > - **The restart check rests on file times.**
 
+**Dated note, 11 November 2026: the listening process is found three ways, because Windows can
+report a serving socket's state wrongly.** The user asked for this on main after NFR-08's runs on
+`anthropic` (#88).
+
+- **The fault,** on this laptop (Windows 11, build 26300). `scripts/server_record.py` found the
+  listening process with `Get-NetTCPConnection -State Listen` only. With Waitress answering on
+  127.0.0.1:8000:
+  - the TCP table reported its listening socket in state 0, which is undefined, or 1 (Closed),
+    where 2 is Listen;
+  - `netstat -ano` showed no line for it, or CLOSED;
+  - the socket's own row was there throughout, with the Waitress PID.
+
+  So decision 2's pre-flight refused D-85's server as nothing listening, and the closing check
+  marked measured runs INVALID. NFR-08's runs 1 and 5 on `anthropic` were measured and marked
+  INVALID that way, and runs 2 and 4 were refused before k6
+  (`corpus/objective-02/runs/2026-11-10-anthropic/nfr08-anthropic.md`, #88).
+- **The fault can refuse a run or invalidate it. It cannot pass one.** A lookup that finds
+  nothing fails the pre-flight and the closing check alike.
+- **The lookup now** (`listening_process`), in this order:
+  1. the Listen row, as before, taken when its process's command line can be read;
+  2. `netstat -ano`: the one PID with a LISTENING line on the port;
+  3. the port's own socket row, local port and remote port 0, whatever state is reported, when
+     exactly one live process with a readable command line owns such a row. PID 0 and PID 4 never
+     qualify.
+
+  Two candidates in step 2 or 3 is not found. When none of the three names a process that can be
+  read, they are tried again every 10 s for about 60 s. Then the Listen row's own answer is
+  returned, as it always was.
+- **Where it came from.** NFR-08's run 6, the valid one, ran a run-folder copy of the script with
+  this lookup, which the user approved before it ran (#88, `154915c`). This is that copy's lookup,
+  with what follows added.
+- **Recorded:** which lookup found the process, and what each try saw:
+  - in the pre-flight record: `process_found_by` and `process_lookup`;
+  - on the pre-flight's console: `found by`;
+  - in the summary's `server_at_end`: `found_by` and `lookup`.
+- **What does not change.** Decision 2's rules, and the built note's two checks beyond D-87:
+  - the server and its thread count are still read from the found process's command line;
+  - the process at the end must still be the one observed before the run. Another PID, no
+    process, or a "Serving on" line inside the window still marks the run INVALID.
+- **Tried on the laptop on 11 November,** with `python -m http.server` on scratch ports. The
+  record is `corpus/objective-02/runs/2026-11-11-listener-lookup/`, and its `README.md` gives
+  each trial.
+  - **At 14:44, with the fault present.** With the listener answering, the Listen row and netstat
+    showed nothing for it, and the port's own row named its PID, in state 0 and then 1. Step 3
+    found it, in 2.8 s. With the listener stopped, the lookup gave up after 53.8 s.
+  - **A Listen row naming PID 0, and at times a netstat LISTENING line naming it too,** were seen
+    in that trial and in the one before it, at 14:42:
+    - beside an answering listener's own row, and again just after it stopped (14:42);
+    - about 40 s after a listener had stopped (14:44).
+
+    PID 0 is not a process. Step 1 takes a Listen row only with a readable command line, so such
+    a row does not end the search. A first draft of this change took any Listen row that named a
+    PID, and returned PID 0 in the 14:42 trial. It was corrected before it was committed.
+  - **At 19:15, after the laptop had restarted at 17:07, the fault did not show.** The committed
+    script (`421f9ed`) found the listener by its Listen row in 1.5 s. Netstat and the port's row
+    named the same PID, in state 2. With nothing listening, it said so after 50.8 s.
+  - **Only the 19:15 trial has a console on file.** The two earlier ones were not teed, and the
+    README quotes the session's console for them.
+  - **Whether a restart clears the fault is not known.** It is one observation.
+- **Tests,** in `apps/ai/tests/test_server_record_preflight.py`. Each fails under at least one
+  deliberate break of the script, named after the list:
+  - `test_netstat_names_the_pid_listening_on_the_port_and_no_other`: S5;
+  - `test_netstat_gives_one_listening_pid_or_none`: S2, S5;
+  - `test_the_ports_own_row_gives_one_owner_or_none`: S3, S7, S11;
+  - `test_a_listen_row_is_taken_first_and_nothing_else_is_asked`: S13;
+  - `test_a_listener_with_no_listen_row_is_found_through_netstat`: S1;
+  - `test_when_netstat_misreports_too_the_ports_own_row_names_the_process`: S1;
+  - `test_the_lookup_is_tried_again_before_it_says_nothing_is_listening`: S1, S4;
+  - `test_nothing_listening_is_said_only_after_the_wait_and_in_the_same_words`: S1, S4;
+  - `test_a_listen_row_and_a_netstat_line_naming_pid_0_do_not_end_the_search`: S1, S10;
+  - `test_a_process_no_lookup_can_read_is_returned_after_the_wait_as_it_always_was`: S1, S4, S10;
+  - `test_off_windows_the_process_is_not_looked_up_and_nothing_waits`: S6;
+  - `test_the_record_says_which_lookup_found_the_process`: S8;
+  - `test_the_closing_check_says_how_it_found_the_process`: S12;
+  - `test_another_process_found_by_a_fallback_still_makes_the_run_invalid`: S14;
+  - `test_no_process_found_at_the_end_still_makes_the_run_invalid`: S9.
+
+  The breaks:
+  - S1: only the Listen row is asked, as before this note;
+  - S2: netstat picks one of two LISTENING processes;
+  - S3: the port's row picks the first of two owners;
+  - S4: no second try;
+  - S5: netstat's port is matched as a suffix, so 18000 reads as 8000;
+  - S6: the fallbacks run off Windows;
+  - S7: the port's row is asked for in state Listen only;
+  - S8: the record does not say which lookup found the process;
+  - S9: no process at the end reads as the same process;
+  - S10: a Listen row is taken without a readable command line;
+  - S11: PID 0 and PID 4 may own the port's row;
+  - S12: the closing check does not record how the process was found;
+  - S13: a Listen row is never taken;
+  - S14: any process at the end reads as the same process. The existing
+    `test_another_process_at_the_end_makes_the_run_invalid` fails under it too.
+- **The runbook's own check** has the same fault. Its step 4 runs
+  `Get-NetTCPConnection -LocalPort 8000 -State Listen` and expects nothing. That can print
+  nothing while a server listens, and a leftover row with `OwningProcess` 0 after one stops. The
+  runbook now says so and names `scripts\server_record.py` as the check.
+- **Not covered:**
+  - **Why Windows misreports the state.** It is observed, not explained, and another build may
+    differ.
+  - **A listener whose process cannot be read,** such as another user's or PID 4's. No lookup is
+    credited with it, and the answer is the one given before, after the wait.
+  - **The PowerShell and netstat commands themselves in the test suite.** The tests script each
+    lookup's output. The commands ran on the laptop only, in the trials above.
+  - **The committed script against the fault, with a console on file.** The 14:44 trial ran the
+    script as committed, and its console was not kept. By 19:15 the fault had gone.
+  - **`run.ps1`,** which still has no automated test (the built note's first "Not covered" line).
+  - **NFR-08 again with this code.** Run 6's copy had the same lookup without the record fields.
+  - **Measured runs before 11 November.** They are not re-examined for this fault.
+
 ## D-88 · The M6 alpha serves `kmp_demo_20261101`, restored from item 6's snapshot, from a worktree of its own
 
 **Status:** Settled by the user · **Date:** 2026-11-01 · **Stage:** 5 item 9 · **Closes:** D-84's
