@@ -8064,6 +8064,38 @@ result. The file is frozen and is not edited; this note supersedes its line. The
 has no independent figure (the requirements audit, D-119, its finding 8). The thirty remain the
 acceptance test for a decline fix, as above.
 
+**Dated note, 11 November 2026 (FR-12): on `anthropic`, the acceptance test this entry names is
+met, and FR-12's decline weakness is closed on that configuration. It stays open on FLM.**
+- **The evidence** is `corpus/objective-06/runs/2026-11-11-anthropic-draws/fr12-declines.md`.
+- **The scoring rule,** and what this note may conclude, were committed in that folder's
+  `plan.md` before any draw (`c46c38e`).
+
+| Unscreened, on `anthropic` (Claude Haiku 5.5, voyage-4 at 0.2687) | Draws | Unanswerable asks reaching a no-answer (path A / B) | Permission-only asks reaching a no-answer |
+|---|---|---|---|
+| the draft's original eight (`pre-measurement-asks.json`): a copy of D-121's harness at `3cd0726`, on a new `kmp_fr12_declines_20261111` restored `--into` from `kmp_anthropic`'s snapshot | 5 | 40 of 40 (5 / 35) | 30 of 30 |
+| the thirty (`queries.json`): the Objectives 05/06 session's seedings at `c3ac5b0` (#86) and `462e8e9` (PR #90), scored from their QueryLog exports | 3 | 24 of 24 (18 / 6) | 18 of 18 |
+
+- **Haiku proposed nothing whenever an unanswerable ask reached generation:** 41 of 41 times,
+  `rejected_count` 0, so no statement was cited, rejected or shown. On FLM, the same seven original
+  wordings reached generation, and gemma3:4b answered six of them (above).
+- **No permission-only ask was answered from readable material.** On both sets, FLM answered P04
+  and P07. In the harness's 70 runs, no restricted chunk reached a prompt.
+- **The thirty's seven answerable asks** were answered with citations in all three draws, with
+  none rejected.
+- **No draw differed from another:** every ask took the same path in every draw.
+- **What this does not show: a decline rate in general use.**
+  - The unanswerable asks are sixteen wordings of four subjects.
+  - The repeats are of the same wordings, so the evidence is 41 declined generations over nine
+    distinct wordings.
+  - Six of the thirty's eight end at path A, which tests retrieval, not generation.
+  - D-121's round recorded one underspecified cold follow-up that Haiku answered, with citations
+    about a different "that".
+- **Nothing was tuned.** No threshold or code changed, and FR-12's path is the same at all three
+  commits. D-126's change in draws 2 and 3 is to FR-19's exclusion.
+- **On FLM the weakness stays open,** as this entry and D-102's 8 November note record.
+- **Spend:** about US$0.017 of Haiku for the five draws. The thirty's seedings are counted by their
+  own session.
+
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,
