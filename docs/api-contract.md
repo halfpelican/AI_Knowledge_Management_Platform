@@ -1342,13 +1342,19 @@ and exits 1 on a provider outage. The route runs the same cycle on demand.
    row with `result_count` 0, timestamped from the previous cycle's start less
    `CYCLE_GRACE_SECONDS` (60) up to this cycle's start, and not already in the log. The first
    cycle takes everything before it.
-2. **A row is left out when the asker's role explains it** (D-108). A question is embedded on its
-   own wording and ranked over the Administrator's whole scope; if the top-ranked passage, whether
-   or not it clears `RELEVANCE_THRESHOLD`, is one the asker's role cannot read, the row is left
-   out, and otherwise it is kept, as it is when no passage of the question's embedding model
-   exists. A search is counted again as the Administrator, writing no `SearchLog` row; above zero,
-   it is left out. A kept search term longer than `MAXIMUM_QUESTION_LENGTH` is cut to that length
-   before it is embedded and stored as a subject. Nothing records a row that was left out.
+2. **A row is left out when the asker's role explains it** (D-108, D-126). A question is embedded
+   on its own wording and ranked over the Administrator's whole scope. Which passage decides is the
+   embedding model's rule (`GAP_EXCLUSION_RULE_BY_MODEL`):
+   - **rank-one,** for every model the map does not list, EmbeddingGemma included: the top-ranked
+     passage, whether or not it clears `RELEVANCE_THRESHOLD`;
+   - **threshold-first,** for `voyage-4`: the top passage at or above the model's own relevance
+     threshold. If no passage reaches it, nobody could have been answered, and the row is kept.
+
+   If the deciding passage is one the asker's role cannot read, the row is left out, and otherwise
+   it is kept, as it is when no passage of the question's embedding model exists. A search is
+   counted again as the Administrator, writing no `SearchLog` row; above zero, it is left out. A
+   kept search term longer than `MAXIMUM_QUESTION_LENGTH` is cut to that length before it is
+   embedded and stored as a subject. Nothing records a row that was left out.
 3. **Kept rows are grouped by similarity** (D-109): in timestamp order, each joins the nearest
    Open entry, embedded by the same model, whose centroid's cosine is at least
    `GAP_GROUPING_THRESHOLD`, or starts a new entry. An Addressed entry is never joined, so a

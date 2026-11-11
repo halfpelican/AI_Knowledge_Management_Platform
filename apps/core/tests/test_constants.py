@@ -285,6 +285,17 @@ def test_the_knowledge_gap_constants_are_d107s_and_d109s():
     assert constants.DASHBOARD_GAP_ITEMS == constants.DASHBOARD_RECENT_ITEMS
 
 
+def test_the_gap_exclusion_rules_are_d108s_and_d126s():
+    """FR-19's permission exclusion. Rank-one (D-108's note of 10 November 2026) is the rule for any
+    model not listed. voyage-4 is threshold-first, the user's decision of 11 November 2026 (D-126),
+    pinned so a change is a decision."""
+    assert constants.GAP_EXCLUSION_RANK_ONE == "rank-one"
+    assert constants.GAP_EXCLUSION_THRESHOLD_FIRST == "threshold-first"
+    assert constants.GAP_EXCLUSION_RULES == (constants.GAP_EXCLUSION_RANK_ONE, constants.GAP_EXCLUSION_THRESHOLD_FIRST)
+    assert constants.GAP_EXCLUSION_RULE == constants.GAP_EXCLUSION_RANK_ONE
+    assert constants.GAP_EXCLUSION_RULE_BY_MODEL == {"voyage-4": constants.GAP_EXCLUSION_THRESHOLD_FIRST}
+
+
 def test_session_inactivity_is_sixty_minutes():
     # FR-04, docs/decisions.md D-10.
     assert constants.SESSION_INACTIVITY_MINUTES == 60
