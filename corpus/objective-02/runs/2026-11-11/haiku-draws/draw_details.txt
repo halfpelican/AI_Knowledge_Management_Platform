@@ -1,0 +1,72 @@
+WITH HISTORY: items cited per draw (statements), expected source's rank, top supplied items
+  t01@Employee/with-history
+    draw 1: cited D01 x1; expected ['D01'] at rank 1; supplied first: D01 0.5301, D10 0.3324, D04 0.3128, D03 0.3116
+    draw 2: cited D01 x1; expected ['D01'] at rank 1; supplied first: D01 0.5301, D10 0.3324, D04 0.3128, D03 0.3116
+    draw 3: cited D01 x1; expected ['D01'] at rank 1; supplied first: D01 0.5301, D10 0.3324, D04 0.3128, D03 0.3116
+  t02@Employee/with-history
+    draw 1: cited D07 x2; expected ['D07'] at rank 1; supplied first: D07 0.6161, D08 0.4636, D04 0.4377, D04 0.4330
+    draw 2: cited D07 x1; expected ['D07'] at rank 1; supplied first: D07 0.6161, D08 0.4636, D04 0.4377, D04 0.4330
+    draw 3: cited D07 x1; expected ['D07'] at rank 1; supplied first: D07 0.6161, D08 0.4636, D04 0.4377, D04 0.4330
+  t03@Employee/with-history
+    draw 1: cited D12 x1; expected ['D12'] at rank 1; supplied first: D12 0.4003
+    draw 2: cited D12 x1; expected ['D12'] at rank 1; supplied first: D12 0.4003
+    draw 3: cited D12 x1; expected ['D12'] at rank 1; supplied first: D12 0.4004
+  t04@Employee/with-history
+    draw 1: cited D19 x2; expected ['D19'] at rank 1; supplied first: D19 0.6413, D04 0.3713, D04 0.3461, D04 0.3393
+    draw 2: cited D19 x2; expected ['D19'] at rank 1; supplied first: D19 0.6413, D04 0.3713, D04 0.3461, D04 0.3393
+    draw 3: cited D19 x1; expected ['D19'] at rank 1; supplied first: D19 0.6413, D04 0.3713, D04 0.3461, D04 0.3393
+  t05@Employee/with-history
+    draw 1: cited T03 x1; expected ['T03'] at rank 1; supplied first: T03 0.5455, D13 0.2875, T01 0.2825
+    draw 2: cited T03 x1; expected ['T03'] at rank 1; supplied first: T03 0.5455, D13 0.2875, T01 0.2825
+    draw 3: cited T03 x1; expected ['T03'] at rank 1; supplied first: T03 0.5452, D13 0.2866, T01 0.2817
+  t06@Administrator/with-history
+    draw 1: cited T02 x4; expected ['T02'] at rank 4; supplied first: D12 0.4457, D05 0.4254, D04 0.4057, T02 0.3883
+    draw 2: cited T02 x4; expected ['T02'] at rank 4; supplied first: D12 0.4457, D05 0.4254, D04 0.4057, T02 0.3883
+    draw 3: cited T02 x3; expected ['T02'] at rank 4; supplied first: D12 0.4457, D05 0.4254, D04 0.4057, T02 0.3883
+  t06@Employee/with-history
+    draw 1: cited nothing (declined); expected ['T02'] at rank None; supplied first: D12 0.4457, D05 0.4255, D04 0.4061, D04 0.3773
+    draw 2: cited nothing (declined); expected ['T02'] at rank None; supplied first: D12 0.4457, D05 0.4254, D04 0.4057, D04 0.3771
+    draw 3: cited nothing (declined); expected ['T02'] at rank None; supplied first: D12 0.4457, D05 0.4254, D04 0.4057, D04 0.3771
+  t07@Administrator/with-history
+    draw 1: cited D09 x1; expected ['D09'] at rank 2; supplied first: D20 0.5376, D09 0.3087, D03 0.2957, D15 0.2735
+    draw 2: cited D09 x1; expected ['D09'] at rank 2; supplied first: D20 0.5376, D09 0.3091, D03 0.2959, D15 0.2739
+    draw 3: cited D09 x1; expected ['D09'] at rank 2; supplied first: D20 0.5377, D09 0.3093, D03 0.2960, D15 0.2739
+  t07@Employee/with-history
+    draw 1: cited nothing (declined); expected ['D09'] at rank None; supplied first: D20 0.5377, D03 0.2960, D14 0.2729
+    draw 2: cited nothing (declined); expected ['D09'] at rank None; supplied first: D20 0.5377, D03 0.2960, D14 0.2729
+    draw 3: cited nothing (declined); expected ['D09'] at rank None; supplied first: D20 0.5377, D03 0.2960, D14 0.2729
+  t08@Employee/with-history
+    draw 1: cited D03 x1; expected ['D03'] at rank 2; supplied first: T04 0.3683, D03 0.3548, D06 0.2838
+    draw 2: cited D03 x1; expected ['D03'] at rank 2; supplied first: T04 0.3683, D03 0.3548, D06 0.2838
+    draw 3: cited D03 x1; expected ['D03'] at rank 2; supplied first: T04 0.3677, D03 0.3547, D06 0.2837
+  t09@Employee/with-history
+    draw 1: cited D17 x1; expected ['D17'] at rank 3; supplied first: D20 0.5701, D04 0.3501, D17 0.3389, D04 0.3379
+    draw 2: cited D17 x1; expected ['D17'] at rank 3; supplied first: D20 0.5701, D04 0.3501, D17 0.3389, D04 0.3379
+    draw 3: cited D17 x1; expected ['D17'] at rank 3; supplied first: D20 0.5694, D04 0.3504, D17 0.3388, D04 0.3381
+
+COLD: the runs that were answered (a cold follow-up is predicted not correct, t08 apart)
+  t02@Employee/cold: answered | answered | answered; cited D04 | D04 | D04; not correct | not correct | not correct
+  t04@Employee/cold: answered | answered | answered; cited D04 | D04 | D04; not correct | not correct | not correct
+  t08@Employee/cold: answered | answered | answered; cited D03 | D03 | D03; correct | correct | correct
+  t09@Employee/cold: answered | answered | answered; cited D05 | D05 | D05; not correct | not correct | not correct
+
+VERIFIED STATEMENTS: runs whose text or count differs between draws, by way
+  first-turn: 7 of 11 differ in wording or count; 0 of those cite a different set of passages
+  with-history: 5 of 11 differ in wording or count; 0 of those cite a different set of passages
+  spelled-out: 6 of 11 differ in wording or count; 1 of those cite a different set of passages
+  cold: 3 of 11 differ in wording or count; 1 of those cite a different set of passages
+
+SUPPLIED PASSAGES: runs with the same set in another order
+  t09@Employee/with-history
+    draw 1: D20:f4d89447 0.57012, D04:b9ffdcd6 0.35010, D17:c751047b 0.33894, D04:3a1c6e0a 0.33791, D04:f5181d4f 0.32207, D04:43eef2bf 0.32198, D07:0fd9f0f6 0.32184, D04:c8a7e5e3 0.31835, D12:5da258bd 0.31752
+    draw 2: D20:f4d89447 0.57012, D04:b9ffdcd6 0.35010, D17:c751047b 0.33894, D04:3a1c6e0a 0.33791, D04:f5181d4f 0.32207, D04:43eef2bf 0.32198, D07:0fd9f0f6 0.32184, D04:c8a7e5e3 0.31835, D12:5da258bd 0.31752
+    draw 3: D20:f4d89447 0.56942, D04:b9ffdcd6 0.35037, D17:c751047b 0.33879, D04:3a1c6e0a 0.33806, D04:43eef2bf 0.32227, D04:f5181d4f 0.32225, D07:0fd9f0f6 0.32126, D04:c8a7e5e3 0.31790, D12:5da258bd 0.31753
+
+SCORES: the five largest differences for one passage in one run, across the three draws
+  0.00142  t02@Employee/first-turn  D20:f4d89447  0.38217  0.38347  0.38359
+  0.00116  t02@Employee/first-turn  D14:8ebfca34  0.30007  0.30082  0.30123
+  0.00113  t02@Employee/first-turn  D17:c751047b  0.29473  0.29563  0.29586
+  0.00099  t02@Employee/first-turn  D07:0fd9f0f6  0.52063  0.52156  0.52163
+  0.00092  t02@Employee/first-turn  D10:2187cabc  0.26954  0.27030  0.27047
+  largest difference between draws 2 and 3 alone, made two minutes apart: 0.00086
+  passages compared: 203
