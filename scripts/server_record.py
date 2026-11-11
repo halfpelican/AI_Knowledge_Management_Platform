@@ -13,7 +13,10 @@ listening on the port, with what command line and since when, and that command l
 
 - the listening process, its command line and its start time, from ``Get-NetTCPConnection``
   and ``Win32_Process`` (Windows, where the laptop runs; elsewhere the record says it was not
-  looked up);
+  looked up). Windows can report a serving socket's state wrongly, so ``listening_process``
+  falls back to ``netstat`` and then to the port's own socket row, and tries again before it
+  says nothing is listening (D-87's note of 11 November 2026). The record says which lookup
+  found the process;
 - the server and the thread count, parsed from that command line. A Waitress started without
   ``--threads`` runs Waitress's default of 4, and the record says so;
 - the version: the Waitress installed in the venv the command line runs from (the venv's
@@ -59,6 +62,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
@@ -78,6 +82,14 @@ D85_COMMAND = (
 )
 WAITRESS_DEFAULT_THREADS = 4  # waitress.adjustments.Adjustments.threads
 LOOKUP_TIMEOUT_SECONDS = 30
+# listening_process tries again this often, for about this long, before it says that nothing is
+# listening (D-87's note of 11 November 2026). The values are the ones NFR-08's run 6 ran with.
+LOOKUP_RETRY_SECONDS = 60
+LOOKUP_RETRY_INTERVAL_SECONDS = 10
+# Which lookup found the listening process: listening_process's ``found_by``.
+FOUND_BY_LISTEN_ROW = "Get-NetTCPConnection -State Listen"
+FOUND_BY_NETSTAT = "netstat -ano, a LISTENING line"
+FOUND_BY_PORT_ROW = "the port's own socket row (remote port 0), whatever state is reported"
 
 THREADS_PATTERN = re.compile(r"--threads(?:=|\s+)(\d+)")
 LISTEN_PATTERN = re.compile(r"--listen(?:=|\s+)(\S+)")
@@ -221,11 +233,12 @@ def venv_package_version(venv: Path, name: str) -> str | None:
     return None
 
 
-def listening_process(port: int) -> dict:
-    """The process listening on ``port`` on this machine.
+def _listen_row_process(port: int) -> dict:
+    """The owner of ``port``'s Listen row, from ``Get-NetTCPConnection -State Listen``.
 
-    ``pid``, ``command`` (its command line) and ``started_at`` (its start, UTC, ISO 8601), each
-    None when unknown, and ``note`` saying why when the lookup itself failed.
+    ``listening_process``'s first lookup, and until 11 November 2026 its only one. ``pid``,
+    ``command`` (its command line) and ``started_at`` (its start, UTC, ISO 8601), each None when
+    unknown, and ``note`` saying why when the lookup itself failed.
     """
     found: dict = {"pid": None, "command": None, "started_at": None, "note": None}
     if sys.platform != "win32":
@@ -263,6 +276,157 @@ def listening_process(port: int) -> dict:
     found.update(pid=reply.get("pid"), command=reply.get("command") or None,
                  started_at=reply.get("started") or None)
     return found
+
+
+def parse_netstat_listening(text: str, port: int) -> set[int]:
+    """The PIDs ``netstat -ano`` lists as LISTENING on TCP ``port``, IPv4 or IPv6."""
+    pids: set[int] = set()
+    for line in text.splitlines():
+        parts = line.split()
+        # TCP    127.0.0.1:8000    0.0.0.0:0    LISTENING    46608
+        if (len(parts) >= 5 and parts[0].upper() == "TCP" and parts[3].upper() == "LISTENING"
+                and parts[1].rsplit(":", 1)[-1] == str(int(port)) and parts[4].isdigit()):
+            pids.add(int(parts[4]))
+    return pids
+
+
+def _netstat_listening_pid(port: int) -> tuple[int | None, str | None]:
+    """The one PID netstat lists as LISTENING on ``port``, or None and why not."""
+    try:
+        completed = subprocess.run(["netstat", "-ano"], capture_output=True, text=True,
+                                   timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return None, f"netstat could not be run ({type(exc).__name__})"
+    pids = parse_netstat_listening(completed.stdout or "", port)
+    if not pids:
+        return None, f"netstat -ano lists no LISTENING line for port {port}"
+    if len(pids) > 1:
+        return None, f"netstat -ano lists more than one process LISTENING on port {port}: {sorted(pids)}"
+    return next(iter(pids)), None
+
+
+def _process_by_pid(pid: int) -> tuple[str | None, str | None]:
+    """(command line, start in UTC ISO 8601) of ``pid`` from Win32_Process, as the Listen row's are read."""
+    script = (
+        f"$p = Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}'; if ($p) {{ $s = '';"
+        " if ($p.CreationDate) { $s = $p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',"
+        " [Globalization.CultureInfo]::InvariantCulture) }; [pscustomobject]@{"
+        " command = [string]$p.CommandLine; started = $s } | ConvertTo-Json -Compress }; exit 0"
+    )
+    try:
+        completed = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                                   capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
+        reply = json.loads((completed.stdout or "").strip() or "{}")
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None, None
+    if not isinstance(reply, dict):
+        return None, None
+    return (reply.get("command") or None), (reply.get("started") or None)
+
+
+def _port_row_owner(port: int) -> tuple[dict | None, str]:
+    """The one live, identifiable owner of a remote-port-0 row on ``port``, whatever its reported state.
+
+    Returns ({pid, command, started_at, states}, "") or (None, why). PIDs 0 and 4 and processes
+    whose command line cannot be read never qualify, which also drops stale rows, and two
+    qualifying PIDs is not found.
+    """
+    script = (
+        f"$rows = @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetTCPConnection"
+        f" -Filter 'LocalPort={int(port)} AND RemotePort=0' -ErrorAction SilentlyContinue); $found = @();"
+        " foreach ($o in ($rows | ForEach-Object { [int]$_.OwningProcess } | Sort-Object -Unique)) {"
+        " if ($o -le 4) { continue }; $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $o);"
+        " if ($p -and $p.CommandLine) { $s = ''; if ($p.CreationDate) {"
+        " $s = $p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',"
+        " [Globalization.CultureInfo]::InvariantCulture) };"
+        " $states = (($rows | Where-Object { [int]$_.OwningProcess -eq $o } | ForEach-Object { [int]$_.State }) -join ',');"
+        " $found += [pscustomobject]@{ pid = $o; command = [string]$p.CommandLine; started = $s; states = $states } } };"
+        " ConvertTo-Json -InputObject @($found) -Compress; exit 0"
+    )
+    try:
+        completed = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+                                   capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
+        reply = json.loads((completed.stdout or "").strip() or "[]")
+    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+        return None, f"the port's socket rows could not be read ({type(exc).__name__})"
+    owners = [owner for owner in (reply if isinstance(reply, list) else [reply]) if isinstance(owner, dict)]
+    if not owners:
+        return None, f"no live process with a readable command line owns a remote-port-0 row on port {port}"
+    if len(owners) > 1:
+        return None, (f"more than one process owns a remote-port-0 row on port {port}: "
+                      f"{sorted(str(owner.get('pid')) for owner in owners)}")
+    owner = owners[0]
+    return ({"pid": owner.get("pid"), "command": owner.get("command") or None,
+             "started_at": owner.get("started") or None, "states": owner.get("states")}, "")
+
+
+def listening_process(port: int) -> dict:
+    """The process listening on ``port`` on this machine.
+
+    ``pid``, ``command`` (its command line) and ``started_at`` (its start, UTC, ISO 8601), each
+    None when unknown, and ``note`` saying why when the lookup itself failed. ``found_by`` names
+    the lookup that found a process whose command line could be read (a FOUND_BY_* value, None
+    when none did), and ``lookup`` lists what each try saw.
+
+    Windows can report a serving socket's state wrongly (D-87's note of 11 November 2026). The
+    listening row of a Waitress that was answering requests has read as state 0 or 1, where 2 is
+    Listen, and netstat has shown no line for it, or CLOSED. A Listen row and a netstat line
+    naming PID 0 have also been seen, beside the real listener's own row and after a listener
+    had gone. So three lookups are tried in order:
+
+    1. The Listen row (``_listen_row_process``), taken when its process's command line can be read.
+    2. ``netstat -ano``: the one PID with a LISTENING line on the port, read through
+       ``Win32_Process``.
+    3. The port's own socket row, local port ``port`` and remote port 0, whatever state is
+       reported, when exactly one live process with a readable command line owns such a row.
+
+    Two candidates in step 2 or 3 is not found. When no lookup names a process that can be read,
+    the three are tried again every LOOKUP_RETRY_INTERVAL_SECONDS for about LOOKUP_RETRY_SECONDS,
+    and then the Listen row's own result is returned, as it always was: nothing listening, or a
+    PID with no command line.
+
+    Each try is printed to stderr as it happens, so a wait shows its reason. Only how the
+    process is found changes here. What a caller requires of it does not: the pre-flight still
+    reads the server and its threads from this process's command line, and the closing check
+    still requires the same PID as before the run.
+    """
+    if sys.platform != "win32":
+        return {**_listen_row_process(port), "found_by": None, "lookup": []}
+    trace: list[str] = []
+
+    def say(line: str) -> None:
+        trace.append(line)
+        print(f"listener lookup, {line}", file=sys.stderr)
+
+    deadline = time.monotonic() + LOOKUP_RETRY_SECONDS
+    tries = 0
+    while True:
+        tries += 1
+        found = _listen_row_process(port)
+        if found["pid"] is not None and found["command"]:
+            say(f"try {tries}: the Listen row names pid {found['pid']}")
+            return {**found, "found_by": FOUND_BY_LISTEN_ROW, "lookup": trace}
+        listen_row = found["note"] or f"the Listen row names pid {found['pid']}, whose command line could not be read"
+        pid, why = _netstat_listening_pid(port)
+        if pid is not None:
+            command, started = _process_by_pid(pid)
+            if command:
+                say(f"try {tries}: {listen_row}; netstat -ano lists pid {pid} LISTENING, read through Win32_Process")
+                return {"pid": pid, "command": command, "started_at": started, "note": None,
+                        "found_by": FOUND_BY_NETSTAT, "lookup": trace}
+            why = f"netstat -ano lists pid {pid} LISTENING, but its command line could not be read"
+        owner, row_why = _port_row_owner(port)
+        if owner is not None and owner["pid"] is not None and owner["command"]:
+            say(f"try {tries}: {listen_row}; {why}; the port's own row (remote port 0) is owned by pid "
+                f"{owner['pid']}, reported state {owner['states']} (2 is Listen), read through Win32_Process")
+            return {"pid": owner["pid"], "command": owner["command"], "started_at": owner["started_at"],
+                    "note": None, "found_by": FOUND_BY_PORT_ROW, "lookup": trace}
+        seen = f"try {tries}: {listen_row}; {why}; {row_why}"
+        if time.monotonic() + LOOKUP_RETRY_INTERVAL_SECONDS > deadline:
+            say(f"{seen}. Giving up after about {LOOKUP_RETRY_SECONDS} s")
+            return {**found, "found_by": None, "lookup": trace}
+        say(f"{seen}. Trying again in {LOOKUP_RETRY_INTERVAL_SECONDS} s")
+        time.sleep(LOOKUP_RETRY_INTERVAL_SECONDS)
 
 
 def debug_probe(base_url: str) -> dict:
@@ -370,6 +534,8 @@ def observe(base_url: str, server_header: str | None = None, *, probe_debug: boo
         "listen": described["listen"],
         "pid": process["pid"],
         "process_started_at": process["started_at"],
+        "process_found_by": process.get("found_by"),
+        "process_lookup": process.get("lookup") or [],
         "command_line": command,
         "server_header": server_header,
         "d85_command": D85_COMMAND,
@@ -726,6 +892,7 @@ def preflight_main(argv: list[str]) -> int:
     print(f"server         : {summary(server)}")
     print(f"command line   : {server.get('command_line') or 'not observed'}")
     print(f"process start  : {server.get('process_started_at') or 'not observed'}")
+    print(f"found by       : {server.get('process_found_by') or 'no lookup found it'}")
     print(f"version from   : {server.get('version_source') or 'not read'}")
     print(f"Server header  : {server.get('server_header') or 'none'} (GET /api/), "
           f"{debug.get('server_header') or 'none'} (the DEBUG probe)")
@@ -800,7 +967,8 @@ def finalise(*, preflight_record: dict, summary_path: Path, window_start: dateti
     at_end = listening_process(port) if port else {"pid": None, "note": "no port"}
     server_at_end = {"pid": at_end["pid"], "pid_before_the_run": expected_pid,
                      "same_process": at_end["pid"] is not None and at_end["pid"] == expected_pid,
-                     "note": at_end.get("note")}
+                     "note": at_end.get("note"), "found_by": at_end.get("found_by"),
+                     "lookup": at_end.get("lookup") or []}
 
     reasons: list[str] = []
     if restarts:

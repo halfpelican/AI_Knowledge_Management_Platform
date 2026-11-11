@@ -96,6 +96,16 @@ Changing the order is a decision, not an edit to make on the day.
    Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue   # must print nothing
    ```
 
+   **This check can be wrong in both directions on this laptop** (D-87's note of 11 November
+   2026). Windows has reported a serving socket in another state, so it can print nothing while a
+   server is listening. It has also left a row whose `OwningProcess` is 0 after a server stopped,
+   which is not a server. When in doubt, ask the script the pre-flight uses. It reads the port's
+   own row as well, and takes about a minute to say that nothing is listening:
+
+   ```powershell
+   & $py scripts\server_record.py http://127.0.0.1:8000
+   ```
+
 ## 1. The names, in every PowerShell window used below
 
 Each step runs in a PowerShell window that has this block pasted into it. Environment variables
