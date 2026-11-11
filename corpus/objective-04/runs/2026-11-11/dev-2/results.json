@@ -1,0 +1,128 @@
+{
+  "reference_items": 39,
+  "matched_reference_items": 39,
+  "recall": 1.0,
+  "recall_met": true,
+  "extracted_items": 43,
+  "extras": 4,
+  "extras_rate": 0.09302325581395349,
+  "extras_met": true,
+  "items_with_a_named_owner": 42,
+  "wrong_owner": [],
+  "attribution_met": true,
+  "met": true,
+  "transcripts_without_a_ready_summary": [],
+  "missed": [],
+  "extra_items": [
+    {
+      "where": "T01 row 3",
+      "description": "Cover Saturday on-call"
+    },
+    {
+      "where": "T01 row 4",
+      "description": "Cover Sunday on-call"
+    },
+    {
+      "where": "T06 row 2",
+      "description": "Send a reminder to staff about the cups change"
+    },
+    {
+      "where": "T06 row 5",
+      "description": "Install water refill stations"
+    }
+  ],
+  "due_dates": {
+    "compared": 19,
+    "agree": 18,
+    "differ": [
+      {
+        "where": "T01 row 2",
+        "due_as_said": "",
+        "resolved": null,
+        "expected": "2026-09-17"
+      }
+    ]
+  },
+  "per_transcript": [
+    {
+      "transcript": "X01",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "X02",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 3,
+      "extracted_decisions": 4
+    },
+    {
+      "transcript": "T01",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 7,
+      "extras": 2,
+      "reference_decisions": 1,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "T02",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T03",
+      "status": "Ready",
+      "reference_items": 7,
+      "matched": 7,
+      "extracted_items": 7,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "T04",
+      "status": "Ready",
+      "reference_items": 6,
+      "matched": 6,
+      "extracted_items": 6,
+      "extras": 0,
+      "reference_decisions": 2,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T05",
+      "status": "Ready",
+      "reference_items": 3,
+      "matched": 3,
+      "extracted_items": 3,
+      "extras": 0,
+      "reference_decisions": 1,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "T06",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 6,
+      "extras": 2,
+      "reference_decisions": 2,
+      "extracted_decisions": 4
+    }
+  ]
+}

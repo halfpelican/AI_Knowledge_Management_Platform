@@ -24,8 +24,10 @@ judgement nobody could test, and a wrong one would look exactly like a right one
   ``end of next month``: the next month's last day; ``end of January``: that month's last day.
 
 Leading connectives (``by``, ``on``, ``before``, ``due``, ``until``, ``no later than``, ``for``)
-and a trailing time of day (``morning``, ``afternoon``, ``evening``, ``night``, ``at the
-latest``) are ignored. **Anything else resolves to None, and the phrase is kept**: ``next week``,
+and a time of day are ignored, whether it trails (``Friday afternoon``, ``Thursday night``,
+``Friday close of business``, ``tomorrow at the latest``) or leads (``end of day tomorrow``,
+``close of business Friday``): the day is what is resolved. **Anything else resolves to None, and
+the phrase is kept**: ``next week``,
 ``this week``, ``soon``, ``the week after next``, ``over the weekend``, ``after the audit``,
 ``once finance approves``. A date is never invented: the person sees the phrase and can set one.
 """
@@ -71,7 +73,15 @@ _COUNT_WORDS = {
 # Words in front of the deadline that do not change it, any number of them: "by", "due by", "no
 # later than". "end of" is not among them: it does change the date.
 _LEADING = re.compile(r"^(?:(?:no later than|not later than|by|on|before|due|until|till|for|at)\s+)+")
-_TRAILING = re.compile(r"\s+(?:at the latest|latest|morning|afternoon|evening|night)$")
+_TRAILING = re.compile(
+    r"\s+(?:at the latest|latest|morning|afternoon|evening|night|"
+    r"(?:by )?(?:the )?(?:end|close) of (?:the )?(?:day|business)|cob|eod)$"
+)
+# A time of day in front of the day it belongs to: "end of day tomorrow", "close of business
+# Friday". Only where something follows it; on its own, "end of the day" is the meeting's day.
+_LEADING_TIME_OF_DAY = re.compile(
+    r"^(?:the )?(?:(?:end|close) of (?:the )?(?:day|business)|cob|eod|first thing)(?: on)? (?=\S)"
+)
 
 _WEEKDAY = "(" + "|".join(WEEKDAYS) + ")"
 _MONTH = "(" + "|".join(sorted(MONTHS, key=len, reverse=True)) + r")\.?"
@@ -90,6 +100,9 @@ def _clean(phrase: str) -> str:
     text = re.sub(r"[.,;:!?]+$", "", text)
     text = re.sub(r"\s+", " ", text)
     text = _LEADING.sub("", text)
+    text = _LEADING_TIME_OF_DAY.sub("", text)
+    if _END_OF.fullmatch(text):
+        return text  # "the end of the day" is the whole phrase, not a time of day after one
     return _TRAILING.sub("", text).strip()
 
 
