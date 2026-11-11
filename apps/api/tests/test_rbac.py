@@ -73,7 +73,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail",
                     # NIT3004: FR-10's tag administration, both routes behind manage_tags (D-119
                     # finding 5; D-105's dated note of 10 November 2026, night)
-                    "tag-list", "tag-detail"}
+                    "tag-list", "tag-detail",
+                    # Recording transcription, both routes behind contribute_content
+                    # (D-123)
+                    "transcription-status", "transcription-list"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -99,6 +102,10 @@ PERMISSIONED_ROUTES = {
     # FR-10's tag administration (D-119 finding 5): manage_tags, a permission_classes entry on both.
     "tag-list": MANAGE_TAGS_PERMISSION,
     "tag-detail": MANAGE_TAGS_PERMISSION,
+    # Recording transcription (D-123): contribute_content, a permission_classes entry on
+    # both, so the 403 comes before the body is read. Nothing on either route is scoped.
+    "transcription-status": CONTRIBUTE_CONTENT_PERMISSION,
+    "transcription-list": CONTRIBUTE_CONTENT_PERMISSION,
 }
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {

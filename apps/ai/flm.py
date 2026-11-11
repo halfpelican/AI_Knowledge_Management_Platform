@@ -10,7 +10,7 @@ from typing import Callable
 import openai
 from django.conf import settings
 
-from apps.ai import _openai_compat
+from apps.ai import _openai_compat, transcription
 from apps.ai._status import error_for_status
 from apps.ai.base import (
     DocumentClassification,
@@ -21,6 +21,7 @@ from apps.ai.base import (
     ProviderUnavailable,
     StatementList,
     TagScheme,
+    Transcription,
 )
 from apps.ai.classification import (
     CLASSIFICATION_MAX_TOKENS,
@@ -172,6 +173,18 @@ class FLMService:
             input_truncated=truncated,
             max_tokens=max_tokens,
         )
+
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:
+        """One recording segment's text, through Whisper on this FLM server (D-123).
+
+        apps/ai/transcription.py holds the call and its attempt policy, shared with the Anthropic
+        provider, which has no speech model of its own. TRANSCRIPTION_PROVIDER decides whether it
+        runs at all; this provider's client already points at FLM_BASE_URL, so it is reused.
+        """
+        return transcription.transcribe(lambda: self._client, audio, filename=filename)
+
+    def transcription_health(self) -> ProviderHealth:
+        return transcription.health(lambda: self._client)
 
     def health(self) -> ProviderHealth:
         # A report, not a call path: this never raises.

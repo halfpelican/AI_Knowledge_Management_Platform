@@ -96,3 +96,55 @@ def test_manage_py_check_is_silent_with_a_matching_provider(stub_ai_service):
     call_command("check", "--tag", "ai", stdout=stdout, stderr=stderr)
     assert "ai." not in stdout.getvalue()
     assert stderr.getvalue() == ""
+
+
+# --- Recording transcription's setting (D-123) ---------------------------------------------
+
+from apps.ai.checks import check_transcription_provider  # noqa: E402
+
+
+def test_the_transcription_check_is_registered_under_the_ai_tag():
+    assert check_transcription_provider in registry.registered_checks
+    assert "ai" in check_transcription_provider.tags
+
+
+def test_transcription_off_is_silent_and_calls_nothing(monkeypatch):
+    stub = StubAIService(transcription_available=False)
+    install(monkeypatch, stub)
+
+    with override_settings(TRANSCRIPTION_PROVIDER="none"):
+        assert check_transcription_provider(None) == []
+
+
+def test_transcription_on_with_flm_answering_passes(stub_ai_service):
+    with override_settings(TRANSCRIPTION_PROVIDER="flm"):
+        assert check_transcription_provider(None) == []
+
+
+def test_transcription_on_with_flm_silent_is_a_warning_naming_asr(monkeypatch):
+    install(monkeypatch, StubAIService(transcription_available=False))
+
+    with override_settings(TRANSCRIPTION_PROVIDER="flm"):
+        messages = check_transcription_provider(None)
+
+    assert [message.id for message in messages] == ["ai.W002"]
+    assert messages[0].level == checks.WARNING
+    assert "--asr 1" in messages[0].hint
+
+
+def test_an_unknown_transcription_provider_is_an_error():
+    with override_settings(TRANSCRIPTION_PROVIDER="whisper-cpu"):
+        messages = check_transcription_provider(None)
+
+    assert [message.id for message in messages] == ["ai.E003"]
+    assert messages[0].level == checks.ERROR
+    assert "'none' or 'flm'" in messages[0].hint
+
+
+def test_an_unknown_ai_provider_is_left_to_its_own_check(monkeypatch):
+    def unknown():
+        raise ImproperlyConfigured("Unknown AI_PROVIDER: 'x'")
+
+    monkeypatch.setattr(apps.ai, "get_ai_service", unknown)
+    with override_settings(TRANSCRIPTION_PROVIDER="flm"):
+        assert check_transcription_provider(None) == []
