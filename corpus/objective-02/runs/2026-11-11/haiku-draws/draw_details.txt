@@ -70,3 +70,17 @@ SCORES: the five largest differences for one passage in one run, across the thre
   0.00092  t02@Employee/first-turn  D10:2187cabc  0.26954  0.27030  0.27047
   largest difference between draws 2 and 3 alone, made two minutes apart: 0.00086
   passages compared: 203
+
+SCORES: runs in which every supplied passage has exactly the same score in two draws
+  draw 1 and draw 2: 22 of the 37 runs that were supplied a passage
+  draw 2 and draw 3: 22 of the 37 runs that were supplied a passage
+  draw 1 and draw 3: 22 of the 37 runs that were supplied a passage
+
+TOP SCORES: the seven cold runs that stopped before generation (path A), top score per draw, threshold 0.2687
+  t01@Employee/cold: 0.2614  0.2614  0.2614
+  t03@Employee/cold: 0.2315  0.2315  0.2315
+  t05@Employee/cold: 0.1715  0.1715  0.1715
+  t06@Administrator/cold: 0.1964  0.1964  0.1964
+  t06@Employee/cold: 0.1462  0.1462  0.1462
+  t07@Administrator/cold: 0.1702  0.1702  0.1703
+  t07@Employee/cold: 0.1702  0.1702  0.1702

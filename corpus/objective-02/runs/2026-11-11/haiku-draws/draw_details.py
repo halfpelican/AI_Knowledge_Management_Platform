@@ -100,6 +100,22 @@ def main() -> int:
     between_new = max((abs(values[1] - values[2]) for _, _, _, values in spreads), default=0.0)
     print(f"  largest difference between draws 2 and 3 alone, made two minutes apart: {between_new:.5f}")
     print(f"  passages compared: {len(spreads)}")
+
+    print("\nSCORES: runs in which every supplied passage has exactly the same score in two draws")
+    for first, second in ((0, 1), (1, 2), (0, 2)):
+        identical = with_passages = 0
+        for run_id in run_ids:
+            a = [(p["chunk_id"], p["score"]) for p in draws[first][1][run_id]["retrieved"]]
+            b = [(p["chunk_id"], p["score"]) for p in draws[second][1][run_id]["retrieved"]]
+            if a or b:
+                with_passages += 1
+                identical += a == b
+        print(f"  {draws[first][0]} and {draws[second][0]}: {identical} of the {with_passages} runs that were supplied a passage")
+
+    print("\nTOP SCORES: the seven cold runs that stopped before generation (path A), top score per draw, threshold 0.2687")
+    for run_id in run_ids:
+        if all(runs[run_id]["score"]["outcome"] == "path-A" for _, runs in draws):
+            print(f"  {run_id}: " + "  ".join(f"{runs[run_id]['top_score']:.4f}" for _, runs in draws))
     return 0
 
 
