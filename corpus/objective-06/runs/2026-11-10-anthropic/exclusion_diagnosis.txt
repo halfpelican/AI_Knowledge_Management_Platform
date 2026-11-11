@@ -1,0 +1,16 @@
+database: kmp_obj0506_anthropic_20261110; voyage-4 at 1024; 3 draws per question
+U01 Employee      unanswerable    path no_relevant_passage    left out [True]  top 'Project Budget Tracker FY27' 0.197 readable False  best readable 0.1875 (rank 2)  margin min 0.0095
+U02 Administrator unanswerable    path no_relevant_passage    left out [False]  top 'Project Budget Tracker FY27' 0.2075 readable True  best readable 0.2075 (rank 1)  margin min None
+U04 Employee      unanswerable    path no_statement_verified  left out [False]  top 'Fleet Vehicle Usage Notes' 0.289 readable True  best readable 0.289 (rank 1)  margin min 0.1239
+U05 Administrator unanswerable    path no_statement_verified  left out [False]  top 'Fleet Vehicle Usage Notes' 0.293 readable True  best readable 0.293 (rank 1)  margin min None
+U07 Employee      unanswerable    path no_relevant_passage    left out [False]  top 'Employee Leave Policy 2026' 0.2479 readable True  best readable 0.2479 (rank 1)  margin min None
+U08 Administrator unanswerable    path no_relevant_passage    left out [False]  top 'Employee Leave Policy 2026' 0.2478 readable True  best readable 0.2478 (rank 1)  margin min None
+U10 Employee      unanswerable    path no_relevant_passage    left out [False]  top 'Expense Claims Guide' 0.2312 readable True  best readable 0.2312 (rank 1)  margin min 0.0641
+U11 Administrator unanswerable    path no_relevant_passage    left out [False]  top 'Data Privacy Notice' 0.1278 readable True  best readable 0.1278 (rank 1)  margin min None
+P01 Employee      permission-only path no_relevant_passage    left out [True]  top 'Project Atlas Kickoff Brief' 0.4854 readable False  best readable 0.2454 (rank 4)  margin min 0.24
+P02 Employee      permission-only path no_relevant_passage    left out [True]  top 'Project Atlas Kickoff Brief' 0.2812 readable False  best readable 0.2364 (rank 2)  margin min 0.0448
+P04 Employee      permission-only path no_relevant_passage    left out [True]  top 'Team Roster and Skills Matrix' 0.5026 readable False  best readable 0.2456 (rank 3)  margin min 0.2571
+P06 Employee      permission-only path no_relevant_passage    left out [True]  top 'Board Risk Committee Meeting' 0.4361 readable False  best readable 0.2116 (rank 3)  margin min 0.2244
+P07 Employee      permission-only path no_statement_verified  left out [True]  top 'Board Risk Committee Meeting' 0.5046 readable False  best readable 0.3067 (rank 2)  margin min 0.1973
+P08 Employee      permission-only path no_statement_verified  left out [True]  top 'Security Incident Debrief' 0.5476 readable False  best readable 0.3016 (rank 2)  margin min 0.2452
+wrote corpus\objective-06\runs\2026-11-10-anthropic\exclusion_diagnosis.json

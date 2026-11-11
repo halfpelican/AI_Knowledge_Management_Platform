@@ -21,7 +21,7 @@ from typing import Callable
 import anthropic as anthropic_sdk
 from django.conf import settings
 
-from apps.ai import _openai_compat
+from apps.ai import _openai_compat, transcription
 from apps.ai._status import error_for_status
 from apps.ai.base import (
     DocumentClassification,
@@ -32,6 +32,7 @@ from apps.ai.base import (
     ProviderUnavailable,
     StatementList,
     TagScheme,
+    Transcription,
 )
 from apps.ai.classification import (
     CLASSIFICATION_SYSTEM_PROMPT,
@@ -60,12 +61,14 @@ CLAUDE_EFFORT = "low"
 
 
 class AnthropicService:
-    def __init__(self, embedding_client=None, anthropic_client=None):
-        # Both clients are injected by tests. Production builds them lazily: the
+    def __init__(self, embedding_client=None, anthropic_client=None, transcription_client=None):
+        # The clients are injected by tests. Production builds them lazily: the
         # openai client refuses an empty key, and the keys are blank unless the
-        # anthropic path is actually in use (docs/decisions.md D-04).
+        # anthropic path is actually in use (docs/decisions.md D-04). The third is FLM's,
+        # for recording transcription, which Claude and Voyage cannot do (D-123).
         self._embedding_client = embedding_client
         self._anthropic_client = anthropic_client
+        self._transcription_client = transcription_client
 
     def _voyage(self):
         if self._embedding_client is None:
@@ -236,6 +239,25 @@ class AnthropicService:
             input_truncated=truncated,
             max_tokens=max_tokens,
         )
+
+    def _flm_for_transcription(self):
+        if self._transcription_client is None:
+            self._transcription_client = transcription.build_client()
+        return self._transcription_client
+
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription:
+        """One recording segment's text, through Whisper on FLM, not through Claude (D-123).
+
+        Claude and Voyage have no speech-to-text, so this provider sends the segment where the
+        FLM provider does: FLM's ``/v1/audio/transcriptions`` at FLM_BASE_URL, with the shared
+        call and attempt policy in apps/ai/transcription.py. TRANSCRIPTION_PROVIDER, not
+        AI_PROVIDER, decides whether it runs: with ``none`` it raises TranscriptionDisabled
+        before any client is built.
+        """
+        return transcription.transcribe(self._flm_for_transcription, audio, filename=filename)
+
+    def transcription_health(self) -> ProviderHealth:
+        return transcription.health(self._flm_for_transcription)
 
     def health(self) -> ProviderHealth:
         # A report, not a call path: this never raises.

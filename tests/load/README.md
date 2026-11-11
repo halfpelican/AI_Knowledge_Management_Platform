@@ -48,7 +48,7 @@ The measured run is served by Waitress with 24 threads, under `DEBUG=False`, wri
 ```powershell
 $env:DEBUG = 'False'                                  # .env sets DEBUG=True; the shell's value wins
 $env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"    # beside errors.log (D-87 decision 3)
-waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
 
 - **Where it runs.** From the repository root, in its own PowerShell window, with the measurement
@@ -65,6 +65,9 @@ waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
   a 429.
 - **`--threads=24` is set explicitly.** Waitress's default is 4, which NFR-08's five users
   already exceed. 24 is NFR-09's 20 users plus 4 for everything else (D-85 decision 3).
+- **`--max-request-body-size=54525952` caps any request body** (D-124), 2 MB over the 50 MB
+  upload limit, where Waitress's default is 1 GB. No load-test request comes near it, and the
+  pre-flight does not check it.
 - **What `run.ps1` observes before k6 starts** (D-87 decision 2), with
   `scripts/server_record.py preflight`. It refuses unless each holds:
   - **Waitress, from the listening process.** The process listening on `-BaseUrl`'s port is

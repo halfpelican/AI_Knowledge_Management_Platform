@@ -100,10 +100,15 @@ class AIService(Protocol):
     def generate_statements(self, question: str, passages: list[Passage]) -> StatementList: ...
     def health(self) -> ProviderHealth: ...
     def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
+    def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription: ...
+    def transcription_health(self) -> ProviderHealth: ...
 ```
 
 The list, not a count, is the source of truth. `classify_document` arrived with FR-10 on 9 November
-2026 (D-104). Summarisation (FR-16) is added the same way when its
+2026 (D-104). `transcribe` and `transcription_health` arrived on 10 November 2026 with recording
+transcription (D-123): only FLM has speech-to-text, so the FLM and Anthropic providers alike send a
+segment to FLM's Whisper, selected by its own `TRANSCRIPTION_PROVIDER` (`none` by default), not by
+`AI_PROVIDER`. Summarisation (FR-16) is added the same way when its
 requirement is built, not before.
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:
@@ -195,6 +200,11 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_GENERATION_ATTEMPTS` | **3** — 1 initial call + 2 retries, then 503 (NFR-19) |
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
 | `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004) |
+| `MAXIMUM_TRANSCRIBE_ATTEMPTS` | **3** — 1 initial call + 2 retries (recording transcription, D-123) |
+| `TRANSCRIPTION_SEGMENT_SECONDS` / `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` | 30 s, the page's segment / 60 s, the most the server transcribes in one request |
+| `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |
+| `MAXIMUM_RECORDING_BYTES` | 500 MB — the largest recording the page decodes; client-only, since the recording never reaches the server |
+| `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` | 2 — segments the whole server sends to FLM at once (D-123) |
 | `MAXIMUM_STATEMENTS` | **6**, *tune* — chosen on the development set; a retry after a cut-off asks for fewer (D-100) |
 | `MINIMUM_QUESTION_LENGTH` | ~10 characters |
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |
@@ -204,7 +214,7 @@ set during evaluation, not guessed in a code review.
 | `LOCKOUT_THRESHOLD` / `LOCKOUT_DURATION` | 5 attempts / 15 minutes (FR-02 enforces, D-25; FR-03 adds the interface, NIT3004) |
 | `NO_ANSWER_MESSAGE` | fixed text, defined once |
 
-**The three attempt constants are totals, not retry counts.** The proposal words them
+**The attempt constants are totals, not retry counts.** The proposal words them
 as "2 retries", which is the same thing said differently. Comment each one
 `# 1 initial call + 2 retries` so nobody helpfully corrects them to 2. NFR-19's
 fault-injection test asserts the provider was called exactly three times before the

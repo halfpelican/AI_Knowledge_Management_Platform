@@ -192,6 +192,10 @@ THROTTLED_ROUTES = {
     ("conversation-list", "POST"): "conversation_create",
     ("search", "GET"): "search",
     ("document-tags", "POST"): "tagging",
+    # D-123: one recording segment per request, and the status, which asks FLM each time, in the
+    # same budget.
+    ("transcription-list", "POST"): "transcription",
+    ("transcription-status", "GET"): "transcription",
 }
 
 
