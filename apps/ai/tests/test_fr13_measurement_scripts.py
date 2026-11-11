@@ -449,40 +449,55 @@ def test_the_harness_records_that_it_ran_in_process(scripts):
     assert "no HTTP server" in record["note"]
 
 
-def a_lookup_that_prints(server_record, monkeypatch, reply):
-    """Make listening_process's PowerShell lookup print ``reply``, on any platform."""
+def a_listen_row_that_prints(server_record, monkeypatch, reply):
+    """Make the Listen-row lookup's PowerShell print ``reply``, on any platform.
+
+    Only that lookup is answered. netstat and the port's own row (D-87's note of 11 November
+    2026) see nothing, and the retries do not wait.
+    """
+    def run(command, *args, **kwargs):
+        listen_row = command[0] == "powershell" and "-State Listen" in command[-1]
+        return SimpleNamespace(returncode=0, stdout=json.dumps(reply) if listen_row else "", stderr="")
+
     monkeypatch.setattr(server_record.sys, "platform", "win32")
-    monkeypatch.setattr(server_record.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(
-        returncode=0, stdout=json.dumps(reply), stderr=""))
+    monkeypatch.setattr(server_record.subprocess, "run", run)
+    monkeypatch.setattr(server_record, "LOOKUP_RETRY_SECONDS", 0)
 
 
 def test_process_0_is_never_recorded_as_the_listening_process(scripts, monkeypatch):
     """D-112's note of 11 November 2026, section (c), defect 1.
 
     The HTTP check of 10 November recorded pid 0 and the machine's boot time as the server's.
-    Process 0 is the System Idle Process, so the listener is unknown, and the record says why.
+    Process 0 is the System Idle Process, so the Listen row's lookup reports the listener as
+    unknown, and says why. When no other lookup finds the listener either, that is what
+    listening_process returns and what the record holds.
     """
     server_record = scripts("server_record")
-    a_lookup_that_prints(server_record, monkeypatch,
-                         {"pid": 0, "command": "", "started": "2026-11-09T11:19:15.787Z"})
+    a_listen_row_that_prints(server_record, monkeypatch,
+                             {"pid": 0, "command": "", "started": "2026-11-09T11:19:15.787Z"})
+    row = server_record._listen_row_process(8000)
+    assert row == {"pid": None, "command": None, "started_at": None, "note": row["note"]}
+    assert "process 0" in row["note"] and "unknown" in row["note"]
+
     found = server_record.listening_process(8000)
-    assert (found["pid"], found["command"], found["started_at"]) == (None, None, None)
-    assert "process 0" in found["note"] and "unknown" in found["note"]
+    assert (found["pid"], found["command"], found["started_at"], found["found_by"]) == (None, None, None, None)
+    assert found["note"] == row["note"]
 
     record = server_record.observe("http://127.0.0.1:8000", "waitress", probe_debug=False)
     assert (record["pid"], record["process_started_at"], record["command_line"]) == (None, None, None)
-    assert record["threads"] is None and found["note"] in record["notes"]
+    assert record["threads"] is None and row["note"] in record["notes"]
     # A lookup that found nothing is not evidence of another server (D-85): no refusal.
     assert server_record.contradicts_d85(record) == []
 
 
 def test_a_real_listening_process_is_recorded_as_before(scripts, monkeypatch):
     server_record = scripts("server_record")
-    a_lookup_that_prints(server_record, monkeypatch,
-                         {"pid": 44868, "command": WAITRESS_24, "started": "2026-11-10T05:33:43.000Z"})
+    a_listen_row_that_prints(server_record, monkeypatch,
+                             {"pid": 44868, "command": WAITRESS_24, "started": "2026-11-10T05:33:43.000Z"})
     found = server_record.listening_process(8000)
-    assert found == {"pid": 44868, "command": WAITRESS_24, "started_at": "2026-11-10T05:33:43.000Z",
-                     "note": None}
+    assert (found["pid"], found["command"], found["started_at"], found["note"]) == (
+        44868, WAITRESS_24, "2026-11-10T05:33:43.000Z", None)
+    assert found["found_by"] == server_record.FOUND_BY_LISTEN_ROW
 
 
 # --- citation_harness.py --threads: refusals, as it is run ---------------------------------

@@ -390,7 +390,8 @@ def listening_process(port: int) -> dict:
     Two candidates in step 2 or 3 is not found. When no lookup names a process that can be read,
     the three are tried again every LOOKUP_RETRY_INTERVAL_SECONDS for about LOOKUP_RETRY_SECONDS,
     and then the Listen row's own result is returned, as it always was: nothing listening, or a
-    PID with no command line.
+    PID with no command line. It is never process 0: ``_listen_row_process`` reports a row that
+    names it as unknown, with a note (D-112's note of 12 November 2026).
 
     Each try is printed to stderr as it happens, so a wait shows its reason. Only how the
     process is found changes here. What a caller requires of it does not: the pre-flight still
