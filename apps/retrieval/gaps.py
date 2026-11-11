@@ -25,21 +25,33 @@ re-scan safe in any case. Nothing here depends on two timestamps differing: Wind
 question is embedded on its own wording with the query prefix, through ``embed_question``, the
 pipeline's one embedding path. It is ranked over ``candidate_chunks(role_name="Administrator")``,
 which since D-66 is every stamped chunk, through the one scoping helper, so no new unscoped query
-shape exists. Then, on the top-ranked passage, **whether or not it clears ``RELEVANCE_THRESHOLD``**
-(the user's decision of 10 November 2026, D-108's note):
+shape exists. Which passage then decides depends on the question's embedding model
+(``exclusion_rule``, D-126):
+
+- **rank-one,** the default and EmbeddingGemma's rule: the top-ranked passage, **whether or not it
+  clears the threshold** (the user's decision of 10 November 2026, D-108's note);
+- **threshold-first,** voyage-4's rule (the user's decision of 11 November 2026, D-126): if no
+  passage reaches the model's own relevance threshold (``ranking.admit``, D-120), nobody could
+  have been answered, so the row is a gap. Otherwise the top admitted passage decides.
+
+The deciding passage settles it:
 
 - no passage of the question's embedding model exists: nothing restricted can explain the
   no-answer, and the row is a gap;
-- the top-ranked passage's ``visible_to_roles`` has no overlap with the asker's effective roles:
-  the best evidence for an answer is where the asker cannot read it, so the row is
+- the deciding passage's ``visible_to_roles`` has no overlap with the asker's effective roles: the
+  best evidence for an answer is where the asker cannot read it, so the row is
   permission-affected and is left out;
 - otherwise the best match was readable by the asker, so their no-answer was not a permission
   matter, and the row is a gap.
 
-As first built the rule admitted at ``RELEVANCE_THRESHOLD`` first and kept every row with nothing
-admitted. Objective 06's first cycle on the frozen thirty then kept P02, whose answer exists only
-in an Administrator-only document scoring 0.2977 to 0.2983, inside D-40's drift of the threshold;
-the change was made after, and because of, that result, and is disclosed as such.
+**How the two rules arose.**
+- As first built, the rule was threshold-first for every model. Objective 06's first cycle on the
+  frozen thirty then kept P02. Its answer exists only in an Administrator-only document scoring
+  0.2977 to 0.2983 on EmbeddingGemma, inside D-40's drift of 0.30. So rank-one was adopted after,
+  and because of, that result, and is disclosed as such.
+- On voyage-4, rank-one failed D-108's development check: two genuine gaps whose weak best matches
+  are Administrator-only were left out. Threshold-first passed it, and voyage-4 went back to it
+  (D-126). That choice too was informed by the thirty, and is disclosed as a departure from D-93.
 
 For a search, the same keyword search is counted again as the Administrator through
 ``search_total``, which writes no ``SearchLog`` row. Above zero, the asker's role withheld it and
@@ -84,6 +96,9 @@ from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     MAXIMUM_QUESTION_LENGTH,
     CYCLE_GRACE_SECONDS,
+    GAP_EXCLUSION_RULE,
+    GAP_EXCLUSION_RULE_BY_MODEL,
+    GAP_EXCLUSION_THRESHOLD_FIRST,
     GAP_GROUPING_THRESHOLD,
     GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_OPEN,
@@ -96,7 +111,7 @@ from apps.retrieval.models import (
     SearchLog,
 )
 from apps.retrieval.query_embedding import embed_question
-from apps.retrieval.ranking import cosine_similarity, rank
+from apps.retrieval.ranking import admit, cosine_similarity, rank
 from apps.retrieval.scoping import candidate_chunks, effective_roles
 from apps.retrieval.search import search_total
 
@@ -263,19 +278,44 @@ def _window(started_at: datetime) -> tuple[QuerySet[QueryLog], QuerySet[SearchLo
 def _question_explained_by_permissions(
     row: QueryLog, embedding: EmbeddingResult, scope: _AdministratorScope
 ) -> bool:
-    """D-108's rule for a question: True when the top-ranked passage over the Administrator's
-    scope, whether or not it clears RELEVANCE_THRESHOLD, is one the asker's role cannot read
-    (D-108's note of 10 November 2026)."""
+    """D-108's rule for a question: True when the deciding passage over the Administrator's
+    scope is one the asker's role cannot read.
+
+    Which passage decides is the embedding model's rule (``exclusion_rule``, D-126):
+    - rank-one: the top-ranked passage, whether or not it clears the threshold (D-108's note of
+      10 November 2026);
+    - threshold-first: the top passage at or above the model's own relevance threshold, or none,
+      which makes the row a gap.
+    """
     chunks, roles = scope.for_model(embedding.model)
     ranked = rank(chunks, embedding.vectors[0])
     if not ranked:
         # No passage of this embedding model anywhere: nothing restricted explains it, a gap.
         return False
-    top = ranked[0]
+    if exclusion_rule(embedding.model) == GAP_EXCLUSION_THRESHOLD_FIRST:
+        admitted = admit(ranked, embedding_model=embedding.model)
+        if not admitted:
+            # Nothing reaches the model's threshold for anyone, so nobody could have been answered
+            # and no permission explains the no-answer: a gap (D-108 as first written, D-126).
+            return False
+        top = admitted[0]
+    else:
+        top = ranked[0]
     asker_roles = set(effective_roles(row.user.role.role_name))
     # A role missing from EFFECTIVE_ROLES reads nothing, so every top passage is unreadable to
     # it and its rows are left out: the list never shows a question whose answer may exist.
     return not (set(roles[top.chunk_id]) & asker_roles)
+
+
+def exclusion_rule(embedding_model: str) -> str:
+    """D-108's exclusion rule for ``embedding_model``: rank-one or threshold-first (D-126).
+
+    A model GAP_EXCLUSION_RULE_BY_MODEL lists gets its own rule. voyage-4 gets threshold-first,
+    which D-108's development check passes on its scores. Any other model, EmbeddingGemma included,
+    gets GAP_EXCLUSION_RULE, rank-one. Both names are read at call time, as grouping_threshold's
+    are, so a test that reassigns either is honoured.
+    """
+    return GAP_EXCLUSION_RULE_BY_MODEL.get(embedding_model, GAP_EXCLUSION_RULE)
 
 
 def grouping_threshold(embedding_model: str) -> float:

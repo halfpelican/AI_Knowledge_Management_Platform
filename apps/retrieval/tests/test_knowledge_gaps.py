@@ -39,6 +39,11 @@ from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CYCLE_GRACE_SECONDS,
     EMPLOYEE_ROLE_NAME,
+    GAP_EXCLUSION_RANK_ONE,
+    GAP_EXCLUSION_RULE,
+    GAP_EXCLUSION_RULE_BY_MODEL,
+    GAP_EXCLUSION_RULES,
+    GAP_EXCLUSION_THRESHOLD_FIRST,
     GAP_GROUPING_THRESHOLD,
     GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_ADDRESSED,
@@ -47,6 +52,7 @@ from apps.core.constants import (
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
     RELEVANCE_THRESHOLD,
+    RELEVANCE_THRESHOLD_BY_MODEL,
     SOURCE_TYPES,
 )
 from apps.documents.models import ContentChunk, Document
@@ -504,6 +510,116 @@ def test_the_payload_of_the_exclusion_reaches_no_column(corpus, employee):
     for model in (KnowledgeGap, KnowledgeGapItem, KnowledgeGapCycle):
         names = {field.name for field in model._meta.get_fields()}
         assert names.isdisjoint({"user", "asker", "role", "role_name", "reason", "excluded", "left_out"})
+
+
+# --- The exclusion per embedding model (D-126) -------------------------------------------------
+
+VOYAGE = "voyage-4"
+VOYAGE_THRESHOLD = RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE]
+# Designed from voyage-4's own threshold, never a literal, so the tests follow D-120's value.
+JUST_BELOW = VOYAGE_THRESHOLD - 0.02
+WELL_ABOVE = VOYAGE_THRESHOLD + 0.30
+
+V_RESTRICTED_BELOW = "Is anything planned for the chair's succession?"  # top restricted, under the threshold
+V_READABLE_BELOW = "Will home working change in the new year?"  # top readable, under the threshold
+V_RESTRICTED_ABOVE = "Who is named on the succession register?"  # top restricted, above the threshold
+V_READABLE_ABOVE = "How many home working days do staff get?"  # top readable, above the threshold
+V_RESTRICTED_FIRST = "Does the chair's succession affect home working?"  # both admitted, restricted first
+
+
+@pytest.fixture
+def voyage_corpus(administrator, designed):
+    """The same two chunks as ``corpus``, embedded by voyage-4, with a service that answers as voyage-4."""
+    chunks = {}
+    for name, text, axis, roles in (("restricted", RESTRICTED_TEXT, 0, ADMINISTRATOR_ONLY),
+                                     ("readable", READABLE_TEXT, 1, BOTH_ROLES)):
+        chunk = stored_chunk(title=f"Voyage {name}", text=text, vector=unit(axis), roles=roles,
+                             uploader=administrator)
+        ContentChunk.objects.filter(pk=chunk.pk).update(embedding_model=VOYAGE)
+        chunks[name] = chunk
+    service = designed(
+        {
+            V_RESTRICTED_BELOW: at_cosine(JUST_BELOW, axis=0, towards=5),
+            V_READABLE_BELOW: at_cosine(JUST_BELOW, axis=1, towards=5),
+            V_RESTRICTED_ABOVE: at_cosine(WELL_ABOVE, axis=0, towards=5),
+            V_READABLE_ABOVE: at_cosine(WELL_ABOVE, axis=1, towards=5),
+            V_RESTRICTED_FIRST: at_cosine(0.9, axis=0, towards=1),
+        },
+        model=VOYAGE,
+    )
+    return {**chunks, "service": service}
+
+
+def test_the_exclusion_rule_is_the_embedding_models_own():
+    """D-126: voyage-4 is threshold-first; any other model, EmbeddingGemma included, keeps rank-one."""
+    assert gaps.exclusion_rule(VOYAGE) == GAP_EXCLUSION_THRESHOLD_FIRST
+    assert gaps.exclusion_rule(STUB_EMBEDDING_MODEL) == GAP_EXCLUSION_RULE == GAP_EXCLUSION_RANK_ONE
+    assert gaps.exclusion_rule("embed-gemma") == GAP_EXCLUSION_RANK_ONE
+    assert set(GAP_EXCLUSION_RULE_BY_MODEL.values()) <= set(GAP_EXCLUSION_RULES)
+    assert GAP_EXCLUSION_RULE in GAP_EXCLUSION_RULES
+
+
+def test_on_voyage_a_restricted_best_match_under_the_threshold_is_a_gap(voyage_corpus, employee):
+    """U01's shape (D-126): nothing reaches voyage-4's threshold for anyone, so nobody could have
+    been answered. Rank-one left such a row out; threshold-first keeps it."""
+    assert JUST_BELOW < VOYAGE_THRESHOLD  # the premise
+    row = ask(employee, V_RESTRICTED_BELOW, at=hours_ago(1))
+
+    run_cycle()
+
+    assert in_log(row)
+    assert gap_of(row).embedding_model == VOYAGE
+
+
+def test_on_voyage_a_readable_best_match_under_the_threshold_is_a_gap(voyage_corpus, employee):
+    row = ask(employee, V_READABLE_BELOW, at=hours_ago(1))
+
+    run_cycle()
+
+    assert in_log(row)
+
+
+def test_on_voyage_a_restricted_top_admitted_passage_is_left_out(voyage_corpus, employee):
+    """P02's shape on voyage-4: the restricted answer clears the threshold, so the row is a
+    permission boundary and is left out, recorded nowhere."""
+    row = ask(employee, V_RESTRICTED_ABOVE, at=hours_ago(1))
+
+    cycle = run_cycle()
+
+    assert not in_log(row)
+    assert cycle.queries_considered == 0
+    assert KnowledgeGap.objects.count() == 0
+
+
+def test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted(voyage_corpus, employee):
+    restricted_first = ask(employee, V_RESTRICTED_FIRST, at=hours_ago(2))
+    readable_above = ask(employee, V_READABLE_ABOVE, at=hours_ago(1))
+
+    run_cycle()
+
+    assert not in_log(restricted_first)
+    assert in_log(readable_above)
+
+
+def test_on_voyage_an_administrators_question_is_always_kept(voyage_corpus, administrator):
+    """Every chunk is readable by the Administrator (D-66), under either rule."""
+    rows = [ask(administrator, V_RESTRICTED_ABOVE, at=hours_ago(2)),
+            ask(administrator, V_RESTRICTED_BELOW, at=hours_ago(1))]
+
+    run_cycle()
+
+    assert all(in_log(row) for row in rows)
+
+
+def test_rank_one_still_decides_below_the_threshold_for_a_model_not_listed(corpus, employee, monkeypatch):
+    """The other side of D-126: the same geometry on a model the map does not list is rank-one, so a
+    restricted best match under the threshold is still left out, P02's case on EmbeddingGemma."""
+    monkeypatch.setattr(gaps, "GAP_EXCLUSION_RULE_BY_MODEL", {VOYAGE: GAP_EXCLUSION_THRESHOLD_FIRST})
+    row = ask(employee, Q_RESTRICTED_BELOW, at=hours_ago(1))
+
+    run_cycle()
+
+    assert not in_log(row)
 
 
 # --- The grouping (D-109) --------------------------------------------------------------------
