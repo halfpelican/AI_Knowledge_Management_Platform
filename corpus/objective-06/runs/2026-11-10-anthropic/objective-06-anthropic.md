@@ -10,6 +10,11 @@ the seeding, the cycle and the verification. On FLM, the independent first cycle
 instead, on P02. A second cycle there, informed by the first, met all three after the exclusion rule
 was changed (D-108's and D-110's notes). The rule that left U01 out is that changed rule.
 
+**D-108's development check fails on voyage-4.** It should have run on this configuration before
+the thirty, and did not. Run afterwards with the user's approval, it fails at 13 of 15: two of its
+nine no-answer questions are left out in the same way as U01. On FLM it passed 15 of 15. Whether
+the rule changes for voyage-4 is the user's decision.
+
 ## How it ran
 
 | | |
@@ -69,6 +74,11 @@ either.
   passage scores 0.2812. This is arithmetic on the diagnosis's scores, not a run of that code.
 - **The subject still reached the log.** U02, the Administrator's wording, and U03, the search
   term, formed its entry with a count of 2. The seeded third occurrence never entered.
+- **A property of the rule, not a fault in this run.** The cycle applied D-108's rule as shipped,
+  which decides on the top-ranked passage even below the threshold (its evening note). Voyage's
+  scores for out-of-corpus questions are low across the board, so for a genuine gap the top-ranked
+  passage is a weak match that can fall on restricted material. The development check below, run
+  afterwards, shows the same shape twice more.
 
 ## Clause 2: "differently worded questions on a single subject must group into one entry with an accurate occurrence count"
 
@@ -116,22 +126,51 @@ the other two), every threshold, and the seeded logs themselves, because the ant
 seeded through Haiku and Voyage. The anthropic and FLM cycle 2 columns run the same rule, but on
 different vectors.
 
+## D-108's development check on voyage-4, run afterwards
+
+D-108's and D-110's notes say D-108's check (`scripts/exclusion_dev_check.py`, D-108's known-risk
+paragraph) is repeated on the new configuration before the thirty are run there. It was not, and
+the cycle above went ahead without it. That was this session's oversight, not a decision: both
+notes were read before the run, and their order was not acted on. The FR-19 work already done on
+this provider is the grouping sweep (#81), not this check.
+
+On 11 November, with the user's approval, the check was run afterwards
+(`exclusion-dev-check-voyage/`).
+- **What ran:** a copy of the script changed only where FLM was named, with its `.diff`
+  (`9527cd7`), on this database. It writes nothing and calls no Claude model.
+- **Twice, because Voyage jitters.** Both passes gave the same outcome for every question, with
+  scores no more than 0.0004 apart.
+
+| D-108's development check | FLM, embed-gemma (`../2026-11-10/exclusion-dev-check-2/`) | **anthropic, voyage-4** |
+|---|---|---|
+| scoped questions left out | 6 of 6 | 6 of 6 |
+| no-answer questions kept | 9 of 9 | **7 of 9** |
+| the check | passes | **fails** |
+| ordinary questions kept (for information) | 46 of 50 | 46 of 50 |
+
+- **The two misses have U01's shape.** u36 ("how many people did we hire last year?") and d27
+  ("What salary does the head of digital services earn?") have no answer anywhere. Their
+  top-ranked passages score 0.230 and 0.238, far under the 0.2687 threshold, and both are
+  Administrator-only, so the rule leaves both out.
+- **The ordinary questions left out are as on FLM:** u07, the known false exclusion, and u28, u29
+  and d23, whose sources are Administrator-only.
+- **What D-108 says follows a failed check:** "the margin rule is chosen on the same material
+  before the thirty are run". The thirty have already run on this configuration, so any such
+  choice now would be informed by their result. Whether to change the rule for voyage-4, and how,
+  is the user's decision. Nothing is changed here.
+
 ## What this result does not show
 
-- **The exclusion's development check on Voyage.** D-108's and D-110's notes say D-108's check
-  (`scripts/exclusion_dev_check.py`, D-108's known-risk paragraph) is repeated on the new
-  configuration before the thirty are run there. It was not, and this run went ahead without it.
-  That was this session's oversight, not a decision: both notes were read before the run, and their
-  order was not acted on. The FR-19 work already done on this provider is the grouping sweep (#81),
-  not this check. Whether the development questions would have shown U01's shape is unknown.
+- **A check of the exclusion on Voyage made in time.** The development check above came after the
+  thirty's cycle. It explains the cycle's miss but did not precede it.
 - **The outcome over repeated seedings.** This is one draw. D-110's note says that on `anthropic`
   the seeding is repeated and reported per draw, because Claude's generation is not deterministic.
   The exclusion decided on embeddings alone, and U01's was stable over three of them. The two path-B
   declines and the answered asks rest on single generations.
-- **The size of the false-exclusion cost.** It hit one of the eight unanswerable asks on this set. On
-  FLM, D-108's development check kept all nine of its no-answer questions, and met the same shape
-  once among its ordinary questions (u07). A rate needs more questions of this kind than either set
-  holds.
+- **A rate for the false-exclusion cost.** On voyage-4 it hit one of the thirty's eight
+  unanswerable asks and two of the development set's nine no-answer questions. On FLM it hit none
+  of either, and met the same shape once among the ordinary questions (u07). That is three cases
+  in seventeen on Voyage: enough to show the cost is real, not to measure it.
 - **FR-12's decline on unscreened wordings.** The eight asks were screened on embed-gemma's scores.
   Two cleared Voyage's threshold and Haiku declined both, which is two cases, not a measure of
   D-102's open finding. D-110's acceptance test for a decline fix, an unscreened re-run, was not run.
@@ -143,7 +182,7 @@ different vectors.
 | | |
 |---|---|
 | Claude (Haiku 5.5) | the seeding: 11 calls (the seven answered asks and the four path-B declines), 34,403 tokens in and 932 out, about **$0.0039** (`seed/seed.json`, `record.claude_usage`). The cycle and the diagnosis call no Claude model |
-| Voyage (voyage-4) | the seeding's 21 question embeddings, the cycle's 18 (14 questions and 4 search terms), and the diagnosis's 42. Within Voyage's free allowance |
+| Voyage (voyage-4) | the seeding's 21 question embeddings, the cycle's 18 (14 questions and 4 search terms), the diagnosis's 42, and the development check's 65 twice. Within Voyage's free allowance |
 
 ## Files
 
@@ -154,3 +193,5 @@ different vectors.
 - `verification/`: the shipped verifier's record and table.
 - `exclusion_diagnosis.py`, `.txt` and `.json`: why each no-answer ask was kept or left out,
   three draws each.
+- `exclusion-dev-check-voyage/`: D-108's development check, run afterwards. The copy and its
+  `.diff` (`9527cd7`), with the two passes' records (`pass-1/`, `pass-2/`) and consoles.
