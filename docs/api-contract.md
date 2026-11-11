@@ -66,7 +66,8 @@ cannot drift.
 **Rate limiting.** `POST /api/auth/register` and `POST /api/auth/login` are limited
 per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
 and thread creation are limited per user as well, and keyword search and a person applying a tag
-since 10 November 2026; "Stage 5 item 5" below lists every throttled route (D-79).
+since 10 November 2026, and a recording segment sent for transcription since D-123;
+"Stage 5 item 5" below lists every throttled route (D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -104,9 +105,28 @@ Response bodies the front end relies on (Stage 2 implementation):
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
 - CSRF: `POST /api/auth/logout` and `PATCH` always require `X-CSRFToken`; so does
   `POST /api/auth/login` when the browser already holds a session.
+  - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
+    (D-124).** That is so the check never reads the request body. Every client already sends the
+    header.
+  - **A refusal is `403 {"detail": "CSRF Failed: ..."}`,** given before any permission check,
+    throttle or body is read.
 - `POST /api/auth/register` starts no session (D-23).
 - Any endpoint, a request body that is not `application/json`: `415`. The API parses
   JSON only, which is what stops a cross-site form from posting credentials (D-24).
+- Any endpoint that reads a JSON body, one declaring more than 2.5 MiB:
+  `400 {"detail": "Bad request."}`, refused unread.
+  - **Why:** DRF parses JSON from `request.body`, which applies Django's
+    `DATA_UPLOAD_MAX_MEMORY_SIZE` to the declared length.
+  - **Not new:** it held from the start and was first written down at D-124. The one body it does
+    not cover is FR-09's pasted transcript above 50 MB, which gets the upload ceiling's `413`.
+- Any endpoint, a body declaring `MAX_REQUEST_BODY_BYTES` (54,525,952) or more: `413` from Waitress,
+  not from the API (D-124).
+  - **It is Waitress's own plain-text page, not JSON.** Waitress gives it at the request's headers,
+    before reading the body, then closes the connection. A client still sending may see the
+    connection reset instead.
+  - **A chunked body declares no length.** Waitress counts it as it arrives and refuses it when it
+    reaches the cap, so up to the cap is received first.
+  - **It applies only where the server is started as `docs/alpha-deployment.md` starts it.**
 
 ## Stage 3 — FR-08, FR-09
 
@@ -152,10 +172,33 @@ content than may be inflated — the same step, a different rejection**), then s
 says why the permission is first — "it is the cheapest rejection, and the user's role
 may have changed during a transfer of up to 50 MB".
 
-**The size ceiling is applied twice**: once against the declared `Content-Length`,
-before the body is parsed, so a 50 MB transfer is refused without being buffered; and
-once against the bytes actually received, for a client that lies about or omits the
-header.
+**The size ceiling is applied twice**: once against the declared `Content-Length`, before the
+body is read, and once against the bytes actually received. The second is defence in depth:
+Django reads no more of a body than its declared length, so a body cannot carry a larger file than
+it declares.
+
+- **One step runs ahead of the order above, as it has since Stage 3.** The declared-length 413
+  comes before the signature's 415, because the signature cannot be read without reading the body.
+  So an oversized disguised file is `413`, not `415`.
+- **Every step after it** runs in §7.2's order.
+- **Nothing reads the body before the view** (D-124). The view reads it only after the 403, the 429
+  and the declared-length 413.
+
+> **Corrected 11 November 2026 (D-124).** From Stage 3 until then, this paragraph said the first
+> check refused a 50 MB transfer "without being buffered".
+>
+> - **For every signed-in browser session it did not.** DRF's CSRF check read `request.POST`, which
+>   parsed the whole body, spooling the upload to temporary files. That happened before the 403,
+>   the 429 and this 413, so §7.2's "cheapest rejection" was not cheap.
+> - **The suite did not catch it,** because the test client enforces CSRF only when asked.
+> - **The fix:** the CSRF check now reads its token from the `X-CSRFToken` header and parses
+>   nothing.
+
+**What is not refused unread: receiving.** Waitress reads the whole body before Django sees the
+request. The serve command's `--max-request-body-size` caps that, on every route, at
+`MAX_REQUEST_BODY_BYTES`: 54,525,952 bytes, 2 MiB over the upload ceiling (D-124). A body at or
+over that cap is refused by Waitress itself (see Stage 2's last bullet), as is a chunked one when it
+reaches the cap. A body over 50 MB and under the cap gets this route's JSON `413`.
 
 **A third size rejection shares the 413 and does not share the message** (Stage 4
 item 12b). Both checks above are checks on the *upload*, and a 199 KB DOCX whose
@@ -250,7 +293,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
+| POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `413 {"detail": "Transcript exceeds the maximum permitted size of 50 MB."}` a body, pasted or a file, declaring more than 50 MB, refused before it is read, after the 403 and the 429, nothing stored (*convention*, D-124: FR-09 enumerates only 201 and 400, and a body refused unread has no field to report on); `400 {"detail": "Bad request."}` a pasted transcript whose JSON body declares between 2.5 MiB and 50 MB, refused unread by Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`, nothing stored (always so; first written down at D-124); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
 | GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope |
 | DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body (D-99; not in the proposal, see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission; `403` the meeting is in scope and the role lacks `manage_meetings` |
@@ -970,6 +1013,7 @@ not grant it, and it does not grant `manage_documents`.
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
 | `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
 | `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
+| `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
@@ -1006,10 +1050,11 @@ user, another from the same user, on any of the three, answers at once:
   404, 409 and the 422 for a missing original. Those are answered as before. A 422 for content
   stored but not indexed is ingestion's own outcome, reached inside the slot. The rate is checked
   before the slot, so this 429 counts against the rate.
-- **It is separate from the ask's slot.** A user may have one question and one ingestion in
-  flight at once.
-- The client tells the three kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
-  and `ingestion_in_flight`. It does not parse `detail`.
+- **It is separate from the ask's slot.** A user may have a question and an ingestion in flight
+  at once, and since D-123 a recording segment in transcription as well.
+- The client tells the kinds of 429 apart by `code`: none for the rate, `ask_in_flight`,
+  `ingestion_in_flight` and, on the transcription route, `transcription_in_flight` and
+  `transcription_busy` (D-123). It does not parse `detail`.
 
 **The conversation list leaves out empty threads (D-80).** `GET /api/conversations` returns only
 threads with at least one turn, answered or not. It never filters on the title, or on what a turn
@@ -1040,7 +1085,7 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
 | a file in the build, such as `/assets/index-<hash>.js` or `/favicon.svg` | `200` the file. Under `/assets/`, `Cache-Control: max-age=315360000, public, immutable`, because Vite puts a content hash in every name there; anything else, `max-age=60, public` |
 | `/assets/...` naming no file in the build | `404 {"detail": "Not found."}`, never `index.html` |
 | any other path, for `GET` or `HEAD` | `200` the build's `index.html`, `Cache-Control: no-cache`, so the React router answers a reload or a typed address on a client route |
-| any other path, another method | `405`, or Django's `403` page first when the CSRF check refuses it |
+| any other path, another method | `405`, and nothing is read. Until D-124, Django's CSRF check ran first: it could answer its `403` page, and it parsed a multipart body to look for a form-field token. The catch-all is exempt now, because it makes no write |
 | any path outside `/api/`, with no build in `SPA_DIST_DIR` | `404 {"detail": "Not found."}`, as before item 9 |
 
 - **`/media/` is a client route like any other.** It answers `index.html` and never a stored file.
@@ -1308,3 +1353,67 @@ and exits 1 on a provider outage. The route runs the same cycle on demand.
    Open entry, embedded by the same model, whose centroid's cosine is at least
    `GAP_GROUPING_THRESHOLD`, or starts a new entry. An Addressed entry is never joined, so a
    subject that recurs after being addressed opens a new one.
+
+## Recording transcription (D-123)
+
+Not in the proposal: §1.9 puts live transcription and native recording capture out of scope, and
+FR-09 takes a transcript file or pasted text. The user decided on 10 November 2026 that a person
+with a meeting **recording** can have it transcribed into a **draft**, which they review before it
+is added. These routes, the status and the segment, turn the recording into the draft's text. **Neither stores anything**:
+no meeting, no chunk, no file and no row. The reviewed draft is added through FR-09's
+`POST /api/meetings` as `transcript_text`, exactly as pasted text is, which stays the one path
+into the index.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| GET | `/api/transcriptions/status` | session + `contribute_content` | `200 {"enabled": bool, "available": bool, "segment_seconds": 30, "maximum_segment_seconds": 60}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE`, one budget with the segments |
+| POST | `/api/transcriptions` | session + `contribute_content` | `200 {"status": "transcribed", "text": "...", "model": "whisper-v3:turbo", "duration_seconds": 29.6, "loudest_dbfs": -18.4}`, or `200 {"status": "silent", "text": "", "model": null, "duration_seconds": 30.0, "loudest_dbfs": -61.2}` | `401`; `403` the role lacks `contribute_content`; `429` past `TRANSCRIPTION_THROTTLE_RATE` (DRF's body, with `Retry-After`); `503 {"detail": "...", "code": "transcription_disabled"}` transcription is not enabled on this server; `413` a declared `Content-Length` over 50 MB, or a segment over it; `400 {"audio": ["..."]}` no `audio` part, a segment with no audio frames, or one longer than `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS`; `415` not a 16-bit PCM mono WAV at 16 kHz, or a body that is not multipart; `429 {"detail": "...", "code": "transcription_in_flight"}` another segment of this user's is with the provider; `429 {"detail": "...", "code": "transcription_busy"}` with `Retry-After` (5 s), the server is already transcribing `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` (2) segments; `503 {"detail": "...", "code": "transcription_unavailable"}` the provider failed after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, or refused the segment (D-118) |
+
+**The request is `multipart/form-data`**, one field, `audio`: one segment of the recording as a
+16-bit PCM WAV. The page decodes the recording in the browser, resamples it to 16 kHz mono and cuts
+it into segments of at most `segment_seconds`, at the quietest tenth of a second in each segment's
+last third (the last may run up to a second longer), then sends them one at a time. The recording itself never reaches the server, so the
+50 MB ceiling bounds each segment, not the recording; the page bounds the recording at
+`MAXIMUM_RECORDING_BYTES` (500 MB), which only the client enforces. A cross-site multipart POST is
+refused for want of the CSRF token, as on the upload.
+
+**The rejection order** is fixed, each before any provider call: `401`, `403`, the `429` rate, the
+`503` `transcription_disabled`, the `413` on the declared length, the `400` for no `audio`, the `413`
+on the bytes received, the `415`, the `400` for an empty or over-long segment. Then a silent segment
+is answered `200` `silent`, then the in-flight `429`, then the busy `429`, then the provider.
+
+**Since D-124 the order is of the reading too.** Nothing reads the body before the declared-length
+`413`, so a body refused there or earlier is never parsed.
+
+- **How:** the CSRF check takes its token from the `X-CSRFToken` header and parses nothing.
+- **What still bounds receiving:** Waitress's cap, `MAX_REQUEST_BODY_BYTES` (see Stage 2).
+- **Corrected 11 November 2026.** Until D-124 this paragraph said, truly, that a session sending its
+  CSRF token had its whole multipart body parsed by DRF while authenticating, before any of these
+  answers. D-123 recorded that as open, and its dated note records the close.
+
+**Only what the page sends is accepted:** a 16-bit PCM mono WAV at 16 kHz.
+
+**Format is decided by the bytes.** A WAV is a RIFF file whose form type is `WAVE`; the filename
+and the part's declared type are never consulted.
+
+**Silence never reaches Whisper.** The server measures the segment's loudest half second, and below
+`TRANSCRIPTION_SILENCE_DBFS` (-45 dBFS) answers `silent` without calling the provider: Whisper
+invents text from silence. Every reply carries that level as `loudest_dbfs`, rounded to a tenth,
+and `null` for digital silence, so the threshold (*tune*) can be checked on real recordings. What is sent to the provider is a WAV rebuilt from exactly the frames
+measured, so a header that understates its data cannot carry more audio past the checks.
+
+**The 503s are told apart by `code`.** `transcription_disabled` means paste or upload the
+transcript instead; `transcription_unavailable` means nothing was stored and the same segment can
+be sent again. The page keeps the recording and the draft through either (invariant 8). After
+`transcription_unavailable` it resumes from the failed segment; after `transcription_disabled` there
+is nothing to resume until transcription is switched on again.
+
+**`available` means FLM answered, not that its speech model is loaded.** FLM's model list names
+its chat catalogue, not `whisper-v3:turbo`, so a server started without `--asr 1` reports
+available and fails the first segment, which the page shows as unavailable. No provider detail is
+returned: it names an internal address.
+
+**Transcription is off by default** (`TRANSCRIPTION_PROVIDER=none`), so a host without the NPU
+offers no control that cannot work (D-114). Such a host still ingests a transcript made elsewhere,
+saved from the page as a text file, through FR-09's file option.
+

@@ -1,6 +1,6 @@
 """D-79's per-user rate throttles, D-80's create throttle, and ``NUM_PROXIES``.
 
-Five scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.py``:
+The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.py``:
 
 - ``ask`` on ``POST /api/ask``;
 - ``ingestion``, one budget shared by ``POST /api/documents``, ``POST /api/meetings``,
@@ -9,7 +9,9 @@ Five scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/constants.p
 - ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
 - ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
 - ``tagging`` on ``POST /api/documents/{id}/tags``, since D-79's note on tagging of the same night
-  (D-105's security review, finding 4).
+  (D-105's security review, finding 4);
+- ``transcription`` on ``POST /api/transcriptions``, one recording segment per request, and on
+  ``GET /api/transcriptions/status``, which asks FLM for its model list (D-123).
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -52,6 +54,7 @@ from apps.core.constants import (
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TOPIC_DIMENSION,
+    TRANSCRIPTION_THROTTLE_RATE,
 )
 from apps.documents.models import ContentTag, Document, Tag
 from apps.retrieval.models import Conversation, QueryLog, SearchLog
@@ -128,6 +131,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert CONVERSATION_CREATE_THROTTLE_RATE == ASK_THROTTLE_RATE
     assert SEARCH_THROTTLE_RATE == "30/min"
     assert TAGGING_THROTTLE_RATE == "30/min"
+    assert TRANSCRIPTION_THROTTLE_RATE == "60/min"
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
@@ -135,6 +139,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
         "conversation_create": CONVERSATION_CREATE_THROTTLE_RATE,
         "search": SEARCH_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
+        "transcription": TRANSCRIPTION_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -418,3 +423,40 @@ def test_one_users_tagging_budget_is_not_anothers(
     assert_rate_throttled(type_topic(clients[spender], document.id, "night shifts"))
 
     assert type_topic(clients[other], document.id, "night shifts").status_code == 201
+
+
+# --- transcription (D-123) -----------------------------------------------------------------
+
+TRANSCRIPTIONS_URL = "/api/transcriptions"
+TRANSCRIPTION_LIMIT = allowed(TRANSCRIPTION_THROTTLE_RATE)
+
+
+def segment_without_audio(client):
+    """The cheapest request the route refuses: with transcription off, as conftest.py leaves it,
+    it is answered 503 before its body is read, and still counts against the rate."""
+    return client.post(TRANSCRIPTIONS_URL, {}, format="multipart")
+
+
+def test_the_transcription_scope_answers_429_past_its_rate(session_client):
+    client = session_client.client
+    for number in range(1, TRANSCRIPTION_LIMIT + 1):
+        assert segment_without_audio(client).status_code == 503, number
+
+    assert_rate_throttled(segment_without_audio(client))
+
+
+def test_one_users_transcription_budget_is_not_anothers(employee_client, administrator_client):
+    for _ in range(TRANSCRIPTION_LIMIT):
+        segment_without_audio(employee_client)
+    assert_rate_throttled(segment_without_audio(employee_client))
+
+    assert segment_without_audio(administrator_client).status_code == 503
+
+
+def test_the_transcription_status_shares_the_segment_budget(employee_client):
+    """Each status request asks FLM for its model list, so it is throttled in the same scope as
+    the segments (the security review of 11 November, suspicion S2)."""
+    for _ in range(TRANSCRIPTION_LIMIT):
+        segment_without_audio(employee_client)
+
+    assert_rate_throttled(employee_client.get("/api/transcriptions/status"))

@@ -103,6 +103,38 @@ That serves both models at `http://127.0.0.1:8625/v1`.
   `.venv/Scripts/python.exe scripts/check_flm.py`. It fails, exiting 1, when the embeddings are not
   deterministic.
 
+### Transcribing meeting recordings (Whisper on FLM)
+
+The meetings page can turn a meeting recording into a draft transcript, which a person reviews
+and then adds as an ordinary transcript (D-123). Only FLM has speech-to-text, so this needs
+FLM on the NPU laptop whichever `AI_PROVIDER` is set. It is off unless `.env` says:
+
+```
+TRANSCRIPTION_PROVIDER=flm
+```
+
+Pull the speech model once (623 MB), then serve it beside `gemma3:4b` and `embed-gemma` with `--asr 1`:
+
+```powershell
+flm pull whisper-v3:turbo
+```
+
+```powershell
+flm serve gemma3:4b --embed 1 --asr 1
+```
+
+- **Check for an FLM server already running first** (`Get-Process flm`). Windows lets a second
+  `flm serve` process listen on port 8625 beside the first; requests then go to either, and the
+  newer one could not load its model. Stop the old one before starting this one.
+- **The recording stays in the browser.** The page decodes it (audio, or the sound of a video such
+  as a Game Bar MP4, up to 500 MB) and sends it to `POST /api/transcriptions` in WAV segments of
+  about 30 s. FLM transcribes at about a quarter of real time, so an hour's meeting takes about fifteen
+  minutes.
+- **Nothing is added until a person ticks that they reviewed the draft.** Whisper mishears names,
+  numbers and dates, and writes dates the US way.
+- **A host without the NPU** keeps `TRANSCRIPTION_PROVIDER=none`. The draft can be saved as a text
+  file on the laptop and added on that host as a transcript file.
+
 ### Switching an existing database
 
 A database is indexed for one provider at a time:
