@@ -188,11 +188,12 @@ Paste the step 1 block, then, every time the server starts:
 ```powershell
 $env:DEBUG = 'False'                                 # .env says True; only the shell overrides it
 $env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"   # the same path the run.ps1 window has
-& $waitress --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+& $waitress --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
 
-This is D-85 §2's command, `waitress-serve --listen=127.0.0.1:8000 --threads=24
-config.wsgi:application`, run from the venv's `Scripts` folder so that it is the venv's Waitress.
+This is D-85 §2's command with D-124's body cap,
+`waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`,
+run from the venv's `Scripts` folder so that it is the venv's Waitress.
 The two lines before it repeat step 1's on purpose: a server started from a window without them
 runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `logs\waitress.log`.
 
@@ -202,6 +203,11 @@ runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `lo
 - **`--threads=24` is set explicitly** (D-85 §3). Waitress's default is 4, which NFR-08's five
   users already exceed. 24 is NFR-09's 20 users plus 4 for screens, logins and uploads, so a load
   run waits on the NPU, not in Waitress.
+- **`--max-request-body-size=54525952` caps any request body** (D-124), at
+  `MAX_REQUEST_BODY_BYTES`, 2 MB over the 50 MB upload limit. Without it Waitress takes bodies up to
+  1 GB. It changes nothing a run measures. The largest measured request is the ingestion's
+  oversized item I02, generated 1 MB past 50 MB, so it stays under the cap and still gets the API's
+  own 413; a test ties the two. `run.ps1` does not check the flag.
 - **Waitress writes its own log** to `$root\logs\waitress.log` (D-87 §3). Its first line is
   `Serving on http://127.0.0.1:8000`, with a timestamp: that line is how `run.ps1` knows when the
   server started. A `Task queue depth is N` line means a request arrived with no thread free;

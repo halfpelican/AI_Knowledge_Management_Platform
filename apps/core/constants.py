@@ -295,8 +295,22 @@ MINIMUM_CONTENT_LENGTH = 50
 
 # The proposal's section 7.0 names this MAXIMUM_UPLOAD_SIZE; CLAUDE.md section 5
 # names it MAX_UPLOAD_BYTES, and the byte unit is in the name here. Enforced before
-# the file is read into memory (FR-08 Validation).
+# the file is read into memory (FR-08 Validation): against the declared length, before the
+# body is parsed. That holds since D-124. Before it, the CSRF check parsed a signed-in
+# session's body first.
 MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # 50 MB
+
+# The web server's own ceiling on a request body, in bytes, on every route: waitress-serve's
+# --max-request-body-size (D-124). Waitress refuses a declared Content-Length at or above it,
+# with its own plain-text 413, before it reads the body. So no body declared larger is received,
+# spooled to a temporary file or parsed. A chunked body declares no length: Waitress counts it as
+# it arrives and refuses it at the cap. Without the flag the ceiling is Waitress's default, 1 GB.
+# Two MiB above MAX_UPLOAD_BYTES, so a body a little over the upload ceiling still reaches the
+# view and gets the API's JSON 413 rather than Waitress's text. That includes the Objective 02
+# ingestion's oversized item: scripts/ingest_objective02.py generates it 1 MiB past the ceiling,
+# so its recorded outcome, the view's 413, is unchanged. Every documented serve command carries
+# this value, and apps/api/tests/test_request_body_bound.py reads them.
+MAX_REQUEST_BODY_BYTES = MAX_UPLOAD_BYTES + 2 * 1024 * 1024  # 54525952
 
 # Formats admitted at upload, established from the file's CONTENT (FR-08:
 # "confirmed by inspecting the file signature rather than the extension alone").

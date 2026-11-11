@@ -198,13 +198,24 @@ $env:FLM_BASE_URL          = 'http://127.0.0.1:8625/v1'
 $name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
 "Django will connect to: $name"
 if ($name -ne 'kmp_demo_20261101') { throw "Not starting: the database is '$name', not kmp_demo_20261101." }
-& "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+& "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
 
 - **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
   automatically", so `$name` holds two lines, never equals `kmp_demo_20261101`, and the check
   refuses even the right database.
 - **24 threads, set explicitly** (D-85). Waitress defaults to 4.
+- **A request body is capped at 54,525,952 bytes, set explicitly** (D-124). That is
+  `MAX_REQUEST_BODY_BYTES`, 2 MB over the 50 MB upload limit.
+  - **Why:** without the flag, Waitress accepts any body up to 1 GB. It reads the body, spooling it
+    to a temporary file, before the application sees the request, so nothing in Django can refuse
+    it sooner.
+  - **Above the cap:** Waitress refuses the body unread, at its headers, with its own plain-text
+    413 instead of the API's JSON. It then closes the connection, so a client still sending may
+    see the connection reset instead of the 413. A chunked body declares no length, so it is
+    refused once it reaches the cap. The SPA never sends that much: it refuses a file over 50 MB
+    before sending it.
+  - **Under the cap:** a body over 50 MB still gets the API's own 413.
 - **The console stays quiet.** Waitress's own lines go to `WAITRESS_LOG_PATH` (D-87). From another
   window, `Get-Content C:\kmp-demo\2026-11-01\logs\waitress.log -Tail 1` shows
   `Serving on http://127.0.0.1:8000`.

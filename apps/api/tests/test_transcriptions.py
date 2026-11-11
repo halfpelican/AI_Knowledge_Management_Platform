@@ -316,8 +316,9 @@ def test_a_session_without_the_csrf_token_is_refused(employee, transcription_on)
 
 def csrf_session(user):
     """A session that sends its CSRF token, as the page does: the cookie from GET /api/auth/me, and
-    the token in X-CSRFToken on every POST. DRF parses such a request's body while it checks the
-    token, before the permission and the size checks (the security review of 11 November)."""
+    the token in X-CSRFToken on every POST. Until D-124, DRF parsed such a request's body while it
+    checked the token, before the permission and the size checks (the security review of
+    11 November). Since D-124 the check reads the header only and parses nothing."""
     client = APIClient(enforce_csrf_checks=True)
     client.force_login(user)
     assert client.get("/api/auth/me").status_code == 200
@@ -336,11 +337,11 @@ def test_a_session_sending_its_token_is_answered_as_any_other(session_client, tr
 def test_a_session_sending_its_token_still_gets_the_403_and_the_413(
     session_client, transcription_on, stub_ai_service, monkeypatch
 ):
-    """The answers keep their order with CSRF enforced; what the order does not do is spare the
-    parse (D-123, "What it does not cover"). That shows here too: a declared length larger than the
-    bytes sent, which the plain client's 413 test uses, cannot be sent with the token, because DRF
-    reads the whole declared body while checking it. So the ceiling is lowered and a real body sent
-    over it."""
+    """The answers keep their order with CSRF enforced. The ceiling is lowered and a real body sent
+    over it, as when this test was written: then the CSRF check read the whole declared body, so a
+    declared length larger than the bytes sent could not be sent with the token. Since D-124 nothing
+    reads the body before the 413. ``test_request_body_bound.py`` shows that by counting the bytes
+    read, for this route as for the upload routes (D-123's dated note)."""
     client, token = csrf_session(session_client.user)
     monkeypatch.setattr("apps.api.views.MAX_UPLOAD_BYTES", 1000)
     oversized = post_segment(client, build.tone(1.0), **token)
