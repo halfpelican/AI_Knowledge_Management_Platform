@@ -1,0 +1,2 @@
+Restored the snapshot of kmp_obj02_20261101 into the new database kmp_obj0506_anthropic_20261110, and its media into C:\kmp-measurement\2026-11-10-obj0506-anthropic\media (dump sha256 3bf98403354dbabceb54052b99b45a25f5f39d4fd685cca1e07233aa1e166f59). kmp_obj02_20261101 was not touched.
+Next: manage.py migrate against it, for any migration newer than the snapshot.

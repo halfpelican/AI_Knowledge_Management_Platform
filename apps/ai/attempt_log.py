@@ -164,7 +164,8 @@ def failed_attempt(
     *,
     reply: ReplyFacts | None = None,
 ) -> None:
-    """One failed attempt of ``step``: "generation", "question embedding" or "classification".
+    """One failed attempt of ``step``: "generation", "question embedding", "classification" or,
+    since D-123, "transcription" (one recording segment).
 
     ``reply`` is passed for a generation or a classification attempt, and adds the bracket.
     """

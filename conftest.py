@@ -93,6 +93,9 @@ def no_live_provider(monkeypatch):
         VOYAGE_BASE_URL=UNROUTABLE_PROVIDER_URL,
         ANTHROPIC_API_KEY="",  # nothing in a developer's .env can reach a metered API
         VOYAGE_API_KEY="",
+        # Recording transcription is off, as it is by default (D-123), whatever a
+        # developer's .env says: a test that needs it on says so with override_settings.
+        TRANSCRIPTION_PROVIDER="none",
     ):
         yield
 
