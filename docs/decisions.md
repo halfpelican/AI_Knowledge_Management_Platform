@@ -7869,6 +7869,26 @@ review of that night.**
   (D-66). A test now requires every role holding `review_knowledge_gaps` to have the
   Administrator's effective roles (D-107's note of the same night, L3).
 
+**Dated note, 11 November 2026: on voyage-4 the development check fails under rank-one, and the user
+chose threshold-first for that model (D-126).**
+
+- **The check was not repeated before the thirty ran on `anthropic`,** as this entry's note of 10
+  November and D-110's note on the FLM configuration ask. That was an oversight, owned in #86's
+  write-up. Run afterwards, on commit `9527cd7` and `kmp_obj0506_anthropic_20261110`
+  (`corpus/objective-06/runs/2026-11-10-anthropic/exclusion-dev-check-voyage/`), it fails:
+  - scoped questions left out: u30, u31, u32, d11, d21, d22, as they should be;
+  - no-answer questions kept: u33, u34, u35, u37, d24, d25, d26;
+  - **no-answer questions left out: u36 and d27.** Their top-ranked passages score 0.230 and 0.238,
+    under voyage-4's 0.2687, and are Administrator-only.
+- **That is the evening note's "known cost", now observed.** On embed-gemma no development or frozen
+  question had the shape. On voyage-4 u36, d27 and the thirty's U01 have it.
+- **The fallback was not followed as written.** This entry says the margin rule is chosen on the
+  development material when the check fails, and that the thirty are never used to choose. On
+  voyage-4 the margin rule and step 4's threshold-first both pass the check, and the user chose
+  threshold-first, informed by the thirty. D-126 records the choice and both departures.
+- **Rank-one is still the rule for every model `GAP_EXCLUSION_RULE_BY_MODEL` does not list,**
+  embed-gemma included. No FLM result in this entry changes.
+
 ## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
@@ -8063,6 +8083,17 @@ was made once, by the user's decision, and disclosed, with the first cycle kept 
 result. The file is frozen and is not edited; this note supersedes its line. The rule now shipped
 has no independent figure (the requirements audit, D-119, its finding 8). The thirty remain the
 acceptance test for a decline fix, as above.
+
+**Dated note, 11 November 2026: the thirty informed a second rule choice, for voyage-4, and it is
+named as a departure from D-93 (D-126).** The thirty's first cycle on `anthropic` left U01 out under
+rank-one (#86: clause 1 not met, clauses 2 and 3 met). The user then chose threshold-first for
+voyage-4, and the choice between it and the margin rule used the thirty's P02 and U01. So the night
+note's "made once" is true of `333be14` only. As there, the first cycle on that configuration stays
+the independent result, the rule now shipped for voyage-4 has no independent figure, and the file is
+frozen and is not edited. The repeated seeding that this entry's note on the FLM configuration asks for
+on `anthropic` was run as draws 1, 2 and 3: they are in D-126 and
+`corpus/objective-06/runs/2026-11-11-anthropic/objective-06-d126.md`. FR-12's declines are not scored
+there.
 
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
@@ -10227,3 +10258,136 @@ documented answer except the one in decision 2.
 version of this change, and found the three Django-checked routes and a false premise about JSON.
 This entry and the code carry both corrections, and the tests above were re-run against the old
 code.
+
+## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
+
+**Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,
+D-110, D-93, D-120, D-122, `apps/core/constants.py`, `apps/retrieval/gaps.py` · **Departs from:**
+D-93 and D-108's fallback, both disclosed below
+
+**What prompted it:** Objective 06's verification on the `anthropic` provider (#86,
+`corpus/objective-06/runs/2026-11-10-anthropic/`).
+
+- **The thirty's first cycle on voyage-4** met clauses 2 and 3, and not clause 1: U01 was missing
+  from the log.
+  - U01 ("Will my salary rise with inflation?", asked by the Employee) is a genuine gap, and D-108's
+    rank-one rule left it out.
+  - Its top-ranked passage over the Administrator's scope scores 0.197 and is Administrator-only.
+    The best readable one scores 0.1875.
+- **D-108's development check came after that cycle.** D-108's note of 10 November and D-110's note
+  on the FLM configuration ask for it on a new configuration before the thirty run there. On
+  voyage-4 it was not run first, an oversight owned in #86's write-up.
+  - Run afterwards, it fails. The scoped questions are all left out, as they should be. Of the
+    no-answer questions, u36 and d27 are left out too, in U01's way (0.230 and 0.238,
+    Administrator-only).
+  - On embed-gemma it passed (D-108's notes of 10 November).
+- **The cause:** the rank-one rule meets Voyage's lower scores for out-of-corpus questions. A
+  genuine gap's best match is weak, and it can fall on restricted material. This is the "known cost"
+  of D-108's evening note. It was unmeasured on embed-gemma, where no question had the shape.
+
+**The options put to the user.** D-108 says that when the check fails, the margin rule is chosen on
+the development material. On voyage-4 two rules pass the check
+(`corpus/objective-06/runs/2026-11-11-anthropic/exclusion-rule-exploration/`):
+
+- **The margin rule.** A row is left out when its restricted top passage beats the best readable
+  one by at least m. Here m = 0.0939, the midpoint between d27's margin (0.0659, the larger of the
+  no-answer margins, u36's and d27's) and d21's (0.1218, the smallest scoped margin).
+- **Threshold-first,** step 4 of D-108's rule as first written, at the model's own threshold
+  (0.2687, D-120). It needs no new constant.
+
+The development questions cannot choose between them. On the frozen thirty they differ. That is
+arithmetic on the diagnosis of #86's cycle (`exclusion_diagnosis.txt` there), not a new run:
+
+- the margin rule would keep P02, whose margin is 0.0448, so a permission-only question would be in
+  the log and clause 3 would not be met;
+- threshold-first leaves P02 out (0.2812, above 0.2687) and keeps U01 (0.197, below it).
+
+**Decision (the user's, 11 November): threshold-first for voyage-4.**
+
+- **The map:** `GAP_EXCLUSION_RULE_BY_MODEL = {"voyage-4": "threshold-first"}`. Any model not
+  listed, embed-gemma included, keeps `GAP_EXCLUSION_RULE = "rank-one"` (`333be14`).
+  `gaps.exclusion_rule()` reads both at call time, as `grouping_threshold()` reads its map.
+- **The rule:** if no passage reaches the model's own relevance threshold (`ranking.admit`), nobody
+  could have been answered, and the row is a gap. Otherwise the top admitted passage decides, as
+  before.
+- **Why embed-gemma keeps rank-one:** threshold-first kept P02 there, at 0.2977 to 0.2983 against
+  0.30 (D-108's evening note). Nothing was measured again on embed-gemma for this entry.
+
+**Two departures, disclosed.**
+
+- **From D-93.** The choice between the two passing rules used the frozen thirty's P02 and U01. The
+  earlier departures on frozen sets are named in D-106's and D-110's notes of 10 November (night);
+  this one is on the same thirty as D-110's, which now carries its own note. The thirty's first
+  cycle on voyage-4 (#86) stays the independent result. The rule now shipped for voyage-4 has no
+  independent figure.
+- **From D-108's fallback.** D-108 says the margin rule is chosen when the check fails, and that the
+  thirty are never used to choose. The margin rule was not chosen, and the thirty were used. D-108
+  carries a dated note.
+
+**Verified** on `fix/FR-19-exclusion-voyage`. The evidence is
+`corpus/objective-06/runs/2026-11-11-anthropic/`, and `objective-06-d126.md` there is the write-up.
+
+- **Tests,** in `apps/retrieval/tests/test_knowledge_gaps.py`, each named with the deliberate
+  breaks of `gaps.py` under which it fails. The breaks are listed after the table.
+
+  | Test | Fails under |
+  |---|---|
+  | `test_the_exclusion_rule_is_the_embedding_models_own` | A, B |
+  | `test_on_voyage_a_restricted_best_match_under_the_threshold_is_a_gap` (U01's shape) | A, D |
+  | `test_on_voyage_a_readable_best_match_under_the_threshold_is_a_gap` | D |
+  | `test_on_voyage_a_restricted_top_admitted_passage_is_left_out` | E |
+  | `test_on_voyage_a_restricted_answer_between_the_two_thresholds_is_left_out` (P02's shape) | C, E |
+  | `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` | E |
+  | `test_on_voyage_an_administrators_question_is_always_kept` | D, F |
+  | `test_rank_one_still_decides_below_the_threshold_for_a_model_not_listed` | B |
+
+  - A: voyage-4 forced back to rank-one.
+  - B: every model forced to threshold-first. The existing
+    `test_a_question_whose_best_passage_is_restricted_is_left_out_below_the_threshold` fails too.
+  - C: threshold-first judged by EmbeddingGemma's threshold instead of the model's own.
+  - D: threshold-first, with nothing admitted meaning left out.
+  - E: threshold-first never leaving an admitted row out.
+  - F: every asker judged as an Employee. The existing
+    `test_an_administrators_unanswered_question_is_always_kept` and
+    `test_the_asker_role_is_read_from_the_user_row_at_cycle_time` fail too.
+  - **A correction to `b854288`'s message.** It says every new test failed under a deliberate
+    break. Under its two breaks, A and B, that was true of the first, second and last rows above
+    only. The test for P02's shape and breaks C to F were added afterwards, in `14d9629`.
+- **D-108's check on the shipped code,** run twice at `462e8e9`
+  (`exclusion-dev-check-threshold-first/`): it passes both times. Scoped questions left out: u30,
+  u31, u32, d11, d21, d22. No-answer questions kept: u33, u34, u35, u36, u37, d24, d25, d26, d27.
+- **Objective 06 on `anthropic`, three draws** (D-110's note asks for repeated seeding there, and
+  the user asked for three):
+  - draw 1, on rank-one (#86): clause 1 not met, U01 missing; clauses 2 and 3 met;
+  - draws 2 and 3, on this rule at `462e8e9`: all three clauses met on each. Every expected query
+    is in the log, each of the four subjects has one entry counting its three queries, and no
+    permission-only query is in the log;
+  - generation's outcome was the same on the three draws: A01 to A07 answered; U04, U05, P07 and
+    P08 declined after generation (path B); every other ask a no-answer on path A.
+
+**What it costs:**
+
+- **A possible leak.** A permission-only question whose restricted answer scores under 0.2687 would
+  be kept, so its wording would reach the gap log, which FR-19's validation clause forbids. Neither
+  the development questions nor the thirty have one: their restricted answers score from 0.2812
+  (P02) to 0.56 (u32). P02 sits 0.0125 above the threshold, about 27 times Voyage's jitter of
+  0.00047. The size of this cost beyond this corpus is unmeasured.
+- **A coupling to D-120.** The rule rests on voyage-4's relevance threshold, so re-tuning that
+  value moves the exclusion too. The test for P02's shape is designed from the threshold, not a
+  literal, and follows it.
+
+**Not covered:**
+
+- embed-gemma, or any model other than voyage-4, under threshold-first: not measured for this entry.
+- An independent test of the voyage-4 rule: none exists, as above.
+- A permission-only question scoring under 0.2687: none in either set, so the leak's rate is not
+  known.
+- The zero-result search side: unchanged. D-108's recount as the Administrator does not use this
+  rule.
+- FR-12's declines on these draws: not scored here. Each draw's rows are exported
+  (`draw-N/export.json`) for that scoring.
+- D-108's own "Not covered" list (FR-13 composition, a role recorded at ask time, re-evaluation
+  after a visibility change): it stands.
+
+**Where it applies:** `apps/core/constants.py`, `apps/retrieval/gaps.py` and
+`apps/retrieval/tests/test_knowledge_gaps.py`. D-108 and D-110 carry dated notes.
