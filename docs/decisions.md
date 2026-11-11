@@ -5861,16 +5861,26 @@ report a serving socket's state wrongly.** The user asked for this on main after
   - the server and its thread count are still read from the found process's command line;
   - the process at the end must still be the one observed before the run. Another PID, no
     process, or a "Serving on" line inside the window still marks the run INVALID.
-- **Tried on the laptop on 11 November,** with `python -m http.server` on scratch ports
-  (`corpus/objective-02/runs/2026-11-11-listener-lookup/`):
-  - **With the listener answering,** the Listen row and netstat showed nothing for it, and the
-    port's own row named its PID, in state 0 or 1. Step 3 found it.
-  - **A Listen row and a netstat LISTENING line naming PID 0** were seen twice: once beside an
-    answering listener's own row, and once about 40 s after a listener had stopped. PID 0 is not a
-    process. Step 1 takes a Listen row only with a readable command line, so such a row does not
-    end the search. A first draft of this change took any Listen row that named a PID, and
-    returned PID 0 on the first of these. It was corrected before it was committed.
-  - **With nothing listening,** the lookup said so after about 54 s.
+- **Tried on the laptop on 11 November,** with `python -m http.server` on scratch ports. The
+  record is `corpus/objective-02/runs/2026-11-11-listener-lookup/`, and its `README.md` gives
+  each trial.
+  - **At 14:44, with the fault present.** With the listener answering, the Listen row and netstat
+    showed nothing for it, and the port's own row named its PID, in state 0 and then 1. Step 3
+    found it, in 2.8 s. With the listener stopped, the lookup gave up after 53.8 s.
+  - **A Listen row naming PID 0, and at times a netstat LISTENING line naming it too,** were seen
+    in that trial and in the one before it, at 14:42:
+    - beside an answering listener's own row, and again just after it stopped (14:42);
+    - about 40 s after a listener had stopped (14:44).
+
+    PID 0 is not a process. Step 1 takes a Listen row only with a readable command line, so such
+    a row does not end the search. A first draft of this change took any Listen row that named a
+    PID, and returned PID 0 in the 14:42 trial. It was corrected before it was committed.
+  - **At 19:15, after the laptop had restarted at 17:07, the fault did not show.** The committed
+    script (`421f9ed`) found the listener by its Listen row in 1.5 s. Netstat and the port's row
+    named the same PID, in state 2. With nothing listening, it said so after 50.8 s.
+  - **Only the 19:15 trial has a console on file.** The two earlier ones were not teed, and the
+    README quotes the session's console for them.
+  - **Whether a restart clears the fault is not known.** It is one observation.
 - **Tests,** in `apps/ai/tests/test_server_record_preflight.py`. Each fails under at least one
   deliberate break of the script, named after the list:
   - `test_netstat_names_the_pid_listening_on_the_port_and_no_other`: S5;
@@ -5915,7 +5925,9 @@ report a serving socket's state wrongly.** The user asked for this on main after
   - **A listener whose process cannot be read,** such as another user's or PID 4's. No lookup is
     credited with it, and the answer is the one given before, after the wait.
   - **The PowerShell and netstat commands themselves in the test suite.** The tests script each
-    lookup's output. The commands ran on the laptop only, in the trial above.
+    lookup's output. The commands ran on the laptop only, in the trials above.
+  - **The committed script against the fault, with a console on file.** The 14:44 trial ran the
+    script as committed, and its console was not kept. By 19:15 the fault had gone.
   - **`run.ps1`,** which still has no automated test (the built note's first "Not covered" line).
   - **NFR-08 again with this code.** Run 6's copy had the same lookup without the record fields.
   - **Measured runs before 11 November.** They are not re-examined for this fault.
