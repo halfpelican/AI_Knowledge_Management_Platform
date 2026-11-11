@@ -8757,6 +8757,123 @@ verdict.
 > - On `anthropic`, it is partial and unconfirmed: 9/9 on one draw per model, with no measured noise band.
 > - On both providers, D-42 narrows "prior turns" to prior questions, and "reachable from any page" has no front-end test.
 
+**Dated note, 12 November 2026: the draws were made on the evening of 11 November, and the
+resolving half of FR-13's follow-up clause is recorded as met on `anthropic`.** This is the
+further note the table above promised. It records a measurement, not an audit: FR-13's verdict
+stays INCOMPLETE until `requirements-auditor` reads it again. The text above this note is left as
+written.
+
+**The rule, committed before the first draw** (`049fefe`,
+`corpus/objective-02/runs/2026-11-11/haiku-draws/haiku-draws.md`). The user chose it on
+11 November from three put to him as a tabbed question. It was the recommended one.
+
+- **Three draws of the frozen nine on the default configuration:** the draw of 10 November
+  (`e04aab1`) and two new ones.
+- **Each draw:** with history at least 8/9, 0 leaks, 0 fabricated identifiers. That is
+  `haiku-round.md`'s bar, as the verdict's section (b) suggested.
+- **Across the draws:** no follow-up misses with history in more than one draw. t09 is exempt,
+  because its frozen prediction is a miss (D-42).
+- **One HTTP check on Haiku:** WIRED 3 of 3, 0 leaks, and turn two correct at least 2 of 3.
+- **The two not chosen:** the same bar with no condition across the draws, and 9/9 on every draw.
+
+**The result: the rule is met.**
+
+| | bar | draw 1, 10 Nov (`e04aab1`) | draw 2, 11 Nov (`bf384b2`) | draw 3, 11 Nov (`bf384b2`) |
+|---|---|---|---|---|
+| first turn | | 11/11 | 11/11 | 11/11 |
+| **with history** | at least 8/9 | **9/9** | **9/9** | **9/9** |
+| spelled out | | 9/9 | 9/9 | 9/9 |
+| cold | | 1/9 | 1/9 | 1/9 |
+| **leaks** | 0 | **0** | **0** | **0** |
+| **fabricated identifiers** | 0 | **0** | **0** | **0** |
+| a follow-up missed in more than one draw | none | | none missed at all | |
+
+- **One configuration, three times:** `claude-haiku-5-5`, `voyage-4` at 1024, threshold 0.2687 and
+  floor 0.2468, on `kmp_voyage_20261110` at dump `80ff46d4…`, with the thread set `acfe3d47…` and
+  rule v2. The harness copy of 10 November ran unchanged, in-process.
+- **The readings per follow-up are the same in every draw,** and the same as the verdict's
+  section (a) describes. t09 matched each time through retrieval of D17, not through the earlier
+  answer.
+- **The HTTP check on Haiku** (`0dd05c6`, `runs/2026-11-11/haiku-http-check/`): WIRED 3 of 3,
+  turn two correct 3 of 3, 0 leaks, through a Waitress started fresh with D-85's command.
+
+**The band, this provider's first measured one** (D-115: "measured on this provider, not carried
+over from D-103").
+
+- **No spread:** every way scored the same in all three draws, and 0 of the 44 runs changed
+  outcome or correctness. FLM's band was ±1–2 runs (D-103).
+- **The draws are repeats, not replays:** the verified statements differ in wording or count in 21
+  of the 44 runs.
+- **Retrieval jitters and did not move a cut:** the largest score difference for one passage was
+  0.00142. No run was supplied a different set of passages, and one was supplied the same set in
+  another order.
+- **It was measured at the ceiling, over three draws.** It does not bound the variation.
+
+**FR-13's status after the draws, per provider.**
+
+- **On `anthropic`, the default: the resolving half of the follow-up clause is met, on three
+  draws.** That is "so that pronouns and abbreviated references resolve correctly", as far as the
+  frozen nine test it. This is a measured pass, not an accepted deviation.
+- **On `flm`: unchanged.** The follow-up clause is partial, the deviation this entry accepted for
+  NIT3003. Nothing was measured on FLM in this run.
+- **On both providers, unchanged:**
+  - **D-42 stays a recorded deviation.** Prior questions are passed, never prior answers. No frozen
+    follow-up tests a referent that is only in an earlier answer.
+  - **"Reachable from any page" has its front-end test, since #91** (`d271917`, merged after the
+    draws): `frontend/tests/askNavLink.test.jsx` walks every route as each role. That is not this
+    run's work.
+
+**These sentences in the note above are overtaken by this one, and left as written:**
+
+- **"partial and unconfirmed. It is not recorded as met".** True when written, on one draw per
+  model. On three draws under a rule fixed first, the resolving half is now recorded as met.
+- **"Haiku has no HTTP check".** It has one now.
+- **"Left without an owner yet": `scripts/server_record.py:263`.** A Listen row that names
+  process 0 is now reported as unknown, with a note (`6124822`, two tests). The line number is
+  the verdict's, at `bd95f92`. Since #93 the guard is in `_listen_row_process`.
+  - **#93 merged first** (`25f6179`, on 11 November at 20:27; D-87's note of that day). The lookup
+    now falls back to netstat and to the port's own row, and it takes a Listen row only with a
+    readable command line, so a row naming process 0 no longer ends the search.
+  - **The guard sits inside #93's first lookup.** It matters when no lookup finds the listener and
+    a leftover Listen row names process 0. #93 alone then returns process 0, "as it always was".
+    With the guard, the record says the listener is unknown, and why.
+  - **The user decided on 12 November to keep the guard,** from a tabbed question. Its two tests
+    were adapted to #93's lookup. #93's own tests are unchanged and pass: they stub the first
+    lookup, so one of them still describes process 0 being returned, which the real lookup no
+    longer does.
+- **"no snapshot record is committed for dump `80ff46d4…`".** A copy of the snapshot record is in
+  `runs/2026-11-11/haiku-draws/snapshot.json`. The dump's SHA-256 was recomputed and is the
+  record's. The earlier run folders still hold none.
+
+**Section (c)'s defect 1 did not recur.** The check's record holds the server as observed:
+Waitress 3.0.2, 24 threads, pid 28208, started 08:23:05Z, `DEBUG` off. `server_observed.txt` holds
+the listener's row and command line, and `server_settings.txt` the model the server ran. The lookup
+found the listener, so the new guard was not exercised on a live server. The check ran at
+`0dd05c6`, before #93 was merged into this branch, so its lookup was the single Listen-row one.
+
+**What the pass does not show.** The verdict's own list, in section (a), stands: nothing from t08,
+no reference into an earlier answer, no shortened name or acronym, and no thread longer than two
+turns. To it:
+
+- **Reliability beyond three draws,** at the ceiling of a set of nine.
+- **Which model snapshot answered.** The records hold the configured name.
+- **Three cold follow-ups are answered, not declined, in every draw** (t02, t04 and t09, each from
+  another source). All score not correct, as predicted. Cold is not a path FR-13 uses. It is
+  FR-12's decline behaviour (D-110).
+
+**Spend:** about $0.050 of Claude credit, for 80 calls: $0.0232 and $0.0229 for the draws, and
+$0.0038 for the check. The user approved about $0.06 for this run (D-113).
+
+**Left to the user.**
+
+- **Stage 5's exit criterion.** `M6-BUILD-PROMPT.md`'s Done line admits FR-13's deviation "on the
+  FLM build". On the default build, the closing audit (item 10) now has a measured pass to cite for
+  the resolving half, and D-42 as the recorded deviation. The line's wording is not changed here.
+- **The re-audit.** `requirements-auditor` has not read FR-13 since these draws.
+
+**Where it applies:** `corpus/objective-02/runs/2026-11-11/`, and
+`docs/stage-5-clause-audit.md`'s section "After the draws (11 November 2026)".
+
 ## D-113 · D-35 is superseded: the `anthropic` provider is funded by the Max plan's monthly Claude API credits, and is brought into use
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-35, D-03, D-04, D-36, D-67,

@@ -273,6 +273,13 @@ def _listen_row_process(port: int) -> dict:
     except ValueError:
         found["note"] = "the process lookup printed something that is not JSON"
         return found
+    if reply.get("pid") == 0:
+        # Process 0 is Windows' System Idle Process. It listens on nothing, and its start is the
+        # machine's boot. The HTTP check of 10 November 2026 recorded it as the server, with that
+        # start (D-112's note of 11 November 2026, section (c), defect 1). It is not an observation.
+        found["note"] = (f"the Listen row for port {port} names process 0, the System Idle Process, "
+                         "which is not a server: the listening process is unknown")
+        return found
     found.update(pid=reply.get("pid"), command=reply.get("command") or None,
                  started_at=reply.get("started") or None)
     return found
@@ -383,7 +390,8 @@ def listening_process(port: int) -> dict:
     Two candidates in step 2 or 3 is not found. When no lookup names a process that can be read,
     the three are tried again every LOOKUP_RETRY_INTERVAL_SECONDS for about LOOKUP_RETRY_SECONDS,
     and then the Listen row's own result is returned, as it always was: nothing listening, or a
-    PID with no command line.
+    PID with no command line. It is never process 0: ``_listen_row_process`` reports a row that
+    names it as unknown, with a note (D-112's note of 12 November 2026).
 
     Each try is printed to stderr as it happens, so a wait shows its reason. Only how the
     process is found changes here. What a caller requires of it does not: the pre-flight still

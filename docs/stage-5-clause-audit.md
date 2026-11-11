@@ -553,3 +553,35 @@ written, `main` had moved to `d63518b`, by #85, #86 and #87, which add only run 
 - **The suites were not run by the auditor.** CI was green on `bd95f92` (run 42932385814).
 - **Which database the deployed alpha serves.** The auditor read no `.env`, and checked the alpha's
   commit only.
+
+## After the draws (11 November 2026)
+
+FR-13's follow-up clause on the default provider, measured again with repeated draws: two further
+thread draws of the frozen nine on Claude Haiku 5.5 with Voyage `voyage-4`, and one HTTP check on
+Haiku. The pass rule was committed before the first draw (`049fefe`), and the user chose it. The
+run is `corpus/objective-02/runs/2026-11-11/haiku-draws/haiku-draws.md`, and D-112's dated note of
+12 November records it. This section was written on 12 November, after #91 and #93 had merged.
+This is a measurement, not an audit: the re-audit's verdict, INCOMPLETE, stands until
+`requirements-auditor` reads FR-13 again. The rows above stay as written on their day.
+
+| Requirement | Clause | Before | After the draws | Evidence |
+|---|---|---|---|---|
+| FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ partial on both providers, each for its own reason; and "reachable from any page" has no front-end test (after the re-audit) | ⚠️ **on `anthropic`, follow-ups resolve on three draws; on `flm`, unchanged, an accepted deviation; "reachable from any page" has its front-end test since #91** | **`anthropic`, the default: "so follow-up questions need not restate the subject" is met on three draws.** With history, 9 of 9 in each: `runs/2026-11-10/haiku/threads.json` (`e04aab1`), and `runs/2026-11-11/haiku-draw-2/threads.json` and `runs/2026-11-11/haiku-draw-3/threads.json` (both `bf384b2`). In each draw: first turn 11 of 11, spelled out 9 of 9, cold 1 of 9, 0 leaks, 0 fabricated identifiers, and both scoped Employee follow-ups declined. The rule asked for at least 8 of 9 in every draw, and no follow-up missing in more than one. None missed in any. **Through the server, on Haiku:** WIRED 3 of 3, turn two correct 3 of 3, 0 leaks (`runs/2026-11-11/haiku-http-check/http_check.json`, `0dd05c6`), with the server observed: Waitress 3.0.2, 24 threads, `DEBUG` off. **The band, this provider's first:** no spread on any way, and 0 of 44 runs changed outcome between draws, though the wording changed in 21. It was measured at the ceiling, over three draws, and does not bound the variation. **`flm`: unchanged,** the deviation D-112 accepted for NIT3003. Nothing was measured on FLM. So the cell stays ⚠️. **"Reachable from any page":** tested since #91 (`d271917`, merged after the draws, and not this run's work). `frontend/tests/askNavLink.test.jsx` renders the application at every route as each role, and asserts the Ask link in the primary navigation with `href="/ask"` |
+| FR-13 | Maintains conversation context per session and passes prior turns alongside the new question so that pronouns and abbreviated references resolve correctly | ⚠️ declined in part on both providers (D-42); whether references resolve differs by provider (after the re-audit) | ⚠️ **declined in part on both providers (D-42), unchanged; on `anthropic`, "so that pronouns and abbreviated references resolve correctly" is met on three draws** | **The resolving half, on `anthropic`:** as in this table's Front-End row. Seven follow-ups show a pronoun resolving, in every draw: t01 to t05, and t06 and t07 asked by the Administrator. Each is correct with history and not correct cold. **What the pass does not show:** t08 is cold-answerable. t09 matched in every draw because the joined questions retrieved D17, which names the facilities team itself; the earlier answer was not used. The frozen follow-ups use pronouns and demonstratives, with no shortened name or acronym, and no thread is longer than two turns. **Prior questions only, on both providers (D-42):** unchanged, and still untested by any frozen follow-up. **On `flm`:** unchanged |
+
+- **The other FR-13 rows above are not touched by the draws:** the database operations (D-43), and
+  every clause the re-audit read as satisfied.
+- **"Until they are read, the `anthropic` cells above stand as written"** (the section above). They
+  have now been read. Those cells stay as written on their day, and this section's cells follow
+  them.
+- **Not covered by the draws,** from the section above: a reference into an earlier answer, a
+  shortened name or an acronym, and a thread longer than two turns. Haiku through the server is
+  now covered.
+- **Three cold follow-ups were answered, not declined, in every draw** (t02, t04 and t09, each from
+  another source, each scored not correct, as predicted). Cold is not a path FR-13 uses. It is
+  FR-12's decline behaviour (D-110), and no bar here depends on it.
+- **Stage 5's exit criterion** (`M6-BUILD-PROMPT.md`'s Done line) still admits FR-13's deviation
+  "on the FLM build" only. For the default build there is now a measured pass to cite for the
+  resolving half, with D-42 as the recorded deviation. Its wording is the user's, and it is not
+  changed here.
+- **Spend:** about $0.050 of Claude credit for the two draws and the check (D-113).
