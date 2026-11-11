@@ -97,6 +97,28 @@ class Transcription:              # D-123 — one recording segment's text, a dr
 
 class TranscriptionDisabled(ProviderUnavailable): ...  # TRANSCRIPTION_PROVIDER=none
 
+@dataclass(frozen=True)
+class SummaryElement:             # FR-16 — one narrative sentence, decision or highlight (D-125)
+    text: str
+    passages: tuple[int, ...]     # passage numbers as the reply gave them; NOT yet verified
+
+@dataclass(frozen=True)
+class ExtractedActionItem:
+    description: str
+    owner: str | None             # the name as the transcript gives it, or None
+    due: str | None               # the deadline as said ("next Friday"), or None
+    passages: tuple[int, ...]
+
+@dataclass(frozen=True)
+class MeetingSummaryDraft:
+    narrative: tuple[SummaryElement, ...]     # 1 to MAXIMUM_SUMMARY_SENTENCES
+    decisions: tuple[SummaryElement, ...]
+    highlights: tuple[SummaryElement, ...]
+    action_items: tuple[ExtractedActionItem, ...]   # may be empty; the key may not be missing
+    model: str                    # the chat model that answered, for the summary's record
+
+class MalformedSummary(ProviderUnavailable): ...  # two replies broke SUMMARY_SCHEMA (FR-16)
+
 class AIService(Protocol):
     def embed(self, texts: list[str], *, input_type: InputType | None = None) -> EmbeddingResult: ...
     def generate_statements(
@@ -110,6 +132,7 @@ class AIService(Protocol):
     def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
     def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription: ...
     def transcription_health(self) -> ProviderHealth: ...
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft: ...
 ```
 
 The operations are the ones listed on `AIService`, and the list is the source of truth, not a
@@ -117,8 +140,8 @@ count. `classify_document` arrived with FR-10 on 9 November 2026 (D-104), when N
 it; it lives in its own module, `apps/ai/classification.py`, so nothing in the generation prompt
 or its loop changed for it — section 5b. `transcribe` and `transcription_health` arrived on 10
 November 2026 with recording transcription (D-123), when the user asked for it — section 5c.
-Summarisation (FR-16) gets its own method the same way when its requirement is built, not
-speculatively before.
+`summarise_meeting` arrived on 11 November 2026 with FR-16 (D-125), in its own module,
+`apps/ai/summarisation.py` — section 5d.
 
 `generate_statements` raises `ProviderUnavailable` after
 `MAXIMUM_GENERATION_ATTEMPTS`, which the view turns into 503 with the NFR-19 notice.
@@ -141,6 +164,12 @@ failed attempt, and any other 4xx ends the attempts at once.
 `none`, and otherwise `ProviderUnavailable` after `MAXIMUM_TRANSCRIBE_ATTEMPTS`, with a 4xx handled
 as for generation (D-118). `POST /api/transcriptions` answers either with a 503 carrying its own
 code. `transcription_health` never raises (section 5c).
+
+`summarise_meeting` raises `ProviderUnavailable` after `MAXIMUM_SUMMARY_ATTEMPTS` failed calls,
+`ProviderRefused` at once for a 4xx other than a 429 (D-118), and `MalformedSummary` after the
+second reply that breaks `SUMMARY_SCHEMA`, because FR-16 allows a malformed response one retry
+(section 5d). No route waits on it: the run is in the background, and the caller marks the
+summary Unavailable and queues it for retry (NFR-20).
 
 ### `on_attempt` — an observer, not an operation
 
@@ -531,6 +560,54 @@ the confirmed draft goes in through FR-09's `POST /api/meetings`.
 
 ---
 
+## 5d. Meeting summaries (FR-16, D-125)
+
+`apps/ai/summarisation.py` holds the prompt, the schema, the tolerant parser and the attempt loop
+for `summarise_meeting`, as `classification.py` does for FR-10. Both providers call the loop with
+their one-call function (`_chat_once`, `_claude_once`), so the prompt strings are the same either
+way.
+
+- **One request returns everything:** FR-16's "single structured request returning both the
+  summary and the action items against a defined schema rather than prose". The reply is one JSON
+  object with exactly four keys: `summary` (1 to 6 narrative sentences), `decisions`, `highlights`
+  and `action_items`. All four are required and the last three may be empty arrays, so a reply
+  that omits the action-item section is a violation and one that lists none is a result (UC-04 A1).
+- **The transcript is sent as numbered passages.** The caller passes FR-09's own chunks of the
+  transcript, and the prompt heads them `[P1]` to `[Pn]`. Every element of the reply must carry
+  `passages`, at least one label of the form `P<n>`: UC-04's "every element of the summary carries
+  a reference to the passage of the transcript it was drawn from", as a schema rule.
+- **The parser checks a label's shape and nothing else.** Whether that passage was sent is set
+  membership, done by the caller in `apps/meetings/summaries.py`, as FR-12's citations are
+  verified outside the provider (invariant 5).
+- **The worked example's labels start at P41,** above the most passages any request carries
+  (`SUMMARY_INPUT_TOKENS // CHUNK_SIZE + 1`, 21). A label copied from the example therefore names
+  no real passage and verification drops it. An example using P1 would let a copied reference
+  silently cite the real first passage. `build_summary_user_prompt` refuses more passages than
+  that, so the guarantee is local.
+- **Owners and deadlines are copied, never resolved.** The prompt tells the model to copy an
+  owner exactly as the transcript names them, to take an "I'll" from the speaker's label, to leave
+  the owner null where nobody is named, and to copy a deadline word for word. Matching the name to
+  a user and converting the phrase to a date are application code (`apps/meetings/owners.py`,
+  `due_dates.py`).
+- **Untrusted text:** the label's header form inside a transcript or a title, `[P3]`, has its
+  square brackets turned round, D-45's transformation. A transcript that instructs the model in
+  prose can still steer the reply; what bounds it is the schema, the verified references, the
+  user list, the date parser, and a person who can edit every action item and regenerate.
+- **Attempts:** a failed call (a transport failure, a 5xx or a 429) is retried to
+  `MAXIMUM_SUMMARY_ATTEMPTS`, 1 initial call + 2 retries. A malformed reply gets exactly one
+  retry: the second is `MalformedSummary` even with an attempt left
+  (`MAXIMUM_MALFORMED_SUMMARY_REPLIES`). Any other 4xx is `ProviderRefused` at once. Each attempt
+  is logged under the step `summarisation` with the provider's token counts and no reply text.
+- **Ceilings:** FLM takes `SUMMARY_MAX_TOKENS` (3,000); Claude takes `CLAUDE_MAX_TOKENS`, because
+  its thinking counts against the ceiling (D-115). Both carry `SUMMARY_TIMEOUT_SECONDS` (600).
+
+**Not measured on `gemma3:4b`.** The development set and Objective 04 were run on the `anthropic`
+provider (D-125). On FLM the prompt is a first version with a tested parser and a tested retry
+path. A transcript near `SUMMARY_INPUT_TOKENS` is a far longer prompt than anything FLM has been
+measured on here.
+
+---
+
 ## 6. Testing
 
 Tests never reach a live FLM server. Inject a stub `AIService` returning fixed
@@ -545,6 +622,12 @@ instead of quietly succeeding against a developer's running server. The same fix
 sets `TRANSCRIPTION_PROVIDER` to `none` whatever a developer's `.env` says; a test that needs
 transcription on says so. The stub's `transcribe` returns a numbered text per segment
 (`stub_transcript_text`), and `transcription=` overrides it as `classification=` does.
+
+The stub's `summarise_meeting` returns one narrative sentence, one decision and one action item,
+each citing a passage that was sent, so the default survives verification; `summary=` overrides it
+with a draft or a callable. `conftest.py` also sets `SUMMARY_RUNNER` to `inline`, so a summary's
+run happens in the test's own thread when the test executes the commit callbacks, and never in a
+background thread that would outlive the test.
 
 ---
 

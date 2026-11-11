@@ -102,14 +102,16 @@ class AIService(Protocol):
     def classify_document(self, title: str, text: str, scheme: TagScheme) -> DocumentClassification: ...
     def transcribe(self, audio: bytes, *, filename: str = "segment.wav") -> Transcription: ...
     def transcription_health(self) -> ProviderHealth: ...
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft: ...
 ```
 
 The list, not a count, is the source of truth. `classify_document` arrived with FR-10 on 9 November
 2026 (D-104). `transcribe` and `transcription_health` arrived on 10 November 2026 with recording
 transcription (D-123): only FLM has speech-to-text, so the FLM and Anthropic providers alike send a
 segment to FLM's Whisper, selected by its own `TRANSCRIPTION_PROVIDER` (`none` by default), not by
-`AI_PROVIDER`. Summarisation (FR-16) is added the same way when its
-requirement is built, not before.
+`AI_PROVIDER`. `summarise_meeting` arrived on 11 November 2026 with FR-16 (D-125): one
+structured call returning a meeting's summary and action items, on whichever provider
+`AI_PROVIDER` names.
 
 Two implementations, selected by the `AI_PROVIDER` environment variable:
 
@@ -201,6 +203,12 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_EMBED_ATTEMPTS` | **3** — 1 initial call + 2 retries, then flag the item |
 | `MAXIMUM_CLASSIFY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-10, NIT3004) |
 | `MAXIMUM_TRANSCRIBE_ATTEMPTS` | **3** — 1 initial call + 2 retries (recording transcription, D-123) |
+| `MAXIMUM_SUMMARY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-16, D-125) |
+| `MAXIMUM_MALFORMED_SUMMARY_REPLIES` | **2** — 1 malformed reply + 1 retry, within the three (FR-16: "a malformed response triggers one retry") |
+| `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH` | 200 tokens, *tune* — below this a transcript is not summarised and the summary routes answer 422 |
+| `SUMMARY_INPUT_TOKENS` | 10,000 tokens, *tune* — the most of a transcript one summary request carries, as whole passages |
+| `MAXIMUM_SUMMARY_RETRY_RUNS` / `SUMMARY_STALE_AFTER_SECONDS` | 3 queued runs, then a failed summary leaves NFR-20's retry queue / 2,400 s, after which a run still Processing is an orphan |
+| `MAXIMUM_SUMMARIES_IN_FLIGHT` | 2 — background summary runs calling the provider at once in one server process |
 | `TRANSCRIPTION_SEGMENT_SECONDS` / `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` | 30 s, the page's segment / 60 s, the most the server transcribes in one request |
 | `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |
 | `MAXIMUM_RECORDING_BYTES` | 500 MB — the largest recording the page decodes; client-only, since the recording never reaches the server |
