@@ -12,6 +12,10 @@ clause 1 was not met: 12 of 20 (60%) on the independent first run and 14 of 20 (
 - **It is one draw.** Claude takes no sampling parameters (D-115), and D-106's note on the FLM
   configuration asks for the type-match rate over repeated draws on this provider.
 
+  > **Dated note, 11 November 2026: two more draws, at the user's request.** Clause 1 was met on
+  > every draw: 19, 18 and 18 of 20 (95%, 90%, 90%). Clauses 2 and 3 were met on every draw. See
+  > "Repeated draws" below.
+
 Clause 3 is met only through its Topic half on this run: Haiku suggested no out-of-scheme
 department, Project or Process value, so nothing was discarded.
 
@@ -119,7 +123,7 @@ applied. The other was held to keep a department the document already had:
   deterministic. D-106's note on the FLM configuration says that if M8 runs on `anthropic`, Objective
   05 is verified again over repeated draws. The brief for this run asked for one. A spread would need
   two or more further draws, each classifying the twenty again after this run's analysis rows and AI
-  links are cleared, as FLM's re-run did.
+  links are cleared, as FLM's re-run did. *(Done on 11 November: see "Repeated draws" below.)*
 - **Clause 3's discard behaviour on Haiku.** Nothing out of scheme was suggested in the three discard
   dimensions.
 - **That Haiku's type confidence separates right from wrong.** There was one wrong type on this draw.
@@ -127,11 +131,51 @@ applied. The other was held to keep a department the document already had:
   `classify_document_now`, but upload timing with classification is Objective 02's (item 3).
 - **Sonnet 5.5,** or any classification setting other than D-115's call parameters.
 
+## Repeated draws, 11 November 2026
+
+The user asked for two more draws, as D-106's note on the FLM configuration asks for this provider.
+
+**How they ran:**
+- **The database and scheme:** the same database, the same fourteen seeded scheme values, and the same threshold (0.72).
+- **The command and the scoring:** the same shipped command through the same driver, and the same shipped verifier.
+- **The code:** the commit is `1b6d43e`, which adds only `reset_classification.py` to draw 1's `abb41c8`, so the classification code is unchanged.
+- **Between draws:** the previous draw's analysis rows and AI tag links were deleted, after their counts were checked against its record (`draw-N/reset.txt`), as FLM's re-run did.
+- **The calls:** every classification parsed on its first attempt (`draw-N/classify/attempts.log`).
+
+| | Draw 1 | Draw 2 | Draw 3 |
+|---|---|---|---|
+| **clause 1, types matching the reference** | **19 of 20 (95%)** | **18 of 20 (90%)** | **18 of 20 (90%)** |
+| the misses, with confidence | D09 Report 0.55 | D04 Policy 0.6, D09 Report 0.55 | D04 Policy 0.6, D09 Report 0.6 |
+| counting the reference's recorded alternatives (information) | 20 of 20 | 20 of 20 | 20 of 20 |
+| types held as provisional (right / wrong) | 4 (3 / 1) | 4 (2 / 2) | 3 (1 / 2) |
+| clause 2: below 0.72 held; at or above applied (+ held to keep a department) | 45/45; 43/44 (+1) | 43/43; 43/44 (+1) | 39/39; 45/46 (+1) |
+| clause 3: discarded / Topics proposed / out-of-scheme links | 0 / 1 / 0 | 0 / 1 / 0 | 0 / 1 / 0 |
+| departments matching the manifest (information) | 18 of 20 | 17 of 20 | 17 of 20 |
+| tags against the manifest: precision, recall (information) | 63.3%, 64.6% | 63.8%, 62.5% | 68.9%, 64.6% |
+| Claude | 20 calls, $0.0068 | 20 calls, $0.0068 | 20 calls, $0.0067 |
+
+- **Clause 1 was met on every draw,** at 90 to 95%. The misses are the same two documents.
+  - D09 was missed every time. It is a weak fit, and Haiku called it Report, the reference's
+    alternative.
+  - D04 was missed twice. It is a fair fit, and Haiku called it Policy, the reference's
+    alternative.
+  - Every other document was typed right on every draw.
+- **No wrong type was ever applied.** Every miss scored 0.6 or less and was held under 0.72, so a
+  person confirms it. Right types scored from 0.6 to 0.95, and from one to three of them per draw
+  were held too.
+  - This is consistent with the confidence carrying information on Haiku, where it carried almost
+    none on gemma3:4b (D-106).
+  - Three wrong-type cases, all on two documents, are still a small sample.
+- **Clauses 2 and 3 were met on every draw.** Clause 3 was met only through its Topic half each
+  time: "customer complaints" was proposed on D06 every time, and nothing was ever discarded.
+- **What the draws do not change:** they are not independent of the prompt revision (`caf9e22`),
+  and three draws give a spread, not a distribution.
+
 ## Spend
 
 | | |
 |---|---|
-| Claude (Haiku 5.5) | 20 calls, 39,286 tokens in and 5,816 out: about **$0.0068** at $0.10 / $0.50 per million (`classify/claude_usage.json`) |
+| Claude (Haiku 5.5) | draw 1: 20 calls, 39,286 tokens in and 5,816 out, about **$0.0068** at $0.10 / $0.50 per million (`classify/claude_usage.json`). Draws 2 and 3: 40 calls, about $0.0135 (`draw-2/`, `draw-3/`). In all: 60 calls, about **$0.020** |
 | Voyage (voyage-4) | the re-index's 43 chunk embeddings and each command's startup probe; no Claude call. Within Voyage's free allowance |
 
 ## Files
@@ -140,6 +184,9 @@ applied. The other was held to keep a department the document already had:
 - `setup/`: the restore, migrate, account retirement, scheme seeding and re-index consoles.
 - `classify/`: `classify_documents`' record, its console, the Claude usage tally and the run's
   attempts log, which records token counts and timings and quotes nothing of the replies.
+- `reset_classification.py` and `draw-2/`, `draw-3/`: the counted reset between draws, and each
+  draw's reset console, classification record, console, usage tally, attempts log and
+  verification.
 - `verification/`: the shipped verifier's record and table. Its first line reads "FLM v0.9.39 …
   server v0.9.39": that verifier records whatever FLM server is reachable, and one was running on
   the machine. FLM took no part in this run; the record's `configuration` names the provider.
