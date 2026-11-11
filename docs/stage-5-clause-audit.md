@@ -505,3 +505,51 @@ FR-13's "before": D-86's measurement, run at `2f65a8e` on `kmp_obj02_20261101`
 | Requirement | Clause | Before | After step 5 | Evidence |
 |---|---|---|---|---|
 | FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ for the screen's reason, pending step 5 (an informal look) | ⚠️ **partial, measured** | **Wired:** the history changes what is retrieved, both in-process and through the server (HTTP check: WIRED 3 of 3, 0 leaks). **Not answered:** with history, 1 of 9 answerable follow-ups matched, and that one (t08) is cold-answerable. Spelled out, 3 of 9 matched; cold, 1 of 9. 7 of the 9 other answered with-history replies restate the first turn. Where spelling the question out works and history does not (t01, t05), history is the limit. Where spelling it out fails too (t02, t03, t04, t06 and t07 as the Administrator, t09), the limit is generation or retrieval as well. t09 failed, as D-86 decision 2 expected. Out-of-scope passages: 0 in every run. The two Employee follow-ups that should get no answer (t06, t07) were answered by restating the first turn, from material the Employee may read: not a leak |
+
+## After the re-audit (11 November 2026)
+
+FR-13, re-audited after D-122 made `anthropic` the default provider: one `requirements-auditor`
+run, read only, at `bd95f92`, over every FR-13 clause. Its verdict is INCOMPLETE, and D-112's dated
+note of 11 November records it verbatim. No measurement was made for it. `main` has since moved to
+`23e6e65`, by #85 and #86, which add only run folders under `corpus/objective-05/` and
+`corpus/objective-06/`. The rows above stay as written on their day.
+
+| Requirement | Clause | Before | After the re-audit | Evidence |
+|---|---|---|---|---|
+| FR-13 | A conversational interface reachable from any page, retaining the thread so follow-ups need not restate the subject | ⚠️ partial, measured (after step 5) | ⚠️ **partial on both providers, each for its own reason; and "reachable from any page" has no front-end test** | **`flm`, the offline alternative: partial, the deviation D-112 accepted for NIT3003.** With history, 2 of 9, 3 of 9 and 2 of 9 on `main` run on FLM (`corpus/objective-02/runs/2026-11-08/after-030/`, `runs/2026-11-09/fr13-phase3/` and `runs/2026-11-09/fr13-phase4/`). Spelled out, 6 of 9 each time. 0 leaks. The deployed alpha (`8598d19`) runs the answer path measured in "After step 5", 1 of 9. **`anthropic`, the default since D-122: partial and unconfirmed, so not recorded as met.** With history, 9 of 9 on Claude Haiku 5.5 (`runs/2026-11-10/haiku/threads.json`, at `e04aab1`) and 9 of 9 on Sonnet 5.5 (`runs/2026-11-10/voyage-frozen/threads.json`, at `54f15cc`). Each model ran once. On both: spelled out 9 of 9, cold 1 of 9, first turn 11 of 11, 0 leaks and 0 fabricated identifiers. Through the server, on Sonnet only: WIRED 3 of 3, with turn two correct 3 of 3 (`runs/2026-11-10/voyage-http-check/`, at `58b9c27`). No noise band has been measured on this provider. D-115 says FLM's band is not carried over to it, and D-112 says the same of its acceptance. **What the 9 of 9 does not show:** t08 is cold-answerable. t09 matched because the joined questions retrieved D17, which names the facilities team itself; the earlier answer was not used (D-42). **"Reachable from any page":** the link is built (`frontend/src/App.jsx:72`), and no test in `frontend/tests` asserts it (§8 condition 2, D-62) |
+| FR-13 | Maintains conversation context per session and passes prior turns alongside the new question so that pronouns and abbreviated references resolve correctly | ⚠️ at Stage 4, for D-42 (`docs/stage-4-clause-audit.md:86`); not restated in this file | ⚠️ **declined in part on both providers (D-42); whether references resolve differs by provider** | **Prior questions only, on both providers (D-42).** `apps/retrieval/conversation.py:164-168` reads each earlier turn's `question`, and no answer re-enters a prompt. No frozen follow-up has a referent that is only in an earlier answer and in no passage the joined questions retrieve, so that cost is untested on both. **"So that pronouns and abbreviated references resolve correctly":** by provider, as in this table's Front-End row. The frozen follow-ups use pronouns and demonstratives. None uses a shortened name or an acronym, and no thread is longer than two turns. **"Per session"** is read as per conversation: the history is read from `QueryLog` by conversation and by user, so it outlives a login session |
+| FR-13 | Database: Conversations (Create, Read, Update); QueryLog (Create) | ⚠️ at Stage 4: Update has no mutating verb (D-43) | ⚠️ **unchanged, as a recorded deviation (D-43); the re-audit read the operations as satisfied** | The re-audit's words: "Satisfied as database operations. There is no client rename route (D-43)". The title is derived from the first question, and `last_updated_at` moves on every turn (`apps/retrieval/query_log.py:294-299`). Tests: `apps/api/tests/test_conversations.py:137`, `:150`, `:161`, `:172` and `:228`. Stage 4's row expected an auditor to flag the missing `PATCH`, and this one did not. The state stays ⚠️ because the demonstration script presents D-43 as a deviation, never a tick |
+
+- **Every other FR-13 clause was read as satisfied, as it stood before:**
+  - previous conversations listed and reopenable, and the active thread cleared for a new topic
+    (✅ since item 4b);
+  - context truncated to `MAXIMUM_CONVERSATION_TURNS`;
+  - FR-11's scope re-evaluated on every turn;
+  - a fresh retrieval on every turn;
+  - generation and citation verification following FR-12 unchanged;
+  - the 200 with the answer and the updated conversation state.
+
+  Those from the truncation to the 200 were ✅ at Stage 4 (`docs/stage-4-clause-audit.md:87-91`).
+  The re-audit's clause table, with each clause's code and tests, is in D-112's note.
+- **The re-scoping tests have moved.** "After item 10" cites
+  `apps/api/tests/test_fr11_scoping.py:608` and `:633`. At `bd95f92` the same tests begin at `:610`
+  and `:635`.
+- **Decided by the user on 11 November** (D-112's note):
+  - **The draws come later, as a task of their own:** two further Haiku draws of the frozen nine,
+    and one HTTP check on Haiku, with the pass rule committed before the first draw. Until they are
+    read, the `anthropic` cells above stand as written.
+  - **The records the verdict lists as stale are fixed in a follow-up pull request.**
+- **Not owned yet:** the front-end test for the Ask link.
+- **Stage 5's exit criterion** (`M6-BUILD-PROMPT.md`'s Done line) admits FR-13's deviation "on the
+  FLM build" only. Its wording is the user's, and it is not changed here.
+
+#### Not covered by the re-audit
+
+- **No new measurement.** It read the records of 3, 8, 9 and 10 November, and ran no suite,
+  server, database or provider.
+- **Haiku through the server.** The HTTP check on this provider ran on Sonnet.
+- **A reference into an earlier answer,** on either provider. No frozen follow-up tests it.
+- **A shortened name or an acronym** as the reference, and **a thread longer than two turns.**
+- **The suites were not run by the auditor.** CI was green on `bd95f92` (run 42932385814).
+- **Which database the deployed alpha serves.** The auditor read no `.env`, and checked the alpha's
+  commit only.
