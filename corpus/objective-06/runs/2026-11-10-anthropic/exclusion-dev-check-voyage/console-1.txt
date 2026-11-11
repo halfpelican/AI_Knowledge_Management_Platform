@@ -1,0 +1,72 @@
+database: kmp_obj0506_anthropic_20261110
+Provider gate: PASS (anthropic, voyage-4 at 1024, both keys present; database kmp_obj0506_anthropic_20261110)
+  info dev-set-v2.json  u01  ordinary  -> kept     (top 0.4568, readable True) I start next week, what should I expect in my first few days
+  info dev-set-v2.json  u02  ordinary  -> kept     (top 0.559, readable True) new hire here - how does onboarding work?
+  info dev-set-v2.json  u03  ordinary  -> kept     (top 0.5417, readable True) how long do we have to hang on to old invoices and finance p
+  info dev-set-v2.json  u04  ordinary  -> kept     (top 0.4582, readable True) does my work laptop need anything special set up on it?
+  info dev-set-v2.json  u05  ordinary  -> kept     (top 0.4634, readable True) how much holiday do I build up each month?
+  info dev-set-v2.json  u06  ordinary  -> kept     (top 0.3284, readable True) im sick tmrw, do i need a drs note?
+  info dev-set-v2.json  u07  ordinary  -> left out (top 0.431, readable False) I think I clicked a dodgy link in an email, what now?
+  info dev-set-v2.json  u08  ordinary  -> kept     (top 0.517, readable True) where are we meant to go if the fire alarm goes off?
+  info dev-set-v2.json  u09  ordinary  -> kept     (top 0.4011, readable True) hw many quotes do i need to buy something for about 10k?
+  info dev-set-v2.json  u10  ordinary  -> kept     (top 0.5459, readable True) a customer is really unhappy and I can't sort it out, who do
+  info dev-set-v2.json  u11  ordinary  -> kept     (top 0.508, readable True) am I allowed to work from home a couple of days a week?
+  info dev-set-v2.json  u12  ordinary  -> kept     (top 0.5251, readable True) wfh - what hours do I actually need to be online?
+  info dev-set-v2.json  u13  ordinary  -> kept     (top 0.4095, readable True) how do I get my money back for a work lunch?
+  info dev-set-v2.json  u14  ordinary  -> kept     (top 0.4701, readable True) can I find out what personal info the company keeps about me
+  info dev-set-v2.json  u15  ordinary  -> kept     (top 0.4154, readable True) who do we order pens and paper from?
+  info dev-set-v2.json  u16  ordinary  -> kept     (top 0.5328, readable True) any training on giving feedback coming up?
+  info dev-set-v2.json  u17  ordinary  -> kept     (top 0.6116, readable True) is there a spare laptop lying around in the Melbourne office
+  info dev-set-v2.json  u18  ordinary  -> kept     (top 0.6138, readable True) how do i book one of the meeting rooms?
+  info dev-set-v2.json  u19  ordinary  -> kept     (top 0.4469, readable True) forgot my pw, how do I get back in?
+  info dev-set-v2.json  u20  ordinary  -> kept     (top 0.4988, readable True) how do I print something from my laptop?
+  info dev-set-v2.json  u21  ordinary  -> kept     (top 0.4482, readable True) can I take the company car home over the weekend?
+  info dev-set-v2.json  u22  ordinary  -> kept     (top 0.5677, readable True) when are we moving offices?
+  info dev-set-v2.json  u23  ordinary  -> kept     (top 0.4374, readable True) what's the latest on the database migration?
+  info dev-set-v2.json  u24  ordinary  -> kept     (top 0.3565, readable True) is the new mobile app design going out in the next release?
+  info dev-set-v2.json  u25  ordinary  -> kept     (top 0.3406, readable True) why do customers end up cancelling?
+  info dev-set-v2.json  u26  ordinary  -> kept     (top 0.4591, readable True) need a room for 30 ppl one evening, anything I should know?
+  info dev-set-v2.json  u27  ordinary  -> kept     (top 0.3816, readable True) my back hurts from sitting at my desk all day, is there anyt
+  info dev-set-v2.json  u28  ordinary  -> left out (top 0.4816, readable False) how much have we put aside in case projects go over budget?
+  info dev-set-v2.json  u29  ordinary  -> left out (top 0.3703, readable False) did the board flag any new big risks for us to watch?
+  ok   dev-set-v2.json  u30  scoped    -> left out (top 0.458, readable False) what's project atlas actually for?
+  ok   dev-set-v2.json  u31  scoped    -> left out (top 0.4332, readable False) who in the team is strongest at crunching data?
+  ok   dev-set-v2.json  u32  scoped    -> left out (top 0.5583, readable False) how did staff go in the last fake phishing test?
+  ok   dev-set-v2.json  u33  no-answer -> kept     (top 0.3702, readable True) what's the guest wifi password?
+  ok   dev-set-v2.json  u34  no-answer -> kept     (top 0.2407, readable True) do we get paid extra for working overtime?
+  ok   dev-set-v2.json  u35  no-answer -> kept     (top 0.2875, readable True) is there a staff discount at the gym next door?
+  MISS dev-set-v2.json  u36  no-answer -> left out (top 0.2299, readable False) how many people did we hire last year?
+  ok   dev-set-v2.json  u37  no-answer -> kept     (top 0.4976, readable True) how do I apply for parental leave?
+  info dev-set.json     d01  ordinary  -> kept     (top 0.6083, readable True) What is the onboarding process for new employees?
+  info dev-set.json     d02  ordinary  -> kept     (top 0.6193, readable True) Summarise the onboarding process for new employees.
+  info dev-set.json     d03  ordinary  -> kept     (top 0.5124, readable True) How are records managed and retained?
+  info dev-set.json     d04  ordinary  -> kept     (top 0.5742, readable True) What are the rules for acceptable use of IT equipment?
+  info dev-set.json     d05  ordinary  -> kept     (top 0.5701, readable True) What does the health and safety induction cover?
+  info dev-set.json     d06  ordinary  -> kept     (top 0.5754, readable True) Give me an overview of the procurement guidelines.
+  info dev-set.json     d07  ordinary  -> kept     (top 0.6412, readable True) How are customer complaints escalated when they cannot be re
+  info dev-set.json     d08  ordinary  -> kept     (top 0.5468, readable True) What equipment and security rules apply when working from ho
+  info dev-set.json     d09  ordinary  -> kept     (top 0.6554, readable True) Summarise what staff need to know about the office relocatio
+  info dev-set.json     d10  ordinary  -> kept     (top 0.6285, readable True) How do I submit an expense claim?
+  ok   dev-set.json     d11  scoped    -> left out (top 0.4291, readable False) What happened in the security incident debrief?
+  info dev-set.json     d12  ordinary  -> kept     (top 0.5424, readable True) What was decided at the product planning workshop?
+  info dev-set.json     d13  ordinary  -> kept     (top 0.5918, readable True) What actions were agreed at the customer success retrospecti
+  info dev-set.json     d14  ordinary  -> kept     (top 0.4728, readable True) What were the main points of the weekly operations standup?
+  info dev-set.json     d15  ordinary  -> kept     (top 0.5066, readable True) How is consent to use personal information recorded?
+  info dev-set.json     d16  ordinary  -> kept     (top 0.6305, readable True) What etiquette is expected when using a meeting room?
+  info dev-set.json     d17  ordinary  -> kept     (top 0.5559, readable True) What should I do if my laptop is running slowly?
+  info dev-set.json     d18  ordinary  -> kept     (top 0.5271, readable True) How do I request leave, and how quickly does my manager resp
+  info dev-set.json     d19  ordinary  -> kept     (top 0.4587, readable True) When do I need a medical certificate for personal leave?
+  info dev-set.json     d20  ordinary  -> kept     (top 0.5328, readable True) What does the fourth quarter training program cover?
+  ok   dev-set.json     d21  scoped    -> left out (top 0.4526, readable False) Which team members are rated expert in customer service?
+  ok   dev-set.json     d22  scoped    -> left out (top 0.4805, readable False) What did the risk committee decide about the contingency res
+  info dev-set.json     d23  ordinary  -> left out (top 0.5471, readable False) How is Project Atlas delivered, and who reviews each phase?
+  ok   dev-set.json     d24  no-answer -> kept     (top 0.3098, readable True) How much is the annual staff bonus?
+  ok   dev-set.json     d25  no-answer -> kept     (top 0.3887, readable True) Is there staff parking at the new office building?
+  ok   dev-set.json     d26  no-answer -> kept     (top 0.3596, readable True) What is the policy on smoking at work?
+  MISS dev-set.json     d27  no-answer -> left out (top 0.2384, readable False) What salary does the head of digital services earn?
+  info dev-set.json     d28  ordinary  -> kept     (top 0.6418, readable True) Summarise the rules for using a fleet vehicle.
+Commit 9527cd7, database kmp_obj0506_anthropic_20261110, dump 3bf98403…, configuration {'ai_provider': 'anthropic', 'chat_model': 'claude-haiku-5-5', 'embedding_model': 'voyage-4'}, RELEVANCE_THRESHOLD 0.3; every question asked as the Employee.
+
+- Scoped questions left out: 6 of 6
+- No-answer questions kept: 7 of 9
+- Ordinary questions kept (for information): 46 of 50
