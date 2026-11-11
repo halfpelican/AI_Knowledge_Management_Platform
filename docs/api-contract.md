@@ -1382,10 +1382,14 @@ refused for want of the CSRF token, as on the upload.
 on the bytes received, the `415`, the `400` for an empty or over-long segment. Then a silent segment
 is answered `200` `silent`, then the in-flight `429`, then the busy `429`, then the provider.
 
-**The order is of the answers, not of the reading.** A session that sends its CSRF token, as the
-page does, has its whole multipart body parsed by DRF while authenticating, before any of these
-answers: DRF's CSRF check reads `request.POST`. What bounds the reading is the web server's own
-body limit. The document upload and the meeting ingest share this; D-123 records it as open.
+**Since D-124 the order is of the reading too.** Nothing reads the body before the declared-length
+`413`, so a body refused there or earlier is never parsed.
+
+- **How:** the CSRF check takes its token from the `X-CSRFToken` header and parses nothing.
+- **What still bounds receiving:** Waitress's cap, `MAX_REQUEST_BODY_BYTES` (see Stage 2).
+- **Corrected 11 November 2026.** Until D-124 this paragraph said, truly, that a session sending its
+  CSRF token had its whole multipart body parsed by DRF while authenticating, before any of these
+  answers. D-123 recorded that as open, and its dated note records the close.
 
 **Only what the page sends is accepted:** a 16-bit PCM mono WAV at 16 kHz.
 

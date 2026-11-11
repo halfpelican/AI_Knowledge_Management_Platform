@@ -1496,13 +1496,17 @@ class TranscriptionsView(APIView):
        then 429 ``transcription_busy``, with Retry-After, while every server slot is held
        (``apps/api/transcription_slot.py``).
 
-    **These order the answers, not the reading of the body.** A session that sends its CSRF token,
-    as the page always does, has the whole multipart body parsed by DRF during authentication,
-    before the 403, the 429, the 503 and the 413: DRF's CSRF check reads ``request.POST``, which
-    parses the body with this view's parser (found by the security review of 11 November, which
-    drove this view with CSRF enforced). So none of these checks bounds what the server reads;
-    the web server's own request-body limit does. That is not this route's alone: the document
-    upload and the meeting ingest share it, and it is recorded in D-123 as open.
+    **Since D-124 these order the reading of the body too.** Nothing reads it before step 4's
+    declared-length 413, so a body refused at any step up to it is never parsed.
+
+    - **How:** the CSRF check takes its token from the header (``apps/api/authentication.py``), and
+      the 413 is decided from ``CONTENT_LENGTH`` alone (``declares_a_body_over_the_upload_ceiling``).
+    - **What still bounds receiving:** Waitress's ``--max-request-body-size``
+      (``MAX_REQUEST_BODY_BYTES``). Waitress has read the body before Django sees the request.
+    - **Before D-124:** a session that sent its CSRF token, as the page always does, had the whole
+      body parsed by DRF during authentication, before the 403, the 429, the 503 and the 413. The
+      security review of 11 November found that, and D-123 recorded it as open. D-123's dated note
+      records the close.
 
     Then the provider: 200 ``"status": "transcribed"`` with the text and the model, or NFR-19's
     503 ``transcription_unavailable`` after MAXIMUM_TRANSCRIBE_ATTEMPTS (any 4xx refusal at once,
@@ -1520,14 +1524,9 @@ class TranscriptionsView(APIView):
             return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
 
         # The declared length, before this view touches request.data, as the document upload does.
-        # It shapes the answer; it does not spare the parse, which a CSRF-checked session has
-        # already had (see the docstring).
-        declared_length = request.META.get("CONTENT_LENGTH") or 0
-        try:
-            declared_length = int(declared_length)
-        except (TypeError, ValueError):
-            declared_length = 0
-        if declared_length > MAX_UPLOAD_BYTES:
+        # Since D-124 nothing has read the body before this line, so a body refused here is
+        # never parsed.
+        if declares_a_body_over_the_upload_ceiling(request):
             return Response(
                 {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
             )
@@ -1537,7 +1536,8 @@ class TranscriptionsView(APIView):
             return Response(
                 {"audio": [NO_AUDIO_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
             )
-        # Again against what arrived, for a client that lies about or omits the length.
+        # Again against what arrived. Defence in depth: Django reads no more than the declared
+        # length, so a part cannot be larger than the body declares.
         if uploaded.size > MAX_UPLOAD_BYTES:
             return Response(
                 {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE

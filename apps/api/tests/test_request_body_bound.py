@@ -55,6 +55,7 @@ from types import SimpleNamespace
 import pytest
 from django.conf import settings
 from django.middleware.csrf import REASON_CSRF_TOKEN_MISSING, REASON_NO_CSRF_COOKIE
+from django.test import override_settings
 from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
 
@@ -81,6 +82,7 @@ LOGIN_URL = "/api/auth/login"
 ASK_URL = "/api/ask"
 DOCUMENTS_URL = "/api/documents"
 MEETINGS_URL = "/api/meetings"
+TRANSCRIPTIONS_URL = "/api/transcriptions"
 
 BOUNDARY = "body-bound-test"
 MULTIPART = f"multipart/form-data; boundary={BOUNDARY}"
@@ -350,6 +352,92 @@ def test_a_json_route_reads_nothing_before_its_429(session_client, monkeypatch):
 
     assert body.bytes_read == 0
     assert response.status_code == 429
+
+
+# --- Refused unread: the transcription route (D-123) -------------------------------------------
+#
+# POST /api/transcriptions arrived with D-123, recording a body parsed before its 403, 429, 503 and
+# 413 as open. Its own declared-length check already ran before request.data, so D-124's CSRF
+# check is what makes that check refuse unread. Its answers come in this order: 401 and 403, 429,
+# 503 while transcription is off, then 413.
+
+
+@pytest.fixture
+def transcription_on():
+    """Transcription switched on, as the route's own tests switch it (conftest.py pins it off)."""
+    with override_settings(TRANSCRIPTION_PROVIDER="flm"):
+        yield
+
+
+@pytest.mark.django_db
+def test_an_oversized_segment_is_refused_unread(session_client, transcription_on):
+    client, csrf = browser_session(session_client.user)
+    body = an_upload(OVERSIZED)
+
+    response = send(client, TRANSCRIPTIONS_URL, body, MULTIPART, csrf)
+
+    assert body.bytes_read == 0
+    assert response.status_code == 413
+    assert response.json() == {"detail": FILE_TOO_LARGE_MESSAGE}
+
+
+@pytest.mark.django_db
+def test_a_segment_under_the_ceiling_is_read(session_client, transcription_on):
+    """The control. The part is named ``file``, not ``audio``, so the route reads the body and
+    answers that no segment came."""
+    client, csrf = browser_session(session_client.user)
+    body = an_upload(SMALL)
+
+    response = send(client, TRANSCRIPTIONS_URL, body, MULTIPART, csrf)
+
+    assert body.bytes_read == SMALL
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_the_transcription_routes_403_comes_before_the_413_and_reads_nothing(
+    session_client, transcription_on
+):
+    withdraw_contribute_content(session_client.user)
+    client, csrf = browser_session(session_client.user)
+    body = an_upload(OVERSIZED)
+
+    response = send(client, TRANSCRIPTIONS_URL, body, MULTIPART, csrf)
+
+    assert body.bytes_read == 0
+    assert response.status_code == 403
+    assert "CSRF" not in response.json()["detail"]
+
+
+@pytest.mark.django_db
+def test_the_transcription_routes_429_comes_before_the_413_and_reads_nothing(
+    session_client, transcription_on, monkeypatch
+):
+    monkeypatch.setattr(
+        ScopedRateThrottle,
+        "THROTTLE_RATES",
+        {**ScopedRateThrottle.THROTTLE_RATES, "transcription": "1/min"},
+    )
+    client, csrf = browser_session(session_client.user)
+    spent = send(client, TRANSCRIPTIONS_URL, an_upload(SMALL), MULTIPART, csrf)
+    assert spent.status_code == 400  # the one request the rate allows
+    body = an_upload(OVERSIZED)
+
+    response = send(client, TRANSCRIPTIONS_URL, body, MULTIPART, csrf)
+
+    assert body.bytes_read == 0
+    assert response.status_code == 429
+
+
+@pytest.mark.django_db
+def test_with_transcription_off_a_segment_is_503_unread(session_client):
+    client, csrf = browser_session(session_client.user)
+    body = an_upload(OVERSIZED)
+
+    response = send(client, TRANSCRIPTIONS_URL, body, MULTIPART, csrf)
+
+    assert body.bytes_read == 0
+    assert response.status_code == 503
 
 
 # --- Refused unread: the routes where Django ran the check itself ------------------------------

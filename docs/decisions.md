@@ -9583,13 +9583,31 @@ the user before any code.
 - **Not measured:** the per-segment levels, so the margin of `TRANSCRIPTION_SILENCE_DBFS` is
   unchecked, and the recording's exact length and format.
 
+**Dated note, 11 November 2026: "What a request body costs before it is refused" is closed by
+D-124.**
+
+- **What changed:** the CSRF check reads its token from the header only, so nothing reads a body
+  before the view. `POST /api/transcriptions`' declared-length 413, and its 403, 429 and 503 before
+  it, now refuse a body unread. That is tested by counting the bytes read
+  (`apps/api/tests/test_request_body_bound.py`). Waitress's `--max-request-body-size` caps
+  receiving at `MAX_REQUEST_BODY_BYTES`. The claims this item named, in `config/settings.py` and
+  D-30, are corrected.
+- **The item understated the old defect in two ways:**
+  - **The CSRF cookie alone was enough.** The body was parsed before the header was looked for,
+    so a session that did not send its token had its body parsed too, and was then refused.
+  - **Django ran the same check on login, `/api/auth/me` and the SPA's catch-all,** signed out
+    and on a made-up cookie. D-124 removed it there too.
+- **Still this entry's own question:** the route accepts a segment of up to `MAX_UPLOAD_BYTES`,
+  where a valid one is about 1.92 MB, and reads the whole part into memory.
+- **The view's docstring and the contract's section** were corrected on the same day.
+
 ## D-124 · Request bodies are bounded before they are read: no CSRF check reads a body, and Waitress caps every body at 54,525,952 bytes
 
 **Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-08, FR-09, FR-02, FR-06,
 D-21, D-30, D-85, D-123, `apps/api/authentication.py`, `apps/api/views.py`, `config/spa.py`,
 `apps/core/constants.py`, `config/settings.py`, `scripts/server_record.py`,
 `scripts/ingest_objective02.py`, `docs/api-contract.md`, `docs/alpha-deployment.md`,
-`docs/measurement-runbook.md`, `tests/load/README.md`
+`docs/measurement-runbook.md`, `tests/load/README.md`, `apps/api/tests/test_transcriptions.py`
 
 **The defect.** The security review of `feat/FR-09-recording-transcription` found it (D-123). That
 branch recorded it as open and left the shared fix out of its scope. It was verified again here.
@@ -9622,8 +9640,8 @@ branch recorded it as open and left the shared fix out of its scope. It was veri
   Django's check returns before it reads anything. The one test that claimed the body went
   unparsed used such a client.
 - **Measured here,** by running the new tests against the old CSRF paths:
-  - the whole 52,428,801-byte upload was read on both upload routes, before the 403, the 429 and
-    the 413, from both roles;
+  - the whole 52,428,801-byte upload was read on all three upload routes, before the 403, the 429
+    and the 413 (and the transcription route's 503), from both roles;
   - the whole upload was read on login, `/api/auth/me`, `/` and `/documents`, from a client with a
     made-up cookie and no session;
   - 2,048-byte JSON bodies were read on reprocess, and on the ask route before its 429.
@@ -9685,8 +9703,9 @@ documented answer except the one in decision 2.
    - **A pasted transcript** was already held to 2.5 MiB by Django. Between 2.5 MiB and 50 MB it is
      `400 {"detail": "Bad request."}`, refused unread, which the contract now lists. Above 50 MB the
      new 413 replaces that 400.
-   - **One helper serves both upload routes:** `declares_a_body_over_the_upload_ceiling` in
-     `apps/api/views.py`.
+   - **One helper serves every upload route:** `declares_a_body_over_the_upload_ceiling` in
+     `apps/api/views.py`. That is the document upload, the meeting ingest and, since D-123 merged,
+     the transcription route, which had its own copy of the check.
 5. **`POST /api/documents/{id}/reprocess` takes no body, and now reads none,** so it needs no
    ceiling of its own.
 6. **Waitress caps every request body at `MAX_REQUEST_BODY_BYTES`, 54,525,952 bytes,** which is
@@ -9721,8 +9740,12 @@ documented answer except the one in decision 2.
 **What it covers:**
 
 - **Every route, for reading before the view, under Waitress** (decision 3).
-- **The two upload routes' bodies over `MAX_UPLOAD_BYTES`,** refused unread by their declared
-  length.
+- **The three upload routes' bodies over `MAX_UPLOAD_BYTES`,** refused unread by their declared
+  length:
+  - `POST /api/documents`;
+  - `POST /api/meetings`;
+  - `POST /api/transcriptions`, merged with D-123 on 11 November after this entry was first
+    written. It now uses the same helper, and D-123's dated note closes its open item.
 - **Every route's body declared at or over `MAX_REQUEST_BODY_BYTES`,** refused by Waitress before
   it is received, where the server is started as documented. A chunked one is refused when it
   reaches the cap.
@@ -9751,15 +9774,9 @@ documented answer except the one in decision 2.
     Login and registration take them from signed-out clients, within the auth throttle's 20 a
     minute per address.
   - **Not part of this change:** a smaller JSON ceiling.
-- **`POST /api/transcriptions` (D-123) is not on main.**
-  - Its own declared-length check runs before `request.data`, so once both branches are merged a
-    body over the ceiling is refused unread there too. Two statements on that branch then become
-    untrue: the view's docstring ("These order the answers, not the reading of the body") and the
-    comment in `post` ("does not spare the parse").
-  - That is not tested here. The merge should add the route to
-    `apps/api/tests/test_request_body_bound.py` and give D-123's open item a dated note.
-  - Whether that route should accept bodies up to `MAX_UPLOAD_BYTES` at all is D-123's own
-    question. A valid segment is about 1.92 MB.
+- **`POST /api/transcriptions`' own ceiling.** Whether the route should accept a segment of up to
+  `MAX_UPLOAD_BYTES` is D-123's own question, raised in its dated note. A valid segment is about
+  1.92 MB, and the route reads the whole part into memory.
 - **The response above the cap.** Waitress's 413 is plain text, not the contract's JSON, and a
   client still sending when Waitress closes the connection may see a reset instead. The SPA never
   sends that much: the upload and meeting forms screen a file's size before sending it.
@@ -9777,10 +9794,11 @@ documented answer except the one in decision 2.
   `wsgi.input`, so it sees any reader. A multipart body is a well-formed upload of one file. Bytes
   read are asserted before status.
 - **What they check:**
-  - an oversized body gets a 413 and is not read, on both upload routes, multipart and JSON;
+  - an oversized body gets a 413 and is not read, on all three upload routes: documents and
+    meetings, multipart and JSON, and transcriptions;
   - a pasted transcript between 2.5 MiB and 50 MB gets Django's 400, unread;
-  - no body is read before the 401, the 403 or the 429 on either upload route, and the 403 comes
-    before the 413;
+  - no body is read before the 401, the 403 or the 429 on any upload route, nor before the
+    transcription route's 503 while transcription is off, and the 403 comes before the 413;
   - reprocess reads no body, and `/api/ask` reads none before its 429;
   - login, `/api/auth/me`, `/` and `/documents` read nothing, signed out with a made-up cookie or
     signed in, and login and `/api/auth/me` still send the cookie;
@@ -9791,9 +9809,9 @@ documented answer except the one in decision 2.
   - every documented serve command carries the flag, `D85_COMMAND` included, and I02 stays under
     the cap.
 - **Checked against the code before the fix:** the old `apps/api/authentication.py`, the two
-  `ensure_csrf_cookie` decorators and the old `config/spa.py` were put back. Then 32 of the new
-  tests fail.
-  - 30 fail because the body was read: 52,428,801, 2,048 or 136 bytes.
+  `ensure_csrf_cookie` decorators and the old `config/spa.py` were put back, on the code merged
+  with D-123. Then 40 of the 72 tests fail.
+  - 38 fail because the body was read: 52,428,801, 2,048 or 136 bytes.
   - 2 fail because Django answered its own 400 where the 413 is expected, for a JSON transcript
     over 2.5 MiB, which it refused unread even then.
 
