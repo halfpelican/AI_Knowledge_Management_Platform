@@ -1,0 +1,2 @@
+database kmp_obj0506_anthropic_20261110: {'analyses': 20, 'ai_links': 47, 'other_links': 0, 'tags': 14}
+deleted 20 analysis row(s) and 47 AI link row(s); after: {'analyses': 0, 'ai_links': 0, 'other_links': 0, 'tags': 14}
