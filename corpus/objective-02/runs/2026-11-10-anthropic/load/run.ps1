@@ -5,7 +5,11 @@
     scripts/check_flm.py) are replaced by the provider gate beside this file, provider_gate.py,
     and k6 is given the provider and the gate's result in place of the FLM version and
     check_flm.py's. The k6 script it runs is this folder's copy, because tests/load/common.js
-    refuses to start without an FLM version. The original synopsis follows.
+    refuses to start without an FLM version. Since 11 November 2026, with the user's approval
+    before NFR-08 run 6, the server is observed by this folder's copy of scripts/server_record.py.
+    Its listener lookup falls back to netstat and to the port's own socket row, and retries,
+    because the TCP table sometimes misreports Waitress's socket; see that file's header.
+    D-87's rules are unchanged. The original synopsis follows.
 
     Runs one k6 load test, only after scripts/check_flm.py has passed (D-83) and the server
     has been observed to be D-85's, with DEBUG off and restarted since the last run (D-87).
@@ -266,9 +270,9 @@ if (-not (Test-Path -LiteralPath $Python -PathType Leaf)) {
 if (-not (Test-Path -LiteralPath $ProviderGateScript -PathType Leaf)) {
     Stop-Run "the provider gate's script is not at $ProviderGateScript (this copy)."
 }
-$serverRecordScript = Join-Path $repoRoot 'scripts\server_record.py'
+$serverRecordScript = Join-Path $PSScriptRoot 'server_record.py'  # this copy: the run folder's copy, whose listener lookup retries
 if (-not (Test-Path -LiteralPath $serverRecordScript -PathType Leaf)) {
-    Stop-Run "scripts\server_record.py is not in $repoRoot."
+    Stop-Run "this copy's server_record.py is not at $serverRecordScript."
 }
 
 # This copy: flm is not needed, because FLM takes no part.
@@ -329,7 +333,7 @@ Write-Host "the provider gate passed at $checkedAt"
 
 # --- 5. The server, observed (D-87 decisions 1 and 2) ---------------------------------
 
-Write-Step "scripts\server_record.py preflight, for $BaseUrl"
+Write-Step "server_record.py preflight (this folder's copy), for $BaseUrl"
 $stem = Join-Path ([IO.Path]::GetTempPath()) ("kmp-$Test-preflight-" + [guid]::NewGuid().ToString('N'))
 $preflightFile = "$stem.json"
 $preflightEnvFile = "$stem.env"
@@ -488,7 +492,7 @@ Write-Host "k6 exited $k6Exit. The run's window: $windowStart to $windowEnd."
 
 # --- 8. Waitress's log for the run's window, into the results (D-87 decision 3) -------
 
-Write-Step "scripts\server_record.py finalise: Waitress's log for the run's window"
+Write-Step "server_record.py finalise (this folder's copy): Waitress's log for the run's window"
 $summaryFile = Join-Path $k6ResultsDir "$($Test)_summary.json"
 $finaliseArgs = @('-I', $serverRecordScript, 'finalise', '--preflight', $preflightFile,
                   '--summary', $summaryFile, '--window-start', $windowStart, '--window-end', $windowEnd)
