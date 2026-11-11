@@ -11,7 +11,7 @@
  * minimum's agreement with the server's `MINIMUM_SEARCH_LENGTH` is
  * apps/api/tests/test_front_end_constants_agreement.py. This file does not test
  * "available from every page": the field is used here from the dashboard and the
- * search screen only.
+ * search screen only. tests/headerSearchField.test.jsx walks the routes for it.
  *
  * The whole application is rendered, signed in, with the real auth provider.
  */
