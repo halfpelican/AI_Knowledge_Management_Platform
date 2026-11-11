@@ -1,0 +1,91 @@
+WHERE EACH DRAW CAME FROM
+                               draw 1                     draw 2                     draw 3
+  ---------------------------  -------------------------  -------------------------  -------------------------
+  recorded at                  2026-11-10T19:38:27+11:00  2026-11-11T19:19:01+11:00  2026-11-11T19:21:03+11:00
+  commit                       e04aab1                    bf384b2                    bf384b2
+  uncommitted tracked changes  False                      False                      False
+  database                     kmp_voyage_20261110        kmp_voyage_20261110        kmp_voyage_20261110
+  dump sha256                  80ff46d4...                80ff46d4...                80ff46d4...
+  chat model                   claude-haiku-5-5           claude-haiku-5-5           claude-haiku-5-5
+  embedding                    voyage-4 at 1024           voyage-4 at 1024           voyage-4 at 1024
+  threshold / floor            0.2687 / 0.2468            0.2687 / 0.2468            0.2687 / 0.2468
+  thread set sha256            acfe3d47...                acfe3d47...                acfe3d47...
+  scoring rule                 v2                         v2                         v2
+  runs                         44                         44                         44
+  server                       in-process                 in-process                 in-process
+  same in every draw, database and dump: yes
+  same in every draw, provider record: yes
+  same in every draw, thread set and rule: yes
+  same in every draw, constants: yes
+  same in every draw, the questions, run for run: yes
+
+SCORES PER WAY (expected-answer match, where an answer is expected)
+                                     draw 1         draw 2         draw 3
+  ---------------------------------  -------------  -------------  -------------
+  first-turn                         11/11          11/11          11/11
+  with-history                       9/9            9/9            9/9
+  spelled-out                        9/9            9/9            9/9
+  cold                               1/9            1/9            1/9
+  scoped Employee runs not answered  6/6            6/6            6/6
+  leaks (out of scope, every run)    0              0              0
+  fabricated identifiers             0/59           0/52           0/50
+  schema conformance                 37/37          37/37          37/37
+  unavailable runs                   0              0              0
+  scoping shown, t06 / t07           yes / yes      yes / yes      yes / yes
+  Claude calls                       37             37             37
+  input / output tokens              188557 / 8958  188557 / 8596  188557 / 8053
+  estimated US$                      0.0233         0.0232         0.0229
+  elapsed, minutes                   1.5            1.5            1.4
+
+WITH HISTORY, PER FOLLOW-UP (outcome; C = correct by the frozen rule, x = not; source rank; passages supplied)
+  follow-up          draw 1                                  draw 2                                  draw 3                                  missed in
+  -----------------  --------------------------------------  --------------------------------------  --------------------------------------  ---------
+  t01@Employee       answered  C  rank 1  10 supplied        answered  C  rank 1  10 supplied        answered  C  rank 1  10 supplied        -
+  t02@Employee       answered  C  rank 1  9 supplied         answered  C  rank 1  9 supplied         answered  C  rank 1  9 supplied         -
+  t03@Employee       answered  C  rank 1  1 supplied         answered  C  rank 1  1 supplied         answered  C  rank 1  1 supplied         -
+  t04@Employee       answered  C  rank 1  8 supplied         answered  C  rank 1  8 supplied         answered  C  rank 1  8 supplied         -
+  t05@Employee       answered  C  rank 1  3 supplied         answered  C  rank 1  3 supplied         answered  C  rank 1  3 supplied         -
+  t06@Administrator  answered  C  rank 4  9 supplied         answered  C  rank 4  9 supplied         answered  C  rank 4  9 supplied         -
+  t06@Employee       path-B-declined  C  rank -  9 supplied  path-B-declined  C  rank -  9 supplied  path-B-declined  C  rank -  9 supplied  -
+  t07@Administrator  answered  C  rank 2  5 supplied         answered  C  rank 2  5 supplied         answered  C  rank 2  5 supplied         -
+  t07@Employee       path-B-declined  C  rank -  3 supplied  path-B-declined  C  rank -  3 supplied  path-B-declined  C  rank -  3 supplied  -
+  t08@Employee       answered  C  rank 2  3 supplied         answered  C  rank 2  3 supplied         answered  C  rank 2  3 supplied         -
+  t09@Employee       answered  C  rank 3  9 supplied         answered  C  rank 3  9 supplied         answered  C  rank 3  9 supplied         -
+
+READINGS (scoring rule part 10)
+  follow-up          draw 1                                         draw 2                                         draw 3
+  -----------------  ---------------------------------------------  ---------------------------------------------  ---------------------------------------------
+  t01@Employee       history works                                  history works                                  history works
+  t02@Employee       history works                                  history works                                  history works
+  t03@Employee       history works                                  history works                                  history works
+  t04@Employee       history works                                  history works                                  history works
+  t05@Employee       history works                                  history works                                  history works
+  t06@Administrator  history works                                  history works                                  history works
+  t06@Employee       not answered by any way                        not answered by any way                        not answered by any way
+  t07@Administrator  history works                                  history works                                  history works
+  t07@Employee       not answered by any way                        not answered by any way                        not answered by any way
+  t08@Employee       cold-answerable: proves nothing about history  cold-answerable: proves nothing about history  cold-answerable: proves nothing about history
+  t09@Employee       history works  [prediction did not hold]       history works  [prediction did not hold]       history works  [prediction did not hold]
+
+WHAT DIFFERED BETWEEN DRAWS (the band)
+  way           matches per draw  range           spread
+  ------------  ----------------  --------------  ------
+  first-turn    11 11 11          11 to 11 of 11  0
+  with-history  9 9 9             9 to 9 of 9     0
+  spelled-out   9 9 9             9 to 9 of 9     0
+  cold          1 1 1             1 to 1 of 9     0
+  runs whose outcome or correctness differs between draws: 0 of 44
+  runs whose verified statements differ in any way (wording included): 21 of 44
+  runs supplied a different SET of passages in some draw: 0 of 44
+  runs supplied the same set in a different ORDER: 1 of 44 (t09@Employee/with-history)
+  largest score difference for one passage in one run: 0.00142 (t02@Employee/first-turn)
+
+THE RULE (haiku-draws.md)
+          with history      leaks  fabricated identifiers  the draw
+  ------  ----------------  -----  ----------------------  --------
+  draw 1  9/9 (at least 8)  0 (0)  0 (0)                   PASSES
+  draw 2  9/9 (at least 8)  0 (0)  0 (0)                   PASSES
+  draw 3  9/9 (at least 8)  0 (0)  0 (0)                   PASSES
+  repeated misses (a follow-up missed with history in more than one draw): none
+
+  THE THREE DRAWS PASS. With the HTTP check's bar (haiku-draws.md), the resolving half is read as met.

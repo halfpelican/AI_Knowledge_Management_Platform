@@ -1,0 +1,394 @@
+Thread set: corpus\objective-02\threads.json, 9 thread(s) valid, so 44 run(s) (each follow-up with history, cold and spelled out; each first turn once)
+Provider gate: anthropic (Voyage voyage-4 at 1024, Claude), the Voyage copy, D-120's values
+Provider gate: PASS
+
+Citation reliability harness — Stage 4 item 0
+  RECORD          : recorded
+  commit          : bf384b24515cec3978b93fdfe80db6924018e481
+  FLM version     : none, FLM takes no part (D-113)
+  dump sha256     : 80ff46d482d7d36029060e4afa2646ee9f07683331d35dbdb17b97fb6fc0d1e4
+  database        : kmp_voyage_20261110
+  provider        : anthropic (AnthropicService)
+  endpoint        : the Anthropic API (Claude) and https://api.voyageai.com/v1 (Voyage)
+  chat model      : claude-haiku-5-5
+  embed model     : voyage-4, dimension 1024
+  D-120 values    : threshold 0.2687, partial-match floor 0.2468
+  health          : True — Anthropic API reachable
+  server          : none, in-process (D-85: the pipeline's functions are called here)
+  thread set      : corpus\objective-02\threads.json  (9 thread(s), 44 run(s)), sha256 acfe3d47afed7d97, scoring rule v2
+  set status      : FROZEN on 1 November 2026. Approved as written by Benjamin Morovan and Sagarika Dey on 1 November 2026 (D-86 decision 7). Accepted alternatives for number words, dates and times were added before the freeze, at the user's request, and are frozen with the set. Any later change is recorded with its reason.
+  indexed chunks  : 43, recorded embedding model(s): ['voyage-4']
+  constants       : TOP_K=25, RELEVANCE_THRESHOLD=0.3, MAXIMUM_CONTEXT_TOKENS=4000, MAXIMUM_GENERATION_ATTEMPTS=3
+  prompt          : apps/ai/prompting.py SYSTEM_PROMPT, 2484 characters
+  schema          : apps/ai/schema.py, required key(s) ['statements'], per statement ['chunk_id', 'text']
+  corpus          : exactly the 25 items of corpus/objective-02/manifest.json
+[1/44] t01@Employee/first-turn ...
+[2/44] t01@Employee/with-history ...
+[3/44] t01@Employee/cold ...
+[4/44] t01@Employee/spelled-out ...
+[5/44] t02@Employee/first-turn ...
+[6/44] t02@Employee/with-history ...
+[7/44] t02@Employee/cold ...
+[8/44] t02@Employee/spelled-out ...
+[9/44] t03@Employee/first-turn ...
+[10/44] t03@Employee/with-history ...
+[11/44] t03@Employee/cold ...
+[12/44] t03@Employee/spelled-out ...
+[13/44] t04@Employee/first-turn ...
+[14/44] t04@Employee/with-history ...
+[15/44] t04@Employee/cold ...
+[16/44] t04@Employee/spelled-out ...
+[17/44] t05@Employee/first-turn ...
+[18/44] t05@Employee/with-history ...
+[19/44] t05@Employee/cold ...
+[20/44] t05@Employee/spelled-out ...
+[21/44] t06@Administrator/first-turn ...
+[22/44] t06@Administrator/with-history ...
+[23/44] t06@Administrator/cold ...
+[24/44] t06@Administrator/spelled-out ...
+[25/44] t06@Employee/first-turn ...
+[26/44] t06@Employee/with-history ...
+[27/44] t06@Employee/cold ...
+[28/44] t06@Employee/spelled-out ...
+[29/44] t07@Administrator/first-turn ...
+[30/44] t07@Administrator/with-history ...
+[31/44] t07@Administrator/cold ...
+[32/44] t07@Administrator/spelled-out ...
+[33/44] t07@Employee/first-turn ...
+[34/44] t07@Employee/with-history ...
+[35/44] t07@Employee/cold ...
+[36/44] t07@Employee/spelled-out ...
+[37/44] t08@Employee/first-turn ...
+[38/44] t08@Employee/with-history ...
+[39/44] t08@Employee/cold ...
+[40/44] t08@Employee/spelled-out ...
+[41/44] t09@Employee/first-turn ...
+[42/44] t09@Employee/with-history ...
+[43/44] t09@Employee/cold ...
+[44/44] t09@Employee/spelled-out ...
+
+====================================================================================================
+PER-FOLLOW-UP DETAIL (one block per thread and role; the first turn, then three ways)
+====================================================================================================
+
+[t01@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How much annual leave do full-time staff build up each month?
+                supplied : D01:c87d03d5, D08:f3014d68, D04:ea4cbd19, D03:3eb8e59f, D04:47564b41, T01:fd6b36e5, D04:8e8e8ce7, D04:7c7ac790, D04:43eef2bf
+                attempts : 1:parsed
+                  - [D01:c87d03d5] Under the Harbour Light leave accrual method, full-time staff earn 1.67 days of annual leave for every month of service, credited on the last working day of each month.
+  with-history  answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Is there a limit on how much of it I can save up?
+                embedded : How much annual leave do full-time staff build up each month? Is there a limit on how much of it I can save up?
+                supplied : D01:c87d03d5, D10:2187cabc, D04:ea4cbd19, D03:3eb8e59f, D08:f3014d68, D04:7c7ac790, D04:47564b41, D04:30971885, D04:b9ffdcd6, D11:0ce9f371
+                attempts : 1:parsed
+                  - [D01:c87d03d5] Unused leave carries over to the next year up to a maximum of thirty days.
+  cold          path-A           source rank 5           phrase no   cited no   not correct
+                question : Is there a limit on how much of it I can save up?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Is there a limit on how much annual leave I can save up?
+                supplied : D01:c87d03d5, D10:2187cabc, D05:85b5748e
+                attempts : 1:parsed
+                  - [D01:c87d03d5] Unused leave carries over to the next year up to a maximum of thirty days.
+
+[t02@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What do I need before I can start working from home?
+                supplied : D07:0fd9f0f6, D20:f4d89447, D18:9dac28cc, D08:f3014d68, D03:3eb8e59f, D02:4b8bf070, D14:8ebfca34, D17:c751047b, D04:3a1c6e0a, D10:2187cabc, D04:b9ffdcd6
+                attempts : 1:parsed
+                  - [D07:0fd9f0f6] A Blue Heron remote arrangement is available to employees who have completed their probation, hold a role that can be performed away from the office, and have a safe workspace with reliable internet access.
+                  - [D07:0fd9f0f6] Remote employees must be reachable during core hours of ten in the morning to three in the afternoon.
+                  - [D07:0fd9f0f6] The organisation supplies a laptop and headset for remote work, and work must be done on the supplied equipment over the corporate virtual private network.
+                  - [D07:0fd9f0f6] The remote work agreement is completed by the employee and the manager and stored on the personnel file.
+  with-history  answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How often does that get reviewed?
+                embedded : What do I need before I can start working from home? How often does that get reviewed?
+                supplied : D07:0fd9f0f6, D08:f3014d68, D04:47564b41, D04:b9ffdcd6, D03:3eb8e59f, D04:7c7ac790, D04:3a1c6e0a, D04:ea4cbd19, D02:4b8bf070
+                attempts : 1:parsed
+                  - [D07:0fd9f0f6] Eligibility for a Blue Heron remote arrangement is reviewed every six months.
+  cold          answered         source rank 25          phrase no   cited no   not correct
+                question : How often does that get reviewed?
+                supplied : D04:47564b41, D04:7c7ac790, D04:ea4cbd19, D04:30971885, D04:04463dd5, D04:8e8e8ce7, D04:782ac92d, D04:79a58ae7
+                attempts : 1:parsed
+                  - [D04:47564b41] This handbook is owned by the records manager and reviewed annually.
+                  - [D04:79a58ae7] Each business unit must document how roles and responsibilities is handled and name a responsible owner who reviews the arrangement at least once every twelve months.
+                  - [D04:79a58ae7] Guidance on roles and responsibilities is reviewed whenever legislation, technology or business needs change in a way that affects it.
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How often do the requirements for working from home get reviewed?
+                supplied : D07:0fd9f0f6, D04:47564b41, D04:7c7ac790, D04:b9ffdcd6, D04:ea4cbd19, D04:8e8e8ce7, D04:3a1c6e0a, D04:30971885
+                attempts : 1:parsed
+                  - [D07:0fd9f0f6] Eligibility for a Blue Heron remote arrangement is reviewed every six months.
+                  - [D07:0fd9f0f6] The owner of the remote work agreement template reviews it at least once a year.
+
+[t03@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Which company handles our catering?
+                supplied : D12:5da258bd
+                attempts : 1:parsed
+                  - [D12:5da258bd] Ridgeline Catering is listed in the data table with the category Catering.
+  with-history  answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How do I place an order with them?
+                embedded : Which company handles our catering? How do I place an order with them?
+                supplied : D12:5da258bd
+                attempts : 1:parsed
+                  - [D12:5da258bd] Ridgeline Catering's listed contact is book@ridgeline.example.
+  cold          path-A           source rank 1           phrase no   cited no   not correct
+                question : How do I place an order with them?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : How do I place an order with our catering company?
+                supplied : D12:5da258bd, D05:85b5748e
+                attempts : 1:parsed
+                  - [D12:5da258bd] Ridgeline Catering is listed in the vendor register under the Catering category, with the contact book@ridgeline.example.
+
+[t04@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Who is allowed to drive the fleet vehicles?
+                supplied : D19:a6a4045b, D07:0fd9f0f6, D02:4b8bf070
+                attempts : 1:parsed
+                  - [D19:a6a4045b] Only employees with a current licence who have completed the driver induction may use a fleet vehicle.
+  with-history  answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What records do they need to keep?
+                embedded : Who is allowed to drive the fleet vehicles? What records do they need to keep?
+                supplied : D19:a6a4045b, D04:f5181d4f, D04:b9ffdcd6, D04:79a58ae7, D04:5a28ed64, D04:43eef2bf, D04:782ac92d, D04:3a1c6e0a
+                attempts : 1:parsed
+                  - [D19:a6a4045b] The Coral Ridge logbook rule requires the driver to record the date, start and end odometer readings, destination and purpose of every trip.
+                  - [D19:a6a4045b] Logbooks are collected monthly by the fleet coordinator.
+  cold          answered         source rank 21          phrase no   cited no   not correct
+                question : What records do they need to keep?
+                supplied : D04:c8a7e5e3, D04:f5181d4f, D04:43eef2bf, D04:04463dd5, D04:5a28ed64, D04:3a1c6e0a, D04:0d378a56, D04:782ac92d
+                attempts : 1:parsed
+                  - [D04:c8a7e5e3] Financial records are kept for seven years after the end of the financial year to which they relate.
+                  - [D04:c8a7e5e3] Personnel records are kept for seven years after employment ends.
+                  - [D04:c8a7e5e3] Project records are kept for five years after project closure.
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What records do the people allowed to drive the fleet vehicles need to keep?
+                supplied : D19:a6a4045b, D04:f5181d4f, D04:b9ffdcd6, D04:43eef2bf, D04:5a28ed64, D04:782ac92d, D04:79a58ae7, D04:ea4cbd19
+                attempts : 1:parsed
+                  - [D19:a6a4045b] The Coral Ridge logbook rule requires the driver to record the date, start and end odometer readings, destination and purpose of every trip.
+                  - [D19:a6a4045b] Logbooks are collected monthly by the fleet coordinator.
+
+[t05@Employee] ordinary
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What date did the planning workshop set for the feature freeze?
+                supplied : T03:7065d7a4, D13:bfd22b0e, T01:fd6b36e5
+                attempts : 1:parsed
+                  - [T03:7065d7a4] Sofia proposed fixing the Tidewater feature freeze for the seventh of November, and the planning workshop agreed to this.
+  with-history  answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Why does it have to be that early?
+                embedded : What date did the planning workshop set for the feature freeze? Why does it have to be that early?
+                supplied : T03:7065d7a4, D13:bfd22b0e, T01:fd6b36e5
+                attempts : 1:parsed
+                  - [T03:7065d7a4] The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.
+  cold          path-A           source rank 5           phrase no   cited no   not correct
+                question : Why does it have to be that early?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Why does the feature freeze have to be that early?
+                supplied : T03:7065d7a4
+                attempts : 1:parsed
+                  - [T03:7065d7a4] The Tidewater feature freeze needs to be at least three weeks before release so testing has enough time.
+
+[t06@Administrator] scoped
+  first-turn    answered         source rank 2           phrase yes  cited yes  CORRECT
+                question : How often are our suppliers reviewed?
+                supplied : D04:47564b41, D12:5da258bd, D05:85b5748e, D04:ea4cbd19, D04:7c7ac790, D04:782ac92d, D04:04463dd5, D04:8e8e8ce7, D04:30971885
+                attempts : 1:parsed
+                  - [D12:5da258bd] Each vendor is reviewed once a year against price, delivery performance and quality.
+                  - [D05:85b5748e] Suppliers are reviewed annually, and poor performance is recorded in the vendor register.
+  with-history  answered         source rank 4           phrase yes  cited yes  CORRECT
+                question : Are we relying too heavily on just a few of them?
+                embedded : How often are our suppliers reviewed? Are we relying too heavily on just a few of them?
+                supplied : D12:5da258bd, D05:85b5748e, D04:47564b41, T02:814b2b19, D04:ea4cbd19, D04:7c7ac790, D04:04463dd5, D04:782ac92d, D04:63ccf857
+                attempts : 1:parsed
+                  - [T02:814b2b19] Helen stated on supplier concentration that three suppliers account for almost half of our spend.
+                  - [T02:814b2b19] Helen recommended developing alternatives for the two most critical services.
+                  - [T02:814b2b19] The chair said the recommendation seemed sensible and asked Helen to bring a plan to the next meeting.
+                  - [T02:814b2b19] The top three risks on the risks register were cyber security, loss of key staff and supplier failure.
+  cold          path-A           source rank 1           phrase no   cited no   not correct
+                question : Are we relying too heavily on just a few of them?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Are we relying too heavily on just a few of our suppliers?
+                supplied : T02:814b2b19, D12:5da258bd, D05:85b5748e
+                attempts : 1:parsed
+                  - [T02:814b2b19] Helen stated that three suppliers account for almost half of our spend.
+                  - [T02:814b2b19] Helen recommended that we develop alternatives for the two most critical services.
+
+[t06@Employee] scoped
+  first-turn    answered         source rank 2           phrase yes  cited yes  CORRECT
+                question : How often are our suppliers reviewed?
+                supplied : D04:47564b41, D12:5da258bd, D05:85b5748e, D04:ea4cbd19, D04:7c7ac790, D04:782ac92d, D04:04463dd5, D04:8e8e8ce7, D04:30971885
+                attempts : 1:parsed
+                  - [D12:5da258bd] Each vendor is reviewed once a year against price, delivery performance and quality.
+                  - [D05:85b5748e] Suppliers are reviewed annually, and poor performance is recorded in the vendor register.
+  with-history  path-B-declined  source not a candidate  phrase no   cited no   CORRECT
+                question : Are we relying too heavily on just a few of them?
+                embedded : How often are our suppliers reviewed? Are we relying too heavily on just a few of them?
+                supplied : D12:5da258bd, D05:85b5748e, D04:47564b41, D04:ea4cbd19, D04:7c7ac790, D04:04463dd5, D04:782ac92d, D04:63ccf857, D04:8e8e8ce7
+                attempts : 1:parsed
+  cold          path-A           source not a candidate  phrase no   cited no   CORRECT
+                question : Are we relying too heavily on just a few of them?
+                supplied : (none above threshold)
+  spelled-out   path-B-declined  source not a candidate  phrase no   cited no   CORRECT
+                question : Are we relying too heavily on just a few of our suppliers?
+                supplied : D12:5da258bd, D05:85b5748e
+                attempts : 1:parsed
+
+[t07@Administrator] scoped
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What gets published on the intranet about the office move?
+                supplied : D20:f4d89447, D03:3eb8e59f, D09:01d3887b, D17:c751047b, D15:fe8dfa92, D14:8ebfca34, T01:fd6b36e5
+                attempts : 1:parsed
+                  - [D20:f4d89447] A weekly update will be published on the intranet until the move is complete.
+  with-history  answered         source rank 2           phrase yes  cited yes  CORRECT
+                question : Is it being replaced?
+                embedded : What gets published on the intranet about the office move? Is it being replaced?
+                supplied : D20:f4d89447, D09:01d3887b, D03:3eb8e59f, D15:fe8dfa92, D14:8ebfca34
+                attempts : 1:parsed
+                  - [D09:01d3887b] Project Atlas replaces the organisation's ageing intranet with a searchable knowledge platform.
+  cold          path-A           source rank 23          phrase no   cited no   not correct
+                question : Is it being replaced?
+                supplied : (none above threshold)
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Is the intranet being replaced?
+                supplied : D09:01d3887b, T01:fd6b36e5
+                attempts : 1:parsed
+                  - [D09:01d3887b] Project Atlas replaces the organisation's ageing intranet with a searchable knowledge platform.
+
+[t07@Employee] scoped
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What gets published on the intranet about the office move?
+                supplied : D20:f4d89447, D03:3eb8e59f, D17:c751047b, D14:8ebfca34, T01:fd6b36e5
+                attempts : 1:parsed
+                  - [D20:f4d89447] A weekly update will be published on the intranet until the move is complete.
+  with-history  path-B-declined  source not a candidate  phrase no   cited no   CORRECT
+                question : Is it being replaced?
+                embedded : What gets published on the intranet about the office move? Is it being replaced?
+                supplied : D20:f4d89447, D03:3eb8e59f, D14:8ebfca34
+                attempts : 1:parsed
+  cold          path-A           source not a candidate  phrase no   cited no   CORRECT
+                question : Is it being replaced?
+                supplied : (none above threshold)
+  spelled-out   path-B-declined  source not a candidate  phrase no   cited no   CORRECT
+                question : Is the intranet being replaced?
+                supplied : T01:fd6b36e5
+                attempts : 1:parsed
+
+[t08@Employee] topic-change
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What was the customer satisfaction score last quarter?
+                supplied : T04:bfed770c, D06:94d67a03
+                attempts : 1:parsed
+                  - [T04:bfed770c] Ollie reported that the satisfaction score rose to eighty-six percent.
+  with-history  answered         source rank 2           phrase yes  cited yes  CORRECT
+                question : Where are the first aid kits kept?
+                embedded : What was the customer satisfaction score last quarter? Where are the first aid kits kept?
+                supplied : T04:bfed770c, D03:3eb8e59f, D06:94d67a03
+                attempts : 1:parsed
+                  - [D03:3eb8e59f] First aid kits are kept at reception and on every floor.
+  cold          answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Where are the first aid kits kept?
+                supplied : D03:3eb8e59f, D04:04463dd5, D04:3a1c6e0a, D04:ea4cbd19
+                attempts : 1:parsed
+                  - [D03:3eb8e59f] First aid kits are kept at reception and on every floor.
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Where are the first aid kits kept?
+                supplied : D03:3eb8e59f, D04:04463dd5, D04:3a1c6e0a, D04:ea4cbd19
+                attempts : 1:parsed
+                  - [D03:3eb8e59f] First aid kits are kept at reception and on every floor.
+
+[t09@Employee] previous-answer
+  first-turn    answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : Who do I ask if I have questions about the office move?
+                supplied : D20:f4d89447, D03:3eb8e59f, D17:c751047b, D18:9dac28cc, T01:fd6b36e5, D04:3a1c6e0a, D12:5da258bd, D04:19283da2, D04:108db77b, D13:bfd22b0e
+                attempts : 1:parsed
+                  - [D20:f4d89447] Direct questions about the office relocation to the facilities team.
+  with-history  answered         source rank 3           phrase yes  cited yes  CORRECT   <- NOT AS PREDICTED
+                question : What do they have to approve?
+                embedded : Who do I ask if I have questions about the office move? What do they have to approve?
+                supplied : D20:f4d89447, D04:b9ffdcd6, D17:c751047b, D04:3a1c6e0a, D04:f5181d4f, D04:43eef2bf, D07:0fd9f0f6, D04:c8a7e5e3, D12:5da258bd
+                attempts : 1:parsed
+                  - [D17:c751047b] Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.
+  cold          answered         source not a candidate  phrase no   cited no   not correct
+                question : What do they have to approve?
+                supplied : D05:85b5748e
+                attempts : 1:parsed
+                  - [D05:85b5748e] Team leaders may approve purchases up to two thousand dollars.
+                  - [D05:85b5748e] Department heads may approve purchases up to twenty thousand dollars.
+                  - [D05:85b5748e] The executive committee approves anything above the department head limit of twenty thousand dollars.
+                  - [D05:85b5748e] Exceptions to procurement guidelines require written approval.
+  spelled-out   answered         source rank 1           phrase yes  cited yes  CORRECT
+                question : What does the facilities team have to approve?
+                supplied : D17:c751047b, D20:f4d89447, D12:5da258bd, D05:85b5748e, D04:b9ffdcd6, D04:43eef2bf, D04:f5181d4f, D04:782ac92d, D08:f3014d68, D04:7c7ac790
+                attempts : 1:parsed
+                  - [D17:c751047b] Bookings of more than twenty people or bookings that run past six in the evening must be approved by the facilities team at least one week in advance.
+
+====================================================================================================
+SUMMARY, PER WAY, ACROSS FOLLOW-UPS (scoring rule version 2)
+====================================================================================================
+
+first-turn  (11 run(s))
+  answered, where an answer is expected : 100.0%  (11/11)
+  expected-answer match                 : 100.0%  (11/11)
+  not answered, where none is expected  : n/a (0 samples)
+  outcomes                              : answered 11, path-A 0, path-B-declined 0, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/16)
+  first-attempt conformance             : 100.0%  (11/11)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 100.0%  (11/11)
+
+with-history  (11 run(s))
+  answered, where an answer is expected : 100.0%  (9/9)
+  expected-answer match                 : 100.0%  (9/9)
+  not answered, where none is expected  : 100.0%  (2/2)
+  outcomes                              : answered 9, path-A 0, path-B-declined 2, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/13)
+  first-attempt conformance             : 100.0%  (11/11)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 90.9%  (10/11)
+
+cold  (11 run(s))
+  answered, where an answer is expected : 44.4%  (4/9)
+  expected-answer match                 : 11.1%  (1/9)
+  not answered, where none is expected  : 100.0%  (2/2)
+  outcomes                              : answered 4, path-A 7, path-B-declined 0, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/11)
+  first-attempt conformance             : 100.0%  (4/4)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 100.0%  (11/11)
+
+spelled-out  (11 run(s))
+  answered, where an answer is expected : 100.0%  (9/9)
+  expected-answer match                 : 100.0%  (9/9)
+  not answered, where none is expected  : 100.0%  (2/2)
+  outcomes                              : answered 9, path-A 0, path-B-declined 2, path-B-rejected 0, unavailable 0
+  fabricated identifiers                : 0.0%  (0/12)
+  first-attempt conformance             : 100.0%  (11/11)
+  out-of-scope (must be 0)              : 0
+  as predicted                          : 100.0%  (11/11)
+
+readings (scoring rule part 10):
+  t01@Employee       ordinary         history works
+  t02@Employee       ordinary         history works
+  t03@Employee       ordinary         history works
+  t04@Employee       ordinary         history works
+  t05@Employee       ordinary         history works
+  t06@Administrator  scoped           history works
+  t06@Employee       scoped           not answered by any way
+  t07@Administrator  scoped           history works
+  t07@Employee       scoped           not answered by any way
+  t08@Employee       topic-change     cold-answerable: proves nothing about history
+  t09@Employee       previous-answer  history works   <- prediction did not hold
+scoping shown, t06: YES
+scoping shown, t07: YES
+
+schema conformance, every response : 100.0%  (37/37)
+out-of-scope, every run             : 0  (must be 0)
+
+elapsed: 1.5 minutes
+Claude usage    : 37 call(s), 188557 input and 8596 output tokens, about US$0.0232 at Haiku 5.5's prices (0 call(s) without counts)
+full record written to corpus\objective-02\runs\2026-11-11\haiku-draw-2\threads.json
+
+RESULT: no leak, and schema conformance meets the 95% bar. The readings above are the result.
