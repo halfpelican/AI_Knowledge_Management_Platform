@@ -10021,3 +10021,61 @@ Recorded so the user can overrule any of them; each is application code with its
 **Not covered:** UC-12 A2 and UC-04 E2 (above); a history of regenerated summaries beyond their
 rows; summarising FR-08 documents (FR-10's summary clauses, D-104's note); multi-language
 summaries (§1.9 out of scope); scheduling follow-up meetings from action items (§1.9 out of scope).
+
+**Dated note, 11 November 2026 (evening): what the build changed from this entry as first written.**
+Recorded the day it was built, so the entry and the code agree. Each item is the session's own
+correction or addition; none changes the user's four choices.
+
+- **Correction to choice 1, "What is indexed": the summary's passages carry no first line.** This
+  entry said the indexed text sat "under a first line saying it is an AI-generated summary of the
+  named meeting and date". Built that way, a test showed the defect: every word of a chunk is found
+  by FR-12's keyword search, so a search for a meeting's title matched the summary's own first line
+  and showed the summary's text where FR-12 shows the opening of the transcript, and a word such as
+  "summary" would have matched every summarised meeting. The indexed text is now the summary's own
+  sentences and nothing else: the narrative, then each decision and each highlight, one to a line,
+  with no title, date or label (`apps/meetings/summaries.py::summary_index_text`). That a passage
+  is AI content is said by `ContentChunk.ai_generated` alone, which every surface reads.
+- **How the two existing payloads say so (NFR-15).** Each consulted passage in `POST /api/ask` and
+  in a reopened thread gains `ai_generated`, and each search result gains `snippet_ai_generated`.
+  Keyword search orders a meeting's matching passages with the transcript's first, so a summary
+  supplies the snippet only where nothing else of the meeting matched, and FR-12's title-only
+  snippet never takes a summary passage for the opening of the item. A meeting found through its
+  summary alone is one result, counted once.
+- **Seven existing tests pinned the old payload shapes and were amended** to carry the new field
+  with the value `false`: `test_ask.py`, `test_conversations.py` (two), `test_fr11_thread_scope.py`
+  (`PASSAGE_FIELDS`), `test_provenance_removed_turn.py`,
+  `test_null_chunk_citations_on_a_reopened_turn.py` and `test_search.py`. Each change is the one
+  key; no assertion was loosened.
+- **Four columns this entry's schema list did not name.** `MeetingSummary.run_number`, 1, 2, 3 per
+  meeting and unique with it, given under the meeting's row lock: "latest" means the highest, so
+  nothing depends on two timestamps differing (Windows clocks tick at about 15.6 ms).
+  `ActionItem.position`, the panel's order, for the same reason. `MeetingSummary.passages_sent`
+  and `passages_total`, which are how the panel says how much of a long transcript was read.
+- **`reindex` re-embeds a meeting's Ready summary with the meeting,** in the same transaction and
+  from its stored text. Nothing is summarised again. If none of the summary's chunks can be
+  embedded, the meeting fails and rolls back as a whole.
+- **The two commands.** `manage.py retry_meeting_summaries` reclaims orphans, runs the queue once,
+  prints ids and never titles or content, and exits 1 while any summary is still unavailable.
+  `manage.py summarise_meetings --missing | --meeting <uuid> [--out <json>]` is Objective 04's
+  instrument and the backfill for meetings stored before FR-16; it creates each run with
+  `request_summary(start=False)` and carries it itself, so a meeting costs one run's calls and
+  never a second in a background thread. Its record takes the token counts from the attempts log's
+  own lines.
+- **`SUMMARY_RUNNER`** (`thread` by default, `inline` in the suite) chooses where a run happens
+  (`apps/meetings/summary_runner.py`).
+- **The 422 carries the body too.** A transcript under the minimum has no summary, but it can have
+  hand-added action items, so both summary routes answer the 422 with the same keys plus `detail`.
+- **Due dates gained one form:** "end of January" is that month's last day. The full list is the
+  module docstring of `apps/meetings/due_dates.py`.
+- **Open, recorded rather than built:**
+  - an extracted item a person deleted is extracted again by a later Regenerate, because nothing
+    remembers a deletion;
+  - a kept item's passage numbers still name the transcript's passages after a Regenerate, but the
+    new summary stores the text only of the passages it cites itself, so the page shows the number
+    without the text where it has none;
+  - a summary run for a meeting whose visibility is later widened is not regenerated: its passages
+    are re-stamped with the meeting, which is all invariant 2 asks.
+- **Not verified at the time of this note:** no live provider call had been made for FR-16. The
+  suite runs on the stub and on fake provider clients. The development run on the `anthropic`
+  provider and Objective 04's measurement are recorded in their own notes when they are made, and
+  the FLM path (`gemma3:4b`) is not run for FR-16 at all.

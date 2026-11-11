@@ -1417,3 +1417,142 @@ returned: it names an internal address.
 offers no control that cannot work (D-114). Such a host still ingests a transcript made elsewhere,
 saved from the page as a text file, through FR-09's file option.
 
+
+## NIT3004 — FR-16 meeting summary and action items (D-125)
+
+"A "Summary" panel on the meeting page", "A "Regenerate Summary" button", and "An "Action Items"
+panel [that] lists each extracted item with description, suggested owner and due date, all
+editable." One decision, D-125, holds the operation, the schema, the retrieval exposure, the retry
+queue and every route below.
+
+**Scope first, permission second, on every route.** The meeting is resolved through the caller's
+scope, so a meeting the caller cannot see and one that does not exist are the same
+`404 {"detail": "No Meeting matches the given query."}` (invariant 1). Reading needs only a
+session. The four writes then need `contribute_content`, which both roles hold (D-30), checked
+inside the method after that lookup: `403` for a role without it (invariant 4).
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/meetings/{id}/summary` | session, meeting in scope | `200` the summary state (below) when nothing is pending; **`202`** with the same body while a run is `Processing` or queued for its automatic retry | `401`; `404`; **`422`** the same body plus `detail` when the transcript is under `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH` (200 words) |
+| POST | `/api/meetings/{id}/summary` | session + `contribute_content` | **`202`** the summary state, with `status` `"Processing"`. Starts a run, or reports the one already in flight for this meeting. No body is read | `401`; `404`; `403`; `422` too short, nothing started; `429` past the "ingestion" rate |
+| POST | `/api/meetings/{id}/action-items` | session + `contribute_content` | `201` the action item object. Body `{"description": "...", "owner_id": "uuid" or null, "due_date": "YYYY-MM-DD" or null}`; only `description` is required | `401`; `404`; `403`; `400 {"description": [...]}` blank, missing or over 1,000 characters; `400 {"owner_id": ["No user has this id."]}`; `400 {"due_date": [...]}` |
+| PATCH | `/api/meetings/{id}/action-items/{item_id}` | session + `contribute_content` | `200` the updated item. Body: any of `description`, `owner_id`, `due_date`; a field left out is unchanged, and `null` clears the owner or the date | `401`; `404` the meeting, or an `item_id` that is not one of this meeting's (the same body); `403`; `400` as above, and `400 {"non_field_errors": ["Send at least one of description, owner_id and due_date."]}` for an empty body |
+| DELETE | `/api/meetings/{id}/action-items/{item_id}` | session + `contribute_content` | `204`, no body | `401`; `404` as PATCH; `403` |
+
+The summary state, from both summary routes at every status code they answer:
+
+```json
+{"status": "Ready",
+ "queued_for_retry": false,
+ "summary": {
+   "summary_id": "uuid",
+   "summary_text": "The team reviewed the first quarter. It froze discretionary travel until January.",
+   "narrative": [{"text": "The team reviewed the first quarter.", "passages": [1]},
+                 {"text": "It froze discretionary travel until January.", "passages": [1, 2]}],
+   "decisions": [{"text": "Discretionary travel is frozen until 31 January.", "passages": [2]}],
+   "highlights": [{"text": "Travel was twice its budget.", "passages": [1]}],
+   "passages": {"1": "Ravi: Thanks, everyone. This is the first-quarter review ...",
+                "2": "... So the decision is that discretionary travel is frozen ..."},
+   "model": "claude-haiku-5-5",
+   "generated_at": "2026-11-11T14:02:11+11:00",
+   "input_truncated": false,
+   "passages_sent": 2,
+   "passages_total": 2,
+   "action_items_extracted": 4},
+ "action_items": [action item object, ...],
+ "can_edit": true}
+```
+
+- **`status`** is the latest run's: `"Processing"`, `"Ready"` or `"Unavailable"`, or `null` where
+  no summary was ever requested for this meeting (one ingested before FR-16, or one too short).
+- **`queued_for_retry`** is NFR-20's flag on that run. `"Unavailable"` with it true means the
+  hourly retry will run it again, and the route answers `202`. `"Unavailable"` with it false means
+  the retries are spent, and only Generate will try again; the route answers `200`.
+- **`summary`** is the meeting's latest **Ready** summary, or `null`. It is never a failed one:
+  "in the failed state it is never presented to a user" (UC-04). While a Regenerate runs, and
+  after one fails, it is still the previous Ready summary, so `status` and `summary` can differ.
+- **`narrative`, `decisions`, `highlights`:** each element's `passages` are numbers into the
+  summary's `passages` object, which holds the text of every transcript passage an element names
+  (UC-04: "every element of the summary carries a reference to the passage of the transcript it
+  was drawn from"). `summary_text` is the narrative's sentences joined. Every reference was
+  checked by the application to be a passage that was sent to the model; an element that named
+  none is not here (invariant 5).
+- **`model`, `generated_at`:** UC-04's "record of the model that produced it and the date".
+- **`input_truncated`:** true when the transcript was longer than one request carries
+  (`SUMMARY_INPUT_TOKENS`). The summary then covers the first `passages_sent` of
+  `passages_total` passages, and the page says so.
+- **`action_items_extracted`** is how many items that run extracted. 0 is UC-04 A1's meeting
+  that raised none, "recorded as empty rather than omitted".
+- **`can_edit`** is whether the caller's role holds `contribute_content`: a hint for showing the
+  controls. Every write checks the permission itself.
+
+The action item object:
+
+```json
+{"action_item_id": "uuid",
+ "description": "Reconcile the September card statements",
+ "owner": {"id": "uuid", "name": "Alex Morgan"},
+ "owner_name": "Alex",
+ "due_date": "2026-10-23",
+ "due_text": "next Friday",
+ "passages": [2],
+ "origin": "ai",
+ "edited": false,
+ "created_at": "2026-11-11T14:02:11+11:00",
+ "updated_at": "2026-11-11T14:02:11+11:00"}
+```
+
+- **`owner`** is the user the item is assigned to, or `null`: **unassigned**. The server assigns
+  an extracted item only where the transcript's name matches exactly one user: a full name against
+  the user list, or a lone first name against the meeting's recorded attendees. Anything else is
+  unassigned, "rather than attributed to the wrong person". `GET /api/users/directory` lists the
+  people a person may choose.
+- **`owner_name`** and **`due_text`** are the transcript's own words for the owner and the
+  deadline ("the facilities team", "next Friday"), blank where it said nothing and on an item a
+  person added. An edit does not change them.
+- **`due_date`** is the date the server converted `due_text` to, from the meeting's date, or
+  `null` where the phrase fixes none ("next week", "before the move"). A date is never invented.
+- **`passages`** are numbers into the extracting summary's `passages`; `[]` on an item a person
+  added. After a Regenerate, a kept item's numbers still name the transcript's own passages, but
+  the current summary's `passages` object holds only the passages *it* cites, so the page shows a
+  passage where it has the text and the number alone where it does not.
+- **`origin`** is `"ai"` (extracted) or `"user"` (added by a person). **`edited`** is true once a
+  person has changed an extracted item. NFR-15's badge reads both: "Suggested by AI",
+  "Suggested by AI, edited by a person", and none for `"user"`.
+- **Order:** extracted items in the model's order, then hand-added items in the order added.
+
+**What a run does** (D-125). It starts automatically when `POST /api/meetings` stores a transcript
+of 200 words or more, and again on `POST .../summary`. One run is in flight per meeting.
+
+1. The transcript's own passages (FR-09's chunks) are sent in one request, up to
+   `SUMMARY_INPUT_TOKENS`. The reply must match `SUMMARY_SCHEMA`: a malformed reply gets one
+   retry, a failed call two (`MAXIMUM_SUMMARY_ATTEMPTS`, three in total), and a `429` is retried
+   while any other `4xx` ends the run at once (D-118).
+2. Every reference is checked against the passages sent. Owners are matched and dates converted
+   by the application.
+3. The summary, its action items and its search index entries are written in one transaction.
+   The extracted items nobody touched are replaced; **items a person added or edited are kept**.
+4. A run that fails is `"Unavailable"` and queued. `python manage.py retry_meeting_summaries`,
+   scheduled hourly (`scripts/register_meeting_summary_schedule.ps1`), runs each queued summary
+   again, up to `MAXIMUM_SUMMARY_RETRY_RUNS` (3) times. The transcript is stored and searchable
+   throughout: a summary's failure never touches it (invariant 8, NFR-20).
+
+**`POST /api/meetings` is unchanged.** Its `201` body does not mention the summary; the meeting
+page asks `GET .../summary`.
+
+### The summary as source material (UC-04, D-125 choice 1)
+
+A Ready summary's narrative, decisions and highlights are indexed as passages of **the meeting
+itself**, under the meeting's own `visible_to_roles`, so FR-12 can find and cite them. Its action
+items are not indexed. Two existing payloads gain one field each, so that an AI-written passage
+is never shown as the transcript's words (NFR-15):
+
+- **`POST /api/ask` and `GET /api/conversations/{id}`:** each object in `sources[].passages`
+  gains **`"ai_generated": true | false`**. True for a passage of a meeting's AI-generated
+  summary. Such a passage's `text` is the summary's own sentences (the narrative, then each
+  decision and highlight, one to a line) with nothing added, so the flag is the only thing that
+  says it is AI content. Its source is the meeting, as for any other passage of it.
+- **`GET /api/search`:** each result gains **`"snippet_ai_generated": true | false`**. True where
+  the snippet shown comes from the meeting's AI-generated summary, which happens only when the
+  term occurs in the summary and nowhere in the transcript. A meeting found through its summary
+  alone is still one result, in the meetings group, counted once.

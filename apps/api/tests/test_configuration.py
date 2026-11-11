@@ -196,6 +196,11 @@ THROTTLED_ROUTES = {
     # same budget.
     ("transcription-list", "POST"): "transcription",
     ("transcription-status", "GET"): "transcription",
+    # FR-16 (D-125): Generate or Regenerate Summary is one provider call, like FR-10's classify, so
+    # it shares the ingestion budget. Its GET is not throttled, because the page polls it while a
+    # run is in flight, and the action-item writes are not either: they call no provider and grow
+    # no shared vocabulary.
+    ("meeting-summary", "POST"): "ingestion",
 }
 
 
