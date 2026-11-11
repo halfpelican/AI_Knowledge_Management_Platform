@@ -1,0 +1,50 @@
+database kmp_obj02_anthropic_20261110: empty of users; provider anthropic, claude-haiku-5-5, voyage-4 at 1024
+Superuser created successfully.
+step 4: corpus.admin@example.com made by createsuperuser --noinput, role Administrator
+the server signed in corpus.admin@example.com (200, Administrator): it serves kmp_obj02_anthropic_20261110
+step 6: corpus.employee@example.com registered through POST /api/auth/register: 201, role Employee
+step 7: ingest_objective02_anthropic.py --output-dir corpus\objective-02\runs\2026-11-10-anthropic\ingestion
+This process reads the database 'kmp_obj02_anthropic_20261110'; the server must write to the same one.
+Provider gate: PASS {'ai_provider': 'anthropic', 'chat_model': 'claude-haiku-5-5', 'embedding_model': 'voyage-4', 'embedding_dimension': 1024, 'relevance_threshold': 0.2687, 'partial_match_floor': 0.2468, 'classification_threshold': 0.72}
+Server: waitress 3.0.2, unknown threads, DEBUG off
+WARNING: the thread count is unknown, not 24 (D-85 decision 3)
+D01: HTTP 201 Indexed 9.9s 
+D02: HTTP 201 Indexed 2.0s 
+D03: HTTP 201 Indexed 3.8s 
+D04: HTTP 201 Indexed 9.8s 
+D05: HTTP 201 Indexed 2.0s 
+D06: HTTP 201 Indexed 2.4s 
+D07: HTTP 201 Indexed 3.3s 
+D08: HTTP 201 Indexed 3.5s 
+D09: HTTP 201 Indexed 4.1s 
+D10: HTTP 201 Indexed 3.7s 
+D11: HTTP 201 Indexed 2.3s 
+D12: HTTP 201 Indexed 3.2s 
+D13: HTTP 201 Indexed 2.3s 
+D14: HTTP 201 Indexed 4.1s 
+D15: HTTP 201 Indexed 2.7s 
+D16: HTTP 201 Indexed 2.2s 
+D17: HTTP 201 Indexed 3.4s 
+D18: HTTP 201 Indexed 3.7s 
+D19: HTTP 201 Indexed 3.9s 
+D20: HTTP 201 Indexed 2.7s 
+T01: HTTP 201 Indexed 0.7s 
+T02: HTTP 201 Indexed 0.5s 
+T03: HTTP 201 Indexed 1.2s 
+T04: HTTP 201 Indexed 0.7s 
+T05: HTTP 201 Indexed 0.7s 
+I01: HTTP 415  0.1s 
+I02: HTTP 413  0.7s 
+I03: HTTP 422 Extraction failed 0.2s 
+I04: HTTP 422 Insufficient content 0.1s 
+I05: HTTP 422 Extraction failed 0.1s 
+B01: HTTP 409  0.1s 
+
+Missed: none; over the bound: none
+Wrote corpus\objective-02\runs\2026-11-10-anthropic\ingestion\results.json and corpus\objective-02\runs\2026-11-10-anthropic\ingestion\results.md
+step 7 ended with exit code 0
+chunks by (source type, embedding model, width): {('document', 'voyage-4', 1024): 38, ('meeting', 'voyage-4', 1024): 5}
+document analyses by model: {'claude-haiku-5-5': 20}
+documents by status: {'Indexed': 20, 'Extraction failed': 2, 'Insufficient content': 1}
+meetings by status: {'Indexed': 5}
+users: 2
