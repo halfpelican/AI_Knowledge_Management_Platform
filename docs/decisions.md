@@ -8725,10 +8725,11 @@ verdict.
 > - On `anthropic`, it is partial and unconfirmed: 9/9 on one draw per model, with no measured noise band.
 > - On both providers, D-42 narrows "prior turns" to prior questions, and "reachable from any page" has no front-end test.
 
-**Dated note, 11 November 2026, the evening: the draws were made, and the resolving half of
-FR-13's follow-up clause is recorded as met on `anthropic`.** This is the further note the table
-above promised. It records a measurement, not an audit: FR-13's verdict stays INCOMPLETE until
-`requirements-auditor` reads it again. The text above this note is left as written.
+**Dated note, 12 November 2026: the draws were made on the evening of 11 November, and the
+resolving half of FR-13's follow-up clause is recorded as met on `anthropic`.** This is the
+further note the table above promised. It records a measurement, not an audit: FR-13's verdict
+stays INCOMPLETE until `requirements-auditor` reads it again. The text above this note is left as
+written.
 
 **The rule, committed before the first draw** (`049fefe`,
 `corpus/objective-02/runs/2026-11-11/haiku-draws/haiku-draws.md`). The user chose it on
@@ -8782,12 +8783,13 @@ over from D-103").
   draws.** That is "so that pronouns and abbreviated references resolve correctly", as far as the
   frozen nine test it. This is a measured pass, not an accepted deviation.
 - **On `flm`: unchanged.** The follow-up clause is partial, the deviation this entry accepted for
-  NIT3003. Nothing was measured on FLM today.
+  NIT3003. Nothing was measured on FLM in this run.
 - **On both providers, unchanged:**
   - **D-42 stays a recorded deviation.** Prior questions are passed, never prior answers. No frozen
     follow-up tests a referent that is only in an earlier answer.
-  - **"Reachable from any page" still needs its front-end test on `main`.** One is open as pull
-    request #91, not merged when this was written.
+  - **"Reachable from any page" has its front-end test, since #91** (`d271917`, merged after the
+    draws): `frontend/tests/askNavLink.test.jsx` walks every route as each role. That is not this
+    run's work.
 
 **These sentences in the note above are overtaken by this one, and left as written:**
 
@@ -8795,9 +8797,17 @@ over from D-103").
   model. On three draws under a rule fixed first, the resolving half is now recorded as met.
 - **"Haiku has no HTTP check".** It has one now.
 - **"Left without an owner yet": `scripts/server_record.py:263`.** A Listen row that names
-  process 0 is now recorded as unknown, with a note (`6124822`, two tests). A larger change to the
-  same lookup, with fallbacks for when Windows misreports the socket, is open as pull request #93.
-  Which of the two lands first is the user's decision.
+  process 0 is now reported as unknown, with a note (`6124822`, two tests).
+  - **#93 merged first** (`25f6179`, on 11 November at 20:27; D-87's note of that day). The lookup
+    now falls back to netstat and to the port's own row, and it takes a Listen row only with a
+    readable command line, so a row naming process 0 no longer ends the search.
+  - **The guard sits inside #93's first lookup.** It matters when no lookup finds the listener and
+    a leftover Listen row names process 0. #93 alone then returns process 0, "as it always was".
+    With the guard, the record says the listener is unknown, and why.
+  - **The user decided on 12 November to keep the guard,** from a tabbed question. Its two tests
+    were adapted to #93's lookup. #93's own tests are unchanged and pass: they stub the first
+    lookup, so one of them still describes process 0 being returned, which the real lookup no
+    longer does.
 - **"no snapshot record is committed for dump `80ff46d4…`".** A copy of the snapshot record is in
   `runs/2026-11-11/haiku-draws/snapshot.json`. The dump's SHA-256 was recomputed and is the
   record's. The earlier run folders still hold none.
@@ -8805,7 +8815,8 @@ over from D-103").
 **Section (c)'s defect 1 did not recur.** The check's record holds the server as observed:
 Waitress 3.0.2, 24 threads, pid 28208, started 08:23:05Z, `DEBUG` off. `server_observed.txt` holds
 the listener's row and command line, and `server_settings.txt` the model the server ran. The lookup
-found the listener, so the new guard was not exercised on a live server.
+found the listener, so the new guard was not exercised on a live server. The check ran at
+`0dd05c6`, before #93 was merged into this branch, so its lookup was the single Listen-row one.
 
 **What the pass does not show.** The verdict's own list, in section (a), stands: nothing from t08,
 no reference into an earlier answer, no shortened name or acronym, and no thread longer than two
