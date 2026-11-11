@@ -1,0 +1,5 @@
+> scripts/snapshot_measurement_db.py restore --database kmp_anthropic --into kmp_fr12_declines_20261111 --media-root C:\kmp-measurement\2026-11-11-fr12-declines\media --from-dir C:\kmp-dev\kmp_anthropic\snapshot
+  (2026-11-11 14:01:32 +1100, commit c46c38e)
+Restored the snapshot of kmp_anthropic into the new database kmp_fr12_declines_20261111, and its media into C:\kmp-measurement\2026-11-11-fr12-declines\media (dump sha256 8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70). kmp_anthropic was not touched.
+Next: manage.py migrate against it, for any migration newer than the snapshot.
+exit code: 0
