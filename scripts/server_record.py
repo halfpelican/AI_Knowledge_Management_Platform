@@ -260,6 +260,13 @@ def listening_process(port: int) -> dict:
     except ValueError:
         found["note"] = "the process lookup printed something that is not JSON"
         return found
+    if reply.get("pid") == 0:
+        # Process 0 is Windows' System Idle Process. It listens on nothing, and its start is the
+        # machine's boot. The HTTP check of 10 November 2026 recorded it as the server, with that
+        # start (D-112's note of 11 November 2026, section (c), defect 1). It is not an observation.
+        found["note"] = (f"the Listen row for port {port} names process 0, the System Idle Process, "
+                         "which is not a server: the listening process is unknown")
+        return found
     found.update(pid=reply.get("pid"), command=reply.get("command") or None,
                  started_at=reply.get("started") or None)
     return found

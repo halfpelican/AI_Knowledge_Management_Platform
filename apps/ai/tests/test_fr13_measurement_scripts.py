@@ -449,6 +449,42 @@ def test_the_harness_records_that_it_ran_in_process(scripts):
     assert "no HTTP server" in record["note"]
 
 
+def a_lookup_that_prints(server_record, monkeypatch, reply):
+    """Make listening_process's PowerShell lookup print ``reply``, on any platform."""
+    monkeypatch.setattr(server_record.sys, "platform", "win32")
+    monkeypatch.setattr(server_record.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(
+        returncode=0, stdout=json.dumps(reply), stderr=""))
+
+
+def test_process_0_is_never_recorded_as_the_listening_process(scripts, monkeypatch):
+    """D-112's note of 11 November 2026, section (c), defect 1.
+
+    The HTTP check of 10 November recorded pid 0 and the machine's boot time as the server's.
+    Process 0 is the System Idle Process, so the listener is unknown, and the record says why.
+    """
+    server_record = scripts("server_record")
+    a_lookup_that_prints(server_record, monkeypatch,
+                         {"pid": 0, "command": "", "started": "2026-11-09T11:19:15.787Z"})
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"]) == (None, None, None)
+    assert "process 0" in found["note"] and "unknown" in found["note"]
+
+    record = server_record.observe("http://127.0.0.1:8000", "waitress", probe_debug=False)
+    assert (record["pid"], record["process_started_at"], record["command_line"]) == (None, None, None)
+    assert record["threads"] is None and found["note"] in record["notes"]
+    # A lookup that found nothing is not evidence of another server (D-85): no refusal.
+    assert server_record.contradicts_d85(record) == []
+
+
+def test_a_real_listening_process_is_recorded_as_before(scripts, monkeypatch):
+    server_record = scripts("server_record")
+    a_lookup_that_prints(server_record, monkeypatch,
+                         {"pid": 44868, "command": WAITRESS_24, "started": "2026-11-10T05:33:43.000Z"})
+    found = server_record.listening_process(8000)
+    assert found == {"pid": 44868, "command": WAITRESS_24, "started_at": "2026-11-10T05:33:43.000Z",
+                     "note": None}
+
+
 # --- citation_harness.py --threads: refusals, as it is run ---------------------------------
 
 
