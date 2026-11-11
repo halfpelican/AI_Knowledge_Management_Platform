@@ -9819,3 +9819,205 @@ documented answer except the one in decision 2.
 version of this change, and found the three Django-checked routes and a false premise about JSON.
 This entry and the code carry both corrections, and the tests above were re-run against the old
 code.
+
+## D-125 · FR-16's meeting summary: one structured call after FR-09 stores a transcript, numbered passages checked by set membership, the summary indexed as the meeting's own chunks, and an hourly retry queue
+
+**Status:** Settled by the user (the four choices below, 11 November 2026) · **Date:** 2026-11-11 ·
+**Concerns:** FR-16, UC-04, NFR-14, NFR-15, NFR-20, NFR-21, Objective 04, FR-09, FR-11, FR-12,
+invariants 1, 2, 3, 5, 7, 8, 9 and 10, D-07, D-16, D-17, D-19, D-31, D-45, D-47, D-79, D-93, D-104,
+D-105, D-107, D-118, D-121, D-123, `apps/ai/base.py`, `apps/ai/summarisation.py`,
+`apps/meetings/`, `apps/documents/models.py` (`ContentChunk`), `apps/core/constants.py`,
+`docs/api-contract.md`, `docs/schema-v1.md`, `docs/ai-provider.md` · **Stage:** NIT3004,
+Objective 04 due 13 November 2026 · **Area:** meeting intelligence, Sagarika Dey's (CLAUDE.md §1)
+
+**What the proposal asks for, in its words.**
+
+- **FR-16, Front-End:** "A "Summary" panel on the meeting page shows a concise paragraph-length
+  summary once processing completes." "A "Regenerate Summary" button lets the user re-run generation
+  if the result is unsatisfactory." "An "Action Items" panel lists each extracted item with
+  description, suggested owner and due date, all editable. Users can edit, delete or manually add
+  items the extraction missed; deletion requires confirmation."
+- **FR-16, Server-End:** "Sends the stored transcript to the language model in a single structured
+  request returning both the summary and the action items against a defined schema rather than
+  prose." "transcripts below a minimum length are rejected rather than submitted, since short
+  transcripts produce unreliable output. The response is schema-validated before storage, and a
+  malformed response triggers one retry. Failures are retried twice before the summary is marked
+  unavailable." "summary failure never blocks the transcript from being stored or searched." "a
+  named owner is matched against the user list, and where no confident match exists the item is
+  stored as unassigned rather than attributed to the wrong person. Relative dates such as "next
+  Friday" are converted using the meeting date as reference." "202 Accepted while processing, 200
+  OK with the summary and item list once ready, an empty item list being a valid result, 422
+  Unprocessable Entity where the transcript is too short to summarise."
+- **FR-16, Database:** "MeetingSummaries (Create, Read); ActionItems (Create, Read, Update,
+  Delete)", with one field table, MeetingSummaries': `summary_id`, `meeting_id`, `summary_text`,
+  `status` ("Ready"), `generated_at`.
+- **UC-04, on success:** a summary "holding a narrative account of the meeting, the decisions
+  reached, the action items raised, and the highlights of discussion"; "Every element of the summary
+  carries a reference to the passage of the transcript it was drawn from"; it is "stored as generated
+  content ... carrying a record of the model that produced it and the date of production"; and "The
+  summary is available to UC07 Query Organisational Knowledge as source material, subject to the
+  permission scope applying to the parent document." **On failure:** "in the failed state it is
+  never presented to a user nor cited as a source." **A1:** "The system records the action item
+  section as empty rather than omitting it." **E1:** "the system marks the summary as pending and
+  queues the transcript for a later attempt".
+- **NFR-15:** "All AI-generated content (summaries, action items, extracted knowledge) must be
+  visually distinguished from human-authored content using one consistent convention".
+- **NFR-20:** "the raw transcript must still be stored, retrievable, and flagged for automatic
+  retry"; its test: "Simulate summary-generation failure; confirm the raw transcript persists, is
+  searchable, and appears in a retry queue."
+- **Objective 04:** a "reference set of ten transcripts for which summaries, action items and
+  decisions have been prepared manually in advance: at least 80% of the action items present in the
+  reference must be extracted, no more than 10% of extracted items may be items absent from the
+  reference, and every extracted item carrying a named owner must either resolve to a user on the
+  system or be recorded as unassigned rather than attributed to the wrong person."
+
+**Two gaps in the proposal, recorded rather than filled silently.**
+
+- **ActionItems has no field table.** The CRUD line names the table and nothing defines its
+  columns. They are taken from FR-16's and UC-04's words: a description, a suggested owner, a due
+  date, the person "or role" it was assigned to, and the passage it came from (the schema below).
+- **UC-04's trigger is UC-12 A2, "the extracted text has the character of a meeting record", and
+  its E2 is a misidentified file.** Neither is built. A meeting reaches FR-16 through FR-09's own
+  route, where a person declares it a meeting; an FR-08 upload is never inspected for being a
+  transcript, and nothing reclassifies a meeting as a document.
+
+### The user's four choices
+
+**1. The summary reaches retrieval as the meeting's own chunks.** A Ready summary is chunked and
+embedded as `ContentChunks` rows with `source_type` "meeting" and `source_id` the meeting's id,
+plus a new boolean column, `ContentChunk.ai_generated`, true only for them (`documents` migration,
+additive, default false).
+
+- **Invariants 1 and 2 hold by construction.** The rows are stamped with the meeting's
+  `visible_to_roles`, read under `SELECT ... FOR UPDATE` on the meeting row in the transaction that
+  writes them, so a visibility change either waits for the write or is seen by it. D-47's cascade
+  re-stamps every chunk of the source, which includes these, in the same transaction; meeting
+  deletion removes chunks by source, which includes these. Both get their own tests.
+- **No new `SOURCE_TYPES` value.** A third value would need a second branch in the cascade,
+  deletion, `reindex`, search grouping, citation links and the dashboard.
+- **What is indexed** is the summary record: the narrative, the decisions and the highlights,
+  under a first line saying it is an AI-generated summary of the named meeting and date. **Action
+  items are not indexed:** they are the editable table (ActionItems: CRUD), and an index entry that
+  disagreed with the record a person had corrected would be the defect.
+- **Only a Ready summary is indexed,** in the same transaction that marks it Ready, so a Ready
+  summary is always searchable and a failed one never is (UC-04, on failure). If every summary
+  chunk fails to embed, the transaction is rolled back and the run fails.
+- **Regenerating replaces the summary's chunks** in that transaction. `reindex` rebuilds them from
+  the current Ready summary's stored text, beside the transcript's.
+- **Every surface that shows a passage from them carries the AI badge (NFR-15):** a citation in an
+  answer and a search snippet each say the passage is from the AI-generated summary.
+
+**2. Summarisation runs automatically after FR-09 commits, again on Regenerate, and a failure is
+retried hourly.** There is no task queue in the stack, so:
+
+- **The run is a background thread in the server process,** started by `transaction.on_commit`
+  after the meeting's ingestion transaction or the Regenerate request commits. No provider call is
+  made inside the ingestion transaction, and no provider call is made while a database lock is
+  held, except the summary's own embedding (point 1). At most `MAXIMUM_SUMMARIES_IN_FLIGHT` (2)
+  runs call the provider at once; a third waits. The suite and the management commands run it
+  inline.
+- **One run in flight per meeting.** A Regenerate while a run is Processing answers 202 with that
+  run and starts nothing.
+- **The retry queue (NFR-20, UC-04 E1)** is every summary marked Unavailable with
+  `queued_for_retry` set. A run that fails for any reason is queued. `manage.py
+  retry_meeting_summaries` runs each queued summary again, inline, oldest first, and
+  `scripts/register_meeting_summary_schedule.ps1` registers it in Windows Task Scheduler hourly,
+  FR-19's pattern (D-107's note of 10 November 2026). A summary leaves the queue when it is Ready, or
+  after `MAXIMUM_SUMMARY_RETRY_RUNS` (3) queued runs have failed, when it stays Unavailable until a
+  person presses Regenerate. A run left Processing by a server restart, older than
+  `SUMMARY_STALE_AFTER_SECONDS`, is treated as failed and queued by the same command.
+- **Registering the task is the user's step,** since it changes the host's settings.
+
+**3. Every element names numbered transcript passages, and application code checks them.**
+
+- **The transcript is sent as FR-09's own passages:** `split_into_overlapping_chunks`, the chunker
+  that indexed it, labelled `[P1]` to `[Pn]`. The label syntax in transcript text is neutralised as
+  D-45 neutralises `[chunk_id: ...]`: its square brackets become round ones.
+- **Every narrative sentence, decision, highlight and action item must name at least one passage.**
+  An element with no `passages` array, or an empty one, breaks the schema.
+- **Verification is set membership, in `apps/meetings`, never a model judgement (invariant 5):** a
+  reference outside the passages sent is removed, and an element left with none is dropped. If no
+  narrative sentence survives, the run fails as path (b) does for FR-12 (invariant 7's distinction):
+  it is logged as its own reason and queued.
+- **The text of each referenced passage is stored with the summary,** so a reference survives a
+  change to the chunker and works when indexing failed (UC-04's precondition is extracted text, not
+  an index).
+
+**4. Objective 04's reference set is prepared by people.** This session drafts ten candidate
+transcripts, a roster, a blank reference template and a separate development set. The user and
+Sagarika write the reference summaries, decisions and action items by hand and freeze them. Nothing
+is tuned against the frozen ten (D-93); prompt changes are judged on the development transcripts.
+
+### The session's choices where the brief was silent
+
+Recorded so the user can overrule any of them; each is application code with its own tests.
+
+- **The AI operation:** `summarise_meeting(title: str, passages: list[str]) ->
+  MeetingSummaryDraft`, the fifth operation on `AIService`, in its own module
+  (`apps/ai/summarisation.py`), FR-10's shape (D-104): prompt, schema, tolerant parser and attempt
+  loop together, both providers calling the loop with their one-call function. The reply is one
+  JSON object with exactly four keys, `summary` (1 to `MAXIMUM_SUMMARY_SENTENCES` narrative
+  sentences), `decisions`, `highlights` and `action_items`, each element carrying `passages`. All
+  four keys are required and the last three may be empty arrays, so an omitted action-item section
+  is a schema violation and an empty one is a result (UC-04 A1). An action item is `{description,
+  owner, due, passages}`, `owner` and `due` copied as the transcript says them, or null.
+- **Attempts:** `MAXIMUM_SUMMARY_ATTEMPTS` = 3 in total (1 initial call + 2 retries) for failed
+  calls, a 429 included (D-118); any other 4xx ends the run at once. A malformed reply gets exactly
+  one retry (FR-16's "a malformed response triggers one retry"): `MAXIMUM_MALFORMED_SUMMARY_REPLIES`
+  = 2, the first triggering the retry and the second ending the run, within the three.
+- **The minimum length:** `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH`, 200 whitespace tokens (D-31's
+  token), *tune*. FR-09's own floor is 50. Below it nothing is sent: no run is started at
+  ingestion, and both summary routes answer 422.
+- **A long transcript:** one request, as FR-16 says, of whole passages up to
+  `SUMMARY_INPUT_TOKENS` (10,000, *tune*); the passages after are left out, `input_truncated` is
+  recorded, and the panel says how much of the transcript the summary covers. No silent fragment.
+- **Owners (attribution):** names are compared after case folding and collapsing spaces. A
+  match is (a) exactly one user whose full name equals the name, or (b) for a single word, exactly
+  one of the meeting's recorded attendees whose first name equals it. Anything else is
+  unassigned: no match, several matches, a surname alone, a title such as "Ms Nguyen", a team or a
+  role. The name as the transcript gives it is kept beside the empty owner, so "the Finance team"
+  stays readable. Attendance is used here as a participation record, never for access (invariant 3).
+- **Due dates:** the model copies the phrase; `apps/meetings/due_dates.py` converts it from the
+  meeting date. An absolute date (2026-11-14, 14/11/2026, 14 November, the 14th) is the next such
+  date on or after the meeting where the year is not said. "Today", "tomorrow", "in N days" or
+  "weeks", "this Friday" or a bare "Friday" (the first Friday after the meeting), "next Friday" (the
+  Friday of the calendar week after the meeting's, weeks starting on Monday), "end of the week"
+  (that week's Friday), "end of next week", "end of the month", "end of next month". Anything
+  vaguer ("next week", "soon", "after the audit") keeps its phrase and no date: a date is never
+  invented.
+- **Regenerate** keeps every action item a person added or edited and replaces the AI items nobody
+  touched. The previous Ready summary stays shown until the new run is Ready; if it fails, the old
+  one stays.
+- **Who may do what:** anyone who can see the meeting reads its summary and items; generating,
+  regenerating and adding, editing or deleting an item need `contribute_content` (FR-10's rule,
+  D-105; both roles hold it, D-30), checked after the scoped 404 (D-73's order). Throttled in the
+  "ingestion" scope (D-79), like FR-10's classify.
+- **Statuses:** `SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")`, FR-16's words,
+  plus the `queued_for_retry` flag, NFR-20's. A summary row's status moves from Processing to Ready
+  or Unavailable during its own run; `summary_text` is written once, when it is Ready, and never
+  edited, so the table is Create and Read in substance.
+- **The routes,** exact bodies in `docs/api-contract.md`: `GET` and `POST
+  /api/meetings/{id}/summary` (202 while the latest run is Processing or queued for retry, 200
+  otherwise, 422 too short, 404 out of scope); `POST /api/meetings/{id}/action-items` (201);
+  `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}` (200, 204). An item outside the
+  meeting named is 404.
+- **NFR-15:** FR-10's convention, the words "Suggested by AI" beside the content and its
+  `tag--ai` style, for the summary, each AI action item ("Suggested by AI, edited by a person"
+  once edited) and every passage from the summary. A hand-added item carries none.
+
+### The schema (`meetings` migration, additive and reversible)
+
+- **`MeetingSummary`** (`meeting_summaries`): the proposal's `summary_id`, `meeting_id`,
+  `summary_text`, `status`, `generated_at`; plus `narrative`, `decisions`, `highlights` (JSON lists
+  of `{text, passages}`), `passages` (JSON, the referenced passages' text by number), `model`,
+  `input_truncated`, `action_items_extracted` (the number the run extracted, 0 being UC-04 A1's
+  recorded empty section), `requested_by` (null for an automatic run), `requested_at`,
+  `started_at`, `queued_for_retry`, `retry_runs`, `failure_reason`.
+- **`ActionItem`** (`action_items`): `action_item_id`, `meeting_id`, `summary_id` (the run that
+  extracted it; null for a hand-added item), `description`, `owner_id` (null is unassigned),
+  `owner_name` (as said), `due_date`, `due_text` (as said), `passages`, `origin` ("ai" or "user"),
+  `edited`, `created_at`, `updated_at`.
+
+**Not covered:** UC-12 A2 and UC-04 E2 (above); a history of regenerated summaries beyond their
+rows; summarising FR-08 documents (FR-10's summary clauses, D-104's note); multi-language
+summaries (§1.9 out of scope); scheduling follow-up meetings from action items (§1.9 out of scope).
