@@ -519,12 +519,15 @@ VOYAGE_THRESHOLD = RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE]
 # Designed from voyage-4's own threshold, never a literal, so the tests follow D-120's value.
 JUST_BELOW = VOYAGE_THRESHOLD - 0.02
 WELL_ABOVE = VOYAGE_THRESHOLD + 0.30
+# Above voyage-4's threshold, under EmbeddingGemma's: where Objective 06's P02 fell (0.2812).
+IN_THE_BAND = VOYAGE_THRESHOLD + 0.01
 
 V_RESTRICTED_BELOW = "Is anything planned for the chair's succession?"  # top restricted, under the threshold
 V_READABLE_BELOW = "Will home working change in the new year?"  # top readable, under the threshold
 V_RESTRICTED_ABOVE = "Who is named on the succession register?"  # top restricted, above the threshold
 V_READABLE_ABOVE = "How many home working days do staff get?"  # top readable, above the threshold
 V_RESTRICTED_FIRST = "Does the chair's succession affect home working?"  # both admitted, restricted first
+V_RESTRICTED_IN_BAND = "When does the chair's successor take over?"  # top restricted, in the band
 
 
 @pytest.fixture
@@ -544,6 +547,7 @@ def voyage_corpus(administrator, designed):
             V_RESTRICTED_ABOVE: at_cosine(WELL_ABOVE, axis=0, towards=5),
             V_READABLE_ABOVE: at_cosine(WELL_ABOVE, axis=1, towards=5),
             V_RESTRICTED_FIRST: at_cosine(0.9, axis=0, towards=1),
+            V_RESTRICTED_IN_BAND: at_cosine(IN_THE_BAND, axis=0, towards=5),
         },
         model=VOYAGE,
     )
@@ -580,8 +584,8 @@ def test_on_voyage_a_readable_best_match_under_the_threshold_is_a_gap(voyage_cor
 
 
 def test_on_voyage_a_restricted_top_admitted_passage_is_left_out(voyage_corpus, employee):
-    """P02's shape on voyage-4: the restricted answer clears the threshold, so the row is a
-    permission boundary and is left out, recorded nowhere."""
+    """A restricted answer well above the threshold: the row is a permission boundary and is left
+    out, recorded nowhere."""
     row = ask(employee, V_RESTRICTED_ABOVE, at=hours_ago(1))
 
     cycle = run_cycle()
@@ -589,6 +593,19 @@ def test_on_voyage_a_restricted_top_admitted_passage_is_left_out(voyage_corpus, 
     assert not in_log(row)
     assert cycle.queries_considered == 0
     assert KnowledgeGap.objects.count() == 0
+
+
+def test_on_voyage_a_restricted_answer_between_the_two_thresholds_is_left_out(voyage_corpus, employee):
+    """P02's shape on voyage-4: the restricted answer clears voyage-4's threshold but not
+    EmbeddingGemma's, so the exclusion must judge it by the model's own (``ranking.admit``, D-120).
+    Judged by the default, nothing would be admitted, the row would be a gap, and a permission-only
+    question's wording would reach the log."""
+    assert VOYAGE_THRESHOLD <= IN_THE_BAND < RELEVANCE_THRESHOLD  # the premise
+    row = ask(employee, V_RESTRICTED_IN_BAND, at=hours_ago(1))
+
+    run_cycle()
+
+    assert not in_log(row)
 
 
 def test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted(voyage_corpus, employee):
