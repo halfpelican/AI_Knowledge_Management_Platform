@@ -510,9 +510,9 @@ FR-13's "before": D-86's measurement, run at `2f65a8e` on `kmp_obj02_20261101`
 
 FR-13, re-audited after D-122 made `anthropic` the default provider: one `requirements-auditor`
 run, read only, at `bd95f92`, over every FR-13 clause. Its verdict is INCOMPLETE, and D-112's dated
-note of 11 November records it verbatim. No measurement was made for it. `main` has since moved to
-`23e6e65`, by #85 and #86, which add only run folders under `corpus/objective-05/` and
-`corpus/objective-06/`. The rows above stay as written on their day.
+note of 11 November records it verbatim. No measurement was made for it. When this section was
+written, `main` had moved to `d63518b`, by #85, #86 and #87, which add only run folders under
+`corpus/`. The rows above stay as written on their day.
 
 | Requirement | Clause | Before | After the re-audit | Evidence |
 |---|---|---|---|---|

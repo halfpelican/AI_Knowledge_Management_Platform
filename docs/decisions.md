@@ -8183,8 +8183,9 @@ nothing, and it ran no suite, server, database or provider. No measurement was m
 The verdict is recorded here because a verdict that lives only in a terminal is the failure mode
 D-61 names. Its one line: FR-13 is INCOMPLETE. The text above this note is left as written.
 
-`main` has since moved to `23e6e65`, by #85 and #86. They add only run folders under
-`corpus/objective-05/` and `corpus/objective-06/`, so no file the audit read has changed.
+When this note was written, `main` had moved to `d63518b`, by #85, #86 and #87. They add only run
+folders: under `corpus/objective-05/`, under `corpus/objective-06/`, and
+`corpus/objective-02/runs/2026-11-10-anthropic/`. So no file the audit read had changed.
 
 **FR-13's status after the re-audit, per provider.**
 
@@ -8271,7 +8272,8 @@ verdict.
     machine's boot at 11:19:05Z on 9 November;
   - no test under `frontend/tests` asserts the Ask link;
   - D-106's repeated draws for FR-10 on Claude;
-  - no snapshot record committed for dump `80ff46d4…`;
+  - no snapshot record committed for dump `80ff46d4…`. The `snapshot.json` that #87 adds is for
+    another database, `kmp_obj02_anthropic_20261110`, at dump `6e514170…`;
   - CI run 42932385814, green on `bd95f92`;
   - the lines it cites in D-42, D-91, D-121, `M6-BUILD-PROMPT.md`,
     `docs/demonstration-script.md` and `docs/flm-baseline.md`.
