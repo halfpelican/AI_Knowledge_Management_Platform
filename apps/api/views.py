@@ -6,6 +6,7 @@ Routes that need more than a session add ``HasRolePermission`` (FR-06).
 """
 
 import logging
+import math
 
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
@@ -14,11 +15,10 @@ from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch
 from django.http import FileResponse, Http404, JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.utils.decorators import method_decorator
 from django.utils.text import Truncator
-from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -26,10 +26,11 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
+import apps.ai
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import Permission, Role
 from apps.ai import attempt_log
-from apps.ai.base import ProviderUnavailable
+from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
@@ -46,10 +47,13 @@ from apps.core.constants import (
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
     MAX_UPLOAD_BYTES,
+    MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
+    TRANSCRIPTION_BUSY_RETRY_SECONDS,
+    TRANSCRIPTION_SEGMENT_SECONDS,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import (
@@ -70,6 +74,7 @@ from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
 from apps.documents.models import Document, Tag
 from apps.documents.taxonomy import retire_tag, tag_inventory
+from apps.ingestion import audio
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.errors import (
@@ -100,6 +105,12 @@ from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
 from .negotiation import IgnoreClientContentNegotiation
+from .transcription_slot import (
+    release_server_slot,
+    release_transcription_slot,
+    take_server_slot,
+    take_transcription_slot,
+)
 from .permissions import HasRolePermission, role_holds
 from .repository import RepositoryFilters, browse, classification_of, repository_documents
 from .serializers import (
@@ -183,6 +194,10 @@ UNSUPPORTED_FORMAT_MESSAGE = (
 NO_FILE_SUBMITTED_MESSAGE = "No file was submitted."
 # FR-08 Responses: "413 Payload Too Large beyond the size limit".
 FILE_TOO_LARGE_MESSAGE = "File exceeds the maximum permitted size of 50 MB."
+# FR-09's transcript body, pasted or a file, held to the same ceiling as an upload and refused
+# the same way, by its declared length before it is parsed (D-124). FR-09 enumerates only 201 and
+# 400; the 413 is a *convention*, because a body refused unread has no field to put an error on.
+TRANSCRIPT_TOO_LARGE_MESSAGE = "Transcript exceeds the maximum permitted size of 50 MB."
 # Stage 4 item 12b: a DOCX or XLSX whose own table of contents declares more decompressed
 # content than the detector will let a parser inflate (signatures.MEMBER_MAXIMUM_BYTES).
 #
@@ -292,6 +307,43 @@ KNOWLEDGE_GAP_CYCLE_UNAVAILABLE_MESSAGE = (
     "The knowledge service is temporarily unavailable, so the aggregation cycle did not run and "
     "nothing was changed. Please try again shortly."
 )
+# Recording transcription (D-123). Each refusal is answered before any provider call, and
+# none stores anything, because the route stores nothing at all. Each 503 carries a code, so the
+# page can tell "not enabled on this server" (paste or upload the transcript instead) from "FLM is
+# down" (resume shortly) without reading the detail.
+TRANSCRIPTION_DISABLED_MESSAGE = (
+    "Recording transcription is not enabled on this server. Paste or upload the transcript instead."
+)
+TRANSCRIPTION_DISABLED_CODE = "transcription_disabled"
+# NFR-19's informative notice for a segment the provider failed after MAXIMUM_TRANSCRIBE_ATTEMPTS:
+# what happened, and that nothing was stored, so sending the segment again is safe.
+TRANSCRIPTION_UNAVAILABLE_MESSAGE = (
+    "The transcription service is temporarily unavailable. This segment was not transcribed and "
+    "nothing was stored; please send it again shortly."
+)
+TRANSCRIPTION_UNAVAILABLE_CODE = "transcription_unavailable"
+NO_AUDIO_SUBMITTED_MESSAGE = "No audio segment was submitted."
+# 415, as FR-08 answers a format it does not accept: the bytes are not a 16-bit PCM WAV, which is
+# all the page sends (apps/ingestion/audio.py).
+UNSUPPORTED_AUDIO_MESSAGE = "Audio must be a 16-bit PCM mono WAV segment at 16 kHz."
+EMPTY_AUDIO_MESSAGE = "The audio segment holds no audio."
+SEGMENT_TOO_LONG_MESSAGE = (
+    f"An audio segment may hold at most {MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS} seconds of audio."
+)
+# A second segment from a user whose previous one is still with FLM (apps/api/transcription_slot.py).
+TRANSCRIPTION_IN_FLIGHT_MESSAGE = "Your previous audio segment is still being transcribed."
+TRANSCRIPTION_IN_FLIGHT_CODE = "transcription_in_flight"
+# Every server slot is held (MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT, across all users): other people's
+# segments are with FLM. Not this user's doing, so not the in-flight text, which suggests another
+# tab. A 429 with Retry-After, which the page waits out and then sends the segment again.
+TRANSCRIPTION_BUSY_MESSAGE = (
+    "The transcription service is busy with other recordings. This segment was not transcribed "
+    "and nothing was stored; it can be sent again in a few seconds."
+)
+TRANSCRIPTION_BUSY_CODE = "transcription_busy"
+# The values of a transcription reply's "status".
+SEGMENT_TRANSCRIBED = "transcribed"
+SEGMENT_SILENT = "silent"
 
 CanManageRoles = HasRolePermission.for_code(MANAGE_ROLES_PERMISSION)
 CanContributeContent = HasRolePermission.for_code(CONTRIBUTE_CONTENT_PERMISSION)
@@ -338,6 +390,30 @@ def ingestion_in_flight():
         {"detail": INGESTION_IN_FLIGHT_MESSAGE, "code": INGESTION_IN_FLIGHT_CODE},
         status=status.HTTP_429_TOO_MANY_REQUESTS,
     )
+
+
+def declares_a_body_over_the_upload_ceiling(request) -> bool:
+    """Whether the request declares a body longer than ``MAX_UPLOAD_BYTES`` (D-124).
+
+    Read from ``CONTENT_LENGTH`` alone, so it is answered without reading the body. An upload
+    route asks it before anything touches ``request.data``. Since D-124 nothing reads the body
+    before the view either, because the CSRF check takes its token from the header
+    (``apps/api/authentication.py``), so a body refused here is never parsed.
+
+    **Why the declared length can be trusted.** Under WSGI, Django reads no more of the body than
+    ``CONTENT_LENGTH`` declares, and with no length, or a malformed one, it reads none. Waitress
+    reads exactly the declared number of bytes, and it reassembles a chunked body and declares its
+    length before the request reaches Django.
+
+    **What it does not bound: receiving.** Waitress has read the whole body by the time Django
+    sees the request. Waitress's own ``--max-request-body-size`` bounds that
+    (``MAX_REQUEST_BODY_BYTES``, D-124).
+    """
+    try:
+        declared_length = int(request.META.get("CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        declared_length = 0
+    return declared_length > MAX_UPLOAD_BYTES
 
 
 # --- FR-01 registration --------------------------------------------------------------
@@ -424,8 +500,28 @@ def _record_failed_attempt(email: str) -> None:
         user.save(update_fields=["failed_attempts", "locked_until"])
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class LoginView(APIView):
+class SendsCsrfCookieMixin:
+    """Send the ``csrftoken`` cookie with every response from the view, as Django's
+    ``ensure_csrf_cookie`` did, without running Django's CSRF check first (D-124).
+
+    The SPA reads its token from that cookie (D-21). ``ensure_csrf_cookie`` used to set it on
+    login and ``/api/auth/me``. Before the view, it runs a full CSRF check on the raw request, and
+    for an unsafe method that check reads ``request.POST``. Django parses a multipart body to
+    answer that, spooling its files. This happened before DRF's throttle, signed in or not, for
+    anyone holding a well-formed ``csrftoken`` cookie, and a client can make one up. The check
+    never refused anything there, and the cookie came from its one other effect, ``get_token()``.
+    So this keeps only ``get_token()``, in ``finalize_response``, which DRF runs for every
+    response the view returns, its 401s and 429s included. ``get_token()`` marks the cookie for
+    ``CsrfViewMiddleware`` to send. A session's unsafe request to these views is still checked by
+    DRF (``apps/api/authentication.py``).
+    """
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        get_token(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
+class LoginView(SendsCsrfCookieMixin, APIView):
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
@@ -508,8 +604,7 @@ class LogoutView(APIView):
 # --- Current user ----------------------------------------------------------------------
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class MeView(APIView):
+class MeView(SendsCsrfCookieMixin, APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
@@ -626,8 +721,12 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
     check comes first: "it is the cheapest rejection, and the user's role may have
     changed during a transfer of up to 50 MB". ``CanContributeContent`` is returned
     by ``get_permissions()`` for POST, so DRF runs it in ``initial()`` before this
-    method is entered and before the body is parsed at all (D-30). Processing is
-    synchronous, as FR-08 states, with the interface displaying progress.
+    method is entered (D-30). Since D-124 nothing reads the body before it either, because
+    the CSRF check takes its token from the header (``apps/api/authentication.py``). Before
+    D-124 that was not so. A signed-in session's whole body was parsed while DRF checked CSRF,
+    before this 403, the 429 and the 413 below, and this docstring said otherwise from Stage 3
+    until 11 November 2026. Processing is synchronous, as FR-08 states, with the interface
+    displaying progress.
 
     **POST is throttled per user in the "ingestion" scope** (D-79), one budget with meeting
     ingest and reprocess. DRF checks it in ``initial()`` after the permission and before this
@@ -674,18 +773,19 @@ class DocumentsView(ThrottlePostOnlyMixin, APIView):
         return Response(DocumentSerializer(documents, many=True).data)
 
     def post(self, request):
-        # Enforced against the declared length BEFORE request.data is touched, so
-        # an oversized body is refused without being parsed or buffered: FR-08 wants
-        # the ceiling applied "before the file is written to storage", and reading
-        # 50 MB into memory to discover it is 50 MB is the thing to avoid. A client
-        # that lies about or omits Content-Length is caught by the second check
-        # below, against the size Django actually received.
-        declared_length = request.META.get("CONTENT_LENGTH") or 0
-        try:
-            declared_length = int(declared_length)
-        except (TypeError, ValueError):
-            declared_length = 0
-        if declared_length > MAX_UPLOAD_BYTES:
+        # Enforced against the declared length BEFORE request.data is touched. Since D-124
+        # nothing upstream reads the body either, so an oversized body is refused without
+        # being parsed: FR-08 wants the ceiling applied "before the file is written to
+        # storage". Before D-124 this comment claimed the same, and it was untrue for every
+        # signed-in browser session: the CSRF check had already parsed the body, spooling a
+        # multipart upload to temporary files, before this line ran.
+        #
+        # It is not refused without being RECEIVED. Waitress reads the whole body before
+        # Django sees the request, and only its --max-request-body-size bounds that
+        # (MAX_REQUEST_BODY_BYTES, D-124). The second check below, against the bytes
+        # received, is defence in depth: Django reads no more than the declared length, so a
+        # body cannot carry a larger file than it declares.
+        if declares_a_body_over_the_upload_ceiling(request):
             return Response(
                 {"detail": FILE_TOO_LARGE_MESSAGE},
                 status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -1121,6 +1221,21 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
     throttled per user in the same "ingestion" scope as the upload and reprocess (D-79). GET is
     not throttled.
 
+    **A body over the upload ceiling is 413, refused unread** (D-124). It is checked against its
+    declared length after the 401, the 403 and the 429, and before anything touches
+    ``request.data``, as the document upload checks.
+
+    - **A transcript file** had no ceiling before D-124 but Waitress's default of 1 GB.
+    - **A pasted transcript** was and is held to Django's ``DATA_UPLOAD_MAX_MEMORY_SIZE``
+      (2.5 MiB). DRF parses JSON from ``request.body``, so a larger JSON body is
+      ``400 {"detail": "Bad request."}``, refused unread. The 413 replaces that only above 50 MB.
+    - **Before D-124 either form was parsed while DRF checked CSRF,** before the 403 and the 429.
+
+    FR-09 enumerates only 201 and 400, so the 413 is a *convention*: a body refused unread has no
+    field to report on. The meeting form screens a transcript file's size before sending it
+    (``screenFile``). So the page reaches the 413 only with a pasted transcript over 50 MB, and
+    Django's 400 with one between 2.5 MiB and 50 MB.
+
     **One ingestion in flight per user** (D-85), the upload's slot. It is taken after every 400
     and 403, and an uploaded transcript file is extracted before that, because the minimum-length
     400 needs its text. So the slot bounds chunking and embedding here, and a file's extraction
@@ -1146,6 +1261,13 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
         return Response(MeetingListSerializer(meetings, many=True).data)
 
     def post(self, request):
+        # D-124: refused by its declared length, before request.data parses it.
+        if declares_a_body_over_the_upload_ceiling(request):
+            return Response(
+                {"detail": TRANSCRIPT_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+
         serializer = MeetingIngestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)  # 400: FR-09's own code
         data = serializer.validated_data
@@ -1211,10 +1333,11 @@ class MeetingsView(ThrottlePostOnlyMixin, APIView):
             file_format = read_file_signature(uploaded_file)
         except OversizedArchiveContentError:
             # The same bound as FR-08's upload (Stage 4 item 12b), reported in this
-            # endpoint's own shape: FR-09 enumerates only 201 and 400, so the transcript
-            # path cannot answer 413, and a field error carrying the accurate message is
-            # closer to the truth than FR-08's code on a response FR-09 does not define.
-            # The two rejections stay distinguishable by their text.
+            # endpoint's own shape: FR-09 enumerates only 201 and 400, and a field error
+            # carrying the accurate message is closer to the truth than FR-08's code on a
+            # response FR-09 does not define. The two rejections stay distinguishable by their
+            # text. The route's one 413 is D-124's, for a body refused before it is read,
+            # when there is no field yet to put an error on.
             return None, {"file": [COMPRESSED_CONTENT_TOO_LARGE_MESSAGE]}
         if file_format is None:
             # The same four formats as FR-08, decided the same way: by content. A
@@ -1301,6 +1424,191 @@ class MeetingDetailView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# --- Recording transcription (D-123) ---------------------------------------------------
+# Not in the proposal. A person with a meeting recording has the page turn it into a draft
+# transcript, one segment at a time; nothing here indexes anything. The confirmed draft goes in
+# through POST /api/meetings, FR-09's own route and the one path into the index.
+
+
+def transcription_refused(detail: str, code: str):
+    """A 503 carrying ``code``, for the page to branch on, as the in-flight 429s carry theirs."""
+    return Response({"detail": detail, "code": code}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class TranscriptionStatusView(APIView):
+    """``GET /api/transcriptions/status`` — whether a recording can be transcribed here, now.
+
+    The page asks once, when the recording option is chosen, so it can say before a long run
+    starts that transcription is not enabled on this server, or that FLM does not answer. The
+    body also carries the segment lengths, so the page cuts what the server will accept.
+
+    ``available`` is true only when transcription is enabled and the provider's
+    ``transcription_health`` reports FLM answering. That cannot show whether FLM was started with
+    ``--asr 1`` (D-123, "What it does not cover"); a server without it fails the first
+    segment, which the page reports the same way. No provider detail is returned: it names an
+    internal address, and the page needs only ``enabled`` and ``available``.
+
+    Behind ``contribute_content``, as the transcription itself is: only someone who may add a
+    transcript has a reason to ask. **Throttled in the ``transcription`` scope**, one budget with
+    the segments: each request asks FLM for its model list, so an unthrottled one would let a
+    single user make the server call FLM as fast as they could ask (the security review of 11
+    November, suspicion S2). The page asks once per visit to the option.
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transcription"
+
+    def get(self, request):
+        enabled = apps.ai.transcription_enabled()
+        available = enabled and apps.ai.get_ai_service().transcription_health().available
+        return Response(
+            {
+                "enabled": enabled,
+                "available": available,
+                "segment_seconds": TRANSCRIPTION_SEGMENT_SECONDS,
+                "maximum_segment_seconds": MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
+            }
+        )
+
+
+class TranscriptionsView(APIView):
+    """``POST /api/transcriptions`` — one recording segment in, its text out (D-123).
+
+    **The request is multipart**, one field, ``audio``: a 16-bit PCM WAV of at most
+    MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS. **It creates nothing**: no meeting, no chunk, no file,
+    no row. The page assembles the replies into a draft, a person corrects and confirms it, and
+    only then does FR-09's ``POST /api/meetings`` store and index it.
+
+    **The rejection order**, each before any provider call:
+
+    1. 401 no session; 403 the role lacks ``contribute_content`` (DRF's ``initial()``).
+    2. 429 past ``TRANSCRIPTION_THROTTLE_RATE``, scope ``transcription`` (D-79), also in
+       ``initial()``, so a rejected request counts against it too.
+    3. 503 ``transcription_disabled`` when ``TRANSCRIPTION_PROVIDER`` is ``none``.
+    4. 413 a declared ``Content-Length`` over MAX_UPLOAD_BYTES; then 400 no ``audio`` part; then
+       413 again against the bytes that arrived.
+    5. 415 not a 16-bit PCM mono WAV at 16 kHz; 400 a segment with no audio frames, or with more
+       than MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS of audio.
+    6. 200 ``"status": "silent"`` for a segment whose loudest half second is below
+       TRANSCRIPTION_SILENCE_DBFS, with no provider call: Whisper invents text from silence.
+    7. 429 ``transcription_in_flight`` while another segment of this user's is with the provider,
+       then 429 ``transcription_busy``, with Retry-After, while every server slot is held
+       (``apps/api/transcription_slot.py``).
+
+    **Since D-124 these order the reading of the body too.** Nothing reads it before step 4's
+    declared-length 413, so a body refused at any step up to it is never parsed.
+
+    - **How:** the CSRF check takes its token from the header (``apps/api/authentication.py``), and
+      the 413 is decided from ``CONTENT_LENGTH`` alone (``declares_a_body_over_the_upload_ceiling``).
+    - **What still bounds receiving:** Waitress's ``--max-request-body-size``
+      (``MAX_REQUEST_BODY_BYTES``). Waitress has read the body before Django sees the request.
+    - **Before D-124:** a session that sent its CSRF token, as the page always does, had the whole
+      body parsed by DRF during authentication, before the 403, the 429, the 503 and the 413. The
+      security review of 11 November found that, and D-123 recorded it as open. D-123's dated note
+      records the close.
+
+    Then the provider: 200 ``"status": "transcribed"`` with the text and the model, or NFR-19's
+    503 ``transcription_unavailable`` after MAXIMUM_TRANSCRIBE_ATTEMPTS (any 4xx refusal at once,
+    D-118). Nothing was stored, so the page sends the same segment again when the person resumes;
+    its draft and recording are its own and were never here to lose (invariant 8).
+    """
+
+    permission_classes = [IsAuthenticated, CanContributeContent]
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transcription"
+
+    def post(self, request):
+        if not apps.ai.transcription_enabled():
+            return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
+
+        # The declared length, before this view touches request.data, as the document upload does.
+        # Since D-124 nothing has read the body before this line, so a body refused here is
+        # never parsed.
+        if declares_a_body_over_the_upload_ceiling(request):
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        uploaded = request.data.get("audio")
+        if not hasattr(uploaded, "read"):
+            return Response(
+                {"audio": [NO_AUDIO_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        # Again against what arrived. Defence in depth: Django reads no more than the declared
+        # length, so a part cannot be larger than the body declares.
+        if uploaded.size > MAX_UPLOAD_BYTES:
+            return Response(
+                {"detail": FILE_TOO_LARGE_MESSAGE}, status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+            )
+
+        try:
+            segment = audio.read_segment(uploaded.read())
+        except audio.UnsupportedAudio:
+            return Response(
+                {"detail": UNSUPPORTED_AUDIO_MESSAGE}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+            )
+        except audio.EmptyAudio:
+            return Response({"audio": [EMPTY_AUDIO_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+        except audio.SegmentTooLong:
+            return Response({"audio": [SEGMENT_TOO_LONG_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST)
+
+        # What every reply carries about the segment itself. ``loudest_dbfs`` is the level the
+        # silence rule compared with TRANSCRIPTION_SILENCE_DBFS, so the threshold (*tune*) can be
+        # checked against real recordings; null for digital silence, which JSON cannot write as
+        # minus infinity.
+        measured = {
+            "duration_seconds": round(segment.duration_seconds, 2),
+            "loudest_dbfs": (
+                round(segment.loudest_window_dbfs, 1)
+                if math.isfinite(segment.loudest_window_dbfs)
+                else None
+            ),
+        }
+        if segment.silent:
+            return Response({"status": SEGMENT_SILENT, "text": "", "model": None, **measured})
+
+        token = take_transcription_slot(request.user)
+        if token is None:
+            return Response(
+                {"detail": TRANSCRIPTION_IN_FLIGHT_MESSAGE, "code": TRANSCRIPTION_IN_FLIGHT_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        server_slot = take_server_slot()
+        if server_slot is None:
+            release_transcription_slot(request.user, token)
+            return Response(
+                {"detail": TRANSCRIPTION_BUSY_MESSAGE, "code": TRANSCRIPTION_BUSY_CODE},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(TRANSCRIPTION_BUSY_RETRY_SECONDS)},
+            )
+        try:
+            # Every failed attempt inside is logged naming this account (apps/ai/attempt_log.py).
+            with attempt_log.account(request.user.pk):
+                result = audio.transcribe(segment)
+        except TranscriptionDisabled:
+            # The setting was read as on above; reached only if it changed in between.
+            return transcription_refused(TRANSCRIPTION_DISABLED_MESSAGE, TRANSCRIPTION_DISABLED_CODE)
+        except ProviderUnavailable as exc:
+            # On the attempts logger, beside the failed attempts it ended, as the ask's 503 is.
+            logging.getLogger(attempt_log.ATTEMPT_LOGGER_NAME).warning(
+                "POST /api/transcriptions answered 503 (account %s): %s: %s",
+                request.user.pk,
+                attempt_log.cause_of(exc),
+                exc,
+            )
+            return transcription_refused(
+                TRANSCRIPTION_UNAVAILABLE_MESSAGE, TRANSCRIPTION_UNAVAILABLE_CODE
+            )
+        finally:
+            release_server_slot(server_slot)
+            release_transcription_slot(request.user, token)
+        return Response(
+            {"status": SEGMENT_TRANSCRIBED, "text": result.text, "model": result.model, **measured}
+        )
+
+
 class DocumentReprocessView(APIView):
     """``POST /api/documents/{doc_id}/reprocess`` — FR-08's "Please try again".
 
@@ -1323,6 +1631,11 @@ class DocumentReprocessView(APIView):
     any chunk is deleted. The cause and the document go to the error log, not to the client.
     **Not covered:** a file removed between this check and that open still raises inside the
     transaction, which rolls back and answers 500.
+
+    **It takes no body, and nothing reads one** (D-124). Before D-124, DRF's CSRF check read and
+    parsed a JSON body sent here, up to Django's 2.5 MiB ``DATA_UPLOAD_MAX_MEMORY_SIZE``, before the
+    403 and the 429. Now none is read at all, so the route needs no ceiling of its own. Waitress
+    bounds what it receives (``MAX_REQUEST_BODY_BYTES``).
     """
 
     permission_classes = [IsAuthenticated, CanContributeContent]

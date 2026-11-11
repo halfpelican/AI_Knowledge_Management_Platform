@@ -158,9 +158,12 @@ class ApiSession:
             connection.putheader(name, value)
         connection.endheaders()
         if body is not None:
-            # Sent in pieces, so a server that answers before reading the whole body (the
-            # 413 on a declared Content-Length) is still heard: the send is abandoned and the
-            # response it already wrote is read.
+            # Sent in pieces, so a server that answers before reading the whole body is still
+            # heard where it can be: the send is abandoned and the response it already wrote is
+            # read. Under Waitress that is only its own 413 for a length at or over its cap
+            # (D-124), and on Windows the reset can arrive first. The view's 413 for a declared
+            # length comes after Waitress has received the whole body. I02 is generated under the
+            # cap so that it gets the view's 413, and a test holds it there.
             view = memoryview(body)
             try:
                 for offset in range(0, len(body), 1024 * 1024):

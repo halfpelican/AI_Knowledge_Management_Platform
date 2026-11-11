@@ -1,0 +1,120 @@
+{
+ "what": "Objective 02's bound at twenty pages: the first 20 pages of D04, uploaded five times through POST /api/documents, with classification at upload, on FLM",
+ "bound_seconds": 60,
+ "page_bound": 20,
+ "source": {
+  "file": "corpus/objective-02/documents/D04_records_management_handbook.pdf",
+  "sha256": "67456517c0cea1166f65ff0c511248eb22f1ae55cf48e51f51850f0a4368719b",
+  "pages": 26
+ },
+ "how_cut": "pypdf 6.19.0: pages 1-20 of the source, one copy each with its own /Title metadata, so each has its own content hash",
+ "copies": [
+  {
+   "copy": 1,
+   "file": "D04_first_20_pages_copy1.pdf",
+   "bytes": 29249,
+   "sha256": "b3db357aa97016b8063cbd330d85de720ba0c27c107fbe60c55aac28ff09d7f5",
+   "pages": 20
+  },
+  {
+   "copy": 2,
+   "file": "D04_first_20_pages_copy2.pdf",
+   "bytes": 29249,
+   "sha256": "f64c0b452b9d12d42934afed8ccf2ada2492a69ef00968f75d572764eeadf02b",
+   "pages": 20
+  },
+  {
+   "copy": 3,
+   "file": "D04_first_20_pages_copy3.pdf",
+   "bytes": 29249,
+   "sha256": "2dffb02cccc271baf68ea0a6a690ea53e259edaa20d2ddbc1fab3ddaeee7421c",
+   "pages": 20
+  },
+  {
+   "copy": 4,
+   "file": "D04_first_20_pages_copy4.pdf",
+   "bytes": 29249,
+   "sha256": "8782e2083594a616b3a89a1aa1b24db55767dcd5faebfe1b41ce9a70a36b3620",
+   "pages": 20
+  },
+  {
+   "copy": 5,
+   "file": "D04_first_20_pages_copy5.pdf",
+   "bytes": 29249,
+   "sha256": "23d1b43cc525cf3b417ad2eec3317fa3d0b5f577a6b1033cadb17cc2f12178ab",
+   "pages": 20
+  }
+ ],
+ "runs": [
+  {
+   "copy": 1,
+   "started_utc": "2026-11-10T11:14:00.130879+00:00",
+   "http": 201,
+   "seconds": 51.55,
+   "status": "Indexed",
+   "document_id": "fe73079d-1cf2-4f41-81ef-79c86387151c",
+   "classification_attempts": [
+    "classification attempt 1 of 3 parsed after 17.1 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (accoun"
+   ],
+   "note": null,
+   "chunks": 15
+  },
+  {
+   "copy": 2,
+   "started_utc": "2026-11-10T11:14:51.698584+00:00",
+   "http": 201,
+   "seconds": 45.81,
+   "status": "Indexed",
+   "document_id": "7011d82b-20aa-456f-b2cb-71f6d8677906",
+   "classification_attempts": [
+    "classification attempt 1 of 3 parsed after 15.1 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (accoun"
+   ],
+   "note": null,
+   "chunks": 15
+  },
+  {
+   "copy": 3,
+   "started_utc": "2026-11-10T11:15:37.531790+00:00",
+   "http": 201,
+   "seconds": 43.54,
+   "status": "Indexed",
+   "document_id": "078393d4-51ea-4e53-bc1a-54fa53acb3c2",
+   "classification_attempts": [
+    "classification attempt 1 of 3 parsed after 15.3 s [finish_reason=stop completion_tokens=140 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (accoun"
+   ],
+   "note": null,
+   "chunks": 15
+  },
+  {
+   "copy": 4,
+   "started_utc": "2026-11-10T11:16:21.097888+00:00",
+   "http": 201,
+   "seconds": 45.36,
+   "status": "Indexed",
+   "document_id": "bfa4149a-ceba-4a00-b996-24ed1b594607",
+   "classification_attempts": [
+    "classification attempt 1 of 3 parsed after 15.1 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (accoun"
+   ],
+   "note": null,
+   "chunks": 15
+  },
+  {
+   "copy": 5,
+   "started_utc": "2026-11-10T11:17:06.481897+00:00",
+   "http": 201,
+   "seconds": 43.73,
+   "status": "Indexed",
+   "document_id": "f708600c-df5c-48dd-9022-882a628b1e3e",
+   "classification_attempts": [
+    "classification attempt 1 of 3 parsed after 15.4 s [finish_reason=stop completion_tokens=141 prompt_tokens=2535 max_tokens=400 max_statements=unreported] (accoun"
+   ],
+   "note": null,
+   "chunks": 15
+  }
+ ],
+ "database": "kmp_obj02_20261110classify",
+ "base_url": "http://127.0.0.1:8000",
+ "flm_base_url": "http://127.0.0.1:8625/v1",
+ "ai_provider": "flm",
+ "attempts_log_lines_before": 21
+}

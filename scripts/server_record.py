@@ -3,12 +3,13 @@
 D-85 decision 4: "Recorded beside every result: the server, its version and the thread
 count." The measured run is served by
 
-    waitress-serve --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+    waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 
-under ``DEBUG=False``. Waitress answers no request with its thread count, so a client cannot
-ask it. The operating system can say which process is listening on the port, with what
-command line and since when, and that command line carries ``--threads``. So the record is
-OBSERVED, not stated:
+under ``DEBUG=False``. ``--max-request-body-size`` is D-124's ceiling on any request body: it does
+not change what a measurement measures, and nothing here checks it. Waitress answers no request
+with its thread count, so a client cannot ask it. The operating system can say which process is
+listening on the port, with what command line and since when, and that command line carries
+``--threads``. So the record is OBSERVED, not stated:
 
 - the listening process, its command line and its start time, from ``Get-NetTCPConnection``
   and ``Win32_Process`` (Windows, where the laptop runs; elsewhere the record says it was not
@@ -67,7 +68,14 @@ from urllib.parse import urlsplit
 D85_SERVER = "waitress"
 D85_THREADS = 24
 D85_LISTEN = "127.0.0.1:8000"
-D85_COMMAND = f"waitress-serve --listen={D85_LISTEN} --threads={D85_THREADS} config.wsgi:application"
+# D-124: Waitress's ceiling on a request body, a copy of apps.core.constants.MAX_REQUEST_BODY_BYTES
+# (this script imports nothing from the project). apps/api/tests/test_request_body_bound.py ties
+# the two.
+D85_MAX_REQUEST_BODY_BYTES = 54525952
+D85_COMMAND = (
+    f"waitress-serve --listen={D85_LISTEN} --threads={D85_THREADS} "
+    f"--max-request-body-size={D85_MAX_REQUEST_BODY_BYTES} config.wsgi:application"
+)
 WAITRESS_DEFAULT_THREADS = 4  # waitress.adjustments.Adjustments.threads
 LOOKUP_TIMEOUT_SECONDS = 30
 

@@ -22,3 +22,16 @@ def get_ai_service() -> AIService:
 
         return AnthropicService()
     raise ImproperlyConfigured(f"Unknown AI_PROVIDER: {provider!r} (expected 'flm' or 'anthropic')")
+
+
+def transcription_enabled() -> bool:
+    """Whether recording transcription is switched on here (D-123). Calls nothing.
+
+    TRANSCRIPTION_PROVIDER, not AI_PROVIDER, decides it, because only FLM has speech-to-text. A
+    route asks this before reading a segment, so a server with transcription off refuses at
+    once; the transcription itself still goes through ``get_ai_service().transcribe()``.
+    ImproperlyConfigured for a value that is neither ``none`` nor ``flm``.
+    """
+    from apps.ai.transcription import is_enabled
+
+    return is_enabled()
