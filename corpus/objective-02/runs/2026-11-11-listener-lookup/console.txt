@@ -1,0 +1,16 @@
+port 8767, platform win32, python 3.12.13
+before: Listen row 'nothing is listening on port 8767'; netstat (None, 'netstat -ano lists no LISTENING line for port 8767')
+listener started as child pid 31932; it answers HTTP: True. (A venv's python.exe is a launcher, so the process that listens can be its child.)
+each lookup on its own, while the listener answers:
+  1. Listen row : {"pid": 30256, "command": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  -m http.server 8767 --bind 127.0.0.1", "started_at": "2026-11-11T08:15:20.260Z", "note": null}
+  2. netstat    : (30256, None)
+  3. port's row : {"pid": 30256, "command": "\"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe\"  -m http.server 8767 --bind 127.0.0.1", "started_at": "2026-11-11T08:15:20.260Z", "states": "2"} | 
+listener lookup, try 1: the Listen row names pid 30256
+listening_process, listener answering: pid 30256, found_by 'Get-NetTCPConnection -State Listen', note None, started_at 2026-11-11T08:15:20.260Z, command '"C:\\Users\\mozza\\AppData\\Roaming\\uv\\python\\cpython-3.12-windows-x86_64-none\\python.exe"  -m http.server 8767 --', 1 tries, in 1.5 s
+listener stopped; listening_process again (this waits for its retries):
+listener lookup, try 1: nothing is listening on port 8767; netstat -ano lists no LISTENING line for port 8767; no live process with a readable command line owns a remote-port-0 row on port 8767. Trying again in 10 s
+listener lookup, try 2: nothing is listening on port 8767; netstat -ano lists no LISTENING line for port 8767; no live process with a readable command line owns a remote-port-0 row on port 8767. Trying again in 10 s
+listener lookup, try 3: nothing is listening on port 8767; netstat -ano lists no LISTENING line for port 8767; no live process with a readable command line owns a remote-port-0 row on port 8767. Trying again in 10 s
+listener lookup, try 4: nothing is listening on port 8767; netstat -ano lists no LISTENING line for port 8767; no live process with a readable command line owns a remote-port-0 row on port 8767. Trying again in 10 s
+listener lookup, try 5: nothing is listening on port 8767; netstat -ano lists no LISTENING line for port 8767; no live process with a readable command line owns a remote-port-0 row on port 8767. Giving up after about 60 s
+listening_process, listener stopped: pid None, found_by None, note 'nothing is listening on port 8767', started_at None, command 'None', 5 tries, in 50.8 s
