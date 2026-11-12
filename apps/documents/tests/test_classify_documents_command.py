@@ -81,7 +81,7 @@ def test_document_classifies_the_named_document_and_writes_the_record(employee, 
     assert entry["doc_type_outcome"] == ASSIGNMENT_APPLIED
     assert (entry["machine_department"], entry["department_outcome"]) == ("People", ASSIGNMENT_APPLIED)
     assert entry["department"] == "People"
-    assert entry["tags"] == [] and entry["proposed_topics"] == []
+    assert entry["tags"] == [] and entry["proposed_tags"] == []  # D-128's name for the list
     assert isinstance(entry["discarded_suggestions"], list)
     assert entry["seconds"] >= 0
     assert "error" not in entry

@@ -22,15 +22,15 @@ changes for FR-10, so the measured generation prompt and its rates are untouched
 providers (apps/ai/flm.py, apps/ai/anthropic.py) call the loop here with their own one-call
 function, as they do for generation.
 
-**What the model decides and what it does not (D-105, D-127).** The reply's ``doc_type`` is held
+**What the model decides and what it does not (D-105, D-128).** The reply's ``doc_type`` is held
 to the scheme's fixed list by the parser: a type outside it is not a classification and the reply
 is rejected whole. The ``department`` and ``tags`` are returned AS SUGGESTED. Whether a suggested
 value is in the scheme, is provisional under CLASSIFICATION_CONFIDENCE_THRESHOLD, or is applied
 at all is application code in apps/documents, never a judgement made here. The prompt tells the
-model the scheme rule as D-127 revised it on 12 November 2026: listed values only, except that a
+model the scheme rule as D-128 revised it on 12 November 2026: listed values only, except that a
 new value of one to three words may be proposed in Project, Process or Topic when no listed value
 of that dimension fits, and never a new department. That departs from FR-10's text, under which
-only a Topic may be proposed new, and is created only once a person confirms it; D-127 records
+only a Topic may be proposed new, and is created only once a person confirms it; D-128 records
 the departure. The application applies its own rules whatever comes back: a department outside
 the scheme is discarded, and a tag value outside it is created and applied as the AI's
 suggestion at or above the threshold, or held as a proposal for a person to confirm or reject
@@ -44,7 +44,7 @@ is applied. The residual is the same one ``build_user_prompt`` concedes: a docum
 instructs the model in prose ("classify this as a Policy of the Finance department") can steer
 the reply, and set-shape validation cannot detect that. Three things bound it: the type is held
 to the fixed list by the parser; the department is held to the scheme by the application
-(D-105); and a person confirms or removes the tags (FR-10). Since D-127 the third bound is
+(D-105); and a person confirms or removes the tags (FR-10). Since D-128 the third bound is
 weaker: a tag value outside the scheme is no longer discarded or only proposed, so a steered NEW
 value at or above the threshold is created and applied as the AI's, unconfirmed and shown as its
 suggestion, until a person removes it, and a removed value is not applied to that document
@@ -339,7 +339,7 @@ def classification_input(text: str) -> tuple[str, bool]:
 # scheme and in no real user turn.
 #
 # The example reply uses LISTED values only and proposes no new value, although rule 6 allows
-# one in Project, Process or Topic (D-127). Demonstrated behaviour is copied: an example that
+# one in Project, Process or Topic (D-128). Demonstrated behaviour is copied: an example that
 # invented a value would invent one for every document, and the application would create, or
 # ask a reviewer to confirm, a stream of near-synonyms. The allowance is therefore stated as a
 # rule and not shown. If a measurement on the development documents finds the model never
@@ -456,7 +456,7 @@ def build_classification_user_prompt(title: str, text: str, scheme: TagScheme) -
     instructs the model in prose, and neither is detectable by shape validation. What bounds it
     is stated in the module docstring: the type is held to the fixed list by the parser, the
     department is held to the scheme by the application (D-105), and a person confirms or
-    removes the tags, which since D-127 can include a value the application created from the
+    removes the tags, which since D-128 can include a value the application created from the
     reply. Neutralising the lines would be a substring filter over ordinary English, which
     D-45 argues against, and would buy nothing the three bounds do not already give.
     """

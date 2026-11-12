@@ -7716,6 +7716,16 @@ times each (`corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/`).
   keyed by the model the classification carries. gemma3:4b keeps 0.95.
 - **The development set had grown to 19 documents** (caf9e22) since 0.95 was chosen on twelve.
 
+**Dated note, 12 November 2026: claude-haiku-5-5's value is 0.80 on D-128's prompt.** D-128 revised
+rules 6 and 7 of the classification prompt, and this rule ran again on the same 19 documents, three
+times each (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`).
+
+- All 57 types were right again, so the fallback applied: the lowest confidence on a right type,
+  0.80.
+- The user chose to follow the rule. `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]`
+  is 0.80. gemma3:4b's 0.95 is not re-derived on the revised prompt.
+- D-128 has the comparison.
+
 ## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19, FR-14 (D-69), invariants 1
@@ -10062,6 +10072,10 @@ stub provider and passed locally under that configuration.
 - **Documentation:** `README.md`, `CLAUDE.md` §3 and §4, `docs/ai-provider.md`. D-106 and D-109
   carry dated notes.
 
+**Dated note, 12 November 2026: FR-10's value for claude-haiku-5-5 is now 0.80 (D-128).** D-128
+revised the classification prompt, and D-106's rule, re-run on it, gives 0.80. The user chose to
+follow it. The 0.72 above was derived on the earlier prompt.
+
 ## D-123 · A meeting recording is transcribed by Whisper on FLM into a draft that a person must confirm, then ingested through FR-09 unchanged; live transcription stays out of scope
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-09, the proposal's §1.9,
@@ -10651,15 +10665,23 @@ arithmetic on the diagnosis of #86's cycle (`exclusion_diagnosis.txt` there), no
 **Where it applies:** `apps/core/constants.py`, `apps/retrieval/gaps.py` and
 `apps/retrieval/tests/test_knowledge_gaps.py`. D-108 and D-110 carry dated notes.
 
-## D-127 · FR-10: the classifier creates Project, Process and Topic values at or above the confidence threshold, holds every new value below it for a person, and an Administrator can add a value
+## D-128 · FR-10: the classifier creates Project, Process and Topic values at or above the confidence threshold, holds every new value below it for a person, and an Administrator can add a value
 
 **Status:** Settled by the user · **Date:** 2026-11-12 · **Concerns:** FR-10, UC-09, Objective 05,
 D-104, D-105, D-106, D-119, D-122, invariant 1, `apps/ai/classification.py`,
-`apps/documents/classification.py`, `apps/documents/models.py`, `documents 0012`,
+`apps/core/constants.py`, `apps/documents/classification.py`, `apps/documents/models.py`, `documents 0012`,
 `apps/documents/taxonomy.py`, `apps/api/` (serializers, views, urls), `scripts/objective05_verify.py`,
 `frontend/src/components/Classification.jsx`, `frontend/src/pages/Tags.jsx` · **Departs from:** FR-10's
 controlled-taxonomy-growth clause, UC-09 step 4 and E2, Objective 05 clause 3, and D-105's "A retired
 Project or Process tag stays retired", all named below
+
+**Its number.** It was written as D-127. It became D-128 the same evening, because D-127 was already
+committed on `fix/FR-19-exclusion-follow-ups` (FR-19, not yet pushed). Three records keep the first
+number, because each records what happened at the time:
+
+- the message of commit `5dcb6ff`;
+- the development sweep's folder, `corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`;
+- that folder's driver and console.
 
 **What prompted it.** On 12 November the user reported: "each document currently needs manually
 tagging when they should be automatically classified across department, project, process, and
@@ -10736,16 +10758,35 @@ topic." The diagnosis was read-only, on the database the development server serv
 3. **In the document's scheme: as before** (`_link_tag`). Applied at or above the threshold, held
    below it, and a person's decision is left alone.
 4. **Outside the scheme, or retired since the scheme was built:**
-   - **A name too long for the column** is discarded (`discarded_suggestions`).
-   - **At or above the threshold, created and applied.** The Tag is fetched or created. One created, or
-     a retired one fetched, becomes active and **grown**. The document gets an AI link, unconfirmed,
-     not provisional, shown "Suggested by AI".
+   - **Discarded** (`discarded_suggestions`): a name too long for the column; and, since the security
+     review below, a name of more than three words, or carrying a control, format or lone-surrogate
+     character (Cc, Cf, Cs) or ";".
+   - **At or above the threshold, created and applied.** The Tag is fetched or created.
+     - One created becomes active and **grown**.
+     - A retired one fetched becomes active and grown too, but only through a document every role
+       can read. Through any other document it stays retired (the security review, finding 1).
+     - The document gets an AI link, unconfirmed, not provisional, shown "Suggested by AI".
    - **Below the threshold, a proposal** `{dimension, value, confidence}` in `proposed_tags`, which a
      person confirms (the Tag is created then, or fetched, and linked) or rejects (nothing is
      created).
 
 Departments are unchanged: one outside the scheme is discarded (D-72: a department is the documents
 column, not a tag).
+
+**Choices made in building it,** none of which changes what the user decided:
+
+- **Out-of-scheme suggestions of one dimension and name are merged first,** at their highest
+  confidence, before the value is applied or proposed. So no value is both linked and proposed in
+  one run. The parser already drops a repeated tag, so this matters only for a classification built
+  by hand.
+- **Values are created in one order, by dimension then name.** Two concurrent runs creating the same
+  values then wait on each other rather than deadlock.
+- **`confirm_proposed_tag` keeps a link the document already holds as it is,** with its confidence
+  and `applied_by`, as `confirm_proposed_topic` did. A new link takes the proposal's confidence.
+- **`POST /api/tags`'s 409 reads:** "A tag with this name already exists in this dimension. A retired
+  tag is not added again here."
+- **`scripts/objective05_verify.py` counts a Topic in `discarded_suggestions` (one too long to be a
+  tag) as a clause 3 violation,** since the clause says an out-of-scheme Topic is proposed.
 
 **Why an existing value is handled exactly as a new one (invariant 1).** Seen from a reader of the
 document, a value outside its scheme can be one of three things, which the reader must not be able
@@ -10765,13 +10806,20 @@ creates from an Administrator-only document is grown and carried by that documen
 `tag_scheme` offers it only where every role in the audience reads a carrier: never to an
 Employee-visible document, and never in its prompt.
 
+**For a retired tag, grown is not enough.** An Employee-readable document may already carry it, so
+reactivating it through an Administrator-only document would put it back in front of Employees.
+Hence the rule the security review added (below): a retired tag is reactivated only through a
+document every role can read.
+
 **Consequences, stated rather than discovered:**
 
-- **Retiring a tag no longer keeps it out of classification.** A suggestion of a retired value at or
-  above the threshold reactivates it, grown, and a person confirming a proposal of it does too. That
-  now includes Project and Process, where D-105's note said "A retired Project or Process tag stays
-  retired". The alternative, treating a retired value differently, would tell a reader that a value
-  of that name exists.
+- **Retiring a tag no longer keeps it out of classification of a document every role can read.** A
+  suggestion of a retired value at or above the threshold reactivates it, grown, and a person
+  confirming a proposal of it does too. That now includes Project and Process, where D-105's note
+  said "A retired Project or Process tag stays retired". The alternative, treating a retired value
+  differently, would tell a reader that a value of that name exists.
+  - On a document some role cannot read, the tag is linked and stays retired (the security review,
+    finding 1, below).
 - **The scheme grows by itself.** Each document can add up to `MAXIMUM_TAG_SUGGESTIONS` (8) values,
   at the ingestion rate. The scheme the prompt lists has no cap (deferred since D-105's security
   review). Near-synonymous values, the fragmentation FR-10's clause was written to prevent, are now
@@ -10840,6 +10888,121 @@ Employee-visible document, and never in its prompt.
   `EXAMPLE_SCHEME` says why).
 - **The prompt is one for both providers.**
 
+**The security review (12 November, before the pull request), and what changed because of it.** The
+`security-reviewer` agent reviewed the prompt and the server change and confirmed its main findings
+by executing probe tests against its own test database.
+
+1. **HIGH: a retired value brought back through Administrator-only material reappeared to every
+   Employee (invariant 1).** Confirmed by execution, 6 of 6.
+   - **The leak.** A retired value that an Employee-readable document still carries is not offered.
+     When a run on an Administrator-only document reactivated it, it was offered again on every
+     readable document, though nothing an Employee can read had changed. So an Employee learned
+     that restricted material had been classified with that value.
+   - **The paths:** the classifier's reactivation, a person's confirmation of a proposal, and a
+     person's Topic name form. The last is D-105's own path, which had the same leak for one
+     dimension.
+   - **Fixed for all three by one change:** a retired tag is reactivated only through a document
+     every role can read, decided through `scoped_documents` for each role (D-53). On a document
+     some role cannot read, the link is made and the tag stays retired: its only readers are
+     Administrators, who already see retired tags in `GET /api/tags`.
+   - **On a document every role reads,** the three cases stay indistinguishable, and a retired value
+     comes back as before.
+   - **The residual, stated in the code:** on a document some role cannot read, its readers can tell
+     a retired value from a new one. With today's two roles they are Administrators, who read every
+     source and the retired inventory, so nothing is disclosed.
+   - **"Retiring a tag no longer keeps it out of classification"** (above) therefore holds only
+     through documents every role can read.
+   - **The tests:** the regression test inverts the reviewer's probe. The probe's leak cases now
+     fail on their own assertions.
+2. **MEDIUM: uploaded text planted in Administrator-only documents' prompts.** A value the classifier
+   created from an Employee-readable document could be up to 255 characters of any words. It is
+   carried by a document every role reads, so it joined every scheme and was listed verbatim in
+   later prompts, Administrator-only ones included.
+   - **Fixed by enforcing rule 6** in the application, for a value the classifier creates or
+     proposes: more than three words is discarded (`MAXIMUM_CREATED_TAG_WORDS`).
+   - **Also discarded:** a value carrying a control, format or lone-surrogate character (Unicode Cc,
+     Cf or Cs), or the prompt's list separator ";" (finding 5). Cs was added in building the fix: a
+     lone-surrogate escape in a reply decodes to one, and it made the classify route answer 500 as a
+     NUL did.
+   - **Residual:** a value of up to three words still reaches other documents' prompts verbatim.
+     Rendering the scheme lists as JSON was declined, because it would change the prompt the sweep
+     measured.
+3. **LOW: the scheme grows without bound.**
+   - **The rate:** up to 8 values a reply, at the ingestion rate, is up to 480 an hour for one
+     account, and registration gives the Employee role. Every value is listed in every later prompt.
+   - **Not changed here.** A per-run cap and a per-dimension prompt cap are options for the user;
+     neither is a requirement.
+4. **LOW: any uploader can now create Project and Process values,** which neither the name form nor
+   `POST /api/tags` lets them do. On a document every role reads, an uploader can also reverse an
+   Administrator's retirement through content. Recorded, not changed.
+5. **LOW: names kept bidirectional and zero-width characters and ";", and a NUL in a suggested tag
+   value gave a 500.** Fixed for values the classifier creates or proposes, by item 2's discard,
+   recorded with each offending character replaced by U+FFFD. The NUL 500 predates D-128. A person's
+   name form keeps its existing rules.
+6. **LOW: a tag row the classifier creates or reactivates stays locked until the upload commits,**
+   since classification runs inside the upload's transaction. A concurrent request for the same
+   value waits; there is no deadlock, because creation is sorted. Recorded, not changed.
+
+**Found, and older than D-128; not fixed here, and follow-ups:**
+
+- **The race.**
+  - If `DELETE /api/tags/{id}` deletes an unreferenced tag while an upload's classification links it,
+    the database checks the link at the upload's final commit, outside the classification
+    savepoint. The whole upload then rolls back and its stored file is deleted, which breaks
+    invariant 8.
+  - D-128 adds only one more way for a classification to fetch such a tag.
+- **A NUL or lone surrogate in a suggested department** still answers 500 on the classify route,
+  because rule 3 writes `machine_department` unchecked. It is the same defect as item 5, on a path
+  D-128 does not change.
+
+**Checked and sound by the review:**
+
+- **The three cases are indistinguishable** on a document the Employee reads (executed: the classify,
+  confirm and detail replies, `tag_options` and the facets).
+- **Created values stay out of view:** a value created from Administrator-only material is never
+  offered, listed or counted for an Employee-visible document.
+- **The removed-link rule** reads this document's links only.
+- **The proposal routes** match dimension and value together. The order is the scoped 404, then the
+  403, then the body.
+- **`POST /api/tags`** answers 401, 403, 429, 400, 409, in that order, and never reactivates.
+- **Names:** the 255-character limit is checked after normalising, and `grown` is never unset.
+- **`documents 0012`** emits no column SQL.
+- **`objective05_verify.py`** reports the departure; its caveats over-report rather than hide.
+
+**The development sweep on the revised prompt, and the threshold: 0.80 for claude-haiku-5-5 (the
+user's choice, 12 November).** D-106's rule ran on the 19 development documents, three times each,
+through the shipped `classify_document` on Haiku 5.5
+(`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). The driver is the 10 November copy,
+unchanged but for its opening paragraph.
+
+| | 10 November, old prompt (`ffdd5cb`) | 12 November, D-128's prompt (`5dcb6ff`) |
+|---|---|---|
+| classifications, failed | 57, 0 | 57, 0 |
+| types right | 57 | 57 |
+| lowest confidence on a right type | 0.72 (one draw of X17) | 0.80 |
+| what the rule gives | 0.72 | **0.80** |
+| tag suggestions, outside the scheme | 136, 4 | 152, 5 |
+| new values suggested (distinct) | Topic: "customer satisfaction", "energy use" | the same two, each at 0.90 |
+| new Project or Process values | none | **none** |
+| Claude | 57 calls | 57 calls, about $0.018 |
+
+- **Every type was right both times, so the rule's fallback applied,** as on 10 November: the lowest
+  confidence on a right type. That moved from 0.72 to 0.80. The confidences still cannot be shown to
+  separate right from wrong, because there was nothing wrong to separate.
+- **On these documents 0.72 and 0.80 differ by one tag.** At 0.80 one in-scheme Process suggestion
+  of the 152 is held instead of applied, and the departments and Topics come out the same. The
+  question put to the user said "of 147"; the record says 152.
+- **The user chose 0.80, the rule's result** (recommended), over keeping 0.72 as a recorded
+  departure. `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.80 from this
+  decision on, superseding D-122's 0.72. D-106 and D-122 carry dated notes.
+- **Haiku proposed no new Project or Process value in 57 classifications,** though rule 6 now allows
+  one. On documents like these, the Project and Process half of D-128 does not come into play.
+  The two new Topics, at 0.90, would be created and applied where they used to be proposed.
+- **The record names `5dcb6ff` with uncommitted tracked changes.** That was the other agents' work
+  in progress, in `apps/api`, `apps/documents`, `scripts` and tests. `tree-at-run.txt` in the run
+  folder lists them and shows none in `apps/ai`, `apps/ingestion` or `config`, the code the sweep
+  runs.
+
 **Not covered:**
 
 - **gemma3:4b's threshold (0.95)** was derived on the earlier prompt and is not re-derived on this
@@ -10848,5 +11011,8 @@ Employee-visible document, and never in its prompt.
   its window before it does Haiku's.
 - **The documents backfilled on 12 November were classified under the old rules.** A re-run after
   this merges, about $0.007, gives them the new ones.
-- **An independent accuracy figure for created values:** none. The development sweep below reports
+- **An independent accuracy figure for created values:** none. The development sweep above reports
   how many new values Haiku proposes; nothing scores them against a reference.
+- **Objective 05 on the frozen twenty at 0.80:** not re-run, by the user's choice of the sweep option
+  ("the frozen twenty are not touched"). Its clause 1 counts every suggested type, held or not, so
+  the threshold does not move it. Its clause 2 holds by construction at any threshold.

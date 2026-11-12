@@ -232,7 +232,7 @@ def test_an_in_scheme_tag_is_linked_as_ai_applied_and_provisional_only_below_the
 # --- D-122: the threshold is the classifying model's own -----------------------------------------
 
 HAIKU = "claude-haiku-5-5"
-BETWEEN_THE_TWO_VALUES = 0.8  # at or above Haiku's 0.72, below CLASSIFICATION_CONFIDENCE_THRESHOLD
+BETWEEN_THE_TWO_VALUES = 0.85  # above Haiku's 0.80 (D-128), below CLASSIFICATION_CONFIDENCE_THRESHOLD
 
 
 def test_the_confidence_threshold_is_the_classifying_models_own():
@@ -250,8 +250,9 @@ def test_the_confidence_threshold_is_the_classifying_models_own():
 def test_assignments_between_the_two_values_follow_the_classifying_model(
     document, model, outcome, effective, provisional_tag
 ):
-    """D-122: at 0.80 the type, the department and a tag apply on Haiku's 0.72 and are held on 0.95."""
-    # The premise: 0.80 sits between the two values, so the model alone decides.
+    """D-122: at 0.85 the type, the department and a tag apply on Haiku's 0.80 (D-128) and are held
+    on 0.95."""
+    # The premise: 0.85 sits between the two values, so the model alone decides.
     assert (CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU] <= BETWEEN_THE_TWO_VALUES
             < CLASSIFICATION_CONFIDENCE_THRESHOLD)
     make_tag(PROJECT_DIMENSION, "bridge maintenance")
@@ -350,46 +351,73 @@ def test_links_the_new_run_does_not_mention_are_left_alone(document):
 
 
 def test_a_tag_deactivated_since_the_scheme_was_built_is_treated_as_outside_it(document):
-    make_tag(PROJECT_DIMENSION, "old project", active=False)
+    """Outside the scheme since D-128 means fetched and brought into use at or above the threshold:
+    the retired tag is reactivated, grown, and linked as an AI tag. Until D-128 it was discarded."""
+    retired = make_tag(PROJECT_DIMENSION, "old project", active=False)
     analysis = apply_classification(
         document,
         classification(tags=[(PROJECT_DIMENSION, "old project", ABOVE_THRESHOLD)]),
         scheme=scheme(project=["old project"]),
     )
-    assert not links_of(document).exists()
-    assert analysis.discarded_suggestions == [
-        {"dimension": PROJECT_DIMENSION, "value": "old project", "confidence": ABOVE_THRESHOLD}
-    ]
+    retired.refresh_from_db()
+    assert (retired.active, retired.grown) == (True, True)
+    link = links_of(document).get()
+    assert link.tag == retired
+    assert (link.applied_by, link.confirmed, link.provisional) == (AI_APPLIED, False, False)
+    assert link.confidence == Decimal(str(ABOVE_THRESHOLD))
+    assert analysis.discarded_suggestions == []
+    assert analysis.proposed_tags == []
 
 
-# --- Rule 4: the scheme clause, per dimension ---------------------------------------------------
+# --- Rule 4: a value outside the scheme, per dimension (D-128) -----------------------------------
 
 
-def test_a_topic_outside_the_scheme_is_proposed_and_no_tag_row_exists_for_it(document):
+def test_a_topic_outside_the_scheme_below_the_threshold_is_proposed_and_no_tag_row_exists_for_it(
+    document,
+):
     analysis = apply_classification(
         document,
-        classification(tags=[(TOPIC_DIMENSION, "Budget  Planning", ABOVE_THRESHOLD)]),
+        classification(tags=[(TOPIC_DIMENSION, "Budget  Planning", BELOW_THRESHOLD)]),
         scheme=scheme(),
     )
-    assert analysis.proposed_topics == [{"value": "budget planning", "confidence": ABOVE_THRESHOLD}]
+    assert analysis.proposed_tags == [
+        {"dimension": TOPIC_DIMENSION, "value": "budget planning", "confidence": BELOW_THRESHOLD}
+    ]
     assert analysis.discarded_suggestions == []
     assert not Tag.objects.filter(tag_name="budget planning").exists()
     assert not links_of(document).exists()
 
 
 @pytest.mark.parametrize("dimension", [PROJECT_DIMENSION, PROCESS_DIMENSION])
-def test_a_project_or_process_outside_the_scheme_is_discarded_and_recorded(document, dimension):
+@pytest.mark.parametrize(
+    "confidence", [BELOW_THRESHOLD, AT_THRESHOLD, ABOVE_THRESHOLD], ids=["below", "at", "above"]
+)
+def test_a_project_or_process_outside_the_scheme_is_held_below_the_threshold_and_created_at_it(
+    document, dimension, confidence
+):
+    """D-128: no longer discarded. Below the threshold the value is held as a proposal and no Tag
+    row exists for it; at or above, its Tag is created, active and grown, and linked as an AI tag,
+    unconfirmed and not provisional. Nothing goes to ``discarded_suggestions`` either way."""
     analysis = apply_classification(
         document,
-        classification(tags=[(dimension, "Harbour  Upgrade", ABOVE_THRESHOLD)]),
+        classification(tags=[(dimension, "Harbour  Upgrade", confidence)]),
         scheme=scheme(),
     )
-    assert analysis.discarded_suggestions == [
-        {"dimension": dimension, "value": "harbour upgrade", "confidence": ABOVE_THRESHOLD}
-    ]
-    assert analysis.proposed_topics == []
-    assert not Tag.objects.filter(tag_name="harbour upgrade").exists()
-    assert not links_of(document).exists()
+    assert analysis.discarded_suggestions == []
+    if confidence < CLASSIFICATION_CONFIDENCE_THRESHOLD:
+        assert analysis.proposed_tags == [
+            {"dimension": dimension, "value": "harbour upgrade", "confidence": confidence}
+        ]
+        assert not Tag.objects.filter(tag_name="harbour upgrade").exists()
+        assert not links_of(document).exists()
+    else:
+        assert analysis.proposed_tags == []
+        tag = Tag.objects.get(tag_name="harbour upgrade")
+        assert (tag.dimension, tag.active, tag.grown) == (dimension, True, True)
+        link = links_of(document).get()
+        assert link.tag == tag
+        assert (link.applied_by, link.confirmed, link.provisional) == (AI_APPLIED, False, False)
+        assert link.confidence == Decimal(str(confidence))
 
 
 def test_a_suggestion_in_a_dimension_outside_the_three_is_ignored(document):
@@ -404,30 +432,40 @@ def test_a_suggestion_in_a_dimension_outside_the_three_is_ignored(document):
         ),
         scheme=scheme(departments=["Finance"]),
     )
-    assert analysis.proposed_topics == []
+    assert analysis.proposed_tags == []
     assert analysis.discarded_suggestions == []
     assert not links_of(document).exists()
     assert Tag.objects.count() == 0
 
 
-def test_proposed_topics_are_deduplicated_by_normalised_value_and_replaced_on_a_rerun(document):
+def test_proposed_tags_are_deduplicated_by_normalised_value_and_replaced_on_a_rerun(document):
+    """The highest confidence of one value is kept: here the middle suggestion's, so keeping the
+    first or the last suggestion instead would show. Every one is below the threshold, so all three
+    are one proposal and no Tag row exists (D-128)."""
+    lower = round(BELOW_THRESHOLD - 0.1, 3)
+    lowest = round(BELOW_THRESHOLD - 0.2, 3)
     first = apply_classification(
         document,
         classification(
             tags=[
-                (TOPIC_DIMENSION, "Budget Planning", BELOW_THRESHOLD),
-                (TOPIC_DIMENSION, " budget   planning ", ABOVE_THRESHOLD),
+                (TOPIC_DIMENSION, "Budget Planning", lower),
+                (TOPIC_DIMENSION, " budget   planning ", BELOW_THRESHOLD),
+                (TOPIC_DIMENSION, "BUDGET PLANNING", lowest),
             ]
         ),
         scheme=scheme(),
     )
-    assert first.proposed_topics == [{"value": "budget planning", "confidence": ABOVE_THRESHOLD}]
+    assert first.proposed_tags == [
+        {"dimension": TOPIC_DIMENSION, "value": "budget planning", "confidence": BELOW_THRESHOLD}
+    ]
     second = apply_classification(
         document,
-        classification(tags=[(TOPIC_DIMENSION, "Risk Appetite", ABOVE_THRESHOLD)]),
+        classification(tags=[(TOPIC_DIMENSION, "Risk Appetite", BELOW_THRESHOLD)]),
         scheme=scheme(),
     )
-    assert second.proposed_topics == [{"value": "risk appetite", "confidence": ABOVE_THRESHOLD}]
+    assert second.proposed_tags == [
+        {"dimension": TOPIC_DIMENSION, "value": "risk appetite", "confidence": BELOW_THRESHOLD}
+    ]
     assert not Tag.objects.filter(dimension=TOPIC_DIMENSION).exists()
 
 

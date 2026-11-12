@@ -422,11 +422,13 @@ def _browses(client, case, monkeypatch):
 
 # FR-10's routes (D-105) act on a document by id, so each is a status-code probe like the delete:
 # 404 says nothing, anything else confirms the id is real. Each probe first gives the disagreeing
-# document what its route acts on (an analysis, a proposed topic, a tag link), so that the
+# document what its route acts on (an analysis, a proposal, a tag link), so that the
 # Administrator's mirror reaches the work and answers non-404, and the Employee's 404 can only be
 # the scope's. contribute_content is held by both roles, so the Employee's 404 is not a 403 hidden
 # behind one: it is resolved before the permission (D-73's order).
 PROPOSED_TOPIC = "succession planning"
+# The proposed-tags routes' body (D-128): the proposal's dimension and value.
+PROPOSAL_BODY = {"dimension": "Topic", "value": PROPOSED_TOPIC}
 
 
 def _classified(document) -> DocumentAnalysis:
@@ -434,7 +436,7 @@ def _classified(document) -> DocumentAnalysis:
         document=document,
         defaults={
             "classified_at": timezone.now(),
-            "proposed_topics": [{"value": PROPOSED_TOPIC, "confidence": 0.8}],
+            "proposed_tags": [{"dimension": "Topic", "value": PROPOSED_TOPIC, "confidence": 0.8}],
         },
     )
     return analysis
@@ -504,13 +506,11 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/documents/<uuid:pk>/tags/<uuid:content_tag_id>", "DELETE"): _acts_on(
         "delete", lambda case: f"tags/{_linked(case.document).id}"
     ),
-    ("api/documents/<uuid:pk>/proposed-topics/confirm", "POST"): _acts_on(
-        "post", lambda case: "proposed-topics/confirm", body={"value": PROPOSED_TOPIC},
-        prepare=_classified,
+    ("api/documents/<uuid:pk>/proposed-tags/confirm", "POST"): _acts_on(
+        "post", lambda case: "proposed-tags/confirm", body=PROPOSAL_BODY, prepare=_classified,
     ),
-    ("api/documents/<uuid:pk>/proposed-topics/reject", "POST"): _acts_on(
-        "post", lambda case: "proposed-topics/reject", body={"value": PROPOSED_TOPIC},
-        prepare=_classified,
+    ("api/documents/<uuid:pk>/proposed-tags/reject", "POST"): _acts_on(
+        "post", lambda case: "proposed-tags/reject", body=PROPOSAL_BODY, prepare=_classified,
     ),
     # A person applies a tag (D-105's dated note of 10 November 2026, night): a new Topic, so the
     # Administrator's mirror is the 201 and the Employee's answer is the scope's 404.
@@ -550,6 +550,9 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     # and counts of the sources carrying them, read by a role that reads every source (D-66); no
     # Document or Meeting row is read or returned.
     ("api/tags", "GET"): "Tags and their counts of sources, for the Administrator alone.",
+    # D-128: an Administrator adds a value; the 201 is the new tag's entry, and the 409 names the
+    # existing tag's id, which the inventory above already lists to the same reader.
+    ("api/tags", "POST"): "The new tag's entry, or the id of the tag already holding the name.",
     ("api/tags/<uuid:pk>", "DELETE"): "The retired tag's entry, or nothing.",
     # Recording transcription (D-123). No transcription route reads a Document, a Meeting or a
     # chunk, or stores anything: a transcript enters the knowledge base only through

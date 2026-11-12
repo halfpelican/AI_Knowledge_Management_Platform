@@ -220,7 +220,7 @@ cascade deleted the row.
 | `tag_name` | text | unique within a dimension, case- and whitespace-normalised |
 | `dimension` | text | `Department`, `Project`, `Process`, `Topic` |
 | `active` | boolean | deactivated rather than deleted while content references it |
-| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. Never unset |
+| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. **Since D-128,** also set on a value in Project, Process or Topic that the classifier creates or reactivates at or above the confidence threshold, and on one that a person's confirmation of a proposal creates or reactivates. A value an Administrator adds through `POST /api/tags` is not grown: it is vocabulary. Never unset |
 
 ### ContentTags — FR-10, FR-15
 
@@ -279,8 +279,8 @@ by nothing else.
 | `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
 | `department_applied_by` | text, nullable | **`documents 0009`** — whose value `Documents.department` holds, in `TAG_APPLIED_BY_VALUES`: `user` a person gave it (typed at upload, or written through the confirm route); `ai` a run wrote its suggestion into a blank department and no person has written it since; null for no department, or a row classified before 0009 and not set since (D-119 finding 10) |
 | `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
-| `proposed_topics` | jsonb | out-of-scheme Topic suggestions awaiting confirmation, `[{"value", "confidence"}]`, deduplicated by normalised value; replaced by each run |
-| `discarded_suggestions` | jsonb | out-of-scheme Project and Process suggestions, `[{"dimension", "value", "confidence"}]`; evidence of the scheme clause, never shown as tags; replaced by each run |
+| `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012`, D-128:** new values held for a person, in Project, Process and Topic, `[{"dimension", "value", "confidence"}]`, each an out-of-scheme suggestion below the confidence threshold, deduplicated by dimension and normalised value; replaced by each run. The column keeps its first name (`db_column`) so that 0012 changes no column. Until 12 November it held out-of-scheme Topics only, `[{"value", "confidence"}]`, and 0012 stamped those entries `"dimension": "Topic"` |
+| `discarded_suggestions` | jsonb | suggestions that cannot become a tag, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. Since D-128 that is only an out-of-scheme value the classifier may not create or propose: a normalised name longer than the column, of more than `MAXIMUM_CREATED_TAG_WORDS` (3) words, or carrying a control, format or lone-surrogate character (Unicode Cc, Cf, Cs) or ";", which is recorded with those characters replaced by U+FFFD so that the column accepts it. Until 12 November it held every out-of-scheme Project and Process suggestion |
 | `model` | text | the chat model that produced the run |
 | `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
@@ -544,7 +544,8 @@ plans it immediately after `documents 0007`, `documents 0009` (`ContentTags.remo
 (`Tags.grown`) immediately after 0009, and `documents 0011` (the backfill that marks grown every tag
 only restricted material carries) immediately after 0010. 0011's backfill reads meetings'
 `visible_to_roles`, so it depends on `meetings 0002`, and a clean start now plans `meetings 0002`
-directly after `meetings 0001`, before `documents 0002`.
+directly after `meetings 0001`, before `documents 0002`. `documents 0012` (D-128: the proposal list
+renamed `proposed_tags` on its unchanged column, its entries stamped with a dimension) follows 0011.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

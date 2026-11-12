@@ -443,7 +443,7 @@ same approach as section 5, because it is the same risk: a small local model and
 1. A strict system prompt: JSON only; the type from the fixed list, copied exactly; the department
    from the listed departments; tags only from the values listed per dimension, except that a NEW
    value of one to three words may be proposed in Project, Process or Topic when no listed one
-   fits — never a new department (D-127; until 12 November only a new Topic was allowed); at most
+   fits — never a new department (D-128; until 12 November only a new Topic was allowed); at most
    eight tags; confidence as the model's honest estimate; no explanation.
 2. One worked example whose subject (lighthouse keeping) and whose departments and tag values are
    alien to any organisation, for the reason the comment above `SYSTEM_PROMPT` in
@@ -468,7 +468,7 @@ body that steers the model in prose or forges a scheme line; shape validation ca
 What bounds it: the type is held to the fixed list by the parser, the department is held to the
 scheme by the application (D-105), and a person confirms what is held.
 
-**Since D-127 a tag value is not held to the scheme,** so the bound for tags is weaker:
+**Since D-128 a tag value is not held to the scheme,** so the bound for tags is weaker:
 
 - **A steered value is applied at once.** A body that steers the model to a new Project, Process or
   Topic value at or above the confidence threshold has that value created and applied. It is shown
@@ -481,7 +481,7 @@ scheme by the application (D-105), and a person confirms what is held.
   - a name longer than the column is discarded. "One to three words" is the prompt's instruction,
     not a check.
 - **What does not bound it:** an Administrator retiring the value. The classifier brings back a
-  retired value it suggests at or above the threshold (D-127's consequences).
+  retired value it suggests at or above the threshold (D-128's consequences).
 
 **Truncation** (`classification_input`). The model reads the title and the first
 `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text — D-31's token —
@@ -518,8 +518,12 @@ measurements are D-106's sweeps on the development documents and Objective 05's 
 - **On gemma3:4b:** the threshold of 0.95, and the run evidence in D-106's notes.
 - **On claude-haiku-5-5:** the threshold of 0.72 (D-122), and three draws of Objective 05 (#85).
 
-All of them ran on the prompt before D-127, which revised rules 6 and 7 on 12 November 2026. D-127
-records the Haiku sweep on the revised prompt. gemma3:4b has not been measured on it.
+All of them ran on the prompt before D-128, which revised rules 6 and 7 on 12 November 2026.
+
+- **Haiku has been measured on the revised prompt.** D-106's sweep ran on it, and Haiku's threshold
+  is now 0.80, the rule's result (D-128): 57 of 57 types right, no new Project or Process value
+  suggested.
+- **gemma3:4b has not been measured on it.**
 
 ---
 

@@ -15,7 +15,26 @@ database. The three clauses of Objective 05, as the proposal words them:
    Project and Process dimensions while being proposed for confirmation in the Topic dimension
    only": out-of-scheme departments carry the discarded outcome, out-of-scheme Project and Process
    values appear only in discarded_suggestions and never as links, and out-of-scheme Topic values
-   appear only in proposed_topics and never as links.
+   appear only in proposed_tags and never as links.
+
+**D-128 (12 November 2026) departs from clause 3, and this script reports the departure rather than
+hiding it.** The shipped build creates and applies a value outside the scheme in Project, Process or
+Topic when its confidence is at or above the threshold, and holds one below it in
+``DocumentAnalysis.proposed_tags`` (``proposed_topics`` until ``documents 0012``) in any of the
+three dimensions. So, counted per document:
+
+- a Topic entry of ``proposed_tags`` is ``topic_proposed``, as clause 3 asks;
+- a Project or Process entry is ``project_process_proposed`` and a **clause 3 violation**: the
+  clause says such a value is discarded;
+- an AI link whose Tag is ``grown`` is a value the classifier created outside the seeded scheme,
+  counted as ``created_by_classifier`` and recorded as a **clause 3 violation**. On a measurement
+  database no person acts, the scheme is seeded ``--scheme-only`` (whose values are never grown),
+  and only D-128's creation makes a grown tag, so a grown tag on an AI link can have come from
+  nowhere else.
+
+Clause 3 is therefore reported NOT met on any run in which D-128 held or created a Project or
+Process value, or created any value. PR 85's evidence stands for the build it ran on. The reference
+set (corpus/objective-05/reference.json) is frozen and is only read.
 
 Usage, in PowerShell::
 
@@ -108,8 +127,11 @@ def main() -> int:
     rows, problems = [], []
     clause2 = {"below_threshold": 0, "below_and_held": 0, "at_or_above": 0, "at_or_above_and_applied": 0,
                "at_or_above_held_to_keep_a_given_department": 0, "violations": []}
+    # D-128: project_process_proposed and created_by_classifier count the departures from clause 3,
+    # and each one is also recorded as a violation (see the module docstring).
     clause3 = {"department_out_of_scheme": 0, "department_discarded": 0, "project_process_discarded": 0,
-               "topic_proposed": 0, "out_of_scheme_links": 0, "violations": []}
+               "topic_proposed": 0, "project_process_proposed": 0, "created_by_classifier": 0,
+               "out_of_scheme_links": 0, "violations": []}
     tag_hits = tag_suggested = tag_reference = 0
     thresholds_used: dict[str, float] = {}
     record["thresholds_used"] = thresholds_used  # filled per analysis below, before the record is written
@@ -142,7 +164,7 @@ def main() -> int:
             "department_outcome": analysis.department_outcome, "effective_department": document.department,
             "department_match": analysis.machine_department == item["department"],
             "user_edited": analysis.user_edited, "input_truncated": analysis.input_truncated,
-            "proposed_topics": analysis.proposed_topics, "discarded_suggestions": analysis.discarded_suggestions,
+            "proposed_tags": analysis.proposed_tags, "discarded_suggestions": analysis.discarded_suggestions,
             "model": analysis.model,
         })
         # Clause 2 on the type.
@@ -187,7 +209,9 @@ def main() -> int:
         links = list(ContentTag.objects.filter(source_type=document_source, source_id=document.id).select_related("tag"))
         ai_links = [link for link in links if link.applied_by == "ai"]
         row["ai_tags"] = [{"dimension": l.tag.dimension, "name": l.tag.tag_name, "confidence": float(l.confidence) if l.confidence is not None else None,
-                           "provisional": l.provisional, "confirmed": l.confirmed} for l in ai_links]
+                           "provisional": l.provisional, "confirmed": l.confirmed,
+                           # D-128: a grown tag on a measurement database is one the classifier created.
+                           "created_by_classifier": l.tag.grown} for l in ai_links]
         for link in ai_links:
             if link.confidence is None or link.confirmed:
                 continue
@@ -205,12 +229,33 @@ def main() -> int:
             if link.tag.dimension not in REPOSITORY_TAG_DIMENSIONS:
                 clause3["out_of_scheme_links"] += 1
                 clause3["violations"].append(f"{entry['id']} link in dimension {link.tag.dimension}")
+        # D-128: an AI link to a grown tag is a value the classifier created outside the seeded
+        # scheme (see the module docstring). Clause 3 says such a value is never linked: a Project or
+        # Process one is discarded, a Topic one only proposed. Every link counts, whatever its state.
+        for link in ai_links:
+            if link.tag.grown:
+                clause3["created_by_classifier"] += 1
+                clause3["violations"].append(
+                    f"{entry['id']} {link.tag.dimension} value {link.tag.tag_name!r} created outside the "
+                    f"scheme and linked (D-128)"
+                )
         for suggestion in analysis.discarded_suggestions or []:
             if suggestion.get("dimension") in ("Project", "Process"):
                 clause3["project_process_discarded"] += 1
             else:
                 clause3["violations"].append(f"{entry['id']} discarded a {suggestion.get('dimension')} value")
-        clause3["topic_proposed"] += len(analysis.proposed_topics or [])
+        for proposal in analysis.proposed_tags or []:
+            dimension = proposal.get("dimension") if isinstance(proposal, dict) else None
+            if dimension == "Topic":
+                clause3["topic_proposed"] += 1
+            elif dimension in ("Project", "Process"):
+                # D-128 holds a Project or Process value below the threshold; clause 3 discards it.
+                clause3["project_process_proposed"] += 1
+                clause3["violations"].append(
+                    f"{entry['id']} {dimension} value {proposal.get('value')!r} proposed, not discarded (D-128)"
+                )
+            else:
+                clause3["violations"].append(f"{entry['id']} proposed a value in dimension {dimension!r}")
         # Tags against the manifest, for information.
         reference_pairs = {(dimension, normalise_tag_name(value)) for dimension, values in (item.get("tags") or {}).items() for value in values}
         suggested_pairs = {(l.tag.dimension, l.tag.tag_name) for l in ai_links}
@@ -240,19 +285,21 @@ def main() -> int:
              f"Commit {record['commit_sha'][:7]}" + (" (uncommitted tracked changes)" if record["uncommitted_tracked_changes"] else "")
              + f", database {database}, dump {record['dump_sha256'][:8]}…, FLM {version.summary()}, "
              f"threshold by model {thresholds_used or {'(none classified)': CLASSIFICATION_CONFIDENCE_THRESHOLD}}.", "",
-             "| Id | Reference | Suggested | Conf | Type outcome | Dept suggested | Dept conf | Dept outcome | AI tags (provisional) | Proposed topics | Discarded |",
-             "|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| Id | Reference | Suggested | Conf | Type outcome | Dept suggested | Dept conf | Dept outcome | AI tags (provisional) | Created by classifier | Proposed | Discarded |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         if not r.get("classified"):
-            lines.append(f"| {r['id']} | {r['reference_type']} | NOT CLASSIFIED | | | | | | | | |"); continue
+            lines.append(f"| {r['id']} | {r['reference_type']} | NOT CLASSIFIED | | | | | | | | | |"); continue
         prov = sum(1 for t in r["ai_tags"] if t["provisional"])
+        created = sum(1 for t in r["ai_tags"] if t["created_by_classifier"])
         lines.append(f"| {r['id']} | {r['reference_type']} | {r['machine_doc_type']}{'' if r['type_match'] else ' (miss)'} | {r['machine_doc_type_confidence']} | {r['doc_type_outcome']} | "
                      f"{r['machine_department']}{'' if r['department_match'] else ' (differs)'} | {r['machine_department_confidence']} | {r['department_outcome']} | {len(r['ai_tags'])} ({prov}) | "
-                     f"{len(r['proposed_topics'] or [])} | {len(r['discarded_suggestions'] or [])} |")
+                     f"{created} | {len(r['proposed_tags'] or [])} | {len(r['discarded_suggestions'] or [])} |")
     c1, c2, c3 = summary["clause_1"], summary["clause_2"], summary["clause_3"]
     lines += ["", f"**Clause 1:** {c1['type_matches']} of {c1['of']} types match the reference ({c1['rate_percent']}%); 75% {'MET' if c1['passes_75_percent'] else 'NOT MET'}. Misses: {c1['misses']}",
               f"**Clause 2:** {c2['below_and_held']} of {c2['below_threshold']} below-threshold assignments held as provisional; {c2['at_or_above_and_applied']} of {c2['at_or_above']} at or above applied and {c2['at_or_above_held_to_keep_a_given_department']} held to keep a department the document already had; violations: {c2['violations'] or 'none'}.",
-              f"**Clause 3:** departments discarded {c3['department_discarded']}, Project/Process suggestions discarded {c3['project_process_discarded']}, Topic values proposed {c3['topic_proposed']}, out-of-scheme links {c3['out_of_scheme_links']}; violations: {c3['violations'] or 'none'}.",
+              f"**Clause 3:** {'MET' if c3['passes'] else 'NOT MET'}. Departments discarded {c3['department_discarded']}, Project/Process suggestions discarded {c3['project_process_discarded']}, Topic values proposed {c3['topic_proposed']}, "
+              f"Project/Process values proposed {c3['project_process_proposed']} and values created by the classifier {c3['created_by_classifier']} (both D-128's departures from the clause), out-of-scheme links {c3['out_of_scheme_links']}; violations: {c3['violations'] or 'none'}.",
               f"Tags against the manifest, for information: precision {summary['tags_for_information']['precision_percent']}%, recall {summary['tags_for_information']['recall_percent']}%."]
     if problems:
         lines += ["", "Problems: " + "; ".join(problems)]

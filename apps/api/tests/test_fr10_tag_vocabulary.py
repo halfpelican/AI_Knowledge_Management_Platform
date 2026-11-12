@@ -46,7 +46,7 @@ from apps.core.constants import (
 )
 from apps.documents.classification import apply_classification, tag_scheme
 from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
-from apps.documents.tests.classification_builders import ABOVE_THRESHOLD, BELOW_THRESHOLD, classification
+from apps.documents.tests.classification_builders import BELOW_THRESHOLD, classification
 
 pytestmark = pytest.mark.django_db
 
@@ -206,13 +206,23 @@ def test_a_backfilled_restricted_value_stays_out_of_an_employees_options_when_it
 
 def propose(document, name):
     """The machine proposes ``name`` for ``document`` while no Topic has it, as a classification run
-    before the seed script does: outside the scheme, a Topic goes to ``proposed_topics``."""
+    before the seed script does: outside the scheme and below the threshold, a value goes to
+    ``proposed_tags`` (D-128; at or above the threshold it would be created and applied)."""
     apply_classification(
-        document, classification(tags=[(TOPIC_DIMENSION, name, ABOVE_THRESHOLD)]),
+        document, classification(tags=[(TOPIC_DIMENSION, name, BELOW_THRESHOLD)]),
         scheme=tag_scheme(document),
     )
-    proposals = DocumentAnalysis.objects.get(document=document).proposed_topics
-    assert [proposal["value"] for proposal in proposals] == [name]
+    proposals = DocumentAnalysis.objects.get(document=document).proposed_tags
+    assert [(proposal["dimension"], proposal["value"]) for proposal in proposals] == [
+        (TOPIC_DIMENSION, name)
+    ]
+
+
+def confirm_proposal(client, document, name):
+    return client.post(
+        f"{DOCUMENTS_URL}/{document.id}/proposed-tags/confirm",
+        {"dimension": TOPIC_DIMENSION, "value": name}, format="json",
+    )
 
 
 def test_confirming_a_stale_proposal_on_restricted_material_leaves_an_employees_options_unchanged(
@@ -224,9 +234,7 @@ def test_confirming_a_stale_proposal_on_restricted_material_leaves_an_employees_
     before = options(employee_client, staff)
     assert "finance" in names(before[TOPIC_DIMENSION])
 
-    response = administrator_client.post(
-        f"{DOCUMENTS_URL}/{restricted.id}/proposed-topics/confirm", {"value": "finance"}, format="json"
-    )
+    response = confirm_proposal(administrator_client, restricted, "finance")
 
     assert response.status_code == 200, response.content
     assert ContentTag.objects.filter(tag=value, source_id=restricted.pk, confirmed=True).exists()
@@ -242,9 +250,7 @@ def test_confirming_a_stale_proposal_on_a_document_every_role_reads_keeps_the_to
     propose(shared, "finance")
     value = Tag.objects.create(tag_name="finance", dimension=TOPIC_DIMENSION)  # the seed, run after
 
-    response = session_client.client.post(
-        f"{DOCUMENTS_URL}/{shared.id}/proposed-topics/confirm", {"value": "finance"}, format="json"
-    )
+    response = confirm_proposal(session_client.client, shared, "finance")
 
     assert response.status_code == 200, response.content
     assert ContentTag.objects.filter(tag=value, source_id=shared.pk, confirmed=True).exists()
@@ -259,9 +265,12 @@ def test_confirming_a_stale_proposal_on_a_document_every_role_reads_keeps_the_to
 def test_a_topic_named_on_restricted_material_stays_out_of_an_employees_options(
     employee, employee_client, administrator_client, restricted, brought_in
 ):
-    """The name form grows the Topic it creates or reactivates, so a name brought in on
-    Administrator-only material is offered nowhere an Employee reads. Without the mark it would be
-    vocabulary, offered to every Employee because of a link they cannot read."""
+    """The name form grows a Topic it creates, so a new name brought in on Administrator-only
+    material is offered nowhere an Employee reads. Without the mark it would be vocabulary, offered
+    to every Employee because of a link they cannot read. A retired Topic named there is linked and
+    left retired, its ``grown`` unchanged (D-128's security review, finding 1): reactivated from
+    material some role cannot read, it would be offered again wherever a readable carrier makes it
+    eligible. Until that fix it was reactivated and grown here."""
     staff = make_document(employee, title="Staff handbook", roles=[EMPLOYEE_ROLE_NAME])
     if brought_in == "a retired seeded Topic":
         Tag.objects.create(tag_name="merger talks", dimension=TOPIC_DIMENSION, active=False)
@@ -275,5 +284,7 @@ def test_a_topic_named_on_restricted_material_stays_out_of_an_employees_options(
 
     assert response.status_code == 201, response.content
     topic = Tag.objects.get(tag_name="merger talks", dimension=TOPIC_DIMENSION)
-    assert (topic.active, topic.grown) == (True, True)
+    expected = (True, True) if brought_in == "a new name" else (False, False)
+    assert (topic.active, topic.grown) == expected
+    assert ContentTag.objects.filter(tag=topic, source_id=restricted.pk, removed=False).exists()
     assert options(employee_client, staff) == before

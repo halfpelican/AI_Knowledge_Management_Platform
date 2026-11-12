@@ -87,6 +87,8 @@ SCHEMA_V1 = {
     ),
     # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by
     # documents 0008, when FR-10 was built. The columns are docs/schema-v1.md §1's.
+    # "proposed_topics" is the column of the field documents 0012 renamed proposed_tags (D-128),
+    # which kept the column's name.
     "document_analysis": (
         ("analysis_id",),
         {"analysis_id", "doc_id", "machine_doc_type", "machine_doc_type_confidence",
@@ -262,6 +264,9 @@ SECTION_5_PLAN = [
     # The security review's backfill (D-105's dated note of 10 November 2026, night), immediately
     # after 0010.
     ("documents", "0011_grown_marks_withheld_tags"),
+    # D-128, 12 November 2026: DocumentAnalysis.proposed_topics renamed proposed_tags, the column
+    # kept, and each entry given its dimension; immediately after 0011, where its dependency puts it.
+    ("documents", "0012_proposed_tags"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),

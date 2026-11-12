@@ -23,6 +23,13 @@ values and confidences, both outcomes, the tag links with their provisional and 
 2026, night), the proposed and discarded suggestions, and the seconds the call took, or the
 error. The database named ``kmp`` is
 refused (D-84 decision 1) through the same gate the measurement scripts apply.
+
+**Since D-128** (12 November 2026) ``proposed_tags`` holds every value outside the scheme the run
+held below the threshold, in Project, Process or Topic, each with its dimension; it was
+``proposed_topics``, Topic values only, in records made before. A value outside the scheme at or
+above the threshold is created and linked, so it appears among ``tags`` as an AI link like any
+other: the record, like every reply, does not say whether a Tag row was created (CLAUDE.md
+invariant 1). ``scripts/objective05_verify.py`` counts such links by ``Tag.grown`` instead.
 """
 
 import json
@@ -100,7 +107,7 @@ def document_entry(document: Document, analysis, seconds: float) -> dict:
             }
             for link in links
         ],
-        "proposed_topics": analysis.proposed_topics,
+        "proposed_tags": analysis.proposed_tags,
         "discarded_suggestions": analysis.discarded_suggestions,
         "model": analysis.model,
         "input_truncated": analysis.input_truncated,
@@ -245,6 +252,6 @@ class Command(BaseCommand):
             f"{entry['id']}  {title!r:<42}  type {entry['machine_doc_type']}/"
             f"{entry['doc_type_outcome']}  department {entry['machine_department']!r}/"
             f"{entry['department_outcome']}  tags {tags} applied, {held} held, {removed} removed, "
-            f"{len(entry['proposed_topics'])} proposed, {len(entry['discarded_suggestions'])} "
+            f"{len(entry['proposed_tags'])} proposed, {len(entry['discarded_suggestions'])} "
             f"discarded  {entry['seconds']}s"
         )

@@ -8,7 +8,8 @@ next classify or reprocess linked the tag again. Now:
 
 - an AI link that is removed stays, marked ``removed``, with the confidence and provisional flag the
   machine gave it, whether it was held, applied or confirmed;
-- a later run neither links it again nor alters it, and a removed Topic is not proposed again;
+- a later run neither links it again nor alters it, and since D-128 neither creates, reactivates nor
+  proposes its tag, in Project, Process or Topic (until then a removed Topic was not proposed again);
 - a removed link is no longer found by id, so it cannot be confirmed or removed a second time;
 - ``tag_scheme`` still counts it as a link, so the tag stays in its own document's scheme: offered
   there to be applied again, and shown to the classifier, which leaves the removed link alone.
@@ -27,6 +28,7 @@ from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     AI_APPLIED,
     EMPLOYEE_ROLE_NAME,
+    PROCESS_DIMENSION,
     PROJECT_DIMENSION,
     SOURCE_TYPES,
     TOPIC_DIMENSION,
@@ -34,7 +36,7 @@ from apps.core.constants import (
 from apps.documents.classification import (
     NotOnThisDocument,
     apply_classification,
-    confirm_proposed_topic,
+    confirm_proposed_tag,
     confirm_tag,
     reject_tag,
     tag_scheme,
@@ -116,28 +118,42 @@ def test_a_removed_link_is_no_longer_found_to_confirm_or_remove(document, bridge
     assert (kept.removed, kept.confirmed, kept.provisional) == (True, False, True)
 
 
-def test_a_removed_topic_is_not_proposed_again_once_its_tag_is_retired(document):
-    topic = Tag.objects.create(tag_name=BUDGET, dimension=TOPIC_DIMENSION)
-    run(document, (TOPIC_DIMENSION, BUDGET, ABOVE_THRESHOLD), topic=(BUDGET,))
+@pytest.mark.parametrize("dimension", [PROJECT_DIMENSION, PROCESS_DIMENSION, TOPIC_DIMENSION])
+@pytest.mark.parametrize("confidence", [BELOW_THRESHOLD, ABOVE_THRESHOLD], ids=["below", "above"])
+def test_a_removed_tag_is_neither_proposed_nor_brought_back_once_its_tag_is_retired(
+    document, dimension, confidence
+):
+    """D-128 generalised the Topic-only rule to every dimension. Retired since the removal, the tag
+    is in no scheme, so without the removal the suggestion would be held as a proposal below the
+    threshold, or reactivated and linked at or above it, and a person would be overruled about a
+    value they took off this document."""
+    tag = Tag.objects.create(tag_name=BUDGET, dimension=dimension)
+    apply_classification(  # in the scheme while active: linked, then removed by a person
+        document, classification(tags=[(dimension, BUDGET, ABOVE_THRESHOLD)]),
+        scheme=scheme(**{dimension.lower(): (BUDGET,)}),
+    )
     link = links_of(document).get()
     reject_tag(document, link.pk)
-    # Retired since: no longer in any scheme, so without the removal the suggestion would be
-    # proposed as a new Topic and a person asked again about a value they took off this document.
-    topic.active = False
-    topic.save(update_fields=["active"])
+    tag.active = False
+    tag.save(update_fields=["active"])
 
-    analysis = run(document, (TOPIC_DIMENSION, BUDGET, ABOVE_THRESHOLD), topic=())
+    analysis = apply_classification(
+        document, classification(tags=[(dimension, BUDGET, confidence)]), scheme=scheme()
+    )
 
-    assert analysis.proposed_topics == []
+    assert analysis.proposed_tags == []
+    assert analysis.discarded_suggestions == []
+    tag.refresh_from_db()
+    assert (tag.active, tag.grown) == (False, False)  # not brought back
     kept = links_of(document).get()
     assert (kept.pk, kept.removed) == (link.pk, True)
 
 
-def test_confirming_a_proposed_topic_puts_a_removed_link_back(document):
+def test_confirming_a_proposed_tag_puts_a_removed_link_back(document):
     """A proposal recorded before its Topic was removed and retired: a person confirming it wants
     the Topic on the document, so the one link is restored rather than left removed."""
-    analysis = run(document, (TOPIC_DIMENSION, BUDGET, ABOVE_THRESHOLD), topic=())
-    assert [proposal["value"] for proposal in analysis.proposed_topics] == [BUDGET]
+    analysis = run(document, (TOPIC_DIMENSION, BUDGET, BELOW_THRESHOLD), topic=())
+    assert [proposal["value"] for proposal in analysis.proposed_tags] == [BUDGET]
     retired = Tag.objects.create(tag_name=BUDGET, dimension=TOPIC_DIMENSION, active=False)
     removed = ContentTag.objects.create(
         tag=retired, source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk,
@@ -145,7 +161,7 @@ def test_confirming_a_proposed_topic_puts_a_removed_link_back(document):
         confidence=Decimal("0.500"),
     )
 
-    link = confirm_proposed_topic(document, BUDGET)
+    link = confirm_proposed_tag(document, TOPIC_DIMENSION, BUDGET)
 
     assert link.pk == removed.pk
     link.refresh_from_db()
@@ -154,7 +170,7 @@ def test_confirming_a_proposed_topic_puts_a_removed_link_back(document):
     retired.refresh_from_db()
     assert retired.active is True
     assert links_of(document).count() == 1
-    assert DocumentAnalysis.objects.get(document=document).proposed_topics == []
+    assert DocumentAnalysis.objects.get(document=document).proposed_tags == []
 
 
 def test_tag_scheme_counts_a_removed_link_on_a_restricted_document(employee, administrator):

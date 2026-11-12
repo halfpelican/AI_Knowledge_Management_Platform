@@ -1,12 +1,13 @@
 """A person's decisions over a classification: ``confirm_classification``, ``confirm_tag``,
-``reject_tag``, ``confirm_proposed_topic`` and ``reject_proposed_topic`` (FR-10, D-105).
+``reject_tag``, ``confirm_proposed_tag`` and ``reject_proposed_tag`` (FR-10, D-105, D-128).
 
 FR-10: assignments below the threshold are "presented for confirmation rather than applied
-silently"; AI tags and a person's "may be accepted or removed in a single action"; a new Topic
-"requires user confirmation before it is created"; "any value a user edits [is] retained and is
-not overwritten by later reprocessing". Each function answers ``NotOnThisDocument`` for an id or
-value that is not this document's, which the route turns into the same 404 as a document outside
-the caller's scope (D-46).
+silently"; AI tags and a person's "may be accepted or removed in a single action"; "any value a
+user edits [is] retained and is not overwritten by later reprocessing". Since D-128 a value outside
+the scheme below the threshold, in Project, Process or Topic, is held as a proposal and its Tag is
+created, or brought back, only when a person confirms it (FR-10 said this of a new Topic alone).
+Each function answers ``NotOnThisDocument`` for an id or value that is not this document's, which
+the route turns into the same 404 as a document outside the caller's scope (D-46).
 """
 
 import uuid
@@ -31,9 +32,9 @@ from apps.documents.classification import (
     NotOnThisDocument,
     apply_classification,
     confirm_classification,
-    confirm_proposed_topic,
+    confirm_proposed_tag,
     confirm_tag,
-    reject_proposed_topic,
+    reject_proposed_tag,
     reject_tag,
 )
 from apps.documents.models import ContentTag, Document, DocumentAnalysis, Tag
@@ -212,31 +213,35 @@ def test_a_persons_own_tag_is_removed_in_the_same_action_and_kept_marked_removed
     assert (kept.pk, kept.removed, kept.applied_by, kept.confirmed) == (link.pk, True, USER_APPLIED, True)
 
 
-# --- Proposed topics -----------------------------------------------------------------------------
+# --- Proposed tags (D-128; proposed topics until then) -------------------------------------------
+
+PROPOSAL = {"dimension": TOPIC_DIMENSION, "value": "budget planning", "confidence": BELOW_THRESHOLD}
 
 
 @pytest.fixture
 def proposed(document):
-    analysis = classified(document, tags=[(TOPIC_DIMENSION, "Budget  Planning", ABOVE_THRESHOLD)])
-    assert analysis.proposed_topics == [{"value": "budget planning", "confidence": ABOVE_THRESHOLD}]
+    """Below the threshold, so held (D-128: at or above it the value would be created and applied)."""
+    analysis = classified(document, tags=[(TOPIC_DIMENSION, "Budget  Planning", BELOW_THRESHOLD)])
+    assert analysis.proposed_tags == [PROPOSAL]
     return analysis
 
 
 def test_confirming_a_proposed_topic_is_when_the_tag_is_created(document, proposed):
     assert not Tag.objects.filter(tag_name="budget planning").exists()
-    link = confirm_proposed_topic(document, "Budget Planning")  # the un-normalised form works
+    # The un-normalised form works.
+    link = confirm_proposed_tag(document, TOPIC_DIMENSION, "Budget Planning")
     tag = Tag.objects.get(tag_name="budget planning", dimension=TOPIC_DIMENSION)
     assert tag.active is True
     assert link.tag == tag
     assert (link.applied_by, link.confirmed, link.provisional) == (AI_APPLIED, True, False)
-    assert link.confidence == Decimal(str(ABOVE_THRESHOLD))
+    assert link.confidence == Decimal(str(BELOW_THRESHOLD))
     proposed.refresh_from_db()
-    assert proposed.proposed_topics == []
+    assert proposed.proposed_tags == []
 
 
 def test_confirming_a_proposed_topic_reuses_and_reactivates_an_existing_tag(document, proposed):
     retired = Tag.objects.create(tag_name="budget planning", dimension=TOPIC_DIMENSION, active=False)
-    link = confirm_proposed_topic(document, "budget planning")
+    link = confirm_proposed_tag(document, TOPIC_DIMENSION, "budget planning")
     assert link.tag == retired
     retired.refresh_from_db()
     assert retired.active is True
@@ -244,36 +249,43 @@ def test_confirming_a_proposed_topic_reuses_and_reactivates_an_existing_tag(docu
 
 
 def test_rejecting_a_proposed_topic_creates_nothing(document, proposed):
-    reject_proposed_topic(document, "budget planning")
+    reject_proposed_tag(document, TOPIC_DIMENSION, "budget planning")
     proposed.refresh_from_db()
-    assert proposed.proposed_topics == []
+    assert proposed.proposed_tags == []
     assert not Tag.objects.filter(tag_name="budget planning").exists()
     assert not links_of(document).exists()
 
 
 def test_a_value_that_was_not_proposed_is_not_on_this_document(document, other_document, proposed):
     with pytest.raises(NotOnThisDocument):
-        confirm_proposed_topic(document, "risk appetite")
+        confirm_proposed_tag(document, TOPIC_DIMENSION, "risk appetite")
     with pytest.raises(NotOnThisDocument):
-        reject_proposed_topic(document, "risk appetite")
+        reject_proposed_tag(document, TOPIC_DIMENSION, "risk appetite")
+    # D-128: the proposal is matched by dimension and value, so the same value under another
+    # dimension is not proposed.
+    with pytest.raises(NotOnThisDocument):
+        confirm_proposed_tag(document, PROJECT_DIMENSION, "budget planning")
+    with pytest.raises(NotOnThisDocument):
+        reject_proposed_tag(document, PROJECT_DIMENSION, "budget planning")
     # The proposal belongs to ``document``; the other document has no classification at all.
     with pytest.raises(NotOnThisDocument):
-        confirm_proposed_topic(other_document, "budget planning")
+        confirm_proposed_tag(other_document, TOPIC_DIMENSION, "budget planning")
     with pytest.raises(NotOnThisDocument):
-        reject_proposed_topic(other_document, "budget planning")
+        reject_proposed_tag(other_document, TOPIC_DIMENSION, "budget planning")
     assert not Tag.objects.filter(tag_name__in=["risk appetite", "budget planning"]).exists()
     proposed.refresh_from_db()
-    assert proposed.proposed_topics == [{"value": "budget planning", "confidence": ABOVE_THRESHOLD}]
+    assert proposed.proposed_tags == [PROPOSAL]
 
 
 def test_a_confirmed_topic_survives_a_rerun_as_a_confirmed_link(document, proposed):
-    confirm_proposed_topic(document, "budget planning")
-    # The next run sees the value in the scheme and the link already confirmed.
+    confirm_proposed_tag(document, TOPIC_DIMENSION, "budget planning")
+    # The next run sees the value in the scheme and the link already confirmed, and suggests it at
+    # a confidence that would change an unconfirmed link's.
     apply_classification(
         document,
-        classification(tags=[(TOPIC_DIMENSION, "budget planning", BELOW_THRESHOLD)]),
+        classification(tags=[(TOPIC_DIMENSION, "budget planning", round(BELOW_THRESHOLD - 0.1, 3))]),
         scheme=scheme(departments=DEPARTMENTS, topic=["budget planning"]),
     )
     link = links_of(document).get()
     assert (link.confirmed, link.provisional) == (True, False)
-    assert link.confidence == Decimal(str(ABOVE_THRESHOLD))
+    assert link.confidence == Decimal(str(BELOW_THRESHOLD))

@@ -6,8 +6,9 @@ machine's confidence. Since the requirements re-audit of ``5377e3a`` a person's 
 way: deleted, it was linked again as the machine's by the next classify or reprocess that suggested
 it. A removed link is in no read: not the detail's ``tags`` or ``tag_details``, not the classify
 reply's ``tag_details``, not a browse facet value and not a filter hit. A later classify or reprocess
-neither links the tag again nor alters it, and a removed Topic is not proposed again. A removed link
-is the same 404 as an unknown one when it is confirmed or removed again.
+neither links the tag again nor alters it, and since D-128 neither creates nor proposes it, in any
+dimension (until then a removed Topic was not proposed again). A removed link is the same 404 as an
+unknown one when it is confirmed or removed again.
 
 The classification object's ``department_applied_by`` (finding 10) is read here through the classify,
 confirm and detail replies.
@@ -303,7 +304,7 @@ def test_a_persons_removed_tag_is_neither_linked_nor_proposed_again(
     kept = list(links_of(document).filter(tag=tag))
     assert [(link.removed, link.applied_by) for link in kept] == [(True, USER_APPLIED)]
     assert detail(client, document.id)["tag_details"] == []
-    proposals = DocumentAnalysis.objects.get(document=document).proposed_topics
+    proposals = DocumentAnalysis.objects.get(document=document).proposed_tags
     assert tag.tag_name not in [proposal["value"] for proposal in proposals]
 
 

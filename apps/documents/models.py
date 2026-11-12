@@ -158,10 +158,15 @@ class Tag(models.Model):
     # ``documents 0010``; its meaning since ``documents 0011``: not vocabulary (D-105's dated note
     # of 10 November 2026, night: the security review of ``84b5771``). A tag that is not grown is in
     # every document's scheme whatever its links; a grown one only where every audience role reads
-    # a source carrying it (``tag_scheme``). Set on a Topic a person's name creates or reactivates
-    # (``apply_tag``'s name form, ``confirm_proposed_topic``; an active one either fetches keeps its
-    # value, ``_bring_into_use``), and by ``documents 0011`` and the seed script's linked mode on
-    # every tag that only material some role cannot read carries. Never unset.
+    # a source carrying it (``tag_scheme``). Set on a tag the classifier creates or reactivates at
+    # or above the threshold, in Project, Process or Topic (D-128), on one a person's confirmation
+    # of a proposal creates or reactivates (``confirm_proposed_tag``, D-128), and on a Topic a
+    # person's name creates or reactivates (``apply_tag``'s name form); an active tag any of them
+    # fetches keeps its value, and an inactive one is reactivated only from a document every role
+    # reads, else left retired (``_bring_into_use``; D-128's security review, finding 1). Also set by
+    # ``documents 0011`` and the seed script's linked mode on every tag that only material some role
+    # cannot read carries. A value an Administrator adds (``POST /api/tags``, D-128) is created not
+    # grown: vocabulary. Never unset.
     grown = models.BooleanField(default=False)
 
     class Meta:
@@ -229,11 +234,18 @@ class DocumentAnalysis(models.Model):
     - **An outcome per assignment**, from ASSIGNMENT_OUTCOMES: how
       apps/documents/classification.py disposed of each suggestion (applied, provisional,
       discarded, confirmed), stated rather than inferred from which columns are null.
-    - **Two JSON lists for suggestions that may not be tags yet.** A Topic outside the scheme
-      "may be proposed ... and requires user confirmation before it is created", so no Tag row
-      may exist for it while it waits in ``proposed_topics``. A Project or Process outside the
-      scheme is "discarded"; ``discarded_suggestions`` keeps the discard as evidence of that
-      clause, and nothing reads it as a tag.
+    - **Two JSON lists for suggestions that are not tags of the document.** Since D-128 (12
+      November 2026), which departs from FR-10's controlled taxonomy growth clause, a value outside
+      the scheme in Project, Process or Topic is created and applied when its confidence is at or
+      above the threshold, and HELD in ``proposed_tags`` when it is below, for a person to confirm
+      or reject: ``{"dimension", "value", "confidence"}`` per entry, deduplicated by dimension and
+      normalised value. The field was ``proposed_topics`` until ``documents 0012`` and keeps that
+      column (``db_column``), because no migration here renames a column. ``discarded_suggestions``
+      receives only a tag value that cannot become a Tag, a normalised name longer than the
+      column, whatever its confidence; nothing reads it as a tag and the API does not expose it.
+      Until D-128 it held every Project or Process value outside the scheme, which FR-10 says is
+      "discarded". A department outside the scheme is still discarded, through
+      ``department_outcome``.
     - **Whose department it is** (``department_applied_by``, ``documents 0009``): FR-10's
       provenance clause tells a machine's value from a person's, and the outcome alone cannot
       when the machine's suggestion equals the department a person typed (D-119 finding 10).
@@ -275,9 +287,12 @@ class DocumentAnalysis(models.Model):
     # Written by apps/documents/classification.py wherever it decides the department.
     department_applied_by = vocabulary_field(TAG_APPLIED_BY_VALUES, null=True, blank=True)
     user_edited = models.BooleanField(default=False)
-    # [{"value": <normalised name>, "confidence": <float>}], replaced by each run.
-    proposed_topics = models.JSONField(default=list, blank=True)
-    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run.
+    # [{"dimension": "Project"|"Process"|"Topic", "value": <normalised name>, "confidence": <float>}]:
+    # the values outside the scheme the run held below the threshold (D-128), replaced by each run.
+    # Renamed from ``proposed_topics`` by ``documents 0012``; the column keeps its name.
+    proposed_tags = models.JSONField(default=list, blank=True, db_column="proposed_topics")
+    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run: since D-128 only a
+    # value whose normalised name is longer than a tag name may be.
     discarded_suggestions = models.JSONField(default=list, blank=True)
     model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
     input_truncated = models.BooleanField(default=False)
