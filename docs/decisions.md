@@ -11613,6 +11613,15 @@ unchanged but for its opening paragraph.
     rejection committed while a run is classifying is not overwritten by the run's copy. A run
     takes the document row, then the analysis row; a person's decisions take only the analysis
     row's lock, so there is no deadlock.
+    - *Corrected the same day, after the focused re-audit of `5c60564` (its finding N1, below):
+      that last clause was false.* `confirm_classification` took the analysis lock and then wrote
+      the document row, the opposite order, and the auditor executed the deadlock against a run.
+      It predates `5c60564`. It is now fixed: `confirm_classification` takes the document row
+      first, so every path takes the document, then the analysis, then the tags.
+  - **Rejections made before `documents 0013` were never recorded,** because the old route wrote
+    nothing. So they are not honoured: 0013 starts every row at `[]`, and none is guessed (D-105's
+    precedent for rows before 0009). That includes the re-run planned for `kmp_anthropic` after this
+    merges (finding N2, below).
   - **Tests: 46 new,** each failing under a deliberate break (13 breaks), every break reverted. 1,032
     passed across the FR-10 files.
     - `test_fr10_rejected_proposals.py`: 32, from both roles;
@@ -11646,3 +11655,190 @@ unchanged but for its opening paragraph.
   - the scheme's growth (all above).
 
 A focused re-audit of the fixes follows.
+
+**The focused re-audit of `5c60564` (13 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Focused re-audit: FR-10 (D-128), findings A5 and D1 to D4, at 5c60564 — 13 November 2026
+>
+> **Verdict: INCOMPLETE**
+>
+> **What I checked, and how.**
+> - **Read only.** Nothing in the worktree was edited, and `git status` was clean afterwards.
+> - **The diff:** `git show 5c60564` and `git diff 556cd37..5c60564`.
+> - **Measured against:**
+>   - FR-10's correction clause, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:692;
+>   - UC-09 A3, at 2067-2070 of the same file;
+>   - the findings of the audit of 556cd37, now quoted in D-128.
+> - **Three probe tests were executed** from the scratchpad, against `test_kmp_fr10auto_audit`, which pytest-django created and destroyed. The full run's `test_kmp_fr10auto` was not touched.
+>   - C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_rejected_proposal.py is the first audit's A5 probe.
+>   - C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_rejection_sticks.py
+>   - C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_lock_order.py
+> - **Every line number below is at 5c60564.**
+>
+> ### A5. A rejected proposal stays rejected: MET
+>
+> **The record.**
+> - `DocumentAnalysis.rejected_tags` is at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:311-315, and its docstring bullet at 252-260.
+> - It is added by C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0013_rejected_tags.py, one `AddField` that is additive and reversible.
+> - The model and the migration declare the same field, so `makemigrations --check` should agree, by reading.
+> - It is not exposed:
+>   - `ClassificationSerializer` gains no field (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\serializers.py:296-298 and 314);
+>   - a route test asserts it is absent from the reply (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_rejected_proposals.py:87).
+>
+> **Recording the rejection.** `reject_proposed_tag` (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py:1047-1076):
+> - drops the proposal;
+> - writes `{dimension, value, confidence}` into `rejected_tags`, carrying the proposal's confidence, replacing any earlier entry for that pair;
+> - saves both lists in one locked transaction (1066-1076).
+>
+> **Rule 4b.** The skip set is this document's removed links plus `_rejected(analysis)` (classification.py:536-540; `_rejected` at 1122-1129). The skip happens at 549-550.
+> - It comes before the in-scheme match (551).
+> - It covers every dimension and any confidence, because nothing about the confidence is checked before it.
+> - It reads this document's links and its own analysis row only.
+> - The rule's docstring states this (404-413).
+>
+> **The lock.** `apply_classification` takes the analysis row with `select_for_update` (480-485), after the document row (477). So a rejection committed during a run is neither missed nor overwritten by the run's save. No test drives that race; it rests on reading the code.
+>
+> **Tests.**
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_rejected_proposals.py, 32 cases, all through `session_client`, so from both roles:
+>   - 91-108: every dimension, at the threshold and below it;
+>   - 111-129: still not linked after the value enters the scheme through `POST /api/tags`;
+>   - 132-154: another document is unaffected;
+>   - 157-177: a person may still apply it by id;
+>   - 180-197: a person may still name a rejected Topic, and a later run leaves that link alone.
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_rejected.py, 11 cases:
+>   - 50-60: recorded with the machine's confidence;
+>   - 63-77: one entry kept, with the latest confidence;
+>   - 80-90: a value not proposed records nothing;
+>   - 93-113: skipped while in the scheme, at the threshold and below it, with the record and the Tag untouched.
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_migration_0013_rejected_tags.py, 3 tests, through the migration executor, forward and back.
+> - The commit's counts of 32, 11 and 3 match the files.
+>
+> **Executed.**
+> - The first audit's A5 probe now fails on its own assertions, in both cases:
+>   - at the threshold, no link exists (`ContentTag.DoesNotExist`);
+>   - below it, `proposed_tags` is `[]`.
+> - The new probe passed. The rejection is recorded with its confidence, and afterwards:
+>   - at the threshold no Tag or link is made, and below it nothing is proposed;
+>   - after the value becomes vocabulary, it is still not linked;
+>   - the same value in another dimension is proposed in its own right;
+>   - another document links the value normally;
+>   - a person can still apply a rejected Topic by name.
+>
+> **Against the spec.**
+> - proposal.txt:692 is met on this path. The person's decision is retained and not overwritten by later reprocessing, and the machine's assignment, its dimension, value and confidence, is retained beside it.
+> - UC-09 A3 step 3 is met: no run links the rejected value on that document again, so it never reaches that document's facets or filters.
+> - The model that made the suggestion is not kept per entry. Removed links do not keep it either, so this is consistent and not counted.
+>
+> ### D1. The old rule no longer asserted without a pointer: MET
+>
+> - **D-104** has a dated note at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:7139-7143. It matches the prompt's rules 6 and 7 (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\classification.py:403-409) and `_may_become_a_tag` (classification.py:629-649).
+> - **D-105** has a dated note at decisions.md:7717-7737. It supersedes rule 4 as first built, the proposal record and the retired-tag sentence. Its close, at 7735-7737, ends the open item at 7255, which stays as written, per this file's convention.
+> - **D-106's 12 November note** is extended to clause 3 (decisions.md:7905-7908).
+> - **docs/schema-v1.md:** the rewritten JSON-lists paragraph is at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:303-314, the `rejected_tags` row at 284, and the migration plan at 557-558.
+> - **`reject_tag`'s docstring** no longer names `removed_topics` and states the rule for every dimension (classification.py:800-806).
+> - **The test module docstring** is corrected at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_person_applied_tags.py:7-10.
+>
+> `removed_topics` now survives only in historical text: D-105's dated note of 10 November (decisions.md:7667) and D-119's quotation (decisions.md:10014).
+>
+> ### D2. The discard rule stated in full: MET
+>
+> Each of these now matches the code, `_may_become_a_tag` (classification.py:629-649) with `MAXIMUM_CREATED_TAG_WORDS` at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py:716:
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\ai-provider.md:481-485;
+> - D-128 at decisions.md:11079-11082 and 11118-11122;
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\api-contract.md:1170-1173;
+> - models.py:237-260 and 306-309;
+> - apps\ai\classification.py:37-41.
+>
+> No "not a check" or "only a value too long" statement survives outside historical text.
+>
+> ### D3. The `tagging` scope names `POST /api/tags`: MET
+>
+> - **D-79** has a dated note at decisions.md:4991-5000.
+> - **The contract's rate table** names it at api-contract.md:1015.
+> - **Both match the code:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:1995-1997, permission classes before the throttle, so the 429 comes after the 401 and the 403.
+>
+> ### D4. The delete dialog: MET
+>
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:1215 now reads: "A retired tag can come back later, if the AI suggests it again or a person confirms or names it again, on a document everyone can read."
+> - That matches `_bring_into_use`'s guard (classification.py:930-934).
+> - The test reads the constant, and its two patterns, "deleted" and "deactivated", still match: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\tags.test.jsx:250-252.
+>
+> ### New findings introduced by 5c60564
+>
+> **N1. PARTIAL: a claim the code contradicts, executed. "A person's decisions take only the analysis row's lock, so there is no deadlock" is false.**
+> - **Where it is claimed:**
+>   - classification.py:462-466: "A person's decision takes only the analysis lock, so the two orders cannot deadlock";
+>   - D-128 at decisions.md:11612-11615.
+> - **Why it is false.** The two functions take the same two locks in opposite orders.
+>   - `confirm_classification` (classification.py:728) takes the analysis lock (757). It then writes the document row through `_write_department` (768 or 773, then 666-673), and that UPDATE waits on a document lock held elsewhere.
+>   - `apply_classification` takes the document lock (477), then the analysis lock (483).
+> - **When it can happen.** Reprocess holds the document lock while classification runs: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:177-180 and 321-323. A person confirming the department meanwhile completes the cycle.
+> - **Executed.** The lock-order probe ran the real `apply_classification` and `confirm_classification`, in that interleaving. Result: `{'A run': 'OperationalError: deadlock detected', 'B person': 'committed'}`.
+> - **It predates 5c60564.** At 556cd37 the run read the analysis row unlocked and saved it at the end, which closed the same cycle (by reading). 5c60564 introduced the claim, not the deadlock.
+> - **What it costs:**
+>   - It is rare. Reprocess refuses an Indexed document, and on the classify route the window is between two consecutive statements.
+>   - When it happens, one transaction is aborted. If the run is the victim, the ingestion hook swallows the error in its savepoint (apps\ingestion\documents.py:321-334), so invariant 8 holds. If the person's confirm or the classify route is the victim, that request answers 500.
+>   - Nothing is corrupted.
+> - **Smallest fix,** either of:
+>   - lock the document row first in `confirm_classification`, as `apply_classification` and `apply_tag` (classification.py:865) do;
+>   - or correct both sentences to state this residual.
+>
+> **N2. MISSING record, low: a rejection made before documents 0013 is not honoured, and nothing says so.**
+> - 0013 fills existing rows with `[]` (0013_rejected_tags.py:11-13).
+> - At 556cd37, `reject_proposed_tag` recorded nothing. So a value rejected before this migration will be proposed again, or created and applied at the threshold, by the next run. That includes the post-merge re-run D-128 plans for `kmp_anthropic`.
+> - Neither 0013's docstring, models.py nor D-128 states this. D-105's note on 0009 rows is the precedent: "Their history is recorded nowhere, so none is guessed".
+> - **Fix:** one sentence.
+>
+> ### C2, the suites
+>
+> - **At 556cd37:** 3,570 passed with the matrix at 39/39, and npm 486, lint clean and the build succeeding, under vite 8.3.5 and vitest 5.0.5. That is as reported by the coordinator and recorded at decisions.md:11636-11639. I did not observe those runs.
+> - **At 5c60564:** the full pytest is not yet shown; it was running. The commit claims 1,032 passed across the FR-10 files.
+> - **The front end at 5c60564** is not re-run. It changed one string, and the test that reads it still matches.
+> - **No route was added,** so the matrix's set of endpoints is unchanged.
+>
+> **One line:** INCOMPLETE.
+> - A5 is MET: executed, the first audit's probe now fails on its own assertions, and a rejected value is neither proposed, created nor linked, in or out of the scheme, while a person may still apply it.
+> - D1 to D4 are MET.
+> - 5c60564 adds one claim the code contradicts. "No deadlock" is executed false against `confirm_classification`; the deadlock predates the commit.
+> - A rejection made before documents 0013 goes unhonoured, unstated.
+> - The full pytest at 5c60564 is not yet shown.
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at 5c60564.** It was running, and I did not run it, as instructed.
+> - **npm test, lint and build at 5c60564.** Not run.
+> - **The 556cd37 suite results.** These are taken from the coordinator and D-128, not observed.
+> - **CI.** There is no pull request.
+> - **The commit's "13 breaks".**
+> - **Whether any rejection was made before 0013 on `kmp_anthropic`.** I did not inspect the database.
+> - **How often N1's deadlock would occur in use.** The probe shows it can happen, not how often.
+
+**What changed because of the focused re-audit (13 November).**
+
+- **N1: a deadlock between a classification run and a person confirming the department (PARTIAL;
+  the auditor executed it).**
+  - **The fix:** `confirm_classification` now takes the document row first, then the analysis row.
+  - **The order,** stated in a "Lock order" section of `apps/documents/classification.py`'s module
+    docstring: the document, then the analysis, then tags, then links. A function may skip a level
+    but never goes back to an earlier one.
+  - **The false docstring claim** is replaced by what is now true.
+  - **The cost:** a person confirming a department during a long reprocess now waits for it instead
+    of deadlocking.
+- **A second deadlock, found while checking every writer against that order, and fixed.**
+  `delete_document` deleted the document's tag links before the cascade reached the analysis row.
+  `confirm_proposed_tag` takes the analysis row, then a tag, then the document's link. The deletion
+  now takes the analysis row right after the document. It predates D-128: D-105's confirmation of a
+  proposed Topic took the same locks.
+- **N2: a rejection made before `documents 0013` was never recorded,** so it is not honoured. Stated
+  in the `rejected_tags` comment in `apps/documents/models.py`, in `docs/schema-v1.md` and in this
+  entry, above. The pushed migration is not edited.
+- **Tests:** `apps/documents/tests/test_classification_lock_order.py`, 2 tests.
+  - **How they run:** two threads on separate connections call the real functions. The order is
+    forced by reading the waiting lock in `pg_locks`, not by sleeping, with a lock timeout so that a
+    regression fails instead of hanging.
+  - **Each deadlocked** under its break, without the new lock: `OperationalError: deadlock detected`.
+    Each passes with it, both transactions committing.
+  - **They are transactional tests** (`serialized_rollback=True`), and pytest-django runs those last.
+- **The results:**
+  - 1,056 passed across the FR-10 files, with the deletion tests;
+  - the full pytest at `5c60564`, before this fix: 3,616 passed, with the dual-role matrix at 39/39.

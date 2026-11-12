@@ -311,7 +311,9 @@ class DocumentAnalysis(models.Model):
     # [{"dimension": ..., "value": <normalised name>, "confidence": <the proposal's>}]: each proposal a
     # person rejected on this document, deduplicated by dimension and value and never replaced by a
     # run, which skips each of them (rule 4b). ``documents 0013``; the requirements audit of D-128,
-    # finding A5. Not exposed by the API.
+    # finding A5. Not exposed by the API. A rejection made before 0013 was never recorded, because the
+    # old ``reject_proposed_tag`` wrote nothing, so it is not honoured: 0013 fills existing rows with
+    # ``[]`` and none is guessed, as D-105 left the rows from before 0009.
     rejected_tags = models.JSONField(default=list, blank=True)
     model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
     input_truncated = models.BooleanField(default=False)

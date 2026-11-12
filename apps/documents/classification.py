@@ -49,6 +49,32 @@ resolves a ``Document`` for a caller: every function takes one the caller alread
 the request-serving packages ``apps/api/tests/test_source_rows_fail_closed.py`` scans, for the
 reason that module gives: it reads managers directly, for writes against a row already resolved
 and for the vocabulary tables.
+
+**Lock order** (the focused re-audit of ``5c60564``, finding N1). Every function that writes a
+document's classification records takes its row locks in one order: the document row, then its
+``DocumentAnalysis`` row, then ``Tag`` rows, then ``ContentTag`` links. It skips any level it does
+not need and never goes back to an earlier one, so no two of them can wait on each other in a
+cycle. Each one:
+
+- ``apply_classification``: the document, the analysis row, then tags and links (rule 4).
+- ``confirm_classification``: the document, then the analysis row, and only then the document's
+  department, which is already locked. Until N1 it took the analysis row first and then wrote the
+  document, so a confirmation during a reprocess, which holds the document while classification
+  runs, deadlocked with the run.
+- ``apply_tag``: the document, then a tag, then the document's links. It never touches the analysis
+  row.
+- ``confirm_proposed_tag``: the analysis row, then a tag, then the document's link. It never writes
+  the document.
+- ``reject_proposed_tag``: the analysis row only. It waits on nothing after it.
+- ``confirm_tag``, ``reject_tag``: one link only.
+- Elsewhere, ``delete_document`` (apps/documents/deletion.py) takes the document, then the analysis
+  row, then the links, and deletes the document last. Until N1 it locked the links before the
+  analysis row, which its cascade deleted at the end, so a person confirming a proposal deadlocked
+  with a deletion. ``reprocess_document`` holds the document while classification runs, and
+  ``retire_tag`` and ``create_tag`` (taxonomy.py) take one tag row.
+
+apps/documents/tests/test_classification_lock_order.py runs both cycles N1 named, on two
+connections.
 """
 
 import logging
@@ -462,8 +488,12 @@ def apply_classification(
     The document row is locked first, as deletion and reprocess lock it, so a classification
     cannot write links for a document a concurrent delete is removing. The analysis row is locked
     next, as a person's decisions lock it, so a rejection committed meanwhile is neither missed by
-    rule 4b nor overwritten when this run saves the row. A person's decision takes only the
-    analysis lock, so the two orders cannot deadlock.
+    rule 4b nor overwritten when this run saves the row. Tags and links come after. That is the
+    module's lock order, which every writer here keeps (see "Lock order" above). A person's
+    decision that writes the document, ``confirm_classification``, locks the document first as
+    well, so it waits for this run rather than deadlocking with it. Until the focused re-audit of
+    ``5c60564`` (finding N1) this docstring claimed that a person's decision took only the analysis
+    lock. That was false of ``confirm_classification``, and the auditor's probe deadlocked on it.
     """
     if classification.doc_type.value not in DOCUMENT_TYPES:
         raise InvalidClassification(
@@ -477,9 +507,10 @@ def apply_classification(
         locked = Document.objects.select_for_update().filter(pk=document.pk).first()
         if locked is None:
             raise NotOnThisDocument("The document no longer exists.")
-        # The analysis row is locked too, as a person's decisions lock it (``_analysis_of``). This
-        # run saves every field of it, so without the lock a rejection committed between this read
-        # and that save would be overwritten by this stale copy, and would not stick (rule 4b).
+        # The analysis row next, after the document and before any tag or link: the module's lock
+        # order, which a person's decisions keep too. This run saves every field of the row, so
+        # without the lock a rejection committed between this read and that save would be
+        # overwritten by this stale copy, and would not stick (rule 4b).
         analysis, _ = DocumentAnalysis.objects.select_for_update().get_or_create(
             document=locked, defaults={"classified_at": now}
         )
@@ -745,6 +776,13 @@ def confirm_classification(
     gives is "user" (null when blank); a held suggestion confirmed as it stands is written and
     keeps "ai", its provenance, as ``confirm_tag`` keeps an AI tag's ``applied_by``; an applied
     department confirmed as it stands keeps whatever it was.
+
+    **The document row is locked first, then the analysis row** (the module's lock order; the focused
+    re-audit of ``5c60564``, finding N1). This function writes the document's department, so taking
+    the analysis row first, as it did until then, was the opposite of ``apply_classification``'s
+    order. A person confirming during a reprocess, which holds the document while classification
+    runs, then deadlocked with the run. Now the confirmation waits for the run and goes after it.
+    Raises ``NotOnThisDocument`` if the document was deleted meanwhile.
     """
     if doc_type is not None and doc_type not in DOCUMENT_TYPES:
         raise InvalidClassification(f"doc_type must be one of {', '.join(DOCUMENT_TYPES)}.")
@@ -754,6 +792,8 @@ def confirm_classification(
             raise InvalidClassification(f"department may not exceed {NAME_MAX_LENGTH} characters.")
 
     with transaction.atomic():
+        if Document.objects.select_for_update().filter(pk=document.pk).first() is None:
+            raise NotOnThisDocument("The document no longer exists.")
         analysis = _analysis_of(document, for_update=True)
         if doc_type is not None:
             analysis.doc_type = doc_type
