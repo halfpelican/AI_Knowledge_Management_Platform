@@ -150,6 +150,16 @@ because an assessor reads the clause, not the reasoning.
   prior answers (`apps/retrieval/conversation.py:123-179`). A follow-up referring to
   something in the previous answer does not resolve. A deliberate narrowing.
 
+**Dated note, 12 November 2026.** Two parts of the FR-13 item above have moved, and it is left as
+written.
+
+- **"A follow-up referring to something in the previous answer does not resolve"** describes the
+  design, not a guarantee. Such a referent reaches the prompt only if retrieval supplies a passage
+  that names it. t09, the frozen previous-answer thread, matched that way on every `anthropic`
+  draw, and never on FLM (D-42's note of 12 November).
+- **The line reference has drifted.** The prior questions are read by `prior_questions` and joined
+  by `compose`, in `apps/retrieval/conversation.py`.
+
 ---
 
 ## 5. On the demonstration path
