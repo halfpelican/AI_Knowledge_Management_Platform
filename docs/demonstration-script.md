@@ -35,6 +35,15 @@
 >   `main` at `a668a08`. The earlier text cited `:608` and `:633`.
 >
 > The alpha still runs FLM at `8598d19`, so step 5's advice stands for a walk on it.
+>
+> **Amended 12 November 2026, later,** after #95 and D-94's notes of 12 November. The changes:
+>
+> - "What is not verified by any test?" is derived again from `frontend/tests`. The 2 November
+>   list named as untested screens that have been tested since, from Register to Search. It now
+>   names the clauses still untested, then what is tested;
+> - the same list says what the stylesheet checks reach. The tab-order test fails if a
+>   stylesheet rule hides any keyboard stop on the screens it walks, the header search field and
+>   the Ask link among them.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -484,23 +493,45 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
   - **On the default build, `anthropic`,** 9 of 9 matched on each of three draws. That is a
     measurement, and the auditor has not read it yet (D-112's note of 12 November).
   - **On both,** earlier answers are never passed (D-42).
-- **What is not verified by any test?** Give this list, derived from `frontend/tests` on 2 November.
-  It supersedes D-62's. Step 6 (D-94) writes the full enumeration to
-  `docs/stage-5-front-end-clauses.md`.
-  - **Untested in the front-end suite:**
-    - Register, beyond its 429 message;
-    - Login, beyond its 429 message and the role landing (the locked-account message
-      included);
-    - the logout control and its redirect;
-    - RoleManagement;
-    - RequireAuth, RequireRole and AccessDenied;
-    - Upload's client-side format refusal and its progress display;
-    - Meetings, beyond its 429 messages, and MeetingDetail;
-    - Search, its field and its results (the two-character minimum, the grouping, the
-      partial-match label).
-  - **Tested:** Ask and its threads (five files), the Dashboard, DocumentRepository and
-    DocumentDetail, the Upload queue and its 429s, the status vocabulary, the production build
-    and the same-origin client.
+- **What is not verified by any test?** Give this list, derived from `frontend/tests` on
+  12 November. It supersedes D-62's and the one this script gave on 2 November. The record, clause
+  by clause, is `docs/stage-5-front-end-clauses.md` for FR-01 to FR-09 and FR-12's search half, and
+  `docs/stage-5-clause-audit.md` for FR-11 to FR-15.
+  - **Not tested in the front-end suite:**
+    - **FR-06:** the visibility choice the Upload and Meetings screens offer an Administrator,
+      and the fixed note they show an Employee in its place (`visibilityOptionsFor`);
+    - **FR-08:** the sentence the repository shows beside a document whose processing failed,
+      for any of its statuses (`statusMessageFor`). The Try again action is tested;
+    - **FR-09:** the stored transcript shown in full. The meeting's page is rendered with its
+      transcript, and `meetingDelete.test.jsx` checks part of the text, not all of it;
+    - **FR-12:** the note on a search result that matched on its title and has no passage to
+      show (`TEXT.searchSnippetUnavailable`);
+    - **whether a thing can be seen, beyond what the stylesheet checks reach.** jsdom applies no
+      stylesheet and lays nothing out, so no test sees a page laid out, and a rule that hid an
+      element would pass every test except where a test reads the stylesheets as text
+      (`tests/stylesheets.js`). Those tests check that no rule hides:
+      - every keyboard stop on the screens `tabOrder.test.jsx` walks: sign-in, and, as an
+        Employee, the dashboard, documents, upload, meetings and Ask. The header search field
+        and the Ask link are among those stops;
+      - the skip link, the Ask screen's acknowledgement line, and the drop zone's status and
+        label.
+  - **Tested:**
+    - **every route, as an Employee and as an Administrator,** for the Ask link and the header
+      search field (`askNavLink.test.jsx`, `headerSearchField.test.jsx`);
+    - **registration and sign-in:** the password rules and the submit gate, the locked-account
+      message, the show-password toggle, the submit lock and the role landing;
+    - **logout** and its confirmation, **role management**, the **403 page**, and the
+      **RequireAuth** and **RequireRole** guards;
+    - **upload:** the format refusal, each file's progress, and the queue and its retry;
+    - **meetings:** the processing indicator, the attendees and deletion;
+    - **search:** the two-character minimum, the upper bound and the grouping;
+    - **the Ask screen and its threads:** citations, the Sources panel, the no-answer state and
+      partial matches;
+    - **the dashboard**, and **the repository** with its detail view;
+    - **NIT3004's screens:** FR-10's classification and tag administration, FR-19's
+      knowledge-gap log, and recording transcription (D-123);
+    - **across screens:** the 429 and 503 messages, the tab order, the text equivalents, the
+      focus ring and colour contrast, the production build and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,
   never a tick. Each was checked against its entry on 2 November, and D-42's and D-112's again on
   12 November.
