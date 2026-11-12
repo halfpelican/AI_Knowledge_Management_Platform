@@ -488,7 +488,7 @@ UNREADABLE_ROW = {"pid": 4, "command": "", "started": "2026-11-09T11:19:15.787Z"
 def test_the_ports_own_rows_give_every_live_owner(scripts, monkeypatch, stdout, owners, because):
     """Every live owner counts whatever state Windows reports for its row, and whether or not its
     command line can be read. Until 12 November 2026 an owner nobody could read was dropped here,
-    so a second listener of that kind was passed over (the requirements audit of that day, B1)."""
+    so a second listener of that kind was passed over (D-87's note of 12 November 2026, B1)."""
     server_record = scripts("server_record")
     fake = FakeSubprocess(stdout)
     monkeypatch.setattr(server_record, "subprocess", fake)
@@ -561,23 +561,48 @@ def lookup(scripts, monkeypatch):
     return server_record, script, asked, clock
 
 
-@pytest.mark.parametrize("netstat", [({7}, None), ({0, 7}, None), (set(), None),
-                                     (set(), "netstat could not be run (FileNotFoundError)")],
-                         ids=["netstat lists it", "netstat lists it and process 0", "netstat lists nothing",
-                              "netstat missing"])
-def test_a_listen_row_is_taken_when_netstat_lists_no_other_listener(lookup, netstat):
-    """The Listen row is taken at once, and the port's rows are not read, when netstat names no
-    other process LISTENING on the port. Process 0 is not a process, and with netstat missing the
-    row is taken as it was before these checks."""
+ROWS_UNREAD = "the port's socket rows could not be read (TimeoutExpired)"
+NETSTAT_MISSING = "netstat could not be run (FileNotFoundError)"
+
+
+@pytest.mark.parametrize("netstat, owners", [
+    (({7}, None), ([owner(7, "2")], None)),
+    (({0, 7}, None), ([owner(7, "2")], None)),
+    ((set(), None), ([], None)),
+    ((set(), NETSTAT_MISSING), ([owner(7, "2")], None)),
+    (({7}, None), ([], ROWS_UNREAD)),
+    ((set(), NETSTAT_MISSING), ([], ROWS_UNREAD)),
+], ids=["both show it", "netstat shows it and process 0", "neither shows anything", "netstat missing",
+        "the port's rows unread", "neither can be read"])
+def test_a_listen_row_is_taken_when_no_other_process_is_seen_on_the_port(lookup, netstat, owners):
+    """The Listen row is taken at once when neither netstat nor the port's own rows show another
+    live process on the port. Process 0 is not a process. When a source cannot be read, the row is
+    taken on what the other shows, and with neither, as it was before these checks; the trace says
+    which could not be read."""
     server_record, script, asked, clock = lookup
     script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
-    script["netstat"] = [netstat]
+    script["netstat"], script["owners"] = [netstat], [owners]
     found = server_record.listening_process(8000)
     assert (found["pid"], found["command"], found["started_at"], found["note"]) == (7, WAITRESS_24, STARTED, None)
     assert found["found_by"] == server_record.FOUND_BY_LISTEN_ROW
-    assert (asked["netstat"], asked["owners"], clock.slept) == (1, 0, [])
-    if netstat[1]:
-        assert "so no other listener could be looked for" in found["lookup"][-1]
+    assert (asked["netstat"], asked["owners"], clock.slept) == (1, 1, [])
+    for error in (netstat[1], owners[1]):
+        if error:
+            assert error in found["lookup"][-1]
+
+
+def test_a_readable_listen_row_is_not_taken_while_the_ports_rows_show_another_owner(lookup):
+    """A second listener on another address has a row of its own, and the fault can hide it from
+    netstat. Step 1 reads the port's rows too, so the Listen row is not taken (the security review
+    of 12 November 2026)."""
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
+    script["netstat"] = [({7}, None)]
+    script["owners"] = [([owner(7, "2"), owner(9, "0")], None)]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["found_by"]) == (None, None, None)
+    assert "netstat -ano or the port's own rows show pid 9 on port 8000 as well" in found["lookup"][-1]
+    assert "more than one process holds port 8000: pids 7, 9" in found["note"]
 
 
 def test_a_readable_listen_row_is_not_taken_while_netstat_lists_another_listener(lookup):
@@ -592,7 +617,7 @@ def test_a_readable_listen_row_is_not_taken_while_netstat_lists_another_listener
     assert (found["pid"], found["command"], found["started_at"], found["found_by"]) == (None, None, None, None)
     assert found["note"].startswith("no single process with a readable command line holds port 8000")
     assert "more than one process holds port 8000: pids 42280, 48404" in found["note"]
-    assert "netstat -ano lists pid 42280 LISTENING on port 8000 as well" in found["lookup"][-1]
+    assert "netstat -ano or the port's own rows show pid 42280 on port 8000 as well" in found["lookup"][-1]
     assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
     # So the pre-flight refuses: no command line, so not Waitress.
     assert server_record.describe(found["command"])["server"] is None
@@ -603,7 +628,7 @@ def test_a_second_listener_that_goes_away_lets_the_listen_row_be_taken(lookup):
     server_record, script, asked, clock = lookup
     script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
     script["netstat"] = [({7, 9}, None), ({7}, None)]
-    script["owners"] = [([owner(7, "2"), owner(9, "2")], None)]
+    script["owners"] = [([owner(7, "2"), owner(9, "2")], None), ([owner(7, "2")], None)]
     found = server_record.listening_process(8000)
     assert (found["pid"], found["found_by"]) == (7, server_record.FOUND_BY_LISTEN_ROW)
     assert clock.slept == [server_record.LOOKUP_RETRY_INTERVAL_SECONDS]
@@ -630,7 +655,7 @@ def test_when_netstat_misreports_too_the_ports_own_row_names_the_process(lookup)
 
 
 def test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over(lookup):
-    """The audit's case (B1). The Listen row names a process whose command line cannot be read,
+    """D-87's note of 12 November 2026, B1. The Listen row names a process whose command line cannot be read,
     and Waitress owns a row on the port too. The lookup merged on 11 November dropped the first
     and returned Waitress, so the pre-flight was READY. The Listen-row lookup alone had returned
     the unreadable process, and the pre-flight refused."""
@@ -647,7 +672,7 @@ def test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over(lo
 
 
 def test_two_readable_listeners_are_never_reported_as_nothing_listening(lookup):
-    """The audit's B4. The runbook asks this script whether the port is free, and "nothing is
+    """D-87's note of 12 November 2026, B4. The runbook asks this script whether the port is free, and "nothing is
     listening" would be the wrong answer in the unsafe direction."""
     server_record, script, asked, clock = lookup
     script["netstat"] = [({46608, 777}, None)]
@@ -711,6 +736,23 @@ def test_a_process_nobody_can_read_is_returned_after_the_wait_with_a_note_that_s
     found = server_record.listening_process(8000)
     assert (found["pid"], found["command"], found["found_by"]) == (4321, None, None)
     assert "owned by pid 4321 alone, whose command line cannot be read" in found["note"]
+    assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
+
+
+@pytest.mark.parametrize("netstat, owners, because", [
+    ((set(), None), ([], ROWS_UNREAD), ROWS_UNREAD),
+    ((set(), NETSTAT_MISSING), ([], None), NETSTAT_MISSING),
+], ids=["the port's rows unread", "netstat missing"])
+def test_a_lookup_that_could_not_be_read_never_says_nothing_is_listening(lookup, netstat, owners, because):
+    """The misreported state hides a listener from the Listen row and from netstat, and only the
+    port's rows show it. So when a lookup could not be read and nothing was seen, the note says the
+    state is unknown, never that nothing is listening (D-87's note of 12 November 2026)."""
+    server_record, script, asked, clock = lookup
+    script["netstat"], script["owners"] = [netstat], [owners]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["found_by"]) == (None, None, None)
+    assert "nothing is listening" not in found["note"]
+    assert found["note"].startswith("whether anything holds port 8000 is not known") and because in found["note"]
     assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
 
 

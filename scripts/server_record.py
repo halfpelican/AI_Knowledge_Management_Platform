@@ -82,8 +82,8 @@ D85_COMMAND = (
 )
 WAITRESS_DEFAULT_THREADS = 4  # waitress.adjustments.Adjustments.threads
 LOOKUP_TIMEOUT_SECONDS = 30
-# listening_process tries again this often, for about this long, before it says that nothing is
-# listening (D-87's note of 11 November 2026). The values are the ones NFR-08's run 6 ran with.
+# listening_process tries again this often, for about this long, before it gives up (D-87's notes
+# of 11 and 12 November 2026). The values are the ones NFR-08's run 6 ran with.
 LOOKUP_RETRY_SECONDS = 60
 LOOKUP_RETRY_INTERVAL_SECONDS = 10
 # Which lookup found the listening process: listening_process's ``found_by``.
@@ -404,10 +404,12 @@ def listening_process(port: int) -> dict:
     another holds the port (D-87's note of 12 November 2026):
 
     1. The Listen row (``_listen_row_process``), taken when its process's command line can be read
-       and ``netstat -ano`` lists no other process LISTENING on the port. Two servers can listen on
-       one address and port on Windows, and then the Listen row names one of them, while the port's
-       CIM rows, which share one key, show only one; netstat lists both. When netstat cannot be
-       run, the Listen row is taken as it was before these checks, and the trace says so.
+       and neither ``netstat -ano`` nor the port's own socket rows show another live process on the
+       port. Two servers can listen on one address and port on Windows, and then the Listen row
+       names one of them, while the port's CIM rows, which share one key, show only one; netstat
+       lists both. A second listener on another address has a row of its own, which netstat may
+       miss when the state is misreported. When neither source can be read, the Listen row is taken
+       as it was before these checks, and the trace says why.
     2. Otherwise two more are read, and one process is taken only when they agree on it
        (``sole_owner``):
 
@@ -425,8 +427,10 @@ def listening_process(port: int) -> dict:
     the Listen row's own result is returned, as it
     always was: nothing listening, or a PID with no command line. It is never process 0:
     ``_listen_row_process`` reports a row that names it as unknown, with a note (D-112's note of
-    12 November 2026). One thing differs from the Listen row's own answer: when a candidate was
-    seen and none could be taken, ``note`` says so, and does not say that nothing is listening.
+    12 November 2026). Two things differ from the Listen row's own answer, and in neither does
+    ``note`` say that nothing is listening: when a candidate was seen and none could be taken,
+    ``note`` says so; and when netstat or the port's rows could not be read, ``note`` says that
+    whether anything holds the port is not known.
 
     Each try is printed to stderr as it happens, so a wait shows its reason. Only how the
     process is found changes here. What a caller requires of it does not: the pre-flight still
@@ -447,19 +451,20 @@ def listening_process(port: int) -> dict:
         tries += 1
         found = _listen_row_process(port)
         netstat_pids, netstat_error = _netstat_listening_pids(port)
+        owners, rows_error = _port_row_owners(port)
         if found["pid"] is not None and found["command"]:
-            others = sorted(pid for pid in netstat_pids if pid not in (0, found["pid"]))
+            others = sorted((set(netstat_pids) | {owner["pid"] for owner in owners}) - {0, found["pid"]})
             if not others:
+                unread = [error for error in (netstat_error, rows_error) if error]
                 say(f"try {tries}: the Listen row names pid {found['pid']}"
-                    + (f"; {netstat_error}, so no other listener could be looked for" if netstat_error else ""))
+                    + "".join(f"; {error}" for error in unread))
                 return {**found, "found_by": FOUND_BY_LISTEN_ROW, "lookup": trace}
-            listen_row = (f"the Listen row names pid {found['pid']}, and netstat -ano lists {_pids(others)} "
-                          f"LISTENING on port {port} as well")
+            listen_row = (f"the Listen row names pid {found['pid']}, and netstat -ano or the port's own rows "
+                          f"show {_pids(others)} on port {port} as well")
             # Not taken, and not returned at the end either: a run must not be READY on one of two.
             found = {"pid": None, "command": None, "started_at": None, "note": None}
         else:
             listen_row = found["note"] or f"the Listen row names pid {found['pid']}, whose command line could not be read"
-        owners, rows_error = _port_row_owners(port)
         owner, why, candidate_seen = sole_owner(port, netstat_pids, netstat_error, owners, rows_error)
         if owner is not None:
             say(f"try {tries}: {listen_row}; {why}")
@@ -475,6 +480,12 @@ def listening_process(port: int) -> dict:
                 # nothing is listening would be wrong, and wrong in the unsafe direction for
                 # anyone checking that the port is free.
                 result["note"] = f"no single process with a readable command line holds port {port}: {why}"
+            elif netstat_error or rows_error:
+                # A lookup that could not be read cannot show that nothing holds the port: the
+                # misreported state hides a listener from the Listen row and netstat, and only the
+                # port's rows show it (D-87's note of 12 November 2026).
+                result["note"] = (f"whether anything holds port {port} is not known, because a lookup could not "
+                                  f"be read: {why}")
             return result
         say(f"{seen}. Trying again in {LOOKUP_RETRY_INTERVAL_SECONDS} s")
         time.sleep(LOOKUP_RETRY_INTERVAL_SECONDS)
