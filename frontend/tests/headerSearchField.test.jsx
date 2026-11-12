@@ -29,7 +29,9 @@
  *
  * - **Whether the field can be seen.** jsdom applies no stylesheet. These tests
  *   find the field in the accessibility tree; a CSS rule that hid it, or the
- *   header, would not fail them.
+ *   header, would not fail them. tests/tabOrder.test.jsx would, on the screens it
+ *   walks as an Employee: it reads the stylesheets and fails on any keyboard stop
+ *   a rule hides (break V1 of 12 November, docs/stage-5-front-end-clauses.md).
  * - **An anonymous visitor.** One has no search field, by design: RequireAuth
  *   would send them to `/login` before any results could render (src/App.jsx).
  *   tests/logout.test.jsx asserts there is no search landmark once signed out;

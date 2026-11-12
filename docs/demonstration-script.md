@@ -35,6 +35,22 @@
 >   `main` at `a668a08`. The earlier text cited `:608` and `:633`.
 >
 > The alpha still runs FLM at `8598d19`, so step 5's advice stands for a walk on it.
+>
+> **Amended 12 November 2026, later,** after #95 and D-94's notes of 12 November. The changes:
+>
+> - "What is not verified by any test?" is derived again from `frontend/tests`. The 2 November
+>   list named as untested screens that have been tested since, from Register to Search. It now
+>   names the clauses still untested, then what is tested;
+> - the same list says what the stylesheet checks reach. The tab-order test fails if a
+>   stylesheet rule hides any keyboard stop on the screens it walks, the header search field and
+>   the Ask link among them.
+>
+> **Amended 12 November 2026 (night),** after the deviations list was checked against `main`. The
+> changes:
+>
+> - D-33 §1's, D-56's and D-69's entries now say what holds on the alpha's build and what holds
+>   on `main`. On `main`, FR-10 and FR-19 are built and `voyage-4` has a partial-match floor
+>   (D-104, D-105, D-107, D-120). Their 2 November text is true of the alpha only.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -484,26 +500,49 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
   - **On the default build, `anthropic`,** 9 of 9 matched on each of three draws. That is a
     measurement, and the auditor has not read it yet (D-112's note of 12 November).
   - **On both,** earlier answers are never passed (D-42).
-- **What is not verified by any test?** Give this list, derived from `frontend/tests` on 2 November.
-  It supersedes D-62's. Step 6 (D-94) writes the full enumeration to
-  `docs/stage-5-front-end-clauses.md`.
-  - **Untested in the front-end suite:**
-    - Register, beyond its 429 message;
-    - Login, beyond its 429 message and the role landing (the locked-account message
-      included);
-    - the logout control and its redirect;
-    - RoleManagement;
-    - RequireAuth, RequireRole and AccessDenied;
-    - Upload's client-side format refusal and its progress display;
-    - Meetings, beyond its 429 messages, and MeetingDetail;
-    - Search, its field and its results (the two-character minimum, the grouping, the
-      partial-match label).
-  - **Tested:** Ask and its threads (five files), the Dashboard, DocumentRepository and
-    DocumentDetail, the Upload queue and its 429s, the status vocabulary, the production build
-    and the same-origin client.
+- **What is not verified by any test?** Give this list, derived from `frontend/tests` on
+  12 November. It supersedes D-62's and the one this script gave on 2 November. The record, clause
+  by clause, is `docs/stage-5-front-end-clauses.md` for FR-01 to FR-09 and FR-12's search half, and
+  `docs/stage-5-clause-audit.md` for FR-11 to FR-15.
+  - **Not tested in the front-end suite:**
+    - **FR-06:** the visibility choice the Upload and Meetings screens offer an Administrator,
+      and the fixed note they show an Employee in its place (`visibilityOptionsFor`);
+    - **FR-08:** the sentence the repository shows beside a document whose processing failed,
+      for any of its statuses (`statusMessageFor`). The Try again action is tested;
+    - **FR-09:** the stored transcript shown in full. The meeting's page is rendered with its
+      transcript, and `meetingDelete.test.jsx` checks part of the text, not all of it;
+    - **FR-12:** the note on a search result that matched on its title and has no passage to
+      show (`TEXT.searchSnippetUnavailable`);
+    - **whether a thing can be seen, beyond what the stylesheet checks reach.** jsdom applies no
+      stylesheet and lays nothing out, so no test sees a page laid out, and a rule that hid an
+      element would pass every test except where a test reads the stylesheets as text
+      (`tests/stylesheets.js`). Those tests check that no rule hides:
+      - every keyboard stop on the screens `tabOrder.test.jsx` walks: sign-in, and, as an
+        Employee, the dashboard, documents, upload, meetings and Ask. The header search field
+        and the Ask link are among those stops;
+      - the skip link, the Ask screen's acknowledgement line, and the drop zone's status and
+        label.
+  - **Tested:**
+    - **every route, as an Employee and as an Administrator,** for the Ask link and the header
+      search field (`askNavLink.test.jsx`, `headerSearchField.test.jsx`);
+    - **registration and sign-in:** the password rules and the submit gate, the locked-account
+      message, the show-password toggle, the submit lock and the role landing;
+    - **logout** and its confirmation, **role management**, the **403 page**, and the
+      **RequireAuth** and **RequireRole** guards;
+    - **upload:** the format refusal, each file's progress, and the queue and its retry;
+    - **meetings:** the processing indicator, the attendees and deletion;
+    - **search:** the two-character minimum, the upper bound and the grouping;
+    - **the Ask screen and its threads:** citations, the Sources panel, the no-answer state and
+      partial matches;
+    - **the dashboard**, and **the repository** with its detail view;
+    - **NIT3004's screens:** FR-10's classification and tag administration, FR-19's
+      knowledge-gap log, and recording transcription (D-123);
+    - **across screens:** the 429 and 503 messages, the tab order, the text equivalents, the
+      focus ring and colour contrast, the production build and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,
-  never a tick. Each was checked against its entry on 2 November, and D-42's and D-112's again on
-  12 November.
+  never a tick. Each was checked against its entry on 2 November. D-42's and D-112's were checked
+  again on 12 November, and D-33's, D-56's and D-69's against `main` that night. The rest were not
+  checked again.
   - **D-15 (FR-08):** four upload formats, PDF, DOCX, XLSX and TXT, not the six FR-08's upload
     area names. DOC and XLS have no parser.
   - **D-25 (FR-02):** the session carries no role. The role is re-read on every request, so a
@@ -514,6 +553,11 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
     `ExtractedContent` and chunking in `ingest_and_index_document()`, and it must be unable to
     fail the document — a classification failure marks it unclassified and never revokes
     indexed status (`CLAUDE.md` invariant 8).
+    - **That holds on the alpha's build, `8598d19`,** which has no classification.
+    - **On `main`, FR-10 is built, so the hand-off is not deferred there** (D-104, D-105).
+      `_classify` in `apps/ingestion/documents.py` runs between storing the extracted text and
+      chunking, in a savepoint of its own. A failure is logged and leaves the document
+      unclassified, its status unchanged. The upload's 201 carries `classification`, or null.
   - **D-33 §2 (FR-09):** a 422 when every chunk fails to embed, which FR-09's Responses clause
     does not list. The transcript is kept (invariant 8).
   - **D-42 (FR-13):** earlier questions are passed to the model, not earlier answers. Its
@@ -534,9 +578,21 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
     it as met (`M6-BUILD-PROMPT.md`'s Done line, amended 12 November).
   - **D-45 (FR-12):** there is no input sanitiser. The defence is parameterised SQL, React's
     escaping and the prompt's delimiter.
-  - **D-56 (FR-12):** partial matches have no relevance floor. The acknowledgement is recorded,
-    and the floor is owed by step 7 (D-93).
-  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19.
+  - **D-56 (FR-12):** on the FLM build, the alpha's included, partial matches have no relevance
+    floor. The acknowledgement is recorded.
+    - **Step 7 owed the floor (D-93) and set none.** At 0.30 the margin rule cannot set one, and
+      retrieval scores did not separate answerable from unanswerable questions in users' wording
+      (D-102).
+    - **On the default build, `anthropic`,** a near miss is offered as a partial match only at or
+      above 0.2468 on `voyage-4` (D-120).
+    - D-120 records D-56 as narrowed on Voyage, and still open on EmbeddingGemma.
+  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19, and
+    it holds on the alpha's build.
+    - **On `main`, FR-19 is built and the deferral has ended** (D-69's note of 10 November,
+      D-107). An Administrator's dashboard shows the number of Open knowledge gaps and the top
+      entries.
+    - An Employee's payload keeps its keys, because `review_knowledge_gaps` is the
+      Administrator's alone.
   - **D-70 (FR-14):** the department filter narrows documents only. Meetings have no department.
   - **D-72 (FR-15):** Department comes from the documents' column, not from ContentTags. That is
     a deliberate departure from FR-15's server clause.
