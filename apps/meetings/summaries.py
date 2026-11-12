@@ -419,8 +419,13 @@ def _store(summary_id, verified: VerifiedDraft, source: SummaryInput, model: str
     summary.save()
 
     # FR-16: a person's additions and edits survive a Regenerate; the extracted items nobody
-    # touched are replaced by this run's.
+    # touched are replaced by this run's. The kept items then follow this run's, in the order
+    # they already had, so the panel lists what was just extracted first and in the model's order.
     ActionItem.objects.filter(meeting=meeting, origin=ACTION_ITEM_FROM_AI, edited=False).delete()
+    kept = list(action_items_of(meeting))
+    for position, item in enumerate(kept, start=len(verified.action_items)):
+        item.position = position
+    ActionItem.objects.bulk_update(kept, ["position"])
     owners = OwnerDirectory.for_meeting(meeting)
     ActionItem.objects.bulk_create(
         [

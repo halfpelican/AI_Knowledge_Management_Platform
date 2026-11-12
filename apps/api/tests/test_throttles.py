@@ -5,7 +5,8 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
 - ``ask`` on ``POST /api/ask``;
 - ``ingestion``, one budget shared by ``POST /api/documents``, ``POST /api/meetings``,
   ``POST /api/documents/{id}/reprocess`` and, since FR-10, ``POST /api/documents/{id}/classify``
-  (D-105: one provider call, like a reprocess);
+  (D-105: one provider call, like a reprocess), and since FR-16 ``POST /api/meetings/{id}/summary``
+  (D-125: Generate or Regenerate is one provider call too);
 - ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
 - ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
 - ``tagging`` on ``POST /api/documents/{id}/tags``, since D-79's note on tagging of the same night
@@ -95,9 +96,9 @@ def assert_rate_throttled(response):
     assert int(response["Retry-After"]) > 0
 
 
-# The four ingestion routes, each sent the cheapest request it refuses: an upload with no file,
-# a meeting with no fields, and a reprocess and a classify (FR-10, D-105) of an id that names
-# nothing.
+# The five ingestion routes, each sent the cheapest request it refuses: an upload with no file,
+# a meeting with no fields, and a reprocess, a classify (FR-10, D-105) and a summary (FR-16,
+# D-125) of an id that names nothing.
 def upload_without_a_file(client):
     return client.post(DOCUMENTS_URL, {"title": "No file attached"}, format="multipart")
 
@@ -114,11 +115,16 @@ def classify_of_nothing(client):
     return client.post(f"{DOCUMENTS_URL}/{uuid.uuid4()}/classify", {}, format="json")
 
 
+def summary_of_nothing(client):
+    return client.post(f"{MEETINGS_URL}/{uuid.uuid4()}/summary", {}, format="json")
+
+
 INGESTION_ROUTES = {
     "POST /api/documents": (upload_without_a_file, 400),
     "POST /api/meetings": (meeting_without_fields, 400),
     "POST /api/documents/{id}/reprocess": (reprocess_of_nothing, 404),
     "POST /api/documents/{id}/classify": (classify_of_nothing, 404),
+    "POST /api/meetings/{id}/summary": (summary_of_nothing, 404),
 }
 
 
@@ -222,10 +228,10 @@ def test_the_two_429s_are_told_apart_by_code(session_client, monkeypatch):
 
 
 def test_the_ingestion_scope_is_one_budget_shared_by_its_three_routes(session_client):
-    """D-79: upload, meeting ingest, reprocess and (since FR-10) classify draw on one budget. The
-    budget is spent across all four, a quarter each, and then every one of them answers 429; a
-    per-route budget would still have three quarters left on each. Reading the lists is not
-    throttled."""
+    """D-79: upload, meeting ingest, reprocess, (since FR-10) classify and (since FR-16) a meeting's
+    summary draw on one budget. The budget is spent across all five, a fifth each, and then every
+    one of them answers 429; a per-route budget would still have four fifths left on each. Reading
+    the lists is not throttled."""
     client = session_client.client
     routes = list(INGESTION_ROUTES.items())
     for number in range(INGESTION_LIMIT):

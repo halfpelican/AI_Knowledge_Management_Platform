@@ -1519,7 +1519,8 @@ The action item object:
 - **`origin`** is `"ai"` (extracted) or `"user"` (added by a person). **`edited`** is true once a
   person has changed an extracted item. NFR-15's badge reads both: "Suggested by AI",
   "Suggested by AI, edited by a person", and none for `"user"`.
-- **Order:** extracted items in the model's order, then hand-added items in the order added.
+- **Order:** the latest run's extracted items in the model's order, then the items a person
+  edited or added, in the order they already had. A Regenerate renumbers them so this stays true.
 
 **What a run does** (D-125). It starts automatically when `POST /api/meetings` stores a transcript
 of 200 words or more, and again on `POST .../summary`. One run is in flight per meeting.

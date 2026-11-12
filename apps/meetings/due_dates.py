@@ -163,9 +163,22 @@ def _end_of(next_one: bool, unit: str, m: date) -> date:
 
 
 def resolve_due_date(phrase: str | None, meeting_date: date) -> date | None:
-    """The date ``phrase`` names, from ``meeting_date``, or None where the rules above fix none."""
+    """The date ``phrase`` names, from ``meeting_date``, or None where the rules above fix none.
+
+    **It never raises.** The phrase is a model's copy of uploaded text, and the caller is the
+    transaction that stores a whole summary, so a phrase no date can hold ("in 99999999999
+    weeks", a year past 9999) names no date, like any other phrase the rules do not fix. Without
+    this, one such line in a transcript would cost the meeting its summary on every attempt.
+    """
     if not phrase:
         return None
+    try:
+        return _resolve(phrase, meeting_date)
+    except (OverflowError, ValueError):
+        return None
+
+
+def _resolve(phrase: str, meeting_date: date) -> date | None:
     text = _clean(phrase)
     m = meeting_date
 
