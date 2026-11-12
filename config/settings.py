@@ -15,6 +15,7 @@ import environ
 from django.core.exceptions import ImproperlyConfigured
 
 from apps.core.constants import (
+    ACTION_ITEM_THROTTLE_RATE,
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
@@ -202,6 +203,7 @@ REST_FRAMEWORK = {
         "search": SEARCH_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
+        "action_items": ACTION_ITEM_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit

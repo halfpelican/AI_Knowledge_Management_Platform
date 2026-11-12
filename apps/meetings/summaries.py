@@ -38,7 +38,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.utils import timezone
 
 import apps.ai
@@ -53,6 +53,7 @@ from apps.ai.base import (
 from apps.core.constants import (
     ACTION_ITEM_FROM_AI,
     ACTION_ITEM_FROM_USER,
+    MAXIMUM_ACTION_ITEMS_PER_MEETING,
     MAXIMUM_SUMMARY_RETRY_RUNS,
     MINIMUM_SUMMARY_TRANSCRIPT_LENGTH,
     SUMMARY_FAILED_ERROR,
@@ -570,34 +571,45 @@ def retry_summary(summary: MeetingSummary) -> MeetingSummary | None:
 UNCHANGED = object()
 
 
-def add_action_item(meeting: Meeting, *, description: str, owner=None, due_date=None) -> ActionItem:
+class TooManyActionItems(Exception):
+    """The meeting holds MAXIMUM_ACTION_ITEMS_PER_MEETING items already; nothing was added."""
+
+
+def add_action_item(meeting: Meeting, *, description: str, owner=None, due_date=None, by=None) -> ActionItem:
     """An item a person adds: FR-16's "manually add items the extraction missed".
 
     ``origin`` "user", so it carries no AI badge (NFR-15) and no Regenerate replaces it. It goes
-    after every item the meeting has. The meeting's row is locked for the position, so two people
-    adding at once get different ones.
+    after every item the meeting has. The meeting's row is locked for the position and the count,
+    so two people adding at once get different positions and cannot pass the cap together.
+    ``by`` is the person adding it, recorded as ``created_by``. Raises ``TooManyActionItems`` at
+    MAXIMUM_ACTION_ITEMS_PER_MEETING (the security review of 12 November, D-125's third note).
     """
     with transaction.atomic():
         locked = Meeting.objects.select_for_update().get(pk=meeting.pk)
-        last = locked.action_items.aggregate(last=Max("position"))["last"]
+        held = locked.action_items.aggregate(last=Max("position"), count=Count("pk"))
+        if held["count"] >= MAXIMUM_ACTION_ITEMS_PER_MEETING:
+            raise TooManyActionItems
         return ActionItem.objects.create(
             meeting=locked,
             description=description,
             owner=owner,
             due_date=due_date,
             origin=ACTION_ITEM_FROM_USER,
-            position=0 if last is None else last + 1,
+            position=0 if held["last"] is None else held["last"] + 1,
+            created_by=by,
         )
 
 
 def edit_action_item(
-    item: ActionItem, *, description=UNCHANGED, owner=UNCHANGED, due_date=UNCHANGED
+    item: ActionItem, *, description=UNCHANGED, owner=UNCHANGED, due_date=UNCHANGED, by=None
 ) -> ActionItem:
     """Change the fields given. An extracted item becomes ``edited`` and is then kept by Regenerate.
 
     ``owner_name`` and ``due_text`` are left as they are: they are what the transcript said, which
-    an edit does not change, and the panel shows them beside whatever the person chose.
+    an edit does not change, and the panel shows them beside whatever the person chose. ``by`` is
+    the person editing, recorded as ``updated_by`` (D-125's third note).
     """
+    item.updated_by = by
     if description is not UNCHANGED:
         item.description = description
     if owner is not UNCHANGED:

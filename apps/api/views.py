@@ -40,6 +40,7 @@ from apps.core.constants import (
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
+    MAXIMUM_ACTION_ITEMS_PER_MEETING,
     DOCUMENT_INDEXED,
     KNOWLEDGE_GAP_OPEN,
     MANAGE_DOCUMENTS_PERMISSION,
@@ -88,6 +89,7 @@ from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.deletion import delete_meeting
 from apps.meetings.models import Meeting
 from apps.meetings.summaries import (
+    TooManyActionItems,
     TranscriptTooShort,
     action_items_of,
     add_action_item,
@@ -1528,20 +1530,38 @@ def action_item_or_404(meeting, item_id):
     return item
 
 
+ACTION_ITEM_LIMIT_MESSAGE = (
+    f"This meeting already has {MAXIMUM_ACTION_ITEMS_PER_MEETING} action items, the most one meeting "
+    "can hold. Delete one to add another."
+)
+
+
 class MeetingActionItemsView(APIView):
     """``POST /api/meetings/{id}/action-items`` — FR-16: "manually add items the extraction
     missed". Body ``{description, owner_id?, due_date?}``; 201 with the item, which carries
-    ``origin`` "user". 400 in DRF's shape for a blank description, an unknown ``owner_id`` or a
-    malformed date. Not throttled: it calls no provider and grows no shared vocabulary."""
+    ``origin`` "user". 400 in DRF's shape for a blank description, an unknown ``owner_id``, an
+    owner who cannot read the meeting or a malformed date. 409 once the meeting holds
+    MAXIMUM_ACTION_ITEMS_PER_MEETING items.
+
+    Throttled in scope "action_items", with the item routes' PATCH and DELETE: the security review
+    of 12 November found one account could add rows without end, and every reader of the meeting
+    loads them all (D-125's third note). DRF checks the throttle in ``initial()``, before the
+    meeting is looked up, so a 429 is the same for every id.
+    """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "action_items"
 
     def post(self, request, pk):
         meeting = scoped_meeting_or_404(request, pk)
         require_contribute_content(request, self)
         serializer = ActionItemWriteSerializer(data=request.data, context={"meeting": meeting})
         serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
-        item = add_action_item(meeting, **serializer.validated_data)
+        try:
+            item = add_action_item(meeting, by=request.user, **serializer.validated_data)
+        except TooManyActionItems:
+            return Response({"detail": ACTION_ITEM_LIMIT_MESSAGE}, status=status.HTTP_409_CONFLICT)
         return Response(ActionItemSerializer(item).data, status=status.HTTP_201_CREATED)
 
 
@@ -1553,10 +1573,13 @@ class MeetingActionItemView(APIView):
     ``due_date`` (a date, or null); 200 with the item. An extracted item is then ``edited``, which
     NFR-15's badge shows and which keeps it through a Regenerate. DELETE is 204 with no body; the
     confirmation FR-16 requires is the page's, since a confirmed request is all a server can see.
-    An ``item_id`` that is not one of this meeting's is the meeting lookup's own 404.
+    An ``item_id`` that is not one of this meeting's is the meeting lookup's own 404. Both are in
+    the "action_items" throttle scope with the add.
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "action_items"
 
     def patch(self, request, pk, item_id):
         meeting = scoped_meeting_or_404(request, pk)
@@ -1564,7 +1587,7 @@ class MeetingActionItemView(APIView):
         item = action_item_or_404(meeting, item_id)
         serializer = ActionItemWriteSerializer(data=request.data, partial=True, context={"meeting": meeting})
         serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
-        item = edit_action_item(item, **serializer.validated_data)
+        item = edit_action_item(item, by=request.user, **serializer.validated_data)
         return Response(ActionItemSerializer(item).data)
 
     def delete(self, request, pk, item_id):

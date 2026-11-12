@@ -738,6 +738,24 @@ describe('FR-16: a person adds an item the extraction missed', () => {
     expect(fields(form).description.value).toBe('Too long')
     expect(descriptions(panel)).toEqual([])
   })
+
+  it('says the meeting is full on a 409, in its own words, and keeps what was typed', async () => {
+    const SERVER_409 = {
+      detail: 'This meeting already has 200 action items, the most one meeting can hold. Delete one to add another.',
+    }
+    const { panel } = await pageWith(stateWith([RECONCILE]), { [`POST ${ITEMS}`]: { status: 409, body: SERVER_409 } })
+    const form = await adding(panel)
+    fireEvent.change(fields(form).description, { target: { value: 'One too many' } })
+
+    fireEvent.click(within(form).getByRole('button', { name: TEXT.actionItemAdd }))
+
+    await waitFor(() =>
+      expect(within(panel).getByRole('alert').textContent).toBe(`${TEXT.actionItemsFailed}${TEXT.actionItemsAtLimit}`),
+    )
+    expect(document.body.textContent).not.toContain(SERVER_409.detail)
+    expect(fields(form).description.value).toBe('One too many')
+    expect(descriptions(panel)).toEqual([RECONCILE.description])
+  })
 })
 
 /* ---- Empty ---------------------------------------------------------------- */

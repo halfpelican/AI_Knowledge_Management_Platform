@@ -18,10 +18,12 @@ import pytest
 
 from apps.accounts.models import RolePermission
 from apps.api.serializers import OWNER_CANNOT_SEE_MEETING_MESSAGE
+from apps.api.views import ACTION_ITEM_LIMIT_MESSAGE
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
     CONTRIBUTE_CONTENT_PERMISSION,
     EMPLOYEE_ROLE_NAME,
+    MAXIMUM_ACTION_ITEMS_PER_MEETING,
     ROLE_NAMES,
 )
 from apps.meetings.models import ActionItem, Meeting
@@ -146,6 +148,83 @@ def test_an_owner_whose_role_reads_the_meeting_is_accepted_from_either_role(sess
             )
             assert response.status_code == 201, (visible_to_roles, owner.role.role_name)
             assert response.json()["owner"]["id"] == str(owner.id)
+
+
+def test_an_add_past_the_meetings_cap_is_409_and_writes_nothing(session_client):
+    """The security review of 12 November, finding 2 (D-125's third note): one account could add
+    rows without end, and every reader of the meeting loads them all. Every item counts."""
+    meeting = a_meeting()
+    ActionItem.objects.bulk_create(
+        [ActionItem(meeting=meeting, description=f"Item {n}", origin="ai" if n % 2 else "user", position=n)
+         for n in range(MAXIMUM_ACTION_ITEMS_PER_MEETING)]
+    )
+
+    response = session_client.client.post(items_url(meeting.id), {"description": "One too many"}, format="json")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": ACTION_ITEM_LIMIT_MESSAGE}
+    assert ActionItem.objects.filter(meeting=meeting).count() == MAXIMUM_ACTION_ITEMS_PER_MEETING
+    assert not ActionItem.objects.filter(description="One too many").exists()
+
+
+def test_one_below_the_cap_an_add_is_accepted_and_a_delete_makes_room(session_client):
+    meeting = a_meeting()
+    ActionItem.objects.bulk_create(
+        [ActionItem(meeting=meeting, description=f"Item {n}", origin="user", position=n)
+         for n in range(MAXIMUM_ACTION_ITEMS_PER_MEETING - 1)]
+    )
+    client = session_client.client
+
+    assert client.post(items_url(meeting.id), {"description": "The last one"}, format="json").status_code == 201
+    assert client.post(items_url(meeting.id), {"description": "Refused"}, format="json").status_code == 409
+    first = ActionItem.objects.filter(meeting=meeting).order_by("position").first()
+    assert client.delete(item_url(meeting.id, first.id)).status_code == 204
+    assert client.post(items_url(meeting.id), {"description": "Room again"}, format="json").status_code == 201
+
+
+def test_the_cap_is_per_meeting(session_client):
+    full, other = a_meeting(), a_meeting(title="Another meeting")
+    ActionItem.objects.bulk_create(
+        [ActionItem(meeting=full, description=f"Item {n}", origin="user", position=n)
+         for n in range(MAXIMUM_ACTION_ITEMS_PER_MEETING)]
+    )
+
+    response = session_client.client.post(items_url(other.id), {"description": "Fine here"}, format="json")
+
+    assert response.status_code == 201
+
+
+def test_who_added_and_who_last_changed_an_item_are_recorded_and_never_returned(session_client):
+    """The review asked for both, so a panel filled or rewritten by one account can be traced to it."""
+    meeting = a_meeting()
+    client = session_client.client
+
+    added = client.post(items_url(meeting.id), {"description": "Book the room"}, format="json")
+    item = ActionItem.objects.get(pk=added.json()["action_item_id"])
+    assert (item.created_by, item.updated_by) == (session_client.user, None)
+
+    edited = client.patch(item_url(meeting.id, item.id), {"description": "Book the boardroom"}, format="json")
+    item.refresh_from_db()
+    assert (item.created_by, item.updated_by) == (session_client.user, session_client.user)
+
+    for body in (added.json(), edited.json()):
+        assert set(body) == ITEM_KEYS
+    listed = client.get(f"/api/meetings/{meeting.id}/summary").json()["action_items"]
+    assert all(set(entry) == ITEM_KEYS for entry in listed)
+
+
+def test_an_extracted_item_records_nobody_until_a_person_changes_it(
+    session_client, django_capture_on_commit_callbacks, stub_ai_service
+):
+    stub_ai_service.summary = draft(action_items=[action("Extracted")])
+    meeting = summarised(django_capture_on_commit_callbacks)
+    item = ActionItem.objects.get(meeting=meeting)
+    assert (item.created_by, item.updated_by) == (None, None)
+
+    session_client.client.patch(item_url(meeting.id, item.id), {"due_date": "2026-11-20"}, format="json")
+
+    item.refresh_from_db()
+    assert (item.created_by, item.updated_by, item.edited) == (None, session_client.user, True)
 
 
 def test_an_added_item_is_listed_after_the_extracted_ones(session_client, django_capture_on_commit_callbacks, stub_ai_service):

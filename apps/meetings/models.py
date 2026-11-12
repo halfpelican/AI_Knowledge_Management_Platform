@@ -173,6 +173,17 @@ class ActionItem(models.Model):
     # A person changed an extracted item. NFR-15's badge then reads "Suggested by AI, edited by a
     # person", and a Regenerate leaves it alone.
     edited = models.BooleanField(default=False)
+    # Who added the item (null for an extracted one), and who last changed it (null until a person
+    # does). The security review of 12 November 2026 asked for both (D-125's third note), so a
+    # panel filled or rewritten by one account can be traced to it. Never returned by the API.
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column="created_by", related_name="action_items_added",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column="updated_by", related_name="action_items_changed",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -188,7 +188,12 @@ which it falls due".
 | `origin` | text | `ai` or `user` — see §3 |
 | `position` | integer | the panel's order: an extracted item's place in the reply; a person's item after every item then present |
 | `edited` | boolean | a person changed an extracted item; a Regenerate then leaves it alone |
+| `created_by` | UUID FK → Users, nullable | who added the item; null for an extracted one; **set NULL** if the user is deleted. Never returned (D-125's third note: the security review of 12 November asked for it) |
+| `updated_by` | UUID FK → Users, nullable | who last changed the item; null until a person does; **set NULL** if the user is deleted. Never returned (D-125's third note) |
 | `created_at`, `updated_at` | timestamp | |
+
+At most `MAXIMUM_ACTION_ITEMS_PER_MEETING` (200) items per meeting: a person's addition past it is
+refused (D-125's third note).
 
 ### Conversations — FR-13
 

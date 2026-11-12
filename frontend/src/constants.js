@@ -1067,6 +1067,10 @@ export const TEXT = {
   // A 404 on a write: the item, or the meeting, is gone or now out of scope. One
   // message for all of them (CLAUDE.md §6, invariant 1), and the panel is read again.
   actionItemNotFound: 'That action item could not be found. The list has been reloaded.',
+  // The 409: the meeting holds as many items as one meeting may (MAXIMUM_ACTION_ITEMS_PER_MEETING;
+  // the security review of 12 November, D-125's third note). Said from this copy, without the
+  // server's number, so the page never shows a backend string.
+  actionItemsAtLimit: 'This meeting holds as many action items as it can. Delete one to add another.',
 
   /* ---- FR-12 keyword search --------------------------------------------- */
   searchFieldLabel: 'Search',

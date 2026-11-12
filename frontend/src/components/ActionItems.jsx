@@ -446,6 +446,10 @@ export default function ActionItems({
         setOutcome({ failed: true, text: TEXT.actionItemNotFound })
         onStale()
         return null
+      case 409:
+        // Only an addition meets it: the meeting is at its cap. The form stays, with what was typed.
+        setOutcome({ failed: true, text: TEXT.actionItemsAtLimit })
+        return null
       case 400: {
         // DRF's validation message, beside the field it names; the notice points at it.
         const { fieldErrors, formError } = extractFieldErrors(refusal, FIELDS)

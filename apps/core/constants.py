@@ -479,6 +479,11 @@ TAGGING_THROTTLE_RATE = "30/min"
 # and carries on. One transcription per user is in flight at once regardless
 # (apps/api/transcription_slot.py), so the rate bounds requests, not NPU time.
 TRANSCRIPTION_THROTTLE_RATE = "60/min"
+# POST, PATCH and DELETE on /api/meetings/{id}/action-items, scope "action_items" (FR-16; the
+# security review of 12 November 2026, finding 2, D-125's third note). They call no provider: the
+# rate bounds how fast one account can fill or rewrite a meeting's Action Items panel, which every
+# reader of the meeting loads. The page sends one request per save, addition or deletion.
+ACTION_ITEM_THROTTLE_RATE = "30/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
@@ -846,3 +851,9 @@ MAXIMUM_SUMMARIES_IN_FLIGHT = 2
 # add items the extraction missed"). The same two words as TAG_APPLIED_BY_VALUES, FR-10's.
 ACTION_ITEM_ORIGINS = ("ai", "user")
 (ACTION_ITEM_FROM_AI, ACTION_ITEM_FROM_USER) = ACTION_ITEM_ORIGINS
+# The most action items one meeting may hold before a person's addition is refused (409). Every
+# item counts, extracted or added. Extraction gives at most 25 a run and replaces its own untouched
+# items (apps/ai/summarisation.py), so this binds the items people add. The security review of 12
+# November 2026, finding 2 (D-125's third note): without it one account could add rows without end,
+# and every reader of the meeting loads them all. A starting value: no meeting in any set comes near.
+MAXIMUM_ACTION_ITEMS_PER_MEETING = 200

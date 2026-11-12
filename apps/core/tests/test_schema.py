@@ -62,7 +62,7 @@ SCHEMA_V1 = {
         ("action_item_id",),
         {"action_item_id", "meeting_id", "summary_id", "description", "owner_id", "owner_name",
          "due_date", "due_text", "passages", "origin", "position", "edited", "created_at",
-         "updated_at"},
+         "updated_at", "created_by", "updated_by"},
     ),
     "conversations": (
         ("conversation_id",),
