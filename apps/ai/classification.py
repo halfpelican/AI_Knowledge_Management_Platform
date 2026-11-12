@@ -34,7 +34,11 @@ only a Topic may be proposed new, and is created only once a person confirms it;
 the departure. The application applies its own rules whatever comes back: a department outside
 the scheme is discarded, and a tag value outside it is created and applied as the AI's
 suggestion at or above the threshold, or held as a proposal for a person to confirm or reject
-below it, unless a person removed it from the document or its name is too long for the column.
+below it. Three things stop that. A value a person removed from the document, or rejected there
+as a proposal, is skipped, even once it is in the scheme. A value that may not become a tag is
+discarded at any confidence: longer than the column, more than MAXIMUM_CREATED_TAG_WORDS words,
+holding ";", or holding a control, format or surrogate character (Cc, Cf, Cs; D-128's security
+review). Rule 6 of the prompt asks for one to three words, and the application enforces it.
 
 **Uploaded text is untrusted, and this prompt has no delimiter to neutralise.** The generation
 prompt invents the ``[chunk_id: ...]`` label and neutralises it in user text (D-45) because a

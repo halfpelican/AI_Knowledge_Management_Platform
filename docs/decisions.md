@@ -4988,6 +4988,17 @@ every value with no cap, and what the detail offers as `tag_options`.
   words. Tested in `frontend/tests/documentClassification.test.jsx`, for the chooser and for a new
   topic.
 
+**Dated note, 13 November 2026: `POST /api/tags` spends the same budget (D-128).** The `tagging`
+scope is no longer "on that route alone".
+
+- **What spends it now:** an Administrator adding a vocabulary value through `POST /api/tags`
+  (D-128) spends the same per-user budget, 30 a minute, shared with `POST /api/documents/{id}/tags`.
+- **Where its 429 sits:** that route's permission classes include `manage_tags`, so its 429 comes
+  after the 401 and the 403.
+- **What stays unthrottled:** its GET. The other tag routes stay unthrottled.
+- **What the classifier creates (D-128)** is bounded by the `ingestion` budget instead.
+- **Tested** in `test_configuration.py`'s walk and in `apps/api/tests/test_fr10_tag_create.py`.
+
 ## D-80 · The conversation list leaves out a thread nobody has asked anything in
 
 **Status:** Settled by the user · **Date:** 2026-10-21 · **Stage:** 5 item 5 · **Closes:** D-58,
@@ -7125,6 +7136,12 @@ INCOMPLETE on its summary clauses:
 What the classifier reads stays capped at `CLASSIFICATION_INPUT_TOKENS`, with `input_truncated`
 recorded and shown, as before.
 
+**Dated note, 13 November 2026: the prompt's tag rule changed (D-128).** This entry's prompt allowed
+a new value in Topic only. Since D-128 (12 November, the user's decision) rules 6 and 7 allow a new
+value of one to three words in Project, Process or Topic when no listed value fits, and still never
+a new department. The worked example is unchanged. The application enforces the word limit too.
+Nothing else in this entry moves.
+
 ## D-105 · Schema v2 for FR-10: `DocumentAnalysis`, two `ContentTags` columns, the audience-scoped scheme, and how a suggestion becomes a record
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-10, FR-15, invariants 1, 4
@@ -7697,6 +7714,28 @@ and gap 9 of the requirements audit (D-119).
     make `anthropic` the default. If M8 runs there, the bound is re-timed on a Voyage-indexed
     database, and this FLM run does not stand in for it.
 
+**Dated note, 13 November 2026: what D-128 changed in this entry.** The user decided D-128 on 12
+November. The requirements audit of 13 November asked that this entry point to it. Three of its
+rules are superseded:
+
+- **Rule 4 as first built:**
+  - a Topic outside the scheme was always proposed;
+  - a Project or Process outside the scheme was discarded;
+  - only a removed Topic was kept from coming back.
+
+  Since D-128, a value outside the scheme in any of the three dimensions is created and applied at or
+  above the confidence threshold, as a grown Tag, and held as a proposal below it. A value a person
+  removed or rejected on a document is skipped for that document, in every dimension.
+- **The proposal record.** `proposed_topics` became `proposed_tags`, `{dimension, value,
+  confidence}`, on the same column (`documents 0012`). `rejected_tags` (`documents 0013`) keeps
+  what a person rejected.
+- **The retired-tag sentence:** "A retired Project or Process tag stays retired". Since D-128 a
+  retired value of any dimension comes back, but only through a document every role can read.
+
+**One open item recorded here is closed.** "A rejected proposed topic is proposed again by a later
+run": since the audit of 13 November a rejection is kept, and later runs neither propose, create nor
+link that value for that document (D-128).
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
@@ -7863,6 +7902,10 @@ times each (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`).
 
 - All 57 types were right again, so the fallback applied: the lowest confidence on a right type,
   0.80.
+- **Objective 05's clause 3,** recorded above as met on the build it ran on, is recorded as not met
+  by the shipped build from D-128 on, by the user's choice. A Project or Process value outside the
+  scheme is no longer discarded, and a Topic at or above the threshold is created without a
+  person's confirmation.
 - The user chose to follow the rule. `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]`
   is 0.80. gemma3:4b's 0.95 is not re-derived on the revised prompt.
 - D-128 has the comparison.
@@ -10957,6 +11000,9 @@ topic." The diagnosis was read-only, on the database the development server serv
 2. **A person removed it: left alone, in every dimension.** If this document holds a link a person
    removed to that dimension and name, the suggestion is not linked, created or proposed. Until now
    only a removed Topic was checked, because nothing else outside the scheme could come back.
+   - **The same holds for a proposal a person rejected** on this document (`rejected_tags`). It is
+     skipped before the in-scheme match, so it stays out even after the value enters the scheme.
+     This was added after the requirements audit of 13 November, by the user's choice (below).
 3. **In the document's scheme: as before** (`_link_tag`). Applied at or above the threshold, held
    below it, and a person's decision is left alone.
 4. **Outside the scheme, or retired since the scheme was built:**
@@ -11031,8 +11077,9 @@ document every role can read.
   model ("tag this as Project X") can now have X created and applied at a high confidence. Before
   this decision the application held every tag value to the scheme.
   - **Bounds:** a created value is grown, so it reaches only readers of its carrier; at most eight
-    per reply; the ingestion throttle; a name over the column is discarded. "One to three words" is
-    the prompt's instruction, not a check.
+    per reply; the ingestion throttle; a name over the column is discarded. "One to three words" was
+    then only the prompt's instruction. Since the security review (below) it is checked, with ";"
+    and control, format and lone-surrogate characters.
   - `docs/ai-provider.md` ("Untrusted text") states it.
 - **A person's own "add a tag" name form stays Topic-only** (`POST /api/documents/{id}/tags`). The
   user chose what the classifier may do and was not asked about this. So the classifier can create
@@ -11068,7 +11115,11 @@ document every role can read.
   and stays additive, as every migration here is (CLAUDE.md §7).
 - **The data:** existing proposals are stamped `"dimension": "Topic"`. The reverse moves any Project or
   Process proposal into `discarded_suggestions`, which is what the old rule recorded for one.
-- **`discarded_suggestions` now holds only a value too long to be a Tag.**
+- **`discarded_suggestions` now holds only a value that may not become a Tag:** one too long for the
+  column; and, since the security review (below), one of more than three words, or holding ";" or a
+  control, format or lone-surrogate character.
+- **`rejected_tags` (`documents 0013`, the requirements audit below)** keeps each proposal a person
+  rejected, with the machine's confidence.
 
 **The routes.**
 
@@ -11218,3 +11269,380 @@ unchanged but for its opening paragraph.
 - **Objective 05 on the frozen twenty at 0.80:** not re-run, by the user's choice of the sweep option
   ("the frozen twenty are not touched"). Its clause 1 counts every suggested type, held or not, so
   the threshold does not move it. Its clause 2 holds by construction at any threshold.
+
+**The requirements audit of `556cd37` (13 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Audit: FR-10 on feat/FR-10-automatic-tagging (D-128) at 556cd37, 13 November 2026
+>
+> **Verdict: INCOMPLETE**
+>
+> **What I checked, and how.**
+> - **Read only.** Nothing in the worktree was edited, and `git status` is clean at the end.
+> - **The diff:** `git diff a668a08..735226e` (5dcb6ff, d98ddf3, 735226e) plus `git show 556cd37 -- docs/decisions.md`.
+> - **Measured against:** FR-10 at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:681-725; UC-09 in the same file at 2028-2082; D-104, D-105 and its notes, D-106 and its notes, D-119, D-122 and D-128; CLAUDE.md §6 and §8.
+> - **The merge.**
+>   - 556cd37 changes no FR-10 file: `git diff 735226e 556cd37 -- apps/documents apps/ai apps/api apps/core` is empty.
+>   - Its decisions.md resolution keeps both 12 November notes on D-122: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:10264-10280.
+>   - No D-127 and no second D-128 heading exists at HEAD.
+> - **One probe test was executed.**
+>   - The file is C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_rejected_proposal.py, outside the worktree.
+>   - It ran twice, at 735226e and at 556cd37, against `test_kmp_fr10auto_audit`, which pytest-django created and destroyed. `test_kmp_fr10auto` was not touched.
+> - Every line number below is at 556cd37.
+>
+> ### (a) The departures D-128 records, and one it does not
+>
+> **A1. FR-10's controlled-taxonomy-growth clause (proposal.txt:690): MET as a recorded departure, and no wider than recorded.**
+> - **Recorded:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:11043-11047.
+> - **The code is the departure as named:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py
+>   - Suggestions are still matched against the scheme first (534-540).
+>   - A Project, Process or Topic value outside the scheme, at or above the classifying model's threshold, is created and linked as an unconfirmed, non-provisional AI link (560-569). Below the threshold it is held in `proposed_tags` (557-559).
+>   - A department outside the scheme is still discarded (492-493).
+> - **The prompt** allows a new value of one to three words in Project, Process or Topic, and never a new department: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\classification.py:403-409.
+> - **Tests:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_d128.py:69-100 and 141-174
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_apply.py:395-420
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_proposed_tags.py:100-146
+>
+> **A2. UC-09 step 4 and E2 (proposal.txt:2053 and 2078-2082): MET as recorded.**
+> - **Recorded:** decisions.md:11048-11052.
+> - **Step 4** still holds for departments (classification.py:492-493).
+> - **For tags,** a value outside the scheme is created or proposed (classification.py:545-572). So a document whose every term falls outside the scheme is classified, not marked unclassified.
+>
+> **A3. Objective 05 clause 3: MET as recorded.**
+> - **Recorded:** decisions.md:11053-11059 records it as not met by the shipped build.
+> - **The verifier reports it:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\scripts\objective05_verify.py
+>   - The module docstring explains the counting (20-37).
+>   - A proposed Project or Process value is counted as a clause 3 violation, and so is an AI link to a grown tag (232-258).
+>   - The clause fails on any violation (277).
+> - **Tested** in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_objective05_verify.py.
+>
+> **A4. D-105's "A retired Project or Process tag stays retired" (decisions.md:7453-7454): MET as recorded.**
+> - **Recorded:** decisions.md:11060-11061 and 11016-11029.
+> - **The code:** `_bring_into_use` (classification.py:881-925, the guard at 912-916) reactivates a fetched retired tag only when every role reads the document. It marks the tag grown when it does.
+>   - "Every role reads it" is decided by `_every_role_reads` (868-878), through `scoped_documents`.
+>   - On any other document the tag is linked and left retired.
+> - **Tests:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_reactivation_scope.py:151-170: nothing an Employee reads moves.
+>   - The same file, 173-189: reactivated on a document every role reads, from both roles.
+>   - test_classification_apply.py:353-370.
+>
+> **A5. PARTIAL, and unrecorded: a proposal a person rejects is not retained. A later run creates and applies it at or above the threshold.**
+> - **The code path.**
+>   - `reject_proposed_tag` only drops the entry (classification.py:1029-1036).
+>   - Rule 4b skips a value only when this document holds a removed ContentTag for it (519-523, 531-533). A rejected proposal leaves no such row.
+>   - So the next classify, reprocess or `classify_documents` run that suggests the value at or above the threshold creates it and links it as an unconfirmed AI tag (557-569).
+>   - FR-15's facets and filters then read that link. C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_d128_invariant1.py:202 shows an applied created value counted in the browse facets.
+>   - Below the threshold, the value is proposed again.
+> - **Executed, not only traced.** The probe:
+>   1. classified a document with a Project value just below the threshold, which was proposed;
+>   2. rejected that proposal;
+>   3. classified again with the same value at ABOVE_THRESHOLD.
+>
+>   The result was an AI link: applied_by "ai", confirmed False, provisional False, removed False. Classified a third way, below the threshold, the value was proposed again. Both cases passed at 556cd37.
+> - **The screen offers both kinds of held suggestion under one heading, with the same "Reject".** File: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\components\Classification.jsx.
+>   - **On a held link,** Reject sends DELETE (260-268, 653-660). That keeps the link marked removed (classification.py:776-797), which blocks the value in every dimension.
+>   - **On a proposal,** Reject calls the reject route (317-325, 669-682), which records nothing.
+> - **What the spec says.**
+>   - proposal.txt:692: "any value a user edits are retained and is not overwritten by later reprocessing, and the machine assignment is retained alongside it".
+>   - proposal.txt:689: "presented for confirmation rather than applied silently".
+>   - UC-09 A3 (proposal.txt:2067-2070): "The corrected classification governs how the document is found from that point".
+>   - Here neither the person's rejection nor the machine's rejected assignment is kept. On this path the code contradicts the correction clause as worded.
+> - **What is recorded.**
+>   - D-105's build note records the earlier, milder form as open: "a rejected proposed topic is proposed again by a later run" (decisions.md:7238).
+>   - D-128 widens it to Project and Process, and turns re-proposal into creation and application. It says only that a rejection creates nothing (decisions.md:10971-10973).
+>   - D-128's consequences (11016-11040) do not mention it.
+>   - No test covers reject-then-reclassify.
+> - **Smallest fix,** either of:
+>   - record it in D-128, with a dated line on D-105:7238, as an accepted consequence;
+>   - or make a rejection durable: a per-document record of rejected `(dimension, value)` pairs, added by an additive migration, which rule 4 skips as it skips a removed link.
+>
+>   Add the reject-then-reclassify test either way.
+>
+> **Checked, and not departures:**
+> - A person's name form stays Topic-only (classification.py:809-812; decisions.md:11037-11040), which FR-10's text allows.
+> - `POST /api/tags` implements FR-10's CRUD "Create" and its 409 (decisions.md:10928-10951, question 3).
+>
+> ### (b) What FR-10 requires that D-128 did not change
+>
+> **B1. A confidence is recorded with each assignment: MET.**
+> - An in-scheme link carries it (classification.py:678-705).
+> - A created value's link carries it (564-569).
+> - A proposal carries it (557-559), and confirming the proposal copies it to the link (998-1017).
+> - A discard records it (550-556).
+> - The threshold is the classifying model's own (582-599). The values are in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py: 692 (the default) and 707 (claude-haiku-5-5 at 0.80, by D-128).
+> - D-106 and D-122 carry the dated notes for 0.80 (decisions.md:7860-7868 and 10277-10280).
+>
+> **B2. Below the threshold, provisional and presented for confirmation: MET for a first presentation.** After a rejection, see A5.
+> - An in-scheme held link is provisional; that path is unchanged (classification.py:678-705).
+> - An out-of-scheme value is held in `proposed_tags` (557-559).
+> - It is shown under "Suggested tags awaiting confirmation", with Confirm and Reject, and each row names its dimension (Classification.jsx:294-330 and 1076-1085).
+> - The wording is in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:681-688.
+> - **Tests:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\documentClassification.test.jsx:1300-1342 and 1344-1409
+>   - test_fr10_proposed_tags.py:100-165
+>
+> **B3. Provenance shown, and accept or remove in a single action: MET.**
+> - A value a run created reads exactly as any AI tag: "Suggested by AI", with Confirm and Remove, and no "new" mark (Classification.jsx:225-231).
+> - documentClassification.test.jsx:1411-1463 compares that row element for element with an AI tag on a listed value.
+> - Confirm and Reject on a proposal are one request each (1344-1409).
+>
+> **B4. Correction kept and not overwritten: PARTIAL.** This is A5.
+> - **Met for the type and department:** `user_edited` (classification.py:481-510).
+> - **Met for a removed link, in every dimension:** classification.py:519-533. Tests: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_removal.py:121-151, and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_removed_tags.py.
+> - **Not met for a rejected proposal.**
+>
+> **B5. The type from a fixed list: MET, unchanged.**
+> - classification.py:456-460.
+> - The parser is unchanged, and the prompt changed only in rules 6 and 7.
+>
+> **B6. Tag names unique within a dimension after normalising case and whitespace: MET.**
+> - The model normalises and constrains names: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:147-149 and 172-182.
+> - `create_tag` normalises, and refuses a duplicate: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\taxonomy.py:84-123.
+> - The classifier and the confirmation call `get_or_create` on the normalised name (classification.py:565 and 996).
+> - **Tests,** in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_tag_create.py:
+>   - 197-261: active or retired, after normalising, a concurrent create included.
+>   - 218-232: the same name in another dimension is not a conflict.
+> - D-105's accepted residual 9, look-alike Unicode names, is unchanged. Rule 4d's discard of control and format characters narrows it for values the classifier creates, and for nothing else.
+>
+> **B7. 409 on a duplicate name within a dimension: MET.**
+> - `POST /api/tags` answers 409 `{detail, tag_id}` for any duplicate, active or retired, and changes nothing:
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:275-277 and 2000-2011
+>   - taxonomy.py:105-120
+> - **Tests:** test_fr10_tag_create.py:197-261, and in the front end C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\tags.test.jsx:508-555.
+> - The name form's 409 stays narrowed by D-105 for invariant 1, unchanged.
+>
+> **B8. 422 where insufficient text was extracted: MET, unchanged.**
+> - views.py:1755-1759.
+> - Tested at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_document_classification.py:226-231 and documentClassification.test.jsx:755.
+>
+> **B9. The taxonomy design: MET, unchanged.**
+> - Tags are deactivated rather than deleted.
+> - One Tags table carries a dimension.
+> - One ContentTags join is keyed on source type and identifier.
+> - Evidence: models.py:152-199; `retire_tag` is unchanged.
+> - Retirement is no longer permanent through a document every role reads. That is A4.
+>
+> **B10. "A tag confirmed by a user is marked confirmed and is not altered by later reprocessing": MET.**
+> - classification.py:700-701.
+> - Tested at test_classification_apply.py:277-311.
+>
+> **B11. Four dimensions shown separately: MET.**
+> - Each proposal row names its dimension (B2).
+> - Department is a column, not a tag (D-72, D-105), as recorded.
+>
+> **B12. Unchanged and recorded, so not counted against this branch.**
+> - **Declined, D-104's dated note (decisions.md:7113-7126):** the summary, the key points, sectioned summarising, the summarisation prompt's grounding, and the summary in the 200.
+> - **Partial and recorded:** the tag browser (D-105; decisions.md:9684-9687).
+> - **CRUD (proposal.txt:697):** Tags "Create" now has an Administrator route.
+> - The departures from the field table stay recorded (D-105).
+> - `proposed_tags` on the `proposed_topics` column is recorded in D-128 and at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:282.
+>
+> ### (c) CLAUDE.md §8, the definition of done
+>
+> **C1. Condition 1, behaves as specified: No.** A5.
+>
+> **C2. Condition 2, both suites and both roles: PARTIAL.**
+> - **Both roles, by inspection of the tests.**
+>   - `POST /api/tags` is sent from both sessions (test_fr10_tag_create.py:91-109).
+>   - The Employee's 403 comes before the body is read (122-132) and before the throttle counts (296-306).
+>   - Anonymous is 401 (135-139).
+>   - Both proposed-tags routes are exercised from both sessions throughout test_fr10_proposed_tags.py.
+>   - Their scoped 404 is tested at test_document_classification.py:142-143 and 517-529, and in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_source_rows_fail_closed.py:509-514.
+>   - The 401 walk covers them: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_rbac.py:70, 79 and 177-187.
+>   - The dual-role matrix enumerates each route and method (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\dual_role_matrix.py:124-157). It gives its verdict only on a full run (235-245).
+> - **The front-end clauses are tested in the front-end suite:** documentClassification.test.jsx:1300-1463; tags.test.jsx:429-660 (the add form) and 661 onward (the guards for each role).
+> - **Not shown: neither suite at 556cd37.**
+>   - d98ddf3 claims "986 passed across the FR-10 files", which is not a full run. The full run had not reported.
+>   - 735226e claims npm 486 passed, lint clean and build succeeding, under vitest 5.0.2.
+>   - 556cd37 moves to vite 8.3.5 and vitest 5.0.5 (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\package.json:26-27). So the front-end suite is not shown at HEAD either.
+>   - There is no pull request, so CI has not run.
+>
+> **C3. Condition 3, happy and failure paths: MET.**
+> - **`POST /api/tags`:** 201, against 400, 401, 403, 409 and 429.
+> - **The proposed-tags routes:** 200, against 400, 403 and 404.
+> - **Rule 4d:** creating and proposing, against discarding (test_classification_d128.py:103-118 and 198-273; C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_created_value_limits.py:37-61).
+> - **The Tags page:** the 201, against the 400, 403, 409 and 429.
+>
+> **C4. Condition 4, committed with the FR ID: MET.**
+> - 5dcb6ff, d98ddf3 and 735226e are each `feat(FR-10): ...`, on `feat/FR-10-automatic-tagging`, and each carries its tests.
+> - 5dcb6ff's "(D-127)" is explained at decisions.md:10880-10887.
+> - The test counts in the commit messages match the files: 21 reactivation-scope cases and 35 created-value-limit cases.
+>
+> **C5. Condition 5, the auditor reports no gaps: not met.** This audit reports gaps.
+>
+> ### (d) The records against the code
+>
+> **D1. PARTIAL: the old rule is still asserted, with no pointer to D-128.**
+> - **docs/schema-v1.md:302-305** says a Topic outside the scheme "may be proposed only in the Topic dimension and requires user confirmation before it is created", and that "a Project or Process outside the scheme is 'discarded'". This contradicts the same file's 282-283 and classification.py:545-572.
+> - **D-104 and D-105 carry no dated note,** though D-128 departs from them:
+>   - D-104 at decisions.md:7096-7098: "allowing a new value in Topic only";
+>   - D-105 at 7159-7163 (the proposal record) and 7191-7197 (rule 4 as first built);
+>   - D-105 at 7453-7454: "A retired Project or Process tag stays retired".
+>
+>   D-128 names these departures (11060-11061) but gave dated notes only to D-106 and D-122. D-106's evening note (7805-7814) still reads "clauses 2 and 3 are met", with no forward pointer.
+> - **classification.py:786-788:** `reject_tag`'s docstring cites `apply_classification`'s `removed_topics`, which no longer exists. It also says only that a removed Topic is not proposed again; since D-128 a removed value is neither proposed, created nor reactivated, in any dimension (519-533).
+> - **C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_person_applied_tags.py:8:** "(only Topic may grow)".
+>
+> **D2. PARTIAL: the discard rule is stated as it was before the security review, which contradicts the code.**
+> - **The code:** rule 4d discards a value that is over the column, has more than `MAXIMUM_CREATED_TAG_WORDS` (3) words, or holds ";" or a Cc, Cf or Cs character (classification.py:612-632; constants.py:709-716).
+> - **These records say otherwise:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\ai-provider.md:481-482: "'One to three words' is the prompt's instruction, not a check." This is false.
+>   - decisions.md:11033-11035 repeats that sentence in D-128, contradicting D-128's own 11123-11128.
+>   - decisions.md:11071: "`discarded_suggestions` now holds only a value too long to be a Tag". This contradicts D-128's own 10963-10965.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\api-contract.md:1169-1171 says the same, contradicting the contract's own 1118-1120.
+>   - models.py:243-245 and 294-295 say the same.
+>   - apps\ai\classification.py:34-37: "unless a person removed it from the document or its name is too long for the column".
+>
+> **D3. PARTIAL: the `tagging` throttle's routes.**
+> - **The code:** `POST /api/tags` spends the `tagging` budget (views.py:1993-1995; constants.py:461-469). Tested at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_configuration.py:196 and test_fr10_tag_create.py:267-282.
+> - **The records:**
+>   - D-79's note says the scope is "on that route alone (`DocumentTagsView`)" and "The other tag routes stay unthrottled" (decisions.md:4961-4963 and 4972-4975).
+>   - The contract's rate table lists only `POST /api/documents/{id}/tags` (api-contract.md:1015).
+>
+> **D4. PARTIAL, minor: the delete dialog overstates.**
+> - frontend\src\constants.js:1214-1215 says: "A retired tag comes back if the AI or a person adds the same value to a document again."
+> - Through a document some role cannot read, the tag is linked and stays retired (classification.py:912-916).
+> - A person cannot re-apply a retired Project or Process value by its id.
+>
+> **D5. MET: accurate against the code.**
+> - **The contract:** api-contract.md:1108-1131 (the rule), 1150-1151 (the proposed-tags routes), 1291 (`POST /api/tags`) and 1305-1334 (retirement).
+> - **The schema:** schema-v1.md:223, 282-283 and 547-548.
+> - **The provider document:** ai-provider.md:441-447 and 514-526.
+> - **D-128 itself:** "The rule as built" (10953-10973), and its routes and migration paragraphs.
+> - **Docstrings:** `apply_classification`, `tag_scheme`, `_bring_into_use`, `confirm_proposed_tag`, taxonomy.py, the serializers and the views.
+> - **The front-end client comments.**
+> - **D-128's sweep table agrees with the run record:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\runs\2026-11-12\dev-sweep-haiku-d127\sweep\dev-sweep.md:65-69 and dev-sweep.json in the same folder.
+>   - 57 of 57 types were right.
+>   - D-106's rule gives a threshold of 0.80.
+>   - Five suggestions fell outside the scheme, all Topic and all at 0.90; no new Project or Process value was suggested.
+>
+> ### D-119's status
+>
+> **Unchanged: FR-10 stays INCOMPLETE by decision.**
+> - The summary, key points, sectioned summarising, grounding and the summary in the 200 are not built (D-104's dated note, decisions.md:7113-7126).
+> - The tag browser is FR-15's facets plus the Administrator's inventory (D-105; decisions.md:9684-9687).
+> - This branch builds none of them and withdraws none.
+> - It adds clauses declined by the user's decision: the controlled-taxonomy-growth clause, and UC-09 step 4 and E2 (D-128). Objective 05 clause 3 is recorded as not met by the shipped build.
+>
+> ### Invariant check
+>
+> - **1, scope before ranking and no disclosure: pass.**
+>   - Five starting states give an Employee byte-identical observations:
+>     - no Tag has the value;
+>     - an active grown Tag that only restricted material carries;
+>     - an active grown Tag that nothing carries;
+>     - a retired Tag carried by restricted material;
+>     - a retired Tag carried by nothing.
+>   - The observations compared are the classify reply, the detail, the browse, the confirm reply and the scheme shown in the prompt (test_fr10_d128_invariant1.py:145-218).
+>   - A value created from Administrator-only material is withheld from every Employee-readable document and from its prompt (224-252).
+>   - A retired value is reactivated only from a document every role reads (classification.py:868-925; test_fr10_reactivation_scope.py:151-170).
+>   - The residual on a document some role cannot read is stated (decisions.md:11112; classification.py:444-449): with today's two roles, its readers are Administrators.
+> - **4, server-side authorisation: pass.**
+>   - `POST /api/tags` is behind `manage_tags` as a permission class. The order is 401, 403, 429, then 400 and 409 (views.py:1971-2011).
+>   - The proposed-tags routes check the session, then the scoped 404, then `contribute_content`'s 403, then the body (views.py:1911-1946).
+> - **8, a failed AI step never discards the source: pass for this branch's code, with two older residuals recorded.**
+>   - Classification at upload still runs in its own savepoint.
+>   - The 500 that a NUL or lone surrogate in a tag value caused is gone (test_fr10_created_value_limits.py:37-61).
+>   - Older residual: a `DELETE /api/tags/{id}` racing an upload's classification can roll back the upload and delete its stored file, which breaks invariant 8. D-128 adds one more path by which a classification fetches such a tag.
+>   - Older residual: a NUL in a suggested department still answers 500 on the classify route.
+>   - Both are recorded in decisions.md:11148-11158.
+> - **9, atomic writes: pass.**
+>   - `apply_classification` runs in one transaction (classification.py:464-572).
+>   - documents 0012 renames the field over an explicit `db_column`, so no column changes, and it is reversible both ways (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0012_proposed_tags.py:30-83).
+>   - Tested in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_migration_0012_proposed_tags.py.
+> - **10, structured output or nothing: pass, unchanged.**
+> - **2, 3, 5, 6 and 7: not applicable.** No chunk, meeting scope or answer path changed.
+>
+> ### Set-level checks
+>
+> - No AI SDK import was added outside `apps/ai`, and no chunk is written.
+> - Constants live in apps\core\constants.py (461-469, 707 and 709-716). No threshold is written inline.
+> - **Observation:** the prompt's "one to three words" (apps\ai\classification.py:403-405) is written as a literal, where rule 5 interpolates `MAXIMUM_TAG_SUGGESTIONS` (401). A test pins the constant at 3 (test_classification_d128.py:201), so any drift fails loudly.
+> - Nothing is enforced only in the interface.
+> - Nothing is implemented twice: `_every_role_reads` and `tag_scheme` both go through `scoped_documents`.
+> - Nothing is misplaced.
+> - **Observation, not an FR-10 clause:** `POST /api/tags` applies none of rule 4d's character checks. An Administrator can add a vocabulary value holding ";" or a zero-width character, and every later prompt lists it. That is the concern of D-128's security finding 5, for an Administrator's own input.
+>
+> ### Gate impact
+>
+> - **Not an M6 requirement.** FR-10 is NIT3004 work, outside the M6 twelve, and M6 (1 November) has passed.
+> - **It touches two MUST paths:**
+>   - **FR-08:** classification inside the upload's transaction can now create or reactivate Tag rows. That includes the recorded race above.
+>   - **FR-15:** the facets and filters now show values the classifier created. This is tested.
+>
+>   Their regression evidence is the full pytest, which is not yet shown.
+> - **One MUST is open:** FR-13 is recorded INCOMPLETE until Stage 5 item 10's closing audit (decisions.md:9028-9038). This branch does not touch it.
+>
+> **Smallest fixes, in order:**
+> 1. Decide A5: record it in D-128 and on D-105:7238, or make a rejection durable. Add the reject-then-reclassify test.
+> 2. Correct the records, doc-only: D1 to D4.
+> 3. Run the full pytest, with its matrix line, and npm test, lint and build at 556cd37. Then open the pull request so CI runs.
+>
+> **One line:** INCOMPLETE.
+> - Every departure D-128 names is built as named, and FR-10's other rules hold, with one exception: a proposal a person rejects is created and applied by a later run at or above the threshold. That breaks the correction clause and is unrecorded (executed).
+> - Records in four places contradict the code.
+> - Neither suite is shown passing at 556cd37.
+> - FR-10 stays INCOMPLETE by decision, as D-119 recorded.
+>
+> ### Could not check
+>
+> - **The full pytest and the dual-role matrix verdict at 556cd37.** I did not run them, as instructed, and the coordinator's run had not reported.
+> - **npm test, lint and build at 556cd37, after the vitest bump.** Not run, to keep the audit read-only.
+> - **`makemigrations --check`.** Not run. By reading, models.py:293 matches 0012's end state (0012_proposed_tags.py:72-81).
+> - **CI.** There is no pull request.
+> - **The commits' "failed under a deliberate break" claims, and the security reviewer's own probes (decisions.md:11097-11147).** I read the regression tests, not the probes.
+> - **The 12 November diagnosis, seed and backfill on `kmp_anthropic` (decisions.md:10888-10926), and the user's answers (10928-10951).** Database state and the conversation are outside the repository.
+> - **Live interface behaviour.** I read the code and the tests only.
+> - **The sweep's provider calls.** The run record agrees with D-128, but the calls themselves were not re-run.
+
+**What changed because of the audit (13 November).**
+
+- **A5: a proposal a person rejected was created and applied by a later run (PARTIAL; the auditor
+  executed it).** It was put to the user as a tabbed question. He chose "Make a rejection stick"
+  (recommended) over recording it as accepted.
+  - **The record:** `DocumentAnalysis.rejected_tags`, added by `documents 0013`, one additive
+    `AddField` whose reverse drops the column. Each entry is `{dimension, value, confidence}`, the
+    machine's confidence kept beside the person's decision. It is not exposed.
+  - **The route:** `reject_proposed_tag` drops the proposal and records the rejection in one save.
+    Rejecting the same value again replaces the entry, with the latest confidence.
+  - **Rule 4b** skips a rejected value as it skips a removed one: in every dimension, at any
+    confidence, and before the in-scheme match. It reads only this document's row.
+    - A person may still apply the value themselves.
+    - No route clears a rejection.
+  - **The lock:** `apply_classification` now locks the analysis row (`select_for_update`), so a
+    rejection committed while a run is classifying is not overwritten by the run's copy. A run
+    takes the document row, then the analysis row; a person's decisions take only the analysis
+    row's lock, so there is no deadlock.
+  - **Tests: 46 new,** each failing under a deliberate break (13 breaks), every break reverted. 1,032
+    passed across the FR-10 files.
+    - `test_fr10_rejected_proposals.py`: 32, from both roles;
+    - `test_classification_rejected.py`: 11;
+    - `test_migration_0013_rejected_tags.py`: 3.
+  - **D-105's open item** ("a rejected proposed topic is proposed again by a later run") is closed by a
+    dated note there.
+- **D1 to D4, the records:**
+  - **D1:**
+    - dated notes on D-104 and D-105;
+    - D-106's note of 12 November extended to clause 3;
+    - `docs/schema-v1.md`'s paragraph on the JSON lists;
+    - `reject_tag`'s docstring;
+    - the module docstring of `test_fr10_person_applied_tags.py`.
+  - **D2: the discard rule is stated in full** in `docs/ai-provider.md`, this entry,
+    `docs/api-contract.md`, `apps/documents/models.py` and `apps/ai/classification.py`.
+  - **D3:** a dated note on D-79, and the contract's rate table, name `POST /api/tags` in the
+    `tagging` scope.
+  - **D4: the delete dialog** now says a retired tag "can come back later, if the AI suggests it again
+    or a person confirms or names it again, on a document everyone can read."
+- **C2, the suites at `556cd37`:**
+  - the full pytest: 3,570 passed, with the dual-role matrix at 39/39;
+  - the front-end suite, under vite 8.3.5 and vitest 5.0.5: 486 passed, lint clean, the build
+    succeeding.
+- **The audit's observation that `POST /api/tags` applies none of rule 4d's character checks: not
+  changed.** It is an Administrator's own input, and the security review's finding 5 concerned values
+  that uploaded content can create. Recorded as open.
+- **Still open, unchanged:**
+  - a NUL in a suggested department answers 500;
+  - the race between deleting a tag and an upload;
+  - the scheme's growth (all above).
+
+A focused re-audit of the fixes follows.

@@ -5,7 +5,9 @@ FR-10's provenance clause: tags "applied automatically are visually distinguishe
 applied by a person and either may be accepted or removed in a single action"; UC-09 A3: a person
 "adds one it did not"; Responses: "409 Conflict on a duplicate tag name within a dimension". The
 body is exactly one of ``{"tag_id"}``, an existing tag offered for this document, or
-``{"dimension": "Topic", "tag_name"}``, a new Topic (only Topic may grow).
+``{"dimension": "Topic", "tag_name"}``, a new Topic. Only this name form is Topic-only: since D-128
+the classifier creates values in Project, Process or Topic and an Administrator adds them
+(``POST /api/tags``), but a person names a new value here in Topic alone.
 
 **Nothing in an answer may tell "does not exist" from "you may not see it"** (invariant 1):
 

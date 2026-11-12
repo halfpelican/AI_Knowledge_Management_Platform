@@ -1212,7 +1212,7 @@ export const TEXT = {
   // a person confirming it as a suggestion, brings it back, and the last sentence
   // says so rather than promising it can never be applied again.
   tagDeleteBody:
-    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired tag comes back if the AI or a person adds the same value to a document again.',
+    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired tag can come back later, if the AI suggests it again or a person confirms or names it again, on a document everyone can read.',
   tagDeleteConfirmLabel: 'Delete tag',
   tagDeleting: 'Deleting…',
   tagDeleteCancel: 'Cancel',

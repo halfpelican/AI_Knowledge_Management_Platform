@@ -1957,8 +1957,10 @@ class DocumentProposedTagConfirmView(_ProposedTagView):
 
 
 class DocumentProposedTagRejectView(_ProposedTagView):
-    """``POST /api/documents/{id}/proposed-tags/reject`` — the proposal is dropped and nothing is
-    created (``reject_proposed_tag``, D-128)."""
+    """``POST /api/documents/{id}/proposed-tags/reject`` — the proposal is dropped, nothing is
+    created, and the rejection is recorded with the machine's confidence, so no later run proposes,
+    creates or links the value on this document (``reject_proposed_tag``, D-128; the requirements
+    audit of D-128, finding A5). The reply is unchanged: the record is not exposed."""
 
     def act(self, document, dimension, value):
         reject_proposed_tag(document, dimension, value)

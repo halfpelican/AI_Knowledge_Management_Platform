@@ -31,7 +31,11 @@ model:
   outcomes, while the ``machine_*`` columns take every run's values. A confirmed tag "is not
   altered by later reprocessing". A removed AI tag is kept, marked ``removed``, with the machine's
   confidence, and later reprocessing neither links it again nor alters it (D-105's dated note of
-  10 November 2026, night), nor, since D-128, creates or proposes it, in any dimension.
+  10 November 2026, night), nor, since D-128, creates, reactivates or proposes it, in any
+  dimension. A proposal a person rejects is kept the same way, in ``rejected_tags`` with the
+  machine's confidence, and later reprocessing never proposes, creates or links that value on the
+  document, even once it is in the scheme (``reject_proposed_tag``; the requirements audit of
+  D-128, finding A5).
 
 **The scheme is built for the document's own audience** (``tag_scheme``), so the prompt never
 lists a value that exists only on material some reader of this document may not see, and a
@@ -397,11 +401,16 @@ def apply_classification(
        clause), each suggestion by its dimension and normalised name, in this order:
 
        a. **Ignored**, and logged: a dimension outside REPOSITORY_TAG_DIMENSIONS, or an empty name.
-       b. **A person removed it.** This document holds a REMOVED link to the tag of that dimension
-          and name, in any of the three dimensions, so the suggestion is skipped: not linked, not
-          created, not proposed, not recorded (FR-10's correction clause, "not overwritten by
+       b. **A person removed or rejected it.** This document holds a REMOVED link to the tag of
+          that dimension and name, or its ``rejected_tags`` holds that dimension and name because a
+          person rejected it as a proposal (``reject_proposed_tag``). In any of the three
+          dimensions, at any confidence, and before the in-scheme match below, so a rejected value
+          is not linked even once it has entered the scheme (an Administrator added it, or another
+          document created it). The suggestion is skipped: not linked, not created, not
+          reactivated, not proposed, not recorded (FR-10's correction clause, "not overwritten by
           later reprocessing"; D-105's dated note of 10 November 2026, night, generalised from
-          Topic by D-128).
+          Topic by D-128; the rejection since the requirements audit of D-128, finding A5). Only
+          this document's own links and analysis row are read.
        c. **In the scheme** (``scheme.tags[dimension]``) and still an active Tag: ``_link_tag``,
           unchanged. A link a person applied or confirmed is left as it is; an unconfirmed AI link
           takes the new confidence and provisional flag; otherwise a link is created,
@@ -451,7 +460,10 @@ def apply_classification(
     carrier (``tag_scheme``), and it is never unset.
 
     The document row is locked first, as deletion and reprocess lock it, so a classification
-    cannot write links for a document a concurrent delete is removing.
+    cannot write links for a document a concurrent delete is removing. The analysis row is locked
+    next, as a person's decisions lock it, so a rejection committed meanwhile is neither missed by
+    rule 4b nor overwritten when this run saves the row. A person's decision takes only the
+    analysis lock, so the two orders cannot deadlock.
     """
     if classification.doc_type.value not in DOCUMENT_TYPES:
         raise InvalidClassification(
@@ -465,7 +477,10 @@ def apply_classification(
         locked = Document.objects.select_for_update().filter(pk=document.pk).first()
         if locked is None:
             raise NotOnThisDocument("The document no longer exists.")
-        analysis, _ = DocumentAnalysis.objects.get_or_create(
+        # The analysis row is locked too, as a person's decisions lock it (``_analysis_of``). This
+        # run saves every field of it, so without the lock a rejection committed between this read
+        # and that save would be overwritten by this stale copy, and would not stick (rule 4b).
+        analysis, _ = DocumentAnalysis.objects.select_for_update().get_or_create(
             document=locked, defaults={"classified_at": now}
         )
 
@@ -511,16 +526,18 @@ def apply_classification(
 
         # Rule 4: the tags (D-128).
         ignored = 0
-        # 4b: the (dimension, name) of every tag a person removed from this document, in any
-        # dimension. One still in the scheme would reach _link_tag, which leaves a removed link
-        # alone; one deactivated since, or withheld from the scheme, would otherwise be created,
-        # linked or proposed again, and a person has already said no to it here. Read from this
-        # document's own links only, so skipping it discloses nothing about other material.
-        removed = set(
+        # 4b: the (dimension, name) of every tag a person removed from this document, and of every
+        # proposal a person rejected on it (``rejected_tags``; the requirements audit of D-128,
+        # finding A5), in any dimension. A removed one still in the scheme would reach _link_tag,
+        # which leaves a removed link alone; any other would otherwise be created, linked or
+        # proposed again, a rejected one even once it has entered the scheme, and a person has
+        # already said no to it here. Read from this document's own links and its own analysis
+        # row only, so skipping it discloses nothing about other material (CLAUDE.md invariant 1).
+        declined = set(
             ContentTag.objects.filter(
                 source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk, removed=True,
             ).values_list("tag__dimension", "tag__tag_name")
-        )
+        ) | _rejected(analysis)
         # 4d: the values outside the scheme, each (dimension, name) at its highest confidence.
         outside: dict[tuple[str, str], float] = {}
         for suggestion in classification.tags:
@@ -529,8 +546,8 @@ def apply_classification(
                 ignored += 1  # 4a
                 continue
             key = (suggestion.dimension, name)
-            if key in removed:
-                continue  # 4b: removed by a person on this document
+            if key in declined:
+                continue  # 4b: removed or rejected by a person on this document
             if name in scheme.tags.get(suggestion.dimension, ()):
                 tag = Tag.objects.filter(
                     dimension=suggestion.dimension, tag_name=name, active=True
@@ -783,9 +800,10 @@ def reject_tag(document: Document, content_tag_id) -> None:
     decision, so the next classify route, reprocess or ``classify_documents`` run that suggested the
     value linked it again, ``applied_by="ai"``, through ``_link_tag``'s create branch: for an AI link
     until D-119 finding 3, and for a person's link until the requirements re-audit of ``5377e3a``
-    (D-105's dated note of 10 November 2026, night). ``_link_tag`` leaves a removed link alone, a
-    removed Topic is not proposed again (``apply_classification``'s ``removed_topics``), and no read
-    lists it. The ``Tag`` row, a vocabulary, stays.
+    (D-105's dated note of 10 November 2026, night). ``_link_tag`` leaves a removed link alone, and
+    since D-128 a later run neither proposes, creates nor reactivates a removed value, in any
+    dimension (``apply_classification`` rule 4b). No read lists a removed link. The ``Tag`` row, a
+    vocabulary, stays.
 
     A link already removed is not found here (``_link_on``), so removing it again is the same
     "not on this document" as an unknown id. A person puts it back by applying the tag
@@ -1027,13 +1045,35 @@ def confirm_proposed_tag(document: Document, dimension: str, value: str) -> Cont
 
 
 def reject_proposed_tag(document: Document, dimension: str, value: str) -> None:
-    """Decline a held value (D-128): it leaves ``proposed_tags`` and no Tag is created or changed.
-    Matched as ``confirm_proposed_tag`` matches it; ``NotOnThisDocument`` when it is not proposed."""
+    """A person rejects a held value (D-128), and the rejection sticks (the requirements audit of
+    D-128, finding A5: the lead's decision of 13 November 2026).
+
+    Matched as ``confirm_proposed_tag`` matches it, by dimension and normalised value;
+    ``NotOnThisDocument`` when it is not proposed, the route's 404. The proposal leaves
+    ``proposed_tags``, and an entry ``{"dimension", "value", "confidence"}`` joins ``rejected_tags``
+    with the machine's confidence from the proposal, so the machine assignment is kept alongside the
+    person's decision (FR-10's correction clause; UC-09 A3). An entry already there for that
+    dimension and value is replaced, so one entry is kept, carrying the latest proposal's
+    confidence. No Tag is created or changed and no link is made.
+
+    Every later classify, reprocess or ``classify_documents`` run skips the value on this document:
+    not proposed, created, reactivated or linked, at any confidence, in the scheme or out of it
+    (``apply_classification`` rule 4b). Until the fix a rejection recorded nothing, and the next run
+    that suggested the value created and linked it at or above the threshold, or proposed it again
+    below it. A person may still apply it themselves (``apply_tag``, by id or by the Topic name
+    form): the rejection blocks the machine, never a person.
+    """
     name = normalise_tag_name(value or "")
     with transaction.atomic():
         analysis = _analysis_of(document, for_update=True)
-        _proposal(analysis, dimension, name)
-        _drop_proposal(analysis, dimension, name)
+        proposal = _proposal(analysis, dimension, name)
+        analysis.rejected_tags = [
+            entry for entry in analysis.rejected_tags if not _is_entry(entry, dimension, name)
+        ] + [{"dimension": dimension, "value": name, "confidence": proposal.get("confidence")}]
+        analysis.proposed_tags = [
+            entry for entry in analysis.proposed_tags if not _is_entry(entry, dimension, name)
+        ]
+        analysis.save(update_fields=["proposed_tags", "rejected_tags"])
 
 
 # --- Lookups that answer "not on this document" ---------------------------------------------------
@@ -1069,8 +1109,8 @@ def _link_on(document: Document, content_tag_id) -> ContentTag:
     return link
 
 
-def _is_proposal(entry, dimension: str, name: str) -> bool:
-    """Whether a ``proposed_tags`` entry is the proposal of ``name`` in ``dimension`` (D-128)."""
+def _is_entry(entry, dimension: str, name: str) -> bool:
+    """Whether a ``proposed_tags`` or ``rejected_tags`` entry is ``name`` in ``dimension`` (D-128)."""
     return (
         isinstance(entry, dict)
         and dimension in REPOSITORY_TAG_DIMENSIONS
@@ -1079,9 +1119,19 @@ def _is_proposal(entry, dimension: str, name: str) -> bool:
     )
 
 
+def _rejected(analysis: DocumentAnalysis) -> set[tuple[str, str]]:
+    """The (dimension, value) of every proposal a person rejected on ``analysis``'s document, for
+    rule 4b (the requirements audit of D-128, finding A5). Only this document's own row is read."""
+    return {
+        (entry.get("dimension"), entry.get("value"))
+        for entry in analysis.rejected_tags
+        if isinstance(entry, dict)
+    }
+
+
 def _proposal(analysis: DocumentAnalysis, dimension: str, name: str) -> dict:
     for proposal in analysis.proposed_tags:
-        if _is_proposal(proposal, dimension, name):
+        if _is_entry(proposal, dimension, name):
             return proposal
     raise NotOnThisDocument("No such proposed tag on this document.")
 
@@ -1089,6 +1139,6 @@ def _proposal(analysis: DocumentAnalysis, dimension: str, name: str) -> dict:
 def _drop_proposal(analysis: DocumentAnalysis, dimension: str, name: str) -> None:
     analysis.proposed_tags = [
         proposal for proposal in analysis.proposed_tags
-        if not _is_proposal(proposal, dimension, name)
+        if not _is_entry(proposal, dimension, name)
     ]
     analysis.save(update_fields=["proposed_tags"])

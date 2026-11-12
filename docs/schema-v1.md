@@ -281,6 +281,7 @@ by nothing else.
 | `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
 | `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012`, D-128:** new values held for a person, in Project, Process and Topic, `[{"dimension", "value", "confidence"}]`, each an out-of-scheme suggestion below the confidence threshold, deduplicated by dimension and normalised value; replaced by each run. The column keeps its first name (`db_column`) so that 0012 changes no column. Until 12 November it held out-of-scheme Topics only, `[{"value", "confidence"}]`, and 0012 stamped those entries `"dimension": "Topic"` |
 | `discarded_suggestions` | jsonb | suggestions that cannot become a tag, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. Since D-128 that is only an out-of-scheme value the classifier may not create or propose: a normalised name longer than the column, of more than `MAXIMUM_CREATED_TAG_WORDS` (3) words, or carrying a control, format or lone-surrogate character (Unicode Cc, Cf, Cs) or ";", which is recorded with those characters replaced by U+FFFD so that the column accepts it. Until 12 November it held every out-of-scheme Project and Process suggestion |
+| `rejected_tags` | jsonb | **`documents 0013`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run |
 | `model` | text | the chat model that produced the run |
 | `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
@@ -299,10 +300,18 @@ by nothing else.
 - **An outcome per assignment** — `applied`, `provisional`, `discarded` or `confirmed` — so the
   record states how the rule disposed of each suggestion rather than leaving it to be inferred
   from which columns are null.
-- **Two JSON lists.** A Topic outside the scheme "may be proposed only in the Topic dimension
-  and requires user confirmation before it is created", so no `Tags` row may exist for it while
-  it waits; a Project or Process outside the scheme is "discarded", and the discard is kept as
-  evidence of that clause.
+- **Two JSON lists, then three.**
+  - **As first built (D-105),** a Topic outside the scheme "may be proposed only in the Topic
+    dimension and requires user confirmation before it is created", so no `Tags` row could exist
+    for it while it waited. A Project or Process outside the scheme was "discarded", and the
+    discard was kept as evidence of that clause.
+  - **Since D-128 (12 November 2026),** a value outside the scheme in any of the three dimensions
+    is created and applied at or above the confidence threshold, or held in `proposed_tags` below
+    it. `discarded_suggestions` keeps only what may not become a tag.
+  - **Since the audit of 13 November (D-128),** `rejected_tags` (`documents 0013`) keeps each
+    proposal a person rejected, with the machine's confidence. Later runs skip that value for that
+    document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,
+    and the machine assignment is retained alongside it".
 
 No column holds a summary or key points: FR-10's front-end clause names them, but
 summarisation is a separate AI operation not yet built (`apps/ai/base.py` reserves it for
@@ -545,7 +554,8 @@ plans it immediately after `documents 0007`, `documents 0009` (`ContentTags.remo
 only restricted material carries) immediately after 0010. 0011's backfill reads meetings'
 `visible_to_roles`, so it depends on `meetings 0002`, and a clean start now plans `meetings 0002`
 directly after `meetings 0001`, before `documents 0002`. `documents 0012` (D-128: the proposal list
-renamed `proposed_tags` on its unchanged column, its entries stamped with a dimension) follows 0011.
+renamed `proposed_tags` on its unchanged column, its entries stamped with a dimension) follows 0011,
+and `documents 0013` (`DocumentAnalysis.rejected_tags`) follows 0012.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

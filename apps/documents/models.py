@@ -234,18 +234,30 @@ class DocumentAnalysis(models.Model):
     - **An outcome per assignment**, from ASSIGNMENT_OUTCOMES: how
       apps/documents/classification.py disposed of each suggestion (applied, provisional,
       discarded, confirmed), stated rather than inferred from which columns are null.
-    - **Two JSON lists for suggestions that are not tags of the document.** Since D-128 (12
-      November 2026), which departs from FR-10's controlled taxonomy growth clause, a value outside
-      the scheme in Project, Process or Topic is created and applied when its confidence is at or
-      above the threshold, and HELD in ``proposed_tags`` when it is below, for a person to confirm
-      or reject: ``{"dimension", "value", "confidence"}`` per entry, deduplicated by dimension and
-      normalised value. The field was ``proposed_topics`` until ``documents 0012`` and keeps that
-      column (``db_column``), because no migration here renames a column. ``discarded_suggestions``
-      receives only a tag value that cannot become a Tag, a normalised name longer than the
-      column, whatever its confidence; nothing reads it as a tag and the API does not expose it.
-      Until D-128 it held every Project or Process value outside the scheme, which FR-10 says is
-      "discarded". A department outside the scheme is still discarded, through
-      ``department_outcome``.
+    - **Three JSON lists for suggestions that are not tags of the document**, each entry
+      ``{"dimension", "value", "confidence"}`` with the normalised value.
+      - ``proposed_tags``: since D-128 (12 November 2026), which departs from FR-10's controlled
+        taxonomy growth clause, a value outside the scheme in Project, Process or Topic is created
+        and applied when its confidence is at or above the threshold, and HELD here when it is
+        below, for a person to confirm or reject. Deduplicated by dimension and value, and replaced
+        by each run. The field was ``proposed_topics`` until ``documents 0012`` and keeps that column
+        (``db_column``), because no migration here renames a column.
+      - ``discarded_suggestions``: a value outside the scheme that may not become a Tag, whatever
+        its confidence (D-128's security review, finding 2): longer than the column, more than
+        MAXIMUM_CREATED_TAG_WORDS words, holding ";", or holding a control, format or surrogate
+        character (Cc, Cf, Cs), recorded with each such character as U+FFFD. Replaced by each run.
+        Nothing reads it as a tag and the API does not expose it. Until D-128 it held every Project
+        or Process value outside the scheme, which FR-10 says is "discarded". A department outside
+        the scheme is still discarded, through ``department_outcome``.
+      - ``rejected_tags`` (``documents 0013``; the requirements audit of D-128, finding A5, the
+        lead's decision of 13 November 2026): each proposal a person rejected on this document,
+        with the machine's confidence from the proposal, so the machine assignment is kept
+        alongside the person's decision (FR-10's correction clause; UC-09 A3). It is never replaced
+        by a run: every later run skips each value it holds, in every dimension, at any confidence
+        and before the in-scheme match (``apply_classification`` rule 4b), as it skips a value with
+        a removed link on this document. A person may still apply the value. Not exposed by the
+        API. Until then a rejection recorded nothing, and the next run created and linked the value
+        at or above the threshold, or proposed it again below it.
     - **Whose department it is** (``department_applied_by``, ``documents 0009``): FR-10's
       provenance clause tells a machine's value from a person's, and the outcome alone cannot
       when the machine's suggestion equals the department a person typed (D-119 finding 10).
@@ -292,8 +304,15 @@ class DocumentAnalysis(models.Model):
     # Renamed from ``proposed_topics`` by ``documents 0012``; the column keeps its name.
     proposed_tags = models.JSONField(default=list, blank=True, db_column="proposed_topics")
     # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run: since D-128 only a
-    # value whose normalised name is longer than a tag name may be.
+    # value outside the scheme that may not become a Tag. That is one longer than a tag name, with
+    # more than MAXIMUM_CREATED_TAG_WORDS words, holding ";", or holding a Cc, Cf or Cs character,
+    # recorded as U+FFFD (D-128's security review, finding 2; classification.py ``_may_become_a_tag``).
     discarded_suggestions = models.JSONField(default=list, blank=True)
+    # [{"dimension": ..., "value": <normalised name>, "confidence": <the proposal's>}]: each proposal a
+    # person rejected on this document, deduplicated by dimension and value and never replaced by a
+    # run, which skips each of them (rule 4b). ``documents 0013``; the requirements audit of D-128,
+    # finding A5. Not exposed by the API.
+    rejected_tags = models.JSONField(default=list, blank=True)
     model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
     input_truncated = models.BooleanField(default=False)
     # Set explicitly by each run, never auto_now: a confirmation edits the row without

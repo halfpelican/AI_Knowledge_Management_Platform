@@ -293,7 +293,9 @@ class ClassificationSerializer(serializers.Serializer):
     that department is, "user", "ai" or null (D-119 finding 10): an outcome of "applied" with
     "user" is a department a person gave that the machine's suggestion matched, which the
     interface must not label as the machine's. ``discarded_suggestions`` is not exposed: it is a
-    record for the Objective 05 measurement (D-106), not for the interface.
+    record for the Objective 05 measurement (D-106), not for the interface. Neither is
+    ``rejected_tags``, the proposals a person rejected (the requirements audit of D-128, finding
+    A5): it keeps the machine's assignment beside that decision for later runs to respect.
 
     ``proposed_tags`` (D-128; ``proposed_topics`` until then) lists the values outside the scheme
     the classifier held below the threshold, in Project, Process or Topic, each

@@ -478,10 +478,14 @@ scheme by the application (D-105), and a person confirms what is held.
     options and the prompts of documents they all read;
   - at most `MAXIMUM_TAG_SUGGESTIONS` (8) values per reply;
   - the ingestion throttle on upload, reprocess and classify;
-  - a name longer than the column is discarded. "One to three words" is the prompt's instruction,
-    not a check.
+  - a name is discarded when it is longer than the column, has more than three words, or holds ";"
+    or a control, format or lone-surrogate character. "One to three words" is rule 6 of the prompt,
+    and since D-128's security review it is also checked (`MAXIMUM_CREATED_TAG_WORDS`);
+  - a value a person removed from, or rejected on, a document is not applied to that document
+    again.
 - **What does not bound it:** an Administrator retiring the value. The classifier brings back a
-  retired value it suggests at or above the threshold (D-128's consequences).
+  retired value it suggests at or above the threshold, through a document every role can read
+  (D-128's consequences).
 
 **Truncation** (`classification_input`). The model reads the title and the first
 `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text — D-31's token —

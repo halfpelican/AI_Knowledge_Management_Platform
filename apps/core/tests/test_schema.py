@@ -96,7 +96,10 @@ SCHEMA_V1 = {
          "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
          "model", "input_truncated", "classified_at",
          # documents 0009, 10 November 2026 (FR-10, D-119 finding 10): whose department it is.
-         "department_applied_by"},
+         "department_applied_by",
+         # documents 0013, 13 November 2026 (FR-10; the requirements audit of D-128, finding A5):
+         # the proposals a person rejected, which no later run proposes, creates or links.
+         "rejected_tags"},
     ),
     # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
     # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
@@ -267,6 +270,9 @@ SECTION_5_PLAN = [
     # D-128, 12 November 2026: DocumentAnalysis.proposed_topics renamed proposed_tags, the column
     # kept, and each entry given its dimension; immediately after 0011, where its dependency puts it.
     ("documents", "0012_proposed_tags"),
+    # 13 November 2026 (the requirements audit of D-128, finding A5): DocumentAnalysis.rejected_tags,
+    # immediately after 0012, where its dependency puts it.
+    ("documents", "0013_rejected_tags"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),
