@@ -132,8 +132,9 @@ meeting; nothing relies on it being so.
 | `user_id` | UUID FK → Users | |
 
 A participation record, never an access rule (D-16). Since FR-16 it is also read to decide
-whose first name an action item's owner means (D-125); nothing about who may see a meeting
-consults it.
+whose name an action item's owner means: an extracted item's owner is always one of the meeting's
+attendees, and one whose role can read the meeting (D-125, its third note). Nothing about who may
+see a meeting consults it.
 
 ### MeetingSummaries — FR-16
 

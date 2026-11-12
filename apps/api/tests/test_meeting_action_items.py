@@ -17,7 +17,13 @@ from datetime import date
 import pytest
 
 from apps.accounts.models import RolePermission
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, CONTRIBUTE_CONTENT_PERMISSION, ROLE_NAMES
+from apps.api.serializers import OWNER_CANNOT_SEE_MEETING_MESSAGE
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    CONTRIBUTE_CONTENT_PERMISSION,
+    EMPLOYEE_ROLE_NAME,
+    ROLE_NAMES,
+)
 from apps.meetings.models import ActionItem, Meeting
 from apps.meetings.tests.summary_builders import TITLE, action, draft, summarised, transcript
 
@@ -113,6 +119,35 @@ def test_an_invalid_add_is_400_keyed_on_its_field_and_writes_nothing(session_cli
     assert not ActionItem.objects.filter(meeting=meeting).exists()
 
 
+def test_an_owner_who_cannot_see_the_meeting_is_refused_on_an_add(administrator_client, employee):
+    """The security review of 12 November (D-125's third note): an owner is given the item, its
+    passages and the meeting's title, so they must be able to read the meeting. An Employee cannot
+    read a meeting marked for Administrators only."""
+    meeting = a_meeting(visible_to_roles=[ADMINISTRATOR_ROLE_NAME])
+
+    response = administrator_client.post(
+        items_url(meeting.id), {"description": "Brief the board", "owner_id": str(employee.id)}, format="json"
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"owner_id": [OWNER_CANNOT_SEE_MEETING_MESSAGE]}
+    assert not ActionItem.objects.filter(meeting=meeting).exists()
+
+
+def test_an_owner_whose_role_reads_the_meeting_is_accepted_from_either_role(session_client, employee, administrator):
+    """Every user can read a meeting marked for both roles, and an Administrator reads one marked
+    for Employees only (D-66), so an Employee is never refused an owner: the refusal tells an
+    Employee nothing about anyone's role."""
+    for visible_to_roles in (ROLE_NAMES, [EMPLOYEE_ROLE_NAME]):
+        meeting = a_meeting(visible_to_roles=visible_to_roles)
+        for owner in (employee, administrator):
+            response = session_client.client.post(
+                items_url(meeting.id), {"description": "Brief the board", "owner_id": str(owner.id)}, format="json"
+            )
+            assert response.status_code == 201, (visible_to_roles, owner.role.role_name)
+            assert response.json()["owner"]["id"] == str(owner.id)
+
+
 def test_an_added_item_is_listed_after_the_extracted_ones(session_client, django_capture_on_commit_callbacks, stub_ai_service):
     stub_ai_service.summary = draft(action_items=[action("Extracted first"), action("Extracted second")])
     meeting = summarised(django_capture_on_commit_callbacks)
@@ -146,6 +181,18 @@ def test_an_edit_changes_only_the_fields_sent(session_client, employee, administ
     assert (body["owner_name"], body["due_text"], body["passages"]) == ("Erin", "next Friday", [1])
     # An extracted item a person changed is marked, which keeps it through a Regenerate.
     assert (body["origin"], body["edited"]) == ("ai", True)
+
+
+def test_an_owner_who_cannot_see_the_meeting_is_refused_on_an_edit(administrator_client, employee, administrator):
+    meeting = a_meeting(visible_to_roles=[ADMINISTRATOR_ROLE_NAME])
+    item = an_item(meeting, origin="ai", owner=administrator)
+    before = snapshot(item)
+
+    response = administrator_client.patch(item_url(meeting.id, item.id), {"owner_id": str(employee.id)}, format="json")
+
+    assert response.status_code == 400
+    assert response.json() == {"owner_id": [OWNER_CANNOT_SEE_MEETING_MESSAGE]}
+    assert snapshot(item) == before
 
 
 def test_null_clears_the_owner_and_the_date(session_client, employee):

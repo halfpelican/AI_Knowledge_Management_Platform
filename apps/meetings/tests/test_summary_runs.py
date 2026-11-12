@@ -226,6 +226,7 @@ def test_extracted_items_get_their_owner_their_date_and_the_words_as_said(
             action("Chase the fit-out quote", owner="the facilities team", due="before the move", passages=(1,)),
             action("Book the boardroom", owner="Wei", due="tomorrow", passages=(1,)),
             action("Circulate the minutes", passages=(1,)),
+            action("Draft the agenda", owner="Priya Raman", passages=(1,)),
         ]
     )
 
@@ -239,21 +240,25 @@ def test_extracted_items_get_their_owner_their_date_and_the_words_as_said(
         # A lone first name, and exactly one attendee has it: assigned. "Next Friday" from a
         # Tuesday is the Friday of the following week.
         ("Reconcile the September card statements", alex, "Alex", date(2026, 11, 20), "next Friday"),
-        # A full name one user has: assigned, though she did not attend.
-        ("Send the forecast to the board", wei, "Wei Zhang", date(2026, 11, 14), "by the 14th"),
+        # A full name one user has, who was not recorded as attending: unassigned since the
+        # security review of 12 November (apps/meetings/owners.py, D-125's third note).
+        ("Send the forecast to the board", None, "Wei Zhang", date(2026, 11, 14), "by the 14th"),
         # A team, and a deadline no rule fixes: unassigned and undated, both phrases kept.
         ("Chase the fit-out quote", None, "the facilities team", None, "before the move"),
         # A first name whose only holder did not attend: unassigned, not guessed.
         ("Book the boardroom", None, "Wei", date(2026, 11, 11), "tomorrow"),
         # Nobody named, nothing said: unassigned, undated, and blank rather than null.
         ("Circulate the minutes", None, "", None, ""),
+        # A full name one attendee has: assigned.
+        ("Draft the agenda", priya, "Priya Raman", None, ""),
     ]
     for position, item in enumerate(items):
         assert (item.origin, item.edited, item.position) == (ACTION_ITEM_FROM_AI, False, position)
         assert item.summary == summary
         assert item.passages == [1]
         assert item.meeting == meeting
-    assert summary.action_items_extracted == 5
+    assert summary.action_items_extracted == 6
+    assert wei.pk not in {item.owner_id for item in items}
     assert other_alex not in [item.owner for item in items]
 
 

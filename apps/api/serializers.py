@@ -33,6 +33,7 @@ from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import tag_options
 from apps.documents.models import ContentTag, Document, normalise_tag_name
 from apps.meetings.models import ActionItem, Meeting, MeetingSummary
+from apps.meetings.owners import can_read_meeting
 from apps.meetings.summaries import action_items_of, current_summary, latest_run, reported_state
 from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
 from apps.retrieval.query_log import FIRST_POSITION
@@ -546,6 +547,7 @@ class MeetingIngestSerializer(serializers.Serializer):
 # document.
 ACTION_ITEM_DESCRIPTION_MAX_LENGTH = 1000
 UNKNOWN_OWNER_MESSAGE = "No user has this id."
+OWNER_CANNOT_SEE_MEETING_MESSAGE = "This person cannot see this meeting, so its action items cannot be theirs."
 NOTHING_TO_CHANGE_MESSAGE = "Send at least one of description, owner_id and due_date."
 
 
@@ -597,9 +599,16 @@ class ActionItemWriteSerializer(serializers.Serializer):
     """The body of an add (POST, ``description`` required) or an edit (PATCH, any subset).
 
     ``owner_id`` is a user's id or null for unassigned; an id that names no user is a 400 keyed
-    on it. ``due_date`` is a date or null. A PATCH that sends none of the three is a 400: there
-    would be nothing to change, and the item would still be marked edited. The validated data
-    carries ``owner`` (the User or None) in place of ``owner_id``.
+    on it, and so is a user whose role cannot read the meeting (``context["meeting"]``). The
+    second is the security review of 12 November (D-125's third note): an owner is given the
+    item, its passages and the meeting's title, and the automatic match already refuses anyone
+    outside the meeting's scope (apps/meetings/owners.py). The refusal discloses nothing the
+    caller lacks: an Employee can reach only meetings every role can read (D-66), so only an
+    Administrator, who reads every user's role through FR-05, is ever refused.
+
+    ``due_date`` is a date or null. A PATCH that sends none of the three is a 400: there would be
+    nothing to change, and the item would still be marked edited. The validated data carries
+    ``owner`` (the User or None) in place of ``owner_id``.
     """
 
     description = serializers.CharField(
@@ -613,9 +622,11 @@ class ActionItemWriteSerializer(serializers.Serializer):
             raise serializers.ValidationError(NOTHING_TO_CHANGE_MESSAGE)
         if "owner_id" in attrs:
             owner_id = attrs.pop("owner_id")
-            owner = None if owner_id is None else User.objects.filter(pk=owner_id).first()
+            owner = None if owner_id is None else User.objects.select_related("role").filter(pk=owner_id).first()
             if owner_id is not None and owner is None:
                 raise serializers.ValidationError({"owner_id": [UNKNOWN_OWNER_MESSAGE]})
+            if owner is not None and not can_read_meeting(owner, self.context["meeting"]):
+                raise serializers.ValidationError({"owner_id": [OWNER_CANNOT_SEE_MEETING_MESSAGE]})
             attrs["owner"] = owner
         return attrs
 

@@ -1441,7 +1441,7 @@ inside the method after that lookup: `403` for a role without it (invariant 4).
 |---|---|---|---|---|
 | GET | `/api/meetings/{id}/summary` | session, meeting in scope | `200` the summary state (below) when nothing is pending; **`202`** with the same body while a run is `Processing` or queued for its automatic retry | `401`; `404`; **`422`** the same body plus `detail` when the transcript is under `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH` (200 words) |
 | POST | `/api/meetings/{id}/summary` | session + `contribute_content` | **`202`** the summary state, with `status` `"Processing"`. Starts a run, or reports the one already in flight for this meeting. No body is read | `401`; `404`; `403`; `422` too short, nothing started; `429` past the "ingestion" rate |
-| POST | `/api/meetings/{id}/action-items` | session + `contribute_content` | `201` the action item object. Body `{"description": "...", "owner_id": "uuid" or null, "due_date": "YYYY-MM-DD" or null}`; only `description` is required | `401`; `404`; `403`; `400 {"description": [...]}` blank, missing or over 1,000 characters; `400 {"owner_id": ["No user has this id."]}`; `400 {"due_date": [...]}` |
+| POST | `/api/meetings/{id}/action-items` | session + `contribute_content` | `201` the action item object. Body `{"description": "...", "owner_id": "uuid" or null, "due_date": "YYYY-MM-DD" or null}`; only `description` is required | `401`; `404`; `403`; `400 {"description": [...]}` blank, missing or over 1,000 characters; `400 {"owner_id": ["No user has this id."]}`; `400 {"owner_id": ["This person cannot see this meeting, so its action items cannot be theirs."]}` a user whose role cannot read the meeting (D-125's third note; only an Administrator can meet it, on a meeting marked for Administrators only, since every role reads what an Employee can reach, D-66); `400 {"due_date": [...]}` |
 | PATCH | `/api/meetings/{id}/action-items/{item_id}` | session + `contribute_content` | `200` the updated item. Body: any of `description`, `owner_id`, `due_date`; a field left out is unchanged, and `null` clears the owner or the date | `401`; `404` the meeting, or an `item_id` that is not one of this meeting's (the same body); `403`; `400` as above, and `400 {"non_field_errors": ["Send at least one of description, owner_id and due_date."]}` for an empty body |
 | DELETE | `/api/meetings/{id}/action-items/{item_id}` | session + `contribute_content` | `204`, no body | `401`; `404` as PATCH; `403` |
 
@@ -1513,10 +1513,12 @@ The action item object:
 ```
 
 - **`owner`** is the user the item is assigned to, or `null`: **unassigned**. The server assigns
-  an extracted item only where the transcript's name matches exactly one user: a full name against
-  the user list, or a lone first name against the meeting's recorded attendees. Anything else is
-  unassigned, "rather than attributed to the wrong person". `GET /api/users/directory` lists the
-  people a person may choose.
+  an extracted item only where the transcript's name, a full name or a lone first name, matches
+  exactly one of the meeting's recorded attendees, and that attendee's role can read the meeting.
+  Anything else is unassigned, "rather than attributed to the wrong person". Until the security
+  review of 12 November a full name was matched against every user (D-125's third note).
+  `GET /api/users/directory` lists the people a person may choose; one whose role cannot read the
+  meeting is refused with a `400` keyed on `owner_id`.
 - **`owner_name`** and **`due_text`** are the transcript's own words for the owner and the
   deadline ("the facilities team", "next Friday"), blank where it said nothing and on an item a
   person added. An edit does not change them.

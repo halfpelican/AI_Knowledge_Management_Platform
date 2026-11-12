@@ -1539,7 +1539,7 @@ class MeetingActionItemsView(APIView):
     def post(self, request, pk):
         meeting = scoped_meeting_or_404(request, pk)
         require_contribute_content(request, self)
-        serializer = ActionItemWriteSerializer(data=request.data)
+        serializer = ActionItemWriteSerializer(data=request.data, context={"meeting": meeting})
         serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
         item = add_action_item(meeting, **serializer.validated_data)
         return Response(ActionItemSerializer(item).data, status=status.HTTP_201_CREATED)
@@ -1562,7 +1562,7 @@ class MeetingActionItemView(APIView):
         meeting = scoped_meeting_or_404(request, pk)
         require_contribute_content(request, self)
         item = action_item_or_404(meeting, item_id)
-        serializer = ActionItemWriteSerializer(data=request.data, partial=True)
+        serializer = ActionItemWriteSerializer(data=request.data, partial=True, context={"meeting": meeting})
         serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
         item = edit_action_item(item, **serializer.validated_data)
         return Response(ActionItemSerializer(item).data)
