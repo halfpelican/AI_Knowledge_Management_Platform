@@ -613,10 +613,11 @@ def test_a_violation_message_quotes_no_value_from_the_reply(body):
 
 def test_a_violation_counts_an_unexpected_key_and_no_longer_names_it():
     """Pinned so it reads as known rather than assumed. The VALUES of a reply never reach a message
-    (above). Until 12 November the NAME of a key the schema does not have did, as it still does in
-    the statement and classification parsers, so a model that wrote content as a key name put that
-    much of it in the attempt log. The security review of that day found it; this parser now counts
-    such keys instead (D-125's third note). The other two parsers are FR-12's and FR-10's."""
+    (above). Until 12 November the NAME of a key the schema does not have did, so a model that wrote
+    content as a key name put that much of it in the attempt log. The security review of that day
+    found it; this parser now counts such keys instead (D-125's third note). FR-12's statement
+    parser and FR-10's classification parser named such keys too, and count them since 13 November
+    (apps/ai/tests/test_schema.py and test_classification_schema.py)."""
     with pytest.raises(SchemaViolation) as excinfo:
         parse(reply(follow_up="Carlton closes in March."))
 
