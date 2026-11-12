@@ -6400,6 +6400,63 @@ FR-01, FR-02, FR-04, FR-05, FR-06, FR-08, FR-09, FR-12, D-62, D-61 gap 13
 **Not covered**, and still open: S4's duplicated server logic (`views.py:1039` and `:1583`;
 `:673-682` and `:1062-1067`) and the "50 MB" literal at `views.py:151`.
 
+**Dated note, 12 November 2026: FR-12's "a search field available from every page" is tested
+across the routes (#95).** Step 6 left this clause at ⚠️ (`docs/stage-5-front-end-clauses.md`,
+FR-12 row 1) because no test walked the routes. #95 (`a668a08`) walks them, reusing the walk #91
+wrote for FR-13's "reachable from any page" (D-112's note of 12 November on the draws). It changed
+files under `frontend/tests` and `docs/stage-5-front-end-clauses.md`, and no file under
+`frontend/src`.
+
+- **What is tested,** in `frontend/tests/headerSearchField.test.jsx`:
+  - **The walk.** The whole application, signed in through `tests/fakeApi.js`, at every path in
+    `frontend/src/App.jsx`'s route table and at `/`, as an Employee and as an Administrator.
+    - At `a668a08` those paths are `/`, `/login`, `/register`, `/components`, `/dashboard`,
+      `/admin`, `/upload`, `/documents`, `/documents/:docId`, `/meetings`, `/meetings/:meetingId`,
+      `/search`, `/ask`, `/403`, `/admin/roles`, `/admin/knowledge-gaps` and `/admin/tags`.
+    - On the page each visit ends on, the banner landmark holds exactly one search landmark. That
+      landmark holds exactly one input labelled `TEXT.searchFieldLabel`, and the input is not
+      disabled.
+    - The field is looked for in the banner, so neither the search screen's own field nor the
+      component sheet's sample can stand in for it.
+  - **Using the field as an Administrator:** a term submitted from `/admin/tags` shows the Search
+    screen at `/search` for that term. As an Employee, from `/dashboard`, this was already tested
+    by step 6's `search.test.jsx` :: refuses one character from the header field with a message
+    naming the minimum, sends nothing, and searches at two.
+  - **The walk is held to the route table** by `askNavLink.test.jsx` :: has a case, as each role,
+    for every path in the route table of src/App.jsx. The cases are in
+    `frontend/tests/routeWalk.jsx`, which `askNavLink.test.jsx` and `headerSearchField.test.jsx`
+    import.
+- **The breaks** are named in `b0be6d9`'s message, as this entry requires. Every new test failed
+  under at least one of them.
+- **Not covered:**
+  - **Whether the field can be seen.** jsdom applies no stylesheet.
+  - **A visitor who never signed in.** One has no field, by design (`HeaderSearch` in
+    `frontend/src/App.jsx`). `logout.test.jsx` asserts there is no search landmark after logging
+    out.
+  - **A term submitted from every page.** A term is submitted from `/dashboard` as an Employee
+    and from `/admin/tags` as an Administrator.
+  - **An address no route matches.**
+  - **A disabled field, in the test that submits a term.** `fireEvent` sets a disabled input's
+    value all the same, so that test passes with the field disabled. The walk asserts `disabled`
+    itself.
+- **Records this overtakes, left as written.** Each records the clause as having no front-end
+  test on its day:
+  - **D-61's verdict:** its table row "Search field on every page | satisfied (no automated
+    test)", and its gap 9, for FR-12's search field.
+  - **D-62's list** of what the suite does not cover: "the search field on every page". D-62's
+    own note of 2 November had already said that `docs/stage-5-front-end-clauses.md` supersedes
+    that list.
+  - **D-90's verdict:** row 12's "Nothing front-end tests the search field on every page…", and
+    finding S1, for FR-12's search field.
+    - Step 6 tested the other items in row 12's list: the grouping, the two-character minimum,
+      the Search screen and the partial-match label.
+    - The rest of what S1 names is tracked in `docs/stage-5-front-end-clauses.md`.
+  - **`docs/demonstration-script.md`'s answer to "What is not verified by any test?"**, derived
+    from `frontend/tests` on 2 November: its item "Search, its field and its results (the
+    two-character minimum, the grouping, the partial-match label)". Step 6 tested the field's
+    two-character minimum, the grouping and the partial-match label, and #95 the field on every
+    page. The script is not edited by this note.
+
 ## D-95 · NFR-08's miss is a local-model baseline, not a dropped NFR
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** NFR-08, NFR-09, D-35,
