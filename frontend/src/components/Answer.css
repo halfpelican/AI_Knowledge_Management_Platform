@@ -80,6 +80,22 @@
   word-break: break-word;
 }
 
+/* A passage of a meeting's AI-generated summary (`ai_generated`, FR-16): the
+   boundary AI content has everywhere, from the one token (NFR-15, AiMark.css), a
+   second cue beside the words above it and never the only one. In this file,
+   after the rule it modifies, so the order two stylesheets load in cannot undo it. */
+.citation-panel__passage--ai {
+  border-style: var(--border-style-ai);
+}
+
+/* The mark and the sentence saying where the passage is from. Muted, at the
+   mark's own size (muted on the alt surface 6.87:1). */
+.citation-panel__provenance {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .answer-sources {
   margin-bottom: var(--space-5);
 }

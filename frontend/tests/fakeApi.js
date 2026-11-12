@@ -212,6 +212,106 @@ export const PROVENANCE_REMOVED_MESSAGE = serverText('PROVENANCE_REMOVED_MESSAGE
  */
 export const TOPIC_ALREADY_OFFERED_MESSAGE = serverText('TOPIC_ALREADY_OFFERED_MESSAGE', ['apps', 'api', 'views.py'])
 
+/**
+ * FR-16's 422 on both summary routes, the `detail` beside the summary state: the
+ * transcript is too short to summarise. Defined in apps/api/views.py.
+ */
+export const SUMMARY_TOO_SHORT_MESSAGE = serverText('SUMMARY_TOO_SHORT_MESSAGE', ['apps', 'api', 'views.py'])
+
+/* ---- FR-16: the summary state, in the contract's shapes ------------------- */
+
+/**
+ * The summary state both summary routes return (docs/api-contract.md, "NIT3004 —
+ * FR-16"). As given, it is a meeting nobody has asked a summary of, read by a role
+ * that may not write: `status` null, no summary, no items, `can_edit` false. That
+ * is what a suite about something else on the meeting page serves, so the page's
+ * own read is answered and nothing FR-16 offers is on screen.
+ *
+ * @param {object} [overrides]
+ */
+export function summaryState(overrides = {}) {
+  return { status: null, queued_for_retry: false, summary: null, action_items: [], can_edit: false, ...overrides }
+}
+
+/**
+ * A Ready summary, the contract's own example: two narrative sentences, one
+ * decision and one highlight, each naming passages whose text `passages` holds.
+ *
+ * @param {object} [overrides]
+ */
+export function readySummary(overrides = {}) {
+  return {
+    summary_id: 'summary-1',
+    summary_text: 'The team reviewed the first quarter. It froze discretionary travel until January.',
+    narrative: [
+      { text: 'The team reviewed the first quarter.', passages: [1] },
+      { text: 'It froze discretionary travel until January.', passages: [1, 2] },
+    ],
+    decisions: [{ text: 'Discretionary travel is frozen until 31 January.', passages: [2] }],
+    highlights: [{ text: 'Travel was twice its budget.', passages: [1] }],
+    passages: {
+      1: 'Ravi: Thanks, everyone. This is the first-quarter review, and travel came in at twice its budget.',
+      2: 'Ravi: So the decision is that discretionary travel is frozen until the thirty-first of January.',
+    },
+    model: 'claude-haiku-5-5',
+    generated_at: '2026-11-11T14:02:11+11:00',
+    input_truncated: false,
+    passages_sent: 2,
+    passages_total: 2,
+    action_items_extracted: 1,
+    ...overrides,
+  }
+}
+
+/**
+ * An action item the run extracted, the contract's own example: an owner the
+ * server matched, the date it worked out, and the transcript's words for both.
+ *
+ * @param {object} [overrides]
+ */
+export function actionItem(overrides = {}) {
+  return {
+    action_item_id: 'item-1',
+    description: 'Reconcile the September card statements',
+    owner: { id: 'user-alex', name: 'Alex Morgan' },
+    owner_name: 'Alex',
+    due_date: '2026-10-23',
+    due_text: 'next Friday',
+    passages: [2],
+    origin: 'ai',
+    edited: false,
+    created_at: '2026-11-11T14:02:11+11:00',
+    updated_at: '2026-11-11T14:02:11+11:00',
+    ...overrides,
+  }
+}
+
+/**
+ * A summary route's answer for `state`, under the code the server gives it
+ * (apps/api/views.py `summary_response`): 202 while the latest run is "Processing"
+ * or "Unavailable" and queued for its retry, 200 for every settled state. So a
+ * test cannot serve a state under a code the server would never send with it.
+ *
+ * @param {object} state a summary state
+ * @returns {{status: number, body: object}}
+ */
+export function summaryRoute(state) {
+  const pending =
+    state.status === 'Processing' || (state.status === 'Unavailable' && state.queued_for_retry === true)
+  return { status: pending ? 202 : 200, body: state }
+}
+
+/**
+ * FR-16's 422: the same summary state with the server's `detail`, for a transcript
+ * too short to summarise.
+ *
+ * @param {object} state a summary state
+ * @returns {{status: number, body: object}}
+ */
+export function summaryTooShortRoute(state) {
+  return { status: 422, body: { ...state, detail: SUMMARY_TOO_SHORT_MESSAGE } }
+}
+
 export const CONVERSATION = {
   conversation_id: '6f1c2a54-0000-4000-8000-000000000001',
   title: 'New conversation',

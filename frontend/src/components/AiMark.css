@@ -1,0 +1,28 @@
+/* NFR-15: one convention for AI-generated content, on every surface. Tokens only.
+   The words are the mark; the boundary is a second cue beside them, never the
+   only one (SC 1.4.1). See AiMark.jsx. */
+
+/* The words, "Suggested by AI" or "Added by a person": muted, and above the
+   body-text ratio on both surfaces they sit on (muted on surface 7.56:1, on the
+   alt surface 6.87:1). The same two declarations FR-10's `.tag__provenance` has. */
+.ai-mark,
+.person-mark {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* The boundary of a block of content, by who wrote it: dashed for the AI's, solid
+   for a person's, as FR-10's tags are. Each class draws the whole border, so it
+   goes on an element no other rule gives a border to; nothing here depends on the
+   order two stylesheets load in. A block that has a border of its own takes the
+   style from the token in its own modifier instead (`.tag--ai`,
+   `.citation-panel__passage--ai`). */
+.ai-content {
+  border: var(--border-width) var(--border-style-ai) var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
+
+.person-content {
+  border: var(--border-width) solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+}
