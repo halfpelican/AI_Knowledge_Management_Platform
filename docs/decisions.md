@@ -3621,6 +3621,30 @@ laptop's NPU and there is no budget for Claude, fell with D-113. The laptop with
 valid host. The three open points above stay open, and D-114 restates them. This entry's M6 alpha
 decision is unchanged.
 
+**Dated note, 12 November 2026: `npm audit` finds nothing, which closes the last "Not covered"
+point.** The five advisories were five development packages: `vite`, `vitest` with its
+`@vitest/mocker`, and two that jsdom and PostCSS bring in, `undici` and `source-map-js`. All
+seventeen advisories behind them were published by 27 October, and the lockfile had not changed
+since 28 September, so these are the same five that were counted on 1 November.
+
+- **No flagged code reached the alpha.** None of the five sits under the three runtime
+  dependencies (`react`, `react-dom`, `react-router-dom`): `npm audit --omit=dev` finds nothing on
+  the old lockfile either. The alpha serves the built `frontend/dist`. The Vite and Vitest
+  advisories concern their development servers, three of them only on Windows, where development
+  runs. `source-map-js` is build tooling. `undici` is jsdom's HTTP client, and the suite makes no
+  requests through it, since it stubs `fetch` and `XMLHttpRequest` (D-62).
+- **What changed.** In `frontend/package.json`, `vite` 8.3.0 → 8.3.5 and `vitest` 5.0.2 → 5.0.5,
+  still exact pins (`frontend/.npmrc` sets `save-exact=true`). In the lockfile only, `undici`
+  8.11.2 → 8.12.3 and `source-map-js` 1.2.1 → 1.2.2. All four are patch releases. D-62 lists the
+  versions of 28 September.
+- **Not the versions `npm audit fix --force` offers.** It would install vite 8.3.8, published the
+  day before, and vitest 5.1.0, a minor release of 2 November. The versions taken are the newest
+  that clear every advisory and had been published for at least two weeks. The install ran with
+  `--before=2026-10-29`, so nothing newer entered the lockfile; the newest version in it is
+  `magic-string` 1.4.5, published 27 October.
+- **Checked on Node 24.16.0.** `npm audit` finds nothing. Lint and build pass. `npm test` passes
+  470 tests in 42 files, on two runs, the same count as on the old versions.
+
 ## D-65 · Every query parameter passes a DRF serializer; D-54 is settled
 
 **Status:** Settled by the user · **Date:** 2026-10-05 · **Settles:** D-54 · **Stage:** 5
