@@ -752,6 +752,53 @@ def test_on_voyage_a_follow_up_whose_composed_best_match_is_readable_is_kept(voy
     assert [query_text(H_OPENER)] not in service.embed_calls
 
 
+M_OPENER = "How many home working days do staff get each week?"  # a readable opener, answered
+M_SWITCH = "And what gets decided at the chair's succession review?"  # a new topic, restricted
+
+
+@pytest.mark.parametrize("composed", ["readable first", "nothing admitted"])
+def test_on_voyage_a_restricted_question_asked_mid_thread_is_left_out(voyage_corpus, employee, composed):
+    """The security review of 12 November 2026, F1. After a readable turn, an explicit question about
+    restricted material: the composed string ranks the readable chunk first, or admits nothing,
+    and alone it would be kept. Its own wording's top admitted passage is restricted, as P02's was,
+    and that wording is what the Administrator would read, so the row is left out."""
+    service = voyage_corpus["service"]
+    service.vectors.update({
+        M_SWITCH: at_cosine(IN_THE_BAND, axis=0, towards=5),
+        joined(M_OPENER, M_SWITCH): (at_cosine(WELL_ABOVE, axis=1, towards=6) if composed == "readable first"
+                                     else unit(NOWHERE)),
+    })
+    thread = thread_of(employee)
+    ask(employee, M_OPENER, at=hours_ago(3), answered=True, conversation=thread)
+    switch = ask(employee, M_SWITCH, at=hours_ago(2), conversation=thread)
+
+    cycle = run_cycle()
+
+    assert not in_log(switch)
+    assert cycle.queries_considered == 0 and KnowledgeGap.objects.count() == 0
+    # Both strings were decided: the composed one, then the follow-up's own wording.
+    assert service.embed_calls == [[query_text(joined(M_OPENER, M_SWITCH))], [query_text(M_SWITCH)]]
+
+
+def test_under_rank_one_a_follow_up_whose_own_wording_ranks_a_restricted_passage_first_is_left_out(
+    corpus, employee
+):
+    """No row is kept that deciding on the question's own wording alone, as before D-127, would have
+    left out: under rank-one too, where the composed string here ranks the readable chunk first."""
+    service = corpus["service"]
+    service.vectors.update({
+        M_SWITCH: at_cosine(0.25, axis=0, towards=5),
+        joined(Q_READABLE, M_SWITCH): at_cosine(0.9, axis=1, towards=0),
+    })
+    thread = thread_of(employee)
+    ask(employee, Q_READABLE, at=hours_ago(3), answered=True, conversation=thread)
+    switch = ask(employee, M_SWITCH, at=hours_ago(2), conversation=thread)
+
+    run_cycle()
+
+    assert not in_log(switch)
+
+
 def test_under_rank_one_a_follow_up_is_decided_on_the_composed_string_too(corpus, employee):
     """D-127 is not voyage-4's alone. On a model the map does not list, the follow-up's own
     wording has a readable best match and the composed string a restricted one, so it is left
@@ -829,7 +876,8 @@ def contractor(db):
 
 def test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out(voyage_corpus, contractor):
     """"The exclusion fails closed." From D-126 until 12 November 2026 that was untrue on voyage-4
-    for a question admitting nothing: it was kept before the role was read."""
+    for a question admitting nothing: it was kept before the role was read. Its questions are not
+    embedded either, so they cost no provider call and cannot fail the cycle."""
     rows = [
         ask(contractor, V_RESTRICTED_BELOW, at=hours_ago(3)),  # nothing admitted
         ask(contractor, V_READABLE_ABOVE, at=hours_ago(2)),  # a passage Employees read
@@ -840,6 +888,7 @@ def test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out(voyage_c
 
     assert not any(in_log(row) for row in rows)
     assert cycle.queries_considered == 0 and KnowledgeGap.objects.count() == 0
+    assert voyage_corpus["service"].embed_calls == []
 
 
 def test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out(corpus, contractor):
@@ -851,20 +900,36 @@ def test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out(cor
     run_cycle()
 
     assert not any(in_log(row) for row in rows)
+    assert corpus["service"].embed_calls == []  # left out before anything was embedded
 
 
 def test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either(
     designed, contractor, employee
 ):
     """No chunk of the question's embedding model exists. For a role that reads something that
-    is a gap. For one that reads nothing the row is still left out."""
-    designed({"Is there a gym on site?": unit(3), "Is there a pool on site?": unit(4)})
+    is a gap. For one that reads nothing the row is still left out, before it is embedded."""
+    service = designed({"Is there a gym on site?": unit(3), "Is there a pool on site?": unit(4)})
     kept = ask(employee, "Is there a gym on site?", at=hours_ago(2))
     left_out = ask(contractor, "Is there a pool on site?", at=hours_ago(1))
 
     run_cycle()
 
     assert in_log(kept) and not in_log(left_out)
+    assert service.embed_calls == [[query_text("Is there a gym on site?")]]
+
+
+def test_the_decision_itself_leaves_out_a_role_that_reads_nothing(voyage_corpus, contractor):
+    """``run_cycle`` skips such a role before embedding anything, so the cycle tests above never
+    reach the decision with one. ``_question_explained_by_permissions`` is also called directly, by
+    the development checks, and it fails closed on its own: under either rule, whatever is ranked,
+    and with no passage of the model at all."""
+    row = ask(contractor, V_RESTRICTED_BELOW, at=hours_ago(1))
+    scope = gaps._AdministratorScope()
+    for vector, model in ((at_cosine(JUST_BELOW, axis=0, towards=5), VOYAGE),  # threshold-first, nothing admitted
+                          (unit(1), VOYAGE),  # threshold-first, a readable passage admitted
+                          (unit(1), STUB_EMBEDDING_MODEL)):  # rank-one, and no passage of the model
+        embedding = EmbeddingResult(vectors=[vector], model=model, dimension=settings.EMBEDDING_DIMENSION)
+        assert gaps._question_explained_by_permissions(row, embedding, scope) is True
 
 
 # --- The grouping (D-109) --------------------------------------------------------------------

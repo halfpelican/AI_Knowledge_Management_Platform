@@ -23,14 +23,21 @@ re-scan safe in any case. Nothing here depends on two timestamps differing: Wind
 
 **2. The exclusion (D-108).** For a question, the asker's role is read from the user row now. A
 role missing from ``EFFECTIVE_ROLES`` reads nothing, and its questions are left out before
-anything is ranked. Otherwise the string retrieval ranked when the row was asked is embedded
-with the query prefix, through ``embed_question``, the pipeline's one embedding path (D-127):
+anything is embedded. Otherwise each string below is embedded with the query prefix, through
+``embed_question``, the pipeline's one embedding path, and decided in turn (D-127):
 
-- for a one-off question, and a thread's first turn, that string is the question;
-- for a follow-up it is the question after its earlier turns, as ``conversation.compose`` joins
-  them. A follow-up's bare wording is not what retrieval ranked. On voyage-4 it often admits
-  nothing (two of the three threads D-112's HTTP check measured), which threshold-first would
-  read as "nobody could have been answered".
+- **the string retrieval ranked when the row was asked.** For a one-off question, and a thread's
+  first turn, that is the question. For a follow-up it is the question after its earlier turns,
+  as ``conversation.compose`` joins them. A follow-up's bare wording is not what retrieval
+  ranked: on voyage-4 it often admits nothing (two of the three threads D-112's HTTP check
+  measured), which threshold-first would read as "nobody could have been answered";
+- **for a follow-up, its own wording too:** the words the Administrator would read, and the
+  vector it would be grouped by. A question about restricted material asked after a turn about
+  something else can rank readable material first in the composed string (the security review of
+  12 November 2026, F1).
+
+A row is left out when either string's deciding passage is one the asker cannot read. So no row
+is kept that deciding on the question's own wording alone, as before D-127, would have left out.
 
 It is ranked over ``candidate_chunks(role_name="Administrator")``,
 which since D-66 is every stamped chunk, through the one scoping helper, so no new unscoped query
@@ -88,9 +95,10 @@ embedded in "one batched call per cycle". A question has to be embedded before D
 whether it remains, and D-108 says it is embedded "as retrieval embeds it", so each row is
 embedded on its own through ``embed_question``: one call per row, with that function's retries and
 its usability checks, and exactly the vector retrieval would compute for the same text. A one-off
-question's vector is then reused for its grouping. A follow-up that is kept is embedded a second
-time, on its own wording, because the subject and the grouping stay on the question as asked
-(D-109, D-127); one that is left out is embedded once. A search is embedded only once it has survived
+question's vector is then reused for its grouping. A follow-up whose composed string leaves it
+out is embedded once. Otherwise it is embedded a second time, on its own wording, which is
+decided too and, if the row is kept, used for its subject and grouping (D-109, D-127). A question
+from a role that reads nothing is not embedded at all. A search is embedded only once it has survived
 its recount. Whether FLM returns the same vector for a text in a batch as alone has not been
 measured, so batching could have made the exclusion rank a different vector from retrieval's.
 """
@@ -217,16 +225,25 @@ def run_cycle(*, triggered_by=None) -> KnowledgeGapCycle:
         scope = _AdministratorScope()
         items: list[_Item] = []
         for row in queries:
-            # D-127: the exclusion is decided on the string retrieval ranked when the row was
-            # asked. For a one-off that is the question. For a follow-up it is the question after
-            # its earlier turns, joined as the pipeline joined them.
+            # A role that reads nothing is left out before anything is embedded (D-107's note of
+            # 12 November 2026): its rows cost no provider call, and cannot fail the cycle.
+            if not effective_roles(row.user.role.role_name):
+                continue  # left out, and recorded nowhere (D-108)
+            # D-127: decided on the string retrieval ranked when the row was asked. For a one-off
+            # that is the question. For a follow-up it is the question after its earlier turns,
+            # joined as the pipeline joined them.
             ranked_text = compose(row.question, prior_questions_before(row)).for_retrieval
             deciding = embed_question(ranked_text)
             if _question_explained_by_permissions(row, deciding, scope):
                 continue  # left out, and recorded nowhere (D-108)
-            # The subject and the grouping stay on the wording as asked (D-109), so a follow-up
-            # that is kept is embedded again, alone.
-            embedding = deciding if ranked_text == row.question else embed_question(row.question)
+            if ranked_text == row.question:
+                embedding = deciding
+            else:
+                # A follow-up's own wording is decided too: it is what the Administrator would
+                # read, and the vector it is grouped by (D-109). Left out if either says so.
+                embedding = embed_question(row.question)
+                if _question_explained_by_permissions(row, embedding, scope):
+                    continue  # left out, and recorded nowhere (D-108, D-127)
             items.append(
                 _Item(
                     timestamp=row.answered_at,
@@ -300,8 +317,9 @@ def _question_explained_by_permissions(
     """D-108's rule for a question: True when the deciding passage over the Administrator's
     scope is one the asker's role cannot read.
 
-    ``embedding`` is of the string retrieval ranked for the row (D-127): the question, or for a
-    follow-up the question after its earlier turns.
+    ``embedding`` is of the string retrieval ranked for the row, the question or, for a follow-up,
+    the question after its earlier turns, or of a follow-up's own wording. A follow-up is decided
+    on both, and left out if either is explained by permissions (D-127).
 
     Which passage decides is the embedding model's rule (``exclusion_rule``, D-126):
     - rank-one: the top-ranked passage, whether or not it clears the threshold (D-108's note of
