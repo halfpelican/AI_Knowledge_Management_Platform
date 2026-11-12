@@ -1,0 +1,268 @@
+{
+  "name": "Objective 04 reference: summaries, decisions and action items, prepared by people",
+  "status": "TEMPLATE, NOT STARTED. Complete every block by hand (README.md), then set status to FROZEN with the date and both names.",
+  "prepared_by": [],
+  "checked_by": [],
+  "frozen_on": null,
+  "transcripts": [
+    {
+      "id": "O01",
+      "title": "Finance Quarterly Budget Review",
+      "meeting_date": "2026-10-14",
+      "attendees": [
+        "Ravi Sharma",
+        "Hannah Lee",
+        "Alex Morgan",
+        "Priya Raman"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O01-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O02",
+      "title": "Service Desk Improvement Meeting",
+      "meeting_date": "2026-10-12",
+      "attendees": [
+        "Lena Kowalski",
+        "Marcus Chen",
+        "Alex Petrov",
+        "Alex Morgan"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O02-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O03",
+      "title": "Level Four Fit-out Check-in",
+      "meeting_date": "2026-10-22",
+      "attendees": [
+        "Owen Fletcher",
+        "Priya Raman",
+        "Grace Nguyen"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O03-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O04",
+      "title": "Graduate Recruitment Planning",
+      "meeting_date": "2026-10-20",
+      "attendees": [
+        "Grace Nguyen",
+        "Nadia Haddad",
+        "Jamal Haddad",
+        "Sofia Marchetti"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O04-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O05",
+      "title": "Customer Complaint Escalation Review",
+      "meeting_date": "2026-10-29",
+      "attendees": [
+        "Chloe Martin",
+        "Ben Carter",
+        "Priya Raman"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O05-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O06",
+      "title": "Quarterly All-Staff Briefing",
+      "meeting_date": "2026-11-02",
+      "attendees": [
+        "Priya Raman",
+        "Ravi Sharma",
+        "Sofia Marchetti",
+        "Daniel Brooks"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O06-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O07",
+      "title": "Project Atlas Steering Committee",
+      "meeting_date": "2026-10-28",
+      "attendees": [
+        "Sofia Marchetti",
+        "Jamal Haddad",
+        "Wei Zhang",
+        "Ravi Sharma",
+        "Aisha Rahman"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O07-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O08",
+      "title": "Health and Safety Committee",
+      "meeting_date": "2026-11-05",
+      "attendees": [
+        "Grace Nguyen",
+        "Owen Fletcher",
+        "Tomas Okafor",
+        "Hannah Lee"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O08-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O09",
+      "title": "Newsletter Content Planning",
+      "meeting_date": "2026-11-09",
+      "attendees": [
+        "Daniel Brooks",
+        "Aisha Rahman",
+        "Chloe Martin"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O09-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "O10",
+      "title": "Customer Success Retrospective Q3",
+      "meeting_date": "2026-11-03",
+      "attendees": [
+        "Ben Carter",
+        "Chloe Martin",
+        "Marcus Chen",
+        "Alex Morgan",
+        "Alex Petrov"
+      ],
+      "summary": "",
+      "decisions": [],
+      "highlights": [],
+      "action_items": [
+        {
+          "ref": "O10-A1",
+          "description": "",
+          "owner_as_said": "",
+          "expected_owner": "",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": ""
+        }
+      ],
+      "notes": ""
+    }
+  ]
+}

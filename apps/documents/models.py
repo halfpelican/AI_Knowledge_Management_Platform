@@ -134,6 +134,11 @@ class ContentChunk(models.Model):
     visible_to_roles = ArrayField(
         models.CharField(max_length=VOCABULARY_MAX_LENGTH), default=list, blank=True
     )
+    # True only for a passage of a meeting's AI-generated summary (FR-16, UC-04; D-125): it shares
+    # the meeting's source_type and source_id, so D-47's cascade and the meeting's deletion cover
+    # it, and this flag is how a citation or a search snippet says it is AI content (NFR-15) and
+    # how a Regenerate replaces it. Every transcript and document chunk is False.
+    ai_generated = models.BooleanField(default=False)
 
     class Meta:
         db_table = "content_chunks"

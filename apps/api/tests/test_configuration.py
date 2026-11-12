@@ -198,6 +198,16 @@ THROTTLED_ROUTES = {
     # same budget.
     ("transcription-list", "POST"): "transcription",
     ("transcription-status", "GET"): "transcription",
+    # FR-16 (D-125): Generate or Regenerate Summary is one provider call, like FR-10's classify, so
+    # it shares the ingestion budget. Its GET is not throttled, because the page polls it while a
+    # run is in flight.
+    ("meeting-summary", "POST"): "ingestion",
+    # The action-item writes, in a budget of their own: the security review of 12 November found
+    # one account could add rows without end, and every reader of the meeting loads them all
+    # (D-125's third note).
+    ("meeting-action-items", "POST"): "action_items",
+    ("meeting-action-item", "PATCH"): "action_items",
+    ("meeting-action-item", "DELETE"): "action_items",
 }
 
 

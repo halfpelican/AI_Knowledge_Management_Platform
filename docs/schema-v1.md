@@ -97,9 +97,19 @@ Stored separately from the original file so text is reusable without re-parsing.
 | `embedding_dimension` | integer | 768 for embed-gemma |
 | `created_at` | timestamp | |
 | `visible_to_roles` | text[] | stamped from the source at ingestion so the filter and the vector share a table — D-17 |
+| `ai_generated` | boolean, default false | true only for a passage of a meeting's AI-generated summary (FR-16); added by `documents 0012_content_chunk_ai_generated` — D-125 |
 
 Index on `(source_type, source_id)` and on `embedding_model` — retrieval filters by
 recorded model before ranking.
+
+**A meeting's summary is indexed as chunks of the meeting itself (FR-16, UC-04; D-125).** They
+carry `source_type` "meeting" and the meeting's id, so D-47's cascade re-stamps them with the
+transcript's chunks and deleting the meeting removes them, with no second branch anywhere.
+`ai_generated` is what tells them apart: it is how a Regenerate and `reindex` replace them, why
+FR-12's title-only snippet never takes one for the opening of the transcript, and what the answer
+and search payloads report so the interface can mark the passage as AI content (NFR-15). Their
+`chunk_index` starts at 0 again, so `(source_type, source_id, chunk_index)` is not unique for a
+meeting; nothing relies on it being so.
 
 ### Meetings — FR-09, FR-14
 
@@ -120,6 +130,70 @@ recorded model before ranking.
 | `attendee_id` | UUID PK | |
 | `meeting_id` | UUID FK → Meetings | |
 | `user_id` | UUID FK → Users | |
+
+A participation record, never an access rule (D-16). Since FR-16 it is also read to decide
+whose name an action item's owner means: an extracted item's owner is always one of the meeting's
+attendees, and one whose role can read the meeting (D-125, its third note). Nothing about who may
+see a meeting consults it.
+
+### MeetingSummaries — FR-16
+
+Added by `meetings 0003_fr16_meeting_summaries` (D-125). One row per summary run. The first five
+fields are the proposal's field table; the rest are UC-04's (the decisions, the highlights, every
+element's passages, "a record of the model that produced it and the date") and NFR-20's (the retry
+flag).
+
+| Field | Type | Notes |
+|---|---|---|
+| `summary_id` | UUID PK | |
+| `meeting_id` | UUID FK → Meetings | deleted with the meeting |
+| `summary_text` | text | the narrative's sentences joined; blank until the run is Ready |
+| `status` | text | fixed vocabulary — see §3. Created `Processing`, ends `Ready` or `Unavailable` |
+| `generated_at` | timestamp, nullable | when the run became Ready |
+| `run_number` | integer | 1, 2, 3… per meeting, unique with `meeting_id`; "latest" is the highest, never a timestamp |
+| `narrative`, `decisions`, `highlights` | JSON | lists of `{text, passages}`, holding only references to passages that were sent |
+| `passages` | JSON | the text of every transcript passage an element names, by number |
+| `model` | text | the chat model that answered |
+| `input_truncated`, `passages_sent`, `passages_total` | boolean, integer, integer | how much of the transcript one request carried (`SUMMARY_INPUT_TOKENS`, `SUMMARY_INPUT_CHARACTERS`) |
+| `action_items_extracted` | integer, nullable | how many items the run extracted; 0 is UC-04 A1's section recorded as empty |
+| `requested_by` | UUID FK → Users, nullable | who pressed Generate or Regenerate; null for the run ingestion starts; **set NULL** if the user is deleted |
+| `requested_at`, `started_at` | timestamp | `started_at` is when the current attempt began: a `Processing` row much older is an orphan |
+| `queued_for_retry` | boolean | NFR-20's "flagged for automatic retry"; indexed |
+| `retry_runs` | integer | queued runs made so far, at most `MAXIMUM_SUMMARY_RETRY_RUNS`; a malformed failure is queued only while it is below `MAXIMUM_MALFORMED_RETRY_RUNS` |
+| `failure_reason` | text | fixed vocabulary — see §3; blank unless `Unavailable`; never shown to a user |
+
+**The table is Create and Read in substance.** A row's status moves during its own run, and
+`summary_text` and the element lists are written once, when it is Ready, and never edited; a
+Regenerate makes a new row. The meeting's current summary is its latest Ready row. A failed row
+holds no text and is never presented or cited (UC-04, on failure).
+
+### ActionItems — FR-16
+
+Added by the same migration. **The proposal names this table and gives it no field table**
+(D-125): the columns are taken from FR-16's "description, suggested owner and due date" and
+UC-04's "the person or role it was assigned to and, where the transcript states one, the date by
+which it falls due".
+
+| Field | Type | Notes |
+|---|---|---|
+| `action_item_id` | UUID PK | |
+| `meeting_id` | UUID FK → Meetings | the item belongs to the meeting, so a person's additions and edits outlive a Regenerate |
+| `summary_id` | UUID FK → MeetingSummaries, nullable | the run that extracted it; null for an item a person added; **set NULL** if that row goes |
+| `description` | text | |
+| `owner_id` | UUID FK → Users, nullable | **null is unassigned**: FR-16 stores an item without a confident match that way; **set NULL** if the user is deleted |
+| `owner_name` | text | the owner as the transcript named them ("Alex", "the facilities team"); blank where it named nobody |
+| `due_date` | date, nullable | converted from `due_text` by the meeting's date, or set by a person; null where the phrase fixes no date |
+| `due_text` | text | the deadline as said ("next Friday") |
+| `passages` | JSON | passage numbers into the extracting summary's `passages`; empty for a person's item |
+| `origin` | text | `ai` or `user` — see §3 |
+| `position` | integer | the panel's order: an extracted item's place in the reply; a person's item after every item then present |
+| `edited` | boolean | a person changed an extracted item; a Regenerate then leaves it alone |
+| `created_by` | UUID FK → Users, nullable | who added the item; null for an extracted one; **set NULL** if the user is deleted. Never returned (D-125's third note: the security review of 12 November asked for it) |
+| `updated_by` | UUID FK → Users, nullable | who last changed the item; null until a person does; **set NULL** if the user is deleted. Never returned (D-125's third note) |
+| `created_at`, `updated_at` | timestamp | |
+
+At most `MAXIMUM_ACTION_ITEMS_PER_MEETING` (200) items per meeting: a person's addition past it is
+refused (D-125's third note).
 
 ### Conversations — FR-13
 
@@ -279,9 +353,9 @@ by nothing else.
 | `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
 | `department_applied_by` | text, nullable | **`documents 0009`** — whose value `Documents.department` holds, in `TAG_APPLIED_BY_VALUES`: `user` a person gave it (typed at upload, or written through the confirm route); `ai` a run wrote its suggestion into a blank department and no person has written it since; null for no department, or a row classified before 0009 and not set since (D-119 finding 10) |
 | `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
-| `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012`, D-128:** new values held for a person, in Project, Process and Topic, `[{"dimension", "value", "confidence"}]`, each an out-of-scheme suggestion below the confidence threshold, deduplicated by dimension and normalised value; replaced by each run. The column keeps its first name (`db_column`) so that 0012 changes no column. Until 12 November it held out-of-scheme Topics only, `[{"value", "confidence"}]`, and 0012 stamped those entries `"dimension": "Topic"` |
+| `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012_proposed_tags`, D-128:** new values held for a person, in Project, Process and Topic, `[{"dimension", "value", "confidence"}]`, each an out-of-scheme suggestion below the confidence threshold, deduplicated by dimension and normalised value; replaced by each run. The column keeps its first name (`db_column`) so that 0012 changes no column. Until 12 November it held out-of-scheme Topics only, `[{"value", "confidence"}]`, and 0012 stamped those entries `"dimension": "Topic"` |
 | `discarded_suggestions` | jsonb | suggestions that cannot become a tag, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. Since D-128 that is only an out-of-scheme value the classifier may not create or propose: a normalised name longer than the column, of more than `MAXIMUM_CREATED_TAG_WORDS` (3) words, or carrying a control, format or lone-surrogate character (Unicode Cc, Cf, Cs) or ";", which is recorded with those characters replaced by U+FFFD so that the column accepts it. Until 12 November it held every out-of-scheme Project and Process suggestion |
-| `rejected_tags` | jsonb | **`documents 0013`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run. A rejection made before 0013 was never recorded, so it is not honoured: existing rows start at `[]`, and none is guessed |
+| `rejected_tags` | jsonb | **`documents 0013_rejected_tags`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run. A rejection made before 0013 was never recorded, so it is not honoured: existing rows start at `[]`, and none is guessed |
 | `model` | text | the chat model that produced the run |
 | `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
@@ -313,9 +387,9 @@ by nothing else.
     document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,
     and the machine assignment is retained alongside it".
 
-No column holds a summary or key points: FR-10's front-end clause names them, but
-summarisation is a separate AI operation not yet built (`apps/ai/base.py` reserves it for
-FR-16), and its columns come with it.
+No column holds a summary or key points: FR-10's front-end clause names them, and a *document's*
+summary is still not built (D-104's note of 10 November 2026). FR-16's `summarise_meeting`
+(D-125) summarises meetings, into `MeetingSummaries` above, and is not that.
 
 ### KnowledgeGaps — FR-19, FR-14
 
@@ -411,6 +485,11 @@ now for work that may be descoped.
 > `KnowledgeGapCycles` (D-107). FR-14's `KnowledgeGaps (Read)`, deferred by D-69, is now the
 > dashboard's knowledge-gap panel.
 
+> **11 November 2026.** `MeetingSummaries` and `ActionItems` (FR-16) were never listed here, though
+> they were deferred with the rest of NIT3004. `meetings 0003_fr16_meeting_summaries` creates both
+> and `documents 0012_content_chunk_ai_generated` adds `ContentChunks.ai_generated` (D-125). The
+> summary of a *document* that FR-10's front-end clause names is still not built (D-104's note).
+
 ---
 
 ## 3. Fixed vocabularies
@@ -429,6 +508,11 @@ DOCUMENT_TYPES = ("Policy", "Procedure", "Report", "Meeting Paper")
 ASSIGNMENT_OUTCOMES = ("applied", "provisional", "discarded", "confirmed")
 # FR-19 (D-107), 9 November 2026:
 KNOWLEDGE_GAP_STATUS_VALUES = ("Open", "Addressed")
+# FR-16 (D-125), 11 November 2026:
+SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
+SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
+                           "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
+ACTION_ITEM_ORIGINS = ("ai", "user")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -448,6 +532,16 @@ it alone.
 starts `Open`, and `PATCH /api/knowledge-gaps/{id}` moves it to `Addressed` and back. Only an `Open`
 entry is a join candidate for D-109's grouping, so a subject that recurs after being addressed
 opens a new entry.
+
+`SUMMARY_STATUS_VALUES` are FR-16's own words: a summary is processing, "Ready" (the proposal's
+example value), or "marked unavailable". `SUMMARY_FAILURE_REASONS` says why a run ended
+Unavailable, for the operator and never for a user: the provider was unreachable after
+`MAXIMUM_SUMMARY_ATTEMPTS`, it refused the request (D-118), two replies broke the schema, **no
+narrative sentence named a passage that was sent** (FR-12's no-answer path (b) for a summary,
+kept apart as invariant 7 keeps the two no-answer paths apart), the summary could not be
+embedded, the server stopped mid-run, or something unexpected was raised. `ACTION_ITEM_ORIGINS`
+is where an item came from: extracted by the model, or added by a person. `SOURCE_TYPES` did not
+gain a value for a summary: its passages are the meeting's (D-125, choice 1).
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
@@ -553,9 +647,15 @@ plans it immediately after `documents 0007`, `documents 0009` (`ContentTags.remo
 (`Tags.grown`) immediately after 0009, and `documents 0011` (the backfill that marks grown every tag
 only restricted material carries) immediately after 0010. 0011's backfill reads meetings'
 `visible_to_roles`, so it depends on `meetings 0002`, and a clean start now plans `meetings 0002`
-directly after `meetings 0001`, before `documents 0002`. `documents 0012` (D-128: the proposal list
-renamed `proposed_tags` on its unchanged column, its entries stamped with a dimension) follows 0011,
-and `documents 0013` (`DocumentAnalysis.rejected_tags`) follows 0012.
+directly after `meetings 0001`, before `documents 0002`. Two migrations numbered 0012 follow 0011,
+from two branches built at the same time. `documents 0012_content_chunk_ai_generated`
+(`ContentChunks.ai_generated`, FR-16, D-125) is one. `documents 0012_proposed_tags` (D-128: the
+proposal list renamed `proposed_tags` on its unchanged column, its entries stamped with a dimension)
+is the other, and `documents 0013_rejected_tags` (`DocumentAnalysis.rejected_tags`) follows it.
+`documents 0014_merge_fr16_and_d128` joins the two branches. It has no operations; it only gives
+the app one leaf again, so neither pushed migration was renumbered or edited. The executor plans
+0012_proposed_tags, 0013, 0012_content_chunk_ai_generated, 0014, then
+`meetings 0003_fr16_meeting_summaries`.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

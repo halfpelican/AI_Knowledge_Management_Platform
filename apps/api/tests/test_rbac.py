@@ -79,7 +79,13 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "tag-list", "tag-detail",
                     # Recording transcription, both routes behind contribute_content
                     # (D-123)
-                    "transcription-status", "transcription-list"}
+                    "transcription-status", "transcription-list",
+                    # NIT3004: FR-16's summary and action items (D-125). The summary's GET needs
+                    # only a session; its POST and the action-item writes check
+                    # contribute_content inside the method, after the scoped lookup, as FR-10's
+                    # routes do. apps/api/tests/test_meeting_summary.py and
+                    # test_meeting_action_items.py prove the 404 before the 403 on each.
+                    "meeting-summary", "meeting-action-items", "meeting-action-item"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -114,7 +120,9 @@ PERMISSIONED_ROUTES = {
 IN_VIEW_PERMISSION_CODES = {
     MANAGE_DOCUMENTS_PERMISSION,  # DocumentDetailView.delete (D-73)
     MANAGE_MEETINGS_PERMISSION,  # MeetingDetailView.delete (D-99)
-    CONTRIBUTE_CONTENT_PERMISSION,  # FR-10's seven document routes (D-105 and its dated notes)
+    # FR-10's seven document routes (D-105 and its dated notes), and FR-16's four meeting writes:
+    # the summary's POST and the action items' POST, PATCH and DELETE (D-125)
+    CONTRIBUTE_CONTENT_PERMISSION,
 }
 
 USERS = reverse("user-list")

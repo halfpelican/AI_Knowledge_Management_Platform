@@ -60,7 +60,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
 )
 from apps.documents.models import ContentChunk, ContentTag, Document, DocumentAnalysis, Tag
-from apps.meetings.models import Meeting
+from apps.meetings.models import ActionItem, Meeting
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
@@ -462,6 +462,28 @@ def _acts_on(method, path, body=None, prepare=None):
     return probe
 
 
+# FR-16's routes (D-125) act on a meeting by id, so each is a status-code probe like the meeting
+# delete: 404 says nothing, anything else confirms the id is real. The fixture's transcript is a
+# sentence, under FR-16's minimum, so the Administrator's mirror on both summary routes is the
+# 422, which no provider call precedes; the action-item routes are given an item to act on.
+# contribute_content is held by both roles, so the Employee's 404 is the scope's and not a 403
+# hidden behind one: it is resolved before the permission (D-73's order).
+def _action_item(meeting) -> ActionItem:
+    item, _ = ActionItem.objects.get_or_create(
+        meeting=meeting, description="Write to the nominations committee.", defaults={"origin": "user"}
+    )
+    return item
+
+
+def _acts_on_meeting(method, path, body=None):
+    def probe(client, case, monkeypatch):
+        url = f"/api/meetings/{case.meeting.id}/{path(case)}"
+        response = getattr(client, method)(url, body or {}, format="json")
+        return response.status_code != 404
+
+    return probe
+
+
 ROUTES_RETURNING_SOURCE_ROWS = {
     ("api/documents", "GET"): _lists("/api/documents"),
     ("api/documents/<uuid:pk>", "GET"): _is_found(lambda case: f"/api/documents/{case.document.id}"),
@@ -516,6 +538,19 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     # Administrator's mirror is the 201 and the Employee's answer is the scope's 404.
     ("api/documents/<uuid:pk>/tags", "POST"): _acts_on(
         "post", lambda case: "tags", body={"dimension": "Topic", "tag_name": "board succession"}
+    ),
+    # FR-16 (D-125): the summary, which is the meeting's content restated, and its action items.
+    ("api/meetings/<uuid:pk>/summary", "GET"): _acts_on_meeting("get", lambda case: "summary"),
+    ("api/meetings/<uuid:pk>/summary", "POST"): _acts_on_meeting("post", lambda case: "summary"),
+    ("api/meetings/<uuid:pk>/action-items", "POST"): _acts_on_meeting(
+        "post", lambda case: "action-items", body={"description": "Book the boardroom."}
+    ),
+    ("api/meetings/<uuid:pk>/action-items/<uuid:item_id>", "PATCH"): _acts_on_meeting(
+        "patch", lambda case: f"action-items/{_action_item(case.meeting).id}",
+        body={"description": "Write to the committee chair."},
+    ),
+    ("api/meetings/<uuid:pk>/action-items/<uuid:item_id>", "DELETE"): _acts_on_meeting(
+        "delete", lambda case: f"action-items/{_action_item(case.meeting).id}"
     ),
 }
 

@@ -40,6 +40,7 @@ from apps.core.constants import (
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
+    MAXIMUM_ACTION_ITEMS_PER_MEETING,
     DOCUMENT_INDEXED,
     KNOWLEDGE_GAP_OPEN,
     MANAGE_DOCUMENTS_PERMISSION,
@@ -86,6 +87,18 @@ from apps.ingestion.extraction import extract_plain_text
 from apps.ingestion.meetings import ingest_meeting_transcript
 from apps.ingestion.signatures import compute_content_hash, read_file_signature
 from apps.meetings.deletion import delete_meeting
+from apps.meetings.models import Meeting
+from apps.meetings.summaries import (
+    TooManyActionItems,
+    TranscriptTooShort,
+    action_items_of,
+    add_action_item,
+    edit_action_item,
+    is_in_progress,
+    latest_run,
+    request_summary,
+    transcript_is_long_enough,
+)
 from apps.retrieval.gaps import ordered_gaps, run_cycle
 from apps.retrieval.models import Conversation, KnowledgeGap, QueryLog
 from apps.retrieval.pipeline import (
@@ -133,6 +146,8 @@ from .serializers import (
     MeetingDetailSerializer,
     MeetingIngestSerializer,
     MeetingListSerializer,
+    ActionItemSerializer,
+    ActionItemWriteSerializer,
     MeetingSerializer,
     ProposedTagSerializer,
     RecentQuestionSerializer,
@@ -146,6 +161,7 @@ from .serializers import (
     TagEntrySerializer,
     UserSerializer,
     classification_payload,
+    meeting_summary_payload,
     tag_details_payload,
 )
 
@@ -274,6 +290,17 @@ TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
 # Administrator, the route's only caller, already sees in the inventory, retired ones included.
 TAG_ALREADY_EXISTS_MESSAGE = (
     "A tag with this name already exists in this dimension. A retired tag is not added again here."
+)
+# FR-16's action-item routes (D-125), for an item id that names nothing on the meeting in the path:
+# the scoped meeting lookup's own 404 body, so an item that belongs to another meeting, one that
+# was deleted and one that never existed are one answer.
+MEETING_NOT_FOUND_MESSAGE = "No %s matches the given query." % Meeting._meta.object_name
+# FR-16 Responses: "422 Unprocessable Entity where the transcript is too short to summarise". The
+# transcript is stored and searchable all the same, and the message says so, because the reader's
+# next question is whether the meeting was lost.
+SUMMARY_TOO_SHORT_MESSAGE = (
+    "This transcript is too short to summarise. It is stored and searchable, and action items "
+    "can still be added by hand."
 )
 # FR-12 keyword search: ``q`` was not sent at all. The minimum-length rule is NOT
 # restated here — ``apps.retrieval.search`` owns it and raises, and this view maps the
@@ -1429,6 +1456,152 @@ class MeetingDetailView(APIView):
         if not self._may_delete(request):
             self.permission_denied(request, message=CanManageMeetings.message)
         delete_meeting(meeting)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# --- FR-16: meeting summary and action items (D-125) ----------------------------------------
+# Every route resolves the meeting through ``scoped_meeting_or_404`` first, so a meeting outside
+# the caller's scope and one that does not exist are one 404 (invariant 1). The three that write
+# then check ``contribute_content`` inside the method, after that lookup, as FR-10's routes and the
+# deletes check theirs (D-73's order): a permission class would answer 403 first and confirm the
+# meeting exists.
+
+
+def summary_response(request, view, meeting, *, too_short: bool = False):
+    """Both summary routes' body, under FR-16's code.
+
+    "202 Accepted while processing, 200 OK with the summary and item list once ready ... 422
+    Unprocessable Entity where the transcript is too short to summarise." Processing here is a run
+    in flight or one queued for its automatic retry (NFR-20): either way a summary is still
+    coming, and the page keeps asking. 200 is every settled state: Ready, Unavailable with its
+    retries spent, and a meeting nobody has asked a summary of. The 422 carries the same body
+    with ``detail``, because the Action Items panel still needs the items.
+
+    The latest run is read once, and both the body and the code come from it through
+    ``apps/meetings/summaries.py`` (``reported_state``, ``is_in_progress``): one rule, so the body
+    and the code cannot disagree.
+    """
+    latest = latest_run(meeting)
+    body = meeting_summary_payload(
+        meeting, can_edit=CanContributeContent().has_permission(request, view), latest=latest
+    )
+    if too_short:
+        body["detail"] = SUMMARY_TOO_SHORT_MESSAGE
+        return Response(body, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+    return Response(
+        body, status=status.HTTP_202_ACCEPTED if is_in_progress(latest) else status.HTTP_200_OK
+    )
+
+
+class MeetingSummaryView(ThrottlePostOnlyMixin, APIView):
+    """``/api/meetings/{id}/summary`` — FR-16's Summary panel (GET) and its Generate and
+    Regenerate Summary button (POST).
+
+    **GET** needs only a session and a meeting in scope. It runs nothing and never touches the
+    provider: it reports the latest run's state, the latest Ready summary and the action items.
+
+    **POST** needs ``contribute_content``, checked after the scoped 404. It starts a run and
+    answers at once; the run happens after the response (apps/meetings/summary_runner.py). Where
+    a run is already in flight for the meeting, it starts nothing and reports that one. Throttled
+    per user in the "ingestion" scope (D-79), one provider call like FR-10's classify; GET is not
+    throttled, because the page polls it while a run is in flight.
+
+    A summary's failure is not an error of either route: the run is marked Unavailable and queued
+    (NFR-20), and the body says so. There is no 503 here, because no provider call is made while
+    the request is open.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "ingestion"
+
+    def get(self, request, pk):
+        meeting = scoped_meeting_or_404(request, pk)
+        return summary_response(request, self, meeting, too_short=not transcript_is_long_enough(meeting))
+
+    def post(self, request, pk):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        try:
+            request_summary(meeting, requested_by=request.user)
+        except TranscriptTooShort:
+            # FR-16 Validation: "rejected rather than submitted". Nothing was sent or stored.
+            return summary_response(request, self, meeting, too_short=True)
+        return summary_response(request, self, meeting)
+
+
+def action_item_or_404(meeting, item_id):
+    """The item, if it is one of this meeting's; the meeting lookup's own 404 otherwise."""
+    item = action_items_of(meeting).filter(pk=item_id).first()
+    if item is None:
+        raise Http404(MEETING_NOT_FOUND_MESSAGE)
+    return item
+
+
+ACTION_ITEM_LIMIT_MESSAGE = (
+    f"This meeting already has {MAXIMUM_ACTION_ITEMS_PER_MEETING} action items, the most one meeting "
+    "can hold. Delete one to add another."
+)
+
+
+class MeetingActionItemsView(APIView):
+    """``POST /api/meetings/{id}/action-items`` — FR-16: "manually add items the extraction
+    missed". Body ``{description, owner_id?, due_date?}``; 201 with the item, which carries
+    ``origin`` "user". 400 in DRF's shape for a blank description, an unknown ``owner_id``, an
+    owner who cannot read the meeting or a malformed date. 409 once the meeting holds
+    MAXIMUM_ACTION_ITEMS_PER_MEETING items.
+
+    Throttled in scope "action_items", with the item routes' PATCH and DELETE: the security review
+    of 12 November found one account could add rows without end, and every reader of the meeting
+    loads them all (D-125's third note). DRF checks the throttle in ``initial()``, before the
+    meeting is looked up, so a 429 is the same for every id.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "action_items"
+
+    def post(self, request, pk):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        serializer = ActionItemWriteSerializer(data=request.data, context={"meeting": meeting})
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        try:
+            item = add_action_item(meeting, by=request.user, **serializer.validated_data)
+        except TooManyActionItems:
+            return Response({"detail": ACTION_ITEM_LIMIT_MESSAGE}, status=status.HTTP_409_CONFLICT)
+        return Response(ActionItemSerializer(item).data, status=status.HTTP_201_CREATED)
+
+
+class MeetingActionItemView(APIView):
+    """``PATCH`` and ``DELETE /api/meetings/{id}/action-items/{item_id}`` — FR-16: each item's
+    "description, suggested owner and due date, all editable", and "edit, delete".
+
+    PATCH takes any of ``description``, ``owner_id`` (a user's id, or null for unassigned) and
+    ``due_date`` (a date, or null); 200 with the item. An extracted item is then ``edited``, which
+    NFR-15's badge shows and which keeps it through a Regenerate. DELETE is 204 with no body; the
+    confirmation FR-16 requires is the page's, since a confirmed request is all a server can see.
+    An ``item_id`` that is not one of this meeting's is the meeting lookup's own 404. Both are in
+    the "action_items" throttle scope with the add.
+    """
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "action_items"
+
+    def patch(self, request, pk, item_id):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        item = action_item_or_404(meeting, item_id)
+        serializer = ActionItemWriteSerializer(data=request.data, partial=True, context={"meeting": meeting})
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        item = edit_action_item(item, by=request.user, **serializer.validated_data)
+        return Response(ActionItemSerializer(item).data)
+
+    def delete(self, request, pk, item_id):
+        meeting = scoped_meeting_or_404(request, pk)
+        require_contribute_content(request, self)
+        action_item_or_404(meeting, item_id).delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

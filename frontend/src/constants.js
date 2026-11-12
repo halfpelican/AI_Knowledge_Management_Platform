@@ -128,6 +128,24 @@ const PARTIALLY_INDEXED_DETAIL =
   'Some passages could not be indexed, so parts of this document will not appear in search results.'
 
 /**
+ * NFR-15's mark, in the one place its words are written: "All AI-generated content
+ * (summaries, action items, extracted knowledge) must be visually distinguished from
+ * human-authored content using one consistent convention ... applied system-wide."
+ * The convention is FR-10's, and every entry in TEXT that says it is built from
+ * these two, so FR-10's type, department and tags, FR-16's summary and action items
+ * and a summary passage shown by FR-12 cannot come to say it differently.
+ */
+const SUGGESTED_BY_AI = 'Suggested by AI'
+/** What the same convention says of content a person wrote. */
+const ADDED_BY_PERSON = 'Added by a person'
+
+/** A description short enough to name a button with: its first 80 characters. */
+function briefly(text) {
+  const value = String(text ?? '')
+  return value.length > 80 ? `${value.slice(0, 79).trimEnd()}…` : value
+}
+
+/**
  * FR-12 search and question bounds, mirroring apps/core/constants.py
  * (MINIMUM_SEARCH_LENGTH, MINIMUM_QUESTION_LENGTH, MAXIMUM_QUESTION_LENGTH).
  *
@@ -167,6 +185,39 @@ export const SOURCE_TYPE = {
   document: 'document',
   meeting: 'meeting',
 }
+
+/**
+ * FR-16's summary statuses, mirroring apps/core/constants.py SUMMARY_STATUS_VALUES
+ * (D-125): the latest run's `status` in the summary state both summary routes
+ * return. A vocabulary, not a tuned value. A meeting nobody has asked a summary of
+ * carries `null` instead, which is why there is no fourth entry.
+ * tests/meetingSummary.test.jsx fails when the two lists drift.
+ */
+export const SUMMARY_STATUS = {
+  processing: 'Processing',
+  ready: 'Ready',
+  unavailable: 'Unavailable',
+}
+
+/**
+ * Who an action item came from, mirroring apps/core/constants.py ACTION_ITEM_ORIGINS:
+ * "ai" for one the summary run extracted, "user" for one a person added. NFR-15's
+ * mark reads it. tests/meetingActionItems.test.jsx fails when the two lists drift.
+ */
+export const ACTION_ITEM_ORIGIN = {
+  ai: 'ai',
+  user: 'user',
+}
+
+/**
+ * How often the meeting page asks `GET /api/meetings/{id}/summary` again while the
+ * latest run is "Processing", in milliseconds (FR-16: "202 Accepted while
+ * processing"). The page's own value with no counterpart on the server, which leaves
+ * that route unthrottled because the page polls it (docs/api-contract.md, FR-16).
+ * It asks only while a run is in flight: a summary waiting for its hourly retry is
+ * not polled.
+ */
+export const MEETING_SUMMARY_POLL_MS = 3000
 
 /**
  * Client-side validation text. Fixed here so every form says the same thing.
@@ -224,6 +275,10 @@ export const VALIDATION = {
   // request on the same two rules, worded for a value of any of the three dimensions.
   tagValueRequired: 'Enter a name for the new tag value.',
   tagValueTooLong: `A tag name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // FR-16's action item: only the description is required, on an edit and on an
+  // item added by hand. Refused before any request; the server answers 400
+  // `{"description": [...]}` for a blank one regardless (CLAUDE.md §6, invariant 4).
+  actionItemDescriptionRequired: 'Enter a description.',
 }
 
 /**
@@ -604,7 +659,7 @@ export const TEXT = {
   // null, and the screen says so rather than showing the held suggestion in its
   // place (FR-10: "presented for confirmation rather than applied silently").
   classificationNotAssigned: 'Not yet assigned',
-  classificationSuggestedByAI: 'Suggested by AI',
+  classificationSuggestedByAI: SUGGESTED_BY_AI,
   // D-119 finding 10: an applied department whose `department_applied_by` is "user" is
   // one a person gave, typed at upload or written through the confirm route, which the
   // machine's suggestion matched. It is the person's, so it does not read "Suggested by
@@ -650,9 +705,9 @@ export const TEXT = {
   classificationTagsHeading: 'Tags',
   // Provenance per tag, in words (FR-10: "tags applied automatically are visually
   // distinguished from those applied by a person"). A word, not only a border.
-  tagAddedByPerson: 'Added by a person',
-  tagSuggestedByAI: 'Suggested by AI',
-  tagConfirmedAI: 'Suggested by AI, confirmed by a person',
+  tagAddedByPerson: ADDED_BY_PERSON,
+  tagSuggestedByAI: SUGGESTED_BY_AI,
+  tagConfirmedAI: `${SUGGESTED_BY_AI}, confirmed by a person`,
   tagConfirm: 'Confirm',
   tagRemove: 'Remove',
   tagReject: 'Reject',
@@ -868,6 +923,187 @@ export const TEXT = {
   // version, so the stored text is shown exactly as it was supplied.
   transcriptVerbatim:
     'Stored and shown exactly as it was supplied, including any speaker labels and timestamps.',
+
+  /* ---- NFR-15: the one mark on AI-generated content --------------------- */
+  // The convention is FR-10's (src/components/Classification.jsx): words beside the
+  // content, because a mark a screen reader cannot read is not a mark, and a dashed
+  // boundary as a second cue (--border-style-ai in tokens.css). The words come from
+  // SUGGESTED_BY_AI above, the same constant FR-10's entries are built from.
+  // src/components/AiMark.jsx renders them on every surface FR-16 adds.
+  aiSuggested: SUGGESTED_BY_AI,
+  // An extracted action item a person has since changed (`edited`), mirroring
+  // FR-10's "Suggested by AI, confirmed by a person".
+  aiSuggestedEdited: `${SUGGESTED_BY_AI}, edited by a person`,
+  // An action item a person added (`origin` "user"): no AI mark, and the words
+  // FR-10 puts on a tag a person applied.
+  addedByPerson: ADDED_BY_PERSON,
+  // A passage of a meeting's AI-generated summary, where FR-12 shows a source
+  // passage or a search snippet (D-125, choice 1). Said after the mark, from the
+  // reply's flag alone (`ai_generated`, `snippet_ai_generated`): the text of such a
+  // passage is the summary's own sentences with nothing added, so no word in it
+  // says what it is (docs/api-contract.md, "The summary as source material").
+  aiSummaryPassage: 'This passage is from the meeting’s AI-generated summary, not from its transcript.',
+  aiSummarySnippet: 'This snippet is from the meeting’s AI-generated summary, not from its transcript.',
+
+  /* ---- FR-16 meeting summary and action items (NIT3004, D-125) ---------- */
+  // FR-16 Front-End: "A "Summary" panel on the meeting page shows a concise
+  // paragraph-length summary once processing completes." The heading is the FR's.
+  // The panel reads `GET /api/meetings/{id}/summary` apart from the meeting itself,
+  // so a slow or failed read never hides the transcript (src/components/
+  // MeetingSummary.jsx).
+  summaryHeading: 'Summary',
+  loadingSummary: 'Loading the summary…',
+  summaryLoadFailed: 'Could not load the summary',
+  // `status` null and no summary: nobody has asked for one. An ordinary state.
+  summaryNone: 'No summary has been generated for this meeting yet.',
+  // FR-16: "A "Regenerate Summary" button lets the user re-run generation if the
+  // result is unsatisfactory." It reads "Generate Summary", NFR-14's label, while
+  // the meeting has no Ready summary. Offered only when the state says `can_edit`;
+  // the server checks `contribute_content` on every POST (CLAUDE.md §6, invariant 4).
+  summaryGenerate: 'Generate Summary',
+  summaryRegenerate: 'Regenerate Summary',
+  // The POST itself answers at once with 202; the run happens after it.
+  summaryStarting: 'Starting…',
+  // What a new run does to the action items (docs/api-contract.md, "What a run
+  // does", step 3), said beside the button because pressing it removes rows.
+  summaryRegenerateHint:
+    'Regenerating replaces this summary and the extracted action items nobody has edited. Action items a person added or edited are kept.',
+  // 202, `status` "Processing": a run is in flight and the page asks again every
+  // few seconds. Announced in a polite live region as well as shown.
+  summaryProcessing: 'The summary is being generated. It will appear here when it is ready.',
+  // The same while a Regenerate runs: `summary` is still the previous Ready one.
+  summaryRegenerating:
+    'A new summary is being generated. The previous summary is shown below until the new one is ready.',
+  // 202, "Unavailable" with `queued_for_retry`: UC-04 E1, "the system marks the
+  // summary as pending and queues the transcript for a later attempt", and NFR-20,
+  // "the raw transcript must still be stored, retrievable, and flagged for automatic
+  // retry". The retry is hourly, so the page does not poll for it.
+  summaryPendingRetry:
+    'The summary is not available yet. The transcript is stored and searchable, and the summary will be tried again automatically.',
+  summaryRegeneratePendingRetry:
+    'A new summary is not available yet, so the previous summary is shown below. The transcript is stored and searchable, and the new summary will be tried again automatically.',
+  // 200, "Unavailable" with its retries spent: only the button tries again.
+  summaryUnavailable: 'The summary could not be generated. The transcript is stored and searchable.',
+  summaryRegenerateUnavailable:
+    'A new summary could not be generated, so the previous summary is shown below. The transcript is stored and searchable.',
+  // FR-16's 422, word for word as the server sends it in `detail` (apps/api/views.py
+  // SUMMARY_TOO_SHORT_MESSAGE). Shown from this copy, as FR-10's 409 is, because the
+  // screen never renders a backend string; tests/meetingSummary.test.jsx fails when
+  // the two drift. It names no minimum, so no tuned value is restated here.
+  summaryTooShort:
+    'This transcript is too short to summarise. It is stored and searchable, and action items can still be added by hand.',
+  // Announced when a run this page was waiting on finishes.
+  summaryReady: 'The summary is ready.',
+  summaryRequestFailed: 'Could not start the summary',
+  // A check on a run in flight failed. The page stops asking and says so, rather
+  // than leaving "being generated" on screen with nothing behind it (NFR-19's rule
+  // against a wait that never resolves).
+  summaryCheckFailed: 'Could not check whether the summary is ready',
+  // The ingestion 429 (D-79), the budget the summary POST shares with upload,
+  // meeting ingestion, reprocess and classify, named as they name it.
+  summaryLimitReached: (when) =>
+    `The upload limit has been reached, so no summary was started. You can try again ${when}.`,
+  // A 403 on Generate or on any action-item write: the role does not hold
+  // `contribute_content` now, whatever `can_edit` said when the panel loaded. One
+  // permission covers all four writes, so every control goes, in both panels, and
+  // this one sentence is true wherever it is shown.
+  meetingContributionNotPermitted:
+    'Your role may not generate summaries or change action items, so those controls are not available.',
+  // UC-04: the summary carries "a record of the model that produced it and the date
+  // of production". Shown after the mark.
+  summaryModel: (model) => `Model: ${model}`,
+  summaryGenerated: 'Generated:',
+  // `input_truncated`: the transcript was longer than one request carries, and the
+  // summary covers its opening passages (D-125). Said rather than hidden.
+  summaryTruncated: (sent, total) =>
+    `This summary covers the first ${sent} of ${total} passages of the transcript.`,
+  // The same, for a truncated summary that arrived without its two counts: it is
+  // still said, without a number the reply did not carry.
+  summaryTruncatedOpening: 'This summary covers only the opening of the transcript.',
+  summaryDecisionsHeading: 'Decisions',
+  summaryHighlightsHeading: 'Highlights',
+  // UC-04: "Every element of the summary carries a reference to the passage of the
+  // transcript it was drawn from." The reference is a button that opens the
+  // passage's text, as FR-12's citation opens its source passage; this is its
+  // accessible name and the opened panel's label, so a bare "[2]" is never all a
+  // screen reader is given (WCAG 2.1 SC 1.1.1).
+  transcriptPassage: (number) => `Transcript passage ${number}`,
+  // An action item kept through a Regenerate can name a passage the current summary
+  // does not quote, so its number is shown without a button (docs/api-contract.md,
+  // the action item's `passages`). Said once, under the list, where that happens.
+  passageNumberOnly:
+    'A passage number that is not a button names a part of the transcript the current summary does not quote, so its text is not shown here.',
+
+  // FR-16: "An "Action Items" panel lists each extracted item with description,
+  // suggested owner and due date, all editable. Users can edit, delete or manually
+  // add items the extraction missed; deletion requires confirmation."
+  actionItemsHeading: 'Action Items',
+  loadingActionItems: 'Loading the action items…',
+  // The one read both panels share failed; the failure is announced once, under
+  // Summary, rather than twice.
+  actionItemsUnavailable: 'Not available. See the message under Summary.',
+  // UC-04 A1: "The system records the action item section as empty rather than
+  // omitting it." A Ready summary whose run extracted none. It is the AI's finding,
+  // so the sentence says whose it is (NFR-15).
+  actionItemsNoneRaised: 'No action items were raised in this meeting, according to its AI-generated summary.',
+  // Empty for any other reason: no summary yet, or every item deleted.
+  actionItemsNone: 'There are no action items for this meeting yet.',
+  actionItemOwner: 'Owner',
+  // `owner` null. FR-16: "where no confident match exists the item is stored as
+  // unassigned rather than attributed to the wrong person."
+  actionItemUnassigned: 'Unassigned',
+  // `owner_name` and `due_text`: the transcript's own words, kept beside whatever
+  // the server matched or a person chose, so "the facilities team" stays readable.
+  actionItemOwnerSaid: (name) => `Named in the meeting: “${name}”`,
+  actionItemDue: 'Due date',
+  // `due_date` null: the phrase fixed no date, or none was said. Never invented.
+  actionItemNoDate: 'No date set',
+  actionItemDueSaid: (text) => `Said in the meeting: “${text}”`,
+  actionItemEdit: 'Edit',
+  actionItemDelete: 'Delete',
+  // The accessible names, so a column of "Edit" and "Delete" buttons each name
+  // their item (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3). A
+  // long description is cut short: the name identifies the item, it does not read it.
+  actionItemEditLabel: (description) => `Edit action item: ${briefly(description)}`,
+  actionItemDeleteLabel: (description) => `Delete action item: ${briefly(description)}`,
+  actionItemEditLegend: 'Edit the action item',
+  actionItemDescription: 'Description',
+  // The owner is chosen from the directory any session may read (D-34), plus
+  // "Unassigned". It is read when a form first opens; `loadingAttendees` is said
+  // while it is, and this where the read failed. The item can still be saved.
+  actionItemOwnerUnavailable: 'The list of people could not be loaded, so another owner cannot be chosen here.',
+  actionItemDueHint: 'Leave empty for no date.',
+  actionItemSave: 'Save',
+  actionItemSaving: 'Saving…',
+  actionItemCancel: 'Cancel',
+  actionItemSaved: 'The action item was saved.',
+  // Save pressed with nothing changed: no request is sent, and the screen says so.
+  actionItemUnchanged: 'Nothing was changed.',
+  // FR-16: "manually add items the extraction missed".
+  actionItemAdd: 'Add action item',
+  actionItemAddLegend: 'Add an action item',
+  actionItemAdding: 'Adding…',
+  actionItemAdded: 'The action item was added.',
+  // FR-16: "deletion requires confirmation". Nothing is sent until the dialogue's
+  // confirm, and the dialogue quotes the item it is about.
+  actionItemDeleteConfirm: 'Delete this action item?',
+  actionItemDeleteBody: 'It is removed from this meeting’s action items. This cannot be undone.',
+  // Said for an extracted item only: a later run starts from the transcript again.
+  actionItemDeleteAiNote: 'If the summary is regenerated, the AI may extract it again.',
+  actionItemDeleteConfirmLabel: 'Delete action item',
+  actionItemDeleting: 'Deleting…',
+  actionItemDeleteCancel: 'Cancel',
+  actionItemDeleted: 'The action item was deleted.',
+  actionItemsFailed: 'Could not change the action items',
+  // The 400 whose message is already under the field it concerns.
+  actionItemCheckFields: 'Check the highlighted field and try again.',
+  // A 404 on a write: the item, or the meeting, is gone or now out of scope. One
+  // message for all of them (CLAUDE.md §6, invariant 1), and the panel is read again.
+  actionItemNotFound: 'That action item could not be found. The list has been reloaded.',
+  // The 409: the meeting holds as many items as one meeting may (MAXIMUM_ACTION_ITEMS_PER_MEETING;
+  // the security review of 12 November, D-125's third note). Said from this copy, without the
+  // server's number, so the page never shows a backend string.
+  actionItemsAtLimit: 'This meeting holds as many action items as it can. Delete one to add another.',
 
   /* ---- FR-12 keyword search --------------------------------------------- */
   searchFieldLabel: 'Search',

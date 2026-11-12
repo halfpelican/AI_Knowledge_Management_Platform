@@ -64,6 +64,14 @@ urlpatterns = [
     # Stage 3: FR-09
     path("meetings", views.MeetingsView.as_view(), name="meeting-list"),
     # D-99 adds can_delete to its GET, and the DELETE method, mirroring documents/<uuid:pk>.
+    # NIT3004: FR-16's summary and action items (D-125). Each has a non-UUID segment after the id,
+    # so none can collide with meetings/<uuid:pk> below; listed before it for the reading habit's
+    # sake. Scoped 404 first, then contribute_content on the three that write.
+    path("meetings/<uuid:pk>/summary", views.MeetingSummaryView.as_view(), name="meeting-summary"),
+    path("meetings/<uuid:pk>/action-items", views.MeetingActionItemsView.as_view(),
+         name="meeting-action-items"),
+    path("meetings/<uuid:pk>/action-items/<uuid:item_id>", views.MeetingActionItemView.as_view(),
+         name="meeting-action-item"),
     path("meetings/<uuid:pk>", views.MeetingDetailView.as_view(), name="meeting-detail"),
     # D-123: a meeting recording becomes a draft transcript, one WAV segment per POST, and
     # nothing is stored. The confirmed draft goes in through "meetings" above. The status first,

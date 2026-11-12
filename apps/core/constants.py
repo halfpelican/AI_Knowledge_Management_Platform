@@ -226,6 +226,14 @@ MAXIMUM_CLASSIFY_ATTEMPTS = 3
 # raises ProviderUnavailable, which POST /api/transcriptions answers 503. The page keeps the
 # segment and the draft, so the person can resume once FLM is back (invariant 8).
 MAXIMUM_TRANSCRIBE_ATTEMPTS = 3
+# Same policy for a meeting summary (FR-16, NIT3004; D-125): apps/ai/summarisation.py's attempt
+# loop makes at most this many summarise_meeting calls, then raises ProviderUnavailable, and the
+# run is marked Unavailable and queued for retry (NFR-20). FR-16: "Failures are retried twice
+# before the summary is marked unavailable."
+MAXIMUM_SUMMARY_ATTEMPTS = 3  # 1 initial call + 2 retries
+# Within those three, a malformed reply gets exactly one retry. FR-16: "a malformed response
+# triggers one retry". A second malformed reply ends the run even if an attempt is left (D-125).
+MAXIMUM_MALFORMED_SUMMARY_REPLIES = 2  # 1 malformed reply + 1 retry
 
 # --- Question bounds (FR-12, FR-13), in characters -----------------------------------
 MINIMUM_QUESTION_LENGTH = 10
@@ -474,6 +482,11 @@ TAGGING_THROTTLE_RATE = "30/min"
 # and carries on. One transcription per user is in flight at once regardless
 # (apps/api/transcription_slot.py), so the rate bounds requests, not NPU time.
 TRANSCRIPTION_THROTTLE_RATE = "60/min"
+# POST, PATCH and DELETE on /api/meetings/{id}/action-items, scope "action_items" (FR-16; the
+# security review of 12 November 2026, finding 2, D-125's third note). They call no provider: the
+# rate bounds how fast one account can fill or rewrite a meeting's Action Items panel, which every
+# reader of the meeting loads. The page sends one request per save, addition or deletion.
+ACTION_ITEM_THROTTLE_RATE = "30/min"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
@@ -810,3 +823,74 @@ REVIEW_KNOWLEDGE_GAPS_PERMISSION = "review_knowledge_gaps"
 # presentation constant as the other recent panels, named for this panel so that changing one does
 # not silently change the other.
 DASHBOARD_GAP_ITEMS = DASHBOARD_RECENT_ITEMS
+
+# --- Meeting summaries and action items (FR-16, NIT3004; docs/decisions.md D-125) ------------
+# FR-16 Validation: "transcripts below a minimum length are rejected rather than submitted, since
+# short transcripts produce unreliable output". Counted in whitespace tokens by D-31's one
+# definition (apps/ingestion/chunking.py's length_in_tokens). Below it no run starts at ingestion,
+# and GET and POST /api/meetings/{id}/summary answer 422. FR-09's own floor, MINIMUM_CONTENT_LENGTH,
+# is 50; a summary needs more than a meeting needs to be indexed. *tune*: a starting value, about
+# ninety seconds of speech, chosen without a measurement.
+MINIMUM_SUMMARY_TRANSCRIPT_LENGTH = 200
+# The most of a transcript one summary request carries, in whitespace tokens, as whole passages
+# (FR-09's own chunks). FR-16 sends "a single structured request", so a longer transcript is not
+# summarised in sections: the passages after the cap are left out, the summary records
+# input_truncated and how many passages it read, and the panel says so. About seventy-five
+# minutes of speech; it keeps gemma3:4b's prompt inside FLM's context. *tune*.
+SUMMARY_INPUT_TOKENS = 10_000
+# The same cap in characters, beside the one in tokens. A token here is a whitespace-separated word,
+# and a word has no length limit, so a transcript of very long "words" could carry far more to the
+# provider than SUMMARY_INPUT_TOKENS suggests (the security review of 12 November 2026, finding 3,
+# D-125's third note). Speech runs about six characters a word, so 10,000 words is about 60,000
+# characters and this does not bind on a real transcript. A first passage longer than this alone is
+# cut to it, and the summary records the transcript as truncated.
+SUMMARY_INPUT_CHARACTERS = 100_000
+# A MeetingSummary's status (FR-16: processing, "Ready", "marked unavailable"). A run is created
+# Processing and ends Ready or Unavailable; summary_text is written once, when Ready (D-125).
+SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
+(SUMMARY_PROCESSING, SUMMARY_READY, SUMMARY_UNAVAILABLE) = SUMMARY_STATUS_VALUES
+DEFAULT_SUMMARY_STATUS = SUMMARY_PROCESSING
+# Why a run ended Unavailable, kept on the row for the operator and never shown to a user.
+# "no_verified_narrative" is FR-12's path (b) for a summary: a reply came back and no narrative
+# sentence named a passage that was sent (invariant 7's distinction, D-125). "busy" is a run the
+# server had no room to start (MAXIMUM_SUMMARIES_WAITING): it never reached the provider.
+SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
+                           "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
+(SUMMARY_FAILED_PROVIDER_UNAVAILABLE, SUMMARY_FAILED_PROVIDER_REFUSED, SUMMARY_FAILED_MALFORMED,
+ SUMMARY_FAILED_NO_VERIFIED_NARRATIVE, SUMMARY_FAILED_INDEXING, SUMMARY_FAILED_ORPHANED,
+ SUMMARY_FAILED_ERROR, SUMMARY_FAILED_BUSY) = SUMMARY_FAILURE_REASONS
+# NFR-20's retry queue: a failed run is queued, and manage.py retry_meeting_summaries runs it
+# again on the hourly schedule. After this many queued runs have also failed it leaves the queue
+# and stays Unavailable until a person presses Regenerate (D-125).
+MAXIMUM_SUMMARY_RETRY_RUNS = 3
+# A run whose replies never conformed ("malformed") is queued only while no queued run has been
+# made, so at most one follows it, not MAXIMUM_SUMMARY_RETRY_RUNS. A transcript that leads the model
+# to break the schema tends to break it again, and each queued run is up to two more provider calls
+# (MAXIMUM_MALFORMED_SUMMARY_REPLIES); one still covers a reply that went wrong by chance. The
+# security review of 12 November 2026, finding 3 (D-125's third note).
+MAXIMUM_MALFORMED_RETRY_RUNS = 1
+# A run still Processing this long after it started was left by a server that stopped mid-run:
+# the retry command marks it failed ("orphaned") and runs it again. Three attempts of the slowest
+# call (SUMMARY_TIMEOUT_SECONDS, 600 s, apps/ai/summarisation.py), plus the summary's own
+# embedding and a margin.
+SUMMARY_STALE_AFTER_SECONDS = 3 * 600 + 600
+# Background runs calling the provider at once in one server process (D-125). A third waits for a
+# place rather than being refused: nobody is waiting on the request, which answered 202.
+MAXIMUM_SUMMARIES_IN_FLIGHT = 2
+# Background runs WAITING for one of those places in one server process. Each waits in a thread of
+# its own, so without a bound a burst of requests (ingestions and Regenerates, from accounts anyone
+# can register) held a thread each for as long as the backlog took. Past it a run is not started:
+# it is closed Unavailable and queued as "busy", and the hourly retry carries it. Twenty runs at
+# about 30 seconds each clear in five minutes on two places. The security review of 12 November
+# 2026, finding 4 (D-125's third note).
+MAXIMUM_SUMMARIES_WAITING = 20
+# Where an action item came from: extracted by the model, or added by a person (FR-16's "manually
+# add items the extraction missed"). The same two words as TAG_APPLIED_BY_VALUES, FR-10's.
+ACTION_ITEM_ORIGINS = ("ai", "user")
+(ACTION_ITEM_FROM_AI, ACTION_ITEM_FROM_USER) = ACTION_ITEM_ORIGINS
+# The most action items one meeting may hold before a person's addition is refused (409). Every
+# item counts, extracted or added. Extraction gives at most 25 a run and replaces its own untouched
+# items (apps/ai/summarisation.py), so this binds the items people add. The security review of 12
+# November 2026, finding 2 (D-125's third note): without it one account could add rows without end,
+# and every reader of the meeting loads them all. A starting value: no meeting in any set comes near.
+MAXIMUM_ACTION_ITEMS_PER_MEETING = 200

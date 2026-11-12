@@ -33,7 +33,9 @@ from apps.core.constants import (
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import tag_options
 from apps.documents.models import ContentTag, Document, normalise_tag_name
-from apps.meetings.models import Meeting
+from apps.meetings.models import ActionItem, Meeting, MeetingSummary
+from apps.meetings.owners import can_read_meeting
+from apps.meetings.summaries import action_items_of, current_summary, latest_run, reported_state
 from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
@@ -586,6 +588,127 @@ class MeetingIngestSerializer(serializers.Serializer):
         return attrs
 
 
+# --- FR-16 meeting summary and action items (D-125) ---------------------------------------
+
+# The longest description a person may type. The model's own are held to 600 characters by
+# SUMMARY_SCHEMA; a person gets a little more room, and a bound at all so one row cannot hold a
+# document.
+ACTION_ITEM_DESCRIPTION_MAX_LENGTH = 1000
+UNKNOWN_OWNER_MESSAGE = "No user has this id."
+OWNER_CANNOT_SEE_MEETING_MESSAGE = "This person cannot see this meeting, so its action items cannot be theirs."
+NOTHING_TO_CHANGE_MESSAGE = "Send at least one of description, owner_id and due_date."
+
+
+class MeetingSummarySerializer(serializers.ModelSerializer):
+    """A Ready summary, as FR-16's Summary panel shows it (UC-04's elements and provenance).
+
+    ``narrative``, ``decisions`` and ``highlights`` are lists of ``{text, passages}``, the
+    passages being numbers into ``passages``, which holds the text of every transcript passage an
+    element names: "every element of the summary carries a reference to the passage of the
+    transcript it was drawn from". ``model`` and ``generated_at`` are UC-04's "record of the model
+    that produced it and the date". Only ever built from a Ready row: a failed summary "is never
+    presented to a user" (``meeting_summary_payload``).
+    """
+
+    summary_id = serializers.UUIDField(source="id", read_only=True)
+
+    class Meta:
+        model = MeetingSummary
+        fields = ("summary_id", "summary_text", "narrative", "decisions", "highlights", "passages",
+                  "model", "generated_at", "input_truncated", "passages_sent", "passages_total",
+                  "action_items_extracted")
+        read_only_fields = fields
+
+
+class ActionItemSerializer(serializers.ModelSerializer):
+    """One action item: FR-16's "description, suggested owner and due date".
+
+    ``owner`` is ``{id, name}`` for the user it is assigned to, or null: unassigned. ``owner_name``
+    and ``due_text`` are the transcript's own words for each, kept beside them, and blank on an
+    item a person added. ``origin`` ("ai" or "user") and ``edited`` are what NFR-15's badge reads.
+    """
+
+    action_item_id = serializers.UUIDField(source="id", read_only=True)
+    owner = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ActionItem
+        fields = ("action_item_id", "description", "owner", "owner_name", "due_date", "due_text",
+                  "passages", "origin", "edited", "created_at", "updated_at")
+        read_only_fields = fields
+
+    def get_owner(self, item):
+        if item.owner is None:
+            return None
+        return {"id": str(item.owner.pk), "name": item.owner.name}
+
+
+class ActionItemWriteSerializer(serializers.Serializer):
+    """The body of an add (POST, ``description`` required) or an edit (PATCH, any subset).
+
+    ``owner_id`` is a user's id or null for unassigned; an id that names no user is a 400 keyed
+    on it, and so is a user whose role cannot read the meeting (``context["meeting"]``). The
+    second is the security review of 12 November (D-125's third note): an owner is given the
+    item, its passages and the meeting's title, and the automatic match already refuses anyone
+    outside the meeting's scope (apps/meetings/owners.py). The refusal discloses nothing the
+    caller lacks: an Employee can reach only meetings every role can read (D-66), so only an
+    Administrator, who reads every user's role through FR-05, is ever refused.
+
+    ``due_date`` is a date or null. A PATCH that sends none of the three is a 400: there would be
+    nothing to change, and the item would still be marked edited. The validated data carries
+    ``owner`` (the User or None) in place of ``owner_id``.
+    """
+
+    description = serializers.CharField(
+        max_length=ACTION_ITEM_DESCRIPTION_MAX_LENGTH, allow_blank=False, trim_whitespace=True
+    )
+    owner_id = serializers.UUIDField(required=False, allow_null=True)
+    due_date = serializers.DateField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if self.partial and not attrs:
+            raise serializers.ValidationError(NOTHING_TO_CHANGE_MESSAGE)
+        if "owner_id" in attrs:
+            owner_id = attrs.pop("owner_id")
+            owner = None if owner_id is None else User.objects.select_related("role").filter(pk=owner_id).first()
+            if owner_id is not None and owner is None:
+                raise serializers.ValidationError({"owner_id": [UNKNOWN_OWNER_MESSAGE]})
+            if owner is not None and not can_read_meeting(owner, self.context["meeting"]):
+                raise serializers.ValidationError({"owner_id": [OWNER_CANNOT_SEE_MEETING_MESSAGE]})
+            attrs["owner"] = owner
+        return attrs
+
+
+_LATEST = object()
+
+
+def meeting_summary_payload(meeting, *, can_edit: bool, latest=_LATEST) -> dict:
+    """What both summary routes return, whatever the state (D-125).
+
+    - ``status``: the latest run's ("Processing", "Ready", "Unavailable"), or null where no
+      summary was ever requested. ``queued_for_retry`` is NFR-20's flag on that run. Both are
+      ``reported_state``'s, so a run a stopped server left Processing reads as Unavailable and
+      queued. ``latest`` is that run, when the caller has already read it.
+    - ``summary``: the latest Ready summary, or null. While a Regenerate runs, and after one
+      fails, this is still the previous Ready summary; a failed one is never here (UC-04).
+    - ``action_items``: the meeting's items in panel order. An empty list beside a Ready summary
+      whose ``action_items_extracted`` is 0 is UC-04 A1's meeting that raised none.
+    - ``can_edit``: whether the caller's role holds ``contribute_content``. A hint for showing
+      the controls; every write checks the permission itself (invariant 4).
+    """
+    if latest is _LATEST:
+        latest = latest_run(meeting)
+    status, queued = reported_state(latest)
+    current = current_summary(meeting)
+    return {
+        "status": status,
+        "queued_for_retry": queued,
+        "summary": MeetingSummarySerializer(current).data if current is not None else None,
+        "action_items": ActionItemSerializer(action_items_of(meeting), many=True).data,
+        "can_edit": can_edit,
+    }
+
+
 # --- FR-12 keyword search ---------------------------------------------------------------
 
 # ``SearchResult.date`` is the source's own date and so is not one type: a datetime for a
@@ -635,6 +758,9 @@ class SearchResultSerializer(serializers.Serializer):
     source_id = serializers.CharField(read_only=True)
     title = serializers.CharField(read_only=True)
     snippet = serializers.CharField(read_only=True, allow_blank=True)
+    # True where the snippet is from the meeting's AI-generated summary, not its transcript
+    # (FR-16, D-125): NFR-15's mark for the one search surface that can show AI content.
+    snippet_ai_generated = serializers.BooleanField(read_only=True)
     department = serializers.CharField(read_only=True, allow_blank=True)
     date = serializers.SerializerMethodField()
 
@@ -721,6 +847,8 @@ class ConsultedPassageSerializer(serializers.Serializer):
 
     chunk_id = serializers.CharField(read_only=True)
     text = serializers.CharField(read_only=True)
+    # True for a passage of a meeting's AI-generated summary (FR-16, D-125): NFR-15's mark.
+    ai_generated = serializers.BooleanField(read_only=True)
 
 
 class ConsultedSourceSerializer(serializers.Serializer):
@@ -890,7 +1018,7 @@ def readable_thread_chunks(turns, *, role_name) -> dict:
     through the consulted list, and the store answers for it as it answers for any chunk that
     no longer exists: with nothing.
 
-    Only the four columns a passage needs are fetched. The embedding is the largest column on
+    Only the five columns a passage needs are fetched. The embedding is the largest column on
     the row and has no use here.
     """
     wanted = {
@@ -906,7 +1034,7 @@ def readable_thread_chunks(turns, *, role_name) -> dict:
     rows = (
         scoped_chunks(role_name=role_name)
         .filter(id__in=wanted)
-        .only("id", "source_type", "source_id", "chunk_text")
+        .only("id", "source_type", "source_id", "chunk_text", "ai_generated")
     )
     return {row.id: row for row in rows}
 
@@ -915,10 +1043,11 @@ def readable_thread_chunks(turns, *, role_name) -> dict:
 class ReopenedPassage:
     """A consulted chunk read back for a reopened turn, in the shape ``resolve_sources`` reads.
 
-    ``resolve_sources`` is the live reply's own code (D-78 item 3) and reads four attributes of
-    each passage: ``source_type``, ``source_id``, ``chunk_id`` and ``chunk_text``. On the live
-    path a ``RankedPassage`` carries them; here a ``ContentChunk`` row does, under one different
-    name, so this adapter gives the row that shape rather than the function a second input.
+    ``resolve_sources`` is the live reply's own code (D-78 item 3) and reads five attributes of
+    each passage: ``source_type``, ``source_id``, ``chunk_id``, ``chunk_text`` and, since D-125,
+    ``ai_generated``. On the live path a ``RankedPassage`` carries them; here a ``ContentChunk``
+    row does, under one different name, so this adapter gives the row that shape rather than the
+    function a second input.
 
     ``chunk_id`` is ``str(chunk.id)``, the expression ``apps.retrieval.ranking.rank`` uses, so
     a passage identifier renders as the same string on a reopened turn as on the live reply.
@@ -929,6 +1058,9 @@ class ReopenedPassage:
     chunk_text: str
     source_type: str
     source_id: UUID
+    # The row's own flag, read back as it stands now: a passage of a meeting's AI-generated
+    # summary is marked on a reopened turn exactly as on the live one (NFR-15, D-125).
+    ai_generated: bool = False
 
     @classmethod
     def of(cls, chunk) -> "ReopenedPassage":
@@ -937,6 +1069,7 @@ class ReopenedPassage:
             chunk_text=chunk.chunk_text,
             source_type=chunk.source_type,
             source_id=chunk.source_id,
+            ai_generated=chunk.ai_generated,
         )
 
 

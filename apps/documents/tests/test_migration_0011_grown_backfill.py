@@ -7,7 +7,9 @@ and tags with a readable link as they are, and an already grown tag grown. Its r
 
 Built as the 0008 to 0010 tests are: the executor itself is driven, for ``documents`` only, from 0010
 to 0011 and back, in the ordinary per-test transaction, and the test ends at the leaf. 0011 changes no
-schema, so the rows are written through the current models while ``documents`` stands at 0010.
+schema, so the rows are written through the current models while ``documents`` stands at 0010. Since
+0012 (FR-16's ``ContentChunks.ai_generated``, D-125) the current models hold one column 0010 and 0011
+do not; the rows this test writes there are tags, links, documents and meetings, never a chunk.
 """
 
 import datetime
@@ -88,8 +90,10 @@ def documents_leaf():
 
 
 def test_0011_is_on_the_path_to_the_leaf_of_documents():
-    """0011 was the leaf of ``documents`` until 0012 (``proposed_tags``, D-128) followed it, so the
-    test checks that 0011 is on the leaf's path, and the test below ends at the leaf."""
+    """0011 was the leaf of ``documents`` until two migrations numbered 0012 followed it: FR-16's
+    ``ContentChunks.ai_generated`` (D-125) and ``proposed_tags`` (D-128), joined by 0014's merge. So
+    the test checks that 0011 is on the leaf's path, and the test below ends at the leaf, as the
+    0009 and 0010 tests do."""
     graph = MigrationExecutor(connection).loader.graph
     assert AFTER in graph.forwards_plan(documents_leaf())
 
