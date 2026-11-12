@@ -1873,6 +1873,32 @@ question-then-follow-up set, which does not exist.
 >   history, cold and spelled out, then the HTTP check.
 > - **FR-13 is partial at the gate** (D-91).
 
+**Dated note, 12 November 2026: FR-13 end to end is measured, and this entry's boundary is read
+again on each provider.** The header's "Unmeasured: yes", and "FR-13 end to end is still
+unmeasured … which does not exist" in the caveat, were true when written. They are overtaken, and
+left as written.
+
+- **The set exists:** `corpus/objective-02/threads.json`, frozen on 1 November (D-86).
+- **It has been run end to end:** on FLM on 3, 8 and 9 November (D-91's note, D-103, D-111), and on
+  `anthropic` on 10 and 11 November (D-112's notes of 11 and 12 November).
+- **The history block holds the schema.** In those runs every with-history run conformed on its
+  first attempt, on both providers. The one run that never conformed was asked cold, with no
+  history block: t04, on 3 November (`corpus/objective-02/runs/2026-11-03/fr13-before.md`).
+- **"Holds for subject nouns and not for references into an answer's wording", per provider.** The
+  follow-ups whose referent is named in the first question are t01 to t05, and t06 and t07 asked by
+  the Administrator.
+  - **On FLM, it did not hold for subject nouns.** The rule read "history works" for none of them
+    on 3 November, for t04 on 8 November, and on 9 November for t02 and t04 in phase 3 and for t04
+    in phase 4. D-91's note splits the cause, and D-112 records the clause as partial.
+  - **On `anthropic`, it held for subject nouns.** Each of them read "history works" on Sonnet
+    5.5's draw and on every Haiku 5.5 draw.
+  - **A reference into an earlier answer.** t09, the previous-answer thread, was not resolved on
+    FLM. On `anthropic` it matched on every draw, but through retrieval: the joined questions
+    retrieved D17, which names the facilities team itself. The earlier answer was not used.
+- **The decision stands on both providers:** prior questions only. A referent that is only in an
+  earlier answer reaches the prompt only if retrieval supplies a passage naming it, and no frozen
+  follow-up tests that case. FR-13's status is in D-112's notes.
+
 ## D-43 · A conversation's title is optional on create and derived from its first question
 
 **Status:** Settled here, by the agent that built the endpoints · **Date:** 2026-09-24 ·
@@ -6332,6 +6358,16 @@ stored.
 D-111). FR-13's follow-up clause is accepted as partial for NIT3003, as a recorded deviation, and the
 generation-side lever moves to NIT3004. "Work continuing" no longer describes it, for the FLM build.
 
+**Dated note, 12 November 2026: the header's "not yet run" is overtaken, and the default build is
+measured.** The header's "Measured reason: step 5 of the user's post-M6 order, not yet run" was
+true on 2 November. Step 5 ran on 3 November (the note of that day above), and the header is left
+as written.
+
+- **This entry and its notes describe the FLM build,** as D-112 does. Nothing has changed on FLM.
+- **On `anthropic`, the default since D-122,** FR-13 was re-audited on 11 November, then measured
+  on two further Haiku 5.5 draws and a Haiku HTTP check that evening (D-112's notes of 11 and
+  12 November). Its state there is in those notes, not here.
+
 ## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,
@@ -6401,6 +6437,63 @@ FR-01, FR-02, FR-04, FR-05, FR-06, FR-08, FR-09, FR-12, D-62, D-61 gap 13
 
 **Not covered**, and still open: S4's duplicated server logic (`views.py:1039` and `:1583`;
 `:673-682` and `:1062-1067`) and the "50 MB" literal at `views.py:151`.
+
+**Dated note, 12 November 2026: FR-12's "a search field available from every page" is tested
+across the routes (#95).** Step 6 left this clause at ⚠️ (`docs/stage-5-front-end-clauses.md`,
+FR-12 row 1) because no test walked the routes. #95 (`a668a08`) walks them, reusing the walk #91
+wrote for FR-13's "reachable from any page" (D-112's note of 12 November on the draws). It changed
+files under `frontend/tests` and `docs/stage-5-front-end-clauses.md`, and no file under
+`frontend/src`.
+
+- **What is tested,** in `frontend/tests/headerSearchField.test.jsx`:
+  - **The walk.** The whole application, signed in through `tests/fakeApi.js`, at every path in
+    `frontend/src/App.jsx`'s route table and at `/`, as an Employee and as an Administrator.
+    - At `a668a08` those paths are `/`, `/login`, `/register`, `/components`, `/dashboard`,
+      `/admin`, `/upload`, `/documents`, `/documents/:docId`, `/meetings`, `/meetings/:meetingId`,
+      `/search`, `/ask`, `/403`, `/admin/roles`, `/admin/knowledge-gaps` and `/admin/tags`.
+    - On the page each visit ends on, the banner landmark holds exactly one search landmark. That
+      landmark holds exactly one input labelled `TEXT.searchFieldLabel`, and the input is not
+      disabled.
+    - The field is looked for in the banner, so neither the search screen's own field nor the
+      component sheet's sample can stand in for it.
+  - **Using the field as an Administrator:** a term submitted from `/admin/tags` shows the Search
+    screen at `/search` for that term. As an Employee, from `/dashboard`, this was already tested
+    by step 6's `search.test.jsx` :: refuses one character from the header field with a message
+    naming the minimum, sends nothing, and searches at two.
+  - **The walk is held to the route table** by `askNavLink.test.jsx` :: has a case, as each role,
+    for every path in the route table of src/App.jsx. The cases are in
+    `frontend/tests/routeWalk.jsx`, which `askNavLink.test.jsx` and `headerSearchField.test.jsx`
+    import.
+- **The breaks** are named in `b0be6d9`'s message, as this entry requires. Every new test failed
+  under at least one of them.
+- **Not covered:**
+  - **Whether the field can be seen.** jsdom applies no stylesheet.
+  - **A visitor who never signed in.** One has no field, by design (`HeaderSearch` in
+    `frontend/src/App.jsx`). `logout.test.jsx` asserts there is no search landmark after logging
+    out.
+  - **A term submitted from every page.** A term is submitted from `/dashboard` as an Employee
+    and from `/admin/tags` as an Administrator.
+  - **An address no route matches.**
+  - **A disabled field, in the test that submits a term.** `fireEvent` sets a disabled input's
+    value all the same, so that test passes with the field disabled. The walk asserts `disabled`
+    itself.
+- **Records this overtakes, left as written.** Each records the clause as having no front-end
+  test on its day:
+  - **D-61's verdict:** its table row "Search field on every page | satisfied (no automated
+    test)", and its gap 9, for FR-12's search field.
+  - **D-62's list** of what the suite does not cover: "the search field on every page". D-62's
+    own note of 2 November had already said that `docs/stage-5-front-end-clauses.md` supersedes
+    that list.
+  - **D-90's verdict:** row 12's "Nothing front-end tests the search field on every page…", and
+    finding S1, for FR-12's search field.
+    - Step 6 tested the other items in row 12's list: the grouping, the two-character minimum,
+      the Search screen and the partial-match label.
+    - The rest of what S1 names is tracked in `docs/stage-5-front-end-clauses.md`.
+  - **`docs/demonstration-script.md`'s answer to "What is not verified by any test?"**, derived
+    from `frontend/tests` on 2 November: its item "Search, its field and its results (the
+    two-character minimum, the grouping, the partial-match label)". Step 6 tested the field's
+    two-character minimum, the grouping and the partial-match label, and #95 the field on every
+    page. The script is not edited by this note.
 
 ## D-95 · NFR-08's miss is a local-model baseline, not a dropped NFR
 
@@ -8916,6 +9009,48 @@ $0.0038 for the check. The user approved about $0.06 for this run (D-113).
 **Where it applies:** `corpus/objective-02/runs/2026-11-11/`, and
 `docs/stage-5-clause-audit.md`'s section "After the draws (11 November 2026)".
 
+**Dated note, 12 November 2026, later: the user decided the Done line, the gate checklist and the
+re-audit, and the records the re-audit found stale are corrected.** The text above this note is
+left as written.
+
+**What the user decided on 12 November,** from three tabbed questions, each the recommended choice:
+
+| Question | Decided |
+|---|---|
+| What `M6-BUILD-PROMPT.md`'s Done line says now | **The FLM acceptance stands, and the default build counts by audit.** The amendment of 10 November stands for the FLM build. On the default build the clause is not admitted as a deviation: its measured pass counts toward COMPLETE only when the auditor reads it as met. D-42 stays a recorded deviation on both builds. The amendment of 12 November is in the user's words |
+| The gate checklist's "Where does the build fall short of a clause on purpose?" | **A dated pointer.** The item stays as it stood for the 1 November gate, and points to `docs/demonstration-script.md`'s list, which now names D-112 |
+| When `requirements-auditor` reads FR-13 again | **With Stage 5 item 10's closing audit,** with no separate run. Until then FR-13's verdict stays INCOMPLETE |
+
+**The verdict's section (d), item by item.**
+
+| Item | Where | Done |
+|---|---|---|
+| 1, 2, 3 | this entry | The note of 11 November (#89) |
+| 4, 5 | D-42 | A dated note |
+| 6 | D-91 | A dated note |
+| 7 | D-121 | A dated note |
+| 8 | D-122 | A dated note |
+| 9 | `M6-BUILD-PROMPT.md`'s Done line | The amendment of 12 November |
+| 10 | `M6-BUILD-PROMPT.md`'s gate checklist | The dated pointer |
+| 11, 12, 13, 14 | `docs/demonstration-script.md` | Amended in place under a dated header, as that file is: step 5, the screen's notes, the answer on conversations, and the deviations list, which now names D-112 with its reason and numbers |
+| 15 | `docs/stage-5-item-8-walk.md` | A dated note. The walk stays true of the alpha, which runs FLM |
+| 16 | `docs/stage-5-clause-audit.md` | Its sections of 11 November (#89) and "After the draws" (#94) |
+| 17 | `docs/stage-4-clause-audit.md:84` | **Left as written.** That file's rows stand as written, as `docs/stage-5-clause-audit.md` says where it quotes them, and FR-13's later states are in that file |
+| 18 | `docs/flm-baseline.md` | Dated notes at its head and under "What remains unmeasured" |
+| 19 | `apps/retrieval/conversation.py` | Its module docstring now says the multi-turn prompt was unmeasured when written, and what has measured it since |
+| 20 | `docs/stage-4-open-items.md` | A dated note |
+| 21 | the `test_fr11_scoping.py` line references | Corrected in `docs/demonstration-script.md`; a dated note in the walk; already in the clause audit's section of 11 November |
+| 22 | `README.md`, `CLAUDE.md` | Nothing was stale |
+
+**Found while correcting them.** Section (d)'s item 19 gives the thread runs' schema conformance as
+"38/38 on FLM". The run of 3 November, on the alpha's code, conformed in 37 of 40 responses. All
+three failures were one cold run, t04's, which carries no history block. Every with-history run in
+the thread runs of 3 to 11 November conformed on its first attempt (D-42's note of 12 November).
+
+**Still open: section (c)'s defect 4.** Steps 9, 12a and 12b of `docs/measurement-runbook.md`, and
+the committed harness and HTTP check, still gate on FLM. Every FR-13 record on `anthropic` came
+from a run-folder copy with a provider gate.
+
 ## D-113 · D-35 is superseded: the `anthropic` provider is funded by the Max plan's monthly Claude API credits, and is brought into use
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-35, D-03, D-04, D-36, D-67,
@@ -10042,6 +10177,12 @@ FR-10, FR-12, FR-13, `config/settings.py`, `.env.example`
 **Where it applies:** `config/settings.py`, `.env.example` and the development `.env`. D-115
 carries a dated note.
 
+**Dated note, 12 November 2026: "The default provider is still FLM" is overtaken.** It was true when
+written. D-122 made `anthropic` the default the same day, and this entry is left as written. The
+table's "threads: follow-ups with history 9/9" was one draw per model. FR-13 was re-audited on
+11 November, and Haiku 5.5 was drawn twice more on the frozen nine (D-112's notes of 11 and
+12 November).
+
 ## D-122 · `anthropic` (Claude Haiku 5.5 + Voyage `voyage-4`) is the default provider, after FR-10's and FR-19's tuned values were re-derived on it
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, D-114, D-117, D-120,
@@ -10120,6 +10261,19 @@ stub provider and passed locally under that configuration.
   `apps/documents/classification.py`, `scripts/objective05_verify.py`.
 - **Documentation:** `README.md`, `CLAUDE.md` §3 and §4, `docs/ai-provider.md`. D-106 and D-109
   carry dated notes.
+
+**Dated note, 12 November 2026 (FR-13): what this entry's FR-13 evidence rested on.** It counts "the
+nine threads (9/9 with history) and the HTTP check (WIRED 3/3)" toward the switch. Those were one
+draw per model, and the HTTP check ran on Sonnet 5.5, not on Haiku 5.5, the model this entry makes
+the default. Since then:
+
+- **FR-13 was re-audited** on 11 November, at `bd95f92`, and returned INCOMPLETE (D-112's note of
+  11 November).
+- **Haiku 5.5 was measured again,** under a rule fixed first: two further draws of the frozen nine,
+  and one HTTP check through a fresh server. The resolving half of the follow-up clause is recorded
+  as met on `anthropic`, as a measurement (D-112's note of 12 November).
+
+This note changes nothing in the decision.
 
 **Dated note, 12 November 2026 (FR-19): one check was not run before the default moved, and the
 exclusion rule is a per-model setting this entry does not list.**
