@@ -96,15 +96,21 @@ Changing the order is a decision, not an edit to make on the day.
    Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue   # must print nothing
    ```
 
-   **This check can be wrong in both directions on this laptop** (D-87's note of 11 November
-   2026). Windows has reported a serving socket in another state, so it can print nothing while a
-   server is listening. It has also left a row whose `OwningProcess` is 0 after a server stopped,
-   which is not a server. When in doubt, ask the script the pre-flight uses. It reads the port's
-   own row as well, and takes about a minute to say that nothing is listening:
+   **This check can be wrong in both directions on this laptop** (D-87's notes of 11 and 12
+   November 2026). Windows has reported a serving socket in another state, so it can print nothing
+   while a server is listening. It has also left a row whose `OwningProcess` is 0 after a server
+   stopped, which is not a server. And with two servers on the port it prints one of them. When in
+   doubt, ask the script the pre-flight uses. It reads netstat and the port's own rows as well, and
+   takes about a minute to give up. The two paths are spelled out because `$py` and `$repo` are set
+   in section 1, below:
 
    ```powershell
-   & $py scripts\server_record.py http://127.0.0.1:8000
+   & 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe' `
+     'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\scripts\server_record.py' http://127.0.0.1:8000
    ```
+
+   The port is free only when its `notes` say that nothing is listening. A note that no single
+   process holds the port means something does.
 
 ## 1. The names, in every PowerShell window used below
 

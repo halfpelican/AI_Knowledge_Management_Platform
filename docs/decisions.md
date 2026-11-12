@@ -5932,6 +5932,143 @@ report a serving socket's state wrongly.** The user asked for this on main after
   - **NFR-08 again with this code.** Run 6's copy had the same lookup without the record fields.
   - **Measured runs before 11 November.** They are not re-examined for this fault.
 
+**Dated note, 12 November 2026: no lookup takes a process while another holds the port.** The
+requirements audit of that day ran on `25f6179`, after #93 had merged; D-126's note of the same day
+records why it ran late. Its findings on this lookup, and what was done:
+
+- **B1: a state the lookup merged on 11 November could pass.** Its port-row step dropped every
+  owner whose command line could not be read before counting. So with D-85's Waitress and an
+  unreadable process on the port (another user's, an elevated one, PID 4), it returned Waitress and
+  the pre-flight was READY. The Listen-row lookup alone had returned the unreadable process when its
+  row came first, and the pre-flight refused. The user chose a stricter lookup (12 November).
+- **B2: the Listen row can name one of two listeners.** The audit raised it, and the first trial
+  below showed it with the real commands. Windows let two servers listen on one address and port.
+  - The Listen row named one of them, a different one from try to try, and step 1 took it.
+  - netstat listed both PIDs LISTENING.
+  - The port's CIM rows showed one, because the two rows share one key.
+
+  The user's choice was that a second process on the port means nothing is taken, and step 1 now
+  follows it too.
+- **The lookup now** (`listening_process`, `sole_owner`):
+  1. **The Listen row,** taken when its process's command line can be read and netstat lists no
+     other live process LISTENING on the port. When netstat cannot be run, the row is taken as
+     before these checks, and the trace says so.
+  2. **Otherwise** netstat's LISTENING PIDs and every live owner of a remote-port-0 row on the port,
+     readable or not, are read together. One process is taken only when it is the only candidate,
+     owns a row and has a readable command line. PID 0 is never a candidate, and a row whose owner
+     is gone is not read as an owner. netstat alone no longer names the listener, as the note of
+     11 November's step 2 did.
+
+  A process the Listen row named but step 1 did not take is not returned at the end either. So a
+  refused lookup gives no command line, and the pre-flight refuses.
+- **B4: what a refusal says.** When a candidate was seen and none was taken, `note` reads "no single
+  process with a readable command line holds port N", with what was seen, where it said "nothing is
+  listening". The runbook asks this script whether the port is free, so "nothing is listening" was
+  wrong in the unsafe direction.
+- **B8: the wait.** The last try starts within 60 s of the first, so the whole wait is about a
+  minute: 57.2, 59.6 and 60.4 s in the trials below. A lookup that times out makes it longer. The
+  note of 11 November's "about 60 s" meant this.
+- **B6: run 4.** The note of 11 November counts NFR-08's run 4 among the runs the fault refused.
+  `nfr08-anthropic.md` records that another session traced run 4's refusals to a `runserver` holding
+  port 8000 that morning, unverified. Run 4's console shows "nothing is listening" with a `waitress`
+  Server header on each attempt, which fits either cause. That note should have carried the caveat.
+- **B5: the runbook.** Section 0's step 4 used `$py` and a relative script path, which section 1
+  sets later. It now spells both out, and says which note means the port is free.
+- **Unchanged:**
+  - decision 2's rules;
+  - the built note's two checks;
+  - process 0, which `_listen_row_process` reports as unknown (D-112's note of 12 November).
+- **Tried on the laptop on 12 November,** with `python -m http.server` on scratch ports and the
+  fault absent: the laptop had been up since 17:07 on 11 November. The record is
+  `corpus/objective-02/runs/2026-11-12-listener-lookup/`:
+  - **at `89f71f0`** (`console.txt`): one listener was found by its Listen row in 1.2 s. With two,
+    step 1 took one of them (B2). With none, "nothing is listening" after 59.6 s;
+  - **at `b40a425`** (`console-2.txt`): one listener was found by its Listen row in 1.0 s. With two,
+    nothing was taken after six tries, 60.4 s, and the note names both PIDs. With none, "nothing is
+    listening" after 57.2 s.
+- **Tests,** in `apps/ai/tests/test_server_record_preflight.py` unless another file is named. Each
+  fails under at least one deliberate break of the script, and the breaks are listed after the
+  table. The three files that load the script pass unbroken: 213 tests.
+
+  | Test | Fails under |
+  |---|---|
+  | `test_netstat_names_the_pid_listening_on_the_port_and_no_other` | T5 |
+  | `test_netstat_gives_every_listening_pid_or_says_why_not` | T5 |
+  | `test_the_ports_own_rows_give_every_live_owner` | T3, T7, T11, T19, T20 |
+  | `test_one_process_is_taken_only_when_it_alone_holds_the_port` | T2, T15, T16, T21 |
+  | `test_nothing_is_taken_when_the_ports_rows_could_not_be_read` | T18 |
+  | `test_a_listen_row_is_taken_when_netstat_lists_no_other_listener` | T13 |
+  | `test_a_readable_listen_row_is_not_taken_while_netstat_lists_another_listener` | T2, T4, T13, T15, T17, T22, T23 |
+  | `test_a_second_listener_that_goes_away_lets_the_listen_row_be_taken` | T2, T4, T13, T22 |
+  | `test_a_listener_with_no_listen_row_is_found_when_netstat_and_its_row_agree` | T24 |
+  | `test_when_netstat_misreports_too_the_ports_own_row_names_the_process` | T1, T25 |
+  | `test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over` | T1, T2, T4, T10, T17 |
+  | `test_two_readable_listeners_are_never_reported_as_nothing_listening` | T2, T17 |
+  | `test_the_lookup_is_tried_again_before_it_says_nothing_is_listening` | T1, T4, T25 |
+  | `test_nothing_listening_is_said_only_after_the_wait_and_in_the_same_words` | T1, T4 |
+  | `test_a_listen_row_and_a_netstat_line_naming_process_0_do_not_end_the_search` | T1, T21, T25 |
+  | `test_only_rows_naming_process_0_are_reported_as_the_listen_row_reports_them` | T1, T4, T21 |
+  | `test_a_process_nobody_can_read_is_returned_after_the_wait_with_a_note_that_says_so` | T1, T4, T10, T16, T17 |
+  | `test_off_windows_the_process_is_not_looked_up_and_nothing_waits` | T6 |
+  | `test_the_record_says_which_lookup_found_the_process` | T8 |
+  | `test_the_closing_check_says_how_it_found_the_process` | T12 |
+  | `test_another_process_found_by_a_fallback_still_makes_the_run_invalid` | T14 |
+  | `test_no_process_found_at_the_end_still_makes_the_run_invalid` | T9 |
+  | `test_process_0_is_never_recorded_as_the_listening_process` (`test_fr13_measurement_scripts.py`) | T1 |
+  | `test_a_real_listening_process_is_recorded_as_before` (`test_fr13_measurement_scripts.py`) | T13 |
+
+  - T1: only the Listen row is asked.
+  - T2: with two candidates, the first is taken.
+  - T3: an owner nobody can read is dropped from the port's rows, as before this note.
+  - T4: no second try.
+  - T5: netstat's port is matched as a suffix, so 18000 reads as 8000.
+  - T6: the fallbacks run off Windows.
+  - T7: the port's rows are asked for in state Listen only.
+  - T8: the record does not say which lookup found the process.
+  - T9: no process at the end reads as the same process.
+  - T10: a Listen row is taken without a readable command line.
+  - T11: the command lets process 0 own the port's row.
+  - T12: the closing check does not record how the process was found.
+  - T13: a Listen row is never taken.
+  - T14: any process at the end reads as the same process. The existing
+    `test_another_process_at_the_end_makes_the_run_invalid` fails under it too.
+  - T15: a process netstat names is not a candidate.
+  - T16: a sole owner nobody can read is taken.
+  - T17: "nothing is listening" is said although a candidate was seen.
+  - T18: rows that could not be read are treated as no rows.
+  - T19: a row whose owner is gone counts.
+  - T20: process 0, if the command printed it, is kept as an owner.
+  - T21: netstat's process 0 is a candidate.
+  - T22: a readable Listen row is taken while netstat lists another listener.
+  - T23: a Listen row rejected for a second listener is returned at the end.
+  - T24: a process the fallbacks take is always credited to the port's row.
+  - T25: a process the fallbacks take is always credited to netstat.
+
+  T7, T11 and T19 change only the PowerShell command, which no test runs, so they are caught by
+  assertions on the command's text.
+- **Not covered:**
+  - **B3: the port's own row cannot tell a misreported listener from a socket that truly is not
+    listening.** A live process holding a bound or closed row on the port counts as holding it.
+    Alone, with a readable command line, it is taken, and at the closing check its PID reads as the
+    same process.
+  - **B7: the other callers of `observe`.** `scripts/conversation_http_check.py` and
+    `scripts/ingest_objective02.py` wait about a minute when no process is taken. They can now
+    refuse on a contradiction that a process found by a fallback shows, where a failed lookup only
+    warned.
+  - **A port that PID 4 also holds,** for instance through http.sys, is now refused. That is a false
+    refusal, the safe direction.
+  - **A second listener that the fault hides from netstat as well as from the Listen row.** The
+    fault has hidden a listener from netstat (the note of 11 November), and the port's CIM rows show
+    one of two listeners on the same address. If both happened at once, the visible listener would
+    be taken.
+  - **This code against the misreported state.** Today's trials ran with the fault absent, and the
+    tests script each lookup's output. The trials of 11 November showed the fault with the earlier
+    lookup.
+  - **`corpus/objective-02/runs/2026-11-11-listener-lookup/try_listener_lookup.py`** calls
+    `_netstat_listening_pid` and `_port_row_owner`, which this change replaced. It runs only against
+    `421f9ed`'s script.
+  - **A measured run with this code,** NFR-08's included.
+
 ## D-88 · The M6 alpha serves `kmp_demo_20261101`, restored from item 6's snapshot, from a worktree of its own
 
 **Status:** Settled by the user · **Date:** 2026-11-01 · **Stage:** 5 item 9 · **Closes:** D-84's

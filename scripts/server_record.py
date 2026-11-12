@@ -14,9 +14,9 @@ listening on the port, with what command line and since when, and that command l
 - the listening process, its command line and its start time, from ``Get-NetTCPConnection``
   and ``Win32_Process`` (Windows, where the laptop runs; elsewhere the record says it was not
   looked up). Windows can report a serving socket's state wrongly, so ``listening_process``
-  falls back to ``netstat`` and then to the port's own socket row, and tries again before it
-  says nothing is listening (D-87's note of 11 November 2026). The record says which lookup
-  found the process;
+  reads ``netstat`` and the port's own socket rows as well as the Listen row. It takes a
+  process only when that process alone holds the port, and tries again before it gives up
+  (D-87's notes of 11 and 12 November 2026). The record says which lookup found the process;
 - the server and the thread count, parsed from that command line. A Waitress started without
   ``--threads`` runs Waitress's default of 4, and the record says so;
 - the version: the Waitress installed in the venv the command line runs from (the venv's
@@ -419,9 +419,10 @@ def listening_process(port: int) -> dict:
        line. ``found_by`` is netstat's when netstat lists it LISTENING, and the port's row
        otherwise. A second candidate, readable or not, means nothing is taken.
 
-    When no process is taken, the lookups are tried again every LOOKUP_RETRY_INTERVAL_SECONDS. A
-    new try starts only within LOOKUP_RETRY_SECONDS of the first, so the wait is usually 50 to 60
-    seconds, and longer if a lookup times out. Then the Listen row's own result is returned, as it
+    When no process is taken, the lookups are tried again every LOOKUP_RETRY_INTERVAL_SECONDS. The
+    last try starts within LOOKUP_RETRY_SECONDS of the first, so the whole wait is about a minute
+    (57 to 61 seconds in the trials of 12 November 2026), and longer if a lookup times out. Then
+    the Listen row's own result is returned, as it
     always was: nothing listening, or a PID with no command line. It is never process 0:
     ``_listen_row_process`` reports a row that names it as unknown, with a note (D-112's note of
     12 November 2026). One thing differs from the Listen row's own answer: when a candidate was
