@@ -57,6 +57,7 @@ from apps.core.constants import (
     MAXIMUM_MALFORMED_RETRY_RUNS,
     MAXIMUM_SUMMARY_RETRY_RUNS,
     MINIMUM_SUMMARY_TRANSCRIPT_LENGTH,
+    SUMMARY_FAILED_BUSY,
     SUMMARY_FAILED_ERROR,
     SUMMARY_FAILED_INDEXING,
     SUMMARY_FAILED_MALFORMED,
@@ -314,15 +315,23 @@ def request_summary(
             started_at=timezone.now(),
         )
         if start:
-            transaction.on_commit(lambda: start_summary_run(summary.pk))
+            # The run's claim is its count of queued runs now, 0: see ``run_summary``.
+            transaction.on_commit(lambda: start_summary_run(summary.pk, claim=summary.retry_runs))
     return summary, True
 
 
 # --- Running one -----------------------------------------------------------------------------
 
 
-def run_summary(summary_id) -> MeetingSummary | None:
+def run_summary(summary_id, *, claim: int | None = None) -> MeetingSummary | None:
     """Carry one Processing run to Ready or Unavailable. Returns the row, or None if it has gone.
+
+    ``claim`` is the row's ``retry_runs`` when this run was started, which only a queued run moves
+    on. A run that waited for a place may meanwhile have been reclaimed as an orphan and retried
+    under a later count; it then belongs to that retry, and this one returns without calling the
+    provider (the security review of 12 November, finding 4, D-125's third note). Every caller in
+    the application passes it; None skips the check, for a caller that has just made or claimed
+    the row in its own thread.
 
     The provider call is made with no transaction open and no lock held. Everything is then
     written in one transaction (``_store``): the summary, its action items and its index entries
@@ -339,11 +348,18 @@ def run_summary(summary_id) -> MeetingSummary | None:
         return summary
     # The attempt starts now, not when the run was requested: in a background thread it may have
     # waited for one of MAXIMUM_SUMMARIES_IN_FLIGHT places, and a run timed from its request
-    # could pass SUMMARY_STALE_AFTER_SECONDS while still queued, be reclaimed as an orphan and run
-    # a second time beside itself. Only a row still Processing is touched.
-    MeetingSummary.objects.filter(pk=summary.pk, status=SUMMARY_PROCESSING).update(
-        started_at=timezone.now()
-    )
+    # could pass SUMMARY_STALE_AFTER_SECONDS while still waiting. Only a row still Processing,
+    # and still under this run's claim, is touched: one that was reclaimed and retried while this
+    # run waited is the retry's, and two runs never call the provider for one row.
+    mine = MeetingSummary.objects.filter(pk=summary.pk, status=SUMMARY_PROCESSING)
+    if claim is not None:
+        mine = mine.filter(retry_runs=claim)
+    if not mine.update(started_at=timezone.now()):
+        logger.info(
+            "Meeting summary %s was taken over while it waited (claim %s); left to that run",
+            summary.pk, claim,
+        )
+        return MeetingSummary.objects.filter(pk=summary.pk).first()
     meeting = summary.meeting
     source = summary_input(meeting.transcript_text)
     try:
@@ -545,6 +561,18 @@ def fail_after_error(summary_id) -> None:
         _fail(summary, SUMMARY_FAILED_ERROR, "an unexpected error; see the error log")
 
 
+def defer_busy(summary_id, detail) -> None:
+    """Close a run the server had no room to start: Unavailable, queued, reason "busy".
+
+    It never reached the provider, and the hourly retry carries it in its own process. A run is
+    only ever started this way when it is new, with its whole queue allowance (the security
+    review of 12 November, finding 4, D-125's third note).
+    """
+    summary = MeetingSummary.objects.filter(pk=summary_id).first()
+    if summary is not None:
+        _fail(summary, SUMMARY_FAILED_BUSY, detail)
+
+
 # --- The retry queue (NFR-20) ----------------------------------------------------------------
 
 
@@ -582,7 +610,7 @@ def retry_summary(summary: MeetingSummary) -> MeetingSummary | None:
         row.retry_runs += 1
         row.started_at = timezone.now()
         row.save(update_fields=["status", "queued_for_retry", "failure_reason", "retry_runs", "started_at"])
-    return run_summary(row.pk)
+    return run_summary(row.pk, claim=row.retry_runs)
 
 
 # --- A person's action items (FR-16: "edit, delete or manually add") --------------------------

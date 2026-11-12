@@ -210,7 +210,7 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_SUMMARY_RETRY_RUNS` / `SUMMARY_STALE_AFTER_SECONDS` | 3 queued runs, then a failed summary leaves NFR-20's retry queue / 2,400 s, after which a run still Processing is an orphan |
 | `MAXIMUM_MALFORMED_RETRY_RUNS` | 1 — a run that failed because no reply conformed is queued once, not three times (D-125's third note) |
 | `MAXIMUM_ACTION_ITEMS_PER_MEETING` | 200 — a person's addition past it is refused with 409 (D-125's third note) |
-| `MAXIMUM_SUMMARIES_IN_FLIGHT` | 2 — background summary runs calling the provider at once in one server process |
+| `MAXIMUM_SUMMARIES_IN_FLIGHT` / `MAXIMUM_SUMMARIES_WAITING` | 2 — background summary runs calling the provider at once in one server process / 20 waiting for a place, past which a run is queued as "busy" for the hourly retry (D-125's third note) |
 | `TRANSCRIPTION_SEGMENT_SECONDS` / `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` | 30 s, the page's segment / 60 s, the most the server transcribes in one request |
 | `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |
 | `MAXIMUM_RECORDING_BYTES` | 500 MB — the largest recording the page decodes; client-only, since the recording never reaches the server |

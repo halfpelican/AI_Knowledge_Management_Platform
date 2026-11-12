@@ -182,7 +182,7 @@ def main() -> int:
                 meeting = existing
                 summary, is_new = request_summary(meeting, start=False)
                 if is_new:
-                    run_summary(summary.pk)
+                    run_summary(summary.pk, claim=summary.retry_runs)
             else:
                 if existing is not None:
                     print(f"REFUSED: {item['id']} ({item['title']!r}) is already in this database; "

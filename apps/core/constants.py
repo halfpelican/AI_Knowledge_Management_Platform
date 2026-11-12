@@ -836,12 +836,13 @@ SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
 DEFAULT_SUMMARY_STATUS = SUMMARY_PROCESSING
 # Why a run ended Unavailable, kept on the row for the operator and never shown to a user.
 # "no_verified_narrative" is FR-12's path (b) for a summary: a reply came back and no narrative
-# sentence named a passage that was sent (invariant 7's distinction, D-125).
+# sentence named a passage that was sent (invariant 7's distinction, D-125). "busy" is a run the
+# server had no room to start (MAXIMUM_SUMMARIES_WAITING): it never reached the provider.
 SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
-                           "no_verified_narrative", "indexing_failed", "orphaned", "error")
+                           "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
 (SUMMARY_FAILED_PROVIDER_UNAVAILABLE, SUMMARY_FAILED_PROVIDER_REFUSED, SUMMARY_FAILED_MALFORMED,
  SUMMARY_FAILED_NO_VERIFIED_NARRATIVE, SUMMARY_FAILED_INDEXING, SUMMARY_FAILED_ORPHANED,
- SUMMARY_FAILED_ERROR) = SUMMARY_FAILURE_REASONS
+ SUMMARY_FAILED_ERROR, SUMMARY_FAILED_BUSY) = SUMMARY_FAILURE_REASONS
 # NFR-20's retry queue: a failed run is queued, and manage.py retry_meeting_summaries runs it
 # again on the hourly schedule. After this many queued runs have also failed it leaves the queue
 # and stays Unavailable until a person presses Regenerate (D-125).
@@ -860,6 +861,13 @@ SUMMARY_STALE_AFTER_SECONDS = 3 * 600 + 600
 # Background runs calling the provider at once in one server process (D-125). A third waits for a
 # place rather than being refused: nobody is waiting on the request, which answered 202.
 MAXIMUM_SUMMARIES_IN_FLIGHT = 2
+# Background runs WAITING for one of those places in one server process. Each waits in a thread of
+# its own, so without a bound a burst of requests (ingestions and Regenerates, from accounts anyone
+# can register) held a thread each for as long as the backlog took. Past it a run is not started:
+# it is closed Unavailable and queued as "busy", and the hourly retry carries it. Twenty runs at
+# about 30 seconds each clear in five minutes on two places. The security review of 12 November
+# 2026, finding 4 (D-125's third note).
+MAXIMUM_SUMMARIES_WAITING = 20
 # Where an action item came from: extracted by the model, or added by a person (FR-16's "manually
 # add items the extraction missed"). The same two words as TAG_APPLIED_BY_VALUES, FR-10's.
 ACTION_ITEM_ORIGINS = ("ai", "user")

@@ -502,7 +502,7 @@ KNOWLEDGE_GAP_STATUS_VALUES = ("Open", "Addressed")
 # FR-16 (D-125), 11 November 2026:
 SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
 SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
-                           "no_verified_narrative", "indexing_failed", "orphaned", "error")
+                           "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
 ACTION_ITEM_ORIGINS = ("ai", "user")
 ```
 

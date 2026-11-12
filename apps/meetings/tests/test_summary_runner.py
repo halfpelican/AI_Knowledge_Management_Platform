@@ -35,7 +35,9 @@ import apps.meetings.summaries as summaries
 from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     MAXIMUM_SUMMARIES_IN_FLIGHT,
+    MAXIMUM_SUMMARIES_WAITING,
     ROLE_NAMES,
+    SUMMARY_FAILED_BUSY,
     SUMMARY_FAILED_ERROR,
     SUMMARY_FAILED_ORPHANED,
     SUMMARY_FAILED_PROVIDER_UNAVAILABLE,
@@ -392,10 +394,99 @@ def test_the_summary_route_answers_202_while_the_provider_is_still_working(setti
     assert len(stub_ai_service.summarise_calls) == 1
 
 
+@pytest.mark.django_db
+def test_past_the_waiting_cap_a_run_is_queued_as_busy_and_no_thread_is_started(
+    settings, stub_ai_service, django_capture_on_commit_callbacks, monkeypatch
+):
+    """The security review of 12 November, finding 4 (D-125's third note): every run waited in a
+    thread of its own, with no bound. With MAXIMUM_SUMMARIES_IN_FLIGHT + MAXIMUM_SUMMARIES_WAITING
+    threads live, a further run is closed Unavailable and queued as "busy", for the hourly retry,
+    and no thread is started for it. The count is set directly, so no thread is needed to fill it."""
+    assert (MAXIMUM_SUMMARIES_WAITING, summary_runner.MAXIMUM_LIVE) == (20, MAXIMUM_SUMMARIES_IN_FLIGHT + 20)
+    summary = processing_run(django_capture_on_commit_callbacks)
+    settings.SUMMARY_RUNNER = THREAD_RUNNER
+    monkeypatch.setattr(summary_runner, "_live", summary_runner.MAXIMUM_LIVE)
+
+    asked = []
+
+    def no_thread(*args, **kwargs):
+        # Recorded, not raised: start_summary_run catches a thread that fails to start and queues
+        # the run as busy too, so a raise here could not tell the cap from that fallback.
+        asked.append(kwargs.get("name"))
+        raise RuntimeError("a thread was asked for past the cap")
+
+    monkeypatch.setattr(summary_runner.threading, "Thread", no_thread)
+
+    start_summary_run(summary.pk, claim=0)
+
+    assert asked == []  # the cap refused it before any thread was asked for
+    summary.refresh_from_db()
+    assert (summary.status, summary.failure_reason, summary.queued_for_retry) == (
+        SUMMARY_UNAVAILABLE, SUMMARY_FAILED_BUSY, True,
+    )
+    assert list(retry_queue()) == [summary]
+    assert stub_ai_service.summarise_calls == []
+    assert summary_runner._live == summary_runner.MAXIMUM_LIVE  # nothing was counted for it
+
+
+@pytest.mark.django_db
+def test_one_below_the_cap_a_run_gets_its_thread(settings, django_capture_on_commit_callbacks, monkeypatch):
+    summary = processing_run(django_capture_on_commit_callbacks)
+    settings.SUMMARY_RUNNER = THREAD_RUNNER
+    monkeypatch.setattr(summary_runner, "_live", summary_runner.MAXIMUM_LIVE - 1)
+    started = []
+
+    class Recorded:
+        def __init__(self, target, args, name, daemon):
+            started.append((target, args, name, daemon))
+
+        def start(self):
+            pass
+
+    monkeypatch.setattr(summary_runner.threading, "Thread", Recorded)
+
+    start_summary_run(summary.pk, claim=0)
+
+    assert started == [(summary_runner._run_in_thread, (summary.pk, 0), f"{THREAD_PREFIX}{summary.pk}", True)]
+    assert summary_runner._live == summary_runner.MAXIMUM_LIVE
+    summary.refresh_from_db()
+    assert summary.status == SUMMARY_PROCESSING
+
+
+@pytest.mark.django_db
+def test_a_thread_the_system_refuses_is_queued_as_busy_and_not_raised(
+    settings, django_capture_on_commit_callbacks, monkeypatch, caplog
+):
+    """``start_summary_run`` runs from ``transaction.on_commit``, after the transcript committed:
+    raising there would answer a stored upload with a 500 (invariant 8)."""
+    summary = processing_run(django_capture_on_commit_callbacks)
+    settings.SUMMARY_RUNNER = THREAD_RUNNER
+    monkeypatch.setattr(summary_runner, "_live", 0)
+
+    class Refused:
+        def __init__(self, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(summary_runner.threading, "Thread", Refused)
+
+    start_summary_run(summary.pk, claim=0)  # does not raise
+
+    summary.refresh_from_db()
+    assert (summary.status, summary.failure_reason, summary.queued_for_retry) == (
+        SUMMARY_UNAVAILABLE, SUMMARY_FAILED_BUSY, True,
+    )
+    assert summary_runner._live == 0  # the place it took was given back
+    assert runner_errors(caplog)
+
+
 def test_the_thread_mode_tests_leave_no_thread_behind():
     """Collected last in this module; pytest-django runs it after the transactional tests above
     because it uses no database."""
     assert summary_threads() == []
+    assert summary_runner.live_runs() == 0  # every thread gave back its count
     # Every place was given back: all of them can be taken now, and not one more.
     places = summary_runner._places
     taken = [places.acquire(blocking=False) for _ in range(MAXIMUM_SUMMARIES_IN_FLIGHT)]

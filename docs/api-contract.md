@@ -1551,8 +1551,10 @@ of 200 words or more, and again on `POST .../summary`. One run is in flight per 
 4. A run that fails is `"Unavailable"` and queued. `python manage.py retry_meeting_summaries`,
    scheduled hourly (`scripts/register_meeting_summary_schedule.ps1`), runs each queued summary
    again, up to `MAXIMUM_SUMMARY_RETRY_RUNS` (3) times; a run that failed because no reply
-   conformed is queued once (`MAXIMUM_MALFORMED_RETRY_RUNS`, D-125's third note). The transcript
-   is stored and searchable throughout: a summary's failure never touches it (invariant 8, NFR-20).
+   conformed is queued once (`MAXIMUM_MALFORMED_RETRY_RUNS`, D-125's third note). A run the server
+   has no room to start, with `MAXIMUM_SUMMARIES_WAITING` already waiting, is queued the same way
+   without reaching the provider. The transcript is stored and searchable throughout: a summary's
+   failure never touches it (invariant 8, NFR-20).
 
 **`POST /api/meetings` is unchanged.** Its `201` body does not mention the summary; the meeting
 page asks `GET .../summary`.

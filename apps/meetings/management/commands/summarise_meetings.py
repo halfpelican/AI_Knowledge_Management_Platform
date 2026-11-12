@@ -260,7 +260,7 @@ class Command(BaseCommand):
                 "error": "in_progress",
                 "seconds": round(time.perf_counter() - started, 3),
             }
-        result = run_summary(summary.pk)
+        result = run_summary(summary.pk, claim=summary.retry_runs)
         if result is None:
             raise CommandError(f"Meeting {meeting.pk} was deleted while its summary was running.")
         seconds = time.perf_counter() - started

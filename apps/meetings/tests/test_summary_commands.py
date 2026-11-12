@@ -318,14 +318,14 @@ def test_the_record_counts_the_tokens_the_attempts_log_reported(stub_ai_service,
     from apps.meetings.summaries import run_summary as real_run_summary
     from apps.meetings.management.commands import summarise_meetings
 
-    def run_and_log(summary_id):
+    def run_and_log(summary_id, *, claim):
         attempt_log.parsed_summary(
             1, 3, 2.5, sentences=1, decisions=1, highlights=0, action_items=1,
             reply=attempt_log.ReplyFacts(
                 max_tokens=16000, finish_reason="end_turn", completion_tokens=321, prompt_tokens=4567
             ),
         )
-        return real_run_summary(summary_id)
+        return real_run_summary(summary_id, claim=claim)
 
     monkeypatch.setattr(summarise_meetings, "run_summary", run_and_log)
     a_meeting_without_a_run()

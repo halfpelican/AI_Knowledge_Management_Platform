@@ -125,7 +125,7 @@ def test_each_failure_ends_unavailable_and_queued_under_its_own_reason(
 def test_the_failure_reasons_are_the_fixed_vocabulary():
     assert SUMMARY_FAILURE_REASONS == (
         "provider_unavailable", "provider_refused", "malformed", "no_verified_narrative", "indexing_failed",
-        "orphaned", "error",
+        "orphaned", "error", "busy",
     )
     summary = MeetingSummary(meeting=Meeting(title="x", meeting_date="2026-11-10"), failure_reason="because")
     with pytest.raises(ValidationError) as excinfo:
@@ -671,3 +671,65 @@ def test_a_run_that_waited_for_a_place_is_timed_from_when_its_work_starts(
     summary.refresh_from_db()
     assert summary.status == SUMMARY_READY and summary.retry_runs == 0
     assert len(stub_ai_service.summarise_calls) == 1
+
+
+# --- A run taken over while it waited (the security review of 12 November, finding 4) ----------------
+
+
+def test_a_run_reclaimed_and_retried_while_it_waited_makes_no_provider_call_when_it_starts(
+    stub_ai_service, django_capture_on_commit_callbacks
+):
+    """A background run waited for a place past SUMMARY_STALE_AFTER_SECONDS. The hourly command
+    reclaimed it as an orphan and retried it, so the row is Processing again under a later claim.
+    The waiting run then gets its place while the retry is mid-call: it must leave the row to the
+    retry rather than call the provider for it a second time (D-125's third note)."""
+    with django_capture_on_commit_callbacks(execute=False) as callbacks:
+        meeting = ingest()  # the run is requested; its start (claim 0) is held back, "waiting"
+    summary = make_stale(MeetingSummary.objects.get(meeting=meeting))
+    assert reclaim_orphans() == 1
+    seen = {}
+
+    def while_the_retry_runs(title, passages):
+        if "late" not in seen:
+            seen["late"] = True
+            callbacks[0]()  # the waiting run gets its place now, under claim 0
+            seen["row"] = MeetingSummary.objects.get(pk=summary.pk)
+        return draft()
+
+    stub_ai_service.summary = while_the_retry_runs
+    retried = retry_summary(MeetingSummary.objects.get(pk=summary.pk))
+
+    assert len(stub_ai_service.summarise_calls) == 1  # the retry's call; the late run made none
+    assert (seen["row"].status, seen["row"].retry_runs) == (SUMMARY_PROCESSING, 1)
+    assert (retried.status, retried.retry_runs) == (SUMMARY_READY, 1)
+
+
+def test_a_run_under_its_own_claim_is_carried(stub_ai_service, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=False) as callbacks:
+        meeting = ingest()
+    callbacks[0]()
+
+    summary = MeetingSummary.objects.get(meeting=meeting)
+    assert (summary.status, summary.retry_runs) == (SUMMARY_READY, 0)
+    assert len(stub_ai_service.summarise_calls) == 1
+
+
+def test_every_caller_in_the_application_passes_a_claim():
+    """``claim=None`` skips the check, so a caller that forgot it would bring the double run back."""
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    callers = [
+        root / "apps" / "meetings" / "summaries.py",
+        root / "apps" / "meetings" / "summary_runner.py",
+        root / "apps" / "meetings" / "management" / "commands" / "summarise_meetings.py",
+        root / "scripts" / "objective04_run.py",
+    ]
+    calls = []
+    for path in callers:
+        source = path.read_text(encoding="utf-8")
+        calls += re.findall(r"(?<!def )\b(?:run_summary|run_guarded|start_summary_run)\(([^)]*)\)", source)
+    assert len(calls) >= 6
+    for arguments in calls:
+        assert "claim=" in arguments, arguments
