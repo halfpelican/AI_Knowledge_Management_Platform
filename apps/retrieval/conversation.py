@@ -68,18 +68,18 @@ cached between turns at all — not passages either, which is FR-13's "each turn
 fresh retrieval based on the resolved question rather than reusing the previous turn's
 passages".
 
-**THE MULTI-TURN PROMPT IS UNMEASURED.** docs/flm-baseline.md's 100% schema conformance
-and 0% fabricated identifiers were measured on a prompt of passages plus ONE question.
-scripts/citation_harness.py asks single questions, so re-running it does not cover the
-composed form and was not re-run for this item. What is known about the composed prompt is
-what the tests assert about its text, plus the fact that verification is indifferent to
-where in the prompt an identifier came from. What is NOT known is whether gemma3:4b's
-schema conformance holds with a history block in front of it. Measuring it needs a
-multi-turn question set the harness does not have.
+**The multi-turn prompt was unmeasured when this module was written** (Stage 4 item 9).
+docs/flm-baseline.md's 100% schema conformance and 0% fabricated identifiers were measured
+on a prompt of passages plus ONE question, and scripts/citation_harness.py then asked single
+questions only. What was not known is whether gemma3:4b's schema conformance holds with a
+history block in front of it. Verification is indifferent to where in the prompt an
+identifier came from, and the tests assert the composed prompt's text.
 
-(Stage 4 item 9a later measured the block in the prompt with retrieval held constant;
-D-42 records it. FR-13 end to end — the composed join changing what is retrieved — is
-D-86's, and ``compose`` below is what its harness mode calls.)
+It has been measured since. Stage 4 item 9a measured the block in the prompt with retrieval
+held constant (D-42). D-86's thread runs measure FR-13 end to end, the composed join
+changing what is retrieved, and ``compose`` below is what the harness's thread mode calls.
+In the thread runs of 3 to 11 November 2026, on FLM and on Claude, every with-history run
+conformed on its first attempt (D-42's note of 12 November 2026).
 
 **7. ``compose`` is the composition, and it is pure (D-86 decision 5).** It takes the
 question and the earlier questions and returns both strings, with no database and no
