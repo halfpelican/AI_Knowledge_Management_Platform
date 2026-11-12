@@ -154,12 +154,12 @@ flag).
 | `narrative`, `decisions`, `highlights` | JSON | lists of `{text, passages}`, holding only references to passages that were sent |
 | `passages` | JSON | the text of every transcript passage an element names, by number |
 | `model` | text | the chat model that answered |
-| `input_truncated`, `passages_sent`, `passages_total` | boolean, integer, integer | how much of the transcript one request carried (`SUMMARY_INPUT_TOKENS`) |
+| `input_truncated`, `passages_sent`, `passages_total` | boolean, integer, integer | how much of the transcript one request carried (`SUMMARY_INPUT_TOKENS`, `SUMMARY_INPUT_CHARACTERS`) |
 | `action_items_extracted` | integer, nullable | how many items the run extracted; 0 is UC-04 A1's section recorded as empty |
 | `requested_by` | UUID FK → Users, nullable | who pressed Generate or Regenerate; null for the run ingestion starts; **set NULL** if the user is deleted |
 | `requested_at`, `started_at` | timestamp | `started_at` is when the current attempt began: a `Processing` row much older is an orphan |
 | `queued_for_retry` | boolean | NFR-20's "flagged for automatic retry"; indexed |
-| `retry_runs` | integer | queued runs made so far, at most `MAXIMUM_SUMMARY_RETRY_RUNS` |
+| `retry_runs` | integer | queued runs made so far, at most `MAXIMUM_SUMMARY_RETRY_RUNS`; a malformed failure is queued only while it is below `MAXIMUM_MALFORMED_RETRY_RUNS` |
 | `failure_reason` | text | fixed vocabulary — see §3; blank unless `Unavailable`; never shown to a user |
 
 **The table is Create and Read in substance.** A row's status moves during its own run, and

@@ -69,7 +69,11 @@ from apps.core.constants import (
 
 # The reply's limits. Each is a parameter of this call, like CLASSIFICATION_MAX_TOKENS, so it is
 # defined here rather than in apps/core/constants.py (D-104's precedent for MAXIMUM_TAG_SUGGESTIONS).
-# A reply over any of them is a schema violation, retried and never trimmed (invariant 10).
+# A reply over any of them is a schema violation, retried and never trimmed (invariant 10). The
+# rules state every one of them: a limit the model was never told is one a long meeting breaks on
+# every attempt, and every queued run (the security review of 12 November 2026, finding 3, D-125's
+# third note). apps/ai/tests/test_summarisation_prompt.py holds the rules and the parser to one
+# number each.
 #
 # FR-16's "concise paragraph-length summary": six sentences is a paragraph, and the same number
 # FR-12 caps an answer at (MAXIMUM_STATEMENTS, D-100).
@@ -409,14 +413,17 @@ Rules, all of them mandatory:
    paragraph-length account of the meeting: what it was for and what came of it. Each object is
    one sentence, with exactly two keys: "text", the sentence, and "passages", an array of the
    labels of the passages it is drawn from, such as ["P2", "P5"].
-4. "decisions" is an array of the decisions the meeting reached, each an object with "text" and
-   "passages". A proposal nobody agreed to is not a decision. An empty array is a correct answer.
+4. "decisions" is an array of at most {MAXIMUM_DECISIONS} decisions the meeting reached, each an
+   object with "text" and "passages". A proposal nobody agreed to is not a decision. If the
+   meeting reached more, list the {MAXIMUM_DECISIONS} that matter most. An empty array is a correct
+   answer.
 5. "highlights" is an array of at most {MAXIMUM_HIGHLIGHTS} points of discussion worth remembering
    that are neither decisions nor action items, each an object with "text" and "passages". An
    empty array is a correct answer.
-6. "action_items" is an array of the tasks the meeting agreed will be done: someone committed to
-   it, was asked to do it and accepted, or the meeting agreed it must be done. Each is an object
-   with exactly four keys:
+6. "action_items" is an array of at most {MAXIMUM_ACTION_ITEMS} tasks the meeting agreed will be
+   done: someone committed to it, was asked to do it and accepted, or the meeting agreed it must be
+   done. If the meeting agreed more, list the {MAXIMUM_ACTION_ITEMS} that matter most. Each is an
+   object with exactly four keys:
    - "description": the task, in a few words;
    - "owner": the person or team who will do it, copied exactly as the transcript names them, or
      null if the transcript does not say who;
@@ -430,9 +437,12 @@ Rules, all of them mandatory:
    speaker's label. If the line has no speaker label, the owner is null. Never complete a first
    name into a full name, and never choose one of two people.
 9. Never turn a deadline into a date, and never invent a deadline.
-10. Every "passages" array names at least one label, copied exactly from a passage header in this
-    conversation. Never invent, renumber or shorten a label.
+10. Every "passages" array names 1 to {MAXIMUM_PASSAGES_PER_ELEMENT} labels, copied exactly from
+    passage headers in this conversation: the passages it is most directly drawn from. Never
+    invent, renumber or shorten a label.
 11. Write only what the transcript says. Add no facts, names, numbers or dates it does not contain.
+12. Keep each "text" and each "description" to at most {MAXIMUM_ELEMENT_CHARACTERS} characters,
+    and each "owner" and each "due" to at most {MAXIMUM_PHRASE_CHARACTERS} characters.
 
 One worked example. Its meeting, names and passages are EXAMPLE values and appear in no real
 transcript: never reuse them, and never summarise a real meeting by its resemblance to the example.

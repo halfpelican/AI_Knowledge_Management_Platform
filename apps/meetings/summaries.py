@@ -54,6 +54,7 @@ from apps.core.constants import (
     ACTION_ITEM_FROM_AI,
     ACTION_ITEM_FROM_USER,
     MAXIMUM_ACTION_ITEMS_PER_MEETING,
+    MAXIMUM_MALFORMED_RETRY_RUNS,
     MAXIMUM_SUMMARY_RETRY_RUNS,
     MINIMUM_SUMMARY_TRANSCRIPT_LENGTH,
     SUMMARY_FAILED_ERROR,
@@ -63,6 +64,7 @@ from apps.core.constants import (
     SUMMARY_FAILED_ORPHANED,
     SUMMARY_FAILED_PROVIDER_REFUSED,
     SUMMARY_FAILED_PROVIDER_UNAVAILABLE,
+    SUMMARY_INPUT_CHARACTERS,
     SUMMARY_INPUT_TOKENS,
     SUMMARY_PROCESSING,
     SUMMARY_READY,
@@ -97,35 +99,51 @@ def transcript_is_long_enough(meeting: Meeting) -> bool:
 
 @dataclass(frozen=True)
 class SummaryInput:
-    """The passages one request carries, and how many the transcript has in all."""
+    """The passages one request carries, and how many the transcript has in all.
+
+    ``cut`` is True where the first passage alone was over SUMMARY_INPUT_CHARACTERS and was sent
+    cut to it: then even one passage is not the whole of what it was.
+    """
 
     passages: list[str]
     total: int
+    cut: bool = False
 
     @property
     def truncated(self) -> bool:
-        return len(self.passages) < self.total
+        return self.cut or len(self.passages) < self.total
 
 
 def summary_input(transcript_text: str) -> SummaryInput:
-    """FR-09's own passages of the transcript, whole, up to SUMMARY_INPUT_TOKENS.
+    """FR-09's own passages of the transcript, whole, up to SUMMARY_INPUT_TOKENS and
+    SUMMARY_INPUT_CHARACTERS.
 
     ``split_into_overlapping_chunks`` is the chunker that indexed the transcript, so passage
     ``n`` here is the text of the transcript's chunk ``n - 1`` wherever it was indexed. The first
-    passage is always sent; each later one is sent only if it fits whole. FR-16 sends "a single
-    structured request", so what does not fit is left out and recorded, never summarised in a
-    second call.
+    passage is always sent; each later one is sent only if it fits whole under both caps. FR-16
+    sends "a single structured request", so what does not fit is left out and recorded, never
+    summarised in a second call. The one passage ever cut is a first passage longer than
+    SUMMARY_INPUT_CHARACTERS on its own, sent as its first SUMMARY_INPUT_CHARACTERS characters:
+    a transcript of very long "words", which the token cap alone would not have bounded (the
+    security review of 12 November, finding 3, D-125's third note).
     """
     chunks = split_into_overlapping_chunks(transcript_text)
     passages: list[str] = []
-    used = 0
+    tokens = characters = 0
+    cut = False
     for chunk in chunks:
-        size = length_in_tokens(chunk.text)
-        if passages and used + size > SUMMARY_INPUT_TOKENS:
+        size, length = length_in_tokens(chunk.text), len(chunk.text)
+        if passages and (
+            tokens + size > SUMMARY_INPUT_TOKENS or characters + length > SUMMARY_INPUT_CHARACTERS
+        ):
             break
-        passages.append(chunk.text)
-        used += size
-    return SummaryInput(passages=passages, total=len(chunks))
+        text = chunk.text
+        if length > SUMMARY_INPUT_CHARACTERS:  # only ever the first: a later one breaks above
+            text, cut = text[:SUMMARY_INPUT_CHARACTERS], True
+        passages.append(text)
+        tokens += size
+        characters += len(text)
+    return SummaryInput(passages=passages, total=len(chunks), cut=cut)
 
 
 # --- Verification: set membership, never a judgement (invariant 5) ---------------------------
@@ -500,15 +518,18 @@ def _fail(summary: MeetingSummary, reason: str, detail) -> MeetingSummary | None
 
     FR-16: "Failures are retried twice before the summary is marked unavailable". NFR-20:
     "flagged for automatic retry". Queued unless MAXIMUM_SUMMARY_RETRY_RUNS queued runs have
-    already failed, after which it waits for a person. Only a row still Processing is closed, so
-    a run someone else has concluded is left as they left it. The transcript is untouched by
-    construction: nothing in this module writes to a Meeting row.
+    already failed, after which it waits for a person; a "malformed" failure is queued only while
+    fewer than MAXIMUM_MALFORMED_RETRY_RUNS have (the security review of 12 November, finding 3).
+    Only a row still Processing is closed, so a run someone else has concluded is left as they
+    left it. The transcript is untouched by construction: nothing in this module writes to a
+    Meeting row.
     """
+    allowance = MAXIMUM_MALFORMED_RETRY_RUNS if reason == SUMMARY_FAILED_MALFORMED else MAXIMUM_SUMMARY_RETRY_RUNS
     with transaction.atomic():
         row = MeetingSummary.objects.select_for_update().filter(pk=summary.pk).first()
         if row is None or row.status != SUMMARY_PROCESSING:
             return row
-        _close(row, reason, queue=row.retry_runs < MAXIMUM_SUMMARY_RETRY_RUNS)
+        _close(row, reason, queue=row.retry_runs < allowance)
     logger.warning(
         "Meeting %s summary %s is unavailable (%s; %s): %s",
         row.meeting_id, row.pk, reason,

@@ -1490,8 +1490,8 @@ The summary state, from both summary routes at every status code they answer:
   none is not here (invariant 5).
 - **`model`, `generated_at`:** UC-04's "record of the model that produced it and the date".
 - **`input_truncated`:** true when the transcript was longer than one request carries
-  (`SUMMARY_INPUT_TOKENS`). The summary then covers the first `passages_sent` of
-  `passages_total` passages, and the page says so.
+  (`SUMMARY_INPUT_TOKENS`, or `SUMMARY_INPUT_CHARACTERS`, which real speech does not reach). The
+  summary then covers the first `passages_sent` of `passages_total` passages, and the page says so.
 - **`action_items_extracted`** is how many items that run extracted. 0 is UC-04 A1's meeting
   that raised none, "recorded as empty rather than omitted".
 - **`can_edit`** is whether the caller's role holds `contribute_content`: a hint for showing the
@@ -1539,7 +1539,9 @@ The action item object:
 of 200 words or more, and again on `POST .../summary`. One run is in flight per meeting.
 
 1. The transcript's own passages (FR-09's chunks) are sent in one request, up to
-   `SUMMARY_INPUT_TOKENS`. The reply must match `SUMMARY_SCHEMA`: a malformed reply gets one
+   `SUMMARY_INPUT_TOKENS` and `SUMMARY_INPUT_CHARACTERS` (D-125's third note: a whitespace token
+   has no length limit). The reply must match `SUMMARY_SCHEMA`, whose every limit the prompt
+   states: a malformed reply gets one
    retry, a failed call two (`MAXIMUM_SUMMARY_ATTEMPTS`, three in total), and a `429` is retried
    while any other `4xx` ends the run at once (D-118).
 2. Every reference is checked against the passages sent. Owners are matched and dates converted
@@ -1548,8 +1550,9 @@ of 200 words or more, and again on `POST .../summary`. One run is in flight per 
    The extracted items nobody touched are replaced; **items a person added or edited are kept**.
 4. A run that fails is `"Unavailable"` and queued. `python manage.py retry_meeting_summaries`,
    scheduled hourly (`scripts/register_meeting_summary_schedule.ps1`), runs each queued summary
-   again, up to `MAXIMUM_SUMMARY_RETRY_RUNS` (3) times. The transcript is stored and searchable
-   throughout: a summary's failure never touches it (invariant 8, NFR-20).
+   again, up to `MAXIMUM_SUMMARY_RETRY_RUNS` (3) times; a run that failed because no reply
+   conformed is queued once (`MAXIMUM_MALFORMED_RETRY_RUNS`, D-125's third note). The transcript
+   is stored and searchable throughout: a summary's failure never touches it (invariant 8, NFR-20).
 
 **`POST /api/meetings` is unchanged.** Its `201` body does not mention the summary; the meeting
 page asks `GET .../summary`.

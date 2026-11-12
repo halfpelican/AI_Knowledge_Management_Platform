@@ -39,6 +39,7 @@ from apps.core.constants import (
     CHUNK_SIZE,
     SOURCE_TYPES,
     SUMMARY_FAILED_NO_VERIFIED_NARRATIVE,
+    SUMMARY_INPUT_CHARACTERS,
     SUMMARY_INPUT_TOKENS,
     SUMMARY_READY,
     SUMMARY_UNAVAILABLE,
@@ -54,6 +55,20 @@ _, MEETING_SOURCE_TYPE = SOURCE_TYPES
 # passage, then one per advance of the chunker's step.
 WHOLE_PASSAGES = SUMMARY_INPUT_TOKENS // CHUNK_SIZE
 EXACTLY_FULL = CHUNK_SIZE + (WHOLE_PASSAGES - 1) * (CHUNK_SIZE - CHUNK_OVERLAP)
+# The meeting transcripts in this repository run 5.7 to 6.3 characters a word, counting the space
+# and line breaks (corpus/objective-04's ten and its development pair, objective-02's five and the
+# demo's, measured on 12 November 2026). A transcript of real speech that fills SUMMARY_INPUT_TOKENS
+# is therefore about 63,000 characters at most, and SUMMARY_INPUT_CHARACTERS never binds on it.
+SPEECH_CHARACTERS_PER_WORD = 6.3
+
+
+def speech(words: int) -> str:
+    """A transcript of exactly ``words`` tokens of speech length: "w0" to "w9999", about 5.9
+    characters each with the space. The token ceiling's tests use it, so what they find is the
+    token ceiling. The builder's default words, "budget0" to "budget9999", run about 10.9: a
+    density no real transcript here has, at which SUMMARY_INPUT_CHARACTERS binds first, and
+    ``test_at_a_density_no_speech_has_the_character_cap_binds_before_the_token_ceiling`` tests that."""
+    return transcript(words, seed="w")
 
 
 # --- verify_draft: set membership -------------------------------------------------------------
@@ -278,6 +293,68 @@ def test_every_stored_reference_names_a_passage_whose_text_is_stored_with_the_su
 # --- summary_input: what the model reads ----------------------------------------------------------
 
 
+def test_a_transcript_of_very_long_words_is_bounded_by_characters_as_well_as_tokens():
+    """The security review of 12 November, finding 3 (D-125's third note): a token is a
+    whitespace-separated word, and a word has no length limit. 240 "words" of 1,000 characters
+    each is one passage by the token cap and 240,000 characters by any other measure."""
+    text = " ".join("w" * 1000 for _ in range(240))
+
+    source = summary_input(text)
+
+    assert len(source.passages) == 1
+    assert len(source.passages[0]) == SUMMARY_INPUT_CHARACTERS
+    assert source.passages[0] == text[:SUMMARY_INPUT_CHARACTERS]
+    assert (source.total, source.cut, source.truncated) == (1, True, True)
+
+
+def test_later_passages_stop_at_the_character_cap_and_are_never_cut():
+    """Passages of about 30,000 characters each: those that fit under SUMMARY_INPUT_CHARACTERS
+    are sent whole, and the first that would not, and every one after, is recorded as left out."""
+    word = "x" * 59  # 60 characters with its space
+    text = " ".join(word for _ in range(2000))  # 2,000 words: several overlapping passages
+
+    source = summary_input(text)
+    chunks = split_into_overlapping_chunks(text)
+
+    assert 1 <= len(source.passages) < len(chunks)
+    assert source.passages == [chunk.text for chunk in chunks[: len(source.passages)]]
+    sent = sum(len(passage) for passage in source.passages)
+    assert sent <= SUMMARY_INPUT_CHARACTERS
+    assert sent + len(chunks[len(source.passages)].text) > SUMMARY_INPUT_CHARACTERS
+    assert (source.cut, source.truncated) == (False, True)
+
+
+def test_ordinary_speech_never_meets_the_character_cap():
+    """A transcript that fills SUMMARY_INPUT_TOKENS with words of speech length is cut by tokens
+    alone: even at the densest transcript measured here, the character cap is not reached."""
+    text = speech(EXACTLY_FULL)
+    assert len(text) / len(text.split()) < SPEECH_CHARACTERS_PER_WORD
+
+    source = summary_input(text)
+
+    assert sum(len(passage) for passage in source.passages) < SUMMARY_INPUT_CHARACTERS
+    assert len(source.passages) == WHOLE_PASSAGES and source.cut is False
+    assert SPEECH_CHARACTERS_PER_WORD * WHOLE_PASSAGES * CHUNK_SIZE < SUMMARY_INPUT_CHARACTERS
+
+
+def test_at_a_density_no_speech_has_the_character_cap_binds_before_the_token_ceiling():
+    """Words of about 10.9 characters, nearly twice speech's, filling SUMMARY_INPUT_TOKENS: the
+    passages that fit under SUMMARY_INPUT_CHARACTERS are sent whole, fewer than the token ceiling
+    would allow, the next one would have broken the character cap, and the input is recorded as
+    truncated. No passage is cut; only a first passage over the cap alone ever is."""
+    text = transcript(EXACTLY_FULL)
+    chunks = [chunk.text for chunk in split_into_overlapping_chunks(text)]
+
+    source = summary_input(text)
+
+    sent = sum(len(passage) for passage in source.passages)
+    assert source.passages == chunks[: len(source.passages)]
+    assert 1 <= len(source.passages) < WHOLE_PASSAGES
+    assert sent <= SUMMARY_INPUT_CHARACTERS < sent + len(chunks[len(source.passages)])
+    assert sum(length_in_tokens(passage) for passage in source.passages) < SUMMARY_INPUT_TOKENS
+    assert (source.cut, source.truncated) == (False, True)
+
+
 def test_a_short_transcript_is_one_passage_and_is_not_truncated():
     text = transcript(240)
 
@@ -314,7 +391,7 @@ def test_the_passages_are_the_text_of_the_meetings_own_indexed_chunks(django_cap
 
 
 def test_a_transcript_that_fills_the_ceiling_exactly_is_sent_whole():
-    text = transcript(EXACTLY_FULL)
+    text = speech(EXACTLY_FULL)
 
     source = summary_input(text)
 
@@ -325,7 +402,7 @@ def test_a_transcript_that_fills_the_ceiling_exactly_is_sent_whole():
 def test_one_word_more_than_the_ceiling_holds_leaves_the_last_passage_out_and_says_so():
     """Whole passages only: the passage that does not fit is left out, not cut, and the input is
     recorded as truncated with the total, so the panel can say how much the summary covers."""
-    text = transcript(EXACTLY_FULL + 1)
+    text = speech(EXACTLY_FULL + 1)
 
     source = summary_input(text)
 
@@ -340,7 +417,7 @@ def test_a_long_transcript_never_exceeds_the_ceiling_or_the_prompts_bound(words)
     is a whole chunk, they fit SUMMARY_INPUT_TOKENS together, and there are never more than the
     prompt builder accepts, so the caller's cut is what keeps ``build_summary_user_prompt`` from
     raising and the worked example's labels above every real one."""
-    text = transcript(words)
+    text = speech(words)
     chunks = [chunk.text for chunk in split_into_overlapping_chunks(text)]
 
     source = summary_input(text)
@@ -387,7 +464,7 @@ def test_a_truncated_input_is_recorded_on_the_summary_and_only_the_sent_passages
 ):
     """A transcript longer than one request carries: the run records how much it read, and a
     reference to a passage past the cut is a reference to something the model was not shown."""
-    text = transcript(EXACTLY_FULL + CHUNK_SIZE)
+    text = speech(EXACTLY_FULL + CHUNK_SIZE)
     total = len(split_into_overlapping_chunks(text))
     assert total > WHOLE_PASSAGES
     stub_ai_service.summary = draft(

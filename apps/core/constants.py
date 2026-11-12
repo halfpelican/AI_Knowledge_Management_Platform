@@ -822,6 +822,13 @@ MINIMUM_SUMMARY_TRANSCRIPT_LENGTH = 200
 # input_truncated and how many passages it read, and the panel says so. About seventy-five
 # minutes of speech; it keeps gemma3:4b's prompt inside FLM's context. *tune*.
 SUMMARY_INPUT_TOKENS = 10_000
+# The same cap in characters, beside the one in tokens. A token here is a whitespace-separated word,
+# and a word has no length limit, so a transcript of very long "words" could carry far more to the
+# provider than SUMMARY_INPUT_TOKENS suggests (the security review of 12 November 2026, finding 3,
+# D-125's third note). Speech runs about six characters a word, so 10,000 words is about 60,000
+# characters and this does not bind on a real transcript. A first passage longer than this alone is
+# cut to it, and the summary records the transcript as truncated.
+SUMMARY_INPUT_CHARACTERS = 100_000
 # A MeetingSummary's status (FR-16: processing, "Ready", "marked unavailable"). A run is created
 # Processing and ends Ready or Unavailable; summary_text is written once, when Ready (D-125).
 SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
@@ -839,6 +846,12 @@ SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malforme
 # again on the hourly schedule. After this many queued runs have also failed it leaves the queue
 # and stays Unavailable until a person presses Regenerate (D-125).
 MAXIMUM_SUMMARY_RETRY_RUNS = 3
+# A run whose replies never conformed ("malformed") is queued only while no queued run has been
+# made, so at most one follows it, not MAXIMUM_SUMMARY_RETRY_RUNS. A transcript that leads the model
+# to break the schema tends to break it again, and each queued run is up to two more provider calls
+# (MAXIMUM_MALFORMED_SUMMARY_REPLIES); one still covers a reply that went wrong by chance. The
+# security review of 12 November 2026, finding 3 (D-125's third note).
+MAXIMUM_MALFORMED_RETRY_RUNS = 1
 # A run still Processing this long after it started was left by a server that stopped mid-run:
 # the retry command marks it failed ("orphaned") and runs it again. Three attempts of the slowest
 # call (SUMMARY_TIMEOUT_SECONDS, 600 s, apps/ai/summarisation.py), plus the summary's own

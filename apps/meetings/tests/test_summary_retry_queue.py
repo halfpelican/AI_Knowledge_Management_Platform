@@ -37,6 +37,7 @@ from apps.ai.base import EmbeddingResult, MalformedSummary, ProviderRefused, Pro
 from apps.ai.summarisation import SUMMARY_TIMEOUT_SECONDS
 from apps.ai.testing import STUB_EMBEDDING_MODEL, StubAIService
 from apps.core.constants import (
+    MAXIMUM_MALFORMED_RETRY_RUNS,
     MAXIMUM_SUMMARY_ATTEMPTS,
     MAXIMUM_SUMMARY_RETRY_RUNS,
     MEETING_INDEXED,
@@ -156,13 +157,57 @@ def test_a_retry_that_fails_moves_the_count_on_and_queues_the_run_again(
     stub_ai_service, django_capture_on_commit_callbacks
 ):
     meeting, failed = failed_meeting(stub_ai_service, django_capture_on_commit_callbacks)
-    stub_ai_service.summary = raising(MalformedSummary("still malformed"))
+    stub_ai_service.summary = raising(ProviderRefused("HTTP 401: invalid api key"))
 
     retried = retry_summary(failed)
 
     assert (retried.status, retried.queued_for_retry, retried.retry_runs) == (SUMMARY_UNAVAILABLE, True, 1)
-    assert retried.failure_reason == SUMMARY_FAILED_MALFORMED  # this run's reason, not the first one's
+    assert retried.failure_reason == SUMMARY_FAILED_PROVIDER_REFUSED  # this run's reason, not the first one's
     assert list(retry_queue()) == [retried]
+
+
+def test_a_malformed_failure_is_queued_once_and_then_waits_for_a_person(
+    stub_ai_service, django_capture_on_commit_callbacks
+):
+    """The security review of 12 November, finding 3 (D-125's third note). A transcript that leads
+    the model to break the schema, thirty agreed tasks against the reply's limit of 25 say, breaks
+    it again: queued MAXIMUM_SUMMARY_RETRY_RUNS times it cost eight provider calls and never got a
+    summary. One queued run still covers a reply that went wrong by chance."""
+    assert MAXIMUM_MALFORMED_RETRY_RUNS == 1
+    meeting, summary = failed_meeting(
+        stub_ai_service, django_capture_on_commit_callbacks, MalformedSummary("two replies broke SUMMARY_SCHEMA")
+    )
+    assert (summary.failure_reason, summary.queued_for_retry) == (SUMMARY_FAILED_MALFORMED, True)
+    stub_ai_service.summary = raising(MalformedSummary("still malformed"))
+
+    retried = retry_summary(summary)
+
+    assert (retried.status, retried.failure_reason, retried.retry_runs) == (SUMMARY_UNAVAILABLE, SUMMARY_FAILED_MALFORMED, 1)
+    assert retried.queued_for_retry is False
+    assert list(retry_queue()) == []
+    assert len(stub_ai_service.summarise_calls) == 1 + MAXIMUM_MALFORMED_RETRY_RUNS
+    assert is_in_progress(retried) is False
+
+
+def test_a_malformed_failure_after_a_queued_run_is_not_queued(stub_ai_service, django_capture_on_commit_callbacks):
+    """The allowance counts queued runs, whatever ended them: an outage, then a malformed reply,
+    and the run waits for a person rather than taking the outage's allowance."""
+    meeting, summary = failed_meeting(stub_ai_service, django_capture_on_commit_callbacks)
+    assert summary.failure_reason == SUMMARY_FAILED_PROVIDER_UNAVAILABLE
+    stub_ai_service.summary = raising(MalformedSummary("malformed this time"))
+
+    retried = retry_summary(summary)
+
+    assert (retried.failure_reason, retried.queued_for_retry) == (SUMMARY_FAILED_MALFORMED, False)
+
+
+def test_a_malformed_failure_then_a_good_reply_is_ready(stub_ai_service, django_capture_on_commit_callbacks):
+    meeting, summary = failed_meeting(
+        stub_ai_service, django_capture_on_commit_callbacks, MalformedSummary("a reply went wrong by chance")
+    )
+    stub_ai_service.summary = None
+
+    assert retry_summary(summary).status == SUMMARY_READY
 
 
 def test_after_the_last_queued_run_fails_the_summary_is_unavailable_and_not_queued(

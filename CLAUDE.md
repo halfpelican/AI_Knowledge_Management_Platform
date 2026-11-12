@@ -206,8 +206,10 @@ set during evaluation, not guessed in a code review.
 | `MAXIMUM_SUMMARY_ATTEMPTS` | **3** — 1 initial call + 2 retries (FR-16, D-125) |
 | `MAXIMUM_MALFORMED_SUMMARY_REPLIES` | **2** — 1 malformed reply + 1 retry, within the three (FR-16: "a malformed response triggers one retry") |
 | `MINIMUM_SUMMARY_TRANSCRIPT_LENGTH` | 200 tokens, *tune* — below this a transcript is not summarised and the summary routes answer 422 |
-| `SUMMARY_INPUT_TOKENS` | 10,000 tokens, *tune* — the most of a transcript one summary request carries, as whole passages |
+| `SUMMARY_INPUT_TOKENS` / `SUMMARY_INPUT_CHARACTERS` | 10,000 tokens, *tune* — the most of a transcript one summary request carries, as whole passages / 100,000 characters, the same cap in characters, which real speech (5.7–6.3 characters a word) never reaches (D-125's third note) |
 | `MAXIMUM_SUMMARY_RETRY_RUNS` / `SUMMARY_STALE_AFTER_SECONDS` | 3 queued runs, then a failed summary leaves NFR-20's retry queue / 2,400 s, after which a run still Processing is an orphan |
+| `MAXIMUM_MALFORMED_RETRY_RUNS` | 1 — a run that failed because no reply conformed is queued once, not three times (D-125's third note) |
+| `MAXIMUM_ACTION_ITEMS_PER_MEETING` | 200 — a person's addition past it is refused with 409 (D-125's third note) |
 | `MAXIMUM_SUMMARIES_IN_FLIGHT` | 2 — background summary runs calling the provider at once in one server process |
 | `TRANSCRIPTION_SEGMENT_SECONDS` / `MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS` | 30 s, the page's segment / 60 s, the most the server transcribes in one request |
 | `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |

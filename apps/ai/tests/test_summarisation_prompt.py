@@ -28,8 +28,13 @@ from apps.ai.summarisation import (
     EXAMPLE_PASSAGES,
     EXAMPLE_REPLY,
     EXAMPLE_TITLE,
+    MAXIMUM_ACTION_ITEMS,
+    MAXIMUM_DECISIONS,
+    MAXIMUM_ELEMENT_CHARACTERS,
     MAXIMUM_HIGHLIGHTS,
     MAXIMUM_PASSAGES,
+    MAXIMUM_PASSAGES_PER_ELEMENT,
+    MAXIMUM_PHRASE_CHARACTERS,
     MAXIMUM_SUMMARY_SENTENCES,
     REPLY_INSTRUCTION,
     SUMMARY_SYSTEM_PROMPT,
@@ -39,6 +44,7 @@ from apps.ai.summarisation import (
     parse_summary,
     passage_label,
 )
+from apps.ai.schema import SchemaViolation
 from apps.core.constants import CHUNK_SIZE, SUMMARY_INPUT_TOKENS
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -444,11 +450,54 @@ def test_the_numbers_the_rules_state_are_the_constants_the_parser_enforces():
     """A limit the prompt states and the parser enforces must be one number. Both are written
     from the constant, so they are compared here as text: the prompt's sentence and the value."""
     assert f'"summary" is an array of 1 to {MAXIMUM_SUMMARY_SENTENCES} objects' in FLAT_PROMPT
+    assert f'"decisions" is an array of at most {MAXIMUM_DECISIONS} decisions' in FLAT_PROMPT
     assert f'"highlights" is an array of at most {MAXIMUM_HIGHLIGHTS} points' in FLAT_PROMPT
-    # Every "1 to N" and "at most N" in the rules is one of those two, so no third number can be
-    # stated here and enforced as something else.
+    assert f'"action_items" is an array of at most {MAXIMUM_ACTION_ITEMS} tasks' in FLAT_PROMPT
+    assert f'Every "passages" array names 1 to {MAXIMUM_PASSAGES_PER_ELEMENT} labels' in FLAT_PROMPT
+    assert (
+        f'Keep each "text" and each "description" to at most {MAXIMUM_ELEMENT_CHARACTERS} characters, '
+        f'and each "owner" and each "due" to at most {MAXIMUM_PHRASE_CHARACTERS} characters.'
+    ) in FLAT_PROMPT
+    # Every "1 to N" and "at most N" in the rules is one of those, so no number can be stated here
+    # and enforced as something else.
     stated = [int(number) for number in re.findall(r"(?:1 to|at most) (\d+)", flat(RULES))]
-    assert sorted(stated) == sorted([MAXIMUM_SUMMARY_SENTENCES, MAXIMUM_HIGHLIGHTS])
+    assert sorted(stated) == sorted([
+        MAXIMUM_SUMMARY_SENTENCES, MAXIMUM_DECISIONS, MAXIMUM_HIGHLIGHTS, MAXIMUM_ACTION_ITEMS,
+        MAXIMUM_PASSAGES_PER_ELEMENT, MAXIMUM_ELEMENT_CHARACTERS, MAXIMUM_PHRASE_CHARACTERS,
+    ])
+
+
+def test_every_limit_the_parser_enforces_is_stated_in_the_rules():
+    """The security review of 12 November, finding 3 (D-125's third note): the parser refused a
+    reply over limits the prompt never stated, so a meeting with thirty agreed tasks failed on
+    every attempt and every queued run. Each limit's value is checked against what the parser
+    actually refuses, so a limit added to the parser and not to the rules fails here."""
+    import json
+
+    reply = json.loads(EXAMPLE_REPLY)
+
+    def refused(change) -> bool:
+        candidate = json.loads(json.dumps(reply))
+        change(candidate)
+        try:
+            parse_summary(json.dumps(candidate))
+        except SchemaViolation:
+            return True
+        return False
+
+    item = reply["action_items"][0]
+    element = reply["summary"][0]
+    over = {
+        MAXIMUM_SUMMARY_SENTENCES: lambda r: r.__setitem__("summary", [element] * (MAXIMUM_SUMMARY_SENTENCES + 1)),
+        MAXIMUM_DECISIONS: lambda r: r.__setitem__("decisions", [element] * (MAXIMUM_DECISIONS + 1)),
+        MAXIMUM_HIGHLIGHTS: lambda r: r.__setitem__("highlights", [element] * (MAXIMUM_HIGHLIGHTS + 1)),
+        MAXIMUM_ACTION_ITEMS: lambda r: r.__setitem__("action_items", [item] * (MAXIMUM_ACTION_ITEMS + 1)),
+    }
+    for limit, change in over.items():
+        assert refused(change), limit
+        assert str(limit) in RULES
+    for limit in (MAXIMUM_PASSAGES_PER_ELEMENT, MAXIMUM_ELEMENT_CHARACTERS, MAXIMUM_PHRASE_CHARACTERS):
+        assert str(limit) in RULES, limit
 
 
 def test_the_rules_ask_for_the_action_item_section_even_when_it_is_empty():
@@ -470,8 +519,10 @@ def test_the_rules_keep_owners_and_deadlines_as_the_transcript_says_them():
 
 
 def test_the_rules_require_a_label_on_every_element_and_forbid_inventing_one():
-    assert 'Every "passages" array names at least one label' in FLAT_PROMPT
-    assert "copied exactly from a passage header in this conversation" in FLAT_PROMPT
+    # "1 to N": at least one, and since the security review of 12 November no more than the parser
+    # accepts (D-125's third note).
+    assert f'Every "passages" array names 1 to {MAXIMUM_PASSAGES_PER_ELEMENT} labels' in FLAT_PROMPT
+    assert "copied exactly from passage headers in this conversation" in FLAT_PROMPT
     assert "Never invent, renumber or shorten a label" in FLAT_PROMPT
     assert "Write only what the transcript says" in FLAT_PROMPT
 
