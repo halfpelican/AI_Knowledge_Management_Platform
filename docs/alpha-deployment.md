@@ -315,6 +315,48 @@ cd $root
 The Administrator's **Run aggregation now** button on the knowledge-gap page runs the same cycle on
 demand.
 
+## 10. Schedule the meeting-summary retry (FR-16, NFR-20)
+
+A meeting's summary is generated in the background after its transcript is stored, and a summary
+that fails is "flagged for automatic retry" (NFR-20). The retry is `manage.py
+retry_meeting_summaries`, run every hour (D-125). Register it once on the host, from this worktree,
+in PowerShell:
+
+```powershell
+cd $root
+.\scripts\register_meeting_summary_schedule.ps1 -LogDirectory C:\kmp-demo\2026-11-01
+```
+
+- **It registers a task for the current Windows user,** repeating every 60 minutes.
+  `-EveryMinutes` sets another interval, and running the script again replaces the task. The task
+  runs `manage.py retry_meeting_summaries` with this worktree's `.venv` and `.env`, and appends its
+  output to `meeting-summaries.log` in the log directory.
+- **No password is asked for or stored,** so the task runs while that user is logged on, as the
+  knowledge-gap task does.
+- **What one run does:**
+  1. It closes any summary a stopped server left `Processing` for over 40 minutes, and queues it.
+  2. It runs every queued summary again, one at a time.
+
+  A summary leaves the queue when it is ready, or after three queued runs have failed. After that,
+  only **Generate Summary** on the meeting page tries again.
+- **Exit status:** 0 when the queue was empty or every summary it ran came back ready. 1 when any
+  summary it ran is still unavailable, so the task's last result shows it. A summary that has left
+  the queue waits for **Generate Summary** and does not change the exit status. Nothing is lost
+  either way: the transcript stays stored and searchable, and a failed run changes only its own
+  summary's row.
+- **Restarting the server mid-summary is safe.** The meeting page stops waiting once the run is
+  40 minutes old and offers **Generate Summary** again. The summary's row stays `Processing`, and the
+  next run after the 40 minutes picks it up.
+- **Check it** with `Get-ScheduledTask -TaskName "KMP meeting summary retry"`, and run the queue now
+  with `Start-ScheduledTask` and the same name. **Remove it** with
+  `Unregister-ScheduledTask -TaskName "KMP meeting summary retry" -Confirm:$false`.
+- **On a Linux host,** one crontab line does the same:
+  `0 * * * * cd /path/to/checkout && .venv/bin/python manage.py retry_meeting_summaries >> logs/meeting-summaries.log 2>&1`
+
+**Meetings stored before FR-16 have no summary.** Give each its first one with
+`manage.py summarise_meetings --missing`, once, after `migrate`. It costs one model call per
+meeting, and it skips a transcript under 200 words.
+
 ## Redeploying
 
 1. Ctrl+C in the server window, and close it.

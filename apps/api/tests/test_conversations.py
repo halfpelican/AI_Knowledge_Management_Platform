@@ -363,7 +363,10 @@ def test_a_reopened_thread_carries_its_turns_with_their_verified_citations(
             "source_id": str(content_chunk.source_id),
             "title": document_body["title"],
             "date": document_body["uploaded_at"],
-            "passages": [{"chunk_id": str(content_chunk.id), "text": content_chunk.chunk_text}],
+            "passages": [
+                {"chunk_id": str(content_chunk.id), "text": content_chunk.chunk_text,
+                 "ai_generated": False}  # D-125
+            ],
         }
     ]
     assert second["question"] == SECOND_QUESTION
@@ -616,7 +619,7 @@ def test_an_uncited_consulted_passage_is_in_the_reopened_panel(
     assert turn["sources"][-1]["source_id"] == str(schedule.id)
     assert turn["sources"][-1]["title"] == SCHEDULE_TITLE
     assert turn["sources"][-1]["passages"] == [
-        {"chunk_id": str(schedule_chunk.id), "text": SCHEDULE_PASSAGE}
+        {"chunk_id": str(schedule_chunk.id), "text": SCHEDULE_PASSAGE, "ai_generated": False}
     ]
 
 

@@ -267,6 +267,11 @@ class SearchResult:
     snippet: str
     department: str
     date: datetime | date
+    # True where ``snippet`` is taken from the meeting's AI-generated summary rather than from the
+    # transcript (FR-16, UC-04; D-125 choice 1). The interface marks it as AI content (NFR-15).
+    # Only ever True for a meeting whose transcript does not contain the term but whose summary
+    # does: where both match, the transcript's own words are shown.
+    snippet_ai_generated: bool = False
 
 
 @dataclass(frozen=True)
@@ -339,8 +344,9 @@ def snippet_for(text: str, term: str) -> str:
     return f"{prefix}{text[start:end]}{suffix}"
 
 
-def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, str], str]:
-    """Every in-scope chunk whose text contains the term, reduced to one snippet per source.
+def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, str], tuple[str, bool]]:
+    """Every in-scope chunk whose text contains the term, reduced to one snippet per source,
+    with whether that snippet is AI-generated.
 
     The role predicate is ``scoping.scoped_chunks`` — the same function the ranked path
     restricts its candidate set with, reused rather than restated, so this module contains
@@ -352,22 +358,28 @@ def _snippets_by_source(*, role_name: str, query_text: str) -> dict[tuple[str, s
     rather than matching everything.
 
     Ordered by ``chunk_index`` so "the first matching chunk" is a property of the document
-    rather than of the query plan.
+    rather than of the query plan. **A meeting's own words come before its summary's:**
+    ``ai_generated`` sorts first, False before True, so where the term is in the transcript the
+    snippet is the transcript's, and a summary passage (FR-16, D-125) supplies the snippet only
+    when nothing else of the meeting matched. The flag is returned with the snippet so the reply
+    can say which it is (NFR-15). A summary passage carries the meeting's source type, id and
+    ``visible_to_roles``, so it is admitted by the same predicate and resolves to the same
+    meeting row: a meeting found through its summary is one result, counted once.
     """
     matches = (
         scoped_chunks(role_name=role_name)
         .annotate(collapsed_text=_collapsed("chunk_text"))
         .filter(collapsed_text__icontains=query_text)
-        .order_by("source_type", "source_id", "chunk_index")
-        .values_list("source_type", "source_id", "chunk_text")
+        .order_by("source_type", "source_id", "ai_generated", "chunk_index")
+        .values_list("source_type", "source_id", "chunk_text", "ai_generated")
     )
-    snippets: dict[tuple[str, str], str] = {}
-    for source_type, source_id, chunk_text in matches:
+    snippets: dict[tuple[str, str], tuple[str, bool]] = {}
+    for source_type, source_id, chunk_text, ai_generated in matches:
         key = (source_type, str(source_id))
         if key not in snippets:  # first matching chunk wins; see the docstring
             # Windowed over the collapsed text, so a match that wraps a line in the source
             # is found by ``snippet_for`` and shown as one run (D-71).
-            snippets[key] = snippet_for(collapse_whitespace(chunk_text), query_text)
+            snippets[key] = (snippet_for(collapse_whitespace(chunk_text), query_text), ai_generated)
     return snippets
 
 
@@ -378,10 +390,14 @@ def _opening_snippet(*, source_type: str, source_id: str, role_name: str) -> str
     document marked "Insufficient content", or one whose indexing failed. An empty snippet
     is the truthful rendering of "there is no passage here"; the row is still returned,
     because its title genuinely matched.
+
+    Never a passage of a meeting's AI-generated summary (D-125): "the opening of the item" is the
+    opening of the transcript. A summary chunk shares the meeting's source and starts its own
+    ``chunk_index`` at 0, so without the filter it could be picked as the meeting's first chunk.
     """
     first = (
         scoped_chunks(role_name=role_name)
-        .filter(source_type=source_type, source_id=source_id)
+        .filter(source_type=source_type, source_id=source_id, ai_generated=False)
         .order_by("chunk_index")
         .values_list("chunk_text", flat=True)
         .first()
@@ -395,7 +411,7 @@ def _group(
     *,
     source_type: str,
     sources,
-    snippets: dict[tuple[str, str], str],
+    snippets: dict[tuple[str, str], tuple[str, bool]],
     role_name: str,
     title_of,
     department_of,
@@ -409,12 +425,14 @@ def _group(
     results = []
     for source in sources:
         key = (source_type, str(source.id))
-        snippet = snippets.get(key)
-        if snippet is None:
+        found = snippets.get(key)
+        if found is None:
             # Matched by title alone; show the opening of the item instead.
-            snippet = _opening_snippet(
+            snippet, ai_generated = _opening_snippet(
                 source_type=source_type, source_id=str(source.id), role_name=role_name
-            )
+            ), False
+        else:
+            snippet, ai_generated = found
         results.append(
             SearchResult(
                 source_type=source_type,
@@ -423,6 +441,7 @@ def _group(
                 snippet=snippet,
                 department=department_of(source),
                 date=date_of(source),
+                snippet_ai_generated=ai_generated,
             )
         )
     return SearchGroup(source_type=source_type, results=tuple(results))
@@ -597,7 +616,8 @@ def _check_term(query_text: str) -> None:
 class _Match:
     """The scoped matching sources for one term: the snippet map and the two ordered querysets."""
 
-    snippets: dict[tuple[str, str], str]
+    # The snippet per source, and whether it is from a meeting's AI-generated summary (D-125).
+    snippets: dict[tuple[str, str], tuple[str, bool]]
     documents: object  # QuerySet[Document]
     meetings: object  # QuerySet[Meeting]
 

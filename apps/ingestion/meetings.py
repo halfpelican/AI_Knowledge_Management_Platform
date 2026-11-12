@@ -27,6 +27,7 @@ with FR-08, which answers 422 for the same insufficient-content condition; each 
 states its own code and neither is adjusted to match the other.
 """
 
+import logging
 from dataclasses import dataclass
 
 from django.db import transaction
@@ -44,6 +45,9 @@ from apps.ingestion.chunking import (
 )
 from apps.ingestion.embedding import MEETING_SOURCE_TYPE, embed_and_store_chunks
 from apps.meetings.models import Meeting, MeetingAttendee
+from apps.meetings.summaries import request_summary, transcript_is_long_enough
+
+logger = logging.getLogger(__name__)
 
 # Every chunk failed to embed. FR-09 names no status for this case and no response
 # code for it either, so it mirrors FR-08's: the transcript is stored and the record
@@ -136,6 +140,7 @@ def ingest_meeting_transcript(
             # treatment and the same argument applies.
             meeting.status = MEETING_PROCESSING_FAILED
             meeting.save(update_fields=["status"])
+            _request_summary(meeting)
             return MeetingIngestionOutcome(meeting, 422, TOO_MANY_CHUNKS_MESSAGE)
 
         # The FR-08 path, unforked. A meeting chunk differs from a document chunk
@@ -158,8 +163,33 @@ def ingest_meeting_transcript(
         if failed_chunk_count and failed_chunk_count == len(chunks):
             meeting.status = MEETING_PROCESSING_FAILED
             meeting.save(update_fields=["status"])
+            _request_summary(meeting)
             return MeetingIngestionOutcome(meeting, 422, INDEXING_FAILED_MESSAGE)
 
         meeting.status = MEETING_INDEXED
         meeting.save(update_fields=["status"])
+        _request_summary(meeting)
         return MeetingIngestionOutcome(meeting, 201)
+
+
+def _request_summary(meeting: Meeting) -> None:
+    """Ask for the meeting's summary (FR-16, UC-04), without letting that fail the ingestion.
+
+    FR-16 Business logic (isolation): "summary failure never blocks the transcript from being
+    stored or searched" (CLAUDE.md invariant 8, NFR-20). So this is called after the meeting's
+    status has been decided, whatever it is, because UC-04 needs the stored text and not the
+    index; it writes one row in a savepoint of its own; and every exception is caught and logged
+    with its traceback, as FR-10's hook does (apps/ingestion/documents.py::_classify).
+
+    Nothing is sent to a model here. ``request_summary`` registers the run with
+    ``transaction.on_commit``, so it starts only after this ingestion has committed, in a
+    background thread (apps/meetings/summary_runner.py), and never if the ingestion rolls back.
+    A transcript under FR-16's minimum gets no run at all: its summary routes answer 422.
+    """
+    if not transcript_is_long_enough(meeting):
+        return
+    try:
+        with transaction.atomic():
+            request_summary(meeting)
+    except Exception:  # noqa: BLE001 - a summary must never fail an ingestion (invariant 8)
+        logger.exception("Meeting %s was stored, but its summary could not be requested", meeting.pk)

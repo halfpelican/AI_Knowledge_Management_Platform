@@ -55,10 +55,12 @@ def delete_meeting(meeting: Meeting) -> None:
        NIT3004), but ``ContentTags.source_type`` admits ``meeting`` (docs/schema-v1.md §1), so a
        meeting's links are deleted now rather than when the first one appears. The ``Tag`` rows
        stay: they are a vocabulary (D-73's note of 7 October).
-    4. **The meeting**, and with it its ``MeetingAttendee`` rows, through their CASCADE foreign
-       key. No other model has a foreign key to ``Meeting`` (checked on 7 November 2026): no
-       summary or action-item model exists. A model that adds one must decide its ``on_delete``
-       with this function in view.
+    4. **The meeting**, and with it, through their CASCADE foreign keys, its ``MeetingAttendee``
+       rows and FR-16's ``MeetingSummary`` and ``ActionItem`` rows (D-125). Those are the models
+       with a foreign key to ``Meeting`` (checked on 12 November 2026, when the security review
+       found this list out of date). The summary's search entries are ``ContentChunk`` rows of
+       this meeting, so step 2 deleted them with the transcript's. A model that adds a foreign key
+       to ``Meeting`` must decide its ``on_delete`` with this function in view.
 
     A meeting deleted by a concurrent request between the caller's lookup and the lock is
     tolerated: its chunks and tag links are deleted by key, which is idempotent, and there is

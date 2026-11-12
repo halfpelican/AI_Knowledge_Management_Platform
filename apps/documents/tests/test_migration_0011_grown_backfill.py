@@ -7,7 +7,9 @@ and tags with a readable link as they are, and an already grown tag grown. Its r
 
 Built as the 0008 to 0010 tests are: the executor itself is driven, for ``documents`` only, from 0010
 to 0011 and back, in the ordinary per-test transaction, and the test ends at the leaf. 0011 changes no
-schema, so the rows are written through the current models while ``documents`` stands at 0010.
+schema, so the rows are written through the current models while ``documents`` stands at 0010. Since
+0012 (FR-16's ``ContentChunks.ai_generated``, D-125) the current models hold one column 0010 and 0011
+do not; the rows this test writes there are tags, links, documents and meetings, never a chunk.
 """
 
 import datetime
@@ -79,12 +81,20 @@ def link(tag, source, **fields):
     return ContentTag.objects.create(tag=tag, source_type=source_type, source_id=source.pk, **fields)
 
 
-def test_0011_is_the_leaf_of_documents():
-    leaves = [
+def documents_leaf():
+    [leaf] = [
         key for key in MigrationExecutor(connection).loader.graph.leaf_nodes()
         if key[0] == "documents"
     ]
-    assert leaves == [AFTER]
+    return leaf
+
+
+def test_0011_is_on_the_path_to_the_leaf_of_documents():
+    """0011 was the leaf of ``documents`` until 0012 (FR-16's ``ContentChunks.ai_generated``, D-125)
+    followed it, so the test checks that 0011 is on the leaf's path, and the test below ends at the
+    leaf, as the 0009 and 0010 tests do."""
+    graph = MigrationExecutor(connection).loader.graph
+    assert AFTER in graph.forwards_plan(documents_leaf())
 
 
 def test_0011_marks_exactly_the_tags_no_source_every_role_reads_carries_and_its_reverse_does_nothing(
@@ -128,4 +138,4 @@ def test_0011_marks_exactly_the_tags_no_source_every_role_reads_carries_and_its_
     migrate_documents_to(BEFORE)
     assert grown_by_id(expected) == expected
 
-    migrate_documents_to(AFTER)  # the leaf, as the rest of the suite expects
+    migrate_documents_to(documents_leaf())  # the leaf, as the rest of the suite expects

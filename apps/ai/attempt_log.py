@@ -170,8 +170,8 @@ def failed_attempt(
     *,
     reply: ReplyFacts | None = None,
 ) -> None:
-    """One failed attempt of ``step``: "generation", "question embedding", "classification" or,
-    since D-123, "transcription" (one recording segment).
+    """One failed attempt of ``step``: "generation", "question embedding", "classification",
+    "transcription" (one recording segment, D-123) or "summarisation" (one meeting, D-125).
 
     ``reply`` is passed for a generation or a classification attempt, and adds the bracket.
     """
@@ -237,6 +237,38 @@ def parsed_classification(number: int, of: int, seconds: float, tags: int, *, re
         _bracket(reply),
         _account.get() or "not set",
         tags,
+    )
+
+
+def parsed_summary(
+    number: int,
+    of: int,
+    seconds: float,
+    *,
+    sentences: int,
+    decisions: int,
+    highlights: int,
+    action_items: int,
+    reply: ReplyFacts,
+) -> None:
+    """One summary attempt whose reply parsed into SUMMARY_SCHEMA, at INFO (FR-16, D-125).
+
+    ``parsed_classification``'s counterpart for ``summarise_meeting``. The line says how many
+    elements of each kind the reply held and nothing of what they said: this module quotes no
+    reply, and a meeting's summary is the meeting's content.
+    """
+    logger.info(
+        "summarisation attempt %d of %d parsed after %.1f s%s (account %s): %d sentence(s), "
+        "%d decision(s), %d highlight(s), %d action item(s)",
+        number,
+        of,
+        seconds,
+        _bracket(reply),
+        _account.get() or "not set",
+        sentences,
+        decisions,
+        highlights,
+        action_items,
     )
 
 
