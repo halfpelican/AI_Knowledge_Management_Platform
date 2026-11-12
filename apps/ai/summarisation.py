@@ -212,10 +212,13 @@ def parse_summary(raw: str) -> ParsedSummary:
         raise SchemaViolation(f"top level is {type(decoded).__name__}, not an object")
     missing = sorted(_TOP_LEVEL_KEYS - set(decoded))
     if missing:
-        raise SchemaViolation(f"missing top-level key(s): {missing} (keys: {sorted(decoded)})")
+        # The keys the reply did send are the model's words, which a transcript can steer, so they
+        # are counted and never quoted: the message reaches the attempts log and the warning a
+        # failed run writes (the security review of 12 November, D-125's third note).
+        raise SchemaViolation(f"missing top-level key(s): {missing} (the reply had {len(decoded)} key(s))")
     extra = sorted(set(decoded) - _TOP_LEVEL_KEYS)
     if extra:
-        raise SchemaViolation(f"unexpected top-level key(s): {extra}")
+        raise SchemaViolation(f"{len(extra)} unexpected top-level key(s)")
 
     return ParsedSummary(
         narrative=_elements(decoded["summary"], "summary", minimum=1, maximum=MAXIMUM_SUMMARY_SENTENCES),
@@ -243,7 +246,7 @@ def _object(item, where: str, keys: frozenset) -> dict:
         raise SchemaViolation(f"{where} is missing {missing}")
     unexpected = sorted(set(item) - keys)
     if unexpected:
-        raise SchemaViolation(f"{where} has unexpected key(s): {unexpected}")
+        raise SchemaViolation(f"{where} has {len(unexpected)} unexpected key(s)")
     return item
 
 
@@ -524,7 +527,8 @@ def run_summary_attempts(
       retry (NFR-20); nothing about the transcript's storage or indexing depends on this call.
 
     Every attempt is recorded through apps/ai/attempt_log.py under the step "summarisation":
-    failures at WARNING, the parsed attempt at INFO with its counts. No line quotes the reply.
+    failures at WARNING, the parsed attempt at INFO with its counts. No line quotes the reply:
+    a schema violation names the schema's own keys and counts the reply's, never quoting them.
     ``model`` is the chat model the provider answered with, written onto the draft and not parsed.
     """
     last_detail = "no attempt was made"

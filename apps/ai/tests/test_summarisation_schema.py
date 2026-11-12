@@ -159,6 +159,29 @@ def test_a_fifth_key_is_a_violation():
         parse(reply(notes="The meeting ran over."))
 
 
+@pytest.mark.parametrize(
+    "steered",
+    [
+        lambda key: reply(**{key: 1}),
+        lambda key: {key: []},
+        lambda key: reply(summary=[{**element(), key: 1}]),
+        lambda key: reply(action_items=[{**item(), key: 1}]),
+    ],
+    ids=["a fifth top-level key", "the only key", "an element's third key", "an action item's fifth key"],
+)
+def test_a_violation_never_quotes_a_key_the_reply_chose(steered):
+    """A key name is the model's words, which a transcript can steer, and the violation's message
+    reaches the attempts log and the warning a failed run writes. The message names the schema's
+    own keys and counts the reply's (the security review of 12 November, D-125's third note)."""
+    key = "Priya said the merger closes on Friday"
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse(steered(key))
+
+    assert key not in str(caught.value)
+    assert "Priya" not in str(caught.value)
+
+
 @pytest.mark.parametrize("key", TOP_LEVEL_KEYS)
 @pytest.mark.parametrize("value", [{}, "none", None, 0], ids=["object", "string", "null", "number"])
 def test_each_key_must_hold_an_array(key, value):
@@ -588,15 +611,17 @@ def test_a_violation_message_quotes_no_value_from_the_reply(body):
     assert "Carlton" not in str(excinfo.value)
 
 
-def test_a_violation_names_an_unexpected_key_which_is_the_one_part_of_a_reply_a_message_carries():
-    """Pinned so it reads as known rather than assumed: the VALUES of a reply never reach a
-    message (above), but the NAME of a key the schema does not have does, as it does in the
-    statement and classification parsers. A model that wrote content as a key name would put that
-    much of it in the attempt log, cut at DETAIL_LIMIT."""
+def test_a_violation_counts_an_unexpected_key_and_no_longer_names_it():
+    """Pinned so it reads as known rather than assumed. The VALUES of a reply never reach a message
+    (above). Until 12 November the NAME of a key the schema does not have did, as it still does in
+    the statement and classification parsers, so a model that wrote content as a key name put that
+    much of it in the attempt log. The security review of that day found it; this parser now counts
+    such keys instead (D-125's third note). The other two parsers are FR-12's and FR-10's."""
     with pytest.raises(SchemaViolation) as excinfo:
         parse(reply(follow_up="Carlton closes in March."))
 
-    assert "follow_up" in str(excinfo.value)
+    assert "1 unexpected top-level key" in str(excinfo.value)
+    assert "follow_up" not in str(excinfo.value)
     assert "Carlton" not in str(excinfo.value)
 
 
