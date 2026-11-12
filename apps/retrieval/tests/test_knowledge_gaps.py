@@ -27,11 +27,13 @@ from math import acos, cos, sin, sqrt
 
 import pytest
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError
 from django.utils import timezone
 
 import apps.ai
+from apps.accounts.models import Role
 from apps.ai.base import EmbeddingResult, ProviderUnavailable
 from apps.ai.prefixes import QUERY_TEMPLATE, query_text
 from apps.ai.testing import STUB_EMBEDDING_MODEL
@@ -48,6 +50,7 @@ from apps.core.constants import (
     GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_ADDRESSED,
     KNOWLEDGE_GAP_OPEN,
+    MAXIMUM_CONVERSATION_TURNS,
     MAXIMUM_EMBED_ATTEMPTS,
     NO_RELEVANT_PASSAGE,
     NO_STATEMENT_VERIFIED,
@@ -228,6 +231,13 @@ def move_cycle_back(cycle, *, to):
     KnowledgeGapCycle.objects.filter(pk=cycle.pk).update(started_at=to)
 
 
+def joined(*questions: str) -> str:
+    """The string retrieval ranks for a follow-up: its earlier turns and then itself, oldest
+    first. Written out here, not taken from ``conversation.RETRIEVAL_JOIN``, so a change to the
+    join fails these tests; apps/retrieval/tests/test_compose.py pins the join itself."""
+    return " ".join(questions)
+
+
 # --- The window (D-107) ----------------------------------------------------------------------
 
 Q_OLD = "Where is the policy on bringing dogs to the office?"
@@ -322,18 +332,25 @@ def test_a_row_stamped_after_the_cycle_started_waits_for_the_next(window_vectors
 
 
 def test_a_conversation_turn_is_aggregated_on_its_own_wording(window_vectors, employee):
-    """FR-13's turns are included (FR-19 Server-End), and each is embedded on its own wording,
-    not composed with the turns before it (D-108's step 2)."""
+    """FR-13's turns are included (FR-19 Server-End). A follow-up's exclusion is decided on the
+    string retrieval ranked, its earlier turns and then itself (D-127, which replaces D-108's step
+    2 here), and its subject and grouping stay on its own wording."""
     thread = Conversation.objects.create(user=employee, title="Office questions")
     ask(employee, Q_RECENT, at=hours_ago(3), conversation=thread)
     turn = ask(employee, Q_OLD, at=hours_ago(2), conversation=thread)
+    window_vectors.vectors[joined(Q_RECENT, Q_OLD)] = unit(15)
 
     run_cycle()
 
     assert in_log(turn)
     assert gap_of(turn).subject == Q_OLD
-    # Each with the query prefix, as retrieval embeds a question, and alone.
-    assert window_vectors.embed_calls == [[query_text(Q_RECENT)], [query_text(Q_OLD)]]
+    # Each with the query prefix, as retrieval embeds a question. The thread's first turn once,
+    # alone. The follow-up twice: composed, for the exclusion, and then alone, for its grouping.
+    assert window_vectors.embed_calls == [
+        [query_text(Q_RECENT)],
+        [query_text(joined(Q_RECENT, Q_OLD))],
+        [query_text(Q_OLD)],
+    ]
 
 
 # --- The exclusion (D-108) -------------------------------------------------------------------
@@ -527,6 +544,7 @@ V_READABLE_BELOW = "Will home working change in the new year?"  # top readable, 
 V_RESTRICTED_ABOVE = "Who is named on the succession register?"  # top restricted, above the threshold
 V_READABLE_ABOVE = "How many home working days do staff get?"  # top readable, above the threshold
 V_RESTRICTED_FIRST = "Does the chair's succession affect home working?"  # both admitted, restricted first
+V_READABLE_FIRST = "Do home working days depend on the chair's succession?"  # both admitted, readable first
 V_RESTRICTED_IN_BAND = "When does the chair's successor take over?"  # top restricted, in the band
 
 
@@ -546,7 +564,9 @@ def voyage_corpus(administrator, designed):
             V_READABLE_BELOW: at_cosine(JUST_BELOW, axis=1, towards=5),
             V_RESTRICTED_ABOVE: at_cosine(WELL_ABOVE, axis=0, towards=5),
             V_READABLE_ABOVE: at_cosine(WELL_ABOVE, axis=1, towards=5),
+            # 0.9 with one chunk and 0.436 with the other: both at or above voyage-4's threshold.
             V_RESTRICTED_FIRST: at_cosine(0.9, axis=0, towards=1),
+            V_READABLE_FIRST: at_cosine(0.9, axis=1, towards=0),
             V_RESTRICTED_IN_BAND: at_cosine(IN_THE_BAND, axis=0, towards=5),
         },
         model=VOYAGE,
@@ -609,13 +629,19 @@ def test_on_voyage_a_restricted_answer_between_the_two_thresholds_is_left_out(vo
 
 
 def test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted(voyage_corpus, employee):
+    """D-108 declined "any withheld passage above the threshold", and that holds on voyage-4. Both
+    questions admit both chunks (0.436 is above voyage-4's threshold); only the one whose top
+    admitted passage is withheld is left out. Until 12 November 2026 the second question here
+    admitted the readable chunk alone, so a rule excluding on any admitted restricted passage
+    passed this test (the requirements audit of that day, A4)."""
+    assert 0.436 > VOYAGE_THRESHOLD  # the premise: the second chunk is admitted too
     restricted_first = ask(employee, V_RESTRICTED_FIRST, at=hours_ago(2))
-    readable_above = ask(employee, V_READABLE_ABOVE, at=hours_ago(1))
+    readable_first = ask(employee, V_READABLE_FIRST, at=hours_ago(1))
 
     run_cycle()
 
     assert not in_log(restricted_first)
-    assert in_log(readable_above)
+    assert in_log(readable_first)
 
 
 def test_on_voyage_an_administrators_question_is_always_kept(voyage_corpus, administrator):
@@ -637,6 +663,208 @@ def test_rank_one_still_decides_below_the_threshold_for_a_model_not_listed(corpu
     run_cycle()
 
     assert not in_log(row)
+
+
+# --- A follow-up is decided on the string retrieval ranked (D-127) ----------------------------
+# The requirements audit and the security review of 12 November 2026. The cycle judged a follow-up
+# on its own wording, which retrieval never ranked. On voyage-4 a bare follow-up often admits
+# nothing, and threshold-first kept it, including one about restricted material.
+
+T_OPENER = "What is the succession register for?"  # a thread's first turn: restricted top, admitted
+T_FOLLOW_UP = "And who signs it off?"  # its follow-up, which alone admits nothing
+G_OPENER = "Is there a staff canteen in the new building?"  # a thread nobody can answer
+G_FOLLOW_UP = "And what are its opening hours?"
+H_OPENER = "How many home working days do staff get in a week?"  # a thread about readable material
+H_FOLLOW_UP = "And who has to agree to them?"
+R_FOLLOW_UP = "And when was it last updated?"
+NOWHERE = 7  # an axis no chunk is on: cosine 0 with both chunks, so nothing is admitted
+
+
+def thread_of(user, title="A thread") -> Conversation:
+    return Conversation.objects.create(user=user, title=title)
+
+
+def test_on_voyage_a_follow_up_about_restricted_material_is_left_out(voyage_corpus, employee):
+    """The audit's case. Alone, the follow-up admits nothing, which threshold-first reads as
+    "nobody could have been answered". What retrieval ranked was the opener and the follow-up
+    together, and for that string the top admitted passage is Administrator-only."""
+    service = voyage_corpus["service"]
+    service.vectors.update({
+        T_OPENER: at_cosine(WELL_ABOVE, axis=0, towards=5),
+        T_FOLLOW_UP: unit(NOWHERE),
+        joined(T_OPENER, T_FOLLOW_UP): at_cosine(WELL_ABOVE, axis=0, towards=6),
+    })
+    thread = thread_of(employee)
+    opener = ask(employee, T_OPENER, at=hours_ago(3), conversation=thread)
+    follow_up = ask(employee, T_FOLLOW_UP, at=hours_ago(2), conversation=thread)
+
+    cycle = run_cycle()
+
+    assert not in_log(opener) and not in_log(follow_up)
+    assert cycle.queries_considered == 0 and KnowledgeGap.objects.count() == 0
+    # The follow-up was embedded once, composed. Left out, its own wording was never embedded.
+    assert service.embed_calls == [[query_text(T_OPENER)], [query_text(joined(T_OPENER, T_FOLLOW_UP))]]
+
+
+def test_on_voyage_a_follow_up_nobody_could_answer_is_kept_on_its_own_wording(voyage_corpus, employee):
+    """A genuine gap in a thread. The composed string admits nothing, so the row is a gap. Its
+    subject and its vector are its own wording's (D-109), so it groups as the same question asked
+    as a one-off would."""
+    service = voyage_corpus["service"]
+    alone = at_cosine(0.6, axis=8, towards=9)
+    service.vectors.update({
+        G_OPENER: unit(10),
+        G_FOLLOW_UP: alone,
+        joined(G_OPENER, G_FOLLOW_UP): unit(11),
+    })
+    thread = thread_of(employee)
+    ask(employee, G_OPENER, at=hours_ago(3), conversation=thread)
+    follow_up = ask(employee, G_FOLLOW_UP, at=hours_ago(2), conversation=thread)
+
+    run_cycle()
+
+    gap = gap_of(follow_up)
+    assert gap.subject == G_FOLLOW_UP and gap.embedding_model == VOYAGE
+    assert list(gap.embedding) == pytest.approx(alone)
+    # Composed first, for the exclusion, and then alone, for the subject and the grouping.
+    assert service.embed_calls[-2:] == [
+        [query_text(joined(G_OPENER, G_FOLLOW_UP))],
+        [query_text(G_FOLLOW_UP)],
+    ]
+
+
+def test_on_voyage_a_follow_up_whose_composed_best_match_is_readable_is_kept(voyage_corpus, employee):
+    """The opener was answered, so only the follow-up is in the window, and an answered turn is
+    still history. For the composed string the top admitted passage is one the asker reads."""
+    service = voyage_corpus["service"]
+    service.vectors.update({
+        H_FOLLOW_UP: unit(NOWHERE),
+        joined(H_OPENER, H_FOLLOW_UP): at_cosine(WELL_ABOVE, axis=1, towards=6),
+    })
+    thread = thread_of(employee)
+    ask(employee, H_OPENER, at=hours_ago(3), answered=True, conversation=thread)
+    follow_up = ask(employee, H_FOLLOW_UP, at=hours_ago(2), conversation=thread)
+
+    run_cycle()
+
+    assert in_log(follow_up)
+    # The answered opener is not in the window, so it was never embedded on its own.
+    assert [query_text(H_OPENER)] not in service.embed_calls
+
+
+def test_under_rank_one_a_follow_up_is_decided_on_the_composed_string_too(corpus, employee):
+    """D-127 is not voyage-4's alone. On a model the map does not list, the follow-up's own
+    wording has a readable best match and the composed string a restricted one, so it is left
+    out."""
+    service = corpus["service"]
+    service.vectors.update({
+        R_FOLLOW_UP: at_cosine(0.25, axis=1, towards=5),
+        joined(Q_RESTRICTED, R_FOLLOW_UP): at_cosine(0.9, axis=0, towards=1),
+    })
+    thread = thread_of(employee)
+    ask(employee, Q_RESTRICTED, at=hours_ago(3), conversation=thread)
+    follow_up = ask(employee, R_FOLLOW_UP, at=hours_ago(2), conversation=thread)
+
+    run_cycle()
+
+    assert not in_log(follow_up)
+
+
+def test_a_follow_up_is_composed_from_the_turns_retrieval_composed_it_from(
+    voyage_corpus, employee, administrator
+):
+    """The newest MAXIMUM_CONVERSATION_TURNS turns before it, oldest first, of the same
+    conversation and the same user: not a later turn, not another thread's, not another user's.
+    A text nobody designed is a KeyError, so any other composition fails here."""
+    assert MAXIMUM_CONVERSATION_TURNS == 3  # the premise of the four earlier turns below
+    service = voyage_corpus["service"]
+    thread, other = thread_of(employee, "The thread"), thread_of(employee, "Another thread")
+    earlier = ["First question?", "Second question?", "Third question?", "Fourth question?"]
+    for index, text in enumerate(earlier):
+        ask(employee, text, at=hours_ago(10 - index), answered=True, conversation=thread)
+    follow_up = ask(employee, "And the fifth?", at=hours_ago(5), conversation=thread)
+    ask(employee, "A later turn?", at=hours_ago(4), answered=True, conversation=thread)
+    ask(employee, "Another thread's turn?", at=hours_ago(6), answered=True, conversation=other)
+    ask(administrator, "Another user's row?", at=hours_ago(6.5), answered=True, conversation=thread)
+    composed = joined("Second question?", "Third question?", "Fourth question?", "And the fifth?")
+    service.vectors.update({composed: unit(12), "And the fifth?": unit(13)})
+
+    run_cycle()
+
+    assert in_log(follow_up)
+    assert service.embed_calls == [[query_text(composed)], [query_text("And the fifth?")]]
+
+
+def test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording(voyage_corpus, employee):
+    """D-127's stated limit. ``QueryLog.conversation`` is SET_NULL, so once a conversation is
+    deleted its turns cannot be told from one-off questions, and each is decided alone."""
+    service = voyage_corpus["service"]
+    service.vectors[T_FOLLOW_UP] = unit(NOWHERE)
+    thread = thread_of(employee)
+    ask(employee, T_OPENER, at=hours_ago(3), answered=True, conversation=thread)
+    follow_up = ask(employee, T_FOLLOW_UP, at=hours_ago(2), conversation=thread)
+    thread.delete()
+
+    run_cycle()
+
+    assert in_log(follow_up)
+    assert service.embed_calls == [[query_text(T_FOLLOW_UP)]]
+
+
+# --- A role that reads nothing (D-107's build note, and its note of 12 November 2026) ---------
+
+
+@pytest.fixture
+def contractor(db):
+    """A user whose role EFFECTIVE_ROLES does not list, so it reads nothing (D-66)."""
+    role = Role.objects.create(role_name="Contractor")
+    user = get_user_model().objects.create_user(
+        "contractor@example.com", "Unused-Phrase-7-Lantern", name="Casey Contractor"
+    )
+    user.role = role
+    user.save(update_fields=["role"])
+    assert gaps.effective_roles(role.role_name) == ()  # the premise
+    return user
+
+
+def test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out(voyage_corpus, contractor):
+    """"The exclusion fails closed." From D-126 until 12 November 2026 that was untrue on voyage-4
+    for a question admitting nothing: it was kept before the role was read."""
+    rows = [
+        ask(contractor, V_RESTRICTED_BELOW, at=hours_ago(3)),  # nothing admitted
+        ask(contractor, V_READABLE_ABOVE, at=hours_ago(2)),  # a passage Employees read
+        ask(contractor, V_RESTRICTED_ABOVE, at=hours_ago(1)),
+    ]
+
+    cycle = run_cycle()
+
+    assert not any(in_log(row) for row in rows)
+    assert cycle.queries_considered == 0 and KnowledgeGap.objects.count() == 0
+
+
+def test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out(corpus, contractor):
+    rows = [
+        ask(contractor, Q_READABLE, at=hours_ago(2)),
+        ask(contractor, Q_READABLE_BELOW, at=hours_ago(1)),
+    ]
+
+    run_cycle()
+
+    assert not any(in_log(row) for row in rows)
+
+
+def test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either(
+    designed, contractor, employee
+):
+    """No chunk of the question's embedding model exists. For a role that reads something that
+    is a gap. For one that reads nothing the row is still left out."""
+    designed({"Is there a gym on site?": unit(3), "Is there a pool on site?": unit(4)})
+    kept = ask(employee, "Is there a gym on site?", at=hours_ago(2))
+    left_out = ask(contractor, "Is there a pool on site?", at=hours_ago(1))
+
+    run_cycle()
+
+    assert in_log(kept) and not in_log(left_out)
 
 
 # --- The grouping (D-109) --------------------------------------------------------------------

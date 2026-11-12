@@ -70,12 +70,14 @@ Nothing to start. With both keys in `.env`, the server calls Claude and Voyage d
   price.
 - **Embeddings come from `voyage-4` at 1024 dimensions.** Questions and passages are embedded as
   queries and documents respectively (D-116).
-- **Every tuned value was measured on this provider before it became the default** (D-122):
+- **These tuned values were measured on this provider before it became the default** (D-122):
   - the relevance threshold and the partial-match floor (D-120);
   - FR-19's grouping threshold;
   - FR-10's confidence threshold.
 
   Each is per model, so FLM keeps its own values.
+- **One check was not run first:** D-108's check of FR-19's permission exclusion. Run the day after
+  the default moved, it failed on voyage-4, and the exclusion rule became per model too (D-126).
 
 ### FastFlowLM, the offline alternative
 

@@ -51,7 +51,8 @@ PREFIXES_MODULE = "apps.ai.prefixes"
 
 Q_LEFT_OUT = "Who is on the succession register for the chair?"  # top passage Administrator-only
 Q_KEPT = "What colour are the new staff lanyards going to be?"  # top passage readable by both roles
-Q_TURN = "And who orders the lanyards?"  # a conversation turn, embedded on its own wording
+Q_TURN = "And who orders the lanyards?"  # a follow-up: composed for the exclusion, alone for grouping
+Q_TURN_AS_RANKED = f"{Q_KEPT} {Q_TURN}"  # the string retrieval ranked for it (D-127)
 Q_ANSWERED = "How much annual leave do I get each year?"  # answered: never considered
 S_LEFT_OUT = "succession register"  # the Administrator's recount finds it
 S_KEPT = "volcano insurance"  # nobody finds it
@@ -70,7 +71,7 @@ def between(first: int, second: int) -> list[float]:
     return vector
 
 
-VECTORS = {Q_LEFT_OUT: unit(0), Q_KEPT: unit(5), Q_TURN: unit(6), S_KEPT: unit(7)}
+VECTORS = {Q_LEFT_OUT: unit(0), Q_KEPT: unit(5), Q_TURN: unit(6), Q_TURN_AS_RANKED: unit(6), S_KEPT: unit(7)}
 
 
 class RefusingService:
@@ -160,7 +161,9 @@ def test_every_considered_text_goes_through_embed_question_and_nothing_reaches_t
 
     # Every question in the window went through it, the one left out included, because D-108
     # ranks a question's own vector; the surviving search went through it; each once, as typed.
-    assert sorted(recorded) == sorted([Q_LEFT_OUT, Q_KEPT, Q_TURN, S_KEPT])
+    # The follow-up went through it twice: as retrieval ranked it, for the exclusion, and alone,
+    # for its grouping (D-127).
+    assert sorted(recorded) == sorted([Q_LEFT_OUT, Q_KEPT, Q_TURN_AS_RANKED, Q_TURN, S_KEPT])
     # The search the recount left out, and the answered question, were never embedded.
     assert S_LEFT_OUT not in recorded and Q_ANSWERED not in recorded
     # The outcome the recorder's vectors decide, so the cycle really used what it returned.

@@ -21,9 +21,18 @@ already a ``KnowledgeGapItem`` is skipped in the query, and the one-to-one membe
 re-scan safe in any case. Nothing here depends on two timestamps differing: Windows ticks at about
 15.6 ms.
 
-**2. The exclusion (D-108).** For a question, the asker's role is read from the user row now. The
-question is embedded on its own wording with the query prefix, through ``embed_question``, the
-pipeline's one embedding path. It is ranked over ``candidate_chunks(role_name="Administrator")``,
+**2. The exclusion (D-108).** For a question, the asker's role is read from the user row now. A
+role missing from ``EFFECTIVE_ROLES`` reads nothing, and its questions are left out before
+anything is ranked. Otherwise the string retrieval ranked when the row was asked is embedded
+with the query prefix, through ``embed_question``, the pipeline's one embedding path (D-127):
+
+- for a one-off question, and a thread's first turn, that string is the question;
+- for a follow-up it is the question after its earlier turns, as ``conversation.compose`` joins
+  them. A follow-up's bare wording is not what retrieval ranked. On voyage-4 it often admits
+  nothing (two of the three threads D-112's HTTP check measured), which threshold-first would
+  read as "nobody could have been answered".
+
+It is ranked over ``candidate_chunks(role_name="Administrator")``,
 which since D-66 is every stamped chunk, through the one scoping helper, so no new unscoped query
 shape exists. Which passage then decides depends on the question's embedding model
 (``exclusion_rule``, D-126):
@@ -78,8 +87,10 @@ cycle either commits everything it found or nothing. ``embed_question`` has alre
 embedded in "one batched call per cycle". A question has to be embedded before D-108 can decide
 whether it remains, and D-108 says it is embedded "as retrieval embeds it", so each row is
 embedded on its own through ``embed_question``: one call per row, with that function's retries and
-its usability checks, and exactly the vector retrieval would compute for the same text. The
-question's vector is then reused for its grouping. A search is embedded only once it has survived
+its usability checks, and exactly the vector retrieval would compute for the same text. A one-off
+question's vector is then reused for its grouping. A follow-up that is kept is embedded a second
+time, on its own wording, because the subject and the grouping stay on the question as asked
+(D-109, D-127); one that is left out is embedded once. A search is embedded only once it has survived
 its recount. Whether FLM returns the same vector for a text in a batch as alone has not been
 measured, so batching could have made the exclusion rank a different vector from retrieval's.
 """
@@ -103,6 +114,7 @@ from apps.core.constants import (
     GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_OPEN,
 )
+from apps.retrieval.conversation import compose, prior_questions_before
 from apps.retrieval.models import (
     KnowledgeGap,
     KnowledgeGapCycle,
@@ -205,9 +217,16 @@ def run_cycle(*, triggered_by=None) -> KnowledgeGapCycle:
         scope = _AdministratorScope()
         items: list[_Item] = []
         for row in queries:
-            embedding = embed_question(row.question)
-            if _question_explained_by_permissions(row, embedding, scope):
+            # D-127: the exclusion is decided on the string retrieval ranked when the row was
+            # asked. For a one-off that is the question. For a follow-up it is the question after
+            # its earlier turns, joined as the pipeline joined them.
+            ranked_text = compose(row.question, prior_questions_before(row)).for_retrieval
+            deciding = embed_question(ranked_text)
+            if _question_explained_by_permissions(row, deciding, scope):
                 continue  # left out, and recorded nowhere (D-108)
+            # The subject and the grouping stay on the wording as asked (D-109), so a follow-up
+            # that is kept is embedded again, alone.
+            embedding = deciding if ranked_text == row.question else embed_question(row.question)
             items.append(
                 _Item(
                     timestamp=row.answered_at,
@@ -281,12 +300,24 @@ def _question_explained_by_permissions(
     """D-108's rule for a question: True when the deciding passage over the Administrator's
     scope is one the asker's role cannot read.
 
+    ``embedding`` is of the string retrieval ranked for the row (D-127): the question, or for a
+    follow-up the question after its earlier turns.
+
     Which passage decides is the embedding model's rule (``exclusion_rule``, D-126):
     - rank-one: the top-ranked passage, whether or not it clears the threshold (D-108's note of
       10 November 2026);
     - threshold-first: the top passage at or above the model's own relevance threshold, or none,
       which makes the row a gap.
+
+    A role missing from ``EFFECTIVE_ROLES`` is settled first, under either rule and whatever is
+    ranked: it reads nothing, so its row is left out (D-107's build note, and its note of 12
+    November 2026).
     """
+    asker_roles = set(effective_roles(row.user.role.role_name))
+    if not asker_roles:
+        # Fail closed. The list never shows a question whose answer may exist where its asker
+        # could not read it, and for a role that reads nothing that is every passage.
+        return True
     chunks, roles = scope.for_model(embedding.model)
     ranked = rank(chunks, embedding.vectors[0])
     if not ranked:
@@ -301,9 +332,6 @@ def _question_explained_by_permissions(
         top = admitted[0]
     else:
         top = ranked[0]
-    asker_roles = set(effective_roles(row.user.role.role_name))
-    # A role missing from EFFECTIVE_ROLES reads nothing, so every top passage is unreadable to
-    # it and its rows are left out: the list never shows a question whose answer may exist.
     return not (set(roles[top.chunk_id]) & asker_roles)
 
 
