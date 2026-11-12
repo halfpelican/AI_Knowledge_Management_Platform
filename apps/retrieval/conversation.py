@@ -190,7 +190,12 @@ def prior_questions_before(row: QueryLog) -> tuple[str, ...]:
     - MAXIMUM_CONVERSATION_TURNS has not changed since;
     - no other turn of the conversation shares the row's ``answered_at``. If one does, the
       primary key decides which sorts first, as it does in ``prior_questions``, and it says
-      nothing about time.
+      nothing about time;
+    - no turn of the conversation was logged while this one was being answered. ``answered_at``
+      is set when a row is written, after its history was read, so a turn logged in between
+      would sort before it here and not have been in its history then. One ask in flight per
+      user (D-79's ask slot) prevents that on the single-process server; a multi-process server,
+      or a slot that lapsed after its 45 minutes, would not.
     """
     if row.conversation_id is None:
         return ()

@@ -1288,7 +1288,8 @@ The tag entry, in the list and in the `DELETE`'s `200`:
 The Administrator's list of "questions the system could not answer and searches returning no
 results, grouped by subject with an occurrence count and the ability to mark an entry as
 addressed". Decisions: D-107 (the tables, the cycle, the routes, the permission and the dashboard
-panel), D-108 (the permission exclusion) and D-109 (similarity grouping). Every route needs a
+panel), D-108 (the permission exclusion), D-109 (similarity grouping), D-126 (the exclusion's rule
+per embedding model) and D-127 (a follow-up's two strings). Every route needs a
 session **and** `review_knowledge_gaps`, which accounts 0007 gives the Administrator alone: `401`
 without a session, `403` for a role that lacks the code (invariant 4), checked before anything
 else on the request.
@@ -1342,12 +1343,13 @@ and exits 1 on a provider outage. The route runs the same cycle on demand.
    row with `result_count` 0, timestamped from the previous cycle's start less
    `CYCLE_GRACE_SECONDS` (60) up to this cycle's start, and not already in the log. The first
    cycle takes everything before it.
-2. **A row is left out when the asker's role explains it** (D-108, D-126, D-127). The string
-   retrieval ranked for a question is embedded and ranked over the Administrator's whole scope.
-   For a one-off question that string is the question. For a conversation follow-up it is the
-   earlier turns and then the question, as the ask composed them. A question from a role that reads
-   nothing is left out before anything is ranked. Which passage decides is the embedding model's
-   rule (`GAP_EXCLUSION_RULE_BY_MODEL`):
+2. **A row is left out when the asker's role explains it** (D-108, D-126, D-127). A question is
+   embedded and ranked over the Administrator's whole scope. A one-off question is decided on its
+   own wording. A conversation follow-up is decided first on the string retrieval ranked, its
+   earlier turns and then the question as the ask composed them, and then, unless that left it
+   out, on its own wording; either can leave it out. A question from a role that reads nothing is
+   left out before anything is embedded. Which passage decides is the embedding model's rule
+   (`GAP_EXCLUSION_RULE_BY_MODEL`):
    - **rank-one,** for every model the map does not list, EmbeddingGemma included: the top-ranked
      passage, whether or not it clears `RELEVANCE_THRESHOLD`;
    - **threshold-first,** for `voyage-4`: the top passage at or above the model's own relevance

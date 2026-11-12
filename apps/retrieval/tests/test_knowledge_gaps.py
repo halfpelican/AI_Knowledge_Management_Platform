@@ -633,7 +633,7 @@ def test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted(voyag
     questions admit both chunks (0.436 is above voyage-4's threshold); only the one whose top
     admitted passage is withheld is left out. Until 12 November 2026 the second question here
     admitted the readable chunk alone, so a rule excluding on any admitted restricted passage
-    passed this test (the requirements audit of that day, A4)."""
+    passed this test (D-126's note of 12 November 2026)."""
     assert 0.436 > VOYAGE_THRESHOLD  # the premise: the second chunk is admitted too
     restricted_first = ask(employee, V_RESTRICTED_FIRST, at=hours_ago(2))
     readable_first = ask(employee, V_READABLE_FIRST, at=hours_ago(1))

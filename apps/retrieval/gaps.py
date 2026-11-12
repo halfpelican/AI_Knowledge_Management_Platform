@@ -29,8 +29,9 @@ anything is embedded. Otherwise each string below is embedded with the query pre
 - **the string retrieval ranked when the row was asked.** For a one-off question, and a thread's
   first turn, that is the question. For a follow-up it is the question after its earlier turns,
   as ``conversation.compose`` joins them. A follow-up's bare wording is not what retrieval
-  ranked: on voyage-4 it often admits nothing (two of the three threads D-112's HTTP check
-  measured), which threshold-first would read as "nobody could have been answered";
+  ranked: on voyage-4 it can admit nothing (t03 and t06 in D-112's HTTP check; t03 was asked in
+  the Employee's scope, and the cycle ranks in the Administrator's), which threshold-first would
+  read as "nobody could have been answered";
 - **for a follow-up, its own wording too:** the words the Administrator would read, and the
   vector it would be grouped by. A question about restricted material asked after a turn about
   something else can rank readable material first in the composed string (the security review of

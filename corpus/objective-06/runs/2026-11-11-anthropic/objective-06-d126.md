@@ -161,7 +161,7 @@ between two passes over the same question, and so overstated two margins.
 - **What it said:** "about 27 times Voyage's jitter" for P02's headroom, "about 119 times" for the
   gap between the margins, and that the two exploration runs "agree to within Voyage's jitter". The
   jitter figure was 0.00047, the largest difference an earlier check had seen.
-- **What this folder's own evidence shows:** d18's top score differs by 0.0012 between the two
+- **What this change's own evidence shows:** d18's top score differs by 0.0012 between the two
   passes of the rank-one check (`../2026-11-10-anthropic/exclusion-dev-check-voyage/`), u05's by
   0.0008 between the two passes here, and u30's best readable score by 0.0011 between the two
   exploration runs.
