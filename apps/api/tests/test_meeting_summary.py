@@ -12,9 +12,10 @@ request here waits on the provider: the POST answers while the run is still to b
 """
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
+from django.utils import timezone
 
 from apps.accounts.models import RolePermission
 from apps.ai.base import ProviderUnavailable
@@ -24,6 +25,8 @@ from apps.core.constants import (
     MAXIMUM_SUMMARY_RETRY_RUNS,
     MINIMUM_SUMMARY_TRANSCRIPT_LENGTH,
     ROLE_NAMES,
+    SUMMARY_FAILED_ORPHANED,
+    SUMMARY_STALE_AFTER_SECONDS,
     SUMMARY_PROCESSING,
     SUMMARY_READY,
     SUMMARY_UNAVAILABLE,
@@ -306,3 +309,55 @@ def test_a_role_without_contribute_content_reads_the_summary_and_cannot_generate
     assert read.json()["can_edit"] is False and read.json()["summary"] is not None
     assert refused.status_code == 403
     assert MeetingSummary.objects.filter(meeting=meeting).count() == 1
+
+
+# --- A run a stopped server left behind -------------------------------------------------------------
+
+
+def test_a_run_a_stopped_server_left_processing_reads_as_queued_and_post_starts_a_new_one(
+    session_client, django_capture_on_commit_callbacks, stub_ai_service
+):
+    """The server's own recovery is reachable from the page (the audit of 12 November, finding 7).
+
+    A run older than SUMMARY_STALE_AFTER_SECONDS is reported as Unavailable and queued, what the
+    next scheduled retry makes of it, so the page stops asking and offers Generate; the POST then
+    closes the stale run as orphaned and starts a new one. Reported as Processing, it would keep
+    the page waiting with the button disabled until the hourly retry ran."""
+    with django_capture_on_commit_callbacks(execute=False):
+        meeting = ingest()  # the commit callback never runs: the server "stopped"
+    stale = MeetingSummary.objects.get(meeting=meeting)
+    MeetingSummary.objects.filter(pk=stale.pk).update(
+        started_at=timezone.now() - timedelta(seconds=SUMMARY_STALE_AFTER_SECONDS + 60)
+    )
+
+    read = session_client.client.get(url(meeting.id))
+
+    assert read.status_code == 202
+    assert (read.json()["status"], read.json()["queued_for_retry"]) == (SUMMARY_UNAVAILABLE, True)
+    stale.refresh_from_db()
+    assert stale.status == SUMMARY_PROCESSING  # a read reports; it repairs nothing
+
+    with django_capture_on_commit_callbacks(execute=True):
+        started = session_client.client.post(url(meeting.id))
+
+    assert started.status_code == 202
+    stale.refresh_from_db()
+    assert (stale.status, stale.failure_reason, stale.queued_for_retry) == (
+        SUMMARY_UNAVAILABLE, SUMMARY_FAILED_ORPHANED, False,
+    )
+    ready = session_client.client.get(url(meeting.id))
+    assert ready.status_code == 200 and ready.json()["status"] == SUMMARY_READY
+    assert MeetingSummary.objects.get(meeting=meeting, run_number=2).status == SUMMARY_READY
+
+
+def test_a_run_inside_its_time_still_reads_as_processing(session_client, django_capture_on_commit_callbacks):
+    with django_capture_on_commit_callbacks(execute=False):
+        meeting = ingest()
+    MeetingSummary.objects.filter(meeting=meeting).update(
+        started_at=timezone.now() - timedelta(seconds=SUMMARY_STALE_AFTER_SECONDS - 60)
+    )
+
+    read = session_client.client.get(url(meeting.id))
+
+    assert read.status_code == 202
+    assert (read.json()["status"], read.json()["queued_for_retry"]) == (SUMMARY_PROCESSING, False)

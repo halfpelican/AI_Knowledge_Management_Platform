@@ -339,10 +339,13 @@ cd $root
 
   A summary leaves the queue when it is ready, or after three queued runs have failed. After that,
   only **Generate Summary** on the meeting page tries again.
-- **Exit status:** 0 when the queue was empty or every summary came back ready. 1 when any is still
-  unavailable, so the task's last result shows it. Nothing is lost either way: the transcript
-  stays stored and searchable, and a failed run changes only its own summary's row.
-- **Restarting the server mid-summary is safe.** The summary's row stays `Processing`, and the
+- **Exit status:** 0 when the queue was empty or every summary it ran came back ready. 1 when any
+  summary it ran is still unavailable, so the task's last result shows it. A summary that has left
+  the queue waits for **Generate Summary** and does not change the exit status. Nothing is lost
+  either way: the transcript stays stored and searchable, and a failed run changes only its own
+  summary's row.
+- **Restarting the server mid-summary is safe.** The meeting page stops waiting once the run is
+  40 minutes old and offers **Generate Summary** again. The summary's row stays `Processing`, and the
   next run after the 40 minutes picks it up.
 - **Check it** with `Get-ScheduledTask -TaskName "KMP meeting summary retry"`, and run the queue now
   with `Start-ScheduledTask` and the same name. **Remove it** with

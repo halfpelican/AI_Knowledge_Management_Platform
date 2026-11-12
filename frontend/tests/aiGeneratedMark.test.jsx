@@ -283,6 +283,49 @@ describe('NFR-15: each action item says whose it is', () => {
     expect(within(added).queryByText(SUGGESTED_BY_AI, { exact: false })).toBeNull()
     expect(added.classList.contains('person-content')).toBe(true)
   })
+
+  it('marks the record that a meeting raised no action items, which is the summary’s finding', async () => {
+    const { items } = await meetingPage(
+      summaryState({ status: 'Ready', summary: readySummary({ action_items_extracted: 0 }), action_items: [] }),
+    )
+
+    const sentence = within(items).getByText(TEXT.actionItemsNoneRaised, { exact: false })
+    expect(sentence.textContent).toBe(`${SUGGESTED_BY_AI} ${TEXT.actionItemsNoneRaised}`)
+    expect(sentence.classList.contains('ai-content')).toBe(true)
+  })
+
+  it('does not mark the empty list of a meeting with no summary: nothing there is the AI’s', async () => {
+    const { items } = await meetingPage(summaryState())
+
+    const sentence = within(items).getByText(TEXT.actionItemsNone)
+    expect(sentence.textContent).toBe(TEXT.actionItemsNone)
+    expect(within(items).queryByText(SUGGESTED_BY_AI, { exact: false })).toBeNull()
+    expect(sentence.classList.contains('ai-content')).toBe(false)
+  })
+})
+
+/* ---- FR-12's answer -------------------------------------------------------- */
+
+describe('NFR-15: an answer is marked as AI content', () => {
+  it('carries the mark under its heading, inside the dashed boundary, and is described by it', () => {
+    render(
+      <MemoryRouter>
+        <AnswerBody idPrefix="turn" statements={[STATEMENT]} sources={[]} />
+      </MemoryRouter>,
+    )
+
+    const answer = screen.getByRole('region', { name: TEXT.answerHeading })
+    const mark = within(answer).getByText(SUGGESTED_BY_AI)
+    expect(answer.classList.contains('ai-content')).toBe(true)
+    expect(answer.getAttribute('aria-describedby')).toBe(mark.id)
+    // The mark comes before the statements it is about.
+    const statement = within(answer).getByText(STATEMENT.text)
+    expect(mark.compareDocumentPosition(statement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('takes its boundary from the one token every AI surface reads', () => {
+    expect(declarationsOf('.ai-content').border).toContain('var(--border-style-ai)')
+  })
 })
 
 /* ---- A summary passage in an answer ---------------------------------------- */

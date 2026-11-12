@@ -7,10 +7,14 @@ import './AiMark.css'
  * consistent convention, such as an AI-generated badge, applied system-wide."
  *
  * **The convention is FR-10's, and there is one of it.** FR-10 marked its type,
- * department and tags first (src/components/Classification.jsx), and this is that
- * mark for every surface since: FR-16's summary and its extracted action items,
- * and a passage of a meeting's summary where FR-12 shows a source passage or a
- * search snippet. It has two parts, and each is defined once:
+ * department and tags first (src/components/Classification.jsx). This component is
+ * that mark on: FR-12's answer (src/components/Answer.jsx, live and reopened), FR-16's
+ * summary, its extracted action items and the sentence recording that a meeting
+ * raised none, and a passage of a meeting's summary where FR-12 shows a source passage
+ * or a search snippet. **One AI surface does not carry it:** the draft transcript a
+ * recording produces (D-123) carries that feature's own machine-transcript notice in
+ * the field a person is correcting, and whether it should carry this mark as well is
+ * recorded as open in D-125. It has two parts, and each is defined once:
  *
  * - **The words "Suggested by AI"**, beside the content. They are the mark. A
  *   colour or a border is not one to a screen reader, nor to anyone who cannot

@@ -550,7 +550,15 @@ export default function ActionItems({
         </p>
 
         {items.length === 0 ? (
-          <p className="action-items__state">{noneRaised ? TEXT.actionItemsNoneRaised : TEXT.actionItemsNone}</p>
+          noneRaised ? (
+            // UC-04 A1's record that the meeting raised none is the summary's finding, so it is
+            // marked as AI content, as the summary is (NFR-15; the audit of 12 November, D-125).
+            <p className="action-items__state ai-content action-items__state--ai">
+              <AiMark /> {TEXT.actionItemsNoneRaised}
+            </p>
+          ) : (
+            <p className="action-items__state">{TEXT.actionItemsNone}</p>
+          )
         ) : (
           <ul className="action-items__list">
             {items.map((item) => (

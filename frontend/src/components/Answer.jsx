@@ -169,10 +169,18 @@ function CitedStatement({ idPrefix, statement, found }) {
 export function AnswerBody({ idPrefix, statements, sources }) {
   const index = passageIndex(sources)
   const headingId = `${idPrefix}-answer-heading`
+  const markId = `${idPrefix}-answer-mark`
 
+  // NFR-15: an answer is AI-generated content, so it carries the one convention every AI surface
+  // carries: the words "Suggested by AI" under its heading, and the dashed boundary round it
+  // (src/components/AiMark.jsx). Every answer is the model's, so nothing here is conditional.
+  // The audit of 12 November found the answer was the one AI output surface without it (D-125).
   return (
-    <section className="answer" aria-labelledby={headingId}>
+    <section className="answer ai-content" aria-labelledby={headingId} aria-describedby={markId}>
       <h3 id={headingId}>{TEXT.answerHeading}</h3>
+      <p className="answer__provenance">
+        <AiMark id={markId} />
+      </p>
       {statements.map((statement) => (
         <CitedStatement
           key={statement.position}

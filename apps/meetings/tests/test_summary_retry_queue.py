@@ -56,6 +56,7 @@ from apps.documents.models import ContentChunk
 from apps.ingestion.tests.ai_doubles import install
 from apps.meetings.models import ActionItem, Meeting, MeetingSummary
 from apps.meetings.summaries import (
+    _is_stale,
     current_summary,
     is_in_progress,
     latest_run,
@@ -64,7 +65,7 @@ from apps.meetings.summaries import (
     retry_queue,
     retry_summary,
 )
-from apps.meetings.tests.summary_builders import ingest, raising, regenerate, summarised, transcript
+from apps.meetings.tests.summary_builders import draft, ingest, raising, regenerate, summarised, transcript
 
 pytestmark = pytest.mark.django_db
 
@@ -579,3 +580,49 @@ def test_an_unexpected_error_in_a_run_is_logged_with_its_traceback_and_the_inges
     assert f"Meeting summary {summary.pk} failed with an unexpected error" in logged
     assert "RuntimeError: a defect nobody expected" in logged  # the traceback, for whoever fixes it
     assert WORD not in logged  # and no word of the transcript
+
+
+# --- reported_state: the one rule both routes report by (the audit of 12 November) -------------------
+
+
+def test_reported_state_tells_a_reader_what_a_run_is(django_capture_on_commit_callbacks):
+    from apps.meetings.summaries import reported_state
+
+    assert reported_state(None) == (None, False)
+    with django_capture_on_commit_callbacks(execute=False):
+        meeting = ingest()
+    summary = MeetingSummary.objects.get(meeting=meeting)
+    assert reported_state(summary) == (SUMMARY_PROCESSING, False)
+    # A run a stopped server left: reported as what the next scheduled retry makes of it.
+    assert reported_state(make_stale(summary)) == (SUMMARY_UNAVAILABLE, True)
+    assert is_in_progress(summary) is True
+    # Nothing was written by reading it.
+    summary.refresh_from_db()
+    assert summary.status == SUMMARY_PROCESSING
+
+
+def test_a_run_that_waited_for_a_place_is_timed_from_when_its_work_starts(
+    stub_ai_service, django_capture_on_commit_callbacks
+):
+    """A background run may wait for one of MAXIMUM_SUMMARIES_IN_FLIGHT places. Timed from its
+    request, it could pass SUMMARY_STALE_AFTER_SECONDS while still waiting, be reclaimed as an
+    orphan and run a second time beside itself (the audit of 12 November, finding 7). So the run
+    restarts its clock when its work starts, and the retry command, arriving mid-run, leaves it."""
+    with django_capture_on_commit_callbacks(execute=False) as callbacks:
+        meeting = ingest()
+    summary = make_stale(MeetingSummary.objects.get(meeting=meeting))  # as if it waited that long
+    seen = {}
+
+    def while_running(title, passages):
+        seen["reclaimed"] = reclaim_orphans()
+        seen["row"] = MeetingSummary.objects.get(pk=summary.pk)
+        return draft()
+
+    stub_ai_service.summary = while_running
+    callbacks[0]()
+
+    assert seen["reclaimed"] == 0
+    assert seen["row"].status == SUMMARY_PROCESSING and not _is_stale(seen["row"])
+    summary.refresh_from_db()
+    assert summary.status == SUMMARY_READY and summary.retry_runs == 0
+    assert len(stub_ai_service.summarise_calls) == 1

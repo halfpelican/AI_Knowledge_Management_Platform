@@ -601,10 +601,12 @@ way.
 - **Ceilings:** FLM takes `SUMMARY_MAX_TOKENS` (3,000); Claude takes `CLAUDE_MAX_TOKENS`, because
   its thinking counts against the ceiling (D-115). Both carry `SUMMARY_TIMEOUT_SECONDS` (600).
 
-**Not measured on `gemma3:4b`.** The development set and Objective 04 were run on the `anthropic`
-provider (D-125). On FLM the prompt is a first version with a tested parser and a tested retry
-path. A transcript near `SUMMARY_INPUT_TOKENS` is a far longer prompt than anything FLM has been
-measured on here.
+**Not measured on `gemma3:4b`, and Objective 04 not measured at all.** Only the development set
+has been run, three draws on the `anthropic` provider, scored against a development reference
+Claude wrote (`corpus/objective-04/runs/2026-11-11/`, which says it is not the objective's
+result). Objective 04 waits for a reference set written by people (D-125). On FLM the prompt is a
+first version with a tested parser and a tested retry path. A transcript near
+`SUMMARY_INPUT_TOKENS` is a far longer prompt than anything FLM has been measured on here.
 
 ---
 

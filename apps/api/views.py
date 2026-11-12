@@ -52,8 +52,6 @@ from apps.core.constants import (
     MINIMUM_CONTENT_LENGTH,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
-    SUMMARY_PROCESSING,
-    SUMMARY_UNAVAILABLE,
     TRANSCRIPTION_BUSY_RETRY_SECONDS,
     TRANSCRIPTION_SEGMENT_SECONDS,
 )
@@ -94,6 +92,8 @@ from apps.meetings.summaries import (
     action_items_of,
     add_action_item,
     edit_action_item,
+    is_in_progress,
+    latest_run,
     request_summary,
     transcript_is_long_enough,
 )
@@ -1466,15 +1466,21 @@ def summary_response(request, view, meeting, *, too_short: bool = False):
     coming, and the page keeps asking. 200 is every settled state: Ready, Unavailable with its
     retries spent, and a meeting nobody has asked a summary of. The 422 carries the same body
     with ``detail``, because the Action Items panel still needs the items.
+
+    The latest run is read once, and both the body and the code come from it through
+    ``apps/meetings/summaries.py`` (``reported_state``, ``is_in_progress``): one rule, so the body
+    and the code cannot disagree.
     """
-    body = meeting_summary_payload(meeting, can_edit=CanContributeContent().has_permission(request, view))
+    latest = latest_run(meeting)
+    body = meeting_summary_payload(
+        meeting, can_edit=CanContributeContent().has_permission(request, view), latest=latest
+    )
     if too_short:
         body["detail"] = SUMMARY_TOO_SHORT_MESSAGE
         return Response(body, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
-    in_progress = body["status"] == SUMMARY_PROCESSING or (
-        body["status"] == SUMMARY_UNAVAILABLE and body["queued_for_retry"]
+    return Response(
+        body, status=status.HTTP_202_ACCEPTED if is_in_progress(latest) else status.HTTP_200_OK
     )
-    return Response(body, status=status.HTTP_202_ACCEPTED if in_progress else status.HTTP_200_OK)
 
 
 class MeetingSummaryView(ThrottlePostOnlyMixin, APIView):

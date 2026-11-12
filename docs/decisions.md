@@ -10932,6 +10932,91 @@ correction or addition; none changes the user's four choices.
   provider and Objective 04's measurement are recorded in their own notes when they are made, and
   the FLM path (`gemma3:4b`) is not run for FR-16 at all.
 
+**Dated note, 12 November 2026: the second day's work, and the requirements audit.** The note above
+was written on the evening of 11 November and is overtaken in four places: the development runs,
+the due-date rules, two defects, and the audit below.
+
+- **Live runs, development set only.** Three draws of `X01`, `X02` and `T01`–`T06` on the
+  `anthropic` provider (Haiku 5.5, voyage-4). They are scored against a development reference
+  Claude wrote: recall 94.9%, 100% and 94.9%; extras 2.6%, 9.3% and 5.1%; no owner given to the
+  wrong person. All 24 summaries were ready on the first attempt, for $0.0162 of summarisation.
+  The record is `corpus/objective-04/runs/2026-11-11/`, which says it is not the objective's
+  result. The prompt was not changed. **Objective 04 itself has not been measured**: it waits for
+  the reference set people are writing (choice 4, reaffirmed by the user on 12 November).
+- **Due dates.** A time of day no longer hides the day it belongs to: "by end of day tomorrow" and
+  "Friday close of business" now resolve. A deadline no calendar holds ("in 99999999999 weeks")
+  now resolves to nothing. Before, it raised inside the storing transaction, which would have cost
+  a meeting its summary on every attempt; a test written before the fix found it.
+- **Order of action items.** After a Regenerate, the items a person added or edited follow the new
+  run's items, in the order they already had. Before, they could sit among the newly extracted
+  ones; a test found this too.
+- **`MeetingSummaries.requested_by`** takes that column name, as `uploaded_by` and `triggered_by`
+  do. `meetings 0003` had not been pushed, so it was regenerated rather than followed by another.
+- **`main` was merged in** (`e97d5ff`). D-125 sits between D-124 and D-126. main's every-page
+  route walk needed the meeting page's second request, the summary, answered.
+- **Checked in a browser** against the development database: both panels; Regenerate through the
+  background thread (POST 202, then GET 202, then GET 200); an edit, an addition and a confirmed
+  deletion.
+- **Both suites** pass on the merge: pytest 4,289 tests, every protected endpoint covered from
+  both roles; Vitest 583 tests.
+
+**The requirements audit of `e97d5ff` returned INCOMPLETE.** Every FR-16 clause was found built
+and tested from both roles, or recorded here as a deviation. What it found, and what was done:
+
+1. **A false sentence.** `docs/ai-provider.md` §5d said Objective 04 had been run on the
+   `anthropic` provider. It had not. **Corrected:** only the development set has been run.
+2. **NFR-15 on the answer surface.** "All AI-generated content ... applied system-wide", tested by
+   a "visual audit of every AI output surface". FR-12's answer, the system's main AI output,
+   carried no mark. The commit that brought the mark (`b7c5d08`) said "one AI mark everywhere",
+   and that was not true.
+   - **Done:** the answer now carries the mark under its heading and the dashed boundary, live
+     and in a reopened thread, which share one component.
+   - **Done:** so does UC-04 A1's sentence recording that a meeting raised no action items.
+   - **Open:** the draft transcript a recording produces (D-123) carries that feature's own
+     machine-transcript notice, not this mark. Whether it should carry both is for the team.
+     `AiMark.jsx` now lists the surfaces the mark is on, and names this one.
+3. **The 202 rule was in two places.** **Done:** both summary routes read the latest run once and
+   report it through `reported_state`, and `is_in_progress` decides the 202 from it.
+4. **CLAUDE.md §7, "Tests for a requirement land in the same commit as the requirement".**
+   `6f7e7fc` (the operation) and `56f5613` (the apply layer and routes) carried a smoke test and
+   no suite. Their tests landed in `84d4f7f`, the next day. **Recorded as a departure:** every
+   later commit carries its tests, and the branch has never been pushed. A squash merge of the
+   pull request would also close it, and that is the user's choice.
+5. **This record was stale.** This note brings it up to date. The retry command's exit status is
+   restated in the command and the runbook: it is 1 when a summary that run retried is still
+   unavailable. An empty queue is 0, whatever summaries left it earlier.
+6. **The deviations.** The audit found each stated honestly. Two corrections:
+   - **(a) Not a gap in the proposal.** The second item under "Two gaps in the proposal" is not
+     one. UC-12 A2, which identifies a transcript among FR-08 uploads, and UC-04 E2 are parts of
+     the proposal that are not built. The consequence, stated plainly: a transcript uploaded
+     through FR-08 is never summarised, so UC-12's post-condition "where the file was a meeting
+     transcript, a summary has been produced" is unmet on that path.
+   - **(g) Partial, now recorded.** UC-04 E1.04's report, that the transcript is stored and
+     searchable while its summary is not yet available, is made on the meeting page, where the
+     summary's state is shown. FR-09's upload confirmation does not make it, because the summary
+     runs after the upload has answered 201, and nothing has failed at that moment.
+7. **Robustness.**
+   - **A stale run left the page waiting.** A server stopped mid-run left the row Processing, so
+     the page polled with Generate disabled until the hourly retry ran, or forever if the task
+     was never registered. **Done:** a run older than `SUMMARY_STALE_AFTER_SECONDS` is reported
+     as Unavailable and queued, which is what the next retry makes of it. The page stops asking
+     and offers Generate, and a POST closes the stale run and starts a new one. A read writes
+     nothing.
+   - **A waiting run could be run twice.** A run was timed from its request, so a background run
+     waiting for one of `MAXIMUM_SUMMARIES_IN_FLIGHT` places could go stale, be reclaimed and run
+     beside itself. **Done:** the clock restarts when the run's work starts.
+8. **Open: the tuned retrieval values predate summary passages.** D-120's thresholds, D-122's and
+   D-126's values, and Objectives 03 and 06 were measured on databases with no summaries.
+   - Their recorded results stand for those databases.
+   - Once summaries exist (`summarise_meetings --missing`, runbook section 10), AI-written passages
+     compete in FR-12's ranking and in FR-19's exclusion. Whether the tuned values still hold
+     with them present has not been measured.
+9. **Constants.** Noted, unchanged: `SUMMARY_STALE_AFTER_SECONDS` restates the attempt count and
+   the timeout as numbers, and a test holds them equal. The reply's limits stay in
+   `apps/ai/summarisation.py`, D-104's precedent.
+
+**Not yet done:** the security review. It gets its own note.
+
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
 **Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,

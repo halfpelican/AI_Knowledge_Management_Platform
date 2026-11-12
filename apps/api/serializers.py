@@ -33,7 +33,7 @@ from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import tag_options
 from apps.documents.models import ContentTag, Document, normalise_tag_name
 from apps.meetings.models import ActionItem, Meeting, MeetingSummary
-from apps.meetings.summaries import action_items_of, current_summary, latest_run
+from apps.meetings.summaries import action_items_of, current_summary, latest_run, reported_state
 from apps.retrieval.models import Conversation, KnowledgeGap, KnowledgeGapCycle
 from apps.retrieval.query_log import FIRST_POSITION
 from apps.retrieval.scoping import permission_scope, scoped_chunks
@@ -620,11 +620,16 @@ class ActionItemWriteSerializer(serializers.Serializer):
         return attrs
 
 
-def meeting_summary_payload(meeting, *, can_edit: bool) -> dict:
+_LATEST = object()
+
+
+def meeting_summary_payload(meeting, *, can_edit: bool, latest=_LATEST) -> dict:
     """What both summary routes return, whatever the state (D-125).
 
     - ``status``: the latest run's ("Processing", "Ready", "Unavailable"), or null where no
-      summary was ever requested. ``queued_for_retry`` is NFR-20's flag on that run.
+      summary was ever requested. ``queued_for_retry`` is NFR-20's flag on that run. Both are
+      ``reported_state``'s, so a run a stopped server left Processing reads as Unavailable and
+      queued. ``latest`` is that run, when the caller has already read it.
     - ``summary``: the latest Ready summary, or null. While a Regenerate runs, and after one
       fails, this is still the previous Ready summary; a failed one is never here (UC-04).
     - ``action_items``: the meeting's items in panel order. An empty list beside a Ready summary
@@ -632,11 +637,13 @@ def meeting_summary_payload(meeting, *, can_edit: bool) -> dict:
     - ``can_edit``: whether the caller's role holds ``contribute_content``. A hint for showing
       the controls; every write checks the permission itself (invariant 4).
     """
-    latest = latest_run(meeting)
+    if latest is _LATEST:
+        latest = latest_run(meeting)
+    status, queued = reported_state(latest)
     current = current_summary(meeting)
     return {
-        "status": latest.status if latest is not None else None,
-        "queued_for_retry": bool(latest is not None and latest.queued_for_retry),
+        "status": status,
+        "queued_for_retry": queued,
         "summary": MeetingSummarySerializer(current).data if current is not None else None,
         "action_items": ActionItemSerializer(action_items_of(meeting), many=True).data,
         "can_edit": can_edit,

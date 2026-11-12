@@ -221,17 +221,33 @@ def _is_stale(summary: MeetingSummary, now=None) -> bool:
     return summary.started_at < now - timedelta(seconds=SUMMARY_STALE_AFTER_SECONDS)
 
 
+def reported_state(summary: MeetingSummary | None, now=None) -> tuple[str | None, bool]:
+    """The status and retry flag a reader is told for ``summary``, the latest run: the one rule.
+
+    Both summary routes report through this, and ``is_in_progress`` decides their 202 from it, so
+    the body and the code cannot disagree. Its one translation: **a Processing run older than
+    SUMMARY_STALE_AFTER_SECONDS is reported as Unavailable and queued.** Such a run was left by a
+    server that stopped mid-run, and no thread is carrying it; reporting it as what the next
+    scheduled retry makes of it lets the page stop asking and offer Generate again, and
+    ``request_summary`` then closes the stale run and starts a new one. Reported as Processing, it
+    would keep the page waiting, with the button disabled, until the scheduled retry ran. Nothing
+    is written here: a read repairs nothing (``reclaim_orphans`` does that).
+    """
+    if summary is None:
+        return None, False
+    if _is_stale(summary, now):
+        return SUMMARY_UNAVAILABLE, True
+    return summary.status, summary.queued_for_retry
+
+
 def is_in_progress(summary: MeetingSummary | None) -> bool:
     """FR-16's "202 Accepted while processing": a run in flight, or one queued for its retry.
 
-    A Processing run that has gone stale still counts: the next scheduled retry reclaims it and
-    runs it again, so from the reader's side it is still coming.
+    Read from ``reported_state``, so a stale run counts too, as queued: the next scheduled retry
+    reclaims it and runs it again, so from the reader's side a summary is still coming.
     """
-    if summary is None:
-        return False
-    return summary.status == SUMMARY_PROCESSING or (
-        summary.status == SUMMARY_UNAVAILABLE and summary.queued_for_retry
-    )
+    status, queued = reported_state(summary)
+    return status == SUMMARY_PROCESSING or (status == SUMMARY_UNAVAILABLE and queued)
 
 
 # --- Requesting a run ------------------------------------------------------------------------
@@ -302,6 +318,13 @@ def run_summary(summary_id) -> MeetingSummary | None:
     summary = MeetingSummary.objects.select_related("meeting").filter(pk=summary_id).first()
     if summary is None or summary.status != SUMMARY_PROCESSING:
         return summary
+    # The attempt starts now, not when the run was requested: in a background thread it may have
+    # waited for one of MAXIMUM_SUMMARIES_IN_FLIGHT places, and a run timed from its request
+    # could pass SUMMARY_STALE_AFTER_SECONDS while still queued, be reclaimed as an orphan and run
+    # a second time beside itself. Only a row still Processing is touched.
+    MeetingSummary.objects.filter(pk=summary.pk, status=SUMMARY_PROCESSING).update(
+        started_at=timezone.now()
+    )
     meeting = summary.meeting
     source = summary_input(meeting.transcript_text)
     try:

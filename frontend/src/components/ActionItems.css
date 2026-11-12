@@ -28,6 +28,11 @@
   color: var(--color-text-muted);
 }
 
+/* UC-04 A1's sentence, inside NFR-15's dashed boundary. */
+.action-items__state--ai {
+  padding: var(--space-2) var(--space-3);
+}
+
 .action-items__note {
   font-size: var(--text-sm);
 }

@@ -1474,6 +1474,10 @@ The summary state, from both summary routes at every status code they answer:
 - **`queued_for_retry`** is NFR-20's flag on that run. `"Unavailable"` with it true means the
   hourly retry will run it again, and the route answers `202`. `"Unavailable"` with it false means
   the retries are spent, and only Generate will try again; the route answers `200`.
+- **A run left `"Processing"` for more than `SUMMARY_STALE_AFTER_SECONDS` (2,400 s) is reported
+  as `"Unavailable"` with `queued_for_retry` true.** Such a run was left by a server that stopped
+  mid-run, and that is what the next scheduled retry makes of it. The page then stops asking and
+  offers Generate, and a POST closes the stale run and starts a new one.
 - **`summary`** is the meeting's latest **Ready** summary, or `null`. It is never a failed one:
   "in the failed state it is never presented to a user" (UC-04). While a Regenerate runs, and
   after one fails, it is still the previous Ready summary, so `status` and `summary` can differ.

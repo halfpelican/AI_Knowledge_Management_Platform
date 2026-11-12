@@ -20,9 +20,12 @@ One run does two things, in this order:
 does. One line follows per summary, naming the meeting and summary by id and never by title or
 content.
 
-**Exit status 1 when any summary is still unavailable afterwards,** so the scheduler's last-run
-result shows that something needs attention; nothing is lost either way, because a failed run
-changes nothing but its own row. An empty queue is exit status 0.
+**Exit status 1 when any summary this run took from the queue is still unavailable after it,**
+whether it was queued again or has now left the queue, so the scheduler's last-run result shows
+that something needs attention; nothing is lost either way, because a failed run changes nothing
+but its own row. An empty queue is exit status 0, even while summaries that left the queue on an
+earlier run are still Unavailable: those wait for a person's Generate, and the command does not
+look at them.
 """
 
 from django.core.management.base import BaseCommand, CommandError
