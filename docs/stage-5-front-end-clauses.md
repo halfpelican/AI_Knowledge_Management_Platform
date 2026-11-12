@@ -263,3 +263,34 @@ These correct the record without editing it.
   - **A disabled field, in the test that submits a term.** That test passed with the field
     disabled: Testing Library's `fireEvent` sets a disabled input's value all the same, where a
     browser would not let a user type. The walk fails on a disabled field.
+
+### 12 November 2026, later: FR-09 rows 1 and 3, and what the stylesheet checks reach
+
+Found while the demonstration script's "What is not verified by any test?" was derived again from
+`frontend/tests`, on `docs/FR-01-demonstration-untested-list`. The tests below are cited as they
+stand, and were not re-broken here, as this file treats a test that already existed.
+
+- **FR-09 row 1 is now ✅.** The attendee half is `meetingAttendees.test.jsx` :: records two people
+  chosen one after the other, shows both, and sends both. It chooses attendees on the form, and
+  the `POST /api/meetings` it sends carries them. It was added on 8 November (`09ae33e`, usability
+  finding 5).
+- **FR-09 row 3 is now ⚠️.** `meetingDelete.test.jsx` renders `MeetingDetail.jsx` and checks
+  that its transcript region holds part of the stored text ("supplier review"). It was added on
+  7 November (`cc2ac42`, D-99). No test checks that all of the transcript is shown.
+- **"Left uncovered":** the FR-09 attendee row is closed. The FR-09 transcript row is partly
+  covered, as row 3 says.
+- **A correction to the note above.** Its first "Still uncovered" item says a rule that hid the
+  field or the header would not fail the walk. That is true of the walk, and it reads as if no
+  test could see such a rule. One can:
+  - Since 8 November, `tests/stylesheets.js` reads the stylesheets as text (`c2d7fce`).
+    `tabOrder.test.jsx` uses it to fail on any keyboard stop a rule hides, on the screens it
+    walks: `/login`, and, as an Employee, `/dashboard`, `/documents`, `/upload`, `/meetings` and
+    `/ask`. The header search field is one of those stops on every one of them except `/login`.
+  - Break V1 appended `.search-field--header { display: none; }` to
+    `src/components/SearchField.css`. `tabOrder.test.jsx` failed its dashboard, documents,
+    upload, meetings and ask cases, and the walk passed. The break is named in `0ca090c`'s
+    message.
+  - **Still not seen:** the field hidden on a route `tabOrder.test.jsx` does not walk, or as an
+    Administrator, and whether it is laid out on screen.
+  - The section "What jsdom cannot see", at the head of this file, was true on 2 November. Since
+    8 November the stylesheet checks reach further than it says.

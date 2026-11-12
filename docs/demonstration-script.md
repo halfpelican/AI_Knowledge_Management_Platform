@@ -22,6 +22,35 @@
 >
 > **Amended 7 November 2026,** after the D-35 recording (D-98): Xbox Game Bar records only the
 > window that had focus when it started, so the recording advice now names OBS's Display Capture.
+>
+> **Amended 12 November 2026,** after FR-13 was measured on both providers (D-112 and its notes).
+> The changes:
+>
+> - FR-13's step 5, the screen's notes and the answer on conversations said its measurement "comes
+>   after the gate" or "is step 5's". It was made on 3 November and since, and they now say what it
+>   found on each provider;
+> - the deviations list names D-112, with its reason and numbers, as D-112 requires, and D-42's
+>   entry says how its boundary fared on each provider;
+> - the re-scoping tests are cited at `test_fr11_scoping.py:610` and `:635`, where they begin on
+>   `main` at `a668a08`. The earlier text cited `:608` and `:633`.
+>
+> The alpha still runs FLM at `8598d19`, so step 5's advice stands for a walk on it.
+>
+> **Amended 12 November 2026, later,** after #95 and D-94's notes of 12 November. The changes:
+>
+> - "What is not verified by any test?" is derived again from `frontend/tests`. The 2 November
+>   list named as untested screens that have been tested since, from Register to Search. It now
+>   names the clauses still untested, then what is tested;
+> - the same list says what the stylesheet checks reach. The tab-order test fails if a
+>   stylesheet rule hides any keyboard stop on the screens it walks, the header search field and
+>   the Ask link among them.
+>
+> **Amended 12 November 2026 (night),** after the deviations list was checked against `main`. The
+> changes:
+>
+> - D-33 §1's, D-56's and D-69's entries now say what holds on the alpha's build and what holds
+>   on `main`. On `main`, FR-10 and FR-19 are built and `voyage-4` has a partial-match floor
+>   (D-104, D-105, D-107, D-120). Their 2 November text is true of the alpha only.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -291,8 +320,8 @@ same routes. Every question below was screened with them in place.
      by role.
    - **That the scope is re-evaluated on every turn is evidenced by test, not by this walk.**
      Two sessions holding two roles cannot show a role changing mid-thread.
-     `apps/api/tests/test_fr11_scoping.py:608` changes the role between turns, from Employee to
-     Administrator, and the next turn takes the new scope. `:633` does the reverse.
+     `apps/api/tests/test_fr11_scoping.py:610` changes the role between turns, from Employee to
+     Administrator, and the next turn takes the new scope. `:635` does the reverse.
 4. **Reopen a thread from `Your conversations`, or from the dashboard's recent questions** (D-77).
    - **Expected:** the turns come back in order.
 5. **Do not ask a follow-up that needs the earlier turn to make sense,** such as "Is there a limit
@@ -301,8 +330,13 @@ same routes. Every question below was screened with them in place.
      follow-up was not correct on any trial (D-91). The replies varied across trials in t04.
    - **FR-13 is partial at the gate** (D-91).
    - [What the screen found](#what-the-screen-found-that-the-walk-avoids) has the details.
-   - If an assessor asks for one, say so plainly. FR-13's thread measurement (D-86) comes after
-     the gate.
+   - **The measurement since agrees, on the alpha's build.** On FLM, with history, 1 of 9 frozen
+     follow-ups matched on the alpha's code (3 November), and 2, 3 and 2 of 9 on `main` (8 and
+     9 November). D-112 accepts the clause as partial for NIT3003, a recorded deviation.
+   - **On the default build it is different.** On `anthropic` (D-122), 9 of 9 matched on each of
+     three draws (D-112's note of 12 November). That is a measurement, not yet the auditor's
+     verdict, and the alpha does not run that build.
+   - If an assessor asks for one, say so plainly, and say which build is running.
 
 ### FR-14 · Dashboard overview (both windows)
 
@@ -395,10 +429,13 @@ same checks as D-88. The steps:
     on its own.
   - **t09 failed, as predicted** (D-86 decision 2).
   - **The prompt labels the earlier questions as context,** with "The question to answer:"
-    before the new one (`apps/ai/prompting.py`). Whether the failure is the model's or the
-    prompt's is not known. The cold and spelled-out runs that would separate them are step 5's.
-  - **It is not tuned here.** FR-13's thread run (D-86) is the measurement, and it comes after the
-    gate.
+    before the new one (`apps/ai/prompting.py`). Whether the failure was the model's or the
+    prompt's was not known on 1 November. Step 5's cold and spelled-out runs split it on
+    3 November: for t01 and t05 history was the limit, and for t02, t03, t04, t06 and t07 asked
+    by the Administrator, and t09, generation or retrieval limited it as well (D-91's note).
+  - **It is not tuned here.** FR-13's thread run (D-86) is the measurement. Options 1 and 2
+    (D-103) and option 3 (D-111) were measured on FLM and not adopted, and D-112 accepts the
+    clause as partial for NIT3003. On `anthropic`, see FR-13's step 5 above.
 - **Citations that do not support their statement were seen,** the limitation invariant 5
   concedes. Several first turns cited another source for a correct sentence. For example, D20's
   "A weekly update will be published on the intranet until the move is complete" was cited to the
@@ -454,28 +491,58 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
 - **Does the same question always answer the same way? No.** D-40 is open, and its trigger is
   unidentified. These questions were screened for it.
 - **Does the assistant follow a conversation?** It keeps the thread, and its scope is re-checked
-  on every turn, which is tested (`test_fr11_scoping.py:608` and `:633`). A follow-up that only
+  on every turn, which is tested (`test_fr11_scoping.py:610` and `:635`). A follow-up that only
   makes sense with the earlier turn did not resolve in the screen's clean cases (D-91). **FR-13 is
-  partial at the gate.** Say so, and do not claim more. The measurement is step 5's.
-- **What is not verified by any test?** Give this list, derived from `frontend/tests` on 2 November.
-  It supersedes D-62's. Step 6 (D-94) writes the full enumeration to
-  `docs/stage-5-front-end-clauses.md`.
-  - **Untested in the front-end suite:**
-    - Register, beyond its 429 message;
-    - Login, beyond its 429 message and the role landing (the locked-account message
-      included);
-    - the logout control and its redirect;
-    - RoleManagement;
-    - RequireAuth, RequireRole and AccessDenied;
-    - Upload's client-side format refusal and its progress display;
-    - Meetings, beyond its 429 messages, and MeetingDetail;
-    - Search, its field and its results (the two-character minimum, the grouping, the
-      partial-match label).
-  - **Tested:** Ask and its threads (five files), the Dashboard, DocumentRepository and
-    DocumentDetail, the Upload queue and its 429s, the status vocabulary, the production build
-    and the same-origin client.
+  partial at the gate.** Say so, and do not claim more.
+  - **On the alpha's build, FLM,** the measurement agrees: with history, 1 of 9 frozen follow-ups
+    matched on the alpha's code, and 2, 3 and 2 of 9 on `main`. D-112 accepts the clause as
+    partial for NIT3003.
+  - **On the default build, `anthropic`,** 9 of 9 matched on each of three draws. That is a
+    measurement, and the auditor has not read it yet (D-112's note of 12 November).
+  - **On both,** earlier answers are never passed (D-42).
+- **What is not verified by any test?** Give this list, derived from `frontend/tests` on
+  12 November. It supersedes D-62's and the one this script gave on 2 November. The record, clause
+  by clause, is `docs/stage-5-front-end-clauses.md` for FR-01 to FR-09 and FR-12's search half, and
+  `docs/stage-5-clause-audit.md` for FR-11 to FR-15.
+  - **Not tested in the front-end suite:**
+    - **FR-06:** the visibility choice the Upload and Meetings screens offer an Administrator,
+      and the fixed note they show an Employee in its place (`visibilityOptionsFor`);
+    - **FR-08:** the sentence the repository shows beside a document whose processing failed,
+      for any of its statuses (`statusMessageFor`). The Try again action is tested;
+    - **FR-09:** the stored transcript shown in full. The meeting's page is rendered with its
+      transcript, and `meetingDelete.test.jsx` checks part of the text, not all of it;
+    - **FR-12:** the note on a search result that matched on its title and has no passage to
+      show (`TEXT.searchSnippetUnavailable`);
+    - **whether a thing can be seen, beyond what the stylesheet checks reach.** jsdom applies no
+      stylesheet and lays nothing out, so no test sees a page laid out, and a rule that hid an
+      element would pass every test except where a test reads the stylesheets as text
+      (`tests/stylesheets.js`). Those tests check that no rule hides:
+      - every keyboard stop on the screens `tabOrder.test.jsx` walks: sign-in, and, as an
+        Employee, the dashboard, documents, upload, meetings and Ask. The header search field
+        and the Ask link are among those stops;
+      - the skip link, the Ask screen's acknowledgement line, and the drop zone's status and
+        label.
+  - **Tested:**
+    - **every route, as an Employee and as an Administrator,** for the Ask link and the header
+      search field (`askNavLink.test.jsx`, `headerSearchField.test.jsx`);
+    - **registration and sign-in:** the password rules and the submit gate, the locked-account
+      message, the show-password toggle, the submit lock and the role landing;
+    - **logout** and its confirmation, **role management**, the **403 page**, and the
+      **RequireAuth** and **RequireRole** guards;
+    - **upload:** the format refusal, each file's progress, and the queue and its retry;
+    - **meetings:** the processing indicator, the attendees and deletion;
+    - **search:** the two-character minimum, the upper bound and the grouping;
+    - **the Ask screen and its threads:** citations, the Sources panel, the no-answer state and
+      partial matches;
+    - **the dashboard**, and **the repository** with its detail view;
+    - **NIT3004's screens:** FR-10's classification and tag administration, FR-19's
+      knowledge-gap log, and recording transcription (D-123);
+    - **across screens:** the 429 and 503 messages, the tab order, the text equivalents, the
+      focus ring and colour contrast, the production build and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,
-  never a tick. Each was checked against its entry on 2 November.
+  never a tick. Each was checked against its entry on 2 November. D-42's and D-112's were checked
+  again on 12 November, and D-33's, D-56's and D-69's against `main` that night. The rest were not
+  checked again.
   - **D-15 (FR-08):** four upload formats, PDF, DOCX, XLSX and TXT, not the six FR-08's upload
     area names. DOC and XLS have no parser.
   - **D-25 (FR-02):** the session carries no role. The role is re-read on every request, so a
@@ -486,17 +553,46 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
     `ExtractedContent` and chunking in `ingest_and_index_document()`, and it must be unable to
     fail the document — a classification failure marks it unclassified and never revokes
     indexed status (`CLAUDE.md` invariant 8).
+    - **That holds on the alpha's build, `8598d19`,** which has no classification.
+    - **On `main`, FR-10 is built, so the hand-off is not deferred there** (D-104, D-105).
+      `_classify` in `apps/ingestion/documents.py` runs between storing the extracted text and
+      chunking, in a savepoint of its own. A failure is logged and leaves the document
+      unclassified, its status unchanged. The upload's 201 carries `classification`, or null.
   - **D-33 §2 (FR-09):** a 422 when every chunk fails to embed, which FR-09's Responses clause
     does not list. The transcript is kept (invariant 8).
   - **D-42 (FR-13):** earlier questions are passed to the model, not earlier answers. Its
-    boundary is contradicted by the 1 November screen (D-42's dated note, D-91).
+    boundary is contradicted by the 1 November screen (D-42's dated note, D-91). On FLM,
+    follow-ups whose referent is in the earlier question mostly did not resolve either. On
+    `anthropic` they resolved on every draw, and a referent that is only in an earlier answer is
+    still never passed (D-42's note of 12 November).
   - **D-43 (FR-13):** a conversation's `Update` is its title on create and the time of its last
     turn. There is no rename route and no `PATCH`.
+  - **D-112 (FR-13):** the follow-up clause, "…so that pronouns and abbreviated references
+    resolve correctly", is accepted as partial for NIT3003 on the FLM build. With history, 2, 3
+    and 2 of the 9 frozen follow-ups matched on `main` (8 and 9 November), against 6 of 9 spelled
+    out, and the alpha's code matched 1 of 9 (3 November). The reason D-112 gives: on several
+    threads the right passage was supplied at rank 1, and generation answered from "the
+    turn-1-adjacent passage". Options 1 and 2 (D-103) and option 3 (D-111) were measured and not
+    adopted. On the default build, `anthropic`, it is not admitted as a deviation: there the
+    resolving half measured 9 of 9 on each of three draws, and counts only when the auditor reads
+    it as met (`M6-BUILD-PROMPT.md`'s Done line, amended 12 November).
   - **D-45 (FR-12):** there is no input sanitiser. The defence is parameterised SQL, React's
     escaping and the prompt's delimiter.
-  - **D-56 (FR-12):** partial matches have no relevance floor. The acknowledgement is recorded,
-    and the floor is owed by step 7 (D-93).
-  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19.
+  - **D-56 (FR-12):** on the FLM build, the alpha's included, partial matches have no relevance
+    floor. The acknowledgement is recorded.
+    - **Step 7 owed the floor (D-93) and set none.** At 0.30 the margin rule cannot set one, and
+      retrieval scores did not separate answerable from unanswerable questions in users' wording
+      (D-102).
+    - **On the default build, `anthropic`,** a near miss is offered as a partial match only at or
+      above 0.2468 on `voyage-4` (D-120).
+    - D-120 records D-56 as narrowed on Voyage, and still open on EmbeddingGemma.
+  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19, and
+    it holds on the alpha's build.
+    - **On `main`, FR-19 is built and the deferral has ended** (D-69's note of 10 November,
+      D-107). An Administrator's dashboard shows the number of Open knowledge gaps and the top
+      entries.
+    - An Employee's payload keeps its keys, because `review_knowledge_gaps` is the
+      Administrator's alone.
   - **D-70 (FR-14):** the department filter narrows documents only. Meetings have no department.
   - **D-72 (FR-15):** Department comes from the documents' column, not from ContentTags. That is
     a deliberate departure from FR-15's server clause.
