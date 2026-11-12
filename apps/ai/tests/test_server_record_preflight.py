@@ -561,13 +561,52 @@ def lookup(scripts, monkeypatch):
     return server_record, script, asked, clock
 
 
-def test_a_listen_row_is_taken_first_and_nothing_else_is_asked(lookup):
+@pytest.mark.parametrize("netstat", [({7}, None), ({0, 7}, None), (set(), None),
+                                     (set(), "netstat could not be run (FileNotFoundError)")],
+                         ids=["netstat lists it", "netstat lists it and process 0", "netstat lists nothing",
+                              "netstat missing"])
+def test_a_listen_row_is_taken_when_netstat_lists_no_other_listener(lookup, netstat):
+    """The Listen row is taken at once, and the port's rows are not read, when netstat names no
+    other process LISTENING on the port. Process 0 is not a process, and with netstat missing the
+    row is taken as it was before these checks."""
     server_record, script, asked, clock = lookup
     script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
+    script["netstat"] = [netstat]
     found = server_record.listening_process(8000)
     assert (found["pid"], found["command"], found["started_at"], found["note"]) == (7, WAITRESS_24, STARTED, None)
     assert found["found_by"] == server_record.FOUND_BY_LISTEN_ROW
-    assert (asked["netstat"], asked["owners"], clock.slept) == (0, 0, [])
+    assert (asked["netstat"], asked["owners"], clock.slept) == (1, 0, [])
+    if netstat[1]:
+        assert "so no other listener could be looked for" in found["lookup"][-1]
+
+
+def test_a_readable_listen_row_is_not_taken_while_netstat_lists_another_listener(lookup):
+    """The trial of 12 November 2026, stage 2: two servers on one address and port. The Listen row
+    names one, netstat lists both, and the port's rows show one. Nothing is taken, the process the
+    Listen row named is not returned at the end, and the note says why."""
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 48404, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
+    script["netstat"] = [({42280, 48404}, None)]
+    script["owners"] = [([owner(48404, "2")], None)]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"], found["found_by"]) == (None, None, None, None)
+    assert found["note"].startswith("no single process with a readable command line holds port 8000")
+    assert "more than one process holds port 8000: pids 42280, 48404" in found["note"]
+    assert "netstat -ano lists pid 42280 LISTENING on port 8000 as well" in found["lookup"][-1]
+    assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
+    # So the pre-flight refuses: no command line, so not Waitress.
+    assert server_record.describe(found["command"])["server"] is None
+
+
+def test_a_second_listener_that_goes_away_lets_the_listen_row_be_taken(lookup):
+    """A second listener that is stopping: the retries see it gone, and the Listen row is taken."""
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
+    script["netstat"] = [({7, 9}, None), ({7}, None)]
+    script["owners"] = [([owner(7, "2"), owner(9, "2")], None)]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["found_by"]) == (7, server_record.FOUND_BY_LISTEN_ROW)
+    assert clock.slept == [server_record.LOOKUP_RETRY_INTERVAL_SECONDS]
 
 
 def test_a_listener_with_no_listen_row_is_found_when_netstat_and_its_row_agree(lookup):

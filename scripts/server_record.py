@@ -400,11 +400,16 @@ def listening_process(port: int) -> dict:
     listening row of a Waitress that was answering requests has read as state 0 or 1, where 2 is
     Listen, and netstat has shown no line for it, or CLOSED. A Listen row and a netstat line
     naming PID 0 have also been seen, beside the real listener's own row and after a listener
-    had gone. So the Listen row is not the only lookup:
+    had gone. So the Listen row is not the only lookup, and no lookup takes a process while
+    another holds the port (D-87's note of 12 November 2026):
 
-    1. The Listen row (``_listen_row_process``), taken when its process's command line can be read.
+    1. The Listen row (``_listen_row_process``), taken when its process's command line can be read
+       and ``netstat -ano`` lists no other process LISTENING on the port. Two servers can listen on
+       one address and port on Windows, and then the Listen row names one of them, while the port's
+       CIM rows, which share one key, show only one; netstat lists both. When netstat cannot be
+       run, the Listen row is taken as it was before these checks, and the trace says so.
     2. Otherwise two more are read, and one process is taken only when they agree on it
-       (``sole_owner``, D-87's note of 12 November 2026):
+       (``sole_owner``):
 
        - ``netstat -ano``: the PIDs with a LISTENING line on the port;
        - the port's own socket rows, local port ``port`` and remote port 0, whatever state is
@@ -440,11 +445,19 @@ def listening_process(port: int) -> dict:
     while True:
         tries += 1
         found = _listen_row_process(port)
-        if found["pid"] is not None and found["command"]:
-            say(f"try {tries}: the Listen row names pid {found['pid']}")
-            return {**found, "found_by": FOUND_BY_LISTEN_ROW, "lookup": trace}
-        listen_row = found["note"] or f"the Listen row names pid {found['pid']}, whose command line could not be read"
         netstat_pids, netstat_error = _netstat_listening_pids(port)
+        if found["pid"] is not None and found["command"]:
+            others = sorted(pid for pid in netstat_pids if pid not in (0, found["pid"]))
+            if not others:
+                say(f"try {tries}: the Listen row names pid {found['pid']}"
+                    + (f"; {netstat_error}, so no other listener could be looked for" if netstat_error else ""))
+                return {**found, "found_by": FOUND_BY_LISTEN_ROW, "lookup": trace}
+            listen_row = (f"the Listen row names pid {found['pid']}, and netstat -ano lists {_pids(others)} "
+                          f"LISTENING on port {port} as well")
+            # Not taken, and not returned at the end either: a run must not be READY on one of two.
+            found = {"pid": None, "command": None, "started_at": None, "note": None}
+        else:
+            listen_row = found["note"] or f"the Listen row names pid {found['pid']}, whose command line could not be read"
         owners, rows_error = _port_row_owners(port)
         owner, why, candidate_seen = sole_owner(port, netstat_pids, netstat_error, owners, rows_error)
         if owner is not None:
