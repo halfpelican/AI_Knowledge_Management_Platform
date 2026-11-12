@@ -11017,6 +11017,121 @@ and tested from both roles, or recorded here as a deviation. What it found, and 
 
 **Not yet done:** the security review. It gets its own note.
 
+**Dated note, 13 November 2026: the security review of 12 November, and what it changed.** The
+security-reviewer agent reviewed `a02797c`. It found no path by which an Employee learns anything
+of an Administrator-only meeting's summary, its action items or its existence, and invariants 1
+and 2 held on every surface it traced. It found two medium and two low issues, all about
+integrity, availability or cost; none discloses content. Each is fixed below in a commit of its
+own, with its tests.
+
+1. **Medium: an account anyone can register could take over action-item owners** (`08ddd31`).
+   - **What it found.** Rule 1 matched a full name against every user. Registration is open and a
+     name is free text. So an account registered as "Alex" took every item a transcript gave
+     "Alex", even where the attendee was Alex Morgan, and an account named "The Finance Team"
+     took "the Finance team"'s. Registering a copy of a colleague's full name turned that
+     colleague's items unassigned. Nothing lists items by owner, so nothing leaked. But no owner
+     was ever checked against the meeting's scope, by the matcher or by a hand-picked `owner_id`.
+   - **The fix.** An owner is one of the meeting's recorded attendees, matched by full name or
+     lone first name, and only if their role can read the meeting (`scoped_meetings`, FR-11's own
+     predicate). Who a name means is decided among all the attendees first, so two attendees
+     called Alex stay ambiguous even where only one can read. A hand-picked `owner_id` is refused
+     with a 400 on the same test. Only an Administrator can meet that refusal: every role reads
+     what an Employee can reach (D-66), and Administrators read every user's role through FR-05.
+   - **Further than the review proposed.** It proposed the users who can read the meeting,
+     attendees first. A newly registered account is an Employee, and an Employee reads every
+     meeting marked for Employees. So that pool would still have let "The Finance Team" take "the
+     Finance team"'s items on any such meeting. Attendees are recorded by the person who ingests
+     the transcript (FR-09), and nobody can add themselves.
+   - **The cost, and a departure from FR-16's words.** FR-16 says "matched against the user
+     list". A task the transcript gives by full name to a colleague who was not recorded as
+     attending is now stored unassigned, with the transcript's words beside it; before, it was
+     theirs. That is the bias Objective 04's third criterion asks for, since an unassigned item
+     passes and a wrong owner fails. The narrowing is recorded here rather than presented as the
+     requirement's own rule. On the development set's re-run of 13 November,
+     every item whose reference owner is a user was still given to that user
+     (`corpus/objective-04/runs/2026-11-13/`).
+2. **Medium: action items without bound** (`985b3d1`).
+   - **What it found.** Any account could add items to a meeting it reads without end, each up to
+     1,000 characters, and every reader of the meeting loads them all.
+   - **The fix.** POST, PATCH and DELETE share a throttle scope, "action_items", at 30 a minute,
+     checked before the meeting is looked up. A meeting holds at most
+     `MAXIMUM_ACTION_ITEMS_PER_MEETING` (200) items; an addition past it is 409 and writes nothing,
+     and the page says so from its own copy. Each item records `created_by` and `updated_by`, never
+     returned, as the review asked.
+   - **What remains, stated.** The cap counts every item but refuses only a person's addition. A
+     Regenerate adds at most 25 extracted items and replaces its own untouched ones, and an
+     extracted item a person edits is kept. So Regenerate-and-edit cycles can still grow a meeting
+     past 200, at the pace the ingestion and action-item throttles allow. Who deleted an item is
+     not recorded.
+3. **Low: failures retrying cannot fix, and an input cap in words** (`f824420`).
+   - **What it found.** The parser refused replies over limits the prompt never stated (12
+     decisions, 25 action items, 6 passages an element, 600 and 120 characters). A meeting with
+     about thirty agreed tasks would fail both attempts as malformed, and the hourly queue would
+     run it three more times: eight calls, and no summary. And `SUMMARY_INPUT_TOKENS` counts
+     whitespace-separated words, which have no length limit.
+   - **The fix.** The prompt states all seven limits, and what to do when a meeting reached more.
+     A run that failed "malformed" is queued once (`MAXIMUM_MALFORMED_RETRY_RUNS`): at most four
+     calls. `summary_input` also caps the passages at `SUMMARY_INPUT_CHARACTERS` (100,000); a
+     first passage over it alone is cut to it and recorded as truncated.
+   - **The cap was measured, not guessed.** The repository's meeting transcripts run 5.7 to 6.3
+     characters a word, counting spaces and line breaks (Objective 04's ten and its development
+     pair, Objective 02's five, the demonstration corpus's). A transcript at the token ceiling is
+     therefore about 63,000 characters at most, and the cap does not bind on real speech. The
+     token ceiling's tests had used the test builder's words, "budget0" to "budget9999", about
+     10.9 characters each, a density no transcript here has, at which the character cap binds
+     first. They now use words of speech length through the builder's `seed`, with every
+     assertion unchanged, and the dense case is a test of its own.
+   - **The prompt changed after the development runs of 11 November**, so the development set was
+     run again on 13 November. Recall was 39 of 39, no owner
+     was wrong and every due date agreed. All eight summaries were ready on the first attempt, for
+     $0.0051. Extras were 5 of 44 (11.4%), one item over the bar. Four are the finer splits the
+     earlier draws showed, and the fifth is a plan reported as in hand, which rule 7 already
+     excludes. One draw cannot tell the change from noise: the earlier draws ranged from 2.6% to
+     9.3% on one prompt. The prompt was not tuned in response.
+   - **Not changed:** a summary is still requested when FR-09 refused to index the transcript or
+     could not embed it. That is invariant 8 applied both ways, since the summary and the
+     transcript's indexing are independent. The character cap now bounds what such a transcript
+     sends.
+4. **Low: waiting runs without bound, and a run that could run twice** (`899d849`).
+   - **What it found.** Every run waited for one of `MAXIMUM_SUMMARIES_IN_FLIGHT` places in a
+     thread of its own, with no limit. A run that waited past `SUMMARY_STALE_AFTER_SECONDS` could
+     be reclaimed and retried by the hourly command, then call the provider again when its place
+     came. `_store` made the second write a no-op, so the cost was a duplicate call, not bad data.
+   - **The fix.** Each run carries a claim, the row's `retry_runs` when it was started, and starts
+     its attempt with an update conditional on it. A run reclaimed and retried meanwhile has a
+     later count, so the late thread makes no call. Past 22 live threads (2 in flight and
+     `MAXIMUM_SUMMARIES_WAITING`, 20, waiting) a run is not started: it is closed Unavailable and
+     queued under a new failure reason, "busy", for the hourly retry. A thread the operating
+     system refuses is queued the same way rather than raised from the commit callback.
+   - Both fixes were broken on purpose, and their tests failed. So was the page's 409 in item 2.
+
+**The informational items.**
+
+- **Model output in the log:** fixed for this parser (`8a2eec1`). A summary schema violation now
+  names the schema's own keys and counts the reply's. FR-12's statement parser
+  (`apps/ai/schema.py`) and FR-10's classification parser quote an unexpected key name the same
+  way. They are not FR-16's, and are left open for their owners.
+- **The stale comment** in `apps/meetings/deletion.py`: corrected (`8a2eec1`).
+- **Unchanged, as the review rated them:**
+  - Revocation waits while `_store` holds the meeting's row lock through the summary's embedding.
+    Recorded above as an exception.
+  - `GET .../summary` reads the transcript on every poll, which is every 3 seconds while a run is
+    Processing. That is the cost profile of `GET /api/meetings/{id}`.
+  - `scripts/objective04_verify.py` writes model text to the adjudication sheet without
+    neutralising spreadsheet formulas. Its inputs are the team's own transcripts.
+
+**Migrations.** `meetings 0003`, never pushed, was regenerated twice more: for `created_by` and
+`updated_by`, and for "busy". The development database `kmp_fr16` was rolled back to
+`meetings 0002` before the first and migrated again after the last. Its summaries of 11 November
+went with it; `corpus/objective-04/runs/2026-11-11/` keeps their results.
+
+**Both suites** on the code of `8a2eec1` (`c0a3980` adds only the run record): pytest 4,347 tests, all passing, with
+every protected endpoint covered from both roles (43 of 43);
+Vitest 588 tests in 45 files, all passing, and oxlint clean.
+
+**Not re-audited.** The requirements audit was of `e97d5ff`. The changes since it are these
+security fixes, and the requirements auditor has not checked them against FR-16's text.
+
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
 **Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,
