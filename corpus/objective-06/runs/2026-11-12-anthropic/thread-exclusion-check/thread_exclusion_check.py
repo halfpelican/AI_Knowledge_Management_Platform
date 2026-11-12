@@ -54,6 +54,7 @@ import measurement_record  # noqa: E402
 
 EXPECTED_DATABASE = "kmp_followups_20261112"
 THREADS = REPOSITORY_ROOT / "corpus" / "objective-02" / "dev-threads.json"
+ACCOUNTS = {"Employee": "corpus.employee@example.com", "Administrator": "corpus.admin@example.com"}
 
 
 class Rollback(Exception):
@@ -111,10 +112,13 @@ def main() -> int:
               "gaps": KnowledgeGap.objects.count(), "items": KnowledgeGapItem.objects.count(),
               "cycles": KnowledgeGapCycle.objects.count()}
 
-    users = {role: get_user_model().objects.filter(role__role_name=role, is_active=True).order_by("email").first()
-             for role in ("Employee", "Administrator")}
+    # The corpus's own two accounts, as Objective 06's seeding uses them. A role is checked too, so
+    # an account whose role was changed cannot stand in for another.
+    users = {role: get_user_model().objects.filter(email=email, role__role_name=role).first()
+             for role, email in ACCOUNTS.items()}
     if not all(users.values()):
-        print(f"REFUSED: no active user for {[r for r, u in users.items() if u is None]}. Nothing was run.")
+        print(f"REFUSED: no account with the expected role for {[r for r, u in users.items() if u is None]}. "
+              "Nothing was run.")
         return 2
 
     threads = json.loads(THREADS.read_text(encoding="utf-8"))["threads"]
