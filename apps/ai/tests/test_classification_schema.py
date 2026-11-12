@@ -238,7 +238,10 @@ def test_a_nan_confidence_is_a_violation():
         (reply()[:-1] + ', "summary": "A policy."}', "unexpected top-level key"),
         ('{"doc_type": "Policy", "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' is str, not an object"),
         ('{"doc_type": {"value": "Policy"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' is missing"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9, "reason": "x"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' has unexpected key"),
+        # This and tag 0's case below match a count, not "has unexpected key", since 13 November
+        # 2026: an unexpected key is counted and never named, because the reply chose its name
+        # (test_a_violation_never_quotes_a_key_the_reply_chose, below).
+        ('{"doc_type": {"value": "Policy", "confidence": 0.9, "reason": "x"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' has 1 unexpected key"),
         ('{"doc_type": {"value": "", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
         ('{"doc_type": {"value": 4, "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance"}, "tags": []}', "'department' is missing"),
@@ -246,7 +249,7 @@ def test_a_nan_confidence_is_a_violation():
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": {}}', "'tags' is dict, not an array"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": ["safety"]}', "tag 0 is str, not an object"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety"}]}', "tag 0 is missing"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.5, "why": "x"}]}', "tag 0 has unexpected key"),
+        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.5, "why": "x"}]}', "tag 0 has 1 unexpected key"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Department", "value": "Finance", "confidence": 0.5}]}', "dimension outside"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "topic", "value": "safety", "confidence": 0.5}]}', "dimension outside"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "", "confidence": 0.5}]}', "tag 0 has an empty or non-string 'value'"),
@@ -279,6 +282,50 @@ def test_a_violation_message_does_not_quote_the_models_value():
     with pytest.raises(SchemaViolation) as excinfo:
         parse_classification(reply(doc_type="Confidential Memo About Layoffs"), SCHEME)
     assert "Layoffs" not in str(excinfo.value)
+
+
+VALID_OBJECT = json.loads(VALID)
+
+
+@pytest.mark.parametrize(
+    "steered,message",
+    [
+        (lambda key: {**VALID_OBJECT, key: 1}, "1 unexpected top-level key(s)"),
+        (
+            lambda key: {key: VALID_OBJECT["tags"]},
+            "missing top-level key(s): ['department', 'doc_type', 'tags'] (the reply had 1 key(s))",
+        ),
+        (
+            lambda key: {**VALID_OBJECT, "doc_type": {**VALID_OBJECT["doc_type"], key: 1}},
+            "'doc_type' has 1 unexpected key(s)",
+        ),
+        (
+            lambda key: {**VALID_OBJECT, "department": {**VALID_OBJECT["department"], key: 1}},
+            "'department' has 1 unexpected key(s)",
+        ),
+        (
+            lambda key: {**VALID_OBJECT, "tags": [{**VALID_OBJECT["tags"][0], key: 1}]},
+            "tag 0 has 1 unexpected key(s)",
+        ),
+    ],
+    ids=["a fourth top-level key", "the only key", "doc_type's third key", "department's third key", "a tag's fourth key"],
+)
+def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
+    """A key name is the model's words, which an uploaded document can steer, and the violation's
+    message reaches the attempts log and the lines a failed classification writes: the classify
+    route's 503 warning and ingestion's "left unclassified", neither cut at DETAIL_LIMIT. So the
+    message names the schema's own keys and counts the reply's. The security review of FR-16
+    found the pattern in its parser on 12 November 2026 (D-125's third note); this is its fix
+    applied here. The whole message is pinned, so the case cannot pass on some other violation."""
+    key = "Marguerite says file this under the Geelong payroll audit"
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(json.dumps(steered(key)), SCHEME)
+
+    assert str(caught.value) == message
+    assert key not in str(caught.value)
+    assert "Marguerite" not in str(caught.value)
+    assert "Geelong" not in str(caught.value)
 
 
 # --- The schema object itself ---------------------------------------------------------------

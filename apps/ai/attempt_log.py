@@ -32,6 +32,12 @@ Nothing logged here quotes the question, a passage or the model's reply: the det
 the exception messages, which describe the failure (``not valid JSON: ...``, ``Request
 timed out.``), and they are cut at ``DETAIL_LIMIT`` characters.
 
+**Until 13 November 2026 that was untrue of key names.** A schema violation from the
+statement or the classification parser named each key the reply had that the schema does
+not, and a key name is the model's words, which a passage or an uploaded document can
+steer. Both parsers now name only the schema's own keys and count the reply's: the fix the
+security review of FR-16 made to its own parser on 12 November (D-125's third note).
+
 **What each generation attempt's reply reported (7 November 2026),** at the user's order
 for step 7: "log each attempt's finish_reason and completion-token count". D-82's notes of
 1 November could only call a reply cut off at ``GENERATION_MAX_TOKENS`` "the likely
