@@ -33,7 +33,9 @@
  *
  * - **Whether the link can be seen.** jsdom applies no stylesheet. These tests find
  *   the link in the accessibility tree; a CSS rule that hid it, or the navigation,
- *   would not fail them.
+ *   would not fail them. tests/tabOrder.test.jsx would, on the screens it walks as
+ *   an Employee: it reads the stylesheets and fails on any keyboard stop a rule
+ *   hides (break V2 of 12 November, docs/decisions.md D-94's later note).
  * - **An anonymous visitor.** One is offered no Ask link, by design: RequireAuth
  *   would send them to `/login` (src/App.jsx). This file asserts that neither way.
  * - **An address no route matches.** It is not a page, and it is not walked.
