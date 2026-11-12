@@ -450,6 +450,13 @@ is basically there.
 > toward COMPLETE only as a recorded deviation, with its reason and numbers. It is never a tick. A
 > provider change is measured again, not carried over.
 
+> **Amended 12 November 2026 (D-112's notes of 11 and 12 November).** The amendment above
+> describes the FLM build, and it stands for that build. Since D-122 the default build runs on
+> `anthropic`, and that acceptance does not carry over to it. There, the clause's resolving half
+> was measured as met on three draws. A measurement is not a verdict: it counts toward COMPLETE
+> only when the auditor reads it as met. On both builds, D-42 passes prior questions and never
+> prior answers. That stays a recorded deviation, with its reason, and is never a tick.
+
 ---
 
 ## Gate checklist — 1 November
@@ -495,6 +502,9 @@ The answers worth having ready before they are asked:
       sanitiser; the defence is parameterised SQL, React escaping and the delimiter)
       and D-42 (prior questions are passed, not prior answers). Present each as a
       deviation with its reason — never as a tick.
+
+> **Amended 12 November 2026.** This is the list as it stood for the 1 November gate. The
+> current list is `docs/demonstration-script.md`'s, which now includes D-112.
 
 ---
 
