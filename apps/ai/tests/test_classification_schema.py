@@ -95,10 +95,12 @@ def test_a_department_outside_the_scheme_is_returned_as_suggested():
     assert parsed.department.value == "Catering"
 
 
-def test_a_tag_value_outside_the_scheme_is_returned_as_suggested():
-    """A new Topic is allowed by the prompt and judged by the application; the parser passes it on."""
-    parsed = parse_classification(reply(tags=(("Topic", "ergonomics", 0.6),)), SCHEME)
-    assert parsed.tags == (TagSuggestion(dimension="Topic", value="ergonomics", confidence=0.6),)
+@pytest.mark.parametrize("dimension", REPOSITORY_TAG_DIMENSIONS)
+def test_a_tag_value_outside_the_scheme_is_returned_as_suggested(dimension):
+    """A new value in Project, Process or Topic is allowed by the prompt (D-127) and judged by the
+    application; the parser passes it on in every dimension, and drops none of them."""
+    parsed = parse_classification(reply(tags=((dimension, "ergonomics", 0.6),)), SCHEME)
+    assert parsed.tags == (TagSuggestion(dimension=dimension, value="ergonomics", confidence=0.6),)
 
 
 def test_several_tags_keep_their_order():

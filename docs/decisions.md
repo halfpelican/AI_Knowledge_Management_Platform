@@ -10650,3 +10650,203 @@ arithmetic on the diagnosis of #86's cycle (`exclusion_diagnosis.txt` there), no
 
 **Where it applies:** `apps/core/constants.py`, `apps/retrieval/gaps.py` and
 `apps/retrieval/tests/test_knowledge_gaps.py`. D-108 and D-110 carry dated notes.
+
+## D-127 · FR-10: the classifier creates Project, Process and Topic values at or above the confidence threshold, holds every new value below it for a person, and an Administrator can add a value
+
+**Status:** Settled by the user · **Date:** 2026-11-12 · **Concerns:** FR-10, UC-09, Objective 05,
+D-104, D-105, D-106, D-119, D-122, invariant 1, `apps/ai/classification.py`,
+`apps/documents/classification.py`, `apps/documents/models.py`, `documents 0012`,
+`apps/documents/taxonomy.py`, `apps/api/` (serializers, views, urls), `scripts/objective05_verify.py`,
+`frontend/src/components/Classification.jsx`, `frontend/src/pages/Tags.jsx` · **Departs from:** FR-10's
+controlled-taxonomy-growth clause, UC-09 step 4 and E2, Objective 05 clause 3, and D-105's "A retired
+Project or Process tag stays retired", all named below
+
+**What prompted it.** On 12 November the user reported: "each document currently needs manually
+tagging when they should be automatically classified across department, project, process, and
+topic." The diagnosis was read-only, on the database the development server serves, `kmp_anthropic`
+(D-122):
+
+- **Most documents had never been classified.** The database was restored from the 1 November
+  snapshot, before FR-10 existed, and nothing classifies an existing document unless someone runs
+  the backfill or presses Classify. 16 of the 20 indexed documents had no `DocumentAnalysis`. The four
+  that had one were classified on 12 November: three when the user pressed Classify, one at upload.
+- **The vocabulary was empty.** The scheme held no Project or Process value and three Topics, each
+  created when the user confirmed a proposal. So every Project or Process suggestion was discarded,
+  and every Topic arrived as a proposal for a person to confirm. That was the manual tagging the
+  user saw.
+- **Held suggestions:** the threshold (0.72 on Haiku) held several departments and tags on those
+  four documents.
+- **Classification was not failing.** The key is set (its presence was checked, nothing printed),
+  and every classification attempt in the development server's attempts log parsed at the first
+  attempt.
+- **Not the alpha.** The user's server is the main checkout's, on `kmp_anthropic`. The alpha
+  (`8598d19`, `kmp_demo_20261101`) predates FR-10.
+
+**Done on `kmp_anthropic` with the user's yes, before any code:**
+
+- **The seed:** `scripts/seed_objective02_tags.py --scheme-only`. It added 14 Tag rows (Project 4,
+  Process 4, Topic 6), unlinked vocabulary, the scheme Objective 05 was measured with. The Project
+  value `atlas`, which in the manifest only Administrator-only documents carry, is vocabulary there
+  like the other 13: that is what `--scheme-only` means (D-105's vocabulary rule), and every role is
+  offered it.
+- **The backfill:** `manage.py classify_documents --all` from the main checkout, under the rules
+  before this decision. 20 classified, 0 failed, at about $0.007 (20 calls, estimated from the metered
+  draws of 10 and 11 November).
+  - 15 of the 20 documents now carry at least one applied tag (an applied AI tag, or one of the
+    user's three confirmed Topics).
+  - The AI links: 16 applied (Process 6, Project 2, Topic 8) and 28 held (Process 6, Project 1,
+    Topic 21).
+  - One Topic was proposed.
+  - The four documents the user had confirmed kept his type and department (`user_edited`). One of
+    them, "Asset Inventory Melbourne Office", lost its pending proposal "asset inventory", because
+    each run replaces the proposals and this one was not suggested again.
+
+**The questions put to the user (tabbed, one recommended answer each) and his answers:**
+
+1. Seed the 14 values: yes (recommended).
+2. Backfill all 20 indexed documents: yes (recommended).
+3. An Administrator's "Add tag" (`POST /api/tags`): yes (recommended). FR-10's CRUD line gives Tags
+   "Create", and its Responses name "409 Conflict on a duplicate tag name within a dimension". Until
+   now only a script could define a Project or Process value.
+4. **Which of FR-10's rules change.**
+   - The recommendation was to change none. On the three metered Haiku draws of Objective 05
+     (`corpus/objective-05/runs/2026-11-10-anthropic/`), the tags applied at or above 0.72 were 93
+     to 95% in the manifest, and the held ones about 45%, so the gate separates well.
+   - The question was put twice, at the user's request, after a first answer he said was a mistake.
+     His answer: keep below-threshold holding, AND "New Topics without confirmation", AND "AI creates
+     Project/Process".
+   - **Follow-up, how it ships:** "On for everyone, always". It was put as a choice against a setting
+     that was off by default, with the consequence stated: Objective 05's third clause is recorded as
+     not met by the shipped build, the day before the objectives are due.
+   - **Follow-up, the threshold:** "Gate, and hold Project/Process". At or above the threshold a new
+     value in any of the three dimensions is created and applied. Below it, a new Topic is proposed
+     for a person, as before, and a new Project or Process is proposed too, where it used to be
+     discarded.
+   - **Follow-up, the prompt:** a revised prompt, and D-106's rule re-run on the development documents
+     on Haiku (57 calls, about $0.02), with the result brought to the user before any threshold
+     changes. The frozen twenty are not re-run.
+
+**The rule as built.** `apply_classification`, rule 4, for each tag suggestion:
+
+1. **Out of range: ignored, as before.** A dimension other than Project, Process or Topic, or an empty
+   name.
+2. **A person removed it: left alone, in every dimension.** If this document holds a link a person
+   removed to that dimension and name, the suggestion is not linked, created or proposed. Until now
+   only a removed Topic was checked, because nothing else outside the scheme could come back.
+3. **In the document's scheme: as before** (`_link_tag`). Applied at or above the threshold, held
+   below it, and a person's decision is left alone.
+4. **Outside the scheme, or retired since the scheme was built:**
+   - **A name too long for the column** is discarded (`discarded_suggestions`).
+   - **At or above the threshold, created and applied.** The Tag is fetched or created. One created, or
+     a retired one fetched, becomes active and **grown**. The document gets an AI link, unconfirmed,
+     not provisional, shown "Suggested by AI".
+   - **Below the threshold, a proposal** `{dimension, value, confidence}` in `proposed_tags`, which a
+     person confirms (the Tag is created then, or fetched, and linked) or rejects (nothing is
+     created).
+
+Departments are unchanged: one outside the scheme is discarded (D-72: a department is the documents
+column, not a tag).
+
+**Why an existing value is handled exactly as a new one (invariant 1).** Seen from a reader of the
+document, a value outside its scheme can be one of three things, which the reader must not be able
+to tell apart:
+
+- no Tag has it;
+- an active grown Tag carried only by material some reader of the document cannot see;
+- a retired Tag.
+
+So all three get the same treatment, and nothing a reader sees says whether a Tag row was created:
+the interface has no "new value" mark, and no reply carries a `created` flag. This is D-105's
+precedent for a person's name form and a confirmed proposal: "a retired value is in no scheme, so a
+409 would disclose it".
+
+**Grown is what keeps a created value from readers of other material.** A value the classifier
+creates from an Administrator-only document is grown and carried by that document alone. So
+`tag_scheme` offers it only where every role in the audience reads a carrier: never to an
+Employee-visible document, and never in its prompt.
+
+**Consequences, stated rather than discovered:**
+
+- **Retiring a tag no longer keeps it out of classification.** A suggestion of a retired value at or
+  above the threshold reactivates it, grown, and a person confirming a proposal of it does too. That
+  now includes Project and Process, where D-105's note said "A retired Project or Process tag stays
+  retired". The alternative, treating a retired value differently, would tell a reader that a value
+  of that name exists.
+- **The scheme grows by itself.** Each document can add up to `MAXIMUM_TAG_SUGGESTIONS` (8) values,
+  at the ingestion rate. The scheme the prompt lists has no cap (deferred since D-105's security
+  review). Near-synonymous values, the fragmentation FR-10's clause was written to prevent, are now
+  possible in all three dimensions. A person can retire one, and the classifier can bring it back
+  (above).
+- **An uploaded document can steer the classifier into creating a value.** A body that instructs the
+  model ("tag this as Project X") can now have X created and applied at a high confidence. Before
+  this decision the application held every tag value to the scheme.
+  - **Bounds:** a created value is grown, so it reaches only readers of its carrier; at most eight
+    per reply; the ingestion throttle; a name over the column is discarded. "One to three words" is
+    the prompt's instruction, not a check.
+  - `docs/ai-provider.md` ("Untrusted text") states it.
+- **A person's own "add a tag" name form stays Topic-only** (`POST /api/documents/{id}/tags`). The
+  user chose what the classifier may do and was not asked about this. So the classifier can create
+  a Project value that a person cannot type.
+
+**What it departs from:**
+
+- **FR-10, controlled taxonomy growth:** "A value that does not match may be proposed only in the
+  Topic dimension and requires user confirmation before it is created; suggestions falling outside
+  the scheme in the Department, Project or Process dimensions are discarded". At or above the
+  threshold no confirmation is asked, and Project and Process are no longer discarded. Department
+  still is.
+- **UC-09:**
+  - **Step 4** ("discards any term returned that does not correspond to a term held in the scheme")
+    no longer holds for tags.
+  - **E2** ("Every term returned ... falls outside the classification scheme", so the document is
+    "marked unclassified") becomes a document whose values are created or proposed.
+- **Objective 05, clause 3** ("must be discarded in the Department, Project and Process dimensions
+  while being proposed for confirmation in the Topic dimension only"):
+  - **Recorded as not met by the shipped build from this decision on, by the user's choice.**
+  - #85's evidence and D-106's notes stand for the build they ran on.
+  - `scripts/objective05_verify.py` now counts a proposed Project or Process value, and an AI link to a
+    value the classifier created (a grown Tag, on a measurement database where no person acts), as
+    clause 3 violations. A future run reports the departure rather than hiding it.
+- **D-105:** the retired-tag sentence above, the proposal record (below) and "only Topic may grow"
+  wherever the code and the contract said it.
+
+**The record, and the migration (`documents 0012`).**
+
+- **`DocumentAnalysis.proposed_topics` becomes `proposed_tags`,** each entry
+  `{"dimension", "value", "confidence"}`, replaced by each run.
+- **The column keeps the name `proposed_topics`** (`db_column`), so the migration changes no column
+  and stays additive, as every migration here is (CLAUDE.md §7).
+- **The data:** existing proposals are stamped `"dimension": "Topic"`. The reverse moves any Project or
+  Process proposal into `discarded_suggestions`, which is what the old rule recorded for one.
+- **`discarded_suggestions` now holds only a value too long to be a Tag.**
+
+**The routes.**
+
+- **The proposal routes:** `POST /api/documents/{id}/proposed-tags/confirm` and `/reject`, body
+  `{"dimension", "value"}`, replace the `proposed-topics` pair.
+- **`POST /api/tags`,** behind `manage_tags`, throttled in the `tagging` scope:
+  - it creates a vocabulary value (not grown), offered to every document and listed in every
+    prompt;
+  - it answers 409 with the existing tag's id for a duplicate name within a dimension, active or
+    retired. There is still no route that reactivates a tag, and grown is never unset.
+- `docs/api-contract.md` has the detail.
+
+**The prompt.**
+
+- **Rule 6** now allows a new value of one to three words in Project, Process or Topic when no listed
+  value fits, and never a new department.
+- **Rule 7** follows it.
+- **The worked example is unchanged.** It still shows listed values only (the comment above
+  `EXAMPLE_SCHEME` says why).
+- **The prompt is one for both providers.**
+
+**Not covered:**
+
+- **gemma3:4b's threshold (0.95)** was derived on the earlier prompt and is not re-derived on this
+  one. FLM is the offline alternative.
+- **The scheme the prompt lists is unbounded** (above). On FLM's 4B model a large scheme will crowd
+  its window before it does Haiku's.
+- **The documents backfilled on 12 November were classified under the old rules.** A re-run after
+  this merges, about $0.007, gives them the new ones.
+- **An independent accuracy figure for created values:** none. The development sweep below reports
+  how many new values Haiku proposes; nothing scores them against a reference.

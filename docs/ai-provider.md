@@ -442,13 +442,14 @@ same approach as section 5, because it is the same risk: a small local model and
 
 1. A strict system prompt: JSON only; the type from the fixed list, copied exactly; the department
    from the listed departments; tags only from the values listed per dimension, except that a NEW
-   Topic value may be proposed when no listed one fits — never a new Project, Process or
-   department; at most eight tags; confidence as the model's honest estimate; no explanation.
+   value of one to three words may be proposed in Project, Process or Topic when no listed one
+   fits — never a new department (D-127; until 12 November only a new Topic was allowed); at most
+   eight tags; confidence as the model's honest estimate; no explanation.
 2. One worked example whose subject (lighthouse keeping) and whose departments and tag values are
    alien to any organisation, for the reason the comment above `SYSTEM_PROMPT` in
    `apps/ai/prompting.py` records: a worked example is training data for the response, and this
    prompt carries no identifiers, so the lesson applies to content. The example's reply uses
-   listed values only and proposes no new Topic — a demonstrated invention would be copied onto
+   listed values only and proposes no new value — a demonstrated invention would be copied onto
    every document. The only values it shares with a real prompt are the four fixed types.
    `apps/ai/tests/test_classification_prompt.py` asserts the example's values appear in no real
    scheme (the corpus manifest) and in no real user turn.
@@ -464,8 +465,23 @@ same approach as section 5, because it is the same risk: a small local model and
 this prompt cites no identifier, so unlike the generation prompt (D-45) it has no delimiter whose
 forgery converts into an accepted citation, and no neutralisation is applied. The residual is a
 body that steers the model in prose or forges a scheme line; shape validation cannot detect it.
-What bounds it: the type is held to the fixed list by the parser, the department and tag values
-are held to the scheme by the application (D-105), and a person confirms the suggestions.
+What bounds it: the type is held to the fixed list by the parser, the department is held to the
+scheme by the application (D-105), and a person confirms what is held.
+
+**Since D-127 a tag value is not held to the scheme,** so the bound for tags is weaker:
+
+- **A steered value is applied at once.** A body that steers the model to a new Project, Process or
+  Topic value at or above the confidence threshold has that value created and applied. It is shown
+  "Suggested by AI", and a person can remove it.
+- **What still bounds it:**
+  - a created value is grown, so it reaches only readers of the document that carries it: their tag
+    options and the prompts of documents they all read;
+  - at most `MAXIMUM_TAG_SUGGESTIONS` (8) values per reply;
+  - the ingestion throttle on upload, reprocess and classify;
+  - a name longer than the column is discarded. "One to three words" is the prompt's instruction,
+    not a check.
+- **What does not bound it:** an Administrator retiring the value. The classifier brings back a
+  retired value it suggests at or above the threshold (D-127's consequences).
 
 **Truncation** (`classification_input`). The model reads the title and the first
 `CLASSIFICATION_INPUT_TOKENS` (1,500) whitespace tokens of the extracted text — D-31's token —
@@ -495,11 +511,15 @@ lists none), one tag per dimension that lists a value, every confidence `STUB_CO
 callable is called with `(title, text, scheme)` and may raise `ProviderUnavailable` to stand in
 for an outage.
 
-**Not measured yet.** Section 5's rates were established with `scripts/citation_harness.py`
-before anything was built on them. The classification prompt has no harness run behind it: its
-conformance rate on `gemma3:4b` is unmeasured, and D-106's sweep on the development documents is
-where it gets one. Until then, treat the prompt as a first version with a tested parser and a
-tested retry path, not as a measured one.
+**What has been measured, and on which prompt.** Section 5's rates were established with
+`scripts/citation_harness.py` before anything was built on them. The classification prompt's
+measurements are D-106's sweeps on the development documents and Objective 05's runs.
+
+- **On gemma3:4b:** the threshold of 0.95, and the run evidence in D-106's notes.
+- **On claude-haiku-5-5:** the threshold of 0.72 (D-122), and three draws of Objective 05 (#85).
+
+All of them ran on the prompt before D-127, which revised rules 6 and 7 on 12 November 2026. D-127
+records the Haiku sweep on the revised prompt. gemma3:4b has not been measured on it.
 
 ---
 
