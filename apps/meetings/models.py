@@ -111,7 +111,7 @@ class MeetingSummary(models.Model):
     # Who pressed Generate or Regenerate; null for the run ingestion starts.
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="requested_summaries",
+        db_column="requested_by", related_name="requested_summaries",
     )
     requested_at = models.DateTimeField(auto_now_add=True)
     # When the current attempt at this run began: a Processing row much older than this is a run a

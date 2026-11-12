@@ -36,7 +36,10 @@ SCHEMA_V1 = {
     "content_chunks": (
         ("chunk_id",),
         {"chunk_id", "source_type", "source_id", "chunk_index", "chunk_text", "embedding",
-         "embedding_model", "embedding_dimension", "created_at", "visible_to_roles"},  # D-17
+         "embedding_model", "embedding_dimension", "created_at", "visible_to_roles",  # D-17
+         # documents 0012, 11 November 2026 (FR-16, D-125): true only for a passage of a
+         # meeting's AI-generated summary (docs/schema-v1.md §1).
+         "ai_generated"},
     ),
     "meetings": (
         ("meeting_id",),
@@ -44,6 +47,23 @@ SCHEMA_V1 = {
          "visible_to_roles"},  # D-16
     ),
     "meeting_attendees": (("attendee_id",), {"attendee_id", "meeting_id", "user_id"}),
+    # FR-16 (D-125), 11 November 2026: meetings 0003. The first five columns of
+    # meeting_summaries are the proposal's field table; the proposal names action_items and
+    # gives it no field table, so its columns are docs/schema-v1.md §1's.
+    "meeting_summaries": (
+        ("summary_id",),
+        {"summary_id", "meeting_id", "summary_text", "status", "generated_at",
+         "run_number", "narrative", "decisions", "highlights", "passages", "model",
+         "input_truncated", "passages_sent", "passages_total", "action_items_extracted",
+         "requested_by", "requested_at", "started_at", "queued_for_retry", "retry_runs",
+         "failure_reason"},
+    ),
+    "action_items": (
+        ("action_item_id",),
+        {"action_item_id", "meeting_id", "summary_id", "description", "owner_id", "owner_name",
+         "due_date", "due_text", "passages", "origin", "position", "edited", "created_at",
+         "updated_at"},
+    ),
     "conversations": (
         ("conversation_id",),
         {"conversation_id", "user_id", "title", "last_updated_at"},
@@ -262,6 +282,10 @@ SECTION_5_PLAN = [
     # The security review's backfill (D-105's dated note of 10 November 2026, night), immediately
     # after 0010.
     ("documents", "0011_grown_marks_withheld_tags"),
+    # FR-16 (D-125), 11 November 2026: ContentChunks.ai_generated, immediately after 0011, and
+    # then the summary and action-item tables, where the executor plans them.
+    ("documents", "0012_content_chunk_ai_generated"),
+    ("meetings", "0003_fr16_meeting_summaries"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).
     ("retrieval", "0002_querylog_rejected_count"),
