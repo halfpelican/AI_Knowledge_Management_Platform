@@ -32,7 +32,9 @@
  *
  * What the walk cannot reach, for either file:
  *
- * - **Whether anything can be seen.** jsdom applies no stylesheet.
+ * - **Whether anything can be seen.** jsdom applies no stylesheet. The walk
+ *   asserts nothing about the stylesheets; tests/tabOrder.test.jsx does, for the
+ *   keyboard stops on the screens it walks.
  * - **An anonymous visitor.** Every case is signed in.
  * - **An address no route matches.** It is not a page, and it is not walked.
  * - **Which roles a new route admits.** The route-table test cannot read a guard

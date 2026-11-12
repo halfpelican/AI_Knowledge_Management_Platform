@@ -6493,6 +6493,30 @@ files under `frontend/tests` and `docs/stage-5-front-end-clauses.md`, and no fil
     two-character minimum, the grouping and the partial-match label, and #95 the field on every
     page. The script is not edited by this note.
 
+**Dated note, 12 November 2026 (later): the note above understates what is tested of "whether the
+field can be seen".** It lists that as not covered, because jsdom applies no stylesheet. That is
+true of #95's walk, but not of the suite.
+
+- **What is tested.** Since 8 November `tests/stylesheets.js` reads the stylesheets as text
+  (`c2d7fce`). `tabOrder.test.jsx` uses it to fail on any keyboard stop that a rule hides, on the
+  screens it walks: `/login`, and, as an Employee, `/dashboard`, `/documents`, `/upload`,
+  `/meetings` and `/ask`. The header search field is one of those stops on every one of them
+  except `/login`.
+- **The evidence:** breaks V1 and V2, named in `0ca090c`'s message.
+  - V1 appended `.search-field--header { display: none; }` to `src/components/SearchField.css`.
+    `tabOrder.test.jsx` failed its dashboard, documents, upload, meetings and ask cases, and #95's
+    walk passed.
+  - V2 did the same to FR-13's Ask link, with `.app-nav a[href="/ask"] { display: none; }` in
+    `src/App.css`, with the same result.
+- **Still not covered:**
+  - the field hidden on a route `tabOrder.test.jsx` does not walk;
+  - the field hidden as an Administrator;
+  - whether the field is laid out on screen, which no test sees.
+- **The demonstration script** now says this in its answer to "What is not verified by any test?"
+  (`0ca090c`), and the script is edited this time.
+- **What is overtaken.** The note above's bullet "Whether the field can be seen" is overtaken by
+  this note, and left as written.
+
 ## D-95 · NFR-08's miss is a local-model baseline, not a dropped NFR
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** NFR-08, NFR-09, D-35,
