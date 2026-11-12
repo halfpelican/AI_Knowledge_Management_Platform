@@ -1,0 +1,817 @@
+{
+  "record": {
+    "recorded_at": "2026-11-12T21:51:12+11:00",
+    "commit_sha": "4c36a38f1893f9f1c7e27cb4266d4adf8de27a41",
+    "uncommitted_tracked_changes": false,
+    "uncommitted_tracked_files": [],
+    "dump_sha256": "8e79cb377965075dd322d2fb098780cc0d45bc4fdfb5eb5f05d6c59628765a70",
+    "database": "kmp_followups_20261112",
+    "flm_version": null,
+    "kind": "D-127's development check on real threads",
+    "configuration": {
+      "ai_provider": "anthropic",
+      "embedding_model": "voyage-4",
+      "embedding_dimension": 1024
+    },
+    "threads_file": {
+      "dev-threads.json": "21200c7238c5d12e8b39edf35c91524f59a253b6e891f0a1698aae7b869ea4ef"
+    },
+    "users": {
+      "Employee": "corpus.employee@example.com",
+      "Administrator": "corpus.admin@example.com"
+    },
+    "finished_at": "2026-11-12T21:51:12+11:00"
+  },
+  "summary": {
+    "scoped_employee": {
+      "total": 3,
+      "left_out": 3,
+      "misses": []
+    },
+    "scoped_administrator_kept": [
+      "t28",
+      "t29",
+      "t37"
+    ],
+    "other_employee_left_out": [],
+    "scoped_employee_left_out_by_the_composed_string_alone": [],
+    "scoped_employee_left_out_by_the_own_wording_alone": [
+      "t28",
+      "t29",
+      "t37"
+    ],
+    "passes": true,
+    "voyage_texts_embedded": 38,
+    "the_cycle": {
+      "queries_considered": 19,
+      "searches_considered": 0,
+      "entries_created": 19,
+      "entries_updated": 0
+    },
+    "database_before": {
+      "query_logs": 0,
+      "conversations": 0,
+      "gaps": 0,
+      "items": 0,
+      "cycles": 0
+    },
+    "database_after": {
+      "query_logs": 0,
+      "conversations": 0,
+      "gaps": 0,
+      "items": 0,
+      "cycles": 0
+    },
+    "unchanged": true
+  },
+  "results": [
+    {
+      "thread": "t20",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "Do I need a doctor's certificate when I'm off sick?",
+      "follow_up": "And does time off looking after my kid come out of the same balance?",
+      "sources": [
+        [
+          "D01"
+        ],
+        [
+          "D01"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.4163,
+        "top_admitted_score": 0.4163,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.3368,
+        "top_admitted_score": 0.3368,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t21",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What do I have to attach when I claim back travel costs?",
+      "follow_up": "And when do I need sign-off before I pay for something?",
+      "sources": [
+        [
+          "D10"
+        ],
+        [
+          "D10"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 4,
+        "top_ranked_score": 0.543,
+        "top_admitted_score": 0.543,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.3506,
+        "top_admitted_score": 0.3506,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t22",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What hours do I have to be contactable when I'm working from home?",
+      "follow_up": "How much notice does either side have to give to end it?",
+      "sources": [
+        [
+          "D07"
+        ],
+        [
+          "D07"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 12,
+        "top_ranked_score": 0.5427,
+        "top_admitted_score": 0.5427,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.2887,
+        "top_admitted_score": 0.2887,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t23",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "Where do we write down that a customer agreed to us using their details?",
+      "follow_up": "What happens if they change their mind later?",
+      "sources": [
+        [
+          "D11"
+        ],
+        [
+          "D11"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.4054,
+        "top_admitted_score": 0.4054,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 0,
+        "top_ranked_score": 0.1839,
+        "top_admitted_score": null,
+        "top_admitted_readable_by_asker": null,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t24",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "Which way do we go out from level three when the fire alarm goes off?",
+      "follow_up": "And who checks everyone has actually got out?",
+      "sources": [
+        [
+          "D03"
+        ],
+        [
+          "D03"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 2,
+        "top_ranked_score": 0.5018,
+        "top_admitted_score": 0.5018,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.3,
+        "top_admitted_score": 0.3,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t25",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What's the biggest risk the infrastructure team flagged at the standup?",
+      "follow_up": "Who's on call over that weekend?",
+      "sources": [
+        [
+          "T01"
+        ],
+        [
+          "T01"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 2,
+        "top_ranked_score": 0.5567,
+        "top_admitted_score": 0.5567,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.4208,
+        "top_admitted_score": 0.4208,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t26",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "How many quotes do I need for a twenty thousand dollar purchase?",
+      "follow_up": "And at what point does it have to go out to tender instead?",
+      "sources": [
+        [
+          "D05"
+        ],
+        [
+          "D05"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 2,
+        "top_ranked_score": 0.5093,
+        "top_admitted_score": 0.5093,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.3158,
+        "top_admitted_score": 0.3158,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t27",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "Which room is the writing clear reports session held in?",
+      "follow_up": "And who's running it?",
+      "sources": [
+        [
+          "D13"
+        ],
+        [
+          "D13"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 4,
+        "top_ranked_score": 0.4666,
+        "top_admitted_score": 0.4666,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 0,
+        "top_ranked_score": 0.1824,
+        "top_admitted_score": null,
+        "top_admitted_readable_by_asker": null,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t28",
+      "kind": "scoped",
+      "asked_as": "Employee",
+      "opener": "How do we handle a customer complaint the first person can't sort out on the spot?",
+      "follow_up": "And who on the team is strongest at that side of things?",
+      "sources": [
+        [
+          "D06"
+        ],
+        [
+          "D16"
+        ]
+      ],
+      "outcome": "left out",
+      "expected": "left out",
+      "as_expected": true,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 5,
+        "top_ranked_score": 0.5331,
+        "top_admitted_score": 0.5331,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.377,
+        "top_admitted_score": 0.377,
+        "top_admitted_readable_by_asker": false,
+        "alone_this_string_would": "left out"
+      }
+    },
+    {
+      "thread": "t28",
+      "kind": "scoped",
+      "asked_as": "Administrator",
+      "opener": "How do we handle a customer complaint the first person can't sort out on the spot?",
+      "follow_up": "And who on the team is strongest at that side of things?",
+      "sources": [
+        [
+          "D06"
+        ],
+        [
+          "D16"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 5,
+        "top_ranked_score": 0.5331,
+        "top_admitted_score": 0.5331,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.377,
+        "top_admitted_score": 0.377,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t29",
+      "kind": "scoped",
+      "asked_as": "Employee",
+      "opener": "When is the Melbourne office actually moving to the new building?",
+      "follow_up": "And how much has been put aside to pay for it?",
+      "sources": [
+        [
+          "D20"
+        ],
+        [
+          "D15"
+        ]
+      ],
+      "outcome": "left out",
+      "expected": "left out",
+      "as_expected": true,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.5225,
+        "top_admitted_score": 0.5225,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.338,
+        "top_admitted_score": 0.338,
+        "top_admitted_readable_by_asker": false,
+        "alone_this_string_would": "left out"
+      }
+    },
+    {
+      "thread": "t29",
+      "kind": "scoped",
+      "asked_as": "Administrator",
+      "opener": "When is the Melbourne office actually moving to the new building?",
+      "follow_up": "And how much has been put aside to pay for it?",
+      "sources": [
+        [
+          "D20"
+        ],
+        [
+          "D15"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.5225,
+        "top_admitted_score": 0.5225,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.338,
+        "top_admitted_score": 0.338,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t30",
+      "kind": "topic-change",
+      "asked_as": "Employee",
+      "opener": "How long do our passwords have to be these days?",
+      "follow_up": "What should I do if the room I reserved is occupied when I arrive?",
+      "sources": [
+        [
+          "D02"
+        ],
+        [
+          "D17"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 4,
+        "top_ranked_score": 0.3729,
+        "top_admitted_score": 0.3729,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.398,
+        "top_admitted_score": 0.398,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t31",
+      "kind": "previous-answer",
+      "asked_as": "Employee",
+      "opener": "Why had customers been cancelling before we could step in?",
+      "follow_up": "And how early do we now get in touch about that?",
+      "sources": [
+        [
+          "T04"
+        ],
+        [
+          "T04"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.4264,
+        "top_admitted_score": 0.4264,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 0,
+        "top_ranked_score": 0.2518,
+        "top_admitted_score": null,
+        "top_admitted_readable_by_asker": null,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t32",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "Who shows a new starter how things really work around here?",
+      "follow_up": "And is there a session this quarter that would lift their report writing?",
+      "sources": [
+        [
+          "D08"
+        ],
+        [
+          "D13"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 21,
+        "top_ranked_score": 0.493,
+        "top_admitted_score": 0.493,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 6,
+        "top_ranked_score": 0.4083,
+        "top_admitted_score": 0.4083,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t33",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What's been the biggest chunk of the support tickets lately?",
+      "follow_up": "And what hours does the self-service option for those actually work?",
+      "sources": [
+        [
+          "T01"
+        ],
+        [
+          "D18"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.3899,
+        "top_admitted_score": 0.3899,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.3906,
+        "top_admitted_score": 0.3906,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t34",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What do I have to jot down every time I take a pool car out?",
+      "follow_up": "And if I top up the tank out of my own pocket, how long have I got to claim it back?",
+      "sources": [
+        [
+          "D19"
+        ],
+        [
+          "D10"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 10,
+        "top_ranked_score": 0.4728,
+        "top_admitted_score": 0.4728,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 3,
+        "top_ranked_score": 0.3619,
+        "top_admitted_score": 0.3619,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t35",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What's engineering signed up to deliver in the next release?",
+      "follow_up": "And if we get everyone in to see it before then, how far ahead does the room need sign-off?",
+      "sources": [
+        [
+          "T03"
+        ],
+        [
+          "D17"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 6,
+        "top_ranked_score": 0.5454,
+        "top_admitted_score": 0.5454,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 7,
+        "top_ranked_score": 0.3997,
+        "top_admitted_score": 0.3997,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t36",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "What happens at the ninety-day mark for someone who's just joined?",
+      "follow_up": "And is the gear actually sorted for the one starting this Monday?",
+      "sources": [
+        [
+          "D08"
+        ],
+        [
+          "T01"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 2,
+        "top_ranked_score": 0.4162,
+        "top_admitted_score": 0.4162,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 1,
+        "top_ranked_score": 0.3025,
+        "top_admitted_score": 0.3025,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t37",
+      "kind": "scoped",
+      "asked_as": "Employee",
+      "opener": "Who can sign off a fifteen thousand dollar purchase?",
+      "follow_up": "And who've we got rated top for running that kind of project?",
+      "sources": [
+        [
+          "D05"
+        ],
+        [
+          "D16"
+        ]
+      ],
+      "outcome": "left out",
+      "expected": "left out",
+      "as_expected": true,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 7,
+        "top_ranked_score": 0.4798,
+        "top_admitted_score": 0.4798,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 2,
+        "top_ranked_score": 0.328,
+        "top_admitted_score": 0.328,
+        "top_admitted_readable_by_asker": false,
+        "alone_this_string_would": "left out"
+      }
+    },
+    {
+      "thread": "t37",
+      "kind": "scoped",
+      "asked_as": "Administrator",
+      "opener": "Who can sign off a fifteen thousand dollar purchase?",
+      "follow_up": "And who've we got rated top for running that kind of project?",
+      "sources": [
+        [
+          "D05"
+        ],
+        [
+          "D16"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 7,
+        "top_ranked_score": 0.4798,
+        "top_admitted_score": 0.4798,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 2,
+        "top_ranked_score": 0.328,
+        "top_admitted_score": 0.328,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    },
+    {
+      "thread": "t38",
+      "kind": "ordinary",
+      "asked_as": "Employee",
+      "opener": "How long do we hang on to someone's personal details?",
+      "follow_up": "And who has to hear about it if any of that information goes astray?",
+      "sources": [
+        [
+          "D11"
+        ],
+        [
+          "D04"
+        ]
+      ],
+      "outcome": "kept",
+      "expected": "kept if unanswered",
+      "as_expected": null,
+      "composed": {
+        "embedded_by_the_cycle": true,
+        "admitted": 20,
+        "top_ranked_score": 0.6055,
+        "top_admitted_score": 0.6055,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      },
+      "own_wording": {
+        "embedded_by_the_cycle": true,
+        "admitted": 18,
+        "top_ranked_score": 0.3575,
+        "top_admitted_score": 0.3575,
+        "top_admitted_readable_by_asker": true,
+        "alone_this_string_would": "kept"
+      }
+    }
+  ]
+}
