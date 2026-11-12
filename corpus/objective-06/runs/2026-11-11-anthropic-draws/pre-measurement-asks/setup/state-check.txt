@@ -1,0 +1,14 @@
+> corpus/objective-06/runs/2026-11-11-anthropic-draws/pre-measurement-asks/setup/state_check.py  (2026-11-11 14:03:10 +1100, commit c46c38e)
+database: kmp_fr12_declines_20261111
+settings: AI_PROVIDER=anthropic, VOYAGE_MODEL=voyage-4, ANTHROPIC_MODEL=claude-haiku-5-5, EMBEDDING_DIMENSION=1024
+content chunks: 43, by (embedding_model, embedding_dimension): {('voyage-4', 1024): 43}
+content_chunks.embedding column: vector(1024)
+chunks by source type: {'document': 38, 'meeting': 5}
+distinct sources with chunks: {'document': 20, 'meeting': 5}
+chunks by visible_to_roles: {('Administrator', 'Employee'): 38, ('Administrator',): 5}
+documents: 23, by status: {'Extraction failed': 2, 'Insufficient content': 1, 'Indexed': 20}
+meetings: 5, by status: {'Indexed': 5}
+query logs: 0, answer citations: 0, conversations: 0
+search logs: 50
+knowledge gaps: 0, items: 0, cycles: 0
+exit code: 0

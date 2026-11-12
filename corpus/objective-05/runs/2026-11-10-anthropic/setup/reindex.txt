@@ -1,0 +1,33 @@
+Provider 'anthropic' embeds at 1024 dimensions with model 'voyage-4'; matches EMBEDDING_DIMENSION.
+Re-indexing with provider 'anthropic': 23 document(s), 5 meeting(s), 43 existing chunk(s).
+Deleted every chunk (43 row(s) in all) and resized the column from vector(768) to vector(1024).
+  ok    document 'Employee Leave Policy 2026': 1 chunk(s), Indexed
+  ok    document 'IT Acceptable Use Policy': 1 chunk(s), Indexed
+  ok    document 'Health and Safety Induction Guide': 1 chunk(s), Indexed
+  ok    document 'Records Management Handbook': 19 chunk(s), Indexed
+  ok    document 'Procurement Guidelines': 1 chunk(s), Indexed
+  ok    document 'Customer Complaints Procedure': 1 chunk(s), Indexed
+  ok    document 'Remote Work Agreement Template': 1 chunk(s), Indexed
+  ok    document 'Onboarding Checklist for New Starters': 1 chunk(s), Indexed
+  ok    document 'Project Atlas Kickoff Brief': 1 chunk(s), Indexed
+  ok    document 'Expense Claims Guide': 1 chunk(s), Indexed
+  ok    document 'Data Privacy Notice': 1 chunk(s), Indexed
+  ok    document 'Vendor Register 2026': 1 chunk(s), Indexed
+  ok    document 'Training Schedule Q4': 1 chunk(s), Indexed
+  ok    document 'Asset Inventory Melbourne Office': 1 chunk(s), Indexed
+  ok    document 'Project Budget Tracker FY27': 1 chunk(s), Indexed
+  ok    document 'Team Roster and Skills Matrix': 1 chunk(s), Indexed
+  ok    document 'Meeting Room Booking Rules': 1 chunk(s), Indexed
+  ok    document 'IT Helpdesk Frequently Asked Questions': 1 chunk(s), Indexed
+  ok    document 'Fleet Vehicle Usage Notes': 1 chunk(s), Indexed
+  ok    document 'Office Relocation Announcement': 1 chunk(s), Indexed
+  skip  document 'Scanned Invoice': no extracted text
+  skip  document 'Near Empty Note': no extracted text
+  skip  document 'Corrupt Contract': no extracted text
+  ok    meeting 'Weekly Operations Standup': 1 chunk(s), Indexed
+  ok    meeting 'Board Risk Committee Meeting': 1 chunk(s), Indexed
+  ok    meeting 'Product Planning Workshop': 1 chunk(s), Indexed
+  ok    meeting 'Customer Success Retrospective': 1 chunk(s), Indexed
+  ok    meeting 'Security Incident Debrief': 1 chunk(s), Indexed
+Done: 25 rebuilt, 3 skipped, 0 failed.
+Chunks now stored: 43.

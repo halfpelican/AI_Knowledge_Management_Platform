@@ -1,0 +1,35 @@
+Observed 2026-11-11T09:49:34+11:00, with the server started at 09:19:01 (Waitress log, line 3) still running.
+
+MSFT_NetTCPConnection rows for local port 8000 (State is the raw value; 2 is Listen):
+LocalAddress LocalPort RemotePort State OwningProcess
+------------ --------- ---------- ----- -------------
+127.0.0.1         8000          0     2         64040
+
+Get-NetTCPConnection -LocalPort 8000 -State Listen (what scripts/server_record.py asks for):
+LocalAddress LocalPort RemoteAddress RemotePort State  AppliedSetting OwningProcess
+------------ --------- ------------- ---------- -----  -------------- -------------
+127.0.0.1    8000      0.0.0.0       0          Listen                64040
+
+netstat -ano -p tcp, lines with 8000:
+TCP    127.0.0.1:8000         0.0.0.0:0              LISTENING       64040
+
+The Waitress process chain (Win32_Process):
+ProcessId       : 63948
+ParentProcessId : 57412
+CreationDate    : 11/11/2026 9:18:58 AM
+CommandLine     : "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-s
+                  erve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+ProcessId       : 70072
+ParentProcessId : 63948
+CreationDate    : 11/11/2026 9:18:59 AM
+CommandLine     : "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+                  " "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress
+                  -serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+ProcessId       : 64040
+ParentProcessId : 70072
+CreationDate    : 11/11/2026 9:18:59 AM
+CommandLine     : "C:\Users\mozza\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe"  "C:\Users\moz
+                  za\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" 
+                  --listen=127.0.0.1:8000 --threads=24 config.wsgi:application

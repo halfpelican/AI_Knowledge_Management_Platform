@@ -1,0 +1,19 @@
+ProcessId       : 63876
+ParentProcessId : 57412
+CreationDate    : 10/11/2026 11:36:17 PM
+CommandLine     : "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-s
+                  erve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+ProcessId       : 55020
+ParentProcessId : 63876
+CreationDate    : 10/11/2026 11:36:17 PM
+CommandLine     : "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe
+                  " "C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress
+                  -serve.exe" --listen=127.0.0.1:8000 --threads=24 config.wsgi:application
+
+ProcessId       : 65868
+ParentProcessId : 55020
+CreationDate    : 10/11/2026 11:36:17 PM
+CommandLine     : "C:\Users\mozza\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe"  "C:\Users\moz
+                  za\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\waitress-serve.exe" 
+                  --listen=127.0.0.1:8000 --threads=24 config.wsgi:application

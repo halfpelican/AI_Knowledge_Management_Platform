@@ -10,6 +10,7 @@ stopped by the test that uses it.
 import importlib
 import json
 import os
+import subprocess
 import sys
 import threading
 from datetime import datetime, timedelta, timezone
@@ -382,3 +383,270 @@ def test_a_summary_from_another_run_is_left_alone(finalise):
     assert summary.read_text(encoding="utf-8") == before
     summary.unlink()
     assert run()[0] == server_record.NOT_MERGED
+
+
+# --- the listening process, when Windows misreports its socket (D-87's note of 11 November 2026) ---
+# Nothing here runs PowerShell or netstat: each lookup is scripted, or its command's output is.
+
+STARTED = "2026-11-11T00:00:00.000Z"
+NOTHING_LISTENING = {"pid": None, "command": None, "started_at": None, "note": "nothing is listening on port 8000"}
+NO_NETSTAT_LINE = (None, "netstat -ano lists no LISTENING line for port 8000")
+NO_PORT_ROW = (None, "no live process with a readable command line owns a remote-port-0 row on port 8000")
+NETSTAT = """
+Active Connections
+
+  Proto  Local Address          Foreign Address        State           PID
+  TCP    0.0.0.0:135            0.0.0.0:0              LISTENING       1480
+  TCP    127.0.0.1:8000         0.0.0.0:0              LISTENING       46608
+  TCP    127.0.0.1:18000        0.0.0.0:0              LISTENING       500
+  TCP    127.0.0.1:800          0.0.0.0:0              LISTENING       501
+  TCP    127.0.0.1:53124        127.0.0.1:8000         ESTABLISHED     502
+  TCP    127.0.0.1:8000         127.0.0.1:53124        ESTABLISHED     46608
+  TCP    [::1]:8001             [::]:0                 LISTENING       503
+  UDP    0.0.0.0:8000           *:*                                    504
+"""
+SECOND_LISTENER = "  TCP    [::1]:8000             [::]:0                 LISTENING       777\n"
+
+
+class FakeClock:
+    """``time`` for server_record: a wait advances the clock and is recorded, and nothing sleeps."""
+
+    def __init__(self):
+        self.now, self.slept = 1000.0, []
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.slept.append(seconds)
+        self.now += seconds
+
+
+class FakeSubprocess:
+    """``subprocess`` for server_record: ``run`` returns the scripted output, or raises it."""
+
+    TimeoutExpired = subprocess.TimeoutExpired
+
+    def __init__(self, stdout):
+        self.stdout, self.commands = stdout, []
+
+    def run(self, command, **kwargs):
+        self.commands.append(command)
+        if isinstance(self.stdout, BaseException):
+            raise self.stdout
+        return type("Completed", (), {"stdout": self.stdout, "stderr": "", "returncode": 0})()
+
+
+def test_netstat_names_the_pid_listening_on_the_port_and_no_other(scripts):
+    parse = scripts("server_record").parse_netstat_listening
+    assert parse(NETSTAT, 8000) == {46608}          # not 18000 or 800, not the ESTABLISHED rows, not UDP
+    assert parse(NETSTAT, 8001) == {503}            # IPv6
+    assert parse(NETSTAT, 53124) == set()           # a client's port
+    assert parse(NETSTAT.replace("LISTENING       46608", "CLOSED          46608"), 8000) == set()
+    assert parse(NETSTAT + SECOND_LISTENER, 8000) == {46608, 777}
+    assert parse("", 8000) == set()
+
+
+@pytest.mark.parametrize("stdout, pid, because", [
+    (NETSTAT, 46608, None),
+    (NETSTAT + SECOND_LISTENER, None, "more than one process LISTENING on port 8000: [777, 46608]"),
+    (NETSTAT.replace("LISTENING       46608", "CLOSED          46608"), None, "no LISTENING line for port 8000"),
+    (FileNotFoundError("netstat"), None, "netstat could not be run (FileNotFoundError)"),
+], ids=["one process", "two processes", "none listening", "netstat missing"])
+def test_netstat_gives_one_listening_pid_or_none(scripts, monkeypatch, stdout, pid, because):
+    """Two processes listed as LISTENING is not found: the lookup never picks between them."""
+    server_record = scripts("server_record")
+    monkeypatch.setattr(server_record, "subprocess", FakeSubprocess(stdout))
+    found, why = server_record._netstat_listening_pid(8000)
+    assert found == pid
+    assert why is None if because is None else because in why
+
+
+ONE_OWNER = {"pid": 46608, "command": WAITRESS_24, "started": STARTED, "states": "0"}
+
+
+@pytest.mark.parametrize("stdout, pid, because", [
+    (json.dumps([ONE_OWNER]), 46608, ""),
+    (json.dumps(ONE_OWNER), 46608, ""),             # one object, not a list of one
+    (json.dumps([ONE_OWNER, {**ONE_OWNER, "pid": 777}]), None, "more than one process owns a remote-port-0 row"),
+    ("[]", None, "no live process with a readable command line owns"),
+    ("", None, "no live process with a readable command line owns"),
+    ("Get-CimInstance : Access denied", None, "could not be read"),
+], ids=["one owner", "one owner, not in a list", "two owners", "no owner", "no output", "not JSON"])
+def test_the_ports_own_row_gives_one_owner_or_none(scripts, monkeypatch, stdout, pid, because):
+    """The row counts whatever state Windows reports for it, but only with exactly one owner."""
+    server_record = scripts("server_record")
+    fake = FakeSubprocess(stdout)
+    monkeypatch.setattr(server_record, "subprocess", fake)
+    owner, why = server_record._port_row_owner(8000)
+    assert (owner or {}).get("pid") == pid and because in why
+    if pid is not None:
+        assert (owner["command"], owner["started_at"], owner["states"]) == (WAITRESS_24, STARTED, "0")
+    # The rows asked for are the port's own: remote port 0 in any state, and never PID 0 or 4's.
+    script = fake.commands[0][-1]
+    assert "-Filter 'LocalPort=8000 AND RemotePort=0'" in script and "if ($o -le 4) { continue }" in script
+
+
+@pytest.fixture
+def lookup(scripts, monkeypatch):
+    """listening_process on Windows, with its three lookups scripted and a clock that does not wait.
+
+    ``script`` maps each lookup to its answers, one per try, the last one repeating; ``by_pid``
+    maps a PID to its (command line, start). ``asked`` counts how often each lookup was asked.
+    """
+    server_record = scripts("server_record")
+    monkeypatch.setattr(sys, "platform", "win32")
+    clock = FakeClock()
+    monkeypatch.setattr(server_record, "time", clock)
+    script = {"listen_row": [NOTHING_LISTENING], "netstat": [NO_NETSTAT_LINE], "port_row": [NO_PORT_ROW], "by_pid": {}}
+    asked = {"listen_row": 0, "netstat": 0, "port_row": 0}
+
+    def answer(name):
+        asked[name] += 1
+        return script[name][min(asked[name], len(script[name])) - 1]
+
+    monkeypatch.setattr(server_record, "_listen_row_process", lambda port: dict(answer("listen_row")))
+    monkeypatch.setattr(server_record, "_netstat_listening_pid", lambda port: answer("netstat"))
+    monkeypatch.setattr(server_record, "_port_row_owner", lambda port: answer("port_row"))
+    monkeypatch.setattr(server_record, "_process_by_pid", lambda pid: script["by_pid"].get(pid, (None, None)))
+    return server_record, script, asked, clock
+
+
+def test_a_listen_row_is_taken_first_and_nothing_else_is_asked(lookup):
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"], found["note"]) == (7, WAITRESS_24, STARTED, None)
+    assert found["found_by"] == server_record.FOUND_BY_LISTEN_ROW
+    assert (asked["netstat"], asked["port_row"], clock.slept) == (0, 0, [])
+
+
+def test_a_listener_with_no_listen_row_is_found_through_netstat(lookup):
+    """The fault of 11 November 2026: the server answers, and its row is not in state Listen."""
+    server_record, script, asked, clock = lookup
+    script["netstat"] = [(46608, None)]
+    script["by_pid"] = {46608: (WAITRESS_24, STARTED)}
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"], found["note"]) == (46608, WAITRESS_24, STARTED, None)
+    assert found["found_by"] == server_record.FOUND_BY_NETSTAT
+    assert (asked["port_row"], clock.slept) == (0, [])
+
+
+def test_when_netstat_misreports_too_the_ports_own_row_names_the_process(lookup):
+    """NFR-08's run 6: netstat showed the serving socket as CLOSED, and its own row named the PID."""
+    server_record, script, asked, clock = lookup
+    script["port_row"] = [({"pid": 46608, "command": WAITRESS_24, "started_at": STARTED, "states": "0"}, "")]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"], found["note"]) == (46608, WAITRESS_24, STARTED, None)
+    assert found["found_by"] == server_record.FOUND_BY_PORT_ROW
+    assert "reported state 0" in found["lookup"][-1] and clock.slept == []
+
+
+def test_the_lookup_is_tried_again_before_it_says_nothing_is_listening(lookup):
+    server_record, script, asked, clock = lookup
+    script["port_row"] = [NO_PORT_ROW, NO_PORT_ROW,
+                          ({"pid": 46608, "command": WAITRESS_24, "started_at": STARTED, "states": "1"}, "")]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["found_by"]) == (46608, server_record.FOUND_BY_PORT_ROW)
+    assert clock.slept == [server_record.LOOKUP_RETRY_INTERVAL_SECONDS] * 2
+    assert asked == {"listen_row": 3, "netstat": 3, "port_row": 3} and len(found["lookup"]) == 3
+
+
+def test_nothing_listening_is_said_only_after_the_wait_and_in_the_same_words(lookup):
+    server_record, script, asked, clock = lookup
+    script["netstat"] = [(46608, None)]   # netstat names it, but its command line cannot be read: not taken
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["found_by"]) == (None, None, None)
+    assert found["note"] == "nothing is listening on port 8000"
+    assert set(clock.slept) == {server_record.LOOKUP_RETRY_INTERVAL_SECONDS}
+    assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
+    assert "Giving up" in found["lookup"][-1] and "its command line could not be read" in found["lookup"][-1]
+
+
+def test_a_listen_row_and_a_netstat_line_naming_pid_0_do_not_end_the_search(lookup):
+    """Seen on 11 November 2026 with a listener answering on a scratch port: the Listen row and
+    netstat both named PID 0, and the port's own row named the process, in state 0."""
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 0, "command": None, "started_at": "2026-11-09T11:19:15.787Z", "note": None}]
+    script["netstat"] = [(0, None)]            # by_pid has no entry for it: PID 0 has no command line
+    script["port_row"] = [({"pid": 84664, "command": WAITRESS_24, "started_at": STARTED, "states": "0"}, "")]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"]) == (84664, WAITRESS_24, STARTED)
+    assert found["found_by"] == server_record.FOUND_BY_PORT_ROW and clock.slept == []
+    assert "the Listen row names pid 0" in found["lookup"][-1]
+
+
+def test_a_process_no_lookup_can_read_is_returned_after_the_wait_as_it_always_was(lookup):
+    """A leftover row naming PID 0, or a process whose command line cannot be read: the answer
+    the Listen row always gave, and no lookup is credited with finding it."""
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 0, "command": None, "started_at": None, "note": None}]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["note"], found["found_by"]) == (0, None, None, None)
+    assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
+    assert "Giving up" in found["lookup"][-1]
+
+
+def test_off_windows_the_process_is_not_looked_up_and_nothing_waits(scripts, monkeypatch):
+    server_record = scripts("server_record")
+    monkeypatch.setattr(sys, "platform", "linux")
+    clock = FakeClock()
+    monkeypatch.setattr(server_record, "time", clock)
+
+    def never(*args, **kwargs):
+        raise AssertionError("no lookup runs off Windows")
+
+    for name in ("_netstat_listening_pid", "_port_row_owner", "_process_by_pid"):
+        monkeypatch.setattr(server_record, name, never)
+    monkeypatch.setattr(server_record, "subprocess", FakeSubprocess(AssertionError("no command runs off Windows")))
+    found = server_record.listening_process(8000)
+    assert found["pid"] is None and found["note"] == "the listening process is only looked up on Windows"
+    assert (found["found_by"], found["lookup"], clock.slept) == (None, [], [])
+
+
+def test_the_record_says_which_lookup_found_the_process(scripts, monkeypatch):
+    server_record = scripts("server_record")
+    trace = ["try 1: nothing is listening on port 8000; the port's own row (remote port 0) is owned by pid 46608"]
+    monkeypatch.setattr(server_record, "listening_process", lambda port: {
+        "pid": 46608, "command": WAITRESS_24, "started_at": STARTED, "note": None,
+        "found_by": server_record.FOUND_BY_PORT_ROW, "lookup": trace})
+    record = server_record.observe("http://127.0.0.1:8000", "waitress", probe_debug=False)
+    assert (record["pid"], record["server"], record["threads"]) == (46608, "waitress", 24)
+    assert (record["process_found_by"], record["process_lookup"]) == (server_record.FOUND_BY_PORT_ROW, trace)
+    # What is required of the process is unchanged: it is D-85's by its command line, however found.
+    assert server_record.problems(record) == []
+
+
+def test_the_closing_check_says_how_it_found_the_process(finalise, monkeypatch):
+    server_record, state, run, _, summary, *_ = finalise
+    monkeypatch.setattr(server_record, "listening_process", lambda port: {
+        "pid": state["pid"], "command": WAITRESS_24, "started_at": STARTED, "note": None,
+        "found_by": server_record.FOUND_BY_PORT_ROW, "lookup": ["try 1: the port's own row"]})
+    run()
+    report = json.loads(summary.read_text(encoding="utf-8"))
+    at_end = report["server_at_end"]
+    assert report["verdict"] == "PASS" and at_end["same_process"] is True
+    assert (at_end["found_by"], at_end["lookup"]) == (server_record.FOUND_BY_PORT_ROW, ["try 1: the port's own row"])
+
+
+def test_another_process_found_by_a_fallback_still_makes_the_run_invalid(finalise, monkeypatch):
+    """D-87's rule is unchanged: the same PID before and after, however the lookup found it."""
+    server_record, _, run, _, summary, *_ = finalise
+    monkeypatch.setattr(server_record, "listening_process", lambda port: {
+        "pid": 99, "command": WAITRESS_24, "started_at": STARTED, "note": None,
+        "found_by": server_record.FOUND_BY_NETSTAT, "lookup": []})
+    run()
+    report = json.loads(summary.read_text(encoding="utf-8"))
+    assert report["verdict"] == "INVALID RUN"
+    assert any("(pid 99) is not the one observed before it (pid 7)" in r for r in report["invalid_reasons"])
+
+
+def test_no_process_found_at_the_end_still_makes_the_run_invalid(finalise, monkeypatch):
+    server_record, _, run, _, summary, *_ = finalise
+    monkeypatch.setattr(server_record, "listening_process", lambda port: {**NOTHING_LISTENING, "found_by": None,
+                                                                         "lookup": ["try 7: ... Giving up"]})
+    run()
+    report = json.loads(summary.read_text(encoding="utf-8"))
+    assert report["verdict"] == "INVALID RUN"
+    assert any("(nothing is listening on port 8000) is not the one observed before it (pid 7)" in r
+               for r in report["invalid_reasons"])

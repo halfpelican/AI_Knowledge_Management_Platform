@@ -1871,6 +1871,32 @@ question-then-follow-up set, which does not exist.
 >   history, cold and spelled out, then the HTTP check.
 > - **FR-13 is partial at the gate** (D-91).
 
+**Dated note, 12 November 2026: FR-13 end to end is measured, and this entry's boundary is read
+again on each provider.** The header's "Unmeasured: yes", and "FR-13 end to end is still
+unmeasured … which does not exist" in the caveat, were true when written. They are overtaken, and
+left as written.
+
+- **The set exists:** `corpus/objective-02/threads.json`, frozen on 1 November (D-86).
+- **It has been run end to end:** on FLM on 3, 8 and 9 November (D-91's note, D-103, D-111), and on
+  `anthropic` on 10 and 11 November (D-112's notes of 11 and 12 November).
+- **The history block holds the schema.** In those runs every with-history run conformed on its
+  first attempt, on both providers. The one run that never conformed was asked cold, with no
+  history block: t04, on 3 November (`corpus/objective-02/runs/2026-11-03/fr13-before.md`).
+- **"Holds for subject nouns and not for references into an answer's wording", per provider.** The
+  follow-ups whose referent is named in the first question are t01 to t05, and t06 and t07 asked by
+  the Administrator.
+  - **On FLM, it did not hold for subject nouns.** The rule read "history works" for none of them
+    on 3 November, for t04 on 8 November, and on 9 November for t02 and t04 in phase 3 and for t04
+    in phase 4. D-91's note splits the cause, and D-112 records the clause as partial.
+  - **On `anthropic`, it held for subject nouns.** Each of them read "history works" on Sonnet
+    5.5's draw and on every Haiku 5.5 draw.
+  - **A reference into an earlier answer.** t09, the previous-answer thread, was not resolved on
+    FLM. On `anthropic` it matched on every draw, but through retrieval: the joined questions
+    retrieved D17, which names the facilities team itself. The earlier answer was not used.
+- **The decision stands on both providers:** prior questions only. A referent that is only in an
+  earlier answer reaches the prompt only if retrieval supplies a passage naming it, and no frozen
+  follow-up tests that case. FR-13's status is in D-112's notes.
+
 ## D-43 · A conversation's title is optional on create and derived from its first question
 
 **Status:** Settled here, by the agent that built the endpoints · **Date:** 2026-09-24 ·
@@ -5822,6 +5848,116 @@ D-85, D-86, Objective 03, NFR-08, NFR-09
 > - **Nothing checks that the server was restarted before the HTTP check.**
 > - **The restart check rests on file times.**
 
+**Dated note, 11 November 2026: the listening process is found three ways, because Windows can
+report a serving socket's state wrongly.** The user asked for this on main after NFR-08's runs on
+`anthropic` (#88).
+
+- **The fault,** on this laptop (Windows 11, build 26300). `scripts/server_record.py` found the
+  listening process with `Get-NetTCPConnection -State Listen` only. With Waitress answering on
+  127.0.0.1:8000:
+  - the TCP table reported its listening socket in state 0, which is undefined, or 1 (Closed),
+    where 2 is Listen;
+  - `netstat -ano` showed no line for it, or CLOSED;
+  - the socket's own row was there throughout, with the Waitress PID.
+
+  So decision 2's pre-flight refused D-85's server as nothing listening, and the closing check
+  marked measured runs INVALID. NFR-08's runs 1 and 5 on `anthropic` were measured and marked
+  INVALID that way, and runs 2 and 4 were refused before k6
+  (`corpus/objective-02/runs/2026-11-10-anthropic/nfr08-anthropic.md`, #88).
+- **The fault can refuse a run or invalidate it. It cannot pass one.** A lookup that finds
+  nothing fails the pre-flight and the closing check alike.
+- **The lookup now** (`listening_process`), in this order:
+  1. the Listen row, as before, taken when its process's command line can be read;
+  2. `netstat -ano`: the one PID with a LISTENING line on the port;
+  3. the port's own socket row, local port and remote port 0, whatever state is reported, when
+     exactly one live process with a readable command line owns such a row. PID 0 and PID 4 never
+     qualify.
+
+  Two candidates in step 2 or 3 is not found. When none of the three names a process that can be
+  read, they are tried again every 10 s for about 60 s. Then the Listen row's own answer is
+  returned, as it always was.
+- **Where it came from.** NFR-08's run 6, the valid one, ran a run-folder copy of the script with
+  this lookup, which the user approved before it ran (#88, `154915c`). This is that copy's lookup,
+  with what follows added.
+- **Recorded:** which lookup found the process, and what each try saw:
+  - in the pre-flight record: `process_found_by` and `process_lookup`;
+  - on the pre-flight's console: `found by`;
+  - in the summary's `server_at_end`: `found_by` and `lookup`.
+- **What does not change.** Decision 2's rules, and the built note's two checks beyond D-87:
+  - the server and its thread count are still read from the found process's command line;
+  - the process at the end must still be the one observed before the run. Another PID, no
+    process, or a "Serving on" line inside the window still marks the run INVALID.
+- **Tried on the laptop on 11 November,** with `python -m http.server` on scratch ports. The
+  record is `corpus/objective-02/runs/2026-11-11-listener-lookup/`, and its `README.md` gives
+  each trial.
+  - **At 14:44, with the fault present.** With the listener answering, the Listen row and netstat
+    showed nothing for it, and the port's own row named its PID, in state 0 and then 1. Step 3
+    found it, in 2.8 s. With the listener stopped, the lookup gave up after 53.8 s.
+  - **A Listen row naming PID 0, and at times a netstat LISTENING line naming it too,** were seen
+    in that trial and in the one before it, at 14:42:
+    - beside an answering listener's own row, and again just after it stopped (14:42);
+    - about 40 s after a listener had stopped (14:44).
+
+    PID 0 is not a process. Step 1 takes a Listen row only with a readable command line, so such
+    a row does not end the search. A first draft of this change took any Listen row that named a
+    PID, and returned PID 0 in the 14:42 trial. It was corrected before it was committed.
+  - **At 19:15, after the laptop had restarted at 17:07, the fault did not show.** The committed
+    script (`421f9ed`) found the listener by its Listen row in 1.5 s. Netstat and the port's row
+    named the same PID, in state 2. With nothing listening, it said so after 50.8 s.
+  - **Only the 19:15 trial has a console on file.** The two earlier ones were not teed, and the
+    README quotes the session's console for them.
+  - **Whether a restart clears the fault is not known.** It is one observation.
+- **Tests,** in `apps/ai/tests/test_server_record_preflight.py`. Each fails under at least one
+  deliberate break of the script, named after the list:
+  - `test_netstat_names_the_pid_listening_on_the_port_and_no_other`: S5;
+  - `test_netstat_gives_one_listening_pid_or_none`: S2, S5;
+  - `test_the_ports_own_row_gives_one_owner_or_none`: S3, S7, S11;
+  - `test_a_listen_row_is_taken_first_and_nothing_else_is_asked`: S13;
+  - `test_a_listener_with_no_listen_row_is_found_through_netstat`: S1;
+  - `test_when_netstat_misreports_too_the_ports_own_row_names_the_process`: S1;
+  - `test_the_lookup_is_tried_again_before_it_says_nothing_is_listening`: S1, S4;
+  - `test_nothing_listening_is_said_only_after_the_wait_and_in_the_same_words`: S1, S4;
+  - `test_a_listen_row_and_a_netstat_line_naming_pid_0_do_not_end_the_search`: S1, S10;
+  - `test_a_process_no_lookup_can_read_is_returned_after_the_wait_as_it_always_was`: S1, S4, S10;
+  - `test_off_windows_the_process_is_not_looked_up_and_nothing_waits`: S6;
+  - `test_the_record_says_which_lookup_found_the_process`: S8;
+  - `test_the_closing_check_says_how_it_found_the_process`: S12;
+  - `test_another_process_found_by_a_fallback_still_makes_the_run_invalid`: S14;
+  - `test_no_process_found_at_the_end_still_makes_the_run_invalid`: S9.
+
+  The breaks:
+  - S1: only the Listen row is asked, as before this note;
+  - S2: netstat picks one of two LISTENING processes;
+  - S3: the port's row picks the first of two owners;
+  - S4: no second try;
+  - S5: netstat's port is matched as a suffix, so 18000 reads as 8000;
+  - S6: the fallbacks run off Windows;
+  - S7: the port's row is asked for in state Listen only;
+  - S8: the record does not say which lookup found the process;
+  - S9: no process at the end reads as the same process;
+  - S10: a Listen row is taken without a readable command line;
+  - S11: PID 0 and PID 4 may own the port's row;
+  - S12: the closing check does not record how the process was found;
+  - S13: a Listen row is never taken;
+  - S14: any process at the end reads as the same process. The existing
+    `test_another_process_at_the_end_makes_the_run_invalid` fails under it too.
+- **The runbook's own check** has the same fault. Its step 4 runs
+  `Get-NetTCPConnection -LocalPort 8000 -State Listen` and expects nothing. That can print
+  nothing while a server listens, and a leftover row with `OwningProcess` 0 after one stops. The
+  runbook now says so and names `scripts\server_record.py` as the check.
+- **Not covered:**
+  - **Why Windows misreports the state.** It is observed, not explained, and another build may
+    differ.
+  - **A listener whose process cannot be read,** such as another user's or PID 4's. No lookup is
+    credited with it, and the answer is the one given before, after the wait.
+  - **The PowerShell and netstat commands themselves in the test suite.** The tests script each
+    lookup's output. The commands ran on the laptop only, in the trials above.
+  - **The committed script against the fault, with a console on file.** The 14:44 trial ran the
+    script as committed, and its console was not kept. By 19:15 the fault had gone.
+  - **`run.ps1`,** which still has no automated test (the built note's first "Not covered" line).
+  - **NFR-08 again with this code.** Run 6's copy had the same lookup without the record fields.
+  - **Measured runs before 11 November.** They are not re-examined for this fault.
+
 ## D-88 · The M6 alpha serves `kmp_demo_20261101`, restored from item 6's snapshot, from a worktree of its own
 
 **Status:** Settled by the user · **Date:** 2026-11-01 · **Stage:** 5 item 9 · **Closes:** D-84's
@@ -6220,6 +6356,16 @@ stored.
 D-111). FR-13's follow-up clause is accepted as partial for NIT3003, as a recorded deviation, and the
 generation-side lever moves to NIT3004. "Work continuing" no longer describes it, for the FLM build.
 
+**Dated note, 12 November 2026: the header's "not yet run" is overtaken, and the default build is
+measured.** The header's "Measured reason: step 5 of the user's post-M6 order, not yet run" was
+true on 2 November. Step 5 ran on 3 November (the note of that day above), and the header is left
+as written.
+
+- **This entry and its notes describe the FLM build,** as D-112 does. Nothing has changed on FLM.
+- **On `anthropic`, the default since D-122,** FR-13 was re-audited on 11 November, then measured
+  on two further Haiku 5.5 draws and a Haiku HTTP check that evening (D-112's notes of 11 and
+  12 November). Its state there is in those notes, not here.
+
 ## D-92 · §8 condition 4: D-60's decline is accepted, for 9508442..e81c6e6 only
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Concerns:** CLAUDE.md §8 condition 4,
@@ -6289,6 +6435,63 @@ FR-01, FR-02, FR-04, FR-05, FR-06, FR-08, FR-09, FR-12, D-62, D-61 gap 13
 
 **Not covered**, and still open: S4's duplicated server logic (`views.py:1039` and `:1583`;
 `:673-682` and `:1062-1067`) and the "50 MB" literal at `views.py:151`.
+
+**Dated note, 12 November 2026: FR-12's "a search field available from every page" is tested
+across the routes (#95).** Step 6 left this clause at ⚠️ (`docs/stage-5-front-end-clauses.md`,
+FR-12 row 1) because no test walked the routes. #95 (`a668a08`) walks them, reusing the walk #91
+wrote for FR-13's "reachable from any page" (D-112's note of 12 November on the draws). It changed
+files under `frontend/tests` and `docs/stage-5-front-end-clauses.md`, and no file under
+`frontend/src`.
+
+- **What is tested,** in `frontend/tests/headerSearchField.test.jsx`:
+  - **The walk.** The whole application, signed in through `tests/fakeApi.js`, at every path in
+    `frontend/src/App.jsx`'s route table and at `/`, as an Employee and as an Administrator.
+    - At `a668a08` those paths are `/`, `/login`, `/register`, `/components`, `/dashboard`,
+      `/admin`, `/upload`, `/documents`, `/documents/:docId`, `/meetings`, `/meetings/:meetingId`,
+      `/search`, `/ask`, `/403`, `/admin/roles`, `/admin/knowledge-gaps` and `/admin/tags`.
+    - On the page each visit ends on, the banner landmark holds exactly one search landmark. That
+      landmark holds exactly one input labelled `TEXT.searchFieldLabel`, and the input is not
+      disabled.
+    - The field is looked for in the banner, so neither the search screen's own field nor the
+      component sheet's sample can stand in for it.
+  - **Using the field as an Administrator:** a term submitted from `/admin/tags` shows the Search
+    screen at `/search` for that term. As an Employee, from `/dashboard`, this was already tested
+    by step 6's `search.test.jsx` :: refuses one character from the header field with a message
+    naming the minimum, sends nothing, and searches at two.
+  - **The walk is held to the route table** by `askNavLink.test.jsx` :: has a case, as each role,
+    for every path in the route table of src/App.jsx. The cases are in
+    `frontend/tests/routeWalk.jsx`, which `askNavLink.test.jsx` and `headerSearchField.test.jsx`
+    import.
+- **The breaks** are named in `b0be6d9`'s message, as this entry requires. Every new test failed
+  under at least one of them.
+- **Not covered:**
+  - **Whether the field can be seen.** jsdom applies no stylesheet.
+  - **A visitor who never signed in.** One has no field, by design (`HeaderSearch` in
+    `frontend/src/App.jsx`). `logout.test.jsx` asserts there is no search landmark after logging
+    out.
+  - **A term submitted from every page.** A term is submitted from `/dashboard` as an Employee
+    and from `/admin/tags` as an Administrator.
+  - **An address no route matches.**
+  - **A disabled field, in the test that submits a term.** `fireEvent` sets a disabled input's
+    value all the same, so that test passes with the field disabled. The walk asserts `disabled`
+    itself.
+- **Records this overtakes, left as written.** Each records the clause as having no front-end
+  test on its day:
+  - **D-61's verdict:** its table row "Search field on every page | satisfied (no automated
+    test)", and its gap 9, for FR-12's search field.
+  - **D-62's list** of what the suite does not cover: "the search field on every page". D-62's
+    own note of 2 November had already said that `docs/stage-5-front-end-clauses.md` supersedes
+    that list.
+  - **D-90's verdict:** row 12's "Nothing front-end tests the search field on every page…", and
+    finding S1, for FR-12's search field.
+    - Step 6 tested the other items in row 12's list: the grouping, the two-character minimum,
+      the Search screen and the partial-match label.
+    - The rest of what S1 names is tracked in `docs/stage-5-front-end-clauses.md`.
+  - **`docs/demonstration-script.md`'s answer to "What is not verified by any test?"**, derived
+    from `frontend/tests` on 2 November: its item "Search, its field and its results (the
+    two-character minimum, the grouping, the partial-match label)". Step 6 tested the field's
+    two-character minimum, the grouping and the partial-match label, and #95 the field on every
+    page. The script is not edited by this note.
 
 ## D-95 · NFR-08's miss is a local-model baseline, not a dropped NFR
 
@@ -7869,6 +8072,26 @@ review of that night.**
   (D-66). A test now requires every role holding `review_knowledge_gaps` to have the
   Administrator's effective roles (D-107's note of the same night, L3).
 
+**Dated note, 11 November 2026: on voyage-4 the development check fails under rank-one, and the user
+chose threshold-first for that model (D-126).**
+
+- **The check was not repeated before the thirty ran on `anthropic`,** as this entry's note of 10
+  November and D-110's note on the FLM configuration ask. That was an oversight, owned in #86's
+  write-up. Run afterwards, on commit `9527cd7` and `kmp_obj0506_anthropic_20261110`
+  (`corpus/objective-06/runs/2026-11-10-anthropic/exclusion-dev-check-voyage/`), it fails:
+  - scoped questions left out: u30, u31, u32, d11, d21, d22, as they should be;
+  - no-answer questions kept: u33, u34, u35, u37, d24, d25, d26;
+  - **no-answer questions left out: u36 and d27.** Their top-ranked passages score 0.230 and 0.238,
+    under voyage-4's 0.2687, and are Administrator-only.
+- **That is the evening note's "known cost", now observed.** On embed-gemma no development or frozen
+  question had the shape. On voyage-4 u36, d27 and the thirty's U01 have it.
+- **The fallback was not followed as written.** This entry says the margin rule is chosen on the
+  development material when the check fails, and that the thirty are never used to choose. On
+  voyage-4 the margin rule and step 4's threshold-first both pass the check, and the user chose
+  threshold-first, informed by the thirty. D-126 records the choice and both departures.
+- **Rank-one is still the rule for every model `GAP_EXCLUSION_RULE_BY_MODEL` does not list,**
+  embed-gemma included. No FLM result in this entry changes.
+
 ## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
@@ -8064,6 +8287,49 @@ result. The file is frozen and is not edited; this note supersedes its line. The
 has no independent figure (the requirements audit, D-119, its finding 8). The thirty remain the
 acceptance test for a decline fix, as above.
 
+**Dated note, 11 November 2026: the thirty informed a second rule choice, for voyage-4, and it is
+named as a departure from D-93 (D-126).** The thirty's first cycle on `anthropic` left U01 out under
+rank-one (#86: clause 1 not met, clauses 2 and 3 met). The user then chose threshold-first for
+voyage-4, and the choice between it and the margin rule used the thirty's P02 and U01. So the night
+note's "made once" is true of `333be14` only. As there, the first cycle on that configuration stays
+the independent result, the rule now shipped for voyage-4 has no independent figure, and the file is
+frozen and is not edited. The repeated seeding that this entry's note on the FLM configuration asks for
+on `anthropic` was run as draws 1, 2 and 3: they are in D-126 and
+`corpus/objective-06/runs/2026-11-11-anthropic/objective-06-d126.md`. FR-12's declines are not scored
+there.
+
+**Dated note, 11 November 2026 (FR-12): on `anthropic`, the acceptance test this entry names is
+met, and FR-12's decline weakness is closed on that configuration. It stays open on FLM.**
+- **The evidence** is `corpus/objective-06/runs/2026-11-11-anthropic-draws/fr12-declines.md`.
+- **The scoring rule,** and what this note may conclude, were committed in that folder's
+  `plan.md` before any draw (`c46c38e`).
+
+| Unscreened, on `anthropic` (Claude Haiku 5.5, voyage-4 at 0.2687) | Draws | Unanswerable asks reaching a no-answer (path A / B) | Permission-only asks reaching a no-answer |
+|---|---|---|---|
+| the draft's original eight (`pre-measurement-asks.json`): a copy of D-121's harness at `3cd0726`, on a new `kmp_fr12_declines_20261111` restored `--into` from `kmp_anthropic`'s snapshot | 5 | 40 of 40 (5 / 35) | 30 of 30 |
+| the thirty (`queries.json`): the Objectives 05/06 session's seedings at `c3ac5b0` (#86) and `462e8e9` (PR #90), scored from their QueryLog exports | 3 | 24 of 24 (18 / 6) | 18 of 18 |
+
+- **Haiku proposed nothing whenever an unanswerable ask reached generation:** 41 of 41 times,
+  `rejected_count` 0, so no statement was cited, rejected or shown. On FLM, the same seven original
+  wordings reached generation, and gemma3:4b answered six of them (above).
+- **No permission-only ask was answered from readable material.** On both sets, FLM answered P04
+  and P07. In the harness's 70 runs, no restricted chunk reached a prompt.
+- **The thirty's seven answerable asks** were answered with citations in all three draws, with
+  none rejected.
+- **No draw differed from another:** every ask took the same path in every draw.
+- **What this does not show: a decline rate in general use.**
+  - The unanswerable asks are sixteen wordings of four subjects.
+  - The repeats are of the same wordings, so the evidence is 41 declined generations over nine
+    distinct wordings.
+  - Six of the thirty's eight end at path A, which tests retrieval, not generation.
+  - D-121's round recorded one underspecified cold follow-up that Haiku answered, with citations
+    about a different "that".
+- **Nothing was tuned.** No threshold or code changed, and FR-12's path is the same at all three
+  commits. D-126's change in draws 2 and 3 is to FR-19's exclusion.
+- **On FLM the weakness stays open,** as this entry and D-102's 8 November note record.
+- **Spend:** about US$0.017 of Haiku for the five draws. The thirty's seedings are counted by their
+  own session.
+
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-13, D-42, D-86, D-91,
@@ -8175,6 +8441,573 @@ finding: generation's use of supplied context. Its next step is one experiment, 
 
 **Where it applies:** D-91 (a dated note), `M6-BUILD-PROMPT.md`'s Done line, and Stage 5 item 10's
 closing run.
+
+**Dated note, 11 November 2026: FR-13 was re-audited after D-122 made `anthropic` the default, and
+the verdict is recorded here verbatim.** One `requirements-auditor` run, read only, at `bd95f92`,
+which was `main` when it ran, over every FR-13 clause against the proposal's text. It edited
+nothing, and it ran no suite, server, database or provider. No measurement was made for this note.
+The verdict is recorded here because a verdict that lives only in a terminal is the failure mode
+D-61 names. Its one line: FR-13 is INCOMPLETE. The text above this note is left as written.
+
+When this note was written, `main` had moved to `d63518b`, by #85, #86 and #87. They add only run
+folders: under `corpus/objective-05/`, under `corpus/objective-06/`, and
+`corpus/objective-02/runs/2026-11-10-anthropic/`. So no file the audit read had changed.
+
+**FR-13's status after the re-audit, per provider.**
+
+- **On `anthropic`, the default (Claude Haiku 5.5 with Voyage `voyage-4`): the follow-up clause is
+  partial and unconfirmed.** It is not recorded as met.
+  - **What was measured:** with history, the frozen nine threads scored 9/9 on Haiku's draw
+    (`e04aab1`) and 9/9 on Sonnet's (`54f15cc`). Each model ran once.
+  - **Through the server:** WIRED 3/3, with turn two correct 3/3, on Sonnet only (`58b9c27`). Haiku
+    has no HTTP check.
+  - **Why it is unconfirmed:** no noise band has been measured on this provider, and D-115 says
+    FLM's is not carried over.
+  - **This entry's acceptance does not cover it.** The decision above says "This acceptance
+    describes the FLM build" and "This record does not carry over to it". So on the default build
+    the clause is neither an accepted deviation nor a confirmed pass.
+- **On `flm`, the offline alternative (gemma3:4b with EmbeddingGemma, FLM v0.9.39): the follow-up
+  clause is partial, the deviation this entry accepted for NIT3003.** That is unchanged.
+  - **The table above describes `main` run on FLM,** on 8 and 9 November.
+  - **The deployed alpha runs older code.** It is at `8598d19`. Its answer path is `2f65a8e`'s,
+    which was measured once, on 3 November: 1/9 with history
+    (`corpus/objective-02/runs/2026-11-03/threads.json`).
+- **On both providers:**
+  - **D-42 passes prior questions, never prior answers,** so "passes prior turns" is declined in
+    part. No frozen follow-up tests that cost. t09 matched on Claude because retrieval found a
+    passage that names its referent, not because the earlier answer was used.
+  - **"Reachable from any page" has no front-end test** (`CLAUDE.md` §8 condition 2, D-62). The
+    link itself is built (`frontend/src/App.jsx:72`).
+- **Every other FR-13 clause was read as satisfied.** The clause table is in the verdict below.
+
+**These sentences above are corrected by this note, and left as written** (the verdict's section
+(d), items 1 and 2):
+
+- **"Its measured state on the shipped build".** The table is `main` run on FLM. Since D-122,
+  `main` defaults to `anthropic`, and the deployed alpha runs the code measured on 3 November.
+- **"prior turns are passed".** Prior questions are passed (D-42).
+
+**What the user decided on it, 11 November.**
+
+| Question | Decided |
+|---|---|
+| The verdict says `anthropic` needs more draws before FR-13 can be recorded as met there | **Record now, draws later.** This note records the verdict as returned. The draws are a task of their own: two further Haiku draws of the frozen nine on `kmp_voyage_20261110`, and one HTTP check on Haiku, with the pass rule committed before the first draw. A further dated note here records their result |
+| The records that the verdict's section (d) lists as stale | **Listed here, fixed in a follow-up pull request.** Section (d) below is the list, by file and line. The Done line's new wording is put to the user before it is written |
+
+**What this note's commit changes, and what it leaves.**
+
+- **Changed:** this note, and `docs/stage-5-clause-audit.md`, which gains the section "After the
+  re-audit (11 November 2026)". Those answer section (d)'s items 1, 2, 3 and 16.
+- **Left for the follow-up pull request:** every other item of section (d).
+- **Left without an owner yet:**
+  - the front-end test for the Ask link (the verdict's "Missing or partial", item 4);
+  - `scripts/server_record.py:263`, which recorded process 0 as the server (section (c), defect 1);
+  - section (c)'s other defects: no snapshot record is committed for dump `80ff46d4…`, and the
+    runbook and the committed measurement scripts can only measure FLM.
+- **Left to the user: Stage 5's exit criterion.** `M6-BUILD-PROMPT.md`'s amendment of 10 November
+  admits this deviation "on the FLM build". Until the draws are read, the closing audit (item 10)
+  has neither an accepted deviation nor a confirmed pass to cite for FR-13 on the default build.
+
+**Where the report is imprecise, checked against the repository.** None of these changes its
+verdict.
+
+- **Its line numbers are against `bd95f92`.** This note sits above D-113. So every line of this
+  file that the report cites below `:8177` has moved down by this note's length: its citations of
+  D-113, D-115, D-121 and D-122.
+- **"The same ranked lists and scores"** (section (b)). The ranked lists are the same in every run
+  of the two draws, and so are the input tokens. The scores are not: they differ by up to 0.00072.
+  That is more than the 0.00047 it quotes from the frozen thirty, and more than t04's and t06's
+  margins at the context cut (0.0003 and 0.0004). So its point there is stronger than it says.
+- **"Reads seven follow-ups as 'history works'"** (section (a)). Each Claude record's
+  `summary.readings` gives that label to t01, t02, t03, t04, t05, t06 and t07 asked by the
+  Administrator, and t09. The report's list leaves out t09, which it treats separately.
+- **"t09 was 'not resolved with history', as predicted"** (section (a)). The label is as stated in
+  the FLM records of 3, 8 and 9 November. Each of them also holds `prediction_held: false` for
+  t09. The frozen prediction says t09 is correct when spelled out, and on FLM it was not.
+- **"Nothing references `TEXT.askNavLabel`"** (the clause table). Nothing under `frontend/tests`
+  does. `frontend/src/App.jsx:72` renders it.
+- **Section (d), item 19.** `apps/retrieval/conversation.py:80-82` already says that Stage 4's
+  item 9a measured the block, and that the end-to-end measurement is D-86's. What is stale is the
+  bold sentence at `:71` and "What is NOT known" at `:76-78`.
+- **Section (d), item 21.** The walk's citation is at `docs/stage-5-item-8-walk.md:228`, not
+  `:229`.
+- **Re-read and found as stated:**
+  - the scores in section (b)'s table, read from the records;
+  - the alpha's answer path against `2f65a8e`: no diff;
+  - the HTTP check record's process 0, against `server_observed.txt`'s listener (pid 44868) and the
+    machine's boot at 11:19:05Z on 9 November;
+  - no test under `frontend/tests` asserts the Ask link;
+  - D-106's repeated draws for FR-10 on Claude;
+  - no snapshot record committed for dump `80ff46d4…`. The `snapshot.json` that #87 adds is for
+    another database, `kmp_obj02_anthropic_20261110`, at dump `6e514170…`;
+  - CI run 42932385814, green on `bd95f92`;
+  - the lines it cites in D-42, D-91, D-121, `M6-BUILD-PROMPT.md`,
+    `docs/demonstration-script.md` and `docs/flm-baseline.md`.
+
+**The verdict, verbatim.** Reproduced as the auditor returned it, quoted rather than edited.
+
+> ## Audit: FR-13 Conversational Knowledge Assistant, re-audited after D-122 — 11 November 2026
+>
+> This audit covers the repository at `bd95f92`, which is `origin/main`, checked out on `docs/FR-13-follow-up-reaudit`. It is checked against the proposal's FR-13 section: `proposal.txt` lines 880–937, which is untracked and not in the repository. Nothing was edited. No suite, server, database or provider was run.
+>
+> **Verdict:** INCOMPLETE
+>
+> ### Clause coverage
+>
+> | # | Clause (proposal.txt:880–890) | Status | Evidence |
+> |---|---|---|---|
+> | FE-1a | "A conversational interface reachable from any page" | **Partial.** It is built, but no front-end test covers it (§8 condition 2, D-62) | `frontend/src/App.jsx:64-74` puts a link to `/ask` in the shell's primary navigation for every signed-in user (`App.jsx:142-154`). No test in `frontend/tests` asserts that link. Nothing references `TEXT.askNavLabel` (`frontend/src/constants.js:871`), and `frontend/tests/tabOrder.test.jsx:242` mentions the link only in a comment. |
+> | FE-1b | "…retaining the thread…" | Satisfied | The thread lives in the address (D-77): `frontend/tests/askThread.test.jsx:221`, `:300`, `:341`. A follow-up is posted to the active thread: `askThread.test.jsx:466`, `askThreadList.test.jsx:159`, `askLimits.test.jsx:240`. Server side: `apps/api/tests/test_ask.py:972`, both roles. |
+> | FE-1c | "…so follow-up questions need not restate the subject" | **flm: partial**, an accepted deviation (D-112). **anthropic: partial and unconfirmed**, with one draw per model | This is the outcome of SE-1c. See (a) and (b). |
+> | FE-2a | "Previous conversations are listed" | Satisfied | `apps/api/views.py:2165-2181`; `frontend/src/pages/Ask.jsx:183`, `:632-643`, `:762`. Tests: `apps/api/tests/test_conversations.py:196`, `:681`, `:701` (both roles); `frontend/tests/askThreadList.test.jsx:99`, `:134`. |
+> | FE-2b | "…and can be reopened" | Satisfied | `apps/api/views.py:2233-2239`; `apps/api/serializers.py:1164`. Tests: `test_conversations.py:334`, `:408`; `apps/api/tests/test_fr11_thread_scope.py:260-854`; `askThread.test.jsx:369`, `:610`; `frontend/tests/askReopened.test.jsx:112`, `:129`, `:147`. |
+> | FE-2c | "the active thread can be cleared to begin a new topic" | Satisfied | The "Start a new topic" control is at `frontend/src/pages/Ask.jsx:706`. Tests: `askThread.test.jsx:404`, `:420`, `:436`. There is deliberately no delete route: `apps/api/urls.py:77-82`, `test_conversations.py:439`. |
+> | SE-1a | "Maintains conversation context per session" | Satisfied, reading "session" as per conversation | History is read from `QueryLog` per conversation and per user (`apps/retrieval/conversation.py:136-169`, `:199-215`), so it outlives a login session. Tests: `apps/retrieval/tests/test_conversation.py:328`, `:409`, `:503`. |
+> | SE-1b | "…passes prior turns alongside the new question…" | **Declined in part (D-42):** only prior questions are passed | `conversation.py:164-168` reads `question` only, and `QueryLog.answer_text` is never read (`:10-19`). The questions are composed into the retrieval string and the labelled prompt block (`:172-196`; `apps/retrieval/pipeline.py:453`, `:460`, `:522-525`). Tests: `test_conversation.py:434`, `test_ask.py:972`. D-42's stated reason, that no model text re-enters a prompt, is what the code does. |
+> | SE-1c | "…so that pronouns and abbreviated references resolve correctly" | **flm: partial**, accepted as a deviation for NIT3003 (D-112). **anthropic: partial and unconfirmed:** 9/9, but on one draw per model | FLM: 2/9, 3/9 and 2/9 on `main`'s FLM build. The alpha's code scored 1/9. Claude: 9/9 on Haiku and 9/9 on Sonnet, and turn two 3/3 through the server on Sonnet. Files are listed in (b). |
+> | V-1 | "context is truncated to a maximum number of prior turns" | Satisfied | `apps/core/constants.py:244` (3); `conversation.py:164-168`; `test_conversation.py:475`. The value 3 was chosen for a 4B model (D-42 §5) and its effect is unmeasured (D-86). The clause asks only for a maximum. |
+> | V-2 | "The permission scope in FR-11 is re-evaluated on every turn" | Satisfied | `pipeline.py:441-446`. Tests: `test_conversation.py:549`, `test_ask.py:1004`, `apps/api/tests/test_fr11_scoping.py:610` and `:635`. On reopen: `test_fr11_thread_scope.py:298`, `:483`. |
+> | BL-1 | "each turn triggers a fresh retrieval based on the resolved question rather than reusing the previous turn's passages" | Satisfied | `pipeline.py:460-469` runs on every call, and nothing is carried between turns. Test: `test_conversation.py:613`. "The resolved question" is implemented as the plain join of the prior questions and the new one (D-42 §3). The standalone rewrite was withdrawn (D-111). |
+> | BL-2 | "Answer generation and citation verification follow FR-12 unchanged" | Satisfied | One endpoint serves both (`apps/api/views.py:2006-2116`; `pipeline.py:521-539`). An identifier that appears only in the history block is rejected: `test_conversation.py:653`, `test_ask.py:1116`. |
+> | R-1 | "200 OK with the answer and updated conversation state" | Satisfied | `views.py:2106-2116`; `apps/api/answers.py:193-195`, `:335`; `apps/api/serializers.py:723-735`, `:768-770`. `last_updated_at` is set in the log transaction (`apps/retrieval/query_log.py:294-299`). Test: `test_ask.py:944`, both roles. |
+> | DB-1 | Conversations: Create | Satisfied | `views.py:2183-2197`; `test_conversations.py:113`, both roles. |
+> | DB-2 | Conversations: Read | Satisfied | `views.py:2165-2181`, `:2233-2239`. Another user's thread is 404 (`test_conversations.py:408`); no session is 401 (`:427`). |
+> | DB-3 | Conversations: Update | Satisfied as database operations. There is no client rename route (D-43) | The title comes from the first question (`views.py:1988-2003`, `:2106-2107`), and `last_updated_at` moves every turn (`query_log.py:294-299`). Tests: `test_conversations.py:137`, `:150`, `:161`, `:172`, `:228`; `test_conversation.py:745`, `:774`. |
+> | DB-4 | QueryLog: Create | Satisfied | Every exit records: `pipeline.py:495-505`, `:555-562`, `:574-581`. Tests: `test_ask.py:930`, `:944`; `test_conversation.py:718`. |
+> | DB-5 | The fields of both tables | Satisfied | `apps/retrieval/models.py:29-35`, `:87-105`. |
+>
+> ### Missing or partial
+>
+> 1. **SE-1c on `anthropic` cannot be recorded yet.** It rests on one draw per model, and no noise band has been measured on this provider. Two more Haiku draws and one HTTP check on Haiku are needed (see (b)).
+> 2. **SE-1c on `flm` is partial, accepted for NIT3003 (D-112).** D-112's figures describe `main`'s FLM build on 8–9 November. The deployed alpha runs older code that was measured once, at 1/9. D-112's sentence "prior turns are passed" (`docs/decisions.md:8148-8149`) overstates the code, which passes prior questions only.
+> 3. **SE-1b is declined in part on both providers (D-42).** The frozen set has no follow-up whose referent exists only in an earlier answer's wording, so the cost D-42 concedes is untested on both providers.
+> 4. **FE-1a has no front-end test (D-62).** The smallest fix is one test that renders `App` signed in as each role, on a route other than `/ask`, and asserts that the primary navigation's link named `TEXT.askNavLabel` has `href="/ask"`.
+> 5. **The measurement records have defects (see (c)):**
+>    - The HTTP check's server block records process 0, with that process's start time.
+>    - The dump hash has no committed snapshot record.
+>    - The runbook has no procedure for `anthropic`, and the committed measurement scripts can only run on FLM.
+> 6. **Records about FR-13 are stale (see (d)).** In particular:
+>    - D-112 has no dated note.
+>    - `M6-BUILD-PROMPT.md:447-451` admits the deviation for the FLM build only.
+>    - `docs/demonstration-script.md:477-502` leaves out D-112's deviation, which D-112 itself requires there (`docs/decisions.md:8168-8170`).
+>    - `docs/stage-5-clause-audit.md` stops at 3 November.
+>
+> ### Invariant check
+>
+> 1. **Pass.** Filtering is before ranking:
+>    - The role predicate is in the candidate query (`pipeline.py:464`), and the history read carries both the conversation and the user predicate (`conversation.py:165`).
+>    - Another user's thread is 404, not 403 (`views.py:2127-2129`, `:2234-2236`; `test_ask.py:834`).
+>    - In the Claude runs, 0 passages were out of scope in every way of asking, and scoping was shown for t06 and t07.
+> 2. **Pass** for this slice. A reopened thread is re-scoped through the stamped chunks (`test_fr11_thread_scope.py:529`).
+> 3. **Pass.** t06's follow-up source, T02, is an Administrator-only transcript. Both Claude models declined the Employee, and nothing in `apps/retrieval/` consults attendance.
+> 4. **Pass.** The dual-role matrix lists `ask`, `conversation-list` and `conversation-detail` (`apps/api/tests/test_rbac.py:57-58`); `test_conversations.py:427` covers the 401.
+> 5. **Pass.** `pipeline.py:539`; `test_conversation.py:653`.
+> 6. **Pass.** `frontend/tests/ask.test.jsx:59`, `:103`.
+> 7. **Pass.** `pipeline.py:495-505` and `:555-562`. The Claude records split the outcomes: path A for seven cold runs, path B declined for the scoped Employee runs.
+> 8. and 9. Not applicable.
+> 10. **Pass.** Schema conformance was 37/37 on each Claude model, through the generation loop FR-12 uses.
+>
+> Set-level checks for this slice:
+> - **Owners.** django-backend has the endpoints, rag-pipeline has `conversation.py`, and react-frontend has `Ask.jsx`.
+> - **One composition.** `compose()` is the only one, pinned to the pipeline by `apps/retrieval/tests/test_compose.py:243`. The measuring tools, however, now exist as three copies of the harness (`scripts/`, `corpus/objective-02/runs/2026-11-10/voyage-frozen/`, `…/haiku/`) and two of the HTTP check.
+> - **Constants.** No literal 500, 50 or 25 appears inline in FR-13's code path. `NEW_CONVERSATION_TITLE` is defined at `apps/api/views.py:302` rather than in `apps/core/constants.py`; it is a fixed text, not a tuned value.
+> - **No AI SDK import outside `apps/ai/`.** I searched `apps/`, `scripts/`, `config/` and `corpus/`.
+>
+> ### §8 definition of done
+>
+> 1. **Not met.** SE-1c is partial on both providers, and SE-1b is declined in part.
+> 2. **Partly met.**
+>    - CI passed both suites on `bd95f92` (run 42932385814).
+>    - Server tests for every FR-13 route run from both roles (`conftest.py:275-280`).
+>    - FE-1a has no front-end test.
+> 3. **Met.** The happy path is tested, and so are the 404, 400, 401, re-scoping and no-answer paths.
+> 4. **Met**, with D-60's decline as accepted in D-92. The later FR-13 commits carry FR-13 in the subject. The Claude thread draws are committed under FR-12 (`718ccaa`, `60de33d`), which `CLAUDE.md` §7 allows for work spanning requirements.
+> 5. **Not met.** This audit reports gaps.
+>
+> ### Gate impact
+>
+> M6, on 1 November, is past. FR-13 was demonstrated on the FLM alpha and recorded as partial (D-91), and nothing here changes that.
+>
+> What this blocks now:
+> - recording FR-13 as met on the default build;
+> - Stage 5's exit criterion (`M6-BUILD-PROMPT.md:443-451`), which admits FR-13's deviation only for the FLM build — on the default build there is neither an accepted deviation nor a confirmed pass;
+> - §8 condition 2 for FE-1a.
+>
+> The smallest fix, in order:
+> 1. Two Haiku draws of the frozen nine and one Haiku HTTP check, with the rule fixed first. This costs about five cents.
+> 2. The one front-end test described above.
+> 3. Dated notes on the items in (d).
+> 4. In `scripts/server_record.py:263`, treat a returned process 0 as unknown.
+>
+> FR-10's threshold on this provider was derived over three draws (`docs/decisions.md:7599-7606`). FR-13, a MUST, has had one.
+>
+> ## (a) Per provider: is the follow-up clause met?
+>
+> ### `anthropic`: partial and unconfirmed
+>
+> This is the default since D-122: Claude Haiku 5.5, with Voyage `voyage-4` at 1024. The resolution half passed on the only draw made with each model. It cannot yet be recorded as met (see (b)), and the passing half is narrowed by D-42 here exactly as on FLM.
+>
+> **What the 9/9 shows.**
+> - Every answerable follow-up asked with history matched an expected phrase and cited an expected source. This held in-process, through the shipped `compose()` and pipeline, on both models:
+>   - Haiku: `corpus/objective-02/runs/2026-11-10/haiku/threads.json`;
+>   - Sonnet: `corpus/objective-02/runs/2026-11-10/voyage-frozen/threads.json`.
+> - Counting the two scoped Employee follow-ups that should be declined, with-history runs were correct 11/11 on both models, with 0 leaks and 0 fabricated identifiers.
+> - The frozen rule (part 10) reads seven follow-ups as "history works": correct with history and not correct cold. Each referent is named in the first question, so these seven are the evidence that pronouns resolve:
+>   - t01 ("it"), t02 ("that"), t03 ("them"), t04 ("they"), t05 ("it");
+>   - t06 and t07 asked by the Administrator ("them", "it").
+> - Spelled out also scored 9/9, so neither retrieval nor generation limited any of them.
+> - Through the server, on Sonnet only, the history was WIRED in all three threads. Turn two was correct 3/3 (`corpus/objective-02/runs/2026-11-10/voyage-http-check/http_check.json`).
+>
+> **What it does not show.**
+> - **That resolution is reliable.** Each model ran once, Claude takes no sampling parameters, and no repeat exists.
+> - **Anything from t08.** It is the topic change, answerable cold by design, and both models read it as "cold-answerable: proves nothing about history". With history, retrieval ranked T04 above D03 and the reply still came from D03. That shows carrying the first question did no harm, and nothing more.
+> - **That a reference into an earlier answer resolves.** t09's follow-up is "What do they have to approve?". "They" is the facilities team, which only the first turn's answer names, and answers are never passed.
+>   - t09's frozen prediction, that it fails with history, did not hold on either model. The rule reads it as "history works" with `prediction_held: false`.
+>   - The records show why. The joined questions ranked D20 first (0.570), and D20 names the facilities team. They admitted D17 third (0.339). Both models answered from D17's sentence: "…must be approved by the facilities team at least one week in advance."
+>   - So the match came from retrieval admitting the one approval passage that names the referent itself, not from the earlier answer (`voyage-frozen.md:103-111`; `haiku-round.md:103-104`). D-86's own note warned of this (`docs/decisions.md:5690-5691`).
+>   - On all four FLM draws, t09 was "not resolved with history", as predicted.
+> - **"Abbreviated references" beyond dropped subjects.** The nine follow-ups use pronouns and demonstratives only. None uses a shortened name or an acronym.
+> - **Threads longer than two turns.** So nothing is shown about the truncation at `MAXIMUM_CONVERSATION_TURNS`.
+> - **Haiku through the server.** The HTTP check ran on Sonnet only.
+>
+> ### `flm`: partial, an accepted deviation for NIT3003 (D-112)
+>
+> This is gemma3:4b with EmbeddingGemma on FLM v0.9.39. On `main`'s FLM build, with history matched:
+> - 2/9 on 8 November (`runs/2026-11-08/after-030/threads.json`, `19c98a8`);
+> - 3/9 on 9 November (`runs/2026-11-09/fr13-phase3/threads.json`, `b2ebba8`, whose `apps/` and `scripts/` are byte-identical to `19c98a8`'s);
+> - 2/9 on 9 November (`runs/2026-11-09/fr13-phase4/threads.json`, `48c20cf`, with the in-process passthrough pin in `run_frozen_main.py`).
+>
+> Spelled out was 6/9 each time, with 0 leaks. t08 was cold-answerable, and t09 not resolved, on every draw.
+>
+> **The deployed alpha is not that build.**
+> - `KMP_Prototype-alpha` is at `8598d19`, from 1 November. That commit defaults to `flm` and a dimension of 768.
+> - Its answer path is byte-identical to `2f65a8e`'s: there is no diff over `apps/ai/`, `apps/retrieval/`, `apps/core/constants.py` and `config/settings.py`.
+> - That code was measured once, on 3 November (`runs/2026-11-03/threads.json`): with history 1/9, spelled out 3/9, cold 1/9, first turn 7/11, 0 leaks.
+> - D-112's table therefore describes `main` on FLM, not what is deployed.
+>
+> ### D-42 on both providers
+>
+> The clause says "passes prior turns". The code passes prior questions only. That part is declined in part by D-42 on both providers.
+> - **On FLM**, the narrowing is not what limits the clause. The subject-noun follow-ups that D-42 said would resolve did not (D-91). D-103 and D-111 place the limit in how generation uses the supplied context.
+> - **On `anthropic`**, the narrowing's cost did not surface. That is only because no frozen follow-up has a referent that exists solely in an answer and in no passage the joined questions retrieve. D-42's own example is "what about the second one?" after an answer that listed three.
+> - That case is untested on both providers. By design it can resolve only when the referent is also in a passage that is retrieved again. It remains a recorded deviation, whatever further draws show.
+>
+> ## (b) How many draws does the 9/9 rest on?
+>
+> | Run | Commit | Database, dump | Model | First turn | With history | Spelled out | Cold | Leaks |
+> |---|---|---|---|---|---|---|---|---|
+> | 3 Nov (the alpha's code) | `2f65a8e` | `kmp_obj02_20261101`, `3bf98403…` | gemma3:4b | 7/11 | 1/9 | 3/9 | 1/9 | 0 |
+> | 8 Nov | `19c98a8` | same | gemma3:4b | 6/11 | 2/9 | 6/9 | 1/9 | 0 |
+> | 9 Nov, phase 3 | `b2ebba8` | same | gemma3:4b | 6/11 | 3/9 | 6/9 | 1/9 | 0 |
+> | 9 Nov, phase 4 | `48c20cf` + pin | same | gemma3:4b | 7/11 | 2/9 | 6/9 | 1/9 | 0 |
+> | 10 Nov | `54f15cc` | `kmp_voyage_20261110`, `80ff46d4…` | claude-sonnet-5-5 | 11/11 | 9/9 | 9/9 | 1/9 | 0 |
+> | 10 Nov | `e04aab1` | same | claude-haiku-5-5 | 11/11 | 9/9 | 9/9 | 1/9 | 0 |
+>
+> All six records name the same frozen set (`acfe3d47…`) and scoring rule version 2.
+>
+> **Draws per model.**
+> - **Haiku 5.5, the default:** one draw, and no HTTP check.
+> - **Sonnet 5.5:** one draw of the nine, and one HTTP check of three threads (t03 and t04 as the Employee, t06 as the Administrator; `58b9c27`).
+> - **The two thread draws are not repeats of one configuration.** Their retrieval was identical: the same ranked lists and scores, and the same 188,557 input tokens over 37 calls. Their agreement shows the result does not depend on which of the two models generates. It is not a repeat.
+>
+> **No noise band has been measured on `anthropic`.**
+> - The only repeat on this provider is of Voyage's embedding scores. Two passes over the frozen thirty differed by up to 0.00047 (`voyage-http-check.md:70-71`).
+> - That matters here: t04's and t06's composed sets sit within that jitter of the context-budget cut, with margins of 0.0003 and 0.0004 (`voyage-http-check.md:84-88`). Even the supplied passages can differ between draws.
+> - No generation repeat exists. The records say so themselves (`haiku-round.md:138`; `voyage-frozen.md:115-116`; D-121, `docs/decisions.md:9274-9275`).
+>
+> **The rules.**
+> - **D-103:** a single-pass delta of ±1–2 runs is noise, and no FR-13 delta may be read as an effect unless it clears the band. Further attempts need "repeated draws per configuration so the rule compares means, not single passes" (`docs/decisions.md:6782-6787`, `:6794-6796`).
+> - **D-112:** FLM's verdict rests on three draws on identical code (`:8140-8144`). On a provider change, FR-13 "is measured again on the new provider under the same rules" (`:8172-8174`).
+> - **D-115:** "the noise band is measured on this provider, not carried over from D-103" (`:8324-8326`).
+> - **D-113:** lists D-103's band among the FLM baselines to re-derive before `anthropic` is relied on (`:8226-8234`).
+> - **FR-10 on this provider:** the repository applies the same rule there. D-106's note requires repeated draws on Claude (`:7540-7548`), and Haiku's threshold was derived over 19 documents three times each (`:7599-7606`).
+>
+> **Conclusion: yes. The `anthropic` verdict needs more draws before it can be recorded.**
+> - "Met" claims that resolution is reliable at the ceiling. One draw per model cannot carry that claim under these rules.
+> - The comparison with FLM needs no further draw. 9/9 against 2/9, 3/9 and 2/9 is six or seven runs, far outside FLM's band.
+>
+> **The draw that would settle it.**
+> - **Two further recorded draws** of the frozen nine (`corpus/objective-02/threads.json`, sha256 `acfe3d47…`, rule version 2), on the default configuration:
+>   - `claude-haiku-5-5`, with `voyage-4` at 1024;
+>   - D-120's threshold 0.2687 and floor 0.2468;
+>   - effort `"low"`, `CLAUDE_MAX_TOKENS` 16000, `MAXIMUM_STATEMENTS` 6, `MAXIMUM_CONTEXT_TOKENS` 4000.
+> - **On `kmp_voyage_20261110` at dump `80ff46d4…`**, so they join `e04aab1`'s draw as three draws of one configuration. The HTTP check's rows there are not retrieval candidates, and the corpus gate checks the chunk set.
+> - **At a clean commit** whose answer path matches `bd95f92`'s. It has been byte-identical since `e04aab1`.
+> - **With a rule written and committed before the first draw.** For example, `haiku-round.md`'s own bar applied to every draw: with history at least 8/9, 0 leaks, 0 fabricated identifiers. The spread across the three draws then becomes this provider's first measured band.
+> - **Plus one HTTP check on Haiku** through a freshly started server, since the default model has none.
+> - **The tools.** The committed scripts cannot make these runs (see (c)).
+>   - `corpus/objective-02/runs/2026-11-10/haiku/citation_harness_haiku.py` can, unchanged, with each record in a new run folder.
+>   - The HTTP check needs a copy of `voyage-http-check/conversation_http_check_voyage.py` with the model changed.
+> - **Cost.** At the recorded rate of about $0.023 per thread draw, two draws cost about $0.05. The HTTP check costs under a cent at Haiku's prices.
+> - **Reading the result.** If every draw passes, the resolution half is recorded as met on `anthropic`, with D-42 still a recorded deviation. If any draw falls short, FR-13 is partial on `anthropic` too, with the band reported.
+>
+> ## (c) Do the Claude records carry their commit, configuration and database?
+>
+> | Field | `haiku/threads.json` | `voyage-frozen/threads.json` | `voyage-http-check/http_check.json` |
+> |---|---|---|---|
+> | `recorded_at` | 2026-11-10T19:38:27+11:00 | 15:57:36+11:00 | 16:35:42+11:00 |
+> | `commit_sha` | `e04aab1…` | `54f15cc…` | `58b9c27…` |
+> | commit exists / on `main` / ancestor of HEAD | yes / yes / yes | yes / yes / yes | yes / yes / yes |
+> | agrees with its markdown | yes (`haiku-round.md:88`) | yes (`voyage-frozen.md:10-13`; parents `8ecb2c6`, `20f4375`) | yes (`voyage-http-check.md:10-11`; parent `4c31d78`) |
+> | uncommitted changes | false, `[]` | false, `[]` | false, `[]` |
+> | dump / database | `80ff46d4…d1e4` / `kmp_voyage_20261110` | same | same |
+> | provider / chat model | anthropic / claude-haiku-5-5 | anthropic / claude-sonnet-5-5 | anthropic / claude-sonnet-5-5 |
+> | embedding model / dimension | voyage-4 / 1024 | same | same |
+> | threshold / floor | 0.2687 / 0.2468 | same | same |
+> | thread-set hash / rule | `acfe3d47…` / v2 | same | same |
+> | server | in-process, names the copy | in-process, names the copy | http: waitress 3.0.2, threads null, **pid 0, started 2026-11-09T11:19:15.787Z**, DEBUG off |
+>
+> **What was verified.**
+> - **The commits.** `git cat-file -t` returns `commit` for all three. `git branch -a --contains` lists `main` and `origin/main` for each, and `git merge-base --is-ancestor` succeeds for each. Each commit adds the copy that ran, and each copy is unchanged from its run commit to HEAD.
+> - **The thread-set hash.** The SHA-256 of `corpus/objective-02/threads.json`, at HEAD and at all three commits, is `acfe3d47afed7d97c2f1952d0528a9612cb6b9b65706f1491ad32f16cf2aee87`. The file last changed at `5314d86`, the 1 November freeze.
+> - **The configuration.** The Haiku record is today's default:
+>   - `config/settings.py:328` (`anthropic`), `:346` (1024), `:354` (`claude-haiku-5-5`) and `:356-357` (`voyage-4` and the recorded URL);
+>   - `.env.example:34`, `:43`, `:45-46`, `:64`;
+>   - `apps/core/constants.py:191-192`.
+> - **The answer path since the Haiku run.** FR-13's answer path is byte-identical between `e04aab1` and `bd95f92`:
+>   - no diff in `apps/retrieval/{pipeline,conversation,ranking,scoping,verification,query_embedding,partial_matches,query_log}.py` or `apps/ai/{prompting,generation,schema,_openai_compat}.py`;
+>   - `apps/ai/anthropic.py` changed only to add transcription (D-123);
+>   - `apps/core/constants.py` changed no value FR-13 reads.
+> - **The Sonnet records** differ from the default only in the generation model.
+>
+> **Defects found.**
+> 1. **The HTTP check's server block describes Windows' System Idle Process, not the server.**
+>    - It records `pid: 0` and `process_started_at: "2026-11-09T11:19:15.787Z"`. Process 0's start time on this machine is exactly that, and the machine booted at 11:19:05Z that day (both read on 11 November with `Get-CimInstance`).
+>    - The markdown says the server "started fresh at 16:33:46" (`voyage-http-check.md:26`) and that the record holds the pid "as unknown" (`:30`). `server_observed.txt` gives the listener as pid 44868, started 2026-11-10T16:33:43.
+>    - The cause is `scripts/server_record.py:263`, which records whatever `OwningProcess` the lookup returns, 0 included.
+>    - Read literally, the record says the server had been running since 9 November, which is the opposite of the restart step 12b requires. Nothing checks that restart (`docs/measurement-runbook.md:493-494`).
+> 2. **The server's thread count and version were not observed.**
+>    - `threads`, `listen` and `command_line` are null, and the console warned "the thread count is unknown, not 24" (`http_check.txt:5`). D-85's 24 threads are evidenced only outside the record, in `server_observed.txt`.
+>    - The version 3.0.2 came from the check's own environment (`version_source`). The markdown's "read from its replies" (`voyage-http-check.md:29`) is true of `DEBUG` and the server name only.
+> 3. **The dump hash cannot be checked from the repository.**
+>    - No snapshot record for `80ff46d4…` is committed. Step 8 says the run folder receives a copy of `snapshot.json` (`docs/measurement-runbook.md:295`, `:311`). The only committed snapshot record is FLM's, `corpus/objective-02/runs/2026-11-01/snapshot.json`.
+>    - The harness records the hash it is given without checking the database against it (`scripts/measurement_record.py:180-191`).
+> 4. **The measurement rules have no path for `anthropic`.**
+>    - Steps 9, 12a and 12b gate on `check_flm.py` and FLM v0.9.39 (`docs/measurement-runbook.md:337-338`, `:477-479`, `:532`). The section "A copy for another provider" (`:622-660`) covers only making and re-indexing the database.
+>    - The committed scripts can only run on FLM (`scripts/citation_harness.py:137`, `:1388-1400`; `scripts/conversation_http_check.py:363-396`).
+>    - All three records came from run-folder copies with a provider gate in place of the FLM gates. Each copy and its full diff are committed beside the record, so the recorded commit does name the code that ran.
+> 5. **The call parameters are in the commit, not the record.** None of these is in the records; all are fixed by the commit and unchanged at HEAD:
+>    - `CLAUDE_EFFORT` (`apps/ai/anthropic.py:60`) and `CLAUDE_MAX_TOKENS` (`:56`);
+>    - `MAXIMUM_STATEMENTS` and `MAXIMUM_CONVERSATION_TURNS`.
+>
+>    D-115 calls the call parameters provisional. The records hold the configured model name, not any identifier the API returned.
+> 6. **The recorded commit alone does not reproduce the configuration.** At the recorded commits, `config/settings.py` still defaulted to `flm` and `claude-sonnet-5-5`. Each copy set the environment before Django started (`haiku/citation_harness_haiku.diff:38-42`), so the configuration is reproducible from the commit together with its copy.
+>
+> Nothing else is missing, unknown or inconsistent.
+>
+> ## (d) What is now stale
+>
+> **In `docs/decisions.md`:**
+>
+> 1. **`:8138` (D-112)** says "Its measured state on the shipped build (FLM v0.9.39…)". Since D-122, `main` ships `anthropic` by default, and the deployed alpha measured 1/9 on older code. "The shipped build" now describes neither.
+> 2. **`:8148-8149` (D-112)** says "prior turns are passed". The code passes only prior questions.
+> 3. **`:8172-8174` (D-112)** says the provider change is "pending as its own decision". D-122 made that decision, and the re-measurement exists only as one draw per model. D-112 has no dated note.
+> 4. **`:1763` and `:1824-1827` (D-42)** say "Unmeasured: yes" and "FR-13 end to end is still unmeasured… a set… which does not exist." The set has existed since 1 November and has been run six times.
+> 5. **`:1831-1836` (D-42)** say follow-ups hold "for subject nouns and not for references into an answer's wording". That was falsified on FLM (`:1854-1872`). On Claude, subject-noun follow-ups resolved on one draw and t09 resolved through retrieval. The 2 November note there ends at D-91 and records nothing later.
+> 6. **`:6148` (D-91)** says the measured reason is "not yet run". It was measured on 3 November (`:6200`). The 10 November note at `:6219-6221` covers the FLM build only.
+> 7. **`:9282-9283` (D-121)** says "The default provider is still FLM". D-122 overtook this the same day, and there is no dated note.
+> 8. **`:9303-9305` (D-122)** counts the threads' 9/9 and the HTTP check toward the switch. It does not say that they are one draw per model, that the HTTP check was Sonnet's, or what FR-13's status is. This is silence rather than staleness.
+>
+> **In `M6-BUILD-PROMPT.md`:**
+>
+> 9. **`:443-451`.** The Done line's amendment admits the deviation "on the FLM build". The default build has neither an accepted deviation nor a confirmed pass.
+> 10. **`:494-497`** lists D-45 and D-42 as the deliberate shortfalls, and leaves out D-112's deviation.
+>
+> **In `docs/demonstration-script.md`:**
+>
+> 11. **`:298-305`** says to avoid follow-ups, that FR-13 is "partial at the gate", and that its measurement "comes after the gate". It has since been measured. The advice is still right for the FLM alpha and wrong for the default provider.
+> 12. **`:398-401`** says the cold and spelled-out runs "are step 5's" and that the measurement "comes after the gate". Step 5 and step 7 have both run since.
+> 13. **`:456-459`** says "The measurement is step 5's". That is overtaken.
+> 14. **`:477-502`.** The deviations list lacks D-112's reason and numbers, which D-112 requires there (`docs/decisions.md:8168-8170`). The script has had no amendment since 7 November.
+>
+> **In the stage records:**
+>
+> 15. **`docs/stage-5-item-8-walk.md:225-227`** says "the measured reason is step 5's", and there is no note for D-112. The walk itself remains true of the FLM alpha.
+> 16. **`docs/stage-5-clause-audit.md:500-507`.** FR-13's last entry is the 3 November FLM baseline. Nothing records 8–9 November, D-112, D-122 or the Claude runs.
+> 17. **`docs/stage-4-clause-audit.md:84`** says FR-13 "holds for subject nouns" and that previous-answer follow-ups do not resolve. This is a record at its date: it was falsified on FLM and did not hold for t09 on Claude.
+>     - `:85` was closed by item 4b (`docs/stage-5-clause-audit.md:382`).
+>     - `:86` and `:92` still hold.
+>
+> **Elsewhere:**
+>
+> 18. **`docs/flm-baseline.md:17-21` and `:611-617`** say FR-13 end to end "remains unmeasured" and that the set "does not exist". Both were overtaken on 3 November.
+> 19. **`apps/retrieval/conversation.py:71-79`** says "THE MULTI-TURN PROMPT IS UNMEASURED". It has been measured: 38/38 on FLM and 37/37 on each Claude model.
+> 20. **`docs/stage-4-open-items.md:149-151`** says previous-answer follow-ups do not resolve. That is true of the design in general; t09 resolved on Claude.
+> 21. **Line references have drifted.** `docs/demonstration-script.md:294-295` and `:457`, `docs/stage-5-clause-audit.md:478-479` and `docs/stage-5-item-8-walk.md:229` cite `test_fr11_scoping.py:608` and `:633`. At HEAD those tests begin at `:610` and `:635`.
+> 22. **`README.md` and `CLAUDE.md`** state nothing about FR-13's status, numbers or provider, so nothing in them is stale on FR-13.
+>
+> ## What I could not check
+>
+> - **I ran no suite.** The suites' result here is CI's: run 42932385814 on `bd95f92` succeeded on both jobs, and the checks on PR #84 were green.
+> - **I re-scored no run.** I read the stored scores and checked t02, t08 and t09 by eye.
+> - **I could not verify the dump, the media hash or the HTTP check's logs.** None is in the repository, and I read nothing outside it.
+> - **I read no `.env`.** So I cannot confirm which database the running alpha serves. I verified only that the alpha's worktree is at `8598d19` and what that commit's defaults are.
+> - **I did not check the provider consoles** for spend or for model snapshots.
+> - **I read the front-end tests without running them.**
+>
+> **Verdict: FR-13 is INCOMPLETE.**
+> - On `flm`, its follow-up clause is partial, an accepted deviation for NIT3003 (D-112); the deployed alpha scored 1/9.
+> - On `anthropic`, it is partial and unconfirmed: 9/9 on one draw per model, with no measured noise band.
+> - On both providers, D-42 narrows "prior turns" to prior questions, and "reachable from any page" has no front-end test.
+
+**Dated note, 12 November 2026: the draws were made on the evening of 11 November, and the
+resolving half of FR-13's follow-up clause is recorded as met on `anthropic`.** This is the
+further note the table above promised. It records a measurement, not an audit: FR-13's verdict
+stays INCOMPLETE until `requirements-auditor` reads it again. The text above this note is left as
+written.
+
+**The rule, committed before the first draw** (`049fefe`,
+`corpus/objective-02/runs/2026-11-11/haiku-draws/haiku-draws.md`). The user chose it on
+11 November from three put to him as a tabbed question. It was the recommended one.
+
+- **Three draws of the frozen nine on the default configuration:** the draw of 10 November
+  (`e04aab1`) and two new ones.
+- **Each draw:** with history at least 8/9, 0 leaks, 0 fabricated identifiers. That is
+  `haiku-round.md`'s bar, as the verdict's section (b) suggested.
+- **Across the draws:** no follow-up misses with history in more than one draw. t09 is exempt,
+  because its frozen prediction is a miss (D-42).
+- **One HTTP check on Haiku:** WIRED 3 of 3, 0 leaks, and turn two correct at least 2 of 3.
+- **The two not chosen:** the same bar with no condition across the draws, and 9/9 on every draw.
+
+**The result: the rule is met.**
+
+| | bar | draw 1, 10 Nov (`e04aab1`) | draw 2, 11 Nov (`bf384b2`) | draw 3, 11 Nov (`bf384b2`) |
+|---|---|---|---|---|
+| first turn | | 11/11 | 11/11 | 11/11 |
+| **with history** | at least 8/9 | **9/9** | **9/9** | **9/9** |
+| spelled out | | 9/9 | 9/9 | 9/9 |
+| cold | | 1/9 | 1/9 | 1/9 |
+| **leaks** | 0 | **0** | **0** | **0** |
+| **fabricated identifiers** | 0 | **0** | **0** | **0** |
+| a follow-up missed in more than one draw | none | | none missed at all | |
+
+- **One configuration, three times:** `claude-haiku-5-5`, `voyage-4` at 1024, threshold 0.2687 and
+  floor 0.2468, on `kmp_voyage_20261110` at dump `80ff46d4…`, with the thread set `acfe3d47…` and
+  rule v2. The harness copy of 10 November ran unchanged, in-process.
+- **The readings per follow-up are the same in every draw,** and the same as the verdict's
+  section (a) describes. t09 matched each time through retrieval of D17, not through the earlier
+  answer.
+- **The HTTP check on Haiku** (`0dd05c6`, `runs/2026-11-11/haiku-http-check/`): WIRED 3 of 3,
+  turn two correct 3 of 3, 0 leaks, through a Waitress started fresh with D-85's command.
+
+**The band, this provider's first measured one** (D-115: "measured on this provider, not carried
+over from D-103").
+
+- **No spread:** every way scored the same in all three draws, and 0 of the 44 runs changed
+  outcome or correctness. FLM's band was ±1–2 runs (D-103).
+- **The draws are repeats, not replays:** the verified statements differ in wording or count in 21
+  of the 44 runs.
+- **Retrieval jitters and did not move a cut:** the largest score difference for one passage was
+  0.00142. No run was supplied a different set of passages, and one was supplied the same set in
+  another order.
+- **It was measured at the ceiling, over three draws.** It does not bound the variation.
+
+**FR-13's status after the draws, per provider.**
+
+- **On `anthropic`, the default: the resolving half of the follow-up clause is met, on three
+  draws.** That is "so that pronouns and abbreviated references resolve correctly", as far as the
+  frozen nine test it. This is a measured pass, not an accepted deviation.
+- **On `flm`: unchanged.** The follow-up clause is partial, the deviation this entry accepted for
+  NIT3003. Nothing was measured on FLM in this run.
+- **On both providers, unchanged:**
+  - **D-42 stays a recorded deviation.** Prior questions are passed, never prior answers. No frozen
+    follow-up tests a referent that is only in an earlier answer.
+  - **"Reachable from any page" has its front-end test, since #91** (`d271917`, merged after the
+    draws): `frontend/tests/askNavLink.test.jsx` walks every route as each role. That is not this
+    run's work.
+
+**These sentences in the note above are overtaken by this one, and left as written:**
+
+- **"partial and unconfirmed. It is not recorded as met".** True when written, on one draw per
+  model. On three draws under a rule fixed first, the resolving half is now recorded as met.
+- **"Haiku has no HTTP check".** It has one now.
+- **"Left without an owner yet": `scripts/server_record.py:263`.** A Listen row that names
+  process 0 is now reported as unknown, with a note (`6124822`, two tests). The line number is
+  the verdict's, at `bd95f92`. Since #93 the guard is in `_listen_row_process`.
+  - **#93 merged first** (`25f6179`, on 11 November at 20:27; D-87's note of that day). The lookup
+    now falls back to netstat and to the port's own row, and it takes a Listen row only with a
+    readable command line, so a row naming process 0 no longer ends the search.
+  - **The guard sits inside #93's first lookup.** It matters when no lookup finds the listener and
+    a leftover Listen row names process 0. #93 alone then returns process 0, "as it always was".
+    With the guard, the record says the listener is unknown, and why.
+  - **The user decided on 12 November to keep the guard,** from a tabbed question. Its two tests
+    were adapted to #93's lookup. #93's own tests are unchanged and pass: they stub the first
+    lookup, so one of them still describes process 0 being returned, which the real lookup no
+    longer does.
+- **"no snapshot record is committed for dump `80ff46d4…`".** A copy of the snapshot record is in
+  `runs/2026-11-11/haiku-draws/snapshot.json`. The dump's SHA-256 was recomputed and is the
+  record's. The earlier run folders still hold none.
+
+**Section (c)'s defect 1 did not recur.** The check's record holds the server as observed:
+Waitress 3.0.2, 24 threads, pid 28208, started 08:23:05Z, `DEBUG` off. `server_observed.txt` holds
+the listener's row and command line, and `server_settings.txt` the model the server ran. The lookup
+found the listener, so the new guard was not exercised on a live server. The check ran at
+`0dd05c6`, before #93 was merged into this branch, so its lookup was the single Listen-row one.
+
+**What the pass does not show.** The verdict's own list, in section (a), stands: nothing from t08,
+no reference into an earlier answer, no shortened name or acronym, and no thread longer than two
+turns. To it:
+
+- **Reliability beyond three draws,** at the ceiling of a set of nine.
+- **Which model snapshot answered.** The records hold the configured name.
+- **Three cold follow-ups are answered, not declined, in every draw** (t02, t04 and t09, each from
+  another source). All score not correct, as predicted. Cold is not a path FR-13 uses. It is
+  FR-12's decline behaviour (D-110).
+
+**Spend:** about $0.050 of Claude credit, for 80 calls: $0.0232 and $0.0229 for the draws, and
+$0.0038 for the check. The user approved about $0.06 for this run (D-113).
+
+**Left to the user.**
+
+- **Stage 5's exit criterion.** `M6-BUILD-PROMPT.md`'s Done line admits FR-13's deviation "on the
+  FLM build". On the default build, the closing audit (item 10) now has a measured pass to cite for
+  the resolving half, and D-42 as the recorded deviation. The line's wording is not changed here.
+- **The re-audit.** `requirements-auditor` has not read FR-13 since these draws.
+
+**Where it applies:** `corpus/objective-02/runs/2026-11-11/`, and
+`docs/stage-5-clause-audit.md`'s section "After the draws (11 November 2026)".
+
+**Dated note, 12 November 2026, later: the user decided the Done line, the gate checklist and the
+re-audit, and the records the re-audit found stale are corrected.** The text above this note is
+left as written.
+
+**What the user decided on 12 November,** from three tabbed questions, each the recommended choice:
+
+| Question | Decided |
+|---|---|
+| What `M6-BUILD-PROMPT.md`'s Done line says now | **The FLM acceptance stands, and the default build counts by audit.** The amendment of 10 November stands for the FLM build. On the default build the clause is not admitted as a deviation: its measured pass counts toward COMPLETE only when the auditor reads it as met. D-42 stays a recorded deviation on both builds. The amendment of 12 November is in the user's words |
+| The gate checklist's "Where does the build fall short of a clause on purpose?" | **A dated pointer.** The item stays as it stood for the 1 November gate, and points to `docs/demonstration-script.md`'s list, which now names D-112 |
+| When `requirements-auditor` reads FR-13 again | **With Stage 5 item 10's closing audit,** with no separate run. Until then FR-13's verdict stays INCOMPLETE |
+
+**The verdict's section (d), item by item.**
+
+| Item | Where | Done |
+|---|---|---|
+| 1, 2, 3 | this entry | The note of 11 November (#89) |
+| 4, 5 | D-42 | A dated note |
+| 6 | D-91 | A dated note |
+| 7 | D-121 | A dated note |
+| 8 | D-122 | A dated note |
+| 9 | `M6-BUILD-PROMPT.md`'s Done line | The amendment of 12 November |
+| 10 | `M6-BUILD-PROMPT.md`'s gate checklist | The dated pointer |
+| 11, 12, 13, 14 | `docs/demonstration-script.md` | Amended in place under a dated header, as that file is: step 5, the screen's notes, the answer on conversations, and the deviations list, which now names D-112 with its reason and numbers |
+| 15 | `docs/stage-5-item-8-walk.md` | A dated note. The walk stays true of the alpha, which runs FLM |
+| 16 | `docs/stage-5-clause-audit.md` | Its sections of 11 November (#89) and "After the draws" (#94) |
+| 17 | `docs/stage-4-clause-audit.md:84` | **Left as written.** That file's rows stand as written, as `docs/stage-5-clause-audit.md` says where it quotes them, and FR-13's later states are in that file |
+| 18 | `docs/flm-baseline.md` | Dated notes at its head and under "What remains unmeasured" |
+| 19 | `apps/retrieval/conversation.py` | Its module docstring now says the multi-turn prompt was unmeasured when written, and what has measured it since |
+| 20 | `docs/stage-4-open-items.md` | A dated note |
+| 21 | the `test_fr11_scoping.py` line references | Corrected in `docs/demonstration-script.md`; a dated note in the walk; already in the clause audit's section of 11 November |
+| 22 | `README.md`, `CLAUDE.md` | Nothing was stale |
+
+**Found while correcting them.** Section (d)'s item 19 gives the thread runs' schema conformance as
+"38/38 on FLM". The run of 3 November, on the alpha's code, conformed in 37 of 40 responses. All
+three failures were one cold run, t04's, which carries no history block. Every with-history run in
+the thread runs of 3 to 11 November conformed on its first attempt (D-42's note of 12 November).
+
+**Still open: section (c)'s defect 4.** Steps 9, 12a and 12b of `docs/measurement-runbook.md`, and
+the committed harness and HTTP check, still gate on FLM. Every FR-13 record on `anthropic` came
+from a run-folder copy with a provider gate.
 
 ## D-113 · D-35 is superseded: the `anthropic` provider is funded by the Max plan's monthly Claude API credits, and is brought into use
 
@@ -9285,6 +10118,12 @@ FR-10, FR-12, FR-13, `config/settings.py`, `.env.example`
 **Where it applies:** `config/settings.py`, `.env.example` and the development `.env`. D-115
 carries a dated note.
 
+**Dated note, 12 November 2026: "The default provider is still FLM" is overtaken.** It was true when
+written. D-122 made `anthropic` the default the same day, and this entry is left as written. The
+table's "threads: follow-ups with history 9/9" was one draw per model. FR-13 was re-audited on
+11 November, and Haiku 5.5 was drawn twice more on the frozen nine (D-112's notes of 11 and
+12 November).
+
 ## D-122 · `anthropic` (Claude Haiku 5.5 + Voyage `voyage-4`) is the default provider, after FR-10's and FR-19's tuned values were re-derived on it
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** D-113, D-114, D-117, D-120,
@@ -9363,6 +10202,19 @@ stub provider and passed locally under that configuration.
   `apps/documents/classification.py`, `scripts/objective05_verify.py`.
 - **Documentation:** `README.md`, `CLAUDE.md` §3 and §4, `docs/ai-provider.md`. D-106 and D-109
   carry dated notes.
+
+**Dated note, 12 November 2026 (FR-13): what this entry's FR-13 evidence rested on.** It counts "the
+nine threads (9/9 with history) and the HTTP check (WIRED 3/3)" toward the switch. Those were one
+draw per model, and the HTTP check ran on Sonnet 5.5, not on Haiku 5.5, the model this entry makes
+the default. Since then:
+
+- **FR-13 was re-audited** on 11 November, at `bd95f92`, and returned INCOMPLETE (D-112's note of
+  11 November).
+- **Haiku 5.5 was measured again,** under a rule fixed first: two further draws of the frozen nine,
+  and one HTTP check through a fresh server. The resolving half of the follow-up clause is recorded
+  as met on `anthropic`, as a measurement (D-112's note of 12 November).
+
+This note changes nothing in the decision.
 
 ## D-123 · A meeting recording is transcribed by Whisper on FLM into a draft that a person must confirm, then ingested through FR-09 unchanged; live transcription stays out of scope
 
@@ -10079,3 +10931,136 @@ correction or addition; none changes the user's four choices.
   suite runs on the stub and on fake provider clients. The development run on the `anthropic`
   provider and Objective 04's measurement are recorded in their own notes when they are made, and
   the FLM path (`gemma3:4b`) is not run for FR-16 at all.
+
+## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
+
+**Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,
+D-110, D-93, D-120, D-122, `apps/core/constants.py`, `apps/retrieval/gaps.py` · **Departs from:**
+D-93 and D-108's fallback, both disclosed below
+
+**What prompted it:** Objective 06's verification on the `anthropic` provider (#86,
+`corpus/objective-06/runs/2026-11-10-anthropic/`).
+
+- **The thirty's first cycle on voyage-4** met clauses 2 and 3, and not clause 1: U01 was missing
+  from the log.
+  - U01 ("Will my salary rise with inflation?", asked by the Employee) is a genuine gap, and D-108's
+    rank-one rule left it out.
+  - Its top-ranked passage over the Administrator's scope scores 0.197 and is Administrator-only.
+    The best readable one scores 0.1875.
+- **D-108's development check came after that cycle.** D-108's note of 10 November and D-110's note
+  on the FLM configuration ask for it on a new configuration before the thirty run there. On
+  voyage-4 it was not run first, an oversight owned in #86's write-up.
+  - Run afterwards, it fails. The scoped questions are all left out, as they should be. Of the
+    no-answer questions, u36 and d27 are left out too, in U01's way (0.230 and 0.238,
+    Administrator-only).
+  - On embed-gemma it passed (D-108's notes of 10 November).
+- **The cause:** the rank-one rule meets Voyage's lower scores for out-of-corpus questions. A
+  genuine gap's best match is weak, and it can fall on restricted material. This is the "known cost"
+  of D-108's evening note. It was unmeasured on embed-gemma, where no question had the shape.
+
+**The options put to the user.** D-108 says that when the check fails, the margin rule is chosen on
+the development material. On voyage-4 two rules pass the check
+(`corpus/objective-06/runs/2026-11-11-anthropic/exclusion-rule-exploration/`):
+
+- **The margin rule.** A row is left out when its restricted top passage beats the best readable
+  one by at least m. Here m = 0.0939, the midpoint between d27's margin (0.0659, the larger of the
+  no-answer margins, u36's and d27's) and d21's (0.1218, the smallest scoped margin).
+- **Threshold-first,** step 4 of D-108's rule as first written, at the model's own threshold
+  (0.2687, D-120). It needs no new constant.
+
+The development questions cannot choose between them. On the frozen thirty they differ. That is
+arithmetic on the diagnosis of #86's cycle (`exclusion_diagnosis.txt` there), not a new run:
+
+- the margin rule would keep P02, whose margin is 0.0448, so a permission-only question would be in
+  the log and clause 3 would not be met;
+- threshold-first leaves P02 out (0.2812, above 0.2687) and keeps U01 (0.197, below it).
+
+**Decision (the user's, 11 November): threshold-first for voyage-4.**
+
+- **The map:** `GAP_EXCLUSION_RULE_BY_MODEL = {"voyage-4": "threshold-first"}`. Any model not
+  listed, embed-gemma included, keeps `GAP_EXCLUSION_RULE = "rank-one"` (`333be14`).
+  `gaps.exclusion_rule()` reads both at call time, as `grouping_threshold()` reads its map.
+- **The rule:** if no passage reaches the model's own relevance threshold (`ranking.admit`), nobody
+  could have been answered, and the row is a gap. Otherwise the top admitted passage decides, as
+  before.
+- **Why embed-gemma keeps rank-one:** threshold-first kept P02 there, at 0.2977 to 0.2983 against
+  0.30 (D-108's evening note). Nothing was measured again on embed-gemma for this entry.
+
+**Two departures, disclosed.**
+
+- **From D-93.** The choice between the two passing rules used the frozen thirty's P02 and U01. The
+  earlier departures on frozen sets are named in D-106's and D-110's notes of 10 November (night);
+  this one is on the same thirty as D-110's, which now carries its own note. The thirty's first
+  cycle on voyage-4 (#86) stays the independent result. The rule now shipped for voyage-4 has no
+  independent figure.
+- **From D-108's fallback.** D-108 says the margin rule is chosen when the check fails, and that the
+  thirty are never used to choose. The margin rule was not chosen, and the thirty were used. D-108
+  carries a dated note.
+
+**Verified** on `fix/FR-19-exclusion-voyage`. The evidence is
+`corpus/objective-06/runs/2026-11-11-anthropic/`, and `objective-06-d126.md` there is the write-up.
+
+- **Tests,** in `apps/retrieval/tests/test_knowledge_gaps.py`, each named with the deliberate
+  breaks of `gaps.py` under which it fails. The breaks are listed after the table.
+
+  | Test | Fails under |
+  |---|---|
+  | `test_the_exclusion_rule_is_the_embedding_models_own` | A, B |
+  | `test_on_voyage_a_restricted_best_match_under_the_threshold_is_a_gap` (U01's shape) | A, D |
+  | `test_on_voyage_a_readable_best_match_under_the_threshold_is_a_gap` | D |
+  | `test_on_voyage_a_restricted_top_admitted_passage_is_left_out` | E |
+  | `test_on_voyage_a_restricted_answer_between_the_two_thresholds_is_left_out` (P02's shape) | C, E |
+  | `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` | E |
+  | `test_on_voyage_an_administrators_question_is_always_kept` | D, F |
+  | `test_rank_one_still_decides_below_the_threshold_for_a_model_not_listed` | B |
+
+  - A: voyage-4 forced back to rank-one.
+  - B: every model forced to threshold-first. The existing
+    `test_a_question_whose_best_passage_is_restricted_is_left_out_below_the_threshold` fails too.
+  - C: threshold-first judged by EmbeddingGemma's threshold instead of the model's own.
+  - D: threshold-first, with nothing admitted meaning left out.
+  - E: threshold-first never leaving an admitted row out.
+  - F: every asker judged as an Employee. The existing
+    `test_an_administrators_unanswered_question_is_always_kept` and
+    `test_the_asker_role_is_read_from_the_user_row_at_cycle_time` fail too.
+  - **A correction to `b854288`'s message.** It says every new test failed under a deliberate
+    break. Under its two breaks, A and B, that was true of the first, second and last rows above
+    only. The test for P02's shape and breaks C to F were added afterwards, in `14d9629`.
+- **D-108's check on the shipped code,** run twice at `462e8e9`
+  (`exclusion-dev-check-threshold-first/`): it passes both times. Scoped questions left out: u30,
+  u31, u32, d11, d21, d22. No-answer questions kept: u33, u34, u35, u36, u37, d24, d25, d26, d27.
+- **Objective 06 on `anthropic`, three draws** (D-110's note asks for repeated seeding there, and
+  the user asked for three):
+  - draw 1, on rank-one (#86): clause 1 not met, U01 missing; clauses 2 and 3 met;
+  - draws 2 and 3, on this rule at `462e8e9`: all three clauses met on each. Every expected query
+    is in the log, each of the four subjects has one entry counting its three queries, and no
+    permission-only query is in the log;
+  - generation's outcome was the same on the three draws: A01 to A07 answered; U04, U05, P07 and
+    P08 declined after generation (path B); every other ask a no-answer on path A.
+
+**What it costs:**
+
+- **A possible leak.** A permission-only question whose restricted answer scores under 0.2687 would
+  be kept, so its wording would reach the gap log, which FR-19's validation clause forbids. Neither
+  the development questions nor the thirty have one: their restricted answers score from 0.2812
+  (P02) to 0.56 (u32). P02 sits 0.0125 above the threshold, about 27 times Voyage's jitter of
+  0.00047. The size of this cost beyond this corpus is unmeasured.
+- **A coupling to D-120.** The rule rests on voyage-4's relevance threshold, so re-tuning that
+  value moves the exclusion too. The test for P02's shape is designed from the threshold, not a
+  literal, and follows it.
+
+**Not covered:**
+
+- embed-gemma, or any model other than voyage-4, under threshold-first: not measured for this entry.
+- An independent test of the voyage-4 rule: none exists, as above.
+- A permission-only question scoring under 0.2687: none in either set, so the leak's rate is not
+  known.
+- The zero-result search side: unchanged. D-108's recount as the Administrator does not use this
+  rule.
+- FR-12's declines on these draws: not scored here. Each draw's rows are exported
+  (`draw-N/export.json`) for that scoring.
+- D-108's own "Not covered" list (FR-13 composition, a role recorded at ask time, re-evaluation
+  after a visibility change): it stands.
+
+**Where it applies:** `apps/core/constants.py`, `apps/retrieval/gaps.py` and
+`apps/retrieval/tests/test_knowledge_gaps.py`. D-108 and D-110 carry dated notes.

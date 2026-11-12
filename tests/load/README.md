@@ -73,6 +73,12 @@ waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=5452
   - **Waitress, from the listening process.** The process listening on `-BaseUrl`'s port is
     looked up (`Get-NetTCPConnection`, `Win32_Process`), and its command line must start
     Waitress. A server named only by a header, or nothing listening, is refused.
+    - **Windows can report a serving socket's state wrongly** (D-87's note of 11 November 2026),
+      so the lookup does not stop at the Listen row. It then reads `netstat -ano` for one
+      LISTENING PID, and then the port's own socket row (remote port 0) whatever state is
+      reported, when one live process with a readable command line owns it.
+    - **It tries again every 10 s for about 60 s** before it says nothing is listening. Each try
+      is printed, and the pre-flight prints which lookup found the process (`found by`).
   - **24 threads, from that command line.** A command line with no `--threads` reads as 4,
     Waitress's default, and is refused as 4, not as "unknown". With `-OverrideServerThreads`,
     the observed count must equal `-ServerThreads`.
@@ -247,8 +253,8 @@ decision 3). It writes into `tests/load/results/<test>_summary.json`:
   `Task queue depth` line timestamped inside it, the deepest, and how many fell before or after
   it. Lines with no timestamp are kept apart, not placed. With none inside the window,
   `queue_depth` reads `none in the run's window`.
-- `server_at_end`: the process listening when the run ended, and whether it is the one observed
-  before it.
+- `server_at_end`: the process listening when the run ended, whether it is the one observed
+  before it, and which lookup found it (`found_by`, `lookup`).
 - `server_preflight`: the whole pre-flight record, command line, DEBUG probe and refusals
   included.
 
@@ -361,7 +367,7 @@ In this order:
 | `server_started_at`, `previous_run` | The server's start, from Waitress's `Serving on` line, and the run record it had to be later than (D-87 decision 1). |
 | `server_observed` | The `Server` header values the logins came back with, how many logins, how many had none, and `matches_server`. `null` when it was not recorded. |
 | `waitress_log` | Added after k6: the run's window and the `Task queue depth` lines inside it, or `none in the run's window` (D-87 decision 3). If it still reads `not added`, the finalise step did not run. |
-| `server_at_end` | Added after k6: the pid listening when the run ended, and `same_process`. |
+| `server_at_end` | Added after k6: the pid listening when the run ended, `same_process`, and which lookup found it (`found_by`, `lookup`). |
 | `server_preflight` | Added after k6: the whole pre-flight record, with the command line and the DEBUG probe's status, content type and reason. |
 | `throttled_429` | `total`, then `rate_limit`, `ask_in_flight`, `ingestion_in_flight` and `unrecognised`. Any non-zero makes the run INVALID. |
 
