@@ -423,7 +423,7 @@ def listening_process(port: int) -> dict:
 
     When no process is taken, the lookups are tried again every LOOKUP_RETRY_INTERVAL_SECONDS. The
     last try starts within LOOKUP_RETRY_SECONDS of the first, so the whole wait is about a minute
-    (57 to 61 seconds in the trials of 12 November 2026), and longer if a lookup times out. Then
+    (57 to 62 seconds in the trials of 12 November 2026), and longer if a lookup times out. Then
     the Listen row's own result is returned, as it
     always was: nothing listening, or a PID with no command line. It is never process 0:
     ``_listen_row_process`` reports a row that names it as unknown, with a note (D-112's note of

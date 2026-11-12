@@ -110,7 +110,8 @@ Changing the order is a decision, not an edit to make on the day.
    ```
 
    The port is free only when its `notes` say that nothing is listening. A note that no single
-   process holds the port means something does.
+   process holds the port means something does. A note that it is not known means a lookup could
+   not be read: look again before treating the port as free.
 
 ## 1. The names, in every PowerShell window used below
 
