@@ -20,7 +20,7 @@ import { AuthContext } from '../src/auth/context.js'
 import { ROLES, TEXT } from '../src/constants.js'
 import MeetingDetail from '../src/pages/MeetingDetail.jsx'
 import Meetings from '../src/pages/Meetings.jsx'
-import { serveApi } from './fakeApi.js'
+import { serveApi, summaryRoute, summaryState } from './fakeApi.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
 
@@ -87,6 +87,17 @@ function detailOf(meeting, overrides = {}) {
 const SERVER_403 = { detail: 'You do not have permission to perform this action.' }
 const SERVER_404 = { detail: 'No Meeting matches the given query.' }
 
+/**
+ * The detail view's own second read since FR-16, `GET /api/meetings/{id}/summary`,
+ * answered for a meeting with no summary and a role that may not write to it: the
+ * panels are on the page and offer nothing, so the only control any of these tests
+ * can find is the meeting's own. FR-16's panels are tests/meetingSummary.test.jsx's
+ * and tests/meetingActionItems.test.jsx's.
+ */
+function summaryRouteFor(meeting) {
+  return { [`GET /api/meetings/${meeting.meeting_id}/summary`]: summaryRoute(summaryState()) }
+}
+
 /* ---- Rendering ----------------------------------------------------------- */
 
 /** The router's current location and its Back, as the probe below last saw them. */
@@ -125,7 +136,11 @@ function renderMeetings(path, user = ADMINISTRATOR) {
 
 /** The detail view at its path, for a meeting the fake API describes. */
 async function renderDetail(detail, extraRoutes = {}, user = ADMINISTRATOR) {
-  const answered = serveApi({ [`GET /api/meetings/${detail.meeting_id}`]: { body: detail }, ...extraRoutes })
+  const answered = serveApi({
+    [`GET /api/meetings/${detail.meeting_id}`]: { body: detail },
+    ...summaryRouteFor(detail),
+    ...extraRoutes,
+  })
   const probe = renderMeetings(`/meetings/${detail.meeting_id}`, user)
   await screen.findByRole('heading', { level: 1, name: detail.title })
   return { answered, probe }
@@ -233,6 +248,7 @@ describe('D-99 meeting deletion: offered only with manage_meetings, and only aft
       'GET /api/meetings': () => ({ body: deleted ? [SUPPLIERS] : [PLANNING, SUPPLIERS] }),
       'GET /api/users/directory': { body: [] },
       [`GET /api/meetings/${PLANNING.meeting_id}`]: { body: detailOf(PLANNING, { can_delete: true }) },
+      ...summaryRouteFor(PLANNING),
       [`DELETE /api/meetings/${PLANNING.meeting_id}`]: () => {
         deleted = true
         return { status: 204 }

@@ -1,0 +1,43 @@
+Lena: Okay, let's start. The goal today is to bring the service desk backlog down before the end of the year. Last month we opened just over eight hundred tickets and closed seven hundred and forty, so we're going backwards.
+
+Marcus: What's driving it?
+
+Lena: Password resets are still the biggest category, about a quarter of everything. Then laptop problems, then access requests.
+
+Alex Petrov: Most of the password resets could be done through the self-service page, but people don't know it exists. The knowledge base article for it is two years out of date and still shows the old login screen.
+
+Lena: Then fixing that article is the cheapest win we have.
+
+Marcus: And Alex will tidy up the shared mailbox rules as well, because half the access requests are landing in the wrong queue.
+
+Lena: Good. On laptops, the problem is that when a laptop goes in for repair, the person has nothing to work on for three or four days.
+
+Alex Morgan: Finance has asked whether a loan pool would actually save money, or just move the cost somewhere else.
+
+Marcus: It would save money. Every day someone can't work costs more than the laptop does. I think we need about ten loan laptops.
+
+Lena: Can you put in the order, Marcus?
+
+Marcus: I can, but I need finance approval first. I'll order them once the approval comes through.
+
+Alex Morgan: I'll take the approval request to Ravi this week, and let you know as soon as it's signed.
+
+Lena: Thanks. Third thing, triage. At the moment whoever is free picks up the next ticket, and the urgent ones sit behind the easy ones. I'd like a proper triage rota, with one person each morning who sorts the queue before anyone starts.
+
+Alex Petrov: I'm happy to be on it, as long as it's shared fairly.
+
+Lena: It will be. I'll draft the rota and send it round so it can start next Monday.
+
+Alex Petrov: On licences, I'm not sure we have enough seats for the remote support tool now that the new starters have joined. I'll check the licence count by Thursday.
+
+Lena: Please do. Last thing from me. There was the outage on the email gateway last week. I was going to email the vendor and ask for a service credit.
+
+Marcus: No need. I already did that this morning, and they've agreed to credit us for the day.
+
+Lena: Great, that's one less thing. So, to recap. The password reset article gets rewritten. Marcus orders the loan laptops once finance approves, and Alex Morgan takes the approval to Ravi this week. I send the triage rota so it starts next Monday. Alex Petrov checks the licence count by Thursday. And the mailbox rules get tidied up.
+
+Marcus: Who's rewriting the article?
+
+Alex Petrov: I will. I wrote the original. I'll have the new version up by Friday.
+
+Lena: Perfect. Thanks, everyone.

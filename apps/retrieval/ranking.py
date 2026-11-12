@@ -113,6 +113,12 @@ class RankedPassage:
     read. The embedding is deliberately NOT carried: it has done its work by the time a
     passage is ranked, it is the largest field on the row, and the one place it could
     still go wrong is being copied somewhere it might be logged.
+
+    ``ai_generated`` is the row's own flag: True only for a passage of a meeting's AI-generated
+    summary (FR-16, D-125). It plays no part in scoring, admission or the context budget. It is
+    carried so the Sources panel can say the passage is AI content rather than the transcript's
+    words (NFR-15), and it defaults to False so every existing construction still means a
+    transcript or document passage.
     """
 
     chunk_id: str
@@ -120,6 +126,7 @@ class RankedPassage:
     score: float
     source_type: str
     source_id: UUID
+    ai_generated: bool = False
 
 
 def rank(candidates: Iterable[ContentChunk], query_vector: list[float]) -> list[RankedPassage]:
@@ -151,6 +158,7 @@ def rank(candidates: Iterable[ContentChunk], query_vector: list[float]) -> list[
             score=cosine_similarity(query_vector, list(chunk.embedding)),
             source_type=chunk.source_type,
             source_id=chunk.source_id,
+            ai_generated=chunk.ai_generated,
         )
         for chunk in candidates
     ]

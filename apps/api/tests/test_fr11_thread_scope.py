@@ -87,7 +87,9 @@ TURN_FIELDS = {"question", "answered", "asked_at", "message", "statements", "sou
 CONVERSATION_FIELDS = {"conversation_id", "title", "last_updated_at"}
 # The live reply's Sources panel entry and passage (D-44), exactly.
 SOURCE_FIELDS = {"source_type", "source_id", "title", "date", "passages"}
-PASSAGE_FIELDS = {"chunk_id", "text"}
+# ``ai_generated`` since D-125: whether the passage is from a meeting's AI-generated summary. It is
+# a property of the passage shown, so it says nothing about a passage that is not.
+PASSAGE_FIELDS = {"chunk_id", "text", "ai_generated"}
 
 # The table every chunk read hits, as it appears in captured SQL.
 CHUNK_TABLE = '"content_chunks"'

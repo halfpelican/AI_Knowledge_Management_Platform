@@ -137,9 +137,11 @@
 }
 
 /* A machine's tag has a dashed boundary and a person's a solid one — a second
-   cue beside the words, never the only one (SC 1.4.1). */
+   cue beside the words, never the only one (SC 1.4.1). The style is the token
+   every surface that marks AI content reads (NFR-15, AiMark.css), so FR-16's
+   summary and action items are bounded exactly as these tags are. */
 .tag--ai {
-  border-style: dashed;
+  border-style: var(--border-style-ai);
 }
 
 .tag--user {

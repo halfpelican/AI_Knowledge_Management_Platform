@@ -5,13 +5,17 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
 - ``ask`` on ``POST /api/ask``;
 - ``ingestion``, one budget shared by ``POST /api/documents``, ``POST /api/meetings``,
   ``POST /api/documents/{id}/reprocess`` and, since FR-10, ``POST /api/documents/{id}/classify``
-  (D-105: one provider call, like a reprocess);
+  (D-105: one provider call, like a reprocess), and since FR-16 ``POST /api/meetings/{id}/summary``
+  (D-125: Generate or Regenerate is one provider call too);
 - ``conversation_create`` on ``POST /api/conversations``, at the ask rate in its own budget;
 - ``search`` on ``GET /api/search``, since D-79's note of 10 November 2026;
 - ``tagging`` on ``POST /api/documents/{id}/tags``, since D-79's note on tagging of the same night
   (D-105's security review, finding 4);
 - ``transcription`` on ``POST /api/transcriptions``, one recording segment per request, and on
-  ``GET /api/transcriptions/status``, which asks FLM for its model list (D-123).
+  ``GET /api/transcriptions/status``, which asks FLM for its model list (D-123);
+- ``action_items`` on FR-16's ``POST /api/meetings/{id}/action-items`` and on ``PATCH`` and
+  ``DELETE /api/meetings/{id}/action-items/{item_id}``, one budget (the security review of 12
+  November 2026, finding 2, D-125's third note).
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -43,6 +47,7 @@ from apps.ai.base import EmbeddingResult
 from apps.ai.testing import STUB_EMBEDDING_MODEL
 from apps.api.views import ASK_IN_FLIGHT_CODE, ASK_IN_FLIGHT_MESSAGE
 from apps.core.constants import (
+    ACTION_ITEM_THROTTLE_RATE,
     ADMINISTRATOR_ROLE_NAME,
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
@@ -95,9 +100,9 @@ def assert_rate_throttled(response):
     assert int(response["Retry-After"]) > 0
 
 
-# The four ingestion routes, each sent the cheapest request it refuses: an upload with no file,
-# a meeting with no fields, and a reprocess and a classify (FR-10, D-105) of an id that names
-# nothing.
+# The five ingestion routes, each sent the cheapest request it refuses: an upload with no file,
+# a meeting with no fields, and a reprocess, a classify (FR-10, D-105) and a summary (FR-16,
+# D-125) of an id that names nothing.
 def upload_without_a_file(client):
     return client.post(DOCUMENTS_URL, {"title": "No file attached"}, format="multipart")
 
@@ -114,11 +119,16 @@ def classify_of_nothing(client):
     return client.post(f"{DOCUMENTS_URL}/{uuid.uuid4()}/classify", {}, format="json")
 
 
+def summary_of_nothing(client):
+    return client.post(f"{MEETINGS_URL}/{uuid.uuid4()}/summary", {}, format="json")
+
+
 INGESTION_ROUTES = {
     "POST /api/documents": (upload_without_a_file, 400),
     "POST /api/meetings": (meeting_without_fields, 400),
     "POST /api/documents/{id}/reprocess": (reprocess_of_nothing, 404),
     "POST /api/documents/{id}/classify": (classify_of_nothing, 404),
+    "POST /api/meetings/{id}/summary": (summary_of_nothing, 404),
 }
 
 
@@ -132,6 +142,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert SEARCH_THROTTLE_RATE == "30/min"
     assert TAGGING_THROTTLE_RATE == "30/min"
     assert TRANSCRIPTION_THROTTLE_RATE == "60/min"
+    assert ACTION_ITEM_THROTTLE_RATE == "30/min"
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
@@ -140,6 +151,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
         "search": SEARCH_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
+        "action_items": ACTION_ITEM_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -222,10 +234,10 @@ def test_the_two_429s_are_told_apart_by_code(session_client, monkeypatch):
 
 
 def test_the_ingestion_scope_is_one_budget_shared_by_its_three_routes(session_client):
-    """D-79: upload, meeting ingest, reprocess and (since FR-10) classify draw on one budget. The
-    budget is spent across all four, a quarter each, and then every one of them answers 429; a
-    per-route budget would still have three quarters left on each. Reading the lists is not
-    throttled."""
+    """D-79: upload, meeting ingest, reprocess, (since FR-10) classify and (since FR-16) a meeting's
+    summary draw on one budget. The budget is spent across all five, a fifth each, and then every
+    one of them answers 429; a per-route budget would still have four fifths left on each. Reading
+    the lists is not throttled."""
     client = session_client.client
     routes = list(INGESTION_ROUTES.items())
     for number in range(INGESTION_LIMIT):
@@ -460,3 +472,87 @@ def test_the_transcription_status_shares_the_segment_budget(employee_client):
         segment_without_audio(employee_client)
 
     assert_rate_throttled(employee_client.get("/api/transcriptions/status"))
+
+
+# --- action items (FR-16; the security review of 12 November 2026, finding 2) ---------------------
+
+ACTION_ITEM_LIMIT = allowed(ACTION_ITEM_THROTTLE_RATE)
+
+
+def readable_meeting():
+    from datetime import date
+
+    from apps.meetings.models import Meeting
+
+    return Meeting.objects.create(
+        title="Fit-out", meeting_date=date(2026, 11, 10), transcript_text="Alex: I will chase it.",
+        visible_to_roles=[EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME],
+    )
+
+
+def add_item(client, meeting_id, description="Chase the quote"):
+    return client.post(f"{MEETINGS_URL}/{meeting_id}/action-items", {"description": description}, format="json")
+
+
+def test_the_action_item_scope_answers_429_past_its_rate_and_writes_nothing(session_client):
+    """Each add below writes one row, so the rows count the adds that ran; the one past the rate
+    writes none."""
+    from apps.meetings.models import ActionItem
+
+    client = session_client.client
+    meeting = readable_meeting()
+    for number in range(1, ACTION_ITEM_LIMIT + 1):
+        assert add_item(client, meeting.id, f"item {number}").status_code == 201, number
+
+    assert_rate_throttled(add_item(client, meeting.id, "one too many"))
+    assert ActionItem.objects.filter(meeting=meeting).count() == ACTION_ITEM_LIMIT
+    assert not ActionItem.objects.filter(description="one too many").exists()
+
+
+def test_an_edit_and_a_delete_share_the_add_budget_and_change_nothing_past_it(session_client):
+    from apps.meetings.models import ActionItem
+
+    client = session_client.client
+    meeting = readable_meeting()
+    item = ActionItem.objects.create(meeting=meeting, description="Keep me", origin="user")
+    for number in range(ACTION_ITEM_LIMIT):
+        assert add_item(client, uuid.uuid4()).status_code == 404, number
+    item_url = f"{MEETINGS_URL}/{meeting.id}/action-items/{item.id}"
+
+    assert_rate_throttled(client.patch(item_url, {"description": "Changed"}, format="json"))
+    assert_rate_throttled(client.delete(item_url))
+    item.refresh_from_db()
+    assert (item.description, item.edited) == ("Keep me", False)
+
+
+def test_past_the_action_item_rate_every_meeting_gets_the_same_429(session_client, administrator):
+    """The throttle is checked before the meeting is looked up, so past the rate an
+    Administrator-only meeting, a readable one and an id naming nothing are three identical 429s."""
+    from datetime import date
+
+    from apps.meetings.models import ActionItem, Meeting
+
+    client = session_client.client
+    restricted = Meeting.objects.create(
+        title="Board", meeting_date=date(2026, 11, 10), transcript_text="Chair: noted.",
+        visible_to_roles=[ADMINISTRATOR_ROLE_NAME],
+    )
+    readable = readable_meeting()
+    for number in range(ACTION_ITEM_LIMIT):
+        assert add_item(client, uuid.uuid4()).status_code == 404, number
+
+    for meeting_id in (restricted.id, readable.id, uuid.uuid4()):
+        assert_rate_throttled(add_item(client, meeting_id))
+    assert not ActionItem.objects.exists()
+
+
+@pytest.mark.parametrize("spender", [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+def test_one_users_action_item_budget_is_not_anothers(employee_client, administrator_client, spender):
+    clients = {EMPLOYEE_ROLE_NAME: employee_client, ADMINISTRATOR_ROLE_NAME: administrator_client}
+    [other] = set(clients) - {spender}
+    meeting = readable_meeting()
+    for number in range(ACTION_ITEM_LIMIT):
+        assert add_item(clients[spender], uuid.uuid4()).status_code == 404, number
+    assert_rate_throttled(add_item(clients[spender], meeting.id))
+
+    assert add_item(clients[other], meeting.id).status_code == 201
