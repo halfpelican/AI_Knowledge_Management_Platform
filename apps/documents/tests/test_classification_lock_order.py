@@ -48,8 +48,12 @@ from .classification_builders import classification, scheme
 # Real transactions on two connections, so ``transaction=True``. A transactional test empties every
 # table when it ends, the roles the data migrations seeded included. ``serialized_rollback`` loads
 # that seeded data again at the start of each one, so the second test here can still create a user.
-# pytest-django runs transactional tests after all the others, so no other test meets the emptied
-# database.
+# pytest-django runs the transactional tests after the other database tests. Only tests that use no
+# database follow them, so no test that needs the seeded data meets the emptied database. These are
+# the suite's only transactional tests. ANY transactional test added later must also use
+# ``serialized_rollback=True``. Without it, it meets an empty database (no roles), and its own
+# teardown recreates the content types that a serialized test after it then fails to load (the
+# re-audit of 7377d38, observation N4).
 pytestmark = pytest.mark.django_db(transaction=True, serialized_rollback=True)
 
 DOCUMENT_SOURCE_TYPE = SOURCE_TYPES[0]

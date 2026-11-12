@@ -12078,6 +12078,9 @@ unchanged but for its opening paragraph.
       the document row, the opposite order, and the auditor executed the deadlock against a run.
       It predates `5c60564`. It is now fixed: `confirm_classification` takes the document row
       first, so every path takes the document, then the analysis, then the tags.
+      *Narrowed after the re-audit of `7377d38` (its finding N3, below): every path takes the
+      document before the analysis row. Tags and links are taken value by value within a run,
+      which cannot cycle, for the reasons the module docstring gives.*
   - **Rejections made before `documents 0013` were never recorded,** because the old route wrote
     nothing. So they are not honoured: 0013 starts every row at `[]`, and none is guessed (D-105's
     precedent for rows before 0009). That includes the re-run planned for `kmp_anthropic` after this
@@ -12281,6 +12284,9 @@ A focused re-audit of the fixes follows.
   - **The order,** stated in a "Lock order" section of `apps/documents/classification.py`'s module
     docstring: the document, then the analysis, then tags, then links. A function may skip a level
     but never goes back to an earlier one.
+    - *Narrowed after the re-audit of `7377d38` (N3):* the order holds for the document and the
+      analysis row. Within a run, rule 4 takes tags and links value by value, so a link can be
+      locked before a later tag. The module docstring now says so, and why no cycle follows.
   - **The false docstring claim** is replaced by what is now true.
   - **The cost:** a person confirming a department during a long reprocess now waits for it instead
     of deadlocking.
@@ -12299,6 +12305,9 @@ A focused re-audit of the fixes follows.
   - **Each deadlocked** under its break, without the new lock: `OperationalError: deadlock detected`.
     Each passes with it, both transactions committing.
   - **They are transactional tests** (`serialized_rollback=True`), and pytest-django runs those last.
+    - *Corrected after the re-audit of `7377d38` (N4):* they run after the other database tests,
+      and tests that use no database follow them. The module now says that any transactional test
+      added must also use `serialized_rollback`.
 - **The results:**
   - 1,056 passed across the FR-10 files, with the deletion tests;
   - the full pytest at `5c60564`, before this fix: 3,616 passed, with the dual-role matrix at 39/39.
@@ -12316,3 +12325,170 @@ beside this entry's `0012_proposed_tags` and `0013_rejected_tags`.
     0013, 0012_content_chunk_ai_generated, 0014, then `meetings 0003`;
   - `docs/schema-v1.md` names both 0012s.
 - **Throughout this entry, "`documents 0012`" means `0012_proposed_tags`.**
+
+**The focused re-audit of `7377d38` (13 November 2026), verbatim.** The `requirements-auditor` agent's report, quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> ## Focused re-audit: FR-10 (D-128), N1, N2, the deletion lock and the lock-order tests, at 7377d38 — 13 November 2026
+>
+> **Verdict: INCOMPLETE.** All four points checked are MET. One new records finding remains: the module docstring states a tags-then-links lock order that `apply_classification` does not keep (N3). No deadlock follows from it.
+>
+> **What I checked, and how**
+> - **Read only.** I read `git show 7377d38` and `git diff 5c60564..7377d38`: six files. apps\api, apps\ingestion, the migrations and the front end are unchanged. `git status` stayed clean throughout.
+> - **What I ran,** on `test_kmp_fr10auto_audit`, which pytest-django created and destroyed. The full run's `test_kmp_fr10auto` was not touched. Each run was a separate session:
+>   - **The two committed lock-order tests:** 2 passed, in two sessions.
+>   - **A break probe,** C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_lock_breaks.py. It removes each new lock by monkeypatching that module's own name for the model, so `select_for_update()` takes no lock, then calls the committed test unchanged. 2 passed: each committed test failed with `OperationalError: deadlock detected`.
+>   - **The first re-audit's probe,** C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\probe\test_probe_lock_order.py, run alone. It now fails only on its own "deadlock" assertion, with `{'A run': 'committed', 'B person': 'committed'}`.
+>   - **The existing deletion tests:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_document_delete.py and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_deletion.py. 22 passed.
+> - **Line numbers are at 7377d38.**
+>
+> ### N1. A run, and a person confirming the department: MET
+>
+> **The fix.** File: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py
+> - `confirm_classification` now locks the document row (795) before the analysis row (797).
+> - That is `apply_classification`'s order: document at 507, then analysis at 514.
+> - `confirm_classification`'s docstring says so (780-785).
+>
+> **The false claim is replaced.**
+> - `apply_classification`'s docstring is corrected (488-496).
+> - D-128 keeps its original sentence with an inline italic correction after it, per the log's convention: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:11616-11620.
+>
+> **Executed.**
+> - The first re-audit's probe now shows both transactions committing.
+> - Committed test 1, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_lock_order.py:132-161, passes.
+> - With the document lock removed, test 1 fails with a deadlock (break probe 1).
+>
+> **Is the order true for every writer, as stated (classification.py:53-77)?**
+> - **Yes, for the half the two deadlocks needed.** Every writer that takes both the document and the analysis row takes the document first:
+>   - `apply_classification` (507, then 514);
+>   - `confirm_classification` (795, then 797);
+>   - `delete_document` (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\deletion.py:77, then 80);
+>   - reprocess, through `apply_classification` (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:177-180 and 321-323).
+> - **No writer now takes the analysis row and then the document:**
+>   - `confirm_proposed_tag` (1050) and `reject_proposed_tag` (1108) never lock the document;
+>   - `apply_tag` (905) never locks the analysis row.
+> - **No, for the tags-then-links half.** That is N3.
+>
+> ### The deletion lock: MET
+>
+> **The change.**
+> - deletion.py:80 locks the analysis row after the document (77) and before chunks and links (81-86).
+> - The docstring describes it at 44-49 and 61-62.
+>
+> **Sound.**
+> - `confirm_proposed_tag` takes the analysis row, then a tag, then the link (classification.py:1050, 1054).
+> - The deletion now waits for it at the analysis row, instead of holding the links that confirmation needs.
+> - In the other order the person waits instead. Once the deletion commits, the person finds the analysis row gone: `NotOnThisDocument`, which the route answers 404.
+>
+> **Executed.**
+> - Committed test 2 (test_classification_lock_order.py:164-199) passes.
+> - With the deletion's analysis lock removed, test 2 fails with a deadlock (break probe 2).
+>
+> **FR-15's deletion (D-73) is unchanged.**
+> - The only change is the extra lock. What is deleted is the same, still in one transaction, and the file is still removed on commit.
+> - The routes (apps\api) are untouched.
+> - The 22 existing deletion tests pass.
+>
+> ### N2. Rejections made before documents 0013: MET
+>
+> - **The statement** is in three places:
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:311-316;
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:284;
+>   - D-128, at decisions.md:11621-11624.
+> - **It is accurate:**
+>   - the old `reject_proposed_tag` wrote nothing;
+>   - 0013 starts every row at `[]`, and nothing is guessed;
+>   - the planned `kmp_anthropic` re-run is named.
+> - **0013 is unedited.**
+>
+> ### The tests: MET
+>
+> All references are to test_classification_lock_order.py.
+> - **Real functions, on two separate connections** (94-129).
+> - **Deterministic.**
+>   - The order is forced by polling `pg_locks` for an ungranted lock held by the second connection's process (80-91).
+>   - The first transaction waits on an event, not a timer (141, 183).
+>   - The 10 ms pause is a polling interval, not an ordering.
+> - **Bounded.** Each transaction sets `lock_timeout` to 10 s (56, 138, 149, 178, 188). Event waits are 10 s and joins 30 s, so a regression fails instead of hanging.
+> - **Not vacuous.** Each test asserts that:
+>   - the second transaction was seen waiting (155, 194);
+>   - both transactions committed (154, 193);
+>   - the end state is right (157-161, 196-199).
+> - **Each fails under its break.** Executed, by the break probes.
+> - **Isolated within the suite.**
+>   - They are marked `transaction=True, serialized_rollback=True` (53).
+>   - They are the suite's only transactional tests: no other `transaction=True`, `transactional_db`, `live_server` or `TransactionTestCase` appears in apps or conftest.py.
+>   - pytest-django 4.14.0 runs db tests first, then transactional tests, then non-db tests, and no non-db test unblocks the database.
+>   - So within a run, no other test meets the database these tests leave flushed. N4 gives the limits of that.
+>
+> ### New findings
+>
+> **N3. PARTIAL, a records error: the stated lock order is not kept by `apply_classification` for tags and links.**
+> - **The claim,** at classification.py:53-57: "the document row, then its `DocumentAnalysis` row, then `Tag` rows, then `ContentTag` links. It skips any level it does not need and never goes back to an earlier one".
+> - **The same claim restated in D-128:**
+>   - decisions.md:11821-11823: "A function may skip a level but never goes back to an earlier one";
+>   - decisions.md:11616-11620: "every path takes the document, then the analysis, then the tags".
+> - **What the code does.**
+>   - Within one run, rule 4c can update an existing unconfirmed AI link (classification.py:587, through `_link_tag` to 752). That happens before rule 4d creates or reactivates a Tag (613, 616).
+>   - Rule 4d then takes each value's tag and then its link, value after value.
+>   - So a link can be locked before a tag.
+> - **Why no cycle follows,** a reason the docstring does not give:
+>   - Every other writer that takes tags and this document's links first takes the document (`apply_tag`, 905) or its analysis row (`confirm_proposed_tag`, 1050). The run holds both for its whole transaction.
+>   - `confirm_tag` and `reject_tag` take one link and wait on nothing after it.
+>   - `retire_tag` and `create_tag` take one tag.
+>   - Concurrent runs take tags in one sorted order (612).
+>   - I found no deadlock.
+> - **Smallest fix,** either of:
+>   - state that rule 4 takes tags and links value by value, and why that cannot cycle;
+>   - or narrow the claim to the document-then-analysis order.
+>
+> **N4. Observation, low: what the transactional tests leave behind.**
+> - **What happens.** A `serialized_rollback` teardown flushes every table with post_migrate inhibited, so after these tests the database is empty. That is harmless as the suite stands, with a fresh database for each run.
+> - **Two limits.** I reproduced both by mixing my own unserialized probe into one session:
+>   - a later transactional test without `serialized_rollback` meets an empty database (`Role.DoesNotExist`);
+>   - its own teardown then recreates the content types, so a serialized test after it fails to reload them (`IntegrityError` on `django_content_type`).
+> - **A third limit, by reading:** a `--reuse-db` run would leave the test database empty for the next run. No workflow in the repository uses `--reuse-db`.
+> - **A small inaccuracy.** decisions.md:11841 says pytest-django runs transactional tests "last", and so does test_classification_lock_order.py:48-52. In fact non-db tests run after them, harmlessly, since they cannot use the database.
+> - **Optional fix:** one sentence in that module saying any transactional test added must also use `serialized_rollback`.
+>
+> ### C2
+>
+> - **Reported to me, not observed:**
+>   - the full pytest at 5c60564: 3,616 passed, with the matrix at 39/39;
+>   - 1,056 passed across the FR-10 and deletion files at 7377d38.
+> - **Not yet shown:**
+>   - the full pytest at 7377d38, which is in progress;
+>   - the front-end suite since 5c60564's one-string change. 7377d38 does not touch the front end.
+>
+> **One line:** INCOMPLETE.
+> - N1, the deletion lock, N2 and the lock-order tests are MET, each executed: both deadlocks are gone, and each test fails with a deadlock when its lock is removed.
+> - FR-15's deletion is unchanged.
+> - But the module docstring and D-128 state a tags-then-links order that `apply_classification` does not keep (N3). No deadlock follows from it.
+> - The full pytest at 7377d38 is not yet shown.
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at 7377d38.** The run is in progress.
+> - **The front-end suite after 5c60564.** Not run.
+> - **CI on PR #102.**
+> - **The implementer's own breaks.** I reproduced "each deadlocked under its break" by monkeypatching the locks away, not with the implementer's breaks.
+> - **scripts\seed_objective02_tags.py against the lock order.** It is an offline tool, not run alongside the server by design, so I did not analyse it.
+> - **How often the old deadlocks would have occurred in use.**
+
+**What changed because of the re-audit of `7377d38` (13 November).** It marked N1, the deletion
+lock, N2 and the lock-order tests MET, each executed, and found two records points.
+
+- **N3, a records error:** the stated lock order claimed tags then links throughout. The module
+  docstring of `apps/documents/classification.py` now states:
+  - the order every writer keeps: the document before the analysis row;
+  - that rule 4 takes tags and links value by value;
+  - why that cannot cycle.
+
+  `apply_classification`'s docstring follows it. The two sentences above carry inline corrections.
+  No code changed.
+- **N4, an observation:** the lock-order test module now says the transactional tests run after the
+  other database tests, with only tests that use no database following them. It also says that
+  any transactional test added must also use `serialized_rollback`. The sentence above carries an
+  inline correction.
+- **The merge with FR-16 (#101)** came after this re-audit; it is recorded above.
+- **The suites at the merge `e0a0938`:** the front end, 604 passed with lint and build clean. The full
+  pytest's result is in the pull request.

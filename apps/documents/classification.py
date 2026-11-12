@@ -50,11 +50,23 @@ the request-serving packages ``apps/api/tests/test_source_rows_fail_closed.py`` 
 reason that module gives: it reads managers directly, for writes against a row already resolved
 and for the vocabulary tables.
 
-**Lock order** (the focused re-audit of ``5c60564``, finding N1). Every function that writes a
-document's classification records takes its row locks in one order: the document row, then its
-``DocumentAnalysis`` row, then ``Tag`` rows, then ``ContentTag`` links. It skips any level it does
-not need and never goes back to an earlier one, so no two of them can wait on each other in a
-cycle. Each one:
+**Lock order** (the focused re-audit of ``5c60564``, finding N1; narrowed after the re-audit of
+``7377d38``, finding N3).
+
+- **The document and the analysis row.** Every function that writes a document's classification
+  records and takes both the document row and its ``DocumentAnalysis`` row takes the document
+  first. No function takes the analysis row and then the document.
+- **Tags and links are not in one fixed order** across ``apply_classification``. Rule 4 takes them
+  value by value: an in-scheme value's existing link can be locked before a later out-of-scheme
+  value's ``Tag``. No cycle follows from that, for four reasons:
+  - every other writer that takes tags and this document's links first holds the document
+    (``apply_tag``) or its analysis row (``confirm_proposed_tag``), and a run holds both for its
+    whole transaction;
+  - ``confirm_tag`` and ``reject_tag`` take one link and wait on nothing after it;
+  - ``retire_tag`` and ``create_tag`` take one tag;
+  - concurrent runs create or reactivate tags in one sorted order.
+
+Each one:
 
 - ``apply_classification``: the document, the analysis row, then tags and links (rule 4).
 - ``confirm_classification``: the document, then the analysis row, and only then the document's
@@ -488,8 +500,9 @@ def apply_classification(
     The document row is locked first, as deletion and reprocess lock it, so a classification
     cannot write links for a document a concurrent delete is removing. The analysis row is locked
     next, as a person's decisions lock it, so a rejection committed meanwhile is neither missed by
-    rule 4b nor overwritten when this run saves the row. Tags and links come after. That is the
-    module's lock order, which every writer here keeps (see "Lock order" above). A person's
+    rule 4b nor overwritten when this run saves the row. Tags and links come after, value by value,
+    which cannot cycle for the reasons "Lock order" above gives. Every writer here keeps the document
+    before the analysis row. A person's
     decision that writes the document, ``confirm_classification``, locks the document first as
     well, so it waits for this run rather than deadlocking with it. Until the focused re-audit of
     ``5c60564`` (finding N1) this docstring claimed that a person's decision took only the analysis
