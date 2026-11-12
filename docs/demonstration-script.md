@@ -44,6 +44,13 @@
 > - the same list says what the stylesheet checks reach. The tab-order test fails if a
 >   stylesheet rule hides any keyboard stop on the screens it walks, the header search field and
 >   the Ask link among them.
+>
+> **Amended 12 November 2026 (night),** after the deviations list was checked against `main`. The
+> changes:
+>
+> - D-33 §1's, D-56's and D-69's entries now say what holds on the alpha's build and what holds
+>   on `main`. On `main`, FR-10 and FR-19 are built and `voyage-4` has a partial-match floor
+>   (D-104, D-105, D-107, D-120). Their 2 November text is true of the alpha only.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -533,8 +540,9 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
     - **across screens:** the 429 and 503 messages, the tab order, the text equivalents, the
       focus ring and colour contrast, the production build and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,
-  never a tick. Each was checked against its entry on 2 November, and D-42's and D-112's again on
-  12 November.
+  never a tick. Each was checked against its entry on 2 November. D-42's and D-112's were checked
+  again on 12 November, and D-33's, D-56's and D-69's against `main` that night. The rest were not
+  checked again.
   - **D-15 (FR-08):** four upload formats, PDF, DOCX, XLSX and TXT, not the six FR-08's upload
     area names. DOC and XLS have no parser.
   - **D-25 (FR-02):** the session carries no role. The role is re-read on every request, so a
@@ -545,6 +553,11 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
     `ExtractedContent` and chunking in `ingest_and_index_document()`, and it must be unable to
     fail the document — a classification failure marks it unclassified and never revokes
     indexed status (`CLAUDE.md` invariant 8).
+    - **That holds on the alpha's build, `8598d19`,** which has no classification.
+    - **On `main`, FR-10 is built, so the hand-off is not deferred there** (D-104, D-105).
+      `_classify` in `apps/ingestion/documents.py` runs between storing the extracted text and
+      chunking, in a savepoint of its own. A failure is logged and leaves the document
+      unclassified, its status unchanged. The upload's 201 carries `classification`, or null.
   - **D-33 §2 (FR-09):** a 422 when every chunk fails to embed, which FR-09's Responses clause
     does not list. The transcript is kept (invariant 8).
   - **D-42 (FR-13):** earlier questions are passed to the model, not earlier answers. Its
@@ -565,9 +578,21 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
     it as met (`M6-BUILD-PROMPT.md`'s Done line, amended 12 November).
   - **D-45 (FR-12):** there is no input sanitiser. The defence is parameterised SQL, React's
     escaping and the prompt's delimiter.
-  - **D-56 (FR-12):** partial matches have no relevance floor. The acknowledgement is recorded,
-    and the floor is owed by step 7 (D-93).
-  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19.
+  - **D-56 (FR-12):** on the FLM build, the alpha's included, partial matches have no relevance
+    floor. The acknowledgement is recorded.
+    - **Step 7 owed the floor (D-93) and set none.** At 0.30 the margin rule cannot set one, and
+      retrieval scores did not separate answerable from unanswerable questions in users' wording
+      (D-102).
+    - **On the default build, `anthropic`,** a near miss is offered as a partial match only at or
+      above 0.2468 on `voyage-4` (D-120).
+    - D-120 records D-56 as narrowed on Voyage, and still open on EmbeddingGemma.
+  - **D-69 (FR-14):** the dashboard does not read KnowledgeGaps. That is deferred with FR-19, and
+    it holds on the alpha's build.
+    - **On `main`, FR-19 is built and the deferral has ended** (D-69's note of 10 November,
+      D-107). An Administrator's dashboard shows the number of Open knowledge gaps and the top
+      entries.
+    - An Employee's payload keeps its keys, because `review_knowledge_gaps` is the
+      Administrator's alone.
   - **D-70 (FR-14):** the department filter narrows documents only. Meetings have no department.
   - **D-72 (FR-15):** Department comes from the documents' column, not from ContentTags. That is
     a deliberate departure from FR-15's server clause.
