@@ -6,10 +6,10 @@ import {
   applyTag,
   classifyDocument,
   confirmClassification,
-  confirmProposedTopic,
+  confirmProposedTag,
   confirmTag,
   fetchDocument,
-  rejectProposedTopic,
+  rejectProposedTag,
   removeTag,
 } from '../api/documents.js'
 import { TEXT } from '../constants.js'
@@ -56,7 +56,7 @@ const EDIT_FIELDS = ['doc_type', 'department']
 const CHOOSE_FIELDS = ['tag_id']
 const NAME_FIELDS = ['tag_name']
 
-/** The keys of the one-off requests; a tag's or a topic's key names the button pressed. */
+/** The keys of the one-off requests; a tag's or a proposal's key names the button pressed. */
 const KEY = {
   classify: 'classify',
   confirm: 'confirm',
@@ -222,6 +222,13 @@ function departmentInferredForOlderServer(current, previous, next, sent) {
  * tag says so. An unconfirmed AI tag offers Confirm and Remove; a person's tag,
  * or a confirmed one, Remove; a held suggestion, Confirm and Reject. Each
  * button's accessible name names its tag, starting with the visible word.
+ *
+ * An AI tag whose value a classify run created reads exactly as any other AI tag,
+ * with no "new" mark (D-128). The link does not say whether its tag was created, and
+ * the row must not guess, from `tag_options` or anything else: a value outside the
+ * document's scheme may be one no tag had, a retired one, or one carried only by
+ * material some reader of the document cannot see, and a mark that told the first
+ * apart would disclose the other two (CLAUDE.md §6, invariant 1).
  */
 function TagRow({ tag, held, controls, pending, onConfirm, onRemove }) {
   const ai = tag.applied_by === APPLIED_BY_AI
@@ -265,26 +272,42 @@ function TagRow({ tag, held, controls, pending, onConfirm, onRemove }) {
   )
 }
 
+/** The proposals in `classification.proposed_tags`, or none: each `{dimension, value, confidence}`. */
+function proposalsOf(classification) {
+  const list = classification?.proposed_tags
+  return Array.isArray(list) ? list : []
+}
+
+/** One proposal's identity: its dimension and its value together, since a value can be proposed in two. */
+function proposalKey(proposal) {
+  return `${proposal.dimension}:${proposal.value}`
+}
+
 /**
- * A Topic value the AI proposed that is not in the list of topics. No tag exists
- * for it until a person confirms it (FR-10's controlled taxonomy growth), so it
- * has no `content_tag_id` and is acted on by value.
+ * A value the AI proposed below the confidence threshold that is not in this
+ * document's list for its dimension: Project, Process or Topic (D-128). It is no tag
+ * of the document's until a person confirms it, so it has no `content_tag_id` and is
+ * acted on by its dimension and value. The row names the dimension, and every
+ * proposal is worded alike whatever the server holds under that name (the sentence's
+ * comment in src/constants.js says why).
  */
-function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
-  const confirmKey = `topic-confirm:${topic.value}`
-  const rejectKey = `topic-reject:${topic.value}`
+function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
+  const confirmKey = `proposal-confirm:${proposalKey(proposal)}`
+  const rejectKey = `proposal-reject:${proposalKey(proposal)}`
   const mine = pending === confirmKey || pending === rejectKey
   const otherBusy = pending !== null && !mine
   return (
     <li className="tag tag--ai">
-      <span className="tag__dimension">{TEXT.documentFieldTopic}</span>
-      <span className="tag__name">{topic.value}</span>
-      <span className="tag__provenance">{withConfidence(TEXT.proposedTopicLabel, topic.confidence)}</span>
+      <span className="tag__dimension">{dimensionLabel(proposal.dimension)}</span>
+      <span className="tag__name">{proposal.value}</span>
+      <span className="tag__provenance">
+        {withConfidence(TEXT.proposedTagLabel(proposal.dimension), proposal.confidence)}
+      </span>
       {controls ? (
         <span className="tag__actions">
           <Button
             variant="secondary"
-            aria-label={TEXT.proposedTopicConfirmLabel(topic.value)}
+            aria-label={TEXT.proposedTagConfirmLabel(proposal.dimension, proposal.value)}
             loading={pending === confirmKey}
             disabled={otherBusy || pending === rejectKey}
             onClick={() => onConfirm(confirmKey)}
@@ -293,7 +316,7 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
           </Button>
           <Button
             variant="secondary"
-            aria-label={TEXT.proposedTopicRejectLabel(topic.value)}
+            aria-label={TEXT.proposedTagRejectLabel(proposal.dimension, proposal.value)}
             loading={pending === rejectKey}
             disabled={otherBusy || pending === confirmKey}
             onClick={() => onReject(rejectKey)}
@@ -318,9 +341,16 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  * **A held suggestion is never shown as the document's.** A provisional type
  * leaves `doc_type` null, and the type reads "Not yet assigned" with the
  * suggestion named beside it. A provisional tag is listed under "Suggested tags
- * awaiting confirmation" and nowhere else; a proposed Topic value likewise. A
- * discarded department is named in a sentence saying it was not applied, and the
- * department shown is the document's own.
+ * awaiting confirmation" and nowhere else; so is a value the AI proposed in Project,
+ * Process or Topic (`proposed_tags`, D-128), each row naming its dimension, and each
+ * confirmed or rejected by its dimension and value. A discarded department is named
+ * in a sentence saying it was not applied, and the department shown is the
+ * document's own.
+ *
+ * **An AI tag is an AI tag, whoever made its value.** Since D-128 a classify run
+ * creates a value outside the scheme, at or above the threshold, and applies it. That
+ * link reads "Suggested by AI" with its confidence, Confirm and Remove, exactly as
+ * any AI link does, and never "new" (see TagRow).
  *
  * **One click is one request, and the section re-reads from the reply.** The
  * routes return what changed — the classification, the tag links, the one link,
@@ -338,11 +368,13 @@ function ProposedTopicRow({ topic, controls, pending, onConfirm, onReject }) {
  *
  * **A person adds a tag in one of two ways** (FR-10's provenance clause, UC-09
  * A3): choosing one the document's own scheme offers, by dimension and then by
- * name from `tag_options`, or typing a new Topic, the one dimension FR-10 lets
- * grow. A 201 and a 200 are announced in different words, and the options are read
- * again after either, because the reply does not carry them and a new Topic joins
- * them. A 409 names a Topic already offered: its sentence is shown, and that tag is
- * selected in the chooser with focus on its Add, so one press applies it.
+ * name from `tag_options`, or typing a new Topic, the one dimension a person may
+ * name a new value in (D-128 lets the AI add Project and Process values, and left
+ * this form Topic-only). A 201 and a 200 are announced in different words, and the
+ * options are read again after either, because the reply does not carry them and a
+ * new Topic joins them. A 409 names a Topic already offered: its sentence is shown,
+ * and that tag is selected in the chooser with focus on its Add, so one press
+ * applies it.
  *
  * **Authorisation is the server's.** The controls are offered to everyone who can
  * read the document, because both roles hold `contribute_content` (D-105); a 403
@@ -406,7 +438,7 @@ export default function Classification({ docId, classification, tagDetails, tagO
   const tags = Array.isArray(tagDetails) ? tagDetails : []
   const applied = tags.filter((tag) => tag.provisional !== true)
   const held = tags.filter((tag) => tag.provisional === true)
-  const proposedTopics = Array.isArray(classification?.proposed_topics) ? classification.proposed_topics : []
+  const proposals = proposalsOf(classification)
   const controls = !refused
   const classified = classification !== null && classification !== undefined
   const options = optionsFrom(tagOptions)
@@ -629,16 +661,22 @@ export default function Classification({ docId, classification, tagDetails, tagO
     )
   }
 
-  function decideTopic(topic, confirm, key) {
+  /**
+   * Confirms or rejects one proposal, sending its own dimension with its value
+   * (D-128), and announces the outcome naming the dimension. The reply carries the
+   * classification without it and, on a confirm, the new link in `tag_details`.
+   */
+  function decideProposal(proposal, confirm, key) {
+    const { dimension, value } = proposal
     run(
       key,
-      () => (confirm ? confirmProposedTopic(docId, topic.value) : rejectProposedTopic(docId, topic.value)),
+      () => (confirm ? confirmProposedTag(docId, dimension, value) : rejectProposedTag(docId, dimension, value)),
       (body) => {
         onChange({
           classification: body?.classification ?? classification,
           tag_details: Array.isArray(body?.tag_details) ? body.tag_details : tags,
         })
-        announce(confirm ? TEXT.proposedTopicConfirmed(topic.value) : TEXT.proposedTopicRejected(topic.value))
+        announce(confirm ? TEXT.proposedTagConfirmed(dimension, value) : TEXT.proposedTagRejected(dimension, value))
       },
     )
   }
@@ -782,7 +820,7 @@ export default function Classification({ docId, classification, tagDetails, tagO
     [classification.doc_type_outcome, classification.department_outcome].some(
       (outcome) => outcome === OUTCOME.applied || outcome === OUTCOME.provisional,
     )
-  const anythingHeld = held.length > 0 || proposedTopics.length > 0
+  const anythingHeld = held.length > 0 || proposals.length > 0
   const classifying = pending === KEY.classify
 
   return (
@@ -1035,14 +1073,14 @@ export default function Classification({ docId, classification, tagDetails, tagO
                 onRemove={(key) => removeOneTag(tag, key)}
               />
             ))}
-            {proposedTopics.map((topic) => (
-              <ProposedTopicRow
-                key={`proposed:${topic.value}`}
-                topic={topic}
+            {proposals.map((proposal) => (
+              <ProposedTagRow
+                key={`proposed:${proposalKey(proposal)}`}
+                proposal={proposal}
                 controls={controls}
                 pending={pending}
-                onConfirm={(key) => decideTopic(topic, true, key)}
-                onReject={(key) => decideTopic(topic, false, key)}
+                onConfirm={(key) => decideProposal(proposal, true, key)}
+                onReject={(key) => decideProposal(proposal, false, key)}
               />
             ))}
           </ul>

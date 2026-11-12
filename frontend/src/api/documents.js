@@ -189,7 +189,7 @@ export function reprocessDocument(docId, options = {}) {
   return post(`/documents/${encodeURIComponent(docId)}/reprocess`, {}, options)
 }
 
-/* ---- FR-10 classification (D-104, D-105) --------------------------------- */
+/* ---- FR-10 classification (D-104, D-105, D-128) -------------------------- */
 
 /*
  * The detail object (`fetchDocument`) carries two more fields since FR-10, read
@@ -198,8 +198,14 @@ export function reprocessDocument(docId, options = {}) {
  * - `classification` — `null` while the document has never been classified, else
  *   `{doc_type, doc_type_outcome, department_outcome, department_applied_by,
  *   machine_doc_type, machine_doc_type_confidence, machine_department,
- *   machine_department_confidence, user_edited, proposed_topics: [{value,
- *   confidence}], classified_at, model, input_truncated}`. `department_applied_by` is
+ *   machine_department_confidence, user_edited, proposed_tags: [{dimension, value,
+ *   confidence}], classified_at, model, input_truncated}`. `proposed_tags` are the
+ *   values the AI suggested below the confidence threshold that are not in this
+ *   document's scheme, in Project, Process or Topic (D-128): held until a person
+ *   confirms or rejects one, `dimension` "Project", "Process" or "Topic" and `value`
+ *   the name as the server stores it. A value at or above the threshold is not
+ *   proposed: it is applied, and is an AI link in `tag_details` like any other.
+ *   `department_applied_by` is
  *   whose value the department is, "user", "ai" or null (D-119 finding 10; null for
  *   no department, or a classification recorded before the field). An outcome is
  *   `applied` (at or above the confidence
@@ -213,7 +219,11 @@ export function reprocessDocument(docId, options = {}) {
  * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
  *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
  *   "user". A link with `provisional: true` is a held suggestion and is not among
- *   `tags`. A link a person removed is in no read.
+ *   `tags`. A link a person removed is in no read. Nothing in a link says whether a
+ *   classify run created its tag (D-128): a value outside the scheme may be one no
+ *   tag had, a retired one, or one other material carries that some reader of this
+ *   document cannot see, and a reply that told them apart would disclose the last
+ *   two (CLAUDE.md §6, invariant 1). The screen shows every AI link alike.
  * - `tag_options` — `{Project: [{tag_id, tag_name}], Process: [...], Topic: [...]}`,
  *   the tags a person may apply to this document, which are its own
  *   classification scheme: always all three keys, each sorted by name, tags
@@ -305,7 +315,11 @@ export function removeTag(docId, contentTagId, options = {}) {
  */
 export const TAG_OPTION_DIMENSIONS = ['Project', 'Process', 'Topic']
 
-/** The one dimension a new value may be created in: FR-10's controlled taxonomy growth. */
+/**
+ * The one dimension a person may name a new value in, through `applyTag`'s name form.
+ * D-128 lets the classifier create a Project, Process or Topic value, and a person
+ * confirm one it proposed (`confirmProposedTag`), but it left this form Topic-only.
+ */
 export const NEW_TAG_DIMENSION = 'Topic'
 
 /**
@@ -346,22 +360,43 @@ export async function applyTag(docId, choice, options = {}) {
   return { created: status === 201, body: data }
 }
 
-/**
- * `POST /api/documents/{id}/proposed-topics/confirm`, body `{value}` — creates
- * the Topic tag the AI proposed outside the scheme and links it (FR-10: a new
- * value "requires user confirmation before it is created"). 200
- * `{classification, tag_details}`: the value leaves `proposed_topics` and a link
- * appears in `tag_details`.
+/*
+ * A value the AI proposed, in `classification.proposed_tags`, is confirmed or
+ * rejected by its dimension and its value together (D-128): the same value can be
+ * proposed under two dimensions, and each is its own proposal.
+ *
+ * Both routes are ordered as every action above: session, the scoped 404, then
+ * `contribute_content`'s 403, then the body. 400 `{"dimension": [...]}` for a missing
+ * dimension or one other than Project, Process and Topic, Department included; 400
+ * `{"value": [...]}` for a blank or over-long value. 404, the document's own 404
+ * body, also when that value is not proposed under that dimension on this document,
+ * as after another session decided it, so the reply never says which.
  */
-export function confirmProposedTopic(docId, value, options = {}) {
-  return post(`/documents/${encodeURIComponent(docId)}/proposed-topics/confirm`, { value }, options)
+
+/**
+ * `POST /api/documents/{id}/proposed-tags/confirm`, body `{dimension, value}` — a
+ * person confirms a value the AI proposed below the threshold (D-128). The server
+ * creates the tag, or brings back one of that name, and links it as the AI's,
+ * confirmed. 200 `{classification, tag_details}`: the entry leaves `proposed_tags`
+ * and a link appears in `tag_details`.
+ *
+ * @param {string} docId
+ * @param {'Project'|'Process'|'Topic'} dimension The proposal's own dimension.
+ * @param {string} value The proposal's value, as `proposed_tags` carries it.
+ */
+export function confirmProposedTag(docId, dimension, value, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/proposed-tags/confirm`, { dimension, value }, options)
 }
 
 /**
- * `POST /api/documents/{id}/proposed-topics/reject`, body `{value}` — drops a
- * proposed Topic value without creating anything. 200 `{classification,
- * tag_details}`, the value gone from `proposed_topics`.
+ * `POST /api/documents/{id}/proposed-tags/reject`, body `{dimension, value}` — drops
+ * a proposed value without creating anything (D-128). 200 `{classification,
+ * tag_details}`, the entry gone from `proposed_tags`.
+ *
+ * @param {string} docId
+ * @param {'Project'|'Process'|'Topic'} dimension The proposal's own dimension.
+ * @param {string} value The proposal's value, as `proposed_tags` carries it.
  */
-export function rejectProposedTopic(docId, value, options = {}) {
-  return post(`/documents/${encodeURIComponent(docId)}/proposed-topics/reject`, { value }, options)
+export function rejectProposedTag(docId, dimension, value, options = {}) {
+  return post(`/documents/${encodeURIComponent(docId)}/proposed-tags/reject`, { dimension, value }, options)
 }

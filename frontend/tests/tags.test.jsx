@@ -1,11 +1,12 @@
 /**
- * FR-10's tag administration (NIT3004; D-119 finding 5): the clauses only the
+ * FR-10's tag administration (NIT3004; D-119 finding 5; D-128): the clauses only the
  * interface can satisfy.
  *
  * FR-10's taxonomy clause, "Tags are deactivated rather than deleted where content
  * still references them, preserving historical classification", and its CRUD line,
- * which gives Tags "Delete" (docs/api-contract.md, "Tag administration"). What is
- * defended here is what the screen shows, keeps, withholds and sends:
+ * which gives Tags "Create" and "Delete" (docs/api-contract.md, "Tag
+ * administration"). What is defended here is what the screen shows, keeps, withholds
+ * and sends:
  *
  * - every tag in the server's order, with its name, dimension, active or retired
  *   state, and its count labelled as the documents and meetings carrying it; the
@@ -15,11 +16,14 @@
  *   gone on a 204 or a 404, each with its notice;
  * - a 403 (every action withdrawn), a failure, and the empty, loading and failed
  *   states;
- * - the route and its link offered to an Administrator only.
+ * - D-128's form that adds a value: what it says before anything is added, what it
+ *   sends, and the 201, the 409 (an active tag and a retired one told apart by the
+ *   list), the 400, the 429 and the 403, each as the page shows it;
+ * - the route, its link and the form offered to an Administrator only.
  *
  * Usability only, and these tests claim nothing more. Deciding between deactivating
- * and deleting, the count, the order and `manage_tags` on every request are the
- * server's, and pytest's.
+ * and deleting, the count, the order, whether a name is a duplicate and `manage_tags`
+ * on every request are the server's, and pytest's.
  *
  * The whole application is rendered at /admin/tags with the real auth provider and
  * guards, against a faked API (tests/fakeApi.js).
@@ -30,7 +34,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from '../src/App.jsx'
 import { messageForStatus } from '../src/api/client.js'
-import { ROLES, TEXT } from '../src/constants.js'
+import { ROLES, TAG_NAME_MAXIMUM_LENGTH, TEXT, VALIDATION } from '../src/constants.js'
 import { heldResponse, serveApi } from './fakeApi.js'
 
 const ADMINISTRATOR = {
@@ -135,6 +139,57 @@ async function openConfirmation(tag) {
 
 function confirmIn(dialog) {
   return within(dialog).getByRole('button', { name: TEXT.tagDeleteConfirmLabel })
+}
+
+/** D-128's add-a-value part of the page, or null while it is not offered. */
+function createSection() {
+  return screen.queryByRole('region', { name: TEXT.tagCreateHeading })
+}
+
+function dimensionSelect() {
+  return within(createSection()).getByLabelText(TEXT.tagDimensionLabel)
+}
+
+function nameField() {
+  return within(createSection()).getByLabelText(TEXT.tagCreateNameLabel)
+}
+
+function addButton() {
+  return within(createSection()).getByRole('button', { name: TEXT.tagCreateAdd })
+}
+
+function creates(answered) {
+  return answered.filter((request) => request.method === 'POST' && request.path === '/api/tags')
+}
+
+/** Everything that describes a field to assistive technology: its hint, its error and anything else named. */
+function descriptionOf(field) {
+  return (field.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ')
+}
+
+/**
+ * Once the form is offered, chooses `dimension`, types `name` and presses Add, as a
+ * person does: the button takes focus, then is clicked.
+ */
+async function addValue(dimension, name) {
+  await screen.findByRole('region', { name: TEXT.tagCreateHeading })
+  fireEvent.change(dimensionSelect(), { target: { value: dimension } })
+  fireEvent.change(nameField(), { target: { value: name } })
+  const add = addButton()
+  add.focus()
+  fireEvent.click(add)
+}
+
+/** `GET /api/tags` answered with `first` once, and with `later` on every read after it. */
+function listReadsAnswer(first, later) {
+  let reads = 0
+  return () => {
+    reads += 1
+    return reads === 1 ? { body: first } : later
+  }
 }
 
 describe('FR-10: the tags, as the server sent them', () => {
@@ -319,7 +374,7 @@ describe('FR-10 tag administration: the empty, loading and failed states', () =>
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
-  it('shows a loading state, then a failed read in fixed words, and Try again reads the list again', async () => {
+  it('shows a loading state, then a failed read in fixed words, and Try again reads the list again, offering the add form only once the list is read', async () => {
     const held = heldResponse()
     const backendText = 'relation "tags" does not exist'
     let reads = 0
@@ -334,16 +389,20 @@ describe('FR-10 tag administration: the empty, loading and failed states', () =>
     renderTags()
 
     expect((await screen.findByText(TEXT.loadingTags)).getAttribute('role')).toBe('status')
+    // D-128's form waits for the list, which is how a 409 is told apart.
+    expect(createSection()).toBeNull()
     held.release({ status: 500, body: { detail: backendText } })
 
     const alert = (await screen.findByText(TEXT.tagsLoadFailed)).closest('[role="alert"]')
     expect(alert.textContent).toContain(messageForStatus(500))
     expect(document.body.textContent).not.toContain(backendText)
+    expect(createSection()).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: TEXT.uploadRetry }))
 
     await screen.findByRole('rowheader', { name: PURCHASING.tag_name })
     expect(screen.queryByRole('alert')).toBeNull()
     expect(listReads(answered)).toHaveLength(2)
+    expect(createSection()).toBeTruthy()
   })
 
   it('renders only the not-permitted notice when the list itself answers 403', async () => {
@@ -356,10 +415,253 @@ describe('FR-10 tag administration: the empty, loading and failed states', () =>
   })
 })
 
+/* ---- D-128: an Administrator adds a value -------------------------------- */
+
+/** The entry a 201 carries: the name as the server stores it, active, carried by nothing yet. */
+const HARBOUR = { tag_id: 'tag-0005', dimension: 'Project', tag_name: 'harbour upgrade', active: true, item_count: 0 }
+
+/** A value a classify run created after the page read the list (D-128): a grown Topic. */
+const ASSET_REGISTER = { tag_id: 'tag-0006', dimension: 'Topic', tag_name: 'asset register', active: true, item_count: 1 }
+
+/** The server's wording of its 409 (apps/api/views.py), which the page never shows. */
+const DUPLICATE_DETAIL = 'A tag with this name already exists in this dimension. A retired tag is not added again here.'
+
+describe('D-128: an Administrator adds a tag value', () => {
+  it('says the value is offered for every document whatever its audience, and that the AI adds values too, before anything is added', async () => {
+    serveApi(routes())
+    renderTags()
+
+    const section = within(await screen.findByRole('region', { name: TEXT.tagCreateHeading }))
+    expect(section.getByRole('heading', { level: 2, name: TEXT.tagCreateHeading })).toBeTruthy()
+    // The scope, plainly: every document, whatever its audience, so any reader sees the name.
+    expect(section.getByText(TEXT.tagCreateScope)).toBeTruthy()
+    expect(TEXT.tagCreateScope).toMatch(/every document, whatever its audience/)
+    expect(TEXT.tagCreateScope).toMatch(/to everyone who tags a document, and to the AI when it classifies one/)
+    // The AI adds values itself, and a retired one can come back that way.
+    expect(section.getByText(TEXT.tagCreateAiNote)).toBeTruthy()
+    expect(TEXT.tagCreateAiNote).toMatch(/AI adds values/)
+    expect(TEXT.tagCreateAiNote).toMatch(/enough confidence/)
+    expect(TEXT.tagCreateAiNote).toMatch(/A retired value can come back/)
+    // The form: a dimension from the three tag dimensions, a name, and Add.
+    expect(Array.from(dimensionSelect().options, (option) => [option.value, option.textContent])).toEqual([
+      ['Project', TEXT.documentFieldProject],
+      ['Process', TEXT.documentFieldProcess],
+      ['Topic', TEXT.documentFieldTopic],
+    ])
+    expect(nameField().tagName).toBe('INPUT')
+    expect(addButton().getAttribute('type')).toBe('submit')
+    // Someone who tabs straight to the name hears the scope as well as the hint.
+    expect(descriptionOf(nameField())).toContain(TEXT.tagCreateNameHint)
+    expect(descriptionOf(nameField())).toContain(TEXT.tagCreateScope)
+  })
+
+  it('on a 201 reads the list again and shows it in the server’s order, clears the name, keeps the dimension and announces the value as stored', async () => {
+    // The second read: the new value where the server orders it, and a value a classify
+    // run added meanwhile, which only a read of the list could show.
+    const after = [PURCHASING, BRIDGE, HARBOUR, LEGACY, ASSET_REGISTER, BUDGET]
+    const answered = serveApi(
+      routes({
+        'GET /api/tags': listReadsAnswer(SERVER_ORDER, { body: after }),
+        'POST /api/tags': { status: 201, body: HARBOUR },
+      }),
+    )
+    renderTags()
+
+    await addValue('Project', '  Harbour \t  Upgrade ')
+
+    const notice = await screen.findByText(TEXT.tagCreated(TEXT.documentFieldProject, HARBOUR.tag_name))
+    // Polite: a status, not an alert.
+    expect(notice.closest('[role="status"]')).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+    await waitFor(() => expect(namesShown()).toEqual(after.map((tag) => tag.tag_name)))
+    expect(cellsOf(HARBOUR).map((cell) => cell.textContent).slice(0, 3)).toEqual([
+      TEXT.documentFieldProject,
+      TEXT.tagStateActive,
+      '0',
+    ])
+    expect(nameField().value).toBe('')
+    expect(dimensionSelect().value).toBe('Project')
+    // One request in the contract's form, trimmed and single-spaced, then one read.
+    expect(creates(answered).map((request) => request.body)).toEqual([{ dimension: 'Project', tag_name: 'Harbour Upgrade' }])
+    expect(listReads(answered)).toHaveLength(2)
+  })
+
+  it('on a 201 whose list cannot be read again places the new value by dimension and name, and still announces it without a failure', async () => {
+    const cable = { tag_id: 'tag-0007', dimension: 'Project', tag_name: 'cable survey', active: true, item_count: 0 }
+    serveApi(
+      routes({
+        'GET /api/tags': listReadsAnswer(SERVER_ORDER, { status: 500, body: { detail: 'database is locked' } }),
+        'POST /api/tags': { status: 201, body: cable },
+      }),
+    )
+    renderTags()
+
+    await addValue('Project', 'Cable Survey')
+
+    expect(await screen.findByText(TEXT.tagCreated(TEXT.documentFieldProject, cable.tag_name))).toBeTruthy()
+    // Between the two Projects it sorts between: Process, then Project, then Topic.
+    expect(namesShown()).toEqual(['purchasing', 'bridge maintenance', 'cable survey', 'legacy rollout', 'budget planning'])
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(document.body.textContent).not.toContain('database is locked')
+  })
+
+  it.each([
+    { state: 'an active one', existing: BRIDGE, typed: 'Bridge  Maintenance', text: TEXT.tagCreateExists },
+    { state: 'a retired one', existing: LEGACY, typed: 'LEGACY rollout', text: TEXT.tagCreateExistsRetired },
+  ])(
+    'on a 409 naming $state, says so by its dimension and name from the list, keeps what was typed, and never shows the reply’s detail',
+    async ({ existing, typed, text }) => {
+      const answered = serveApi(
+        routes({ 'POST /api/tags': { status: 409, body: { detail: DUPLICATE_DETAIL, tag_id: existing.tag_id } } }),
+      )
+      renderTags()
+
+      await addValue(existing.dimension, typed)
+
+      const notice = await screen.findByText(text(TEXT.documentFieldProject, existing.tag_name))
+      expect(notice.closest('[role="status"]')).toBeTruthy()
+      // The two cases are told apart: the active one is not called retired, and the
+      // retired one is.
+      const other = text === TEXT.tagCreateExists ? TEXT.tagCreateExistsRetired : TEXT.tagCreateExists
+      expect(screen.queryByText(other(TEXT.documentFieldProject, existing.tag_name))).toBeNull()
+      expect(document.body.textContent).not.toContain(DUPLICATE_DETAIL)
+      expect(nameField().value).toBe(typed)
+      // Nothing was added, and the list, read again, is as it was.
+      expect(namesShown()).toEqual(SERVER_ORDER.map((tag) => tag.tag_name))
+      expect(listReads(answered)).toHaveLength(2)
+      expect(creates(answered)).toHaveLength(1)
+    },
+  )
+
+  it('on a 409 naming a value the list held here lacks, one a classify run added since, reads the list again, names it from there and shows its row, as text', async () => {
+    // A value the AI derived from a document's text: untrusted, rendered as text.
+    const added = { ...ASSET_REGISTER, tag_name: '<img src="x" onerror="window.__tagCreateInjected = true">asset register' }
+    const after = [PURCHASING, BRIDGE, LEGACY, added, BUDGET]
+    const answered = serveApi(
+      routes({
+        'GET /api/tags': listReadsAnswer(SERVER_ORDER, { body: after }),
+        'POST /api/tags': { status: 409, body: { detail: DUPLICATE_DETAIL, tag_id: added.tag_id } },
+      }),
+    )
+    renderTags()
+
+    await addValue('Topic', 'asset register')
+
+    expect(await screen.findByText(TEXT.tagCreateExists(TEXT.documentFieldTopic, added.tag_name))).toBeTruthy()
+    expect(namesShown()).toEqual(after.map((tag) => tag.tag_name))
+    expect(document.querySelectorAll('main img')).toHaveLength(0)
+    expect(window.__tagCreateInjected).toBeUndefined()
+    expect(listReads(answered)).toHaveLength(2)
+  })
+
+  it.each([
+    { field: 'tag_name', message: 'Ensure this field has no more than 255 characters.', control: () => nameField() },
+    { field: 'dimension', message: '"Department" is not a valid choice.', control: () => dimensionSelect() },
+  ])('places a 400 on $field beside its field, with focus on it, and adds nothing', async ({ field, message, control }) => {
+    const answered = serveApi(routes({ 'POST /api/tags': { status: 400, body: { [field]: [message] } } }))
+    renderTags()
+
+    await addValue('Topic', 'site safety')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.tagCreateFailed)
+    expect(alert.textContent).toContain(TEXT.classificationCheckFields)
+    await waitFor(() => expect(document.activeElement).toBe(control()))
+    expect(control().getAttribute('aria-invalid')).toBe('true')
+    expect(descriptionOf(control())).toContain(message)
+    expect(nameField().value).toBe('site safety')
+    expect(namesShown()).toEqual(SERVER_ORDER.map((tag) => tag.tag_name))
+    // A refusal is not a change: the list is not read again.
+    expect(listReads(answered)).toHaveLength(1)
+  })
+
+  it('refuses an empty name, and one too long once single-spaced, beside the field and before any request', async () => {
+    const answered = serveApi(routes({ 'POST /api/tags': { status: 201, body: HARBOUR } }))
+    renderTags()
+
+    await addValue('Project', '  \t ')
+    await waitFor(() => expect(document.activeElement).toBe(nameField()))
+    expect(nameField().getAttribute('aria-invalid')).toBe('true')
+    expect(descriptionOf(nameField())).toContain(VALIDATION.tagValueRequired)
+
+    await addValue('Project', 'x'.repeat(TAG_NAME_MAXIMUM_LENGTH + 1))
+    await waitFor(() => expect(descriptionOf(nameField())).toContain(VALIDATION.tagValueTooLong))
+    expect(nameField().getAttribute('aria-invalid')).toBe('true')
+    expect(creates(answered)).toEqual([])
+
+    // Within the limit once single-spaced, so it is sent.
+    await addValue('Project', `harbour${' '.repeat(TAG_NAME_MAXIMUM_LENGTH)}upgrade`)
+    await waitFor(() => expect(creates(answered)).toHaveLength(1))
+    expect(creates(answered)[0].body).toEqual({ dimension: 'Project', tag_name: 'harbour upgrade' })
+  })
+
+  it('names the tagging limit on a 429, with when to try again, and keeps the name and the form', async () => {
+    serveApi(
+      routes({
+        'POST /api/tags': { status: 429, body: { detail: 'Request was throttled.' }, headers: { 'Retry-After': '42' } },
+      }),
+    )
+    renderTags()
+
+    await addValue('Topic', 'site safety')
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.tagCreateFailed)
+    expect(alert.textContent).toContain(TEXT.tagLimitReached(TEXT.retryInSeconds(42)))
+    expect(document.body.textContent).not.toContain('Request was throttled.')
+    expect(nameField().value).toBe('site safety')
+    expect(addButton()).toBeTruthy()
+    expect(namesShown()).toEqual(SERVER_ORDER.map((tag) => tag.tag_name))
+  })
+
+  it('on a 403 withdraws every action, the form with them, says the role may not manage tags, and puts focus on the heading', async () => {
+    const detail = "Your role does not hold the 'manage_tags' permission."
+    const answered = serveApi(routes({ 'POST /api/tags': { status: 403, body: { detail } } }))
+    renderTags()
+
+    await addValue('Topic', 'site safety')
+
+    const alert = (await screen.findByText(TEXT.tagsNotPermitted)).closest('[role="alert"]')
+    expect(alert.textContent).toContain(TEXT.notPermittedTitle)
+    expect(TEXT.tagsNotPermitted).toMatch(/added/)
+    expect(createSection()).toBeNull()
+    expect(within(screen.getByRole('main')).queryAllByRole('button')).toEqual([])
+    expect(within(screen.getByRole('table')).queryByRole('columnheader', { name: TEXT.tagsColumnAction })).toBeNull()
+    expect(namesShown()).toEqual(SERVER_ORDER.map((tag) => tag.tag_name))
+    expect(document.body.textContent).not.toContain(detail)
+    await waitFor(() => expect(document.activeElement).toBe(pageHeading()))
+    expect(creates(answered)).toHaveLength(1)
+  })
+
+  it('sends one POST for presses made while the first is still in flight, and says it is busy', async () => {
+    const held = heldResponse()
+    const answered = serveApi(routes({ 'POST /api/tags': held.route }))
+    renderTags()
+    await screen.findByRole('region', { name: TEXT.tagCreateHeading })
+    fireEvent.change(nameField(), { target: { value: 'harbour upgrade' } })
+    const add = addButton()
+
+    // A double press whose second lands before React has rendered the first.
+    act(() => {
+      fireEvent.click(add)
+      fireEvent.click(add)
+    })
+    await waitFor(() => expect(add.getAttribute('aria-busy')).toBe('true'))
+    expect(add.textContent).toBe(TEXT.tagAdding)
+    fireEvent.click(add)
+    expect(creates(answered)).toHaveLength(1)
+
+    held.release({ status: 201, body: HARBOUR })
+    expect(await screen.findByText(TEXT.tagCreated(TEXT.documentFieldProject, HARBOUR.tag_name))).toBeTruthy()
+    expect(creates(answered)).toHaveLength(1)
+    expect(add.getAttribute('aria-busy')).toBeNull()
+  })
+})
+
 describe('FR-10, FR-06: tag administration is an Administrator’s only, in the interface', () => {
-  it('offers an Employee no link to it, and sends one who types its address to the 403 page without reading the tags', async () => {
-    // Nothing answers GET /api/tags: had the page rendered, its read would reach
-    // tests/setup.js's refusal and fail this test whatever it asserted.
+  it('offers an Employee no link to it, and sends one who types its address to the 403 page without reading the tags or offering the add form', async () => {
+    // Nothing answers GET /api/tags or POST /api/tags: had the page rendered, its read
+    // would reach tests/setup.js's refusal and fail this test whatever it asserted.
     const answered = serveApi({ 'GET /api/auth/me': { body: EMPLOYEE } })
     const location = renderTags()
 
@@ -368,16 +670,20 @@ describe('FR-10, FR-06: tag administration is an Administrator’s only, in the 
     const nav = screen.getByRole('navigation', { name: 'Primary' })
     expect(within(nav).getByRole('button', { name: 'Log out' })).toBeTruthy()
     expect(within(nav).queryByRole('link', { name: TEXT.tagsHeading })).toBeNull()
+    // D-128's form is on the Administrator's page and nowhere else.
+    expect(createSection()).toBeNull()
+    expect(screen.queryByRole('button', { name: TEXT.tagCreateAdd })).toBeNull()
     expect(answered.map((request) => request.path)).toEqual(['/api/auth/me'])
   })
 
-  it('offers an Administrator the link beside Role management and the knowledge-gap log, and renders the page at its address', async () => {
+  it('offers an Administrator the link beside Role management and the knowledge-gap log, and renders the page at its address with the add form', async () => {
     serveApi(routes())
     const location = renderTags()
 
     expect(await screen.findByRole('heading', { level: 1, name: TEXT.tagsHeading })).toBeTruthy()
     await screen.findByRole('rowheader', { name: PURCHASING.tag_name })
     expect(location.location.pathname).toBe('/admin/tags')
+    expect(within(createSection()).getByRole('button', { name: TEXT.tagCreateAdd })).toBeTruthy()
     const nav = screen.getByRole('navigation', { name: 'Primary' })
     const names = within(nav)
       .getAllByRole('link')

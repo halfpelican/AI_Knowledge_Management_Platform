@@ -220,6 +220,27 @@ export const VALIDATION = {
   // run of spaces one space. The limit is named, so a refusal says what would do.
   tagNameRequired: 'Enter a name for the new topic.',
   tagNameTooLong: `A topic name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // The value an Administrator adds on the tags page (D-128), refused before any
+  // request on the same two rules, worded for a value of any of the three dimensions.
+  tagValueRequired: 'Enter a name for the new tag value.',
+  tagValueTooLong: `A tag name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+}
+
+/**
+ * A tag dimension in the words a sentence uses, singular and plural, keyed on the
+ * contract's "Project", "Process" and "Topic" without regard to case. Any other is
+ * used as it came, lower-cased. Read by the sentences about a value the AI proposed
+ * (D-128), which name the proposal's own dimension.
+ */
+const DIMENSION_WORDS = {
+  project: { one: 'project', many: 'projects' },
+  process: { one: 'process', many: 'processes' },
+  topic: { one: 'topic', many: 'topics' },
+}
+
+function dimensionWords(dimension) {
+  const key = String(dimension ?? '').toLowerCase()
+  return DIMENSION_WORDS[key] ?? { one: key, many: key }
 }
 
 /**
@@ -643,21 +664,33 @@ export const TEXT = {
   tagConfirmed: (name) => `“${name}” is now a confirmed tag.`,
   tagRemoved: (name) => `“${name}” was removed.`,
   tagRejected: (name) => `The suggestion “${name}” was rejected.`,
-  // Held suggestions: provisional AI tags and proposed new Topic values. They are
-  // not the document's tags until confirmed (FR-10), and the heading says so.
+  // Held suggestions: provisional AI tags, and the values the AI proposed below the
+  // confidence threshold in Project, Process or Topic (D-128). They are not the
+  // document's tags until confirmed (FR-10), and the heading says so.
   suggestedTagsHeading: 'Suggested tags awaiting confirmation',
   suggestedTagsIntro:
     'These are suggestions, not tags of the document. Confirm one to add it as a tag, or reject it.',
-  // A Topic value the AI proposed that is not yet in the list of topics: FR-10
-  // allows a new value in Topic only, and only once a person confirms it.
-  proposedTopicLabel: 'New topic, not yet in the list of topics',
-  proposedTopicConfirmLabel: (value) => `Confirm new topic ${value}`,
-  proposedTopicRejectLabel: (value) => `Reject new topic ${value}`,
-  proposedTopicConfirmed: (value) => `“${value}” was added as a topic tag.`,
-  proposedTopicRejected: (value) => `The proposed topic “${value}” was rejected.`,
+  // A value the AI proposed below the threshold that is not in this document's list
+  // for its dimension (D-128; `proposed_tags`). It is no tag of the document's until a
+  // person confirms it. Worded alike whether no tag has that name, a retired one has,
+  // or one carried only by material some reader of the document cannot see has,
+  // because the reader must not be able to tell which (CLAUDE.md §6, invariant 1).
+  // An AI tag applied at or above the threshold is a different thing and is never
+  // called new: it reads as any AI tag reads (`tagSuggestedByAI`). Each sentence
+  // names the proposal's dimension; Topic's words are the ones it had before D-128.
+  proposedTagLabel: (dimension) => {
+    const { one, many } = dimensionWords(dimension)
+    return `New ${one}, not yet in the list of ${many}`
+  },
+  proposedTagConfirmLabel: (dimension, value) => `Confirm new ${dimensionWords(dimension).one} ${value}`,
+  proposedTagRejectLabel: (dimension, value) => `Reject new ${dimensionWords(dimension).one} ${value}`,
+  proposedTagConfirmed: (dimension, value) => `“${value}” was added as a ${dimensionWords(dimension).one} tag.`,
+  proposedTagRejected: (dimension, value) => `The proposed ${dimensionWords(dimension).one} “${value}” was rejected.`,
   // FR-10's provenance clause and UC-09 A3: a person applies a tag, choosing one the
   // document's own classification scheme offers (`tag_options`) or typing a new
-  // Topic, the one dimension FR-10 lets grow. What they add reads as a person's tag.
+  // Topic, the one dimension a person may name a new value in: D-128 lets the AI add
+  // Project and Process values and left this form as it was. What a person adds
+  // reads as a person's tag.
   tagAddHeading: 'Add a tag',
   tagAddIntro:
     'Choose a tag offered for this document, or type a new topic. A tag you add is marked as added by a person.',
@@ -674,7 +707,7 @@ export const TEXT = {
   tagAdding: 'Adding…',
   tagNewTopicLegend: 'Type a new topic',
   tagNewTopicLabel: 'New topic',
-  tagNewTopicHint: `Only a topic can be new; a project or process is chosen from the existing tags. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagNewTopicHint: `Only a topic can be typed here. A project or process is chosen from the existing tags, or confirmed from the AI’s suggestions. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
   tagNewTopicAdd: 'Add topic',
   // The 201 and the 200 are worded apart: a new link, or a tag the document already
   // had, which the server confirmed (a held suggestion), restored (one removed) or
@@ -1139,11 +1172,12 @@ export const TEXT = {
   // The contract: the dashboard's filters narrow neither the count nor the list.
   dashboardGapsNote: 'The open entries that came up most often. The filters above do not apply to this panel.',
 
-  /* ---- FR-10 tag administration (D-119 finding 5) ----------------------- */
+  /* ---- FR-10 tag administration (D-119 finding 5; D-128) ---------------- */
   // FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content
-  // still references them, preserving historical classification", and its CRUD line
-  // gives Tags "Delete". The screen is src/pages/Tags.jsx, an Administrator's; the
-  // server checks `manage_tags` on every request whatever it shows (invariant 4).
+  // still references them, preserving historical classification", and its CRUD line,
+  // which gives Tags "Create" and "Delete". The screen is src/pages/Tags.jsx, an
+  // Administrator's; the server checks `manage_tags` on every request whatever it
+  // shows (invariant 4).
   // The page heading and the navigation link, which names the screen it opens.
   tagsHeading: 'Tags',
   tagsIntro:
@@ -1173,9 +1207,12 @@ export const TEXT = {
   tagDeleteLabel: (dimension, name) => `Delete ${dimension} tag ${name}`,
   tagDeleteConfirm: (dimension, name) => `Delete the ${dimension} tag “${name}”?`,
   // What the DELETE will do, said before it is sent. The server decides which from
-  // the references it finds, so the sentence gives both.
+  // the references it finds, so the sentence gives both. Since D-128 a retired tag is
+  // not out of reach for good: the AI applying the value with enough confidence, or
+  // a person confirming it as a suggestion, brings it back, and the last sentence
+  // says so rather than promising it can never be applied again.
   tagDeleteBody:
-    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, it is shown as retired, and it can no longer be applied.',
+    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired tag comes back if the AI or a person adds the same value to a document again.',
   tagDeleteConfirmLabel: 'Delete tag',
   tagDeleting: 'Deleting…',
   tagDeleteCancel: 'Cancel',
@@ -1187,7 +1224,37 @@ export const TEXT = {
   // The 404: it no longer exists, so its row goes.
   tagGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
   tagDeleteFailed: 'Could not delete the tag',
-  // A 403 on a delete: the role does not hold `manage_tags` now, whatever it held when
-  // the list was read. Every action is withdrawn.
-  tagsNotPermitted: 'Your role may not manage tags, so they cannot be deleted or deactivated.',
+  // A 403 on an add or a delete: the role does not hold `manage_tags` now, whatever it
+  // held when the list was read. Every action is withdrawn, the add form with them.
+  tagsNotPermitted: 'Your role may not manage tags, so they cannot be added, deleted or deactivated.',
+
+  // An Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create"). The
+  // value is vocabulary: offered for every document whatever its audience, and listed
+  // for the AI when it classifies one. The two sentences under the heading say so, and
+  // that the AI adds values itself, so a retired one can come back: D-128's
+  // consequence, stated where a person retiring a tag will read it.
+  tagCreateHeading: 'Add a tag value',
+  tagCreateScope:
+    'A value added here is offered for every document, whatever its audience: to everyone who tags a document, and to the AI when it classifies one. Anyone who can read a document can see its name.',
+  tagCreateAiNote:
+    'The AI adds values too. When it classifies a document with enough confidence, it can add a new project, process or topic and apply it; with less, it suggests the value instead, and the value is added if a person confirms the suggestion. A retired value can come back either way.',
+  tagCreateNameLabel: 'Name',
+  // The server stores a name trimmed, single-spaced and in lower case, so the name the
+  // list shows, and the 201 announces, can differ from the one typed in case alone.
+  tagCreateNameHint: `Stored in lower case. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagCreateAdd: 'Add tag value',
+  // The 201, polite: the value as stored, its dimension, and where it is now offered.
+  tagCreated: (dimension, name) => `“${name}” was added as a ${dimension} tag. It is now offered for every document.`,
+  // The 409: a tag of that name is already in the dimension, active or retired. The
+  // tag its `tag_id` names is looked up in the list, read again first, so a retired one
+  // is said to be retired: this form does not bring a retired tag back, and nor does
+  // any other route (D-105's note). Never the reply's `detail`.
+  tagCreateExists: (dimension, name) => `“${name}” is already a ${dimension} tag, so it was not added again.`,
+  tagCreateExistsRetired: (dimension, name) =>
+    `“${name}” is already a ${dimension} tag, and it is retired. A retired tag is not added again here.`,
+  // The title over a 400, a 429 or any other failure of the add. A 429 is the
+  // `tagging` limit adding a tag to a document counts against too, so it is worded as
+  // that one is (`tagLimitReached`), and a 400 points at the field it names
+  // (`classificationCheckFields`).
+  tagCreateFailed: 'Could not add the tag value',
 }
