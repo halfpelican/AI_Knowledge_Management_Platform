@@ -1341,14 +1341,16 @@ in the `tagging` scope, after the `401` and `403`, on one budget with `POST /api
 
 | Method | Path | Auth | Success | Errors |
 |---|---|---|---|---|
-| GET | `/api/departments` | session + `manage_tags` | `200` every department, active or not, ordered by name ignoring case, each `{"department_id", "name", "active", "item_count"}`. `item_count` is the number of documents whose department equals the name exactly. Not scoped: the Administrator reads every source (D-66) | `401`; `403` |
-| POST | `/api/departments` | session + `manage_tags` | Body `{"name": string}`, trimmed with internal spaces collapsed, case kept. `201` the entry for a new department, which is vocabulary (not hidden): offered for every document whatever its audience. `200` the entry for a retired name, which is reactivated, keeping its stored spelling and whether it is hidden; a department has no other way back, which is why this differs from `POST /api/tags` | `401`; `403`; `400 {"name": ["..."]}` missing, blank, over 255 characters or holding a NUL; `409 {"detail": "...", "department_id": "uuid"}` an active department with that name ignoring case, a concurrent create of it included; `429` past `TAGGING_THROTTLE_RATE` |
-| DELETE | `/api/departments/{id}` | session + `manage_tags` | `200` the entry, now `active: false`, when any document's department equals its name: it is retired, stays on those documents and in FR-14 and FR-15's filters, and is no longer offered to the classifier; `200` again for one already retired. `204` no body when no document uses it: it is deleted | `401`; `403`; `404 {"detail": "No Department matches the given query."}` |
+| GET | `/api/departments` | session + `manage_tags` | `200` every department, active or not, ordered by name ignoring case, each `{"department_id", "name", "active", "item_count"}`. `item_count` is the number of documents whose department equals the name ignoring case, as the list's uniqueness does (the security review of D-129, F3). Not scoped: the Administrator reads every source (D-66) | `401`; `403` |
+| POST | `/api/departments` | session + `manage_tags` | Body `{"name": string}`, trimmed with internal spaces collapsed, case kept. `201` the entry for a new department, which is vocabulary (not hidden): offered for every document whatever its audience. `200` the entry for a retired name, which is reactivated, keeping its stored spelling and whether it is hidden; a department has no other way back, which is why this differs from `POST /api/tags` | `401`; `403`; `400 {"name": ["..."]}` missing, blank, over 255 characters, or holding a control or format character (Unicode Cc or Cf, NUL included) or ";", the separator the prompt lists departments with (the security review of D-129, F4); `409 {"detail": "...", "department_id": "uuid"}` an active department with that name ignoring case, a concurrent create of it included; `429` past `TAGGING_THROTTLE_RATE` |
+| DELETE | `/api/departments/{id}` | session + `manage_tags` | `200` the entry, now `active: false`, when any document's department equals its name ignoring case: it is retired, stays on those documents and in FR-14 and FR-15's filters, and is no longer offered to the classifier; `200` again for one already retired. `204` no body when no document uses it: it is deleted | `401`; `403`; `404 {"detail": "No Department matches the given query."}` |
 
 - **Seeded by `documents 0015`** from the departments in use when it runs. A department carried only by
-  documents some role cannot read is seeded **hidden**: it reaches a document's classification only when
-  every role in that document's audience reads a document carrying it (invariant 1). A department an
-  Administrator adds is not hidden.
+  documents some role cannot read is seeded **hidden**. A hidden department is offered only for a
+  document whose whole audience reads everything, today an Administrator-only document. A document
+  an Employee can read is never offered one, whatever documents carry it, so what an Employee sees
+  never depends on whether a hidden department exists (invariant 1; the security review of D-129,
+  finding F1). A department an Administrator adds is not hidden.
 - **The upload form and the classification confirm/edit control still take any department** as free
   text. One that is not in the list stays on its document, but the classifier never suggests it.
 

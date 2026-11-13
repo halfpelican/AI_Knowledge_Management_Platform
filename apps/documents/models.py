@@ -225,11 +225,17 @@ class Department(models.Model):
     - ``active``: a department any document uses is retired (``active=False``) rather than deleted.
       It stays on those documents and in FR-14's and FR-15's filters, and no scheme offers it. One
       no document uses is deleted. ``POST /api/departments`` with a retired name reactivates it.
-    - ``grown``: not vocabulary, as ``Tag.grown`` is not. ``documents 0015`` seeds a department
-      found only on documents some role cannot read as grown, so it is offered only for a document
-      whose whole audience reads a document carrying it (``tag_scheme``). A department an
-      Administrator adds is not grown: vocabulary, offered to every audience, as a value added on
-      ``/api/tags`` is. Never unset, reactivation included.
+    - ``grown``: hidden, not vocabulary. ``documents 0015`` seeds a department found only on
+      documents some role cannot read as grown, and it is offered only for a document whose whole
+      audience reads everything (``tag_scheme``, ``reads_everything``; today an Administrator-only
+      document). Unlike a grown tag, no carrier admits it anywhere else: a reader can make a document
+      they read carry any department, through FR-08's upload field or the confirm/edit control, so
+      a carrier rule would tell them whether a hidden department exists (D-129's security review,
+      finding F1). A department an Administrator adds is not grown: vocabulary, offered to every
+      audience, as a value added on ``/api/tags`` is. Never unset, reactivation included.
+
+    A department is "used" by a document whose ``department`` equals its name ignoring case, as the
+    unique constraint compares names (``taxonomy.documents_using``; finding F3).
     """
 
     id = uuid_primary_key("department_id")

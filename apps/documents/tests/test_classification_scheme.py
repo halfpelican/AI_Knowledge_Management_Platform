@@ -13,10 +13,12 @@ both carry, a Topic nothing carries, a grown Topic held provisionally on the res
 and a department each, listed as ``documents 0015`` would seed them.
 
 **The departments are the list's** since D-129 (the lead's decision of 13 November 2026): the active
-``Department`` names, by the same rule as the tags. One that is not grown is vocabulary and in every
-scheme; a grown one is in only where every audience role reads, through ``scoped_documents``, a
-document whose department equals the name. A department in use on documents but not in the list is
-not offered. Until D-129 the departments were derived from the documents each audience role reads.
+``Department`` names. One that is not grown is vocabulary and in every scheme; a grown one is in only
+for an audience every role of which reads everything (``reads_everything``; D-129's security review,
+finding F1), and no document carrying it admits it anywhere else. A department in use on documents
+but not in the list is not offered. Until D-129 the departments were derived from the documents each
+audience role reads, and until finding F1 a grown one was admitted where every audience role read a
+document carrying it, a carrier a reader could plant through FR-08's free-text department field.
 """
 
 import datetime
@@ -42,6 +44,7 @@ from apps.documents import classification as module
 from apps.documents.classification import tag_scheme
 from apps.documents.models import ContentTag, Department, Document, Tag
 from apps.meetings.models import Meeting
+from apps.retrieval.scoping import reads_everything
 
 pytestmark = pytest.mark.django_db
 
@@ -146,7 +149,7 @@ def test_a_department_carried_only_by_administrator_only_documents_is_withheld_l
     """"Legal" is listed grown, and only the Administrator-only document carries it; "People" is
     vocabulary (D-129)."""
     assert tag_scheme(employee_document).departments == ("People",)
-    # The Administrator reads the document carrying "Legal", so both departments.
+    # An Administrator-only audience reads everything, so the grown "Legal" too (finding F1).
     assert tag_scheme(administrator_document).departments == ("Legal", "People")
 
 
@@ -336,10 +339,12 @@ def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
     corpus, administrator_document, monkeypatch
 ):
     """With the helpers answering nothing, every grown value, the grown department "Legal" included,
-    is withheld: the function has no predicate of its own on ``visible_to_roles``. Vocabulary needs
-    no reader, so the listed "People" is in (D-129)."""
+    is withheld: the function has no predicate of its own on ``visible_to_roles`` and no role name of
+    its own for the full scope (``reads_everything``, finding F1). Vocabulary needs no reader, so the
+    listed "People" is in (D-129)."""
     monkeypatch.setattr(module, "scoped_documents", lambda *, role_name: Document.objects.none())
     monkeypatch.setattr(module, "scoped_meetings", lambda *, role_name: Meeting.objects.none())
+    monkeypatch.setattr(module, "reads_everything", lambda role_name: False)
     the_scheme = tag_scheme(administrator_document)
     assert the_scheme.departments == ("People",)
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
@@ -402,25 +407,45 @@ def test_a_retired_department_is_in_no_scheme(corpus, employee, employee_documen
     assert employee_document.department == "People"
 
 
-def test_a_grown_department_is_in_only_where_every_audience_role_reads_a_document_carrying_it(
+def test_a_grown_department_is_in_only_for_an_audience_that_reads_everything(
     employee, administrator, employee_document, administrator_document
 ):
-    """Read through ``scoped_documents``, with the name compared exactly: a readable document whose
-    department differs only in case does not carry it."""
+    """D-129's security review, finding F1: no carrier admits a grown department. One an
+    Employee-visible document carries is still withheld from every audience an Employee is in, and an
+    Administrator-only document is offered every grown name, carried or not."""
     both = make_document(employee, "Site notice", list(ROLE_NAMES))
     nobody = make_document(employee, "Orphaned", [])
+    unknown = make_document(employee, "Audit file", ["Auditor"])
     make_document(employee, "Roster", [EMPLOYEE_ROLE_NAME], "Atlas Office")
     make_document(administrator, "Board minutes", [ADMINISTRATOR_ROLE_NAME], "Board Office")
-    make_document(employee, "Budget memo", list(ROLE_NAMES), "FINANCE")
-    for name in ("Atlas Office", "Board Office", "Finance", "Ghost Office"):
+    everything = ("Atlas Office", "Board Office", "Ghost Office")
+    for name in everything:
         Department.objects.create(name=name, grown=True)
 
-    # An Administrator reads the Employee-visible roster too (D-66).
-    assert tag_scheme(employee_document).departments == ("Atlas Office",)
-    assert tag_scheme(both).departments == ("Atlas Office",)
-    assert tag_scheme(administrator_document).departments == ("Atlas Office", "Board Office")
+    for document in (employee_document, both, unknown):
+        assert tag_scheme(document).departments == (), document.title
+    assert tag_scheme(administrator_document).departments == everything
     # Nobody reads that document, so nobody is protected: every active name.
-    assert tag_scheme(nobody).departments == ("Atlas Office", "Board Office", "Finance", "Ghost Office")
+    assert tag_scheme(nobody).departments == everything
+
+
+def test_a_document_that_carries_a_grown_department_itself_is_not_offered_it(employee):
+    """The carrier a reader can plant (finding F1): the document's own department, typed at upload or
+    through the confirm/edit control. It admits nothing, so the scheme cannot tell the reader whether
+    the hidden row exists."""
+    Department.objects.create(name="Projects", grown=True)
+    carrier = make_document(employee, "Rota", [EMPLOYEE_ROLE_NAME], "Projects")
+    both = make_document(employee, "Kickoff", list(ROLE_NAMES), "Projects")
+    for document in (carrier, both):
+        assert tag_scheme(document).departments == (), document.title
+
+
+def test_reads_everything_is_true_of_a_role_whose_effective_roles_cover_every_role():
+    """The helper finding F1 added to apps/retrieval/scoping.py, read from EFFECTIVE_ROLES and
+    ROLE_NAMES; a role scoping does not know reads nothing."""
+    assert reads_everything(ADMINISTRATOR_ROLE_NAME) is True
+    assert reads_everything(EMPLOYEE_ROLE_NAME) is False
+    assert reads_everything("Auditor") is False
 
 
 @pytest.mark.parametrize("documents", ["on no document", "only on restricted documents", "on readable documents"])

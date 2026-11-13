@@ -308,7 +308,7 @@ in use when it runs.
 | `department_id` | UUID PK | |
 | `name` | text | trimmed, internal spaces collapsed, **case kept**; unique ignoring case (`departments_unique_name_ignoring_case`, on `LOWER(name)`). Not a `Tags` row because `Tag` lower-cases names, and the classifier writes the scheme's spelling into a blank department |
 | `active` | boolean | false once retired: a department in use is retired rather than deleted, stays on its documents and in the filters, and is no longer offered to the classifier |
-| `grown` | boolean | hidden: offered for a document only when every role in its audience reads a document whose department equals the name (invariant 1). Set by the seed on a department only material some role cannot read carries; an Administrator's addition is not hidden. Never unset |
+| `grown` | boolean | hidden: offered only for a document whose whole audience reads everything, today an Administrator-only document, so a document an Employee can read is never offered one (invariant 1; the security review of D-129, F1). Set by the seed on a department only material some role cannot read carries; an Administrator's addition is not hidden. Never unset |
 
 ### ContentTags — FR-10, FR-15
 

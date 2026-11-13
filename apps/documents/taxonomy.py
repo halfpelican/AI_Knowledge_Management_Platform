@@ -43,7 +43,8 @@ FR-10's scheme, on the same page and behind the same code. ``Department`` is a t
 which keeps case (its docstring says why).
 
 - ``department_inventory()``: every Department, active or not, ordered by name ignoring case, with
-  the number of documents whose ``department`` equals the name, for ``GET /api/departments``.
+  the number of documents whose ``department`` equals the name ignoring case, for
+  ``GET /api/departments``.
 - ``create_department(name)``: ``POST /api/departments``. A new name is created active and **not
   grown**, vocabulary, as ``create_tag`` creates a value. An active name that exists ignoring case is
   ``DepartmentAlreadyExists``, the 409. **A retired one is reactivated**, keeping its ``grown`` and its
@@ -52,6 +53,11 @@ which keeps case (its docstring says why).
   Administrator, who reads every document (D-66), can take it.
 - ``retire_department(department_id)``: ``DELETE /api/departments/{id}``. A department any document
   uses is deactivated and kept; one no document uses is deleted.
+
+**"Uses" and the counts compare ignoring case**, ``Lower`` on both sides in the database, as the
+unique constraint compares names (D-129's security review, finding F3). Compared exactly, a hidden
+department whose remaining documents spell it in another case counted as unused, was deleted, and
+could be added again as vocabulary, losing its hidden marking.
 
 Retiring or deleting a department never touches ``Documents.department``: FR-14's and FR-15's
 filters read that column (D-72), so a retired department stays on its documents and in the filters.
@@ -212,26 +218,38 @@ class AddedDepartment:
     created: bool
 
 
-def department_item_counts(names) -> dict[str, int]:
-    """``{name: the number of documents whose department equals it}`` for ``names``, compared
-    exactly, as ``tag_scheme`` compares a grown department with ``Documents.department``. A document
-    whose department differs only in case or spacing is not counted. Unscoped: see the module
-    docstring."""
+def documents_using(name: str) -> int:
+    """The number of documents whose ``department`` equals ``name`` ignoring case: ``Lower`` on both
+    sides, in the database, as the unique constraint compares names (finding F3). A document whose
+    department differs in spacing is not counted. Unscoped: see the module docstring."""
+    return (
+        Document.objects.alias(folded=Lower("department"))
+        .filter(folded=Lower(Value(name)))
+        .count()
+    )
+
+
+def department_item_counts() -> dict[str, int]:
+    """``{lower(department): number of documents}`` over every document with a department, lowered by
+    the database, for ``department_inventory`` to read by each name's own database ``lower()``."""
     rows = (
-        Document.objects.filter(department__in=list(names))
-        .values("department")
+        Document.objects.exclude(department="")
+        .annotate(folded=Lower("department"))
+        .values("folded")
         .annotate(documents=Count("pk"))
     )
-    return {row["department"]: row["documents"] for row in rows}
+    return {row["folded"]: row["documents"] for row in rows}
 
 
 def department_inventory() -> list[Department]:
-    """Every Department, active or not, ordered by name ignoring case, each carrying ``item_count``
-    (``department_item_counts``)."""
-    departments = list(Department.objects.order_by(Lower("name"), "name"))
-    counts = department_item_counts(department.name for department in departments)
+    """Every Department, active or not, ordered by name ignoring case, each carrying ``item_count``:
+    the documents whose department equals its name ignoring case (``department_item_counts``)."""
+    departments = list(
+        Department.objects.annotate(folded=Lower("name")).order_by(Lower("name"), "name")
+    )
+    counts = department_item_counts()
     for department in departments:
-        department.item_count = counts.get(department.name, 0)
+        department.item_count = counts.get(department.folded, 0)
     return departments
 
 
@@ -288,20 +306,22 @@ def create_department(name: str) -> AddedDepartment:
                 if department is None:  # not the unique constraint: a defect, not a duplicate
                     raise
             else:
-                department.item_count = department_item_counts([name]).get(name, 0)
+                department.item_count = documents_using(name)
                 return AddedDepartment(department=department, created=True)
         if department.active:
             raise DepartmentAlreadyExists(department.pk)
         department.active = True
         department.save(update_fields=["active"])
-        department.item_count = department_item_counts([department.name]).get(department.name, 0)
+        department.item_count = documents_using(department.name)
         return AddedDepartment(department=department, created=False)
 
 
 def retire_department(department_id) -> Department | None:
     """Deactivate the department if any document uses it, else delete it; one transaction.
 
-    "Uses" is ``Documents.department`` equal to the name, exactly (``department_item_counts``).
+    "Uses" is ``Documents.department`` equal to the name ignoring case (``documents_using``; D-129's
+    security review, finding F3), so a hidden department whose remaining documents spell it
+    "PROJECTS" is retired, keeping its ``grown``, and not deleted.
     Returns the department, inactive and carrying ``item_count``, when it was kept, and None when it
     was deleted. A department already inactive and still used is answered the same way again.
     Raises ``Department.DoesNotExist`` for an id that names no Department.
@@ -317,7 +337,7 @@ def retire_department(department_id) -> Department | None:
         department = Department.objects.select_for_update().filter(pk=department_id).first()
         if department is None:
             raise Department.DoesNotExist(f"No department {department_id}.")
-        documents = department_item_counts([department.name]).get(department.name, 0)
+        documents = documents_using(department.name)
         if documents:
             if department.active:
                 department.active = False

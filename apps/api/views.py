@@ -2234,7 +2234,8 @@ class TagDetailView(APIView):
 class DepartmentListView(ThrottlePostOnlyMixin, APIView):
     """``GET /api/departments`` — every Department, active or not, ordered by name ignoring case, each
     ``{department_id, name, active, item_count}``, ``item_count`` being the number of documents whose
-    ``department`` equals the name (``apps/documents/taxonomy.py::department_inventory``).
+    ``department`` equals the name ignoring case (``apps/documents/taxonomy.py::department_inventory``;
+    D-129's security review, finding F3).
     ``POST /api/departments`` — an Administrator adds a department to FR-10's department scheme, the
     list the classifier suggests from (``tag_scheme``).
 
@@ -2244,7 +2245,8 @@ class DepartmentListView(ThrottlePostOnlyMixin, APIView):
     the code to that. 200 with a bare list, ``[]`` for none.
 
     The POST: body ``{"name"}`` (``DepartmentCreateSerializer``: 400 ``{"name": [...]}`` for a blank or
-    over-long name, which is normalised with its case kept).
+    over-long name, and for one holding a control or format character or ";" (finding F4); a name is
+    normalised with its case kept).
 
     - A new name: 201 with the entry, created **not grown**: vocabulary, offered to every audience,
       as a value added on ``/api/tags`` is.

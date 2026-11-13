@@ -48,7 +48,8 @@ model:
 lists a value that exists only on material some reader of this document may not see, and a
 suggestion that names one anyway is treated exactly as a value no Tag has (``apply_classification``
 rule 4, CLAUDE.md invariant 1). Its departments are the active ``Department`` names admitted for that
-audience (D-129): a department in use on documents but not in the list is not offered.
+audience (D-129): a hidden (grown) one only for an audience that reads everything, and a department
+in use on documents but not in the list never.
 
 **What this module does not do.** It calls the provider only in ``classify_document_now``; it
 decides no status code (the route and the ingestion hook map the exceptions below); and it never
@@ -95,7 +96,8 @@ Each one:
   with a deletion. ``reprocess_document`` holds the document while classification runs, and
   ``retire_tag`` and ``create_tag`` (taxonomy.py) take one tag row. ``create_department`` and
   ``retire_department`` (taxonomy.py, D-129) take one department row and wait on nothing after it;
-  nothing in this module locks a department row (``tag_scheme`` reads them unlocked).
+  nothing in this module locks a department row (``tag_scheme`` and rule 3's ``_still_listed`` read
+  them unlocked).
 
 apps/documents/tests/test_classification_lock_order.py runs both cycles N1 named, on two
 connections.
@@ -138,7 +140,7 @@ from apps.documents.models import (
     Tag,
     normalise_tag_name,
 )
-from apps.retrieval.scoping import scoped_documents, scoped_meetings
+from apps.retrieval.scoping import reads_everything, scoped_documents, scoped_meetings
 
 logger = logging.getLogger(__name__)
 
@@ -227,14 +229,21 @@ def tag_scheme(document: Document) -> TagScheme:
 
     - ``doc_types`` is DOCUMENT_TYPES: a fixed list that says nothing about the corpus.
     - ``departments`` is the active ``Department`` names, the list an Administrator keeps on the
-      Tags page, admitted by the same rule (D-129, the lead's decision of 13 November 2026). A
-      department that is not grown is vocabulary and always in. A grown one, which ``documents
-      0015`` seeds for a department found only on documents some role cannot read, is in only where
-      EVERY role in the audience reads, through ``scoped_documents``, a document whose ``department``
-      equals the name, exactly. A retired department is in no scheme, and **a department in use on
-      documents but not in the list is not offered**: the list is the scheme, and FR-08's upload
-      field stays free text. Until D-129 this was the intersection, across the audience, of the
-      distinct non-blank ``Documents.department`` values of the documents each role may read.
+      Tags page (D-129, the lead's decision of 13 November 2026). A department that is not grown is
+      vocabulary and always in. **A grown one**, which ``documents 0015`` seeds for a department
+      found only on documents some role cannot read, **is in only for an audience every role of
+      which reads everything** (``reads_everything``; today an Administrator-only document). It
+      consults no carrier, unlike a grown tag: FR-08's upload field and the classification
+      confirm/edit control both take any department, so a reader could make a document they read
+      carry a hidden name themselves, and a rule that admitted the name through that document
+      would answer "listed, applied" where an unknown name answers "discarded" (D-129's security
+      review, finding F1). So the departments of a document some role in a narrower scope reads
+      never depend on whether a grown row exists. A retired department is in no scheme, and **a
+      department in use on documents but not in the list is not offered**: the list is the scheme,
+      and FR-08's upload field stays free text. Until D-129 this was the intersection, across the
+      audience, of the distinct non-blank ``Documents.department`` values of the documents each
+      role may read; until finding F1 a grown department was admitted where every audience role
+      read a document carrying it.
     - ``tags`` holds, for each of REPOSITORY_TAG_DIMENSIONS, the active ``Tag`` names admitted by
       the rule above.
     - **A tag that is not grown is vocabulary** and is in every scheme, unlinked, carried only by
@@ -273,41 +282,32 @@ def tag_scheme(document: Document) -> TagScheme:
 
     **A role name scoping does not know** (one missing from EFFECTIVE_ROLES) reads nothing, so
     every grown tag and every grown department is withheld from a document it is in the audience
-    of, as ``scoped_documents`` fails closed. Vocabulary, a tag or a department that is not grown, is
-    still in: it says nothing about any source, so there is nothing for that reader to be kept from.
+    of, as ``scoped_documents`` and ``reads_everything`` fail closed. Vocabulary, a tag or a
+    department that is not grown, is still in: it says nothing about any source, so there is
+    nothing for that reader to be kept from.
     """
     audience = list(dict.fromkeys(document.visible_to_roles))  # distinct, in order
     active_tags = Tag.objects.filter(
         active=True, dimension__in=REPOSITORY_TAG_DIMENSIONS
     ).values_list("id", "dimension", "tag_name", "grown")
     active_departments = list(Department.objects.filter(active=True).values_list("name", "grown"))
-    grown_departments = [name for name, grown in active_departments if grown]
 
     if audience:
-        readable_departments: set[str] | None = None
         readable_tag_ids: set | None = None
         for role_name in audience:
             documents = scoped_documents(role_name=role_name)
             meetings = scoped_meetings(role_name=role_name)
-            # The grown departments this role reads a document of: exact equality with the name.
-            role_departments = set(
-                documents.filter(department__in=grown_departments)
-                .values_list("department", flat=True)
-                .distinct()
-            ) if grown_departments else set()
             role_tag_ids = set(
                 ContentTag.objects.filter(
                     Q(source_type=DOCUMENT_SOURCE_TYPE, source_id__in=documents.values("id"))
                     | Q(source_type=MEETING_SOURCE_TYPE, source_id__in=meetings.values("id"))
                 ).values_list("tag_id", flat=True)
             )
-            readable_departments = (
-                role_departments if readable_departments is None
-                else readable_departments & role_departments
-            )
             readable_tag_ids = (
                 role_tag_ids if readable_tag_ids is None else readable_tag_ids & role_tag_ids
             )
+        # A grown department needs an audience that reads everything, and no carrier (finding F1).
+        audience_reads_everything = all(reads_everything(role_name) for role_name in audience)
 
         def admitted(tag_id, grown) -> bool:
             # Vocabulary is in whatever its links; a grown tag only on a source every role reads.
@@ -316,9 +316,9 @@ def tag_scheme(document: Document) -> TagScheme:
             return not grown or tag_id in readable_tag_ids
 
         def department_admitted(name, grown) -> bool:
-            # The same rule for a department (D-129): vocabulary always, a grown one only where
-            # every audience role reads a document carrying it.
-            return not grown or name in readable_departments
+            # Vocabulary always; a grown department only for an audience that reads everything,
+            # whatever any document carries (D-129's security review, finding F1).
+            return not grown or audience_reads_everything
 
     else:
 
@@ -458,7 +458,12 @@ def apply_classification(
        anything is written.
     3. **Department**, unless ``user_edited``: compared with ``scheme.departments`` after
        stripping, exactly in case because the column is not case-normalised. Outside the scheme
-       is discarded and nothing is written; inside and below **the department's own threshold**
+       is discarded and nothing is written. **So is a department in the scheme that is no longer an
+       active ``Department`` when the suggestion is applied** (``_still_listed``; D-129's security
+       review, finding F2): the scheme was built before the provider call, and an Administrator
+       may retire or delete the department while the call runs. That is one unlocked ``exists()``
+       read, and its answer is the one an unknown name gets, so it adds no oracle. Inside and below
+       **the department's own threshold**
        is provisional and ``Documents.department`` is untouched. That threshold is
        ``department_threshold(model)`` (D-129, the lead's decision of 13 November 2026): 0.30 for
        claude-haiku-5-5, and for a model not listed the shared value the type and the tags use, so
@@ -575,7 +580,8 @@ def apply_classification(
             # Rule 3: the department.
             current = (locked.department or "").strip()
             machine_wrote = False
-            if department_value not in scheme.departments:
+            if department_value not in scheme.departments or not _still_listed(department_value):
+                # Outside the scheme, or retired or deleted since it was built (finding F2).
                 analysis.department_outcome = ASSIGNMENT_DISCARDED
             elif _department_is_provisional(classification.department.confidence, classification.model):
                 # Below the department's own threshold (D-129), not the type's and the tags'.
@@ -702,6 +708,19 @@ def _department_is_provisional(confidence: float, model: str) -> bool:
     """FR-10's confidence comparison for a department, rule 3's: below the department's threshold
     is provisional; at it is applied (``department_threshold``, D-129)."""
     return confidence < department_threshold(model)
+
+
+def _still_listed(name: str) -> bool:
+    """Whether ``name`` is still an active ``Department`` (rule 3; D-129's security review, finding
+    F2). ``name`` is a spelling the scheme took from a row, so it is compared exactly.
+
+    One ``exists()`` read and no lock, deliberately. A ``FOR SHARE`` lock on the row would serialise
+    with ``retire_department``'s ``FOR UPDATE``, but an ingestion classifies inside its own transaction
+    and then embeds, so the lock would hold an Administrator's ``DELETE`` for the whole of the
+    embedding. What is left is the window between this read and the commit: a department retired in
+    it is written as a retired department is, which is the state every retired department's
+    documents are in anyway, and the state a person typing it produces."""
+    return Department.objects.filter(name=name, active=True).exists()
 
 
 def _unstorable(character: str) -> bool:

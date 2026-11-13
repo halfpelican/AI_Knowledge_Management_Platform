@@ -13400,6 +13400,9 @@ He answered three tabbed questions, each with the recommended option:
   - A department carried only by documents some role cannot read is seeded hidden (`grown`). It is
     offered only for a document whose whole audience reads a document with that department, as a
     hidden tag is.
+    *Changed the same day by the security review (F1, below): a hidden department is offered only
+    for a document whose whole audience reads everything, today an Administrator-only document, and
+    no document carrying it admits it anywhere else.*
 - **The upload field stays free text.** FR-08's form and the classification confirm/edit control are
   unchanged. A department typed there that is not in the list stays on the document, and the
   classifier suggests only listed departments.
@@ -13416,6 +13419,10 @@ He answered three tabbed questions, each with the recommended option:
   - one that is not grown always;
   - a grown one only when every audience role reads, through `scoped_documents`, a document whose
     department equals it.
+
+  *Changed the same day by the security review (F1, below): a grown one only when every audience
+  role reads everything (`reads_everything`, a helper in `apps/retrieval/scoping.py`). No carrier is
+  consulted.*
 
   This replaces the derivation from the departments of documents the audience can read, so a
   department in use but not listed is no longer offered.
@@ -13436,6 +13443,9 @@ He answered three tabbed questions, each with the recommended option:
 
 - **"Equals" means exactly equal,** in case and spacing. That is how `item_count`, "in use" on DELETE,
   and admitting a grown department compare `Documents.department` with a name.
+  *Changed the same day by the security review (F1 and F3, below): `item_count` and "in use" compare
+  ignoring case, as the list's uniqueness does, and still exactly in spacing. Admitting a grown
+  department no longer compares with any document.*
 - **The seed.**
   - It keeps the spelling most documents use; a tie goes to the first by code point.
   - It decides `grown` on that exact spelling, so seeding makes nothing newly visible to any audience.
@@ -13448,6 +13458,10 @@ He answered three tabbed questions, each with the recommended option:
 - **`machine_department` still records what the model said** (rule 1, unchanged). A hidden department
   never reaches a prompt it must not, and a reply naming one anyway is discarded exactly as an unknown
   name is.
+  *Corrected the same day, after the security review (F1, below): as first built that was not true. A
+  document an Employee gave the department to carried it itself, so the name reached that document's
+  prompt. It is true since the fix: a hidden department is admitted only for an Administrator-only
+  audience.*
 - **On the screen:**
   - each row offers Retire or Delete according to `item_count`, the server's own test;
   - a 403 on either list withdraws every control on the page, since both need `manage_tags`;
@@ -13459,6 +13473,61 @@ He answered three tabbed questions, each with the recommended option:
     the three routes;
   - front end: 31 new tests under 38 scripted breaks, each reverted. 635 passed; lint and build
     clean.
+
+**The security review of the department list (13 November, before the pull request), and what changed
+because of it.** The `security-reviewer` agent reviewed `e04a746` and `ce4e9d3` and confirmed each
+finding with probe tests against its own test database.
+
+1. **HIGH: an Employee could learn whether a hidden department exists (invariant 1).**
+   - **How:** give a document they can read that department as free text, at upload or through the
+     confirm/edit control.
+   - **Why it worked:** the document is saved before it is classified, so it counted as its own
+     readable carrier. `tag_scheme` admitted the hidden name for its audience, the prompt listed it,
+     and the reply said "applied" where an unlisted name would have been "discarded". The name also
+     reached the AI service in that prompt.
+   - **D-129 introduced it:** before the list, a readable carrier alone put a department in the scheme.
+   - **Fixed:** a hidden department is admitted only for an audience in which every role reads
+     everything, today an Administrator-only document. So a document an Employee can read is never
+     offered one, and what an Employee sees no longer depends on whether a hidden row exists.
+   - **The cost:** a hidden department is never suggested for an Employee-visible document, even after
+     such documents come to carry it. "Grown is never unset", so there is no route that makes it
+     vocabulary; that would need a decision.
+   - **Kept:** the user's three choices.
+2. **LOW: a department retired or deleted while a classification's provider call was running was
+   still written** into a blank department. Fixed: at apply time, a department with no active row is
+   outside the scheme and discarded, the same answer as for an unknown name.
+3. **LOW: "in use" and `item_count` compared exactly, while the list is unique ignoring case.** A
+   hidden department whose remaining carriers spelled it differently counted as unused, could be
+   deleted, and could come back as vocabulary. Fixed: both compare ignoring case.
+4. **LOW, an Administrator's own input: a name could hold control or format characters, or ";", the
+   separator the prompt lists departments with.** Fixed: `POST /api/departments` refuses them (400).
+   A tab or line break inside a name is a control character and is refused too. Until this fix it was
+   collapsed to a space. Whitespace around a name is still trimmed.
+
+**Tests for the fixes:**
+
+- **21 new server test items.** Each fails under at least one of 11 deliberate breaks, and every
+  break was reverted:
+  - F1: 4 breaks;
+  - F2: 1;
+  - F3: 2;
+  - F4: 4.
+- **Three existing tests** changed their expectations with the fixes, and the breaks fail them too:
+  - the list's count;
+  - a new department's count;
+  - the scheme's independence from the scoping helpers.
+- **The front end is unchanged.** It shows the server's 400 message as it already did.
+
+**Checked and sound by the review:**
+
+- **The routes:** 401, 403, 429 in that order, and CSRF.
+- **`manage_tags`:** held only at the Administrator's scope.
+- **The seed** errs toward hidden, and only the seed sets `grown`.
+- **Create and retire** handle a race.
+- **FR-14 and FR-15** read scoped documents, unchanged.
+- **No model output can widen scope.**
+- **The threshold** changes only whether an admitted suggestion is written, never what is admitted.
+- **Names render as text.**
 
 **Not covered:**
 

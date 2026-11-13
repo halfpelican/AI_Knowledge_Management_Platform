@@ -12,17 +12,21 @@ read and before the throttle counts the request; then, for the Administrator, th
 
 - **The list** holds every Department, active or not, ordered by name ignoring case, each
   ``{department_id, name, active, item_count}``; ``item_count`` is the number of documents whose
-  ``department`` equals the name, unscoped (the Administrator reads every document, D-66).
+  ``department`` equals the name ignoring case, unscoped (the Administrator reads every document,
+  D-66; D-129's security review, finding F3).
 - **The POST** creates a new name not grown (201), answers 409 ``{detail, department_id}`` for a name
   an ACTIVE department has ignoring case, a concurrent create included, and **reactivates a retired
-  one** (200), keeping its ``grown`` and its spelling.
-- **The DELETE** retires a department any document uses (200 with the entry, again for one already
-  retired) and deletes one no document uses (204); an unknown id is 404.
+  one** (200), keeping its ``grown`` and its spelling. A name holding a control or format character,
+  or ";", is 400 (finding F4).
+- **The DELETE** retires a department any document uses, ignoring case (200 with the entry, again for
+  one already retired), and deletes one no document uses (204); an unknown id is 404.
 - A retired department stays on its documents and in FR-14's and FR-15's filters, and leaves every
-  scheme. A department in use on documents but not listed is not offered to the classifier.
+  scheme. A department in use on documents but not listed is not offered to the classifier, and one
+  retired or deleted while the provider is being called is discarded, not written (finding F2).
 - **Invariant 1:** a hidden (grown) department, seeded by ``documents 0015`` from Administrator-only
-  documents, is absent from an Employee-visible document's prompt scheme, so it can never be suggested
-  there, and present for an Administrator-only document's.
+  documents, is offered only to an audience that reads everything (finding F1). An Employee-visible
+  document's prompt scheme and department outcome are the same whether or not the hidden row exists,
+  even when a reader makes that document, or another they read, carry the hidden name themselves.
 
 The routes run from both roles wherever the answer depends on the role, so the dual-role matrix
 credits each of the three routes to each role (CLAUDE.md section 8 item 2).
@@ -34,11 +38,13 @@ from types import SimpleNamespace
 
 import pytest
 from django.apps import apps as django_apps
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from rest_framework.throttling import ScopedRateThrottle
 
 from apps.ai.base import Assignment, DocumentClassification
 from apps.ai.testing import STUB_CHAT_MODEL, STUB_CONFIDENCE
+from apps.api.serializers import DEPARTMENT_NAME_CHARACTERS_MESSAGE
 from apps.api.views import DEPARTMENT_ALREADY_EXISTS_MESSAGE
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
@@ -151,7 +157,7 @@ def test_the_list_holds_every_department_ordered_by_name_ignoring_case_with_the_
                   roles=[ADMINISTRATOR_ROLE_NAME])
     make_document(employee, title="Contract review", department="Legal")
     make_document(employee, title="Budget memo", department="finance")
-    # Equal means equal: a department that differs only in case is not the listed one's document.
+    # Ignoring case, as the unique constraint compares names (finding F3): "FINANCE" is finance's.
     make_document(employee, title="Payroll note", department="FINANCE")
 
     response = administrator_client.get(DEPARTMENTS_URL)
@@ -161,7 +167,7 @@ def test_the_list_holds_every_department_ordered_by_name_ignoring_case_with_the_
     assert all(set(item) == ENTRY_KEYS for item in body)
     # Ignoring case: Board Office, finance, Human Resources, Legal, Operations.
     assert body == [
-        entry(board, 1), entry(finance, 1), entry(people, 2), entry(legal, 1), entry(operations, 0),
+        entry(board, 1), entry(finance, 2), entry(people, 2), entry(legal, 1), entry(operations, 0),
     ]
 
 
@@ -187,14 +193,16 @@ def test_an_administrator_adds_a_department_as_vocabulary_and_an_employee_is_ref
 
 
 def test_a_new_department_already_typed_on_documents_counts_them(administrator_client, employee):
-    """FR-08's upload field is free text, so a department can be on documents before it is listed."""
+    """FR-08's upload field is free text, so a department can be on documents before it is listed.
+    They are counted ignoring case (finding F3)."""
     make_document(employee, title="Leave policy", department="Human Resources")
     make_document(employee, title="Onboarding", department="Human Resources")
+    make_document(employee, title="Payslips", department="HUMAN RESOURCES")
 
     response = add(administrator_client, "Human Resources")
 
     assert response.status_code == 201, response.content
-    assert response.json()["item_count"] == 2
+    assert response.json()["item_count"] == 3
 
 
 EMPLOYEE_BODIES = {
@@ -488,12 +496,13 @@ def test_a_hidden_department_seeded_from_administrator_only_documents_is_never_i
 ):
     """``documents 0015``'s own seed, run here on the rows it would find: "Board Office" is carried only
     by an Administrator-only document, so it is seeded grown, and "People" by a document every role
-    reads, so it is vocabulary. The Employee-visible document's prompt never lists the hidden name, so
-    the model is never shown it there and the stub, which suggests from the prompt, never suggests it.
-    A reply naming it anyway gets the answer an unknown name gets, discarded and never written, so the
-    outcome says nothing about whether a hidden department exists. The Administrator-only document's
-    prompt lists it. The Employee-visible document is classified from both roles; the
-    Administrator-only one by the one role that reads it."""
+    reads, so it is vocabulary. Here the Employee-visible document carries no department: its prompt
+    does not list the hidden name, so the stub, which suggests from the prompt, does not suggest it,
+    and a reply naming it anyway is discarded and never written, as a name in no list is. The
+    Administrator-only document's prompt lists it. That the Employee-visible document's scheme and
+    outcome stay the same when a reader makes a readable document carry the hidden name is the next
+    test's (D-129's security review, finding F1). The Employee-visible document is classified from
+    both roles; the Administrator-only one by the one role that reads it."""
     make_document(administrator, title="Board pack", department="Board Office",
                   roles=[ADMINISTRATOR_ROLE_NAME])
     make_document(administrator, title="Leave policy", department="People", roles=[EMPLOYEE_ROLE_NAME])
@@ -521,3 +530,178 @@ def test_a_hidden_department_seeded_from_administrator_only_documents_is_never_i
 
     classify(administrator_client, board)
     assert prompt_departments(stub_ai_service, board) == ("Board Office", "People")
+
+
+# --- D-129's security review, finding F1: a reader cannot plant a carrier to test for a hidden name --
+
+
+def copy_a_listed_department(title, text, scheme):
+    """A stand-in for a model told to copy one of the listed departments exactly (the reviewer's
+    probe): it copies a listed department the document names, else the first one listed. On
+    claude-haiku-5-5, so the department's own threshold, 0.30, applies to its 0.9."""
+    named = [name for name in scheme.departments if name in title or name in text]
+    chosen = named[0] if named else (scheme.departments[0] if scheme.departments else "Unknown")
+    return DocumentClassification(
+        doc_type=Assignment(value=DOCUMENT_TYPES[0], confidence=0.9),
+        department=Assignment(value=chosen, confidence=0.9),
+        tags=(),
+        model="claude-haiku-5-5",
+        input_truncated=False,
+    )
+
+
+@pytest.mark.parametrize("planted_by", ["upload", "confirm-edit control"])
+def test_a_reader_who_makes_a_document_carry_a_hidden_department_learns_nothing_from_it(
+    session_client, administrator, administrator_client, stub_ai_service, planted_by
+):
+    """Finding F1. A reader gives an Employee-visible document a department as free text, at upload or
+    through the confirm/edit control, and classifies. The prompt scheme, the suggestion, the outcome
+    and the department are the same whether a hidden (grown) "Projects" exists or no row has the
+    name: a grown department is offered only to an audience that reads everything, and a document a
+    reader made carry the name is not a carrier anything consults. Until the fix the document carried
+    the name readably, so the prompt listed it and rule 3 answered "applied" where an unknown name is
+    "discarded" or held. An Administrator-only document is still offered the hidden department. From
+    both roles, as either may upload and edit."""
+    client = session_client.client
+    Department.objects.create(name="Finance")  # vocabulary, in every scheme
+    stub_ai_service.classification = copy_a_listed_department
+
+    def plant_and_classify(world):
+        if planted_by == "upload":
+            text = "Internal note for the Projects department, its rota and its plans. " * 10 + world
+            response = client.post(DOCUMENTS_URL, {
+                "file": SimpleUploadedFile(f"note {world}.txt", text.encode("utf-8"), content_type="text/plain"),
+                "title": f"Projects note, {world}", "department": "Projects",
+            }, format="multipart")
+            assert response.status_code == 201, response.content
+            body = response.json()
+        else:
+            carrier = make_document(session_client.user, title=f"Rota, {world}", roles=[EMPLOYEE_ROLE_NAME])
+            classify(client, carrier)
+            edited = client.post(f"{DOCUMENTS_URL}/{carrier.id}/classification",
+                                 {"department": "Projects"}, format="json")
+            assert edited.status_code == 200, edited.content
+            probe = make_document(session_client.user, title=f"Kickoff, {world}", roles=[EMPLOYEE_ROLE_NAME],
+                                  text="Kickoff notes for the Projects department and its milestones.")
+            body = classify(client, probe)
+        shown = stub_ai_service.classify_calls[-1][2].departments
+        result = body["classification"]
+        return shown, result["machine_department"], result["department_outcome"], body["department"]
+
+    no_row = plant_and_classify("no row")
+    make_document(administrator, title="Programme board pack", department="Projects",
+                  roles=[ADMINISTRATOR_ROLE_NAME])
+    Department.objects.create(name="Projects", grown=True)  # hidden, as documents 0015 seeds it
+    hidden_row = plant_and_classify("hidden row")
+
+    assert hidden_row == no_row
+    assert no_row[0] == ("Finance",)  # "Projects" listed in neither
+    board = make_document(administrator, title="Succession plan", roles=[ADMINISTRATOR_ROLE_NAME])
+    classify(administrator_client, board)
+    assert prompt_departments(stub_ai_service, board) == ("Finance", "Projects")
+
+
+# --- Finding F2: a department retired or deleted while the provider runs is not written -------------
+
+
+@pytest.mark.parametrize("used_elsewhere", [False, True], ids=["deleted-mid-call", "retired-mid-call"])
+def test_a_department_removed_while_the_provider_runs_is_discarded_and_not_written(
+    session_client, administrator, stub_ai_service, used_elsewhere
+):
+    """The scheme listed "Legal" when it was built; the Administrator deletes it (no document uses it)
+    or retires it (one does) before the reply is applied. Rule 3 then answers as for a name in no list:
+    discarded, and the blank department stays blank. From both roles."""
+    legal = Department.objects.create(name="Legal")
+    if used_elsewhere:
+        make_document(administrator, title="Old contract", department="Legal")
+    target = make_document(session_client.user, title="Supplier terms")
+
+    def removed_during_the_call(title, text, scheme):
+        assert scheme.departments == ("Legal",)  # listed when the scheme was built
+        taxonomy.retire_department(legal.pk)  # what DELETE /api/departments/{id} runs
+        return suggest("Legal")
+
+    stub_ai_service.classification = removed_during_the_call
+    body = classify(session_client.client, target)
+
+    assert body["classification"]["department_outcome"] == ASSIGNMENT_DISCARDED
+    assert body["department"] == ""
+    target.refresh_from_db()
+    assert target.department == ""
+    assert list(Department.objects.values_list("active", flat=True)) == ([False] if used_elsewhere else [])
+
+
+# --- Finding F3: "in use" and the counts ignore case, as the unique constraint does ----------------
+
+
+def test_a_hidden_department_whose_documents_spell_it_in_another_case_is_retired_not_deleted(
+    administrator_client, administrator
+):
+    """Its one remaining document spells it "PROJECTS": that is a use, so the DELETE retires it, keeping
+    its ``grown``, and counts the document. Compared exactly, it was deleted (204), and adding the name
+    again published it as vocabulary. Here adding it again reactivates it, still hidden."""
+    make_document(administrator, title="Board pack", department="PROJECTS", roles=[ADMINISTRATOR_ROLE_NAME])
+    projects = Department.objects.create(name="Projects", grown=True)
+
+    response = retire(administrator_client, projects.pk)
+
+    assert response.status_code == 200, response.content
+    assert response.json() == entry(projects, 1, active=False)
+    assert rows() == [("Projects", False, True)]
+    again = add(administrator_client, "Projects")
+    assert again.status_code == 200, again.content
+    assert rows() == [("Projects", True, True)]
+
+
+def test_the_list_counts_the_documents_that_spell_a_department_in_any_case(administrator_client, employee):
+    projects = Department.objects.create(name="Projects")
+    for title, spelling in (("Plan", "Projects"), ("Roadmap", "PROJECTS"), ("Charter", "projects")):
+        make_document(employee, title=title, department=spelling)
+    make_document(employee, title="Spaced", department="Pro jects")  # different spacing: not counted
+
+    response = administrator_client.get(DEPARTMENTS_URL)
+
+    assert response.status_code == 200, response.content
+    assert response.json() == [entry(projects, 3)]
+
+
+# --- Finding F4: an Administrator's name with control or format characters, or ";" -----------------
+
+REFUSED_CHARACTERS = {
+    "escape": chr(0x1B),
+    "bell": chr(0x07),
+    "delete": chr(0x7F),
+    "right-to-left override": chr(0x202E),
+    "zero-width space": chr(0x200B),
+    "byte order mark": chr(0xFEFF),
+    "semicolon": ";",
+}
+
+
+@pytest.mark.parametrize("character", sorted(REFUSED_CHARACTERS))
+def test_a_name_holding_a_control_or_format_character_or_a_semicolon_is_400_keyed_on_name(
+    administrator_client, character
+):
+    """Cc and Cf characters, which no reader sees as written, and ";", which the classification prompt
+    joins department names with, so one name could read as two."""
+    response = add(administrator_client, f"Human{REFUSED_CHARACTERS[character]}Resources")
+
+    assert response.status_code == 400, response.content
+    assert response.json() == {"name": [DEPARTMENT_NAME_CHARACTERS_MESSAGE]}
+    assert rows() == []
+
+
+def test_a_tab_or_line_break_inside_a_name_is_refused_and_one_around_it_trimmed(administrator_client):
+    """Tab, line feed and carriage return are control characters (Cc) too, refused inside a name as
+    every Cc is, as the finding asks. Around a name they are whitespace, trimmed before anything is
+    checked, and plain spaces inside it are collapsed as they always were."""
+    for inside in (chr(0x09), chr(0x0A), chr(0x0D)):
+        response = add(administrator_client, f"Human{inside}Resources")
+        assert response.status_code == 400, (repr(inside), response.content)
+        assert response.json() == {"name": [DEPARTMENT_NAME_CHARACTERS_MESSAGE]}
+    assert rows() == []
+
+    trimmed = add(administrator_client, chr(0x09) + "Human   Resources" + chr(0x0A))
+
+    assert trimmed.status_code == 201, trimmed.content
+    assert trimmed.json()["name"] == "Human Resources"

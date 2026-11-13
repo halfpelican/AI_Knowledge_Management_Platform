@@ -5,6 +5,7 @@
 key set so a field cannot leak in later.
 """
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -436,6 +437,14 @@ class DepartmentEntrySerializer(serializers.Serializer):
     item_count = serializers.IntegerField(read_only=True)
 
 
+# POST /api/departments: what the classification prompt joins a scheme's department names with
+# ("; ", apps/ai/classification.py), refused in a name with the Cc and Cf characters (D-129, F4).
+DEPARTMENT_NAME_SEPARATOR = ";"
+DEPARTMENT_NAME_CHARACTERS_MESSAGE = (
+    "A department name may not contain a semicolon, or a control or invisible formatting character."
+)
+
+
 class DepartmentCreateSerializer(serializers.Serializer):
     """``POST /api/departments``: an Administrator adds a department to FR-10's department scheme, or
     brings a retired one back (D-129).
@@ -446,14 +455,29 @@ class DepartmentCreateSerializer(serializers.Serializer):
     passes the length check overruns the column afterwards. A NUL byte or a lone surrogate is
     refused by ``CharField``'s own validators (D-65). Whether the name is already listed is
     ``create_department``'s question, after validation: the 409, or the 200 for a retired one.
+
+    **Refused characters** (the security review of D-129, finding F4), one 400 for all of them:
+
+    - a control or format character (Unicode Cc or Cf: ESC, BEL, DEL, a right-to-left override, a
+      zero-width space, a byte order mark). No reader sees it as written, and two names could look
+      the same. It is checked on the name as sent, trimmed and before its inner whitespace is
+      collapsed, so a tab or line break inside a name is refused rather than turned into a space;
+    - ";", which the classification prompt joins a scheme's department names with, so that one name
+      could read as two.
     """
 
     name = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
 
     def validate_name(self, value):
+        if any(unicodedata.category(character) == "Cc" for character in value):
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        if any(unicodedata.category(character) == "Cf" for character in value):
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
         name = normalise_department_name(value)
         if not name:
             raise serializers.ValidationError("This field may not be blank.")
+        if DEPARTMENT_NAME_SEPARATOR in name:
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
         return name
 
 
