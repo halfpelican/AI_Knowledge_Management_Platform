@@ -11595,10 +11595,10 @@ after #90 had merged (D-126's note of that day). Both found the same gap.
   the re-audit on `a7d11bb` found it missing. The second attempt stopped on D-117's gap-column
   defect. By 21:50:05 on 12 November, before the first pass, whose record was written at 21:50:47,
   the session ran `alter table knowledge_gaps alter column embedding type vector(1024)` on
-  `kmp_followups_20261112` alone, through `psql`, on the condition that the table held no row,
-  which it did not. The user had approved creating the copy and running this check, not this
-  statement; it was the session's decision. A fresh restore of the snapshot needs the same
-  statement before the script will run (D-117's note of 12 November).
+  `kmp_followups_20261112` alone, through `psql`. The command ran it only if the table held no
+  row, and the table held none. The user had approved creating the copy and running this check,
+  not this statement; it was the session's decision. A fresh restore of the snapshot needs the
+  same statement before the script will run (D-117's note of 12 November).
 - **The scoped threads, t28, t29 and t37,** have a readable opener and a follow-up whose answer is
   only in Administrator-only material.
   - Asked as the Employee, all three were left out, on both passes.
@@ -11714,7 +11714,7 @@ Employee's question was.
     threshold-first, that is when each of the two strings either admits nothing or has a readable
     top admitted passage, in any combination, both admitting nothing included. Under rank-one, it
     is when each string's top-ranked passage is readable. On the three scoped development threads,
-    the own wording's top admitted passage was the restricted answer each time.
+    the own wording's top admitted passage was one the Employee cannot read, each time.
   - **Under rank-one, a follow-up whose own weak top-ranked passage is restricted is left out,** as
     on main before this decision.
   - **D-108's proxy, the top admitted passage, applies to each string.** A compound question, a

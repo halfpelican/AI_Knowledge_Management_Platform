@@ -708,9 +708,9 @@ def test_on_voyage_a_follow_up_about_restricted_material_is_left_out(voyage_corp
 
 
 def test_on_voyage_a_follow_up_nobody_could_answer_is_kept_on_its_own_wording(voyage_corpus, employee):
-    """A genuine gap in a thread. The composed string admits nothing, so the row is a gap. Its
-    subject and its vector are its own wording's (D-109), so it groups as the same question asked
-    as a one-off would."""
+    """A genuine gap in a thread. The composed string admits nothing, and so does the follow-up's own
+    wording, so neither leaves the row out, and it is a gap. Its subject and its vector are its own
+    wording's (D-109), so it groups as the same question asked as a one-off would."""
     service = voyage_corpus["service"]
     alone = at_cosine(0.6, axis=8, towards=9)
     service.vectors.update({
@@ -727,7 +727,8 @@ def test_on_voyage_a_follow_up_nobody_could_answer_is_kept_on_its_own_wording(vo
     gap = gap_of(follow_up)
     assert gap.subject == G_FOLLOW_UP and gap.embedding_model == VOYAGE
     assert list(gap.embedding) == pytest.approx(alone)
-    # Composed first, for the exclusion, and then alone, for the subject and the grouping.
+    # Composed first, then alone. Both are decided on, and the second is also the subject's and the
+    # grouping's (D-127).
     assert service.embed_calls[-2:] == [
         [query_text(joined(G_OPENER, G_FOLLOW_UP))],
         [query_text(G_FOLLOW_UP)],

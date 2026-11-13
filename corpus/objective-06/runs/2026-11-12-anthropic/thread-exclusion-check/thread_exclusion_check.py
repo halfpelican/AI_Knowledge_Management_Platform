@@ -32,8 +32,9 @@ printed), and the database is kmp_followups_20261112. It calls no Claude model.
 
 **Before it will run on a fresh restore** of kmp_anthropic's snapshot, the copy's empty
 ``knowledge_gaps.embedding`` must be ``vector(1024)``: the snapshot's is 768 (D-117's note of 12
-November 2026). For both passes it was altered by hand, on kmp_followups_20261112 alone, by 21:50:05
-on 12 November, when the table held no row::
+November 2026). For both passes the session altered it by hand, on kmp_followups_20261112 alone, by
+21:50:05 on 12 November, when the table held no row. That was the session's decision: the user had
+approved the copy and this check, not the statement::
 
     alter table knowledge_gaps alter column embedding type vector(1024)
 

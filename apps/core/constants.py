@@ -771,13 +771,16 @@ GAP_GROUPING_THRESHOLD = 0.5256
 GAP_GROUPING_THRESHOLD_BY_MODEL = {"voyage-4": 0.5054}
 
 # FR-19's permission exclusion for a question, per embedding model (D-126; apps/retrieval/gaps.py's
-# exclusion_rule() reads these). The question is ranked over the Administrator's scope, and then:
+# exclusion_rule() reads these). Each string decided is ranked over the Administrator's scope: the
+# question, or for a conversation follow-up the composed string and then its own wording (D-127).
+# Then:
 # - "rank-one" (D-108's note of 10 November 2026, 333be14): the top-ranked passage decides, whether
 #   or not it clears the model's relevance threshold. A restricted top passage means the row is left
-#   out, and a readable one means the row is a gap;
+#   out, and a readable one means that string does not leave it out;
 # - "threshold-first" (D-108 as first written): if no passage reaches the model's own relevance
-#   threshold (ranking.relevance_threshold, D-120), nobody could have been answered and the row is a
-#   gap. Otherwise the top admitted passage decides, as above.
+#   threshold (ranking.relevance_threshold, D-120), nobody could have been answered and that string
+#   does not leave the row out. Otherwise the top admitted passage decides, as above.
+# A row that no string leaves out is a gap.
 GAP_EXCLUSION_RANK_ONE = "rank-one"
 GAP_EXCLUSION_THRESHOLD_FIRST = "threshold-first"
 GAP_EXCLUSION_RULES = (GAP_EXCLUSION_RANK_ONE, GAP_EXCLUSION_THRESHOLD_FIRST)

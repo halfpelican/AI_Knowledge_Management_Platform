@@ -328,7 +328,7 @@ def _question_explained_by_permissions(
     - rank-one: the top-ranked passage, whether or not it clears the threshold (D-108's note of
       10 November 2026);
     - threshold-first: the top passage at or above the model's own relevance threshold, or none,
-      which makes the row a gap.
+      in which case this string does not leave the row out.
 
     A role missing from ``EFFECTIVE_ROLES`` is settled first, under either rule and whatever is
     ranked: it reads nothing, so its row is left out (D-107's build note, and its note of 12
@@ -342,13 +342,15 @@ def _question_explained_by_permissions(
     chunks, roles = scope.for_model(embedding.model)
     ranked = rank(chunks, embedding.vectors[0])
     if not ranked:
-        # No passage of this embedding model anywhere: nothing restricted explains it, a gap.
+        # No passage of this embedding model anywhere: nothing restricted explains it, so this
+        # string does not leave the row out.
         return False
     if exclusion_rule(embedding.model) == GAP_EXCLUSION_THRESHOLD_FIRST:
         admitted = admit(ranked, embedding_model=embedding.model)
         if not admitted:
             # Nothing reaches the model's threshold for anyone, so nobody could have been answered
-            # and no permission explains the no-answer: a gap (D-108 as first written, D-126).
+            # and no permission explains the no-answer: this string does not leave the row out
+            # (D-108 as first written, D-126).
             return False
         top = admitted[0]
     else:
