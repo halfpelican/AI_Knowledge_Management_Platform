@@ -70,6 +70,7 @@ from apps.retrieval.conversation import (
     ConversationContext,
     conversation_context,
     prior_questions,
+    prior_questions_before,
 )
 from apps.retrieval.models import Conversation, QueryLog
 from apps.retrieval.pipeline import QuestionLengthOutOfRange, answer_question
@@ -831,3 +832,68 @@ def test_a_conversation_turn_works_from_both_roles(session_client, administrator
     row = QueryLog.objects.get(question=FOLLOW_UP)
     assert row.conversation == conversation
     assert row.user == user
+
+
+# --- The history of a row already logged (D-127) ----------------------------------------------
+# FR-19's aggregation cycle rebuilds the string retrieval ranked for a follow-up, after the fact.
+# ``prior_questions_before`` has to return what ``prior_questions`` returned when the row was asked.
+
+
+@pytest.mark.django_db
+def test_the_history_of_a_logged_turn_is_the_history_it_was_asked_with(employee):
+    """For every turn of a thread longer than the limit: what ``prior_questions`` returned just
+    before the turn was logged is what ``prior_questions_before`` returns for it afterwards,
+    with later turns in the thread by then."""
+    conversation = make_conversation(employee)
+    asked_with, turns = [], []
+    for minute in range(1, MAXIMUM_CONVERSATION_TURNS + 4):
+        asked_with.append(prior_questions(conversation=conversation, user=employee))
+        turns.append(make_turn(conversation, employee, f"Question number {minute}?", minute=minute))
+
+    assert [prior_questions_before(turn) for turn in turns] == asked_with
+    # The premise: the thread outgrew the limit, so the limit and the order were both exercised.
+    assert asked_with[0] == () and len(asked_with[-1]) == MAXIMUM_CONVERSATION_TURNS
+    assert asked_with[-1][-1] == turns[-2].question
+
+
+@pytest.mark.django_db
+def test_a_logged_one_off_has_no_history(employee):
+    """A one-off question is never composed: not with a conversation's turns, and not with the
+    user's earlier one-off questions, which share its empty conversation."""
+    conversation = make_conversation(employee)
+    make_turn(conversation, employee, FIRST, minute=1)
+    make_turn(None, employee, "An earlier one-off question?", minute=2)
+    one_off = make_turn(None, employee, FOLLOW_UP, minute=3)
+
+    assert prior_questions_before(one_off) == ()
+
+
+@pytest.mark.django_db
+def test_a_logged_turns_history_is_its_own_conversations_and_its_own_users(employee, administrator):
+    """Both predicates, always, as in ``prior_questions``: a row of another conversation, and a
+    row another user wrote into this one, are not this turn's history."""
+    conversation = make_conversation(employee)
+    elsewhere = make_conversation(employee, title="Another thread")
+    make_turn(conversation, employee, FIRST, minute=1)
+    make_turn(elsewhere, employee, "A question in another thread?", minute=2)
+    make_turn(conversation, administrator, "A row another user wrote here?", minute=3)
+    turn = make_turn(conversation, employee, FOLLOW_UP, minute=4)
+
+    assert prior_questions_before(turn) == (FIRST,)
+
+
+@pytest.mark.django_db
+def test_two_turns_at_one_instant_are_ordered_as_the_ask_path_orders_them(employee):
+    """A tie on ``answered_at`` is decided by the primary key, in ``prior_questions`` and here
+    alike, so exactly one of the two rows has the other in its history."""
+    conversation = make_conversation(employee)
+    one = make_turn(conversation, employee, "One of two at the same instant?", minute=1)
+    other = make_turn(conversation, employee, "The other of the two?", minute=1)
+    assert one.answered_at == other.answered_at  # the premise
+
+    first, second = sorted([one, other], key=lambda row: str(row.pk).replace("-", ""))
+
+    assert prior_questions_before(first) == ()
+    assert prior_questions_before(second) == (first.question,)
+    # The ask path reads the same order: its newest row is the one that has the other before it.
+    assert prior_questions(conversation=conversation, user=employee) == (first.question, second.question)

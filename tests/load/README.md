@@ -73,12 +73,21 @@ waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=5452
   - **Waitress, from the listening process.** The process listening on `-BaseUrl`'s port is
     looked up (`Get-NetTCPConnection`, `Win32_Process`), and its command line must start
     Waitress. A server named only by a header, or nothing listening, is refused.
-    - **Windows can report a serving socket's state wrongly** (D-87's note of 11 November 2026),
-      so the lookup does not stop at the Listen row. It then reads `netstat -ano` for one
-      LISTENING PID, and then the port's own socket row (remote port 0) whatever state is
-      reported, when one live process with a readable command line owns it.
-    - **It tries again every 10 s for about 60 s** before it says nothing is listening. Each try
-      is printed, and the pre-flight prints which lookup found the process (`found by`).
+    - **Windows can report a serving socket's state wrongly** (D-87's notes of 11 and 12 November
+      2026), so the lookup does not rely on the Listen row alone. On every try it also reads
+      netstat's LISTENING PIDs and the port's own socket rows (remote port 0), whatever state is
+      reported.
+    - **A second process on the port means nothing is taken,** readable or not, and so does a
+      netstat or port-row lookup that could not be read. The Listen row is taken only when both
+      were read and neither shows another process; otherwise a process is taken only when both
+      were read, it alone holds the port, and its command line can be read. Two servers can listen
+      on one address and port on Windows, and netstat shows both.
+    - **It tries again every 10 s, for about a minute,** before it gives up. Each try is printed,
+      and the pre-flight prints which lookup found the process (`found by`). When it gives up, its
+      note says what it saw. With netstat or the port's rows unread, it says that whether anything
+      holds the port is not known. Otherwise, having seen a process it could not take, it says so.
+      It says that nothing is listening only when netstat and the port's rows were both read and
+      neither saw a process.
   - **24 threads, from that command line.** A command line with no `--threads` reads as 4,
     Waitress's default, and is refused as 4, not as "unknown". With `-OverrideServerThreads`,
     the observed count must equal `-ServerThreads`.

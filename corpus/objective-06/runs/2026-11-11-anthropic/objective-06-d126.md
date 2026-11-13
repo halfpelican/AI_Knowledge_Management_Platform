@@ -40,11 +40,13 @@ read-only script that compared the candidates on voyage-4, before the user chose
 - **The margins.** A margin is the restricted top passage's score less the best readable one's.
   The scoped questions' margins run from 0.1218 (d21) to 0.2734 (u30). The no-answer questions
   with a restricted top passage are u36 (0.0124) and d27 (0.0659). The midpoint of 0.0659 and
-  0.1218 is 0.0939, and the gap between them is 0.056, about 119 times Voyage's jitter.
+  0.1218 is 0.0939, and the gap between them is 0.056, about 47 times the largest difference
+  seen between two passes over one question, 0.0012 (corrected on 12 November; see the end).
 - **Two runs.** `first-run.json` is the run the options were put with, from the session's
   scratchpad. `console.txt` and `rows.json` are the same script run again from its committed copy
-  (`4d1e301`), because the first run's console was not kept. They agree to within Voyage's
-  jitter: d21's margin reads 0.1218 in one and 0.1219 in the other.
+  (`4d1e301`), because the first run's console was not kept. They give the same outcome for
+  every question. Their scores differ by up to 0.0011 (u30's best readable score, 0.1846 and
+  0.1857); d21's margin reads 0.1218 in one and 0.1219 in the other (corrected on 12 November).
 - **The development questions do not choose between the two passing rules.** The thirty do, by
   arithmetic on #86's diagnosis: P02's margin is 0.0448, under 0.0939, so the margin rule would
   keep P02 in the log. D-126 records that the choice used this.
@@ -120,7 +122,8 @@ The commit was `462e8e9`, with no uncommitted tracked changes. The database was
 - **The cost of threshold-first.** A permission-only question whose restricted answer scores under
   0.2687 would be kept, and its wording would reach the gap log. Neither the development set nor
   the thirty has one: their restricted answers score from 0.2812 (P02) to 0.56 (u32). So the
-  rule's margin on this set is 0.0125, about 27 times Voyage's jitter, and its size beyond this
+  rule's margin on this set is 0.0125, about 10 times the largest pass-to-pass difference seen
+  in this evidence (corrected on 12 November; see the end), and its size beyond this
   corpus is unmeasured. FLM's P02 fell exactly there, at 0.2977 to 0.2983 against 0.30 (D-108's
   evening note), which is why embed-gemma keeps rank-one.
 - **embed-gemma under either rule.** Nothing was measured on FLM for this change.
@@ -149,3 +152,23 @@ The commit was `462e8e9`, with no uncommitted tracked changes. The database was
   committed file's.
 - `draw-2/` and `draw-3/`: each draw's seed record, console and attempts log, its cycle console, its
   verification, and its export.
+
+## Correction, 12 November 2026
+
+The requirements audit of D-126 found that this write-up understated how far Voyage's scores move
+between two passes over the same question, and so overstated two margins.
+
+- **What it said:** "about 27 times Voyage's jitter" for P02's headroom, "about 119 times" for the
+  gap between the margins, and that the two exploration runs "agree to within Voyage's jitter". The
+  jitter figure was 0.00047, the largest difference an earlier check had seen.
+- **What this change's own evidence shows:** d18's top score differs by 0.0012 between the two
+  passes of the rank-one check (`../2026-11-10-anthropic/exclusion-dev-check-voyage/`), u05's by
+  0.0008 between the two passes here, and u30's best readable score by 0.0011 between the two
+  exploration runs.
+- **Recomputed against 0.0012:** P02's 0.0125 is about 10 times, and the 0.0559 between the margins
+  about 47 times. Every outcome is unchanged, and P02 read 0.2812 on each of the three diagnosis
+  draws.
+- **What the figure does not cover at all:** a paraphrase, a re-chunked document or another corpus.
+
+The three sentences above are corrected in place. D-126's note of 12 November records the same, and
+D-127 records the change the audit led to for follow-up turns.

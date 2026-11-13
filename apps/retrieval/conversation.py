@@ -93,6 +93,8 @@ join or of the labelling, in either place, fails it.
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from django.db.models import Q
+
 from apps.ai.prompting import build_conversational_question
 from apps.core.constants import MAXIMUM_CONVERSATION_TURNS
 from apps.retrieval.models import QueryLog
@@ -163,6 +165,43 @@ def prior_questions(*, conversation, user) -> tuple[str, ...]:
         return ()
     newest_first = (
         QueryLog.objects.filter(conversation=conversation, user=user)
+        .order_by("-answered_at", "-id")
+        .values_list("question", flat=True)[:MAXIMUM_CONVERSATION_TURNS]
+    )
+    return tuple(reversed(list(newest_first)))
+
+
+def prior_questions_before(row: QueryLog) -> tuple[str, ...]:
+    """The earlier questions ``row`` was composed with when it was asked, oldest first (D-127).
+
+    ``prior_questions`` is read at the moment of an ask, before that ask is logged, so it sees
+    every turn then in the conversation. This reads the same turns afterwards, for a row already
+    logged: the same conversation, the same user, the same order and the same limit, and only the
+    rows that sort before ``row``. FR-19's aggregation cycle uses it to rebuild the string
+    retrieval ranked for a follow-up (apps/retrieval/gaps.py).
+
+    A row with no conversation has no history. That is a one-off question, or a turn whose
+    conversation has since been deleted: ``QueryLog.conversation`` is SET_NULL, and its earlier
+    turns can then no longer be told from any other row.
+
+    It is the set ``prior_questions`` returned at the ask as long as all of these hold:
+
+    - no turn of the conversation has been deleted since;
+    - MAXIMUM_CONVERSATION_TURNS has not changed since;
+    - no other turn of the conversation shares the row's ``answered_at``. If one does, the
+      primary key decides which sorts first, as it does in ``prior_questions``, and it says
+      nothing about time;
+    - no turn of the conversation was logged while this one was being answered. ``answered_at``
+      is set when a row is written, after its history was read, so a turn logged in between
+      would sort before it here and not have been in its history then. One ask in flight per
+      user (D-79's ask slot) prevents that on the single-process server; a multi-process server,
+      or a slot that lapsed after its 45 minutes, would not.
+    """
+    if row.conversation_id is None:
+        return ()
+    newest_first = (
+        QueryLog.objects.filter(conversation_id=row.conversation_id, user_id=row.user_id)
+        .filter(Q(answered_at__lt=row.answered_at) | Q(answered_at=row.answered_at, id__lt=row.id))
         .order_by("-answered_at", "-id")
         .values_list("question", flat=True)[:MAXIMUM_CONVERSATION_TURNS]
     )

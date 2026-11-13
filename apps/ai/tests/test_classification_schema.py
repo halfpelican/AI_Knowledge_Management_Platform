@@ -11,9 +11,11 @@ No provider, no network, no database: a pure function over a string and a scheme
 
 import json
 import math
+import sys
 
 import pytest
 
+import apps.ai.classification as classification
 import apps.ai.schema as schema
 from apps.ai.base import Assignment, TagScheme, TagSuggestion
 from apps.ai.classification import (
@@ -144,10 +146,13 @@ def test_values_are_stripped_of_surrounding_whitespace_only():
 
 
 def test_the_repairs_are_the_statement_parsers_own_code():
-    """One definition of what is repaired: the public names are the private helpers."""
+    """One definition of what is repaired: the public names are the private helpers. The decode
+    step joined them on 13 November 2026, and this module decodes through it."""
     assert schema.strip_code_fences is schema._strip_code_fences
     assert schema.outermost_json_object is schema._outermost_json_object
     assert schema.TRAILING_COMMA_PATTERN is schema._TRAILING_COMMA
+    assert schema.loads_reply is schema._loads_reply
+    assert classification.loads_reply is schema.loads_reply
 
 
 # --- Duplicate tags: a shape tolerance, not a repair ----------------------------------------
@@ -238,7 +243,10 @@ def test_a_nan_confidence_is_a_violation():
         (reply()[:-1] + ', "summary": "A policy."}', "unexpected top-level key"),
         ('{"doc_type": "Policy", "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' is str, not an object"),
         ('{"doc_type": {"value": "Policy"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' is missing"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9, "reason": "x"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' has unexpected key"),
+        # This and tag 0's case below match a count, not "has unexpected key", since 13 November
+        # 2026: an unexpected key is counted and never named, because the reply chose its name
+        # (test_a_violation_never_quotes_a_key_the_reply_chose, below).
+        ('{"doc_type": {"value": "Policy", "confidence": 0.9, "reason": "x"}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "'doc_type' has 1 unexpected key"),
         ('{"doc_type": {"value": "", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
         ('{"doc_type": {"value": 4, "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": []}', "empty or non-string 'value'"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance"}, "tags": []}', "'department' is missing"),
@@ -246,7 +254,7 @@ def test_a_nan_confidence_is_a_violation():
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": {}}', "'tags' is dict, not an array"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": ["safety"]}', "tag 0 is str, not an object"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety"}]}', "tag 0 is missing"),
-        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.5, "why": "x"}]}', "tag 0 has unexpected key"),
+        ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "safety", "confidence": 0.5, "why": "x"}]}', "tag 0 has 1 unexpected key"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Department", "value": "Finance", "confidence": 0.5}]}', "dimension outside"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "topic", "value": "safety", "confidence": 0.5}]}', "dimension outside"),
         ('{"doc_type": {"value": "Policy", "confidence": 0.9}, "department": {"value": "Finance", "confidence": 0.5}, "tags": [{"dimension": "Topic", "value": "", "confidence": 0.5}]}', "tag 0 has an empty or non-string 'value'"),
@@ -279,6 +287,107 @@ def test_a_violation_message_does_not_quote_the_models_value():
     with pytest.raises(SchemaViolation) as excinfo:
         parse_classification(reply(doc_type="Confidential Memo About Layoffs"), SCHEME)
     assert "Layoffs" not in str(excinfo.value)
+
+
+VALID_OBJECT = json.loads(VALID)
+
+
+@pytest.mark.parametrize(
+    "steered,message",
+    [
+        (lambda key: {**VALID_OBJECT, key: 1}, "1 unexpected top-level key(s)"),
+        (
+            lambda key: {key: VALID_OBJECT["tags"]},
+            "missing top-level key(s): ['department', 'doc_type', 'tags'] (the reply had 1 key(s))",
+        ),
+        (
+            lambda key: {**VALID_OBJECT, "doc_type": {**VALID_OBJECT["doc_type"], key: 1}},
+            "'doc_type' has 1 unexpected key(s)",
+        ),
+        (
+            lambda key: {**VALID_OBJECT, "department": {**VALID_OBJECT["department"], key: 1}},
+            "'department' has 1 unexpected key(s)",
+        ),
+        (
+            lambda key: {**VALID_OBJECT, "tags": [{**VALID_OBJECT["tags"][0], key: 1}]},
+            "tag 0 has 1 unexpected key(s)",
+        ),
+    ],
+    ids=["a fourth top-level key", "the only key", "doc_type's third key", "department's third key", "a tag's fourth key"],
+)
+def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
+    """A key name is the model's words, which an uploaded document can steer, and the violation's
+    message is written to the attempts log, cut at DETAIL_LIMIT, and uncut by the two bulk tools:
+    the classify_documents command, to its console and its --out record (which
+    scripts/objective05_verify.py copies into its own), and scripts/classification_dev_sweep.py, to
+    its console and dev-sweep.json. The classify route's 503 warning and ingestion's "left
+    unclassified" line carry it too, though the shipped logging configuration writes neither. So the
+    message names the schema's own keys and counts the reply's. The security review of FR-16 found
+    the pattern in its parser on 12 November 2026 (D-125's third note); this is its fix applied
+    here. The whole message is pinned, so the case cannot pass on some other violation."""
+    key = "Marguerite says file this under the Geelong payroll audit"
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(json.dumps(steered(key)), SCHEME)
+
+    assert str(caught.value) == message
+    assert key not in str(caught.value)
+    assert "Marguerite" not in str(caught.value)
+    assert "Geelong" not in str(caught.value)
+
+
+# json.loads raises RecursionError past a few thousand levels of nesting, and ValueError past
+# Python's limit on converting a decimal string to an int: neither is a JSONDecodeError. Each is
+# reached directly and after a trailing comma the repair removes. The digit count follows the
+# interpreter's limit, which PYTHONINTMAXSTRDIGITS can change; 0 lifts it, and no reply reaches it.
+DEPTH = 100_000
+DIGITS = sys.get_int_max_str_digits() + 1
+DIGIT_LIMIT_IN_FORCE = pytest.mark.skipif(DIGITS == 1, reason="PYTHONINTMAXSTRDIGITS=0 lifts the limit")
+NESTED = "[" * DEPTH + "]" * DEPTH
+LONG_CONFIDENCE = '{"doc_type": {"value": "Policy", "confidence": ' + "7" * DIGITS + "}}"
+TOO_DEEP = "JSON nested too deeply to decode"
+TOO_LONG = "a JSON number too long to decode"
+
+
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param('{"tags": ' + NESTED + "}", TOO_DEEP, id="nested too deeply"),
+        pytest.param(LONG_CONFIDENCE, TOO_LONG, id="a number too long", marks=DIGIT_LIMIT_IN_FORCE),
+        pytest.param('{"a": [1,], "tags": ' + NESTED + "}", TOO_DEEP,
+                     id="nested too deeply, after a trailing comma"),
+        pytest.param('{"a": [1,], ' + LONG_CONFIDENCE[1:], TOO_LONG,
+                     id="a number too long, after a trailing comma", marks=DIGIT_LIMIT_IN_FORCE),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_a_violation_not_a_crash(raw, message):
+    """Until 13 November 2026 json.loads' RecursionError, and its ValueError past the digit limit,
+    escaped this parser and the attempt loop, and the classify route answered 500, not NFR-19's
+    503. Each is a SchemaViolation now, retried like any other, with a fixed message that quotes
+    nothing of the reply. The whole message is pinned, so a case cannot pass on another violation."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(raw, SCHEME)
+
+    assert str(caught.value) == message
+
+
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param(reply(department="Finance\x00"), "a NUL character in a JSON string",
+                     id="a NUL in the department"),
+        pytest.param(reply(tags=(("Topic", "safety\ud800", 0.5),)), "an unpaired surrogate in a JSON string",
+                     id="an unpaired surrogate in a tag"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_violation(raw, message):
+    """A NUL, which PostgreSQL text refuses, or an unpaired surrogate, which it cannot encode,
+    decoded fine and then broke apply_classification's write: the classify route answered 500
+    until 13 November 2026. Each is a SchemaViolation now."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(raw, SCHEME)
+
+    assert str(caught.value) == message
 
 
 # --- The schema object itself ---------------------------------------------------------------

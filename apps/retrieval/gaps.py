@@ -21,9 +21,25 @@ already a ``KnowledgeGapItem`` is skipped in the query, and the one-to-one membe
 re-scan safe in any case. Nothing here depends on two timestamps differing: Windows ticks at about
 15.6 ms.
 
-**2. The exclusion (D-108).** For a question, the asker's role is read from the user row now. The
-question is embedded on its own wording with the query prefix, through ``embed_question``, the
-pipeline's one embedding path. It is ranked over ``candidate_chunks(role_name="Administrator")``,
+**2. The exclusion (D-108).** For a question, the asker's role is read from the user row now. A
+role missing from ``EFFECTIVE_ROLES`` reads nothing, and its questions are left out before
+anything is embedded. Otherwise each string below is embedded with the query prefix, through
+``embed_question``, the pipeline's one embedding path, and decided in turn (D-127):
+
+- **the string retrieval ranked when the row was asked.** For a one-off question, and a thread's
+  first turn, that is the question. For a follow-up it is the question after its earlier turns,
+  as ``conversation.compose`` joins them. A follow-up's bare wording is not what retrieval
+  ranked: on voyage-4 it can admit nothing (t03 and t06 in D-112's HTTP check; t03 was asked in
+  the Employee's scope, and the cycle ranks in the Administrator's), which threshold-first would
+  read as "nobody could have been answered";
+- **for a follow-up, its own wording too:** the words the Administrator would read, and the
+  vector it would be grouped by. A question about restricted material asked after a turn about
+  something else can rank readable material first in the composed string (D-127's second step).
+
+A row is left out when either string's deciding passage is one the asker cannot read. So no row
+is kept that deciding on the question's own wording alone, as before D-127, would have left out.
+
+It is ranked over ``candidate_chunks(role_name="Administrator")``,
 which since D-66 is every stamped chunk, through the one scoping helper, so no new unscoped query
 shape exists. Which passage then decides depends on the question's embedding model
 (``exclusion_rule``, D-126):
@@ -32,17 +48,20 @@ shape exists. Which passage then decides depends on the question's embedding mod
   clears the threshold** (the user's decision of 10 November 2026, D-108's note);
 - **threshold-first,** voyage-4's rule (the user's decision of 11 November 2026, D-126): if no
   passage reaches the model's own relevance threshold (``ranking.admit``, D-120), nobody could
-  have been answered, so the row is a gap. Otherwise the top admitted passage decides.
+  have been answered, so that string does not leave the row out. Otherwise the top admitted
+  passage decides.
 
-The deciding passage settles it:
+The deciding passage settles what each string says:
 
 - no passage of the question's embedding model exists: nothing restricted can explain the
-  no-answer, and the row is a gap;
+  no-answer, and the string does not leave the row out;
 - the deciding passage's ``visible_to_roles`` has no overlap with the asker's effective roles: the
   best evidence for an answer is where the asker cannot read it, so the row is
   permission-affected and is left out;
-- otherwise the best match was readable by the asker, so their no-answer was not a permission
-  matter, and the row is a gap.
+- otherwise the best match was readable by the asker, so on that string their no-answer was not a
+  permission matter, and the string does not leave the row out.
+
+A row that no string leaves out is a gap.
 
 **How the two rules arose.**
 - As first built, the rule was threshold-first for every model. Objective 06's first cycle on the
@@ -78,8 +97,11 @@ cycle either commits everything it found or nothing. ``embed_question`` has alre
 embedded in "one batched call per cycle". A question has to be embedded before D-108 can decide
 whether it remains, and D-108 says it is embedded "as retrieval embeds it", so each row is
 embedded on its own through ``embed_question``: one call per row, with that function's retries and
-its usability checks, and exactly the vector retrieval would compute for the same text. The
-question's vector is then reused for its grouping. A search is embedded only once it has survived
+its usability checks, and exactly the vector retrieval would compute for the same text. A one-off
+question's vector is then reused for its grouping. A follow-up whose composed string leaves it
+out is embedded once. Otherwise it is embedded a second time, on its own wording, which is
+decided too and, if the row is kept, used for its subject and grouping (D-109, D-127). A question
+from a role that reads nothing is not embedded at all. A search is embedded only once it has survived
 its recount. Whether FLM returns the same vector for a text in a batch as alone has not been
 measured, so batching could have made the exclusion rank a different vector from retrieval's.
 """
@@ -103,6 +125,7 @@ from apps.core.constants import (
     GAP_GROUPING_THRESHOLD_BY_MODEL,
     KNOWLEDGE_GAP_OPEN,
 )
+from apps.retrieval.conversation import compose, prior_questions_before
 from apps.retrieval.models import (
     KnowledgeGap,
     KnowledgeGapCycle,
@@ -205,9 +228,25 @@ def run_cycle(*, triggered_by=None) -> KnowledgeGapCycle:
         scope = _AdministratorScope()
         items: list[_Item] = []
         for row in queries:
-            embedding = embed_question(row.question)
-            if _question_explained_by_permissions(row, embedding, scope):
+            # A role that reads nothing is left out before anything is embedded (D-107's note of
+            # 12 November 2026): its rows cost no provider call, and cannot fail the cycle.
+            if not effective_roles(row.user.role.role_name):
                 continue  # left out, and recorded nowhere (D-108)
+            # D-127: decided on the string retrieval ranked when the row was asked. For a one-off
+            # that is the question. For a follow-up it is the question after its earlier turns,
+            # joined as the pipeline joined them.
+            ranked_text = compose(row.question, prior_questions_before(row)).for_retrieval
+            deciding = embed_question(ranked_text)
+            if _question_explained_by_permissions(row, deciding, scope):
+                continue  # left out, and recorded nowhere (D-108)
+            if ranked_text == row.question:
+                embedding = deciding
+            else:
+                # A follow-up's own wording is decided too: it is what the Administrator would
+                # read, and the vector it is grouped by (D-109). Left out if either says so.
+                embedding = embed_question(row.question)
+                if _question_explained_by_permissions(row, embedding, scope):
+                    continue  # left out, and recorded nowhere (D-108, D-127)
             items.append(
                 _Item(
                     timestamp=row.answered_at,
@@ -281,29 +320,41 @@ def _question_explained_by_permissions(
     """D-108's rule for a question: True when the deciding passage over the Administrator's
     scope is one the asker's role cannot read.
 
+    ``embedding`` is of the string retrieval ranked for the row, the question or, for a follow-up,
+    the question after its earlier turns, or of a follow-up's own wording. A follow-up is decided
+    on both, and left out if either is explained by permissions (D-127).
+
     Which passage decides is the embedding model's rule (``exclusion_rule``, D-126):
     - rank-one: the top-ranked passage, whether or not it clears the threshold (D-108's note of
       10 November 2026);
     - threshold-first: the top passage at or above the model's own relevance threshold, or none,
-      which makes the row a gap.
+      in which case this string does not leave the row out.
+
+    A role missing from ``EFFECTIVE_ROLES`` is settled first, under either rule and whatever is
+    ranked: it reads nothing, so its row is left out (D-107's build note, and its note of 12
+    November 2026).
     """
+    asker_roles = set(effective_roles(row.user.role.role_name))
+    if not asker_roles:
+        # Fail closed. The list never shows a question whose answer may exist where its asker
+        # could not read it, and for a role that reads nothing that is every passage.
+        return True
     chunks, roles = scope.for_model(embedding.model)
     ranked = rank(chunks, embedding.vectors[0])
     if not ranked:
-        # No passage of this embedding model anywhere: nothing restricted explains it, a gap.
+        # No passage of this embedding model anywhere: nothing restricted explains it, so this
+        # string does not leave the row out.
         return False
     if exclusion_rule(embedding.model) == GAP_EXCLUSION_THRESHOLD_FIRST:
         admitted = admit(ranked, embedding_model=embedding.model)
         if not admitted:
             # Nothing reaches the model's threshold for anyone, so nobody could have been answered
-            # and no permission explains the no-answer: a gap (D-108 as first written, D-126).
+            # and no permission explains the no-answer: this string does not leave the row out
+            # (D-108 as first written, D-126).
             return False
         top = admitted[0]
     else:
         top = ranked[0]
-    asker_roles = set(effective_roles(row.user.role.role_name))
-    # A role missing from EFFECTIVE_ROLES reads nothing, so every top passage is unreadable to
-    # it and its rows are left out: the list never shows a question whose answer may exist.
     return not (set(roles[top.chunk_id]) & asker_roles)
 
 

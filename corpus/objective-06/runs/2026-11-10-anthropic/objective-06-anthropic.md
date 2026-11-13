@@ -67,7 +67,9 @@ either.
   the frozen thirty's unanswerable asks had that shape on FLM, "so its size is unmeasured". On
   Voyage's vectors, U01 has it.
 - **Not Voyage's jitter.** The margin between the restricted top passage and the best readable one
-  is 0.0095, about twenty times the 0.00047 jitter, and the row was left out on all three draws.
+  is 0.0095, about eight times the largest pass-to-pass difference seen in this evidence, 0.0012,
+  and the row was left out on all three draws. (Corrected on 12 November: this read "about twenty
+  times the 0.00047 jitter", and 0.00047 was not a bound. D-126's note of that day.)
 - **For information, not a run:** under D-108's rule as first written, these scores would keep U01.
   That rule admits at the threshold, here voyage-4's 0.2687, then decides on the top admitted
   passage, and nothing clears 0.2687 for anyone. It would still leave out P02, whose restricted top
@@ -138,8 +140,9 @@ On 11 November, with the user's approval, the check was run afterwards
 (`exclusion-dev-check-voyage/`).
 - **What ran:** a copy of the script changed only where FLM was named, with its `.diff`
   (`9527cd7`), on this database. It writes nothing and calls no Claude model.
-- **Twice, because Voyage jitters.** Both passes gave the same outcome for every question, with
-  scores no more than 0.0004 apart.
+- **Twice, because Voyage jitters.** Both passes gave the same outcome for every question. Their
+  top scores differ by up to 0.0012 (d18, 0.5271 and 0.5259). (Corrected on 12 November: this read
+  "scores no more than 0.0004 apart", which the two passes' own files contradict.)
 
 | D-108's development check | FLM, embed-gemma (`../2026-11-10/exclusion-dev-check-2/`) | **anthropic, voyage-4** |
 |---|---|---|

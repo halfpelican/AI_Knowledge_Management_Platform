@@ -136,6 +136,30 @@ def test_a_long_detail_is_cut_and_kept_on_one_line(caplog):
     assert len(line.split(": SchemaViolation: ", 1)[1]) == attempt_log.DETAIL_LIMIT
 
 
+STEERED_KEY = "Marguerite confirmed the Geelong site closes in June"
+STEERED_REPLY = json.dumps({"statements": [], STEERED_KEY: 1})
+
+
+def test_no_line_and_no_final_failure_quotes_a_key_the_reply_chose(caplog):
+    """A key name is the model's words, which a retrieved passage can steer. Every attempt fails on
+    one, and no attempt line, no final ProviderUnavailable and no 503 line quotes it. The parser
+    counts such keys (test_schema.py); this checks that the loop and the ask's 503 line pass on
+    nothing more than the parser's message."""
+    call_once, calls = _scripted(*[STEERED_REPLY] * MAXIMUM_GENERATION_ATTEMPTS)
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable) as excinfo:
+            run_generation_attempts(call_once=call_once, label="FLM")
+        attempt_log.unavailable(excinfo.value)  # what POST /api/ask logs before its 503
+
+    assert len(calls) == MAXIMUM_GENERATION_ATTEMPTS
+    lines = _attempt_lines(caplog)
+    assert len(lines) == MAXIMUM_GENERATION_ATTEMPTS + 1
+    for text in (*lines, str(excinfo.value)):
+        assert "1 unexpected top-level key(s)" in text, text
+        assert "Marguerite" not in text and "Geelong" not in text, text
+
+
 class _FlakyEmbedder:
     """Fails the first ``failures`` embeds, then answers with a usable vector."""
 
