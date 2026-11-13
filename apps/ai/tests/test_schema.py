@@ -138,6 +138,39 @@ def test_a_json_array_at_the_top_level_is_refused():
         parse_statement_list('[{"text": "t", "chunk_id": "x"}]')
 
 
+VALID_OBJECT = json.loads(VALID)
+
+
+@pytest.mark.parametrize(
+    "steered,message",
+    [
+        (lambda key: {**VALID_OBJECT, key: 1}, "1 unexpected top-level key(s)"),
+        (lambda key: {**VALID_OBJECT, key: 1, f"{key}, again": 2}, "2 unexpected top-level key(s)"),
+        (lambda key: {key: VALID_OBJECT["statements"]}, "no 'statements' key (the reply had 1 key(s))"),
+        (
+            lambda key: {"statements": [{**VALID_OBJECT["statements"][0], key: 1}]},
+            "statement 0 has 1 unexpected key(s)",
+        ),
+    ],
+    ids=["a second top-level key", "two more top-level keys", "the only key", "a statement's third key"],
+)
+def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
+    """A key name is the model's words, which a retrieved passage can steer, and the violation's
+    message reaches the attempts log and the ask's 503 line (apps/ai/attempt_log.py). So the
+    message names the schema's own keys and counts the reply's. The security review of FR-16
+    found the pattern in its parser on 12 November 2026 (D-125's third note); this is its fix
+    applied here. The whole message is pinned, so the case cannot pass on some other violation."""
+    key = "Marguerite confirmed the Geelong site closes in June"
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(json.dumps(steered(key)))
+
+    assert str(caught.value) == message
+    assert key not in str(caught.value)
+    assert "Marguerite" not in str(caught.value)
+    assert "Geelong" not in str(caught.value)
+
+
 # --- The schema object itself -----------------------------------------------------------
 
 

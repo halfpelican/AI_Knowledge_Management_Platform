@@ -162,10 +162,16 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
     if not isinstance(decoded, dict):
         raise SchemaViolation(f"top level is {type(decoded).__name__}, not an object")
     if "statements" not in decoded:
-        raise SchemaViolation(f"no 'statements' key (keys: {sorted(decoded)})")
+        # A key the reply chose is the model's words, which a passage can steer, so it is
+        # counted and never quoted, here and for a statement's keys below: the message reaches
+        # the attempts log (apps/ai/attempt_log.py). Only the schema's own keys are named. The
+        # security review of FR-16 found this pattern in its parser on 12 November 2026 (D-125's
+        # third note); the fix is the same. Only the wording changed: what parses and what is
+        # refused are exactly as measured.
+        raise SchemaViolation(f"no 'statements' key (the reply had {len(decoded)} key(s))")
     extra = sorted(set(decoded) - {"statements"})
     if extra:
-        raise SchemaViolation(f"unexpected top-level key(s): {extra}")
+        raise SchemaViolation(f"{len(extra)} unexpected top-level key(s)")
     items = decoded["statements"]
     if not isinstance(items, list):
         raise SchemaViolation(f"'statements' is {type(items).__name__}, not an array")
@@ -180,7 +186,7 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
             raise SchemaViolation(f"statement {position} is missing {missing}")
         unexpected = sorted(set(item) - {"text", "chunk_id"})
         if unexpected:
-            raise SchemaViolation(f"statement {position} has unexpected key(s): {unexpected}")
+            raise SchemaViolation(f"statement {position} has {len(unexpected)} unexpected key(s)")
         text, chunk_id = item["text"], item["chunk_id"]
         if not isinstance(text, str) or not text.strip():
             raise SchemaViolation(f"statement {position} has an empty or non-string 'text'")
