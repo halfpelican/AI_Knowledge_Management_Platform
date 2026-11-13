@@ -1,0 +1,23 @@
+--- corpus/objective-02/runs/2026-11-10-anthropic/ingest_objective02_anthropic.py
++++ corpus/objective-02/runs/2026-11-13-alpha-anthropic/ingest_objective02_anthropic.py
+@@ -1,4 +1,10 @@
+-"""Objective 02 on the anthropic provider (10 November 2026): ingestion through the server, with Voyage and Haiku at upload.
++"""The alpha on anthropic (13 November 2026): the corpus ingested through the alpha's own server.
++
++A copy of corpus/objective-02/runs/2026-11-10-anthropic/ingest_objective02_anthropic.py, changed only
++in the database its provider gate requires: kmp_alpha_20261113. Everything else is the original's,
++whose docstring follows.
++
++Objective 02 on the anthropic provider (10 November 2026): ingestion through the server, with Voyage and Haiku at upload.
+ 
+ A copy of scripts/ingest_objective02.py at 12eb81f, changed only where FLM was named. It ingests
+ Objective 02's corpus through a Waitress server running the anthropic provider, into
+@@ -121,7 +127,7 @@
+ 
+ # This copy: no check_flm, because FLM takes no part. The run's database and provider are set
+ # before Django reads its settings, and the provider gate checks them (D-113).
+-EXPECTED_DATABASE = "kmp_obj02_anthropic_20261110"
++EXPECTED_DATABASE = "kmp_alpha_20261113"
+ PROTECTED = frozenset({"kmp", "kmp_demo_20261101", "kmp_obj02_20261101", "kmp_obj0506_20261101",
+                        "kmp_voyage_20261110", "kmp_anthropic"})
+ EXPECTED_SETTINGS = {

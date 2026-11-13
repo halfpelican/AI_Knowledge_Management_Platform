@@ -1,0 +1,8 @@
+database: kmp_alpha_20261113
+tags by dimension (grown): [('Process', False, 4), ('Project', False, 3), ('Project', True, 1), ('Topic', False, 6)]
+content_tags by applied_by, confirmed: [('ai', False, 15), ('user', True, 48)]
+document_analysis: 20 rows; proposed topics 1 across 1 documents; discarded suggestions 0 across 0 documents; department applied by ['user']
+example proposed topics: [[{'value': 'customer complaints', 'confidence': 0.9}]]
+meeting summaries by status: [('Ready', 5)]
+action items: 25
+chunks by source type and ai_generated: [('document', False, 38), ('meeting', False, 5), ('meeting', True, 5)]

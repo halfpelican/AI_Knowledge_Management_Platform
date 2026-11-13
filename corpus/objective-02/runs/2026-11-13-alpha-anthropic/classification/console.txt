@@ -1,0 +1,23 @@
+Classifying against database 'kmp_alpha_20261113'.
+72b62a3c-d7ff-4b6c-a57d-e3f2c8a2a0be  'Employee Leave Policy 2026'                type Policy/applied  department 'Human Resources'/applied  tags 2 applied, 1 held, 0 removed, 0 proposed, 0 discarded  1.654s
+bad9f5dd-6133-449e-ba52-3450b3aa64de  'IT Acceptable Use Policy'                  type Policy/applied  department 'Information Technology'/applied  tags 3 applied, 2 held, 0 removed, 0 proposed, 0 discarded  1.143s
+ac22ccba-5fe8-4308-bb92-dbc379a1e92b  'Health and Safety Induction Guide'         type Procedure/applied  department 'Human Resources'/provisional  tags 2 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.695s
+f84242b6-e314-4be9-b930-57d8235e3c7c  'Records Management Handbook'               type Policy/provisional  department 'Legal and Compliance'/provisional  tags 2 applied, 0 held, 0 removed, 0 proposed, 0 discarded  3.005s
+56196e77-8c88-4e31-9f27-7df48ca8a617  'Procurement Guidelines'                    type Policy/applied  department 'Finance'/provisional  tags 3 applied, 1 held, 0 removed, 0 proposed, 0 discarded  1.327s
+f09187cb-a344-4ea0-afb9-1fafa1f43dec  'Customer Complaints Procedure'             type Procedure/applied  department 'Operations'/provisional  tags 2 applied, 0 held, 0 removed, 1 proposed, 0 discarded  2.507s
+9cbaee7a-0a46-47f2-945a-0246da0e0d0b  'Remote Work Agreement Template'            type Policy/applied  department 'Human Resources'/applied  tags 3 applied, 2 held, 0 removed, 0 proposed, 0 discarded  1.846s
+8bc7aa37-9348-4cfd-9f7b-4844633b2fd9  'Onboarding Checklist for New Starters'     type Procedure/applied  department 'Human Resources'/applied  tags 2 applied, 1 held, 0 removed, 0 proposed, 0 discarded  1.918s
+408e340f-5b5f-4559-9d66-30caea44f0d5  'Project Atlas Kickoff Brief'               type Report/provisional  department 'Projects'/applied  tags 1 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.62s
+9cb6bf9a-3fc6-48d0-a138-77b176dcb687  'Expense Claims Guide'                      type Procedure/applied  department 'Finance'/applied  tags 3 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.775s
+d39865ae-e52d-4406-a852-92ff476bed5b  'Data Privacy Notice'                       type Policy/applied  department 'Legal and Compliance'/applied  tags 3 applied, 0 held, 0 removed, 0 proposed, 0 discarded  2.054s
+5523f928-c3e7-4cfc-9548-49f78d0e8262  'Vendor Register 2026'                      type Report/applied  department 'Finance'/provisional  tags 3 applied, 0 held, 0 removed, 0 proposed, 0 discarded  1.891s
+0bf45b56-cf03-4a88-a376-1a7b0e913532  'Training Schedule Q4'                      type Report/applied  department 'Human Resources'/provisional  tags 2 applied, 0 held, 0 removed, 0 proposed, 0 discarded  2.103s
+118af57e-628f-4a82-8e15-9c86ac47443d  'Asset Inventory Melbourne Office'          type Report/applied  department 'Operations'/provisional  tags 3 applied, 2 held, 0 removed, 0 proposed, 0 discarded  2.366s
+d99dd76a-7dc3-44f1-8c73-b8900363dea4  'Project Budget Tracker FY27'               type Report/applied  department 'Finance'/provisional  tags 3 applied, 0 held, 0 removed, 0 proposed, 0 discarded  2.275s
+27d0c409-1c0f-48fd-881b-d4c8c908a2f1  'Team Roster and Skills Matrix'             type Report/applied  department 'Human Resources'/provisional  tags 2 applied, 0 held, 0 removed, 0 proposed, 0 discarded  1.976s
+b3c50d26-aae0-421e-b8c2-cf634a5c316c  'Meeting Room Booking Rules'                type Policy/applied  department 'Operations'/provisional  tags 3 applied, 1 held, 0 removed, 0 proposed, 0 discarded  2.017s
+f44c3c06-5dcf-43ff-b331-a5c24350d947  'IT Helpdesk Frequently Asked Questions'    type Procedure/provisional  department 'Information Technology'/applied  tags 2 applied, 0 held, 0 removed, 0 proposed, 0 discarded  1.758s
+01c4c4b1-b973-46ff-874d-4bc51411b716  'Fleet Vehicle Usage Notes'                 type Policy/applied  department 'Operations'/provisional  tags 2 applied, 1 held, 0 removed, 0 proposed, 0 discarded  1.994s
+6d29c483-5964-444b-b991-fb983fe7134d  'Office Relocation Announcement'            type Report/provisional  department 'Operations'/provisional  tags 2 applied, 1 held, 0 removed, 0 proposed, 0 discarded  1.866s
+Done: 20 classified, 0 failed.
+Record written to corpus\objective-02\runs\2026-11-13-alpha-anthropic\classification\classify-all.json.
