@@ -34,8 +34,7 @@ anything is embedded. Otherwise each string below is embedded with the query pre
   read as "nobody could have been answered";
 - **for a follow-up, its own wording too:** the words the Administrator would read, and the
   vector it would be grouped by. A question about restricted material asked after a turn about
-  something else can rank readable material first in the composed string (the security review of
-  12 November 2026, F1).
+  something else can rank readable material first in the composed string (D-127's second step).
 
 A row is left out when either string's deciding passage is one the asker cannot read. So no row
 is kept that deciding on the question's own wording alone, as before D-127, would have left out.
@@ -49,17 +48,20 @@ shape exists. Which passage then decides depends on the question's embedding mod
   clears the threshold** (the user's decision of 10 November 2026, D-108's note);
 - **threshold-first,** voyage-4's rule (the user's decision of 11 November 2026, D-126): if no
   passage reaches the model's own relevance threshold (``ranking.admit``, D-120), nobody could
-  have been answered, so the row is a gap. Otherwise the top admitted passage decides.
+  have been answered, so that string does not leave the row out. Otherwise the top admitted
+  passage decides.
 
-The deciding passage settles it:
+The deciding passage settles what each string says:
 
 - no passage of the question's embedding model exists: nothing restricted can explain the
-  no-answer, and the row is a gap;
+  no-answer, and the string does not leave the row out;
 - the deciding passage's ``visible_to_roles`` has no overlap with the asker's effective roles: the
   best evidence for an answer is where the asker cannot read it, so the row is
   permission-affected and is left out;
-- otherwise the best match was readable by the asker, so their no-answer was not a permission
-  matter, and the row is a gap.
+- otherwise the best match was readable by the asker, so on that string their no-answer was not a
+  permission matter, and the string does not leave the row out.
+
+A row that no string leaves out is a gap.
 
 **How the two rules arose.**
 - As first built, the rule was threshold-first for every model. Objective 06's first cycle on the

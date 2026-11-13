@@ -752,9 +752,9 @@ GAP_GROUPING_THRESHOLD = 0.5256
 # the lowest within-subject pair is 0.5157, and the highest cross-subject pair is 0.5297, the same
 # password pair. So the rule's best pairwise F1 gives 0.5054, and centroid grouping at that value
 # forms 12 entries of 3, none mixed. The lowest within-subject pair sits 0.0103 above it, about
-# twenty times Voyage's measured re-embedding jitter (0.00047). Any model not listed,
-# EmbeddingGemma included, keeps GAP_GROUPING_THRESHOLD; apps/retrieval/gaps.py's
-# grouping_threshold() reads both.
+# 8.6 times Voyage's re-embedding jitter: differences of up to 0.0012 between two passes over one
+# question (D-109's note of 12 November 2026). Any model not listed, EmbeddingGemma included, keeps
+# GAP_GROUPING_THRESHOLD; apps/retrieval/gaps.py's grouping_threshold() reads both.
 GAP_GROUPING_THRESHOLD_BY_MODEL = {"voyage-4": 0.5054}
 
 # FR-19's permission exclusion for a question, per embedding model (D-126; apps/retrieval/gaps.py's

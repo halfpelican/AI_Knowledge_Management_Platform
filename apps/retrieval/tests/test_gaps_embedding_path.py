@@ -161,8 +161,8 @@ def test_every_considered_text_goes_through_embed_question_and_nothing_reaches_t
 
     # Every question in the window went through it, the one left out included, because D-108
     # ranks a question's own vector; the surviving search went through it; each once, as typed.
-    # The follow-up went through it twice: as retrieval ranked it, for the exclusion, and alone,
-    # for its grouping (D-127).
+    # The follow-up went through it twice: as retrieval ranked it, and alone. Both are decided on,
+    # and the second is also what it is grouped by (D-127).
     assert sorted(recorded) == sorted([Q_LEFT_OUT, Q_KEPT, Q_TURN_AS_RANKED, Q_TURN, S_KEPT])
     # The search the recount left out, and the answered question, were never embedded.
     assert S_LEFT_OUT not in recorded and Q_ANSWERED not in recorded

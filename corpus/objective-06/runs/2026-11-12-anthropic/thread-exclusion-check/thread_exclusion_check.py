@@ -24,11 +24,21 @@ database is left exactly as it was: no row, no gap, no cycle. ``gaps.embed_quest
 in this process only, to record each text the cycle embedded and its vector, so the report can show
 each string's top passage; the wrapper returns what the real function returns.
 
-The database's own fifty earlier search logs are in the cycle's window too, so the cycle embeds the
-ones it keeps. Their outcomes are not reported here.
+Any zero-result search already in the database falls in the cycle's window too, and would be
+embedded if kept. The cycle kept none on either pass (``searches_considered`` 0).
 
 It refuses unless the provider is ``anthropic`` with voyage-4 at 1024, both keys are present (never
 printed), and the database is kmp_followups_20261112. It calls no Claude model.
+
+**Before it will run on a fresh restore** of kmp_anthropic's snapshot, the copy's empty
+``knowledge_gaps.embedding`` must be ``vector(1024)``: the snapshot's is 768 (D-117's note of 12
+November 2026). For both passes it was altered by hand, on kmp_followups_20261112 alone, by 21:50:05
+on 12 November, when the table held no row::
+
+    alter table knowledge_gaps alter column embedding type vector(1024)
+
+This docstring was corrected on 13 November 2026, after both passes. The code is as it ran at
+``4c36a38``.
 
 Usage, in PowerShell, from the repository root, with the run's DATABASE_URL set::
 

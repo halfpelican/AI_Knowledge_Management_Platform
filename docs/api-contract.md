@@ -1353,10 +1353,12 @@ and exits 1 on a provider outage. The route runs the same cycle on demand.
    - **rank-one,** for every model the map does not list, EmbeddingGemma included: the top-ranked
      passage, whether or not it clears `RELEVANCE_THRESHOLD`;
    - **threshold-first,** for `voyage-4`: the top passage at or above the model's own relevance
-     threshold. If no passage reaches it, nobody could have been answered, and the row is kept.
+     threshold. If no passage reaches it, nobody could have been answered, and that string does not
+     leave the row out.
 
-   If the deciding passage is one the asker's role cannot read, the row is left out, and otherwise
-   it is kept, as it is when no passage of the question's embedding model exists. A search is
+   If a string's deciding passage is one the asker's role cannot read, the row is left out.
+   Otherwise that string does not leave it out, as when no passage of the question's embedding
+   model exists. A row that no string leaves out is kept. A search is
    counted again as the Administrator, writing no `SearchLog` row; above zero, it is left out. A
    kept search term longer than `MAXIMUM_QUESTION_LENGTH` is cut to that length before it is
    embedded and stored as a subject. Nothing records a row that was left out.

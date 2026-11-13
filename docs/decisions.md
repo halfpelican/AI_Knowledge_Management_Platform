@@ -9358,6 +9358,11 @@ across keeps FR-19's gap column at its old width.** Found while running D-127's 
   `knowledge_gaps.embedding` `vector(768)`, and so does its snapshot (`8e79cb37…`). So FR-19's cycle
   fails there with "expected 768 dimensions, not 1024" as soon as it keeps a question or a search,
   and changes nothing.
+- **What an Administrator sees there.** `POST /api/knowledge-gaps/cycles` catches only
+  `ProviderUnavailable` (`KnowledgeGapCyclesView`, `apps/api/views.py`), so the route answers 500,
+  a status `docs/api-contract.md` does not list for it. `manage.py aggregate_knowledge_gaps`, the
+  scheduled trigger, catches only the same exception, so it fails with a traceback. Either way the
+  cycle's transaction rolls back.
 - **Where it did not.** The measurement copy Objective 06 ran on, `kmp_obj0506_anthropic_20261110`
   (dropped on 11 November), was restored from the 1 November dump, which predates FR-19's tables,
   and migrated under 1024. Its cycles wrote gap entries with voyage-4 vectors.
@@ -11015,7 +11020,8 @@ they changed.**
     run.
   - `CLAUDE.md` §4's sentence that every tuned value was re-derived before the default moved
     (D-122's note of 12 November).
-- **Notes of 12 November are also on** D-107, D-108, D-119 and D-122.
+- **Notes of 12 November from the same audit are also on** D-107, D-108, D-109, D-110, D-119 and
+  D-122. D-117's note of that day came from D-127's check.
 
 ## D-127 · FR-19's cycle decides a follow-up on the string retrieval ranked and on its own wording, and either can leave it out
 
@@ -11075,8 +11081,16 @@ after #90 had merged (D-126's note of that day). Both found the same gap.
 - **The check.** `thread_exclusion_check.py`, at `4c36a38`, on `kmp_followups_20261112`, was run
   twice. Each pass wrote every thread of `corpus/objective-02/dev-threads.json`, a development set,
   into one transaction: an answered opener, then an unanswered follow-up. It then ran the shipped
-  `run_cycle` on voyage-4's real embeddings and rolled the transaction back. The database was the
-  same after each pass.
+  `run_cycle` on voyage-4's real embeddings and rolled the transaction back. Five row counts, of
+  query logs, conversations, gap entries, gap items and cycles, were 0 before and after each pass.
+- **The copy's gap column was altered by hand before the passes.** This record left it out until
+  the re-audit on `a7d11bb` found it missing. The second attempt stopped on D-117's gap-column
+  defect. By 21:50:05 on 12 November, before the first pass, whose record was written at 21:50:47,
+  the session ran `alter table knowledge_gaps alter column embedding type vector(1024)` on
+  `kmp_followups_20261112` alone, through `psql`, on the condition that the table held no row,
+  which it did not. The user had approved creating the copy and running this check, not this
+  statement; it was the session's decision. A fresh restore of the snapshot needs the same
+  statement before the script will run (D-117's note of 12 November).
 - **The scoped threads, t28, t29 and t37,** have a readable opener and a follow-up whose answer is
   only in Administrator-only material.
   - Asked as the Employee, all three were left out, on both passes.
@@ -11084,18 +11098,24 @@ after #90 had merged (D-126's note of that day). Both found the same gap.
 - **The other sixteen threads,** t20 to t27, t30 to t36 and t38, were all kept, asked as the
   Employee (for information).
 - **Which string decided.** On each scoped thread the composed string's top admitted passage is
-  readable, at 0.48 to 0.53, the opener's material. The follow-up's own wording's is restricted,
-  at 0.33 to 0.38. So:
+  readable, at 0.48 to 0.53. The follow-up's own wording's is restricted, at 0.33 to 0.38. So:
   - the composed string alone, this decision's first step (`b3d6a47`), would have kept all three;
   - the own wording alone, as on main, leaves all three out;
   - the composed check changed no outcome on these threads.
 
   Its benefit, a follow-up about restricted material whose own wording admits nothing, is shown
   on designed vectors only. No scoped development thread has that shape.
-- **Two earlier attempts stopped and changed nothing** (`first-attempt/`, `second-attempt/`):
+
+  For each string the record holds how many passages it admitted, its top-ranked and top admitted
+  scores, and whether the asker can read the top admitted passage, not which passage or source
+  that is. It keeps one vector per text, the last one embedded, so a scoped thread's Employee and
+  Administrator rows show the same figures. The outcomes are the cycle's own, read from the gap
+  items it wrote.
+- **Two earlier attempts stopped and changed nothing** (`first-attempt/`, `second-attempt/`). Each
+  folder holds two consoles, and the two are identical:
   1. a user filter named a field the User model does not have;
   2. writing a gap entry failed, because the restored copy's gap column was 768 wide (D-117's note
-     of 12 November).
+     of 12 November). The column was then altered, as above.
 
 **Verified by tests with designed vectors.** Each test is named with the deliberate breaks under
 which it fails, and the breaks are listed after the table. The tests are in
@@ -11132,8 +11152,11 @@ The breaks were run against five files:
 - `apps/retrieval/tests/test_ranking.py`.
 
 Unbroken, the five pass: 214 tests. X was run again against the knowledge-gap file's tests for a
-role that reads nothing, after two of them gained an assertion that such a question is never
-embedded.
+role that reads nothing, after three of them gained an assertion on what was embedded:
+`test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` and
+`test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out` assert that nothing was,
+and `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either` that only the
+Employee's question was.
 
 - G: threshold-first leaves a row out when any admitted passage is restricted, the rule D-108
   declined.
@@ -11155,10 +11178,14 @@ embedded.
   such model has a threshold of its own, so no break here exercises that check alone.
 - U: the decision itself fails open for a role that reads nothing.
 - V: a row with no conversation is composed from its user's earlier one-off questions. Every test
-  in the five files that puts two one-off questions of one user through a cycle on designed vectors
-  fails too, because a designed vector service raises on any text no test designed. So V is caught
-  broadly, and most of those catches say nothing about the failing test's own subject. The tests of
-  V itself are `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` and
+  in the five files that has two one-off questions of one user embedded in a cycle on designed
+  vectors fails too, because a designed vector service raises on any text no test designed. So V
+  is caught broadly, and most of those catches say nothing about the failing test's own subject.
+  Two tests put such questions through a cycle and do not fail under V, because a role that reads
+  nothing is left out before anything is composed or embedded:
+  `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` and
+  `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out`. The tests of V itself
+  are `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` and
   `test_a_logged_one_off_has_no_history`.
 - W: a follow-up's own wording is not decided, as in this decision's first step (`b3d6a47`).
 - X: `run_cycle` does not leave out a role that reads nothing before embedding its question.
@@ -11175,10 +11202,11 @@ embedded.
     string's deciding passage can be the earlier turn's restricted material. The gap is
     under-reported, the fail-closed direction. No development thread has a restricted opener, so
     it was not measured.
-  - **A follow-up about restricted material is still kept when neither string shows it.** That
-    happens when the composed string ranks readable material first and its own wording admits
-    nothing, or ranks readable material first. On the three scoped development threads, the own
-    wording admitted the restricted answer each time.
+  - **A follow-up about restricted material is still kept when neither string shows it.** Under
+    threshold-first, that is when each of the two strings either admits nothing or has a readable
+    top admitted passage, in any combination, both admitting nothing included. Under rank-one, it
+    is when each string's top-ranked passage is readable. On the three scoped development threads,
+    the own wording's top admitted passage was the restricted answer each time.
   - **Under rank-one, a follow-up whose own weak top-ranked passage is restricted is left out,** as
     on main before this decision.
   - **D-108's proxy, the top admitted passage, applies to each string.** A compound question, a
@@ -11209,9 +11237,14 @@ embedded.
 - **embed-gemma.** The rule applies to every model and was not measured on FLM.
 - **A passage exactly on voyage-4's threshold.** `admit` takes it (`>=`). No voyage-4 exclusion test
   puts a passage there.
-- **A configured `VOYAGE_MODEL` other than `"voyage-4"`.** It gets rank-one and 0.30, because both
-  maps are keyed by the literal, and rank-one is the rule that failed D-108's check on voyage-4. No
-  test ties the setting to the maps.
+- **A configured `VOYAGE_MODEL` other than `"voyage-4"`.** Four maps in `apps/core/constants.py` are
+  keyed by the literal, and such a model gets each one's default:
+  - `GAP_EXCLUSION_RULE_BY_MODEL`: rank-one, the rule that failed D-108's check on voyage-4;
+  - `RELEVANCE_THRESHOLD_BY_MODEL`: 0.30, not 0.2687;
+  - `PARTIAL_MATCH_FLOOR_BY_MODEL`: 0.0, no floor, not 0.2468;
+  - `GAP_GROUPING_THRESHOLD_BY_MODEL`: 0.5256, not 0.5054.
+
+  No test ties the setting to the maps.
 - **What the guard test bounds.** It bounds the constants, not scores. These are not caught:
   - a restricted answer under 0.2812 in another corpus;
   - a change to how text is embedded, or a re-index;

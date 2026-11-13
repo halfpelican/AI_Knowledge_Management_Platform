@@ -665,10 +665,11 @@ def test_rank_one_still_decides_below_the_threshold_for_a_model_not_listed(corpu
     assert not in_log(row)
 
 
-# --- A follow-up is decided on the string retrieval ranked (D-127) ----------------------------
+# --- A follow-up is decided on the string retrieval ranked, then on its own wording (D-127) ----
 # The requirements audit and the security review of 12 November 2026. The cycle judged a follow-up
-# on its own wording, which retrieval never ranked. On voyage-4 a bare follow-up often admits
-# nothing, and threshold-first kept it, including one about restricted material.
+# on its own wording alone, which retrieval never ranked. On voyage-4 a bare follow-up can admit
+# nothing (t03 and t06 in D-112's HTTP check), and threshold-first kept it, including one about
+# restricted material. Now either string can leave it out.
 
 T_OPENER = "What is the succession register for?"  # a thread's first turn: restricted top, admitted
 T_FOLLOW_UP = "And who signs it off?"  # its follow-up, which alone admits nothing
@@ -758,10 +759,10 @@ M_SWITCH = "And what gets decided at the chair's succession review?"  # a new to
 
 @pytest.mark.parametrize("composed", ["readable first", "nothing admitted"])
 def test_on_voyage_a_restricted_question_asked_mid_thread_is_left_out(voyage_corpus, employee, composed):
-    """The security review of 12 November 2026, F1. After a readable turn, an explicit question about
-    restricted material: the composed string ranks the readable chunk first, or admits nothing,
-    and alone it would be kept. Its own wording's top admitted passage is restricted, as P02's was,
-    and that wording is what the Administrator would read, so the row is left out."""
+    """D-127's second step. After a readable turn, an explicit question about restricted material:
+    the composed string ranks the readable chunk first, or admits nothing, and alone it would be
+    kept. Its own wording's top admitted passage is restricted, as P02's was, and that wording is
+    what the Administrator would read, so the row is left out."""
     service = voyage_corpus["service"]
     service.vectors.update({
         M_SWITCH: at_cosine(IN_THE_BAND, axis=0, towards=5),
