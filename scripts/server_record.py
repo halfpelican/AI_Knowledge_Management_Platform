@@ -304,6 +304,8 @@ def _netstat_listening_pids(port: int) -> tuple[set[int], str | None]:
                                    timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return set(), f"netstat could not be run ({type(exc).__name__})"
+    if completed.returncode != 0:
+        return set(), f"netstat -ano exited {completed.returncode}"
     return parse_netstat_listening(completed.stdout or "", port), None
 
 
@@ -314,25 +316,40 @@ def _port_row_owners(port: int) -> tuple[list[dict], str | None]:
     not be read. ``command`` is None for a process whose command line cannot be read: it is still
     an owner, and still counts (D-87's note of 12 November 2026). Two kinds of row are left out,
     because neither names a process: one owned by PID 0, and one whose owner no longer exists.
+
+    A query that fails inside PowerShell exits 3, and the rows are then unread, as they are when
+    the command prints nothing or prints something that is not JSON. A query that succeeds and
+    finds no row prints ``[]``. Until 13 November 2026 a failure inside PowerShell printed ``[]``
+    too, and read as "no rows" (the re-audit on ``bbbda8c``).
     """
     script = (
-        f"$rows = @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetTCPConnection"
-        f" -Filter 'LocalPort={int(port)} AND RemotePort=0' -ErrorAction SilentlyContinue); $found = @();"
+        "try {"
+        f" $rows = @(Get-CimInstance -Namespace root/StandardCimv2 -ClassName MSFT_NetTCPConnection"
+        f" -Filter 'LocalPort={int(port)} AND RemotePort=0' -ErrorAction Stop); $found = @();"
         " foreach ($o in ($rows | ForEach-Object { [int]$_.OwningProcess } | Sort-Object -Unique)) {"
-        " if ($o -eq 0) { continue }; $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $o);"
+        " if ($o -eq 0) { continue }; $p = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $o) -ErrorAction Stop;"
         " if (-not $p) { continue }; $s = ''; if ($p.CreationDate) {"
         " $s = $p.CreationDate.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ',"
         " [Globalization.CultureInfo]::InvariantCulture) };"
         " $states = (($rows | Where-Object { [int]$_.OwningProcess -eq $o } | ForEach-Object { [int]$_.State }) -join ',');"
         " $found += [pscustomobject]@{ pid = $o; command = [string]$p.CommandLine; started = $s; states = $states } };"
         " ConvertTo-Json -InputObject @($found) -Compress; exit 0"
+        " } catch { exit 3 }"
     )
     try:
         completed = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
                                    capture_output=True, text=True, timeout=LOOKUP_TIMEOUT_SECONDS, check=False)
-        reply = json.loads((completed.stdout or "").strip() or "[]")
-    except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+    except (OSError, subprocess.TimeoutExpired) as exc:
         return [], f"the port's socket rows could not be read ({type(exc).__name__})"
+    if completed.returncode != 0:
+        return [], f"the port's socket rows could not be read (the query exited {completed.returncode})"
+    output = (completed.stdout or "").strip()
+    if not output:
+        return [], "the port's socket rows could not be read (the query printed nothing)"
+    try:
+        reply = json.loads(output)
+    except ValueError:
+        return [], "the port's socket rows could not be read (the query printed something that is not JSON)"
     owners = []
     for owner in (reply if isinstance(reply, list) else [reply]):
         if isinstance(owner, dict) and isinstance(owner.get("pid"), int) and owner["pid"] != 0:
@@ -349,7 +366,8 @@ def sole_owner(port: int, netstat_pids: set[int], netstat_error: str | None,
     live owner of a remote-port-0 row on the port, or a PID other than 0 that netstat lists as
     LISTENING on it. The owner is taken only when all of these hold:
 
-    - the port's rows could be read;
+    - netstat could be run, and the port's rows could be read (the user's decision of 13
+      November 2026: an unread source could have shown a second process);
     - there is exactly one candidate;
     - it owns a row;
     - its command line can be read.
@@ -370,6 +388,10 @@ def sole_owner(port: int, netstat_pids: set[int], netstat_error: str | None,
     if rows_error:
         return None, f"{netstat_says}; {rows_error}", bool(netstat_live)
     candidates = sorted({owner["pid"] for owner in owners} | set(netstat_live))
+    if netstat_error:
+        rows_say = (f"the port's rows show {_pids(candidates)}" if candidates
+                    else f"no live process owns a remote-port-0 row on port {port}")
+        return None, f"{netstat_says}; {rows_say}; without netstat a second listener cannot be ruled out", bool(candidates)
     if not candidates:
         return None, f"{netstat_says}; no live process owns a remote-port-0 row on port {port}", False
     if len(candidates) > 1:
@@ -403,13 +425,14 @@ def listening_process(port: int) -> dict:
     had gone. So the Listen row is not the only lookup, and no lookup takes a process while
     another holds the port (D-87's note of 12 November 2026):
 
-    1. The Listen row (``_listen_row_process``), taken when its process's command line can be read
-       and neither ``netstat -ano`` nor the port's own socket rows show another live process on the
-       port. Two servers can listen on one address and port on Windows, and then the Listen row
-       names one of them, while the port's CIM rows, which share one key, show only one; netstat
-       lists both. A second listener on another address has a row of its own, which netstat may
-       miss when the state is misreported. When neither source can be read, the Listen row is taken
-       as it was before these checks, and the trace says why.
+    1. The Listen row (``_listen_row_process``), taken when its process's command line can be
+       read, both ``netstat -ano`` and the port's own socket rows could be read, and neither shows
+       another process on the port: netstat by a PID other than 0 listed LISTENING, the rows by
+       another live owner. Two servers can listen on one address and port on Windows, and then
+       the Listen row names one of them, while the port's CIM rows, which share one key, show only
+       one; netstat lists both. A second listener on another address has a row of its own, which
+       netstat may miss when the state is misreported. When either source cannot be read, nothing
+       is taken (the user's decision of 13 November 2026).
     2. Otherwise two more are read, and one process is taken only when they agree on it
        (``sole_owner``):
 
@@ -428,9 +451,11 @@ def listening_process(port: int) -> dict:
     always was: nothing listening, or a PID with no command line. It is never process 0:
     ``_listen_row_process`` reports a row that names it as unknown, with a note (D-112's note of
     12 November 2026). Two things differ from the Listen row's own answer, and in neither does
-    ``note`` say that nothing is listening: when a candidate was seen and none could be taken,
-    ``note`` says so; and when netstat or the port's rows could not be read, ``note`` says that
-    whether anything holds the port is not known.
+    ``note`` say that nothing is listening: when netstat or the port's rows could not be read,
+    ``note`` says that whether anything holds the port is not known, whatever else was seen; and
+    otherwise, when a candidate was seen and none could be taken, ``note`` says so. A failure
+    inside the Listen-row query itself reads as no Listen row, as it always has; netstat and the
+    port's rows then decide.
 
     Each try is printed to stderr as it happens, so a wait shows its reason. Only how the
     process is found changes here. What a caller requires of it does not: the pre-flight still
@@ -454,13 +479,16 @@ def listening_process(port: int) -> dict:
         owners, rows_error = _port_row_owners(port)
         if found["pid"] is not None and found["command"]:
             others = sorted((set(netstat_pids) | {owner["pid"] for owner in owners}) - {0, found["pid"]})
-            if not others:
-                unread = [error for error in (netstat_error, rows_error) if error]
-                say(f"try {tries}: the Listen row names pid {found['pid']}"
-                    + "".join(f"; {error}" for error in unread))
+            unread = [error for error in (netstat_error, rows_error) if error]
+            if not others and not unread:
+                say(f"try {tries}: the Listen row names pid {found['pid']}")
                 return {**found, "found_by": FOUND_BY_LISTEN_ROW, "lookup": trace}
-            listen_row = (f"the Listen row names pid {found['pid']}, and netstat -ano or the port's own rows "
-                          f"show {_pids(others)} on port {port} as well")
+            if others:
+                listen_row = (f"the Listen row names pid {found['pid']}, and netstat -ano or the port's own rows "
+                              f"show {_pids(others)} on port {port} as well")
+            else:
+                listen_row = (f"the Listen row names pid {found['pid']}, but a second process on port {port} "
+                              f"cannot be ruled out: {'; '.join(unread)}")
             # Not taken, and not returned at the end either: a run must not be READY on one of two.
             found = {"pid": None, "command": None, "started_at": None, "note": None}
         else:
@@ -475,17 +503,17 @@ def listening_process(port: int) -> dict:
         if time.monotonic() + LOOKUP_RETRY_INTERVAL_SECONDS > deadline:
             say(f"{seen}. Giving up")
             result = {**found, "found_by": None, "lookup": trace}
-            if candidate_seen:
+            if netstat_error or rows_error:
+                # A lookup that could not be read cannot show that nothing, or that only one process,
+                # holds the port: the misreported state hides a listener from the Listen row and
+                # netstat, and only the port's rows show it (D-87's note of 12 November 2026).
+                result["note"] = (f"whether anything holds port {port} is not known, because a lookup could not "
+                                  f"be read: {why}")
+            elif candidate_seen:
                 # Something holds the port and could not be taken for the listener. Saying that
                 # nothing is listening would be wrong, and wrong in the unsafe direction for
                 # anyone checking that the port is free.
                 result["note"] = f"no single process with a readable command line holds port {port}: {why}"
-            elif netstat_error or rows_error:
-                # A lookup that could not be read cannot show that nothing holds the port: the
-                # misreported state hides a listener from the Listen row and netstat, and only the
-                # port's rows show it (D-87's note of 12 November 2026).
-                result["note"] = (f"whether anything holds port {port} is not known, because a lookup could not "
-                                  f"be read: {why}")
             return result
         say(f"{seen}. Trying again in {LOOKUP_RETRY_INTERVAL_SECONDS} s")
         time.sleep(LOOKUP_RETRY_INTERVAL_SECONDS)

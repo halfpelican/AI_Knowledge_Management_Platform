@@ -452,12 +452,18 @@ def test_the_harness_records_that_it_ran_in_process(scripts):
 def a_listen_row_that_prints(server_record, monkeypatch, reply):
     """Make the Listen-row lookup's PowerShell print ``reply``, on any platform.
 
-    Only that lookup is answered. netstat and the port's own row (D-87's note of 11 November
-    2026) see nothing, and the retries do not wait.
+    Only that lookup is answered. netstat and the port's own rows (D-87's notes of 11 and 12
+    November 2026) see nothing, and the retries do not wait. The rows query prints ``[]``, as a
+    query that ran and found no row does: an empty output is read as a failed query.
     """
     def run(command, *args, **kwargs):
-        listen_row = command[0] == "powershell" and "-State Listen" in command[-1]
-        return SimpleNamespace(returncode=0, stdout=json.dumps(reply) if listen_row else "", stderr="")
+        if command[0] == "powershell" and "-State Listen" in command[-1]:
+            stdout = json.dumps(reply)
+        elif command[0] == "powershell":
+            stdout = "[]"
+        else:
+            stdout = ""
+        return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
 
     monkeypatch.setattr(server_record.sys, "platform", "win32")
     monkeypatch.setattr(server_record.subprocess, "run", run)

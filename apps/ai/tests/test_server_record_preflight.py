@@ -430,14 +430,14 @@ class FakeSubprocess:
 
     TimeoutExpired = subprocess.TimeoutExpired
 
-    def __init__(self, stdout):
-        self.stdout, self.commands = stdout, []
+    def __init__(self, stdout, returncode=0):
+        self.stdout, self.returncode, self.commands = stdout, returncode, []
 
     def run(self, command, **kwargs):
         self.commands.append(command)
         if isinstance(self.stdout, BaseException):
             raise self.stdout
-        return type("Completed", (), {"stdout": self.stdout, "stderr": "", "returncode": 0})()
+        return type("Completed", (), {"stdout": self.stdout, "stderr": "", "returncode": self.returncode})()
 
 
 def owner(pid, states="0", command=WAITRESS_24):
@@ -471,6 +471,13 @@ def test_netstat_gives_every_listening_pid_or_says_why_not(scripts, monkeypatch,
     assert why is None if because is None else because in why
 
 
+def test_netstat_that_exits_non_zero_is_unread(scripts, monkeypatch):
+    """Whatever it printed, netstat's own failure is not read as "nothing is LISTENING"."""
+    server_record = scripts("server_record")
+    monkeypatch.setattr(server_record, "subprocess", FakeSubprocess(NETSTAT, returncode=1))
+    assert server_record._netstat_listening_pids(8000) == (set(), "netstat -ano exited 1")
+
+
 WAITRESS_ROW = {"pid": 46608, "command": WAITRESS_24, "started": STARTED, "states": "0"}
 UNREADABLE_ROW = {"pid": 4, "command": "", "started": "2026-11-09T11:19:15.787Z", "states": "2"}
 
@@ -481,8 +488,8 @@ UNREADABLE_ROW = {"pid": 4, "command": "", "started": "2026-11-09T11:19:15.787Z"
     (json.dumps([WAITRESS_ROW, UNREADABLE_ROW]), [(46608, WAITRESS_24), (4, None)], None),
     (json.dumps([{**WAITRESS_ROW, "pid": 0}, WAITRESS_ROW]), [(46608, WAITRESS_24)], None),
     ("[]", [], None),
-    ("", [], None),
-    ("Get-CimInstance : Access denied", [], "could not be read"),
+    ("", [], "could not be read (the query printed nothing)"),
+    ("Get-CimInstance : Access denied", [], "could not be read (the query printed something that is not JSON)"),
 ], ids=["one owner", "one owner, not in a list", "an owner nobody can read is still an owner",
         "process 0 is not an owner", "no owner", "no output", "not JSON"])
 def test_the_ports_own_rows_give_every_live_owner(scripts, monkeypatch, stdout, owners, because):
@@ -503,6 +510,18 @@ def test_the_ports_own_rows_give_every_live_owner(scripts, monkeypatch, stdout, 
     assert "-Filter 'LocalPort=8000 AND RemotePort=0'" in script
     assert "if ($o -eq 0) { continue }" in script and "if (-not $p) { continue }" in script
     assert "$p.CommandLine)" not in script and "-le 4" not in script
+    # A failure inside PowerShell is fatal there and exits 3, so it is never printed as no rows.
+    assert script.count("-ErrorAction Stop") == 2 and "SilentlyContinue" not in script
+    assert script.startswith("try {") and script.endswith("} catch { exit 3 }")
+
+
+def test_a_rows_query_that_exits_non_zero_is_unread(scripts, monkeypatch):
+    """The re-audit on bbbda8c: until 13 November 2026 a query that failed inside PowerShell
+    printed [] and exited 0, and so read as "no rows"."""
+    server_record = scripts("server_record")
+    monkeypatch.setattr(server_record, "subprocess", FakeSubprocess("[]", returncode=3))
+    assert server_record._port_row_owners(8000) == (
+        [], "the port's socket rows could not be read (the query exited 3)")
 
 
 @pytest.mark.parametrize("netstat, owners, taken, seen, because", [
@@ -527,14 +546,19 @@ def test_one_process_is_taken_only_when_it_alone_holds_the_port(scripts, netstat
     assert candidate_seen is seen and because in why
 
 
-def test_nothing_is_taken_when_the_ports_rows_could_not_be_read(scripts):
-    """netstat alone never names the listener: whether a second process holds the port is unknown."""
+def test_nothing_is_taken_when_either_source_could_not_be_read(scripts):
+    """Neither source alone names the listener: whether a second process holds the port is unknown
+    (the user's decision of 13 November 2026). Until then the rows alone could, without netstat."""
     sole_owner = scripts("server_record").sole_owner
     unread = "the port's socket rows could not be read (TimeoutExpired)"
+    missing = "netstat could not be run (FileNotFoundError)"
     found, why, seen = sole_owner(8000, {46608}, None, [], unread)
     assert found is None and seen is True and why.endswith(unread)
-    found, why, seen = sole_owner(8000, set(), "netstat could not be run (FileNotFoundError)", [], unread)
-    assert found is None and seen is False and "netstat could not be run" in why
+    found, why, seen = sole_owner(8000, set(), missing, [], unread)
+    assert found is None and seen is False and missing in why
+    found, why, seen = sole_owner(8000, set(), missing, [owner(46608, "2")], None)
+    assert found is None and seen is True
+    assert why == f"{missing}; the port's rows show pid 46608; without netstat a second listener cannot be ruled out"
 
 
 @pytest.fixture
@@ -569,16 +593,10 @@ NETSTAT_MISSING = "netstat could not be run (FileNotFoundError)"
     (({7}, None), ([owner(7, "2")], None)),
     (({0, 7}, None), ([owner(7, "2")], None)),
     ((set(), None), ([], None)),
-    ((set(), NETSTAT_MISSING), ([owner(7, "2")], None)),
-    (({7}, None), ([], ROWS_UNREAD)),
-    ((set(), NETSTAT_MISSING), ([], ROWS_UNREAD)),
-], ids=["both show it", "netstat shows it and process 0", "neither shows anything", "netstat missing",
-        "the port's rows unread", "neither can be read"])
+], ids=["both show it", "netstat shows it and process 0", "neither shows anything"])
 def test_a_listen_row_is_taken_when_no_other_process_is_seen_on_the_port(lookup, netstat, owners):
-    """The Listen row is taken at once when neither netstat nor the port's own rows show another
-    live process on the port. Process 0 is not a process. When a source cannot be read, the row is
-    taken on what the other shows, and with neither, as it was before these checks; the trace says
-    which could not be read."""
+    """The Listen row is taken at once when both netstat and the port's own rows were read and
+    neither shows another process on the port. Process 0 is not a process."""
     server_record, script, asked, clock = lookup
     script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
     script["netstat"], script["owners"] = [netstat], [owners]
@@ -586,9 +604,25 @@ def test_a_listen_row_is_taken_when_no_other_process_is_seen_on_the_port(lookup,
     assert (found["pid"], found["command"], found["started_at"], found["note"]) == (7, WAITRESS_24, STARTED, None)
     assert found["found_by"] == server_record.FOUND_BY_LISTEN_ROW
     assert (asked["netstat"], asked["owners"], clock.slept) == (1, 1, [])
-    for error in (netstat[1], owners[1]):
-        if error:
-            assert error in found["lookup"][-1]
+
+
+@pytest.mark.parametrize("netstat, owners", [
+    ((set(), NETSTAT_MISSING), ([owner(7, "2")], None)),
+    (({7}, None), ([], ROWS_UNREAD)),
+    ((set(), NETSTAT_MISSING), ([], ROWS_UNREAD)),
+], ids=["netstat missing", "the port's rows unread", "neither can be read"])
+def test_a_listen_row_is_not_taken_when_a_source_cannot_be_read(lookup, netstat, owners):
+    """The user's decision of 13 November 2026: an unread source could have shown a second
+    process, so nothing is taken, the process the Listen row named is not returned, and the note
+    says the state is not known, even where the other source saw the Listen row's own process."""
+    server_record, script, asked, clock = lookup
+    script["listen_row"] = [{"pid": 7, "command": WAITRESS_24, "started_at": STARTED, "note": None}]
+    script["netstat"], script["owners"] = [netstat], [owners]
+    found = server_record.listening_process(8000)
+    assert (found["pid"], found["command"], found["started_at"], found["found_by"]) == (None, None, None, None)
+    assert found["note"].startswith("whether anything holds port 8000 is not known")
+    assert "a second process on port 8000 cannot be ruled out" in found["lookup"][-1]
+    assert sum(clock.slept) == server_record.LOOKUP_RETRY_SECONDS
 
 
 def test_a_readable_listen_row_is_not_taken_while_the_ports_rows_show_another_owner(lookup):
