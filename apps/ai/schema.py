@@ -120,6 +120,33 @@ def _outermost_json_object(text: str) -> str:
     raise SchemaViolation("unbalanced JSON object in the response")
 
 
+def _loads_reply(text: str):
+    """``json.loads`` for a model reply: every way it can fail to decode is a SchemaViolation.
+
+    ``json.loads`` raises more than JSONDecodeError. A reply nested past the interpreter's limit,
+    a few thousand levels of ``[`` or ``{``, raises RecursionError, and an integer literal past
+    Python's 4,300-digit limit on converting a string to an int raises ValueError. Both are a
+    reply that does not conform, so both are a violation, retried like any other (invariant 10).
+
+    Before 13 November 2026 they escaped the three attempt loops, which catch only
+    SchemaViolation. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of
+    NFR-19's 503, and a meeting summary's run ended as "error", without the one retry FR-16
+    allows a malformed reply. A security review found it that day.
+
+    The two messages are fixed and quote nothing of the reply. A JSONDecodeError propagates
+    unchanged, so the caller can try its trailing-comma repair before it reports "not valid
+    JSON".
+    """
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        raise
+    except RecursionError as exc:
+        raise SchemaViolation("JSON nested too deeply to decode") from exc
+    except ValueError as exc:  # after JSONDecodeError, itself a ValueError: the digit limit
+        raise SchemaViolation("a JSON number too long to decode") from exc
+
+
 # Public names for the three repairs, added on 9 November 2026 for FR-10 (D-104):
 # apps/ai/classification.py applies exactly this tolerance to a classification reply by
 # importing these rather than copying them, so there is one definition of what is
@@ -128,6 +155,9 @@ def _outermost_json_object(text: str) -> str:
 strip_code_fences = _strip_code_fences
 outermost_json_object = _outermost_json_object
 TRAILING_COMMA_PATTERN = _TRAILING_COMMA
+# And the decode step, added on 13 November 2026 on the same principle: the statement,
+# classification and summary parsers all decode through it, so all three fail the same way.
+loads_reply = _loads_reply
 
 
 def parse_statement_list(raw: str, *, max_statements: int | None = None) -> StatementList:
@@ -153,10 +183,10 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
         raise SchemaViolation("empty response")
     candidate = _outermost_json_object(_strip_code_fences(raw))
     try:
-        decoded = json.loads(candidate)
+        decoded = _loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = json.loads(_TRAILING_COMMA.sub("", candidate))
+            decoded = _loads_reply(_TRAILING_COMMA.sub("", candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):

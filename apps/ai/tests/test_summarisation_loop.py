@@ -27,6 +27,7 @@ import inspect
 import json
 import logging
 import re
+import sys
 
 import pytest
 
@@ -253,6 +254,36 @@ def test_two_malformed_replies_raise_malformed_summary_after_exactly_two_calls()
     assert "SUMMARY_SCHEMA" in str(excinfo.value)
     assert LABEL in str(excinfo.value)
     assert "schema violation" in str(excinfo.value)
+
+
+# Replies json.loads cannot decode: past a few thousand levels of nesting it raises
+# RecursionError, and past Python's digit limit on converting a string to an int, ValueError.
+DIGITS = sys.get_int_max_str_digits() + 1  # PYTHONINTMAXSTRDIGITS=0 lifts the limit: skipped
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param('{"summary": ' + "[" * 100_000 + "]" * 100_000 + "}",
+                     "JSON nested too deeply to decode", id="nested too deeply"),
+        pytest.param('{"summary": [{"text": "t", "passages": [' + "7" * DIGITS + "]}]}",
+                     "a JSON number too long to decode", id="a number too long",
+                     marks=pytest.mark.skipif(DIGITS == 1, reason="no digit limit")),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_malformed_and_gets_its_one_retry(reply, message):
+    """Until 13 November 2026 json.loads' RecursionError, and its ValueError past the digit limit,
+    escaped this loop after ONE call, and the run ended as "error" without the retry FR-16 allows a
+    malformed response. Each is a malformed reply now: one retry, then MalformedSummary after
+    exactly two calls, which apps/meetings records as malformed. The third reply conforms, so a loop
+    that retried it as an ordinary failure would return a summary here."""
+    call_once, calls = scripted(reply, reply, CONFORMING)
+
+    with pytest.raises(MalformedSummary) as excinfo:
+        run(call_once)
+
+    assert len(calls) == MAXIMUM_MALFORMED_SUMMARY_REPLIES == 2
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
 def test_malformed_summary_is_a_provider_unavailable_so_a_caller_of_outages_still_fails_the_run():
