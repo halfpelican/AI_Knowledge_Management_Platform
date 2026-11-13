@@ -589,6 +589,14 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     # existing tag's id, which the inventory above already lists to the same reader.
     ("api/tags", "POST"): "The new tag's entry, or the id of the tag already holding the name.",
     ("api/tags/<uuid:pk>", "DELETE"): "The retired tag's entry, or nothing.",
+    # FR-10's department list (D-129), Administrator-only through manage_tags. Department rows and
+    # counts of the documents whose department equals each name, read by a role that reads every
+    # document (D-66), in apps/documents/taxonomy.py; no Document or Meeting row is returned.
+    ("api/departments", "GET"): "Departments and their counts of documents, for the Administrator alone.",
+    ("api/departments", "POST"): (
+        "The new or reactivated department's entry, or the id of the active department holding the name."
+    ),
+    ("api/departments/<uuid:pk>", "DELETE"): "The retired department's entry, or nothing.",
     # Recording transcription (D-123). No transcription route reads a Document, a Meeting or a
     # chunk, or stores anything: a transcript enters the knowledge base only through
     # POST /api/meetings, classified above.

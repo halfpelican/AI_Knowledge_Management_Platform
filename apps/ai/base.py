@@ -69,9 +69,10 @@ class TagScheme:
     to a reader who may not know it exists (invariant 1). A value that is not grown (``Tag.grown``)
     is vocabulary and is in whatever its links; a grown one is in only while every role in the
     audience reads a source carrying it (D-105's dated note of 10 November 2026, night).
-    ``doc_types`` is DOCUMENT_TYPES; ``departments`` are
-    distinct non-blank ``Documents.department`` values; ``tags`` maps each of Project,
-    Process and Topic to its active tag names.
+    ``doc_types`` is DOCUMENT_TYPES; ``departments`` are the active names of the department
+    list an Administrator keeps on the Tags page (``Department``, D-129), a hidden (grown) one
+    only while every role in the audience reads a document carrying it; ``tags`` maps each of
+    Project, Process and Topic to its active tag names.
     """
 
     doc_types: tuple[str, ...]

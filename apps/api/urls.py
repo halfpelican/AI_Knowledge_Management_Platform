@@ -108,4 +108,9 @@ urlpatterns = [
     # "tagging" (D-128); and DELETE: deactivate a tag in use, delete an unused one.
     path("tags", views.TagListView.as_view(), name="tag-list"),
     path("tags/<uuid:pk>", views.TagDetailView.as_view(), name="tag-detail"),
+    # NIT3004: FR-10's department list (D-129), the scheme's fourth dimension, behind manage_tags as
+    # the tag routes are. The list with item counts; POST adds a department, or reactivates a retired
+    # one, throttled in "tagging"; DELETE deactivates a department in use and deletes an unused one.
+    path("departments", views.DepartmentListView.as_view(), name="department-list"),
+    path("departments/<uuid:pk>", views.DepartmentDetailView.as_view(), name="department-detail"),
 ] + router.urls

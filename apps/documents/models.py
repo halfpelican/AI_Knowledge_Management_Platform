@@ -1,5 +1,5 @@
-"""Documents: Documents, ExtractedContent, ContentChunks, Tags, ContentTags and, since
-migration v2's ``0008``, DocumentAnalysis (docs/schema-v1.md section 1).
+"""Documents: Documents, ExtractedContent, ContentChunks, Tags, ContentTags, since migration
+v2's ``0008`` DocumentAnalysis, and since ``0015`` Departments (docs/schema-v1.md section 1).
 
 The original file is stored separately from its extracted text so the text is
 reusable without re-parsing (FR-08, docs/decisions.md D-05). Chunks reference their
@@ -7,11 +7,13 @@ source polymorphically, with no database foreign key (D-07), and record the mode
 and dimension of every stored vector (D-08, risk R10). Tags and ContentTags are in
 v1 because FR-15's browse mode queries them; FR-10 fills them through
 apps/documents/classification.py (D-105), which also writes DocumentAnalysis.
+Departments is FR-10's department scheme, the list the classifier suggests from (D-129).
 """
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.models.functions import Lower
 from pgvector.django import VectorField
 
 from apps.core.constants import (
@@ -188,6 +190,65 @@ class Tag(models.Model):
 
     def __str__(self):
         return f"{self.dimension}: {self.tag_name}"
+
+
+def normalise_department_name(value: str) -> str:
+    """Strip, and collapse internal whitespace to one space. The case is kept (D-129)."""
+    return " ".join(value.split())
+
+
+class Department(models.Model):
+    """FR-10's department scheme: the departments the classifier may suggest (D-129, the lead's
+    decision of 13 November 2026). Departments are the fourth dimension of FR-10's scheme, beside
+    Project, Process and Topic, and an Administrator keeps the list on the Tags page
+    (``GET``, ``POST`` and ``DELETE`` ``/api/departments``, behind ``manage_tags``).
+
+    **Why departments get a table of their own and not Tags rows.** ``Tag.save()`` normalises a name
+    to lower case. A department keeps its case on a document ("Human Resources"), and the classifier
+    writes the scheme's spelling into ``Documents.department`` (``apply_classification`` rule 3).
+    Lower-cased Department tags would start writing "human resources", and FR-14's and FR-15's
+    department filters, which read ``Documents.department`` (D-72), would split by case. So the
+    list is this small table, which keeps case: a name is stripped and its internal whitespace
+    collapsed to one space (``save()``), and two names that differ only in case are the same
+    department (the unique constraint on ``Lower("name")``).
+
+    **What the list supplies, and what it does not.** It supplies the classifier's choices, the
+    ``departments`` of ``tag_scheme``, and nothing else:
+
+    - ``Documents.department`` stays the one field FR-14 and FR-15 read (D-72);
+    - FR-08's upload field stays free text, and so do its server validation and the classification
+      confirm/edit control. A department typed there that is not in the list stays on the
+      document, and the classifier suggests only listed departments.
+
+    **The flags.**
+
+    - ``active``: a department any document uses is retired (``active=False``) rather than deleted.
+      It stays on those documents and in FR-14's and FR-15's filters, and no scheme offers it. One
+      no document uses is deleted. ``POST /api/departments`` with a retired name reactivates it.
+    - ``grown``: not vocabulary, as ``Tag.grown`` is not. ``documents 0015`` seeds a department
+      found only on documents some role cannot read as grown, so it is offered only for a document
+      whose whole audience reads a document carrying it (``tag_scheme``). A department an
+      Administrator adds is not grown: vocabulary, offered to every audience, as a value added on
+      ``/api/tags`` is. Never unset, reactivation included.
+    """
+
+    id = uuid_primary_key("department_id")
+    name = models.CharField(max_length=NAME_MAX_LENGTH)
+    active = models.BooleanField(default=True)
+    grown = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "departments"
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="departments_unique_name_ignoring_case"),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.name = normalise_department_name(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 
 class ContentTag(models.Model):

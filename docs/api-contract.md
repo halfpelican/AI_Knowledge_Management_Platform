@@ -1012,7 +1012,7 @@ not grant it, and it does not grant `manage_documents`.
 | `ingestion` | `POST /api/documents`, `POST /api/meetings`, `POST /api/documents/{id}/reprocess`, since FR-10 `POST /api/documents/{id}/classify` (D-105), and since FR-16 `POST /api/meetings/{id}/summary` (D-125), one shared budget | 60/hour |
 | `conversation_create` | `POST /api/conversations` | 10/min, its own budget |
 | `search` | `GET /api/search`, since D-79's note of 10 November 2026 | 30/min |
-| `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403`. Since D-128 also `POST /api/tags`, the Administrator's add, checked after its `401` and `403`; one budget per user across both routes | 30/min |
+| `tagging` | `POST /api/documents/{id}/tags`, since D-79's note on tagging of the same night; checked before the document is looked up, so past the rate the `429` comes before the `404` and the `403`. Since D-128 also `POST /api/tags`, the Administrator's add, checked after its `401` and `403`; one budget per user across both routes. Since D-129 also `POST /api/departments`, on the same budget | 30/min |
 | `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 | `action_items` | FR-16's `POST /api/meetings/{id}/action-items` and `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}`, one budget (the security review of 12 November 2026, D-125's third note); checked before the meeting is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
 
@@ -1106,11 +1106,13 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
 
 FR-10's server side, 8 and 9 November 2026. The AI operation is `AIService.classify_document`
 (D-104). What becomes of its suggestions is application code in `apps/documents/classification.py`
-(D-105, D-128, D-129). Each value is compared with the classifying model's confidence threshold
-(`confidence_threshold`).
+(D-105, D-128, D-129). Each value is compared with the classifying model's confidence threshold for
+its kind: `confidence_threshold` for the type and the tags (0.72 on Haiku), and `department_threshold`
+for the department (0.30 on Haiku, D-129; a model it does not list uses its shared value).
 
 - **The type:** **applied** at or above the threshold, **provisional** below it.
-- **The department:** likewise, and **discarded** outside the established scheme.
+- **The department:** likewise, against its own threshold, and **discarded** outside the established
+  scheme, which since D-129 is the department list an Administrator keeps on the Tags page.
 - **A tag in the scheme:** linked `applied_by: "ai"`, provisional below the threshold.
 - **A value outside the scheme,** Objective 05's clause 3 as written:
   - **a Topic** is **proposed** in `proposed_tags`, at any confidence, for a person to confirm (which
@@ -1328,6 +1330,27 @@ The tag entry, in the list, in the `POST`'s `201` and in the `DELETE`'s `200`:
 
   Applying it by `tag_id` is the `400`: an inactive tag is never offered. A retired Project or
   Process tag stays retired (D-129; for one day D-128 let the classifier bring one back).
+
+### Departments (D-129)
+
+The department list an Administrator keeps on the Tags page: FR-10's fourth dimension. The classifier
+suggests a department only from it (`tag_scheme`'s `departments`), while a document's department stays
+the free-text `Documents.department` field that FR-14 and FR-15 read (D-72). Every route needs a session
+**and** `manage_tags`: `401`, then `403` for a role without it, before anything else. POST is throttled
+in the `tagging` scope, after the `401` and `403`, on one budget with `POST /api/tags`; GET is not.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/departments` | session + `manage_tags` | `200` every department, active or not, ordered by name ignoring case, each `{"department_id", "name", "active", "item_count"}`. `item_count` is the number of documents whose department equals the name exactly. Not scoped: the Administrator reads every source (D-66) | `401`; `403` |
+| POST | `/api/departments` | session + `manage_tags` | Body `{"name": string}`, trimmed with internal spaces collapsed, case kept. `201` the entry for a new department, which is vocabulary (not hidden): offered for every document whatever its audience. `200` the entry for a retired name, which is reactivated, keeping its stored spelling and whether it is hidden; a department has no other way back, which is why this differs from `POST /api/tags` | `401`; `403`; `400 {"name": ["..."]}` missing, blank, over 255 characters or holding a NUL; `409 {"detail": "...", "department_id": "uuid"}` an active department with that name ignoring case, a concurrent create of it included; `429` past `TAGGING_THROTTLE_RATE` |
+| DELETE | `/api/departments/{id}` | session + `manage_tags` | `200` the entry, now `active: false`, when any document's department equals its name: it is retired, stays on those documents and in FR-14 and FR-15's filters, and is no longer offered to the classifier; `200` again for one already retired. `204` no body when no document uses it: it is deleted | `401`; `403`; `404 {"detail": "No Department matches the given query."}` |
+
+- **Seeded by `documents 0015`** from the departments in use when it runs. A department carried only by
+  documents some role cannot read is seeded **hidden**: it reaches a document's classification only when
+  every role in that document's audience reads a document carrying it (invariant 1). A department an
+  Administrator adds is not hidden.
+- **The upload form and the classification confirm/edit control still take any department** as free
+  text. One that is not in the list stays on its document, but the classifier never suggests it.
 
 ## NIT3004 — FR-19, Objective 06
 

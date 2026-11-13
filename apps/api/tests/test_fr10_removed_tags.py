@@ -36,7 +36,14 @@ from apps.core.constants import (
     TOPIC_DIMENSION,
     USER_APPLIED,
 )
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.models import (
+    ContentTag,
+    Department,
+    Document,
+    DocumentAnalysis,
+    ExtractedContent,
+    Tag,
+)
 from apps.documents.tests.classification_builders import ABOVE_THRESHOLD, BELOW_THRESHOLD, classification
 from apps.ingestion.tests.ai_doubles import ScriptedEmbedService, install
 
@@ -313,8 +320,9 @@ def test_a_persons_removed_tag_is_neither_linked_nor_proposed_again(
 
 def test_a_typed_department_the_machine_matched_reads_as_the_persons_in_every_reply(session_client):
     """The stub suggests the scheme's first department, and this document's own department is the
-    only one in its scheme, so the suggestion equals what the uploader typed."""
+    only one listed (D-129), so the suggestion equals what the uploader typed."""
     client = session_client.client
+    Department.objects.create(name="People")
     document = make_document(session_client.user, department="People")
 
     classified = classify(client, document.id).json()["classification"]
@@ -333,7 +341,7 @@ def test_a_typed_department_the_machine_matched_reads_as_the_persons_in_every_re
 
 def test_a_department_the_machine_filled_reads_as_the_machines_until_a_person_edits_it(session_client):
     client = session_client.client
-    make_document(session_client.user, title="Budget memo", department="Finance")  # puts it in the scheme
+    Department.objects.create(name="Finance")  # puts it in the scheme (D-129)
     document = make_document(session_client.user, department="")
 
     classified = classify(client, document.id).json()

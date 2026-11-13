@@ -20,6 +20,7 @@ from apps.core.constants import (
     ASSIGNMENT_PROVISIONAL,
     CLASSIFICATION_CONFIDENCE_THRESHOLD,
     CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
+    CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL,
     DEPARTMENT_DIMENSION,
     PROCESS_DIMENSION,
     PROJECT_DIMENSION,
@@ -39,6 +40,7 @@ from .classification_builders import (
     ABOVE_THRESHOLD,
     AT_THRESHOLD,
     BELOW_THRESHOLD,
+    EPSILON,
     POLICY,
     REPORT,
     classification,
@@ -250,7 +252,8 @@ def test_the_confidence_threshold_is_the_classifying_models_own():
 def test_assignments_between_the_two_values_follow_the_classifying_model(
     document, model, outcome, effective, provisional_tag
 ):
-    """D-122: at 0.80 the type, the department and a tag apply on Haiku's 0.72 and are held on 0.95."""
+    """D-122: at 0.80 the type and a tag apply on Haiku's 0.72, and the department on Haiku's own 0.30
+    (D-129), and all three are held on 0.95."""
     # The premise: 0.80 sits between the two values, so the model alone decides.
     assert (CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU] <= BETWEEN_THE_TWO_VALUES
             < CLASSIFICATION_CONFIDENCE_THRESHOLD)
@@ -271,6 +274,99 @@ def test_assignments_between_the_two_values_follow_the_classifying_model(
     assert analysis.department_outcome == outcome
     assert document.department == ("Finance" if effective else "")
     assert links_of(document).get().provisional is provisional_tag
+
+
+# --- D-129: a department has a threshold of its own --------------------------------------------------
+
+HAIKU_DEPARTMENT_THRESHOLD = CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU]  # 0.30
+BETWEEN_THE_HAIKU_VALUES = 0.5  # at or above Haiku's department 0.30, below its shared 0.72
+
+
+def test_the_department_threshold_is_its_own_on_haiku_and_the_shared_value_for_an_unlisted_model():
+    """D-129: Haiku's department value from its own map; any other model's department falls back to
+    that model's shared value, which the type and the tags keep."""
+    assert module.department_threshold(HAIKU) == HAIKU_DEPARTMENT_THRESHOLD == 0.30
+    assert module.confidence_threshold(HAIKU) == CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU] == 0.72
+    for unlisted in ("gemma3:4b", "stub-chat"):
+        assert module.department_threshold(unlisted) == module.confidence_threshold(unlisted)
+        assert module.department_threshold(unlisted) == CLASSIFICATION_CONFIDENCE_THRESHOLD
+
+
+@pytest.mark.parametrize(
+    ("confidence", "outcome", "written"),
+    [
+        (HAIKU_DEPARTMENT_THRESHOLD, ASSIGNMENT_APPLIED, True),
+        (round(HAIKU_DEPARTMENT_THRESHOLD - EPSILON, 3), ASSIGNMENT_PROVISIONAL, False),
+        (round(HAIKU_DEPARTMENT_THRESHOLD - 0.01, 2), ASSIGNMENT_PROVISIONAL, False),
+    ],
+    ids=["at-0.30", "just-below", "0.29"],
+)
+def test_a_haiku_department_at_its_threshold_fills_a_blank_department_and_one_below_it_is_held(
+    document, confidence, outcome, written
+):
+    """Rule 3 on Haiku (D-129): applied at 0.30, which fills the blank department, and held below it.
+    Nothing else about rule 3 changes."""
+    analysis = apply_classification(
+        document,
+        classification(department="Finance", department_confidence=confidence, model=HAIKU),
+        scheme=scheme(departments=["Finance"]),
+    )
+    analysis.refresh_from_db()
+    document.refresh_from_db()
+    assert analysis.department_outcome == outcome
+    assert document.department == ("Finance" if written else "")
+    assert analysis.department_applied_by == ("ai" if written else None)
+
+
+@pytest.mark.parametrize("model", ["stub-chat", "gemma3:4b"])
+def test_an_unlisted_models_department_falls_back_to_its_shared_threshold(document, model):
+    """Haiku's department 0.30 is Haiku's alone: on an unlisted model a department at 0.30 is held,
+    one just below the shared value is held, and one at the shared value fills the blank department."""
+    shared = CLASSIFICATION_CONFIDENCE_THRESHOLD
+    for confidence, outcome in (
+        (HAIKU_DEPARTMENT_THRESHOLD, ASSIGNMENT_PROVISIONAL),
+        (round(shared - EPSILON, 3), ASSIGNMENT_PROVISIONAL),
+    ):
+        analysis = apply_classification(
+            document,
+            classification(department="Finance", department_confidence=confidence, model=model),
+            scheme=scheme(departments=["Finance"]),
+        )
+        assert (confidence, analysis.department_outcome) == (confidence, outcome)
+        document.refresh_from_db()
+        assert document.department == ""
+
+    analysis = apply_classification(
+        document,
+        classification(department="Finance", department_confidence=shared, model=model),
+        scheme=scheme(departments=["Finance"]),
+    )
+    document.refresh_from_db()
+    assert analysis.department_outcome == ASSIGNMENT_APPLIED
+    assert document.department == "Finance"
+
+
+def test_on_haiku_the_type_and_the_tags_keep_the_shared_threshold_while_the_department_uses_its_own(
+    document,
+):
+    """At 0.50 on Haiku: the department applies (0.50 >= 0.30) and fills the blank department, while
+    the type and a tag are held (0.50 < 0.72)."""
+    assert HAIKU_DEPARTMENT_THRESHOLD <= BETWEEN_THE_HAIKU_VALUES < CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL[HAIKU]
+    make_tag(PROJECT_DIMENSION, "bridge maintenance")
+    analysis = apply_classification(
+        document,
+        classification(doc_type=POLICY, type_confidence=BETWEEN_THE_HAIKU_VALUES,
+                       department="Finance", department_confidence=BETWEEN_THE_HAIKU_VALUES,
+                       tags=[(PROJECT_DIMENSION, "bridge maintenance", BETWEEN_THE_HAIKU_VALUES)],
+                       model=HAIKU),
+        scheme=scheme(departments=["Finance"], project=["bridge maintenance"]),
+    )
+    analysis.refresh_from_db()
+    document.refresh_from_db()
+    assert (analysis.doc_type_outcome, analysis.doc_type) == (ASSIGNMENT_PROVISIONAL, None)
+    assert links_of(document).get().provisional is True
+    assert analysis.department_outcome == ASSIGNMENT_APPLIED
+    assert document.department == "Finance"
 
 
 def test_a_tag_a_person_applied_and_confirmed_is_not_altered_by_a_rerun(document):

@@ -94,6 +94,9 @@ SCHEMA_V1 = {
          # Topic brought into use by a name, which is not vocabulary once unlinked.
          "grown"},
     ),
+    # documents 0015, 13 November 2026 (FR-10, D-129): the department list the classifier suggests
+    # from, a table of its own because Tags lower-cases names and a department keeps its case.
+    "departments": (("department_id",), {"department_id", "name", "active", "grown"}),
     "content_tags": (
         ("content_tag_id",),
         {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
@@ -297,6 +300,9 @@ SECTION_5_PLAN = [
     # then the summary and action-item tables, where the executor plans them.
     ("documents", "0012_content_chunk_ai_generated"),
     ("documents", "0014_merge_fr16_and_d128"),
+    # FR-10's department list (D-129), 13 November 2026: Departments, seeded from the departments
+    # documents carry, immediately after 0014, where its dependency puts it.
+    ("documents", "0015_departments"),
     ("meetings", "0003_fr16_meeting_summaries"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).

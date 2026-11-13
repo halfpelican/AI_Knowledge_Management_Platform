@@ -83,6 +83,11 @@ def classified(document, *tags, project=(), process=(), topic=()):
 
 def clause_3(monkeypatch, tmp_path):
     """Run the script through ``main()`` against this test's database; returns its clause 3."""
+    return verification(monkeypatch, tmp_path)["summary"]["clause_3"]
+
+
+def verification(monkeypatch, tmp_path):
+    """Run the script through ``main()`` against this test's database; returns verification.json."""
     monkeypatch.setattr(sys, "path", list(sys.path))  # the script inserts the repository root
     from scripts import objective05_verify as script
 
@@ -104,7 +109,7 @@ def clause_3(monkeypatch, tmp_path):
         sys, "argv", ["objective05_verify.py", "--dump-sha256", "b" * 64, "--out-dir", str(out)]
     )
     assert script.main() == 0
-    return json.loads((out / "verification.json").read_text(encoding="utf-8"))["summary"]["clause_3"]
+    return json.loads((out / "verification.json").read_text(encoding="utf-8"))
 
 
 def test_a_topic_proposal_is_what_clause_3_asks_for(titled, monkeypatch, tmp_path):
@@ -176,3 +181,35 @@ def test_an_ai_link_to_a_value_the_classifier_created_is_a_clause_3_violation(ti
     [violation] = result["violations"]
     assert violation.startswith(f"{reference_id} {PROJECT_DIMENSION} value 'harbour upgrade' created")
     assert result["passes"] is False
+
+
+# --- Clause 2: one configured threshold per kind of assignment (D-129) ---------------------------
+
+HAIKU = "claude-haiku-5-5"
+
+
+def test_clause_2_judges_a_haiku_department_by_its_own_threshold_and_the_type_by_the_shared_one(
+    titled, monkeypatch, tmp_path
+):
+    """On Haiku a department at 0.50 is at or above its own 0.30 and was applied, filling the blank
+    department: correct, not a violation, although 0.50 is below the 0.72 the type and the tags use.
+    The type at 0.50 was held, which is correct against 0.72. ``thresholds_used`` records both."""
+    _, document = titled()
+    apply_classification(
+        document,
+        classification(type_confidence=0.5, department="Finance", department_confidence=0.5, model=HAIKU),
+        scheme=scheme(departments=["Finance"]),
+    )
+    document.refresh_from_db()
+    assert document.department == "Finance"  # the premise: rule 3 applied it
+
+    result = verification(monkeypatch, tmp_path)
+
+    clause_2 = result["summary"]["clause_2"]
+    assert clause_2["violations"] == []
+    assert clause_2["passes"] is True
+    # The department at or above its threshold and applied; the type below its own and held.
+    assert (clause_2["at_or_above"], clause_2["at_or_above_and_applied"]) == (1, 1)
+    assert (clause_2["below_threshold"], clause_2["below_and_held"]) == (1, 1)
+    assert result["record"]["thresholds_used"] == {HAIKU: {"type_and_tags": 0.72, "department": 0.30}}
+    assert result["record"]["department_threshold_by_model"] == {HAIKU: 0.30}

@@ -8,9 +8,14 @@ model:
 
 - **confidence** — "a confidence value is recorded with each assignment. Assignments below the
   configured threshold are marked provisional and presented for confirmation rather than applied
-  silently." The classifying model's threshold is compared in one place, ``_is_provisional``:
-  ``CLASSIFICATION_CONFIDENCE_THRESHOLD``, or the model's own value from
-  ``CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL`` (``confidence_threshold``, D-122).
+  silently." The configured threshold is one per kind of assignment (D-129), each the classifying
+  model's own, and each compared in one place:
+  - a type or a tag in ``_is_provisional``, against ``confidence_threshold``:
+    ``CLASSIFICATION_CONFIDENCE_THRESHOLD``, or the model's own value from
+    ``CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL`` (D-122);
+  - a department in ``_department_is_provisional``, against ``department_threshold``: the model's
+    own value from ``CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL``, else the shared
+    value for that model.
 - **controlled taxonomy growth** — FR-10: "suggested tags are matched against values already held
   in the scheme. A value that does not match may be proposed only in the Topic dimension and
   requires user confirmation before it is created; suggestions falling outside the scheme in the
@@ -42,7 +47,8 @@ model:
 **The scheme is built for the document's own audience** (``tag_scheme``), so the prompt never
 lists a value that exists only on material some reader of this document may not see, and a
 suggestion that names one anyway is treated exactly as a value no Tag has (``apply_classification``
-rule 4, CLAUDE.md invariant 1).
+rule 4, CLAUDE.md invariant 1). Its departments are the active ``Department`` names admitted for that
+audience (D-129): a department in use on documents but not in the list is not offered.
 
 **What this module does not do.** It calls the provider only in ``classify_document_now``; it
 decides no status code (the route and the ingestion hook map the exceptions below); and it never
@@ -87,7 +93,9 @@ Each one:
   row, then the links, and deletes the document last. Until N1 it locked the links before the
   analysis row, which its cascade deleted at the end, so a person confirming a proposal deadlocked
   with a deletion. ``reprocess_document`` holds the document while classification runs, and
-  ``retire_tag`` and ``create_tag`` (taxonomy.py) take one tag row.
+  ``retire_tag`` and ``create_tag`` (taxonomy.py) take one tag row. ``create_department`` and
+  ``retire_department`` (taxonomy.py, D-129) take one department row and wait on nothing after it;
+  nothing in this module locks a department row (``tag_scheme`` reads them unlocked).
 
 apps/documents/tests/test_classification_lock_order.py runs both cycles N1 named, on two
 connections.
@@ -113,6 +121,7 @@ from apps.core.constants import (
     ASSIGNMENT_PROVISIONAL,
     CLASSIFICATION_CONFIDENCE_THRESHOLD,
     CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
+    CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL,
     DOCUMENT_TYPES,
     REPOSITORY_TAG_DIMENSIONS,
     ROLE_NAMES,
@@ -121,7 +130,14 @@ from apps.core.constants import (
     USER_APPLIED,
 )
 from apps.core.models import NAME_MAX_LENGTH
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, Tag, normalise_tag_name
+from apps.documents.models import (
+    ContentTag,
+    Department,
+    Document,
+    DocumentAnalysis,
+    Tag,
+    normalise_tag_name,
+)
 from apps.retrieval.scoping import scoped_documents, scoped_meetings
 
 logger = logging.getLogger(__name__)
@@ -210,9 +226,15 @@ def tag_scheme(document: Document) -> TagScheme:
     FR-11 predicate is written (D-53, D-66); nothing here tests ``visible_to_roles`` itself.
 
     - ``doc_types`` is DOCUMENT_TYPES: a fixed list that says nothing about the corpus.
-    - ``departments`` is the intersection, across the audience, of the distinct non-blank
-      ``Documents.department`` values of the documents each role may read. A department carried
-      only by documents some role in the audience cannot read is withheld.
+    - ``departments`` is the active ``Department`` names, the list an Administrator keeps on the
+      Tags page, admitted by the same rule (D-129, the lead's decision of 13 November 2026). A
+      department that is not grown is vocabulary and always in. A grown one, which ``documents
+      0015`` seeds for a department found only on documents some role cannot read, is in only where
+      EVERY role in the audience reads, through ``scoped_documents``, a document whose ``department``
+      equals the name, exactly. A retired department is in no scheme, and **a department in use on
+      documents but not in the list is not offered**: the list is the scheme, and FR-08's upload
+      field stays free text. Until D-129 this was the intersection, across the audience, of the
+      distinct non-blank ``Documents.department`` values of the documents each role may read.
     - ``tags`` holds, for each of REPOSITORY_TAG_DIMENSIONS, the active ``Tag`` names admitted by
       the rule above.
     - **A tag that is not grown is vocabulary** and is in every scheme, unlinked, carried only by
@@ -241,40 +263,47 @@ def tag_scheme(document: Document) -> TagScheme:
       an Employee reads, while that stays so. A value an Administrator adds (``POST /api/tags``,
       D-128) is not grown: vocabulary, in every scheme, as a seeded value is.
 
-    **An empty audience gets the full scheme.** A document whose ``visible_to_roles`` is empty is
-    readable by nobody (``scoped_*`` fail closed), so there is no reader to protect. D-29 refuses
-    an empty list at upload, so this arises only from direct row edits.
+    **An empty audience gets the full scheme**, every active tag and every active department. A
+    document whose ``visible_to_roles`` is empty is readable by nobody (``scoped_*`` fail closed),
+    so there is no reader to protect. D-29 refuses an empty list at upload, so this arises only from
+    direct row edits.
 
     **The scheme is built for the audience at classification time.** A document later widened to
     more roles keeps the values it was classified against; widening should reclassify.
 
     **A role name scoping does not know** (one missing from EFFECTIVE_ROLES) reads nothing, so
-    every grown tag and every department is withheld from a document it is in the audience of, as
-    ``scoped_documents`` fails closed. Vocabulary, a tag that is not grown, is still in: it says
-    nothing about any source, so there is nothing for that reader to be kept from.
+    every grown tag and every grown department is withheld from a document it is in the audience
+    of, as ``scoped_documents`` fails closed. Vocabulary, a tag or a department that is not grown, is
+    still in: it says nothing about any source, so there is nothing for that reader to be kept from.
     """
     audience = list(dict.fromkeys(document.visible_to_roles))  # distinct, in order
     active_tags = Tag.objects.filter(
         active=True, dimension__in=REPOSITORY_TAG_DIMENSIONS
     ).values_list("id", "dimension", "tag_name", "grown")
+    active_departments = list(Department.objects.filter(active=True).values_list("name", "grown"))
+    grown_departments = [name for name, grown in active_departments if grown]
 
     if audience:
-        departments: set[str] | None = None
+        readable_departments: set[str] | None = None
         readable_tag_ids: set | None = None
         for role_name in audience:
             documents = scoped_documents(role_name=role_name)
             meetings = scoped_meetings(role_name=role_name)
+            # The grown departments this role reads a document of: exact equality with the name.
             role_departments = set(
-                documents.exclude(department="").values_list("department", flat=True).distinct()
-            )
+                documents.filter(department__in=grown_departments)
+                .values_list("department", flat=True)
+                .distinct()
+            ) if grown_departments else set()
             role_tag_ids = set(
                 ContentTag.objects.filter(
                     Q(source_type=DOCUMENT_SOURCE_TYPE, source_id__in=documents.values("id"))
                     | Q(source_type=MEETING_SOURCE_TYPE, source_id__in=meetings.values("id"))
                 ).values_list("tag_id", flat=True)
             )
-            departments = (
-                role_departments if departments is None else departments & role_departments
+            readable_departments = (
+                role_departments if readable_departments is None
+                else readable_departments & role_departments
             )
             readable_tag_ids = (
                 role_tag_ids if readable_tag_ids is None else readable_tag_ids & role_tag_ids
@@ -286,13 +315,20 @@ def tag_scheme(document: Document) -> TagScheme:
             # or destroying them moves nothing a reader of this document is offered.
             return not grown or tag_id in readable_tag_ids
 
+        def department_admitted(name, grown) -> bool:
+            # The same rule for a department (D-129): vocabulary always, a grown one only where
+            # every audience role reads a document carrying it.
+            return not grown or name in readable_departments
+
     else:
-        departments = set(
-            Document.objects.exclude(department="").values_list("department", flat=True).distinct()
-        )
 
         def admitted(tag_id, grown) -> bool:
             return True
+
+        def department_admitted(name, grown) -> bool:
+            return True
+
+    departments = {name for name, grown in active_departments if department_admitted(name, grown)}
 
     names = {dimension: [] for dimension in REPOSITORY_TAG_DIMENSIONS}
     for tag_id, dimension, tag_name, grown in active_tags:
@@ -422,8 +458,11 @@ def apply_classification(
        anything is written.
     3. **Department**, unless ``user_edited``: compared with ``scheme.departments`` after
        stripping, exactly in case because the column is not case-normalised. Outside the scheme
-       is discarded and nothing is written; inside and below the threshold is provisional and
-       ``Documents.department`` is untouched. Inside and at or above it, **the machine fills only
+       is discarded and nothing is written; inside and below **the department's own threshold**
+       is provisional and ``Documents.department`` is untouched. That threshold is
+       ``department_threshold(model)`` (D-129, the lead's decision of 13 November 2026): 0.30 for
+       claude-haiku-5-5, and for a model not listed the shared value the type and the tags use, so
+       gemma3:4b keeps 0.95. Inside and at or above it, **the machine fills only
        a blank department** (the user's decision of 10 November 2026, D-105's note): a blank
        column takes the value (D-72: one source), saved with ``update_fields=["department"]``,
        and the outcome is applied; a column that already holds the suggested value is left as it
@@ -538,7 +577,8 @@ def apply_classification(
             machine_wrote = False
             if department_value not in scheme.departments:
                 analysis.department_outcome = ASSIGNMENT_DISCARDED
-            elif _is_provisional(classification.department.confidence, classification.model):
+            elif _department_is_provisional(classification.department.confidence, classification.model):
+                # Below the department's own threshold (D-129), not the type's and the tags'.
                 analysis.department_outcome = ASSIGNMENT_PROVISIONAL
             elif current == department_value:
                 # Already the document's department: nothing to write. Whose value it is, the
@@ -633,12 +673,35 @@ def confidence_threshold(model: str) -> float:
     return CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL.get(model, CLASSIFICATION_CONFIDENCE_THRESHOLD)
 
 
-def _is_provisional(confidence: float, model: str) -> bool:
-    """FR-10's one confidence comparison: below the threshold is provisional; at it is applied.
+def department_threshold(model: str) -> float:
+    """FR-10's threshold for a department ``model`` suggested (D-129, the lead's decision of 13
+    November 2026).
 
-    The threshold is the classifying model's own (``confidence_threshold``, D-122).
+    A model CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL lists gets its own department
+    value: claude-haiku-5-5's 0.30, chosen by D-106's rule on departments alone. Any other gets the
+    shared value for that model, ``confidence_threshold(model)``, so gemma3:4b keeps 0.95. The type and
+    the tags never read this. Both maps are read at call time, so a test that reassigns one is
+    honoured.
+    """
+    if model in CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL:
+        return CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL[model]
+    return confidence_threshold(model)
+
+
+def _is_provisional(confidence: float, model: str) -> bool:
+    """FR-10's confidence comparison for a type or a tag: below the threshold is provisional; at it
+    is applied.
+
+    The threshold is the classifying model's own (``confidence_threshold``, D-122). A department is
+    compared against its own threshold instead (``_department_is_provisional``, D-129).
     """
     return confidence < confidence_threshold(model)
+
+
+def _department_is_provisional(confidence: float, model: str) -> bool:
+    """FR-10's confidence comparison for a department, rule 3's: below the department's threshold
+    is provisional; at it is applied (``department_threshold``, D-129)."""
+    return confidence < department_threshold(model)
 
 
 def _unstorable(character: str) -> bool:

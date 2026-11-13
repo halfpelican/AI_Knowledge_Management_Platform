@@ -40,7 +40,14 @@ from apps.core.constants import (
     TOPIC_DIMENSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.models import (
+    ContentTag,
+    Department,
+    Document,
+    DocumentAnalysis,
+    ExtractedContent,
+    Tag,
+)
 from apps.documents.tests.classification_builders import (
     ABOVE_THRESHOLD,
     BELOW_THRESHOLD,
@@ -155,6 +162,7 @@ ROUTES = {
 def test_classify_returns_the_classification_and_the_tag_details(session_client):
     document = make_document(session_client.user)
     tag = Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)
+    Department.objects.create(name="People")  # the list is the scheme's departments (D-129)
 
     response = classify(session_client.client, document.id)
 
@@ -169,7 +177,8 @@ def test_classify_returns_the_classification_and_the_tag_details(session_client)
     assert result["machine_doc_type"] == POLICY
     assert result["machine_doc_type_confidence"] == STUB_CONFIDENCE
     assert isinstance(result["machine_doc_type_confidence"], float)  # a number, not a string
-    # The document's own department is in its scheme, so the stub's suggestion of it is applied.
+    # The document's own department is listed, so in its scheme, and the stub's suggestion of it is
+    # applied.
     assert (result["machine_department"], result["department_outcome"]) == ("People", ASSIGNMENT_APPLIED)
     assert result["machine_department_confidence"] == STUB_CONFIDENCE
     assert result["user_edited"] is False
@@ -189,9 +198,9 @@ def test_classify_returns_the_classification_and_the_tag_details(session_client)
 def test_classify_replies_with_the_department_the_machine_filled(session_client):
     """A blank department is filled by an applied in-scheme suggestion (D-105's note of 10
     November), and the reply carries it, re-read from the row, so the page need not reload."""
-    # "Finance" is in the scheme because another document both roles can read carries it, and it
-    # is the scheme's only department, so it is what the stub suggests, at STUB_CONFIDENCE.
-    make_document(session_client.user, title="Budget memo", department="Finance")
+    # "Finance" is in the scheme because it is listed, vocabulary (D-129), and it is the scheme's only
+    # department, so it is what the stub suggests, at STUB_CONFIDENCE.
+    Department.objects.create(name="Finance")
     document = make_document(session_client.user, department="")
 
     response = classify(session_client.client, document.id)
@@ -208,8 +217,9 @@ def test_classify_replies_with_the_department_the_machine_filled(session_client)
 def test_classify_keeps_a_different_department_and_replies_with_it(session_client):
     """A department already on the document is not the machine's to replace: the suggestion is
     held as provisional, and the reply's department is the one stored, not the suggestion."""
-    # The scheme is ("Finance", "People"), sorted, so the stub suggests "Finance".
-    make_document(session_client.user, title="Budget memo", department="Finance")
+    # The scheme is ("Finance", "People"), both listed (D-129), sorted, so the stub suggests "Finance".
+    Department.objects.create(name="Finance")
+    Department.objects.create(name="People")
     document = make_document(session_client.user, department="People")
 
     response = classify(session_client.client, document.id)
@@ -322,9 +332,9 @@ def test_a_role_without_contribute_content_is_403_on_a_document_it_can_see(
 def test_confirming_as_it_stands_applies_a_provisional_type_and_marks_both_confirmed(
     session_client, stub_ai_service
 ):
-    # "Finance" is in the scheme because another document both roles can read carries it; the
-    # document being classified starts with no department, so writing it is visible.
-    make_document(session_client.user, title="Budget memo", department="Finance")
+    # "Finance" is in the scheme because it is listed (D-129); the document being classified starts
+    # with no department, so writing it is visible.
+    Department.objects.create(name="Finance")
     document = make_document(session_client.user, department="")
     stub_ai_service.classification = classification(
         doc_type=POLICY, type_confidence=BELOW_THRESHOLD,
@@ -353,6 +363,7 @@ def test_confirming_as_it_stands_applies_a_provisional_type_and_marks_both_confi
 
 def test_an_edited_type_and_department_are_written_and_the_machine_values_kept(session_client):
     document = make_document(session_client.user)
+    Department.objects.create(name="People")  # listed, so the stub suggests it (D-129)
     classify(session_client.client, document.id)
 
     response = confirm(session_client.client, document.id, doc_type=REPORT, department="Operations")

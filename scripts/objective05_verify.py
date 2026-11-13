@@ -9,8 +9,11 @@ database. The three clauses of Objective 05, as the proposal words them:
    the reference, over all twenty, provisional or not (D-106).
 2. "any assignment falling below the configured confidence threshold must be marked provisional
    and held for confirmation rather than applied": every type, department and tag assignment with
-   a confidence under CLASSIFICATION_CONFIDENCE_THRESHOLD has the provisional outcome (or flag) and
-   its effective field was not written; every one at or above it was applied.
+   a confidence under its threshold has the provisional outcome (or flag) and its effective field
+   was not written; every one at or above it was applied. "The configured confidence threshold" is
+   read as one configured threshold per kind of assignment (D-129): the type and the tags are judged
+   by ``confidence_threshold(model)``, the department by ``department_threshold(model)``, each the
+   classifying model's own, and ``thresholds_used`` records both values per model.
 3. "suggested values falling outside the established scheme must be discarded in the Department,
    Project and Process dimensions while being proposed for confirmation in the Topic dimension
    only": out-of-scheme departments carry the discarded outcome, out-of-scheme Project and Process
@@ -93,9 +96,9 @@ def main() -> int:
 
     from apps.core.constants import (
         ASSIGNMENT_OUTCOMES, CLASSIFICATION_CONFIDENCE_THRESHOLD, CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
-        REPOSITORY_TAG_DIMENSIONS, SOURCE_TYPES,
+        CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL, REPOSITORY_TAG_DIMENSIONS, SOURCE_TYPES,
     )
-    from apps.documents.classification import confidence_threshold
+    from apps.documents.classification import confidence_threshold, department_threshold
     from apps.documents.models import ContentTag, Document, DocumentAnalysis, normalise_tag_name
 
     applied, provisional, discarded, confirmed = ASSIGNMENT_OUTCOMES
@@ -121,6 +124,9 @@ def main() -> int:
         "threshold": threshold,
         # D-122: each analysis is judged by its own model's threshold; thresholds_used records them.
         "threshold_by_model": dict(CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL),
+        # D-129: a department is judged by its own threshold, this map's value for a listed model
+        # and the shared one otherwise.
+        "department_threshold_by_model": dict(CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL),
         "verified_at": datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds"),
         "classify_record": json.loads(arguments.classify_record.read_text(encoding="utf-8")) if arguments.classify_record else None,
     })
@@ -134,7 +140,8 @@ def main() -> int:
                "topic_proposed": 0, "project_process_proposed": 0, "created_by_classifier": 0,
                "out_of_scheme_links": 0, "violations": []}
     tag_hits = tag_suggested = tag_reference = 0
-    thresholds_used: dict[str, float] = {}
+    # {model: {"type_and_tags": ..., "department": ...}}: one threshold per kind of assignment (D-129).
+    thresholds_used: dict[str, dict[str, float]] = {}
     record["thresholds_used"] = thresholds_used  # filled per analysis below, before the record is written
 
     for entry in reference["documents"]:
@@ -151,9 +158,11 @@ def main() -> int:
             row.update({"classified": False})
             rows.append(row)
             continue
-        # D-122: the threshold the apply layer used for this analysis is its model's own.
+        # D-122: the threshold the apply layer used for this analysis is its model's own, and since
+        # D-129 one per kind: the type and the tags use ``threshold``, the department its own.
         threshold = confidence_threshold(analysis.model)
-        thresholds_used[analysis.model] = threshold
+        dept_threshold = department_threshold(analysis.model)
+        thresholds_used[analysis.model] = {"type_and_tags": threshold, "department": dept_threshold}
         type_conf = float(analysis.machine_doc_type_confidence) if analysis.machine_doc_type_confidence is not None else None
         dept_conf = float(analysis.machine_department_confidence) if analysis.machine_department_confidence is not None else None
         row.update({
@@ -189,12 +198,13 @@ def main() -> int:
             if document.department == analysis.machine_department and analysis.machine_department:
                 clause3["violations"].append(f"{entry['id']} discarded department was written")
         elif dept_conf is not None and not analysis.user_edited:
-            if dept_conf < threshold:
+            # The department's own threshold (D-129), not the type's and the tags'.
+            if dept_conf < dept_threshold:
                 clause2["below_threshold"] += 1
                 if analysis.department_outcome == provisional:
                     clause2["below_and_held"] += 1
                 else:
-                    clause2["violations"].append(f"{entry['id']} department {dept_conf} < {threshold} but outcome {analysis.department_outcome}")
+                    clause2["violations"].append(f"{entry['id']} department {dept_conf} < {dept_threshold} but outcome {analysis.department_outcome}")
             else:
                 clause2["at_or_above"] += 1
                 if analysis.department_outcome == applied and document.department == analysis.machine_department:
@@ -205,7 +215,7 @@ def main() -> int:
                     # different suggestion is held against the department the document already has.
                     clause2["at_or_above_held_to_keep_a_given_department"] += 1
                 else:
-                    clause2["violations"].append(f"{entry['id']} department {dept_conf} >= {threshold} but outcome {analysis.department_outcome}")
+                    clause2["violations"].append(f"{entry['id']} department {dept_conf} >= {dept_threshold} but outcome {analysis.department_outcome}")
         # Tags: the AI links on this document, with provenance.
         links = list(ContentTag.objects.filter(source_type=document_source, source_id=document.id).select_related("tag"))
         ai_links = [link for link in links if link.applied_by == "ai"]
@@ -285,7 +295,7 @@ def main() -> int:
     lines = ["# Objective 05 verification (D-106)", "",
              f"Commit {record['commit_sha'][:7]}" + (" (uncommitted tracked changes)" if record["uncommitted_tracked_changes"] else "")
              + f", database {database}, dump {record['dump_sha256'][:8]}…, FLM {version.summary()}, "
-             f"threshold by model {thresholds_used or {'(none classified)': CLASSIFICATION_CONFIDENCE_THRESHOLD}}.", "",
+             f"thresholds by model, per kind of assignment (D-129) {thresholds_used or {'(none classified)': CLASSIFICATION_CONFIDENCE_THRESHOLD}}.", "",
              "| Id | Reference | Suggested | Conf | Type outcome | Dept suggested | Dept conf | Dept outcome | AI tags (provisional) | Created by classifier | Proposed | Discarded |",
              "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:

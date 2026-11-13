@@ -32,7 +32,12 @@ from apps.core.constants import (
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import tag_options
-from apps.documents.models import ContentTag, Document, normalise_tag_name
+from apps.documents.models import (
+    ContentTag,
+    Document,
+    normalise_department_name,
+    normalise_tag_name,
+)
 from apps.meetings.models import ActionItem, Meeting, MeetingSummary
 from apps.meetings.owners import can_read_meeting
 from apps.meetings.summaries import action_items_of, current_summary, latest_run, reported_state
@@ -416,6 +421,39 @@ class TagCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("This field may not be blank.")
         if len(name) > NAME_MAX_LENGTH:
             raise serializers.ValidationError(TAG_NAME_TOO_LONG_MESSAGE)
+        return name
+
+
+class DepartmentEntrySerializer(serializers.Serializer):
+    """One entry of ``GET /api/departments``, the ``POST`` 201 and 200, and the ``DELETE`` 200 (D-129):
+    a Department with ``item_count``, which ``apps/documents/taxonomy.py`` sets on it, the number of
+    documents whose ``department`` equals the name. Administrator-only (``manage_tags``), so neither
+    the names nor the counts are scoped: an Administrator reads every document (D-66)."""
+
+    department_id = serializers.UUIDField(source="id", read_only=True)
+    name = serializers.CharField(read_only=True)
+    active = serializers.BooleanField(read_only=True)
+    item_count = serializers.IntegerField(read_only=True)
+
+
+class DepartmentCreateSerializer(serializers.Serializer):
+    """``POST /api/departments``: an Administrator adds a department to FR-10's department scheme, or
+    brings a retired one back (D-129).
+
+    ``name`` is trimmed, refused blank or over the column (400 keyed on ``name``), and returned
+    normalised as ``Departments`` normalises it (``normalise_department_name``): internal whitespace
+    collapsed to one space, **the case kept**. Collapsing only shortens a name, so nothing that
+    passes the length check overruns the column afterwards. A NUL byte or a lone surrogate is
+    refused by ``CharField``'s own validators (D-65). Whether the name is already listed is
+    ``create_department``'s question, after validation: the 409, or the 200 for a retired one.
+    """
+
+    name = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+    def validate_name(self, value):
+        name = normalise_department_name(value)
+        if not name:
+            raise serializers.ValidationError("This field may not be blank.")
         return name
 
 

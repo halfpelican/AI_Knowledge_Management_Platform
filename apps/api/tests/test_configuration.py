@@ -194,6 +194,7 @@ THROTTLED_ROUTES = {
     ("search", "GET"): "search",
     ("document-tags", "POST"): "tagging",
     ("tag-list", "POST"): "tagging",  # D-128: an Administrator adds a value
+    ("department-list", "POST"): "tagging",  # D-129: an Administrator adds a department
     # D-123: one recording segment per request, and the status, which asks FLM each time, in the
     # same budget.
     ("transcription-list", "POST"): "transcription",

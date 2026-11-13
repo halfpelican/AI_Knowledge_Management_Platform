@@ -296,6 +296,20 @@ cascade deleted the row.
 | `active` | boolean | deactivated rather than deleted while content references it |
 | `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. A value an Administrator adds through `POST /api/tags` (D-128) is not grown: it is vocabulary. A person's confirmation of a proposal, or their Topic name form, reactivates a retired tag only through a document every role can read (D-128's security review). For one day D-128 also had the classifier create and reactivate values; D-129 reversed it. Never unset |
 
+### Departments — FR-10 (D-129)
+
+The department list an Administrator keeps on the Tags page, and the scheme the classifier suggests a
+department from. A document's department stays the free-text `Documents.department`, the one field
+FR-14 and FR-15 read (D-72). Added by `documents 0015_departments`, which seeds it from the departments
+in use when it runs.
+
+| Field | Type | Notes |
+|---|---|---|
+| `department_id` | UUID PK | |
+| `name` | text | trimmed, internal spaces collapsed, **case kept**; unique ignoring case (`departments_unique_name_ignoring_case`, on `LOWER(name)`). Not a `Tags` row because `Tag` lower-cases names, and the classifier writes the scheme's spelling into a blank department |
+| `active` | boolean | false once retired: a department in use is retired rather than deleted, stays on its documents and in the filters, and is no longer offered to the classifier |
+| `grown` | boolean | hidden: offered for a document only when every role in its audience reads a document whose department equals the name (invariant 1). Set by the seed on a department only material some role cannot read carries; an Administrator's addition is not hidden. Never unset |
+
 ### ContentTags — FR-10, FR-15
 
 | Field | Type | Notes |
@@ -522,11 +536,12 @@ so a status can be filtered on and its meaning does not drift.
 `DOCUMENT_TYPES` is FR-10's fixed list: "the type must be selected from a fixed list rather
 than generated freely, so that filtering remains consistent". `ASSIGNMENT_OUTCOMES` is how the
 apply layer disposed of one assignment (`DocumentAnalysis.doc_type_outcome`,
-`department_outcome`): **applied**, at or above `CLASSIFICATION_CONFIDENCE_THRESHOLD` and
-written to the effective field, still marked AI-generated and editable; **provisional**, below
+`department_outcome`): **applied**, at or above the classifying model's threshold for that kind
+(`CLASSIFICATION_CONFIDENCE_THRESHOLD`, or the model's value, for the type; since D-129 the department
+has its own, `CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL`) and written to the effective field, still marked AI-generated and editable; **provisional**, below
 the threshold, held for confirmation and not written; **discarded**, outside the established
-scheme (the department only — the type is always in the fixed list because the parser refuses
-anything else); **confirmed**, a person confirmed or edited it, after which reprocessing leaves
+scheme (the department only, whose scheme since D-129 is the department list — the type is always in
+the fixed list because the parser refuses anything else); **confirmed**, a person confirmed or edited it, after which reprocessing leaves
 it alone.
 
 `KNOWLEDGE_GAP_STATUS_VALUES` is FR-19's "the ability to mark an entry as addressed": an entry
@@ -655,8 +670,8 @@ proposal list renamed `proposed_tags` on its unchanged column, its entries stamp
 is the other, and `documents 0013_rejected_tags` (`DocumentAnalysis.rejected_tags`) follows it.
 `documents 0014_merge_fr16_and_d128` joins the two branches. It has no operations; it only gives
 the app one leaf again, so neither pushed migration was renumbered or edited. The executor plans
-0012_proposed_tags, 0013, 0012_content_chunk_ai_generated, 0014, then
-`meetings 0003_fr16_meeting_summaries`.
+0012_proposed_tags, 0013, 0012_content_chunk_ai_generated, 0014, `documents 0015_departments` (the
+department list, D-129), then `meetings 0003_fr16_meeting_summaries`.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

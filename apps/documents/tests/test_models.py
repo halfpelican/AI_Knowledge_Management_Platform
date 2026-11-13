@@ -1,6 +1,6 @@
-"""Documents, ExtractedContent, ContentChunks, Tags and ContentTags.
+"""Documents, ExtractedContent, ContentChunks, Tags, ContentTags and Departments.
 
-FR-08, FR-11, FR-15 and docs/decisions.md D-07, D-08, D-11, D-12.
+FR-08, FR-10, FR-11, FR-15 and docs/decisions.md D-07, D-08, D-11, D-12, D-129.
 """
 
 import uuid
@@ -20,7 +20,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
     TAG_APPLIED_BY_VALUES,
 )
-from apps.documents.models import ContentChunk, ContentTag, Document, ExtractedContent, Tag
+from apps.documents.models import ContentChunk, ContentTag, Department, Document, ExtractedContent, Tag
 
 pytestmark = pytest.mark.django_db
 
@@ -172,3 +172,22 @@ def test_a_tag_in_use_is_protected_not_deleted(document):
     tag.active = False  # the schema's answer: deactivate instead
     tag.save()
     assert Tag.objects.get(pk=tag.pk).active is False
+
+
+# --- Departments (documents 0015, D-129) ------------------------------------------------------
+
+
+def test_department_name_is_normalised_on_save_and_keeps_its_case():
+    """Unlike ``Tag.save()``: the classifier writes the list's spelling into ``Documents.department``,
+    and FR-14's and FR-15's filters would split by case if it were lower-cased (D-129)."""
+    department = Department.objects.create(name="  Human \t  Resources ")
+    department.refresh_from_db()
+    assert department.name == "Human Resources"
+    assert (department.active, department.grown) == (True, False)
+
+
+def test_department_names_are_unique_ignoring_case_after_normalisation():
+    Department.objects.create(name="Human Resources")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Department.objects.create(name="  HUMAN   resources ")
+    assert list(Department.objects.values_list("name", flat=True)) == ["Human Resources"]

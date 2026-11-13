@@ -73,8 +73,17 @@ from apps.documents.classification import (
 )
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
-from apps.documents.models import Document, Tag
-from apps.documents.taxonomy import TagAlreadyExists, create_tag, retire_tag, tag_inventory
+from apps.documents.models import Department, Document, Tag
+from apps.documents.taxonomy import (
+    DepartmentAlreadyExists,
+    TagAlreadyExists,
+    create_department,
+    create_tag,
+    department_inventory,
+    retire_department,
+    retire_tag,
+    tag_inventory,
+)
 from apps.ingestion import audio
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
@@ -134,6 +143,8 @@ from .serializers import (
     ConversationDetailSerializer,
     ConversationSerializer,
     DashboardQuerySerializer,
+    DepartmentCreateSerializer,
+    DepartmentEntrySerializer,
     DirectoryEntrySerializer,
     DocumentBrowseQuerySerializer,
     DocumentDetailSerializer,
@@ -291,6 +302,13 @@ TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
 TAG_ALREADY_EXISTS_MESSAGE = (
     "A tag with this name already exists in this dimension. A retired tag is not added again here."
 )
+# DELETE /api/departments/{id} for an id that names no Department (D-129): get_object_or_404's own
+# wording, as TAG_NOT_FOUND_MESSAGE restates it for tags.
+DEPARTMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Department._meta.object_name
+# POST /api/departments (D-129) for a name an ACTIVE department already has, ignoring case. A retired
+# one is reactivated instead (200), so this message never says the name is retired. The body carries
+# that department's id, which the Administrator, the route's only caller, already sees in the list.
+DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name is already listed."
 # FR-16's action-item routes (D-125), for an item id that names nothing on the meeting in the path:
 # the scoped meeting lookup's own 404 body, so an item that belongs to another meeting, one that
 # was deleted and one that never existed are one answer.
@@ -396,7 +414,8 @@ CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMIS
 # FR-10's tag administration (D-119 finding 5; D-128's POST): the same arrangement as FR-19's, for
 # the same reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an
 # unknown tag, and a POST's 400, 409 and throttle; a tag's existence is the Administrator's to know,
-# since they read every source (D-66).
+# since they read every source (D-66). Since D-129 it guards the department list's two routes the
+# same way, for the same reason.
 CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
 
 
@@ -2207,6 +2226,86 @@ class TagDetailView(APIView):
         if tag is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(TagEntrySerializer(tag).data)
+
+
+# --- FR-10's department list (D-129, the lead's decision of 13 November 2026) -------------------------
+
+
+class DepartmentListView(ThrottlePostOnlyMixin, APIView):
+    """``GET /api/departments`` — every Department, active or not, ordered by name ignoring case, each
+    ``{department_id, name, active, item_count}``, ``item_count`` being the number of documents whose
+    ``department`` equals the name (``apps/documents/taxonomy.py::department_inventory``).
+    ``POST /api/departments`` — an Administrator adds a department to FR-10's department scheme, the
+    list the classifier suggests from (``tag_scheme``).
+
+    ``manage_tags`` is a permission class, as on ``/api/tags``, so 401 and then 403 come before
+    anything else. The list is not scoped and needs no scope: its one reader, the Administrator, reads
+    every document (D-66), and ``apps/accounts/tests/test_manage_tags_seed.py`` holds every holder of
+    the code to that. 200 with a bare list, ``[]`` for none.
+
+    The POST: body ``{"name"}`` (``DepartmentCreateSerializer``: 400 ``{"name": [...]}`` for a blank or
+    over-long name, which is normalised with its case kept).
+
+    - A new name: 201 with the entry, created **not grown**: vocabulary, offered to every audience,
+      as a value added on ``/api/tags`` is.
+    - A name an ACTIVE department has, ignoring case, a concurrent create of it included: 409
+      ``{"detail", "department_id"}``, and nothing changes.
+    - A RETIRED department's name: **200 with the entry, reactivated**, keeping its ``grown`` and its
+      spelling. ``/api/tags`` answers 409 for a retired tag instead, because a retired tag comes back
+      when a person names it on a document every role reads (``apply_tag``, ``confirm_proposed_tag``);
+      a department has no such path, so this is the only way back for one, and only an Administrator,
+      who reads every document, can take it.
+
+    **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``), the POST only
+    (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission classes before
+    the throttles, so the order is 401, 403, then 429.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
+
+    def get(self, request):
+        return Response(DepartmentEntrySerializer(department_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = DepartmentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        try:
+            added = create_department(serializer.validated_data["name"])
+        except DepartmentAlreadyExists as exc:
+            return Response(
+                {"detail": DEPARTMENT_ALREADY_EXISTS_MESSAGE, "department_id": str(exc.department_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            DepartmentEntrySerializer(added.department).data,
+            status=status.HTTP_201_CREATED if added.created else status.HTTP_200_OK,
+        )
+
+
+class DepartmentDetailView(APIView):
+    """``DELETE /api/departments/{id}`` — retire a department (D-129).
+
+    401, then 403 without ``manage_tags``, then 404 ``{"detail": "No Department matches the given
+    query."}`` for an id naming no Department. A department any document uses is deactivated and
+    answered 200 with its entry, again for one already inactive: it stays on those documents and in
+    FR-14's and FR-15's filters, which read ``Documents.department`` (D-72), and the classifier no
+    longer sees it. A department no document uses is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_department``). ``POST /api/departments`` with its name brings
+    a retired one back.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            department = retire_department(pk)
+        except Department.DoesNotExist:
+            raise Http404(DEPARTMENT_NOT_FOUND_MESSAGE)
+        if department is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(DepartmentEntrySerializer(department).data)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------

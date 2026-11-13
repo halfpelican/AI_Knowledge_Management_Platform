@@ -38,16 +38,46 @@ one back: since D-129 a retired value it suggests is proposed (a Topic) or disca
 Process). From D-128 until D-129 it reactivated one at or above the threshold.
 ``create_tag`` never reactivates one (D-105's note: "Declined: a route that only reactivates").
 
+**The department list** (D-129, the lead's decision of 13 November 2026): the fourth dimension of
+FR-10's scheme, on the same page and behind the same code. ``Department`` is a table of its own,
+which keeps case (its docstring says why).
+
+- ``department_inventory()``: every Department, active or not, ordered by name ignoring case, with
+  the number of documents whose ``department`` equals the name, for ``GET /api/departments``.
+- ``create_department(name)``: ``POST /api/departments``. A new name is created active and **not
+  grown**, vocabulary, as ``create_tag`` creates a value. An active name that exists ignoring case is
+  ``DepartmentAlreadyExists``, the 409. **A retired one is reactivated**, keeping its ``grown`` and its
+  spelling, which ``create_tag`` never does for a tag: a tag comes back through a person naming it
+  on a document, and a department has no such path, so this is its only way back, and only an
+  Administrator, who reads every document (D-66), can take it.
+- ``retire_department(department_id)``: ``DELETE /api/departments/{id}``. A department any document
+  uses is deactivated and kept; one no document uses is deleted.
+
+Retiring or deleting a department never touches ``Documents.department``: FR-14's and FR-15's
+filters read that column (D-72), so a retired department stays on its documents and in the filters.
+
 It lives beside ``classification.py`` and ``deletion.py`` in ``apps/documents``, outside the
-request-serving packages D-53's scan watches; it reads no Document or Meeting row.
+request-serving packages D-53's scan watches. The tag functions read no Document or Meeting row. The
+department functions count documents by ``department``, unscoped, which is safe for the same reason
+the tag inventory's counts are: only a holder of ``manage_tags`` calls them.
 """
 
 from collections import Counter
+from dataclasses import dataclass
 
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Value
+from django.db.models.functions import Lower
 
 from apps.core.constants import REPOSITORY_TAG_DIMENSIONS
-from apps.documents.models import ContentTag, Tag, normalise_tag_name
+from apps.documents.models import (
+    ContentTag,
+    Department,
+    Document,
+    Tag,
+    normalise_department_name,
+    normalise_tag_name,
+)
 
 
 class TagAlreadyExists(Exception):
@@ -157,4 +187,142 @@ def retire_tag(tag_id) -> Tag | None:
             tag.item_count = item_counts([tag.pk]).get(tag.pk, 0)
             return tag
         tag.delete()
+        return None
+
+
+# --- The department list (D-129) -----------------------------------------------------------------
+
+
+class DepartmentAlreadyExists(Exception):
+    """``create_department``'s name is already an ACTIVE Department, ignoring case: the 409.
+    ``department_id`` is that Department, which the Administrator, the only caller, already sees in
+    the inventory."""
+
+    def __init__(self, department_id):
+        super().__init__("A department with this name is already listed.")
+        self.department_id = department_id
+
+
+@dataclass(frozen=True)
+class AddedDepartment:
+    """What ``create_department`` did: the Department, carrying ``item_count``, and whether it is a
+    new row (the route's 201) or a retired one reactivated (its 200)."""
+
+    department: Department
+    created: bool
+
+
+def department_item_counts(names) -> dict[str, int]:
+    """``{name: the number of documents whose department equals it}`` for ``names``, compared
+    exactly, as ``tag_scheme`` compares a grown department with ``Documents.department``. A document
+    whose department differs only in case or spacing is not counted. Unscoped: see the module
+    docstring."""
+    rows = (
+        Document.objects.filter(department__in=list(names))
+        .values("department")
+        .annotate(documents=Count("pk"))
+    )
+    return {row["department"]: row["documents"] for row in rows}
+
+
+def department_inventory() -> list[Department]:
+    """Every Department, active or not, ordered by name ignoring case, each carrying ``item_count``
+    (``department_item_counts``)."""
+    departments = list(Department.objects.order_by(Lower("name"), "name"))
+    counts = department_item_counts(department.name for department in departments)
+    for department in departments:
+        department.item_count = counts.get(department.name, 0)
+    return departments
+
+
+def _department_named(name: str) -> Department | None:
+    """The Department whose name equals ``name`` ignoring case, locked ``FOR UPDATE``, or None.
+
+    Compared with ``Lower`` on both sides, in the database, exactly as the unique constraint
+    ``departments_unique_name_ignoring_case`` compares names, so this finds the row an insert of
+    ``name`` would collide with, and no other."""
+    return (
+        Department.objects.select_for_update()
+        .alias(folded=Lower("name"))
+        .filter(folded=Lower(Value(name)))
+        .first()
+    )
+
+
+def create_department(name: str) -> AddedDepartment:
+    """Add ``name`` to the department list, or bring a retired department back (D-129).
+
+    ``name`` is normalised here as well as by the route's serializer (stripped, internal whitespace
+    collapsed, the case kept), so the check and the row agree on one spelling. Raises ``ValueError``
+    for a name that normalises to nothing, which the serializer refuses first.
+
+    - **No department of that name, ignoring case:** created active and **not grown**, vocabulary,
+      offered in every document's classification prompt whatever its audience. ``created`` is True.
+    - **An active one:** ``DepartmentAlreadyExists`` with its id; nothing changes.
+    - **A retired one:** reactivated, ``created`` False. Its ``grown`` is kept (never unset), and so
+      is its spelling: documents and FR-15's filters carry that spelling, and a name that differs
+      only in case is the same department. ``create_tag`` answers 409 for a retired tag instead,
+      because a retired tag comes back when a person names it on a document every role reads; a
+      department has no such path, so this is the only way back, and only an Administrator, who
+      reads every document (D-66), can take it.
+
+    ``item_count`` is set on the Department returned, and may be above 0 for a new one: a
+    department typed at upload is on its documents before it is listed.
+
+    **A concurrent create of the same name** is the same ``DepartmentAlreadyExists``: the insert runs
+    in a savepoint, the unique constraint makes the second insert wait for the first and then fail,
+    and the committed row is read back. The existing row is locked first (``_department_named``),
+    so a concurrent retire or reactivation of it waits.
+    """
+    name = normalise_department_name(name)
+    if not name:
+        raise ValueError("A department name must have at least one character.")
+    with transaction.atomic():
+        department = _department_named(name)
+        if department is None:
+            try:
+                with transaction.atomic():
+                    department = Department.objects.create(name=name, active=True, grown=False)
+            except IntegrityError:
+                department = _department_named(name)
+                if department is None:  # not the unique constraint: a defect, not a duplicate
+                    raise
+            else:
+                department.item_count = department_item_counts([name]).get(name, 0)
+                return AddedDepartment(department=department, created=True)
+        if department.active:
+            raise DepartmentAlreadyExists(department.pk)
+        department.active = True
+        department.save(update_fields=["active"])
+        department.item_count = department_item_counts([department.name]).get(department.name, 0)
+        return AddedDepartment(department=department, created=False)
+
+
+def retire_department(department_id) -> Department | None:
+    """Deactivate the department if any document uses it, else delete it; one transaction.
+
+    "Uses" is ``Documents.department`` equal to the name, exactly (``department_item_counts``).
+    Returns the department, inactive and carrying ``item_count``, when it was kept, and None when it
+    was deleted. A department already inactive and still used is answered the same way again.
+    Raises ``Department.DoesNotExist`` for an id that names no Department.
+
+    **Documents are never touched.** A retired department stays on its documents and in FR-14's and
+    FR-15's filters (D-72); it leaves every scheme, since ``tag_scheme`` reads active departments
+    only. The Department row is locked first (``FOR UPDATE``). There is no foreign key from a
+    document to a department, so a document written with the name while this runs keeps it either
+    way: if the department is deleted meanwhile, that document's department is merely unlisted,
+    the state FR-08's free-text upload field can always produce.
+    """
+    with transaction.atomic():
+        department = Department.objects.select_for_update().filter(pk=department_id).first()
+        if department is None:
+            raise Department.DoesNotExist(f"No department {department_id}.")
+        documents = department_item_counts([department.name]).get(department.name, 0)
+        if documents:
+            if department.active:
+                department.active = False
+                department.save(update_fields=["active"])
+            department.item_count = documents
+            return department
+        department.delete()
         return None

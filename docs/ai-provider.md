@@ -68,7 +68,7 @@ class GenerationAttempt:          # apps/ai/generation.py — the observer's rec
 @dataclass(frozen=True)
 class TagScheme:                  # FR-10 — the scheme one document is classified against (D-104)
     doc_types: tuple[str, ...]    # DOCUMENT_TYPES
-    departments: tuple[str, ...]  # distinct non-blank Documents.department values in the audience
+    departments: tuple[str, ...]  # the active department list's names admitted for the audience (D-129)
     tags: dict[str, tuple[str, ...]]  # Project, Process, Topic -> active tag names
 
 @dataclass(frozen=True)

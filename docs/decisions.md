@@ -12996,7 +12996,7 @@ decision, FR-10 meets Objective 05's clause 3 as written again.
   - the lock-order fixes.
 - This entry's text above stays as written.
 
-## D-129 · D-128's creation of values is reversed: FR-10 meets Objective 05's clause 3 as written again, on the prompt and threshold #85 measured
+## D-129 · D-128's creation of values is reversed so FR-10 meets Objective 05's clause 3 as written, departments get a confidence threshold of their own, and an Administrator keeps the department list on the Tags page
 
 **Status:** Settled by the user · **Date:** 2026-11-13 · **Concerns:** FR-10, Objective 05, D-128,
 D-104, D-105, D-106, D-122, `apps/ai/classification.py`, `apps/core/constants.py`,
@@ -13020,7 +13020,8 @@ the established scheme must be discarded in the Department, Project and Process 
 proposed for confirmation in the Topic dimension only".
 
 - **The prompt** is #85's: `apps/ai/classification.py` and its two test files are restored from `main`,
-  byte-identical to #85's commit `a9934eb`. Rule 6 allows a new Topic only, and never a new Project,
+  byte-identical to #85's commit `a9934eb`. Since then one sentence of the module's docstring names the
+  department threshold below; the prompt text is unchanged. Rule 6 allows a new Topic only, and never a new Project,
   Process or department.
 - **The threshold:** `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.72 again
   (D-122). The 0.80 of D-128 was derived on the revised prompt, which no longer ships.
@@ -13069,8 +13070,12 @@ proposed for confirmation in the Topic dimension only".
 - **D-128's additions that stay act only on:**
   - a person's decisions, which never occur on a measurement database;
   - values that cannot be stored, which Haiku's replies on the twenty did not contain.
-- **So #85's three draws describe the shipped build:** clause 1 met on each (19, 18 and 18 of 20), and
-  clauses 2 and 3 met on each.
+- **So #85's three draws describe the shipped build for clauses 1 and 3:** clause 1 met on each (19,
+  18 and 18 of 20), and clause 3 met on each.
+- **For departments they do not.** #85 held departments at 0.72, and the shipped build applies them at
+  0.30 (below), from the department list (below). Departments are not in clause 1. Clause 2 holds by
+  construction at any threshold, because a suggestion below its kind's threshold is held. A
+  re-verification on the shipped build would show more departments applied. It has not been run.
 - **Two records stay, describing builds that do not ship:**
   - D-128's development sweep (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`), on the
     revised prompt;
@@ -13137,9 +13142,91 @@ rule on the development documents.
     0.70, 48 right and 3 wrong; at 0.25, 66 right and 62 wrong.
 - **The cap is D-106's own recorded flaw:** it defeats a separation found high in the range. The user
   kept it on 10 November.
-- **Nothing is built on this yet.** The threshold, the per-kind verifier check, and the reading of
-  clause 2's "the configured confidence threshold" as one threshold per kind of assignment all wait
-  for his choice.
+- **His choice (13 November, a tabbed question):** "Departments 0.30, tags 0.72" (recommended), over
+  the rule as fixed (0.25 for both) and no change (0.72 for all).
+  - **Departments:** `CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is
+    0.30. That is D-106's rule run on departments alone, where no split exists, so it is the lowest
+    right confidence.
+  - **Types and tags** keep the shared 0.72.
+  - **A model not in the department map** uses its shared value, so gemma3:4b keeps 0.95.
+  - **It departs from the one shared value for tags and departments** that he approved before the run.
+    The run showed the two kinds behave differently, and he chose on that evidence.
+  - **On his 20 documents** (the confidences recorded on `kmp_anthropic`), a re-classification would
+    apply 15 departments instead of 7. Tags are unchanged: 16 applied, 28 held.
+- **Clause 2 is read per kind.** Objective 05's clause 2 says "the configured confidence threshold", and
+  D-129 reads that as one configured threshold per kind of assignment. A department below 0.30, or a
+  type or tag below 0.72, is still held for a person, so clause 2 holds. `scripts/objective05_verify.py`
+  checks each kind against its own threshold.
+
+**The department list on the Tags page (the user's choices of 13 November).**
+
+He asked for it in his words: "This scheme should be available for modification under the Tags page".
+He answered three tabbed questions, each with the recommended option:
+
+- **The source:** the list is the department scheme the classifier reads.
+  - `documents 0015` seeds it from the departments already in use.
+  - A department carried only by documents some role cannot read is seeded hidden (`grown`). It is
+    offered only for a document whose whole audience reads a document with that department, as a
+    hidden tag is.
+- **The upload field stays free text.** FR-08's form and the classification confirm/edit control are
+  unchanged. A department typed there that is not in the list stays on the document, and the
+  classifier suggests only listed departments.
+- **Retiring keeps a department on its documents,** and in FR-14 and FR-15's filters, which read
+  `Documents.department` unchanged (D-72). A department no document uses is deleted.
+
+**How it is built:**
+
+- **A table of its own, `Department`, not Tags rows.** `Tag` lower-cases its names, while a department
+  keeps its case on documents ("Human Resources"). The classifier writes the scheme's spelling into a
+  blank department, so lower-cased department tags would split FR-14 and FR-15's filters by case.
+  `name` keeps its case, with whitespace collapsed, and is unique ignoring case.
+- **`tag_scheme`'s `departments`** are the active list's names admitted for the audience:
+  - one that is not grown always;
+  - a grown one only when every audience role reads, through `scoped_documents`, a document whose
+    department equals it.
+
+  This replaces the derivation from the departments of documents the audience can read, so a
+  department in use but not listed is no longer offered.
+- **The routes.** `GET` and `POST /api/departments` and `DELETE /api/departments/{id}`, behind
+  `manage_tags`. POST is in the `tagging` throttle, sharing one budget with `POST /api/tags`.
+  - **A retired name added again is reactivated (200),** keeping its stored spelling and its `grown`.
+    That differs from `/api/tags`, which answers 409: a department has no other way back, and only an
+    Administrator, who reads every source, can do it.
+  - **An active duplicate, ignoring case,** answers 409.
+  - **A department in use** is retired (200); an unused one is deleted (204).
+- **The screen:** a Departments section on the Tags page with the list, Retire or Delete, an "Add a
+  department" form, and help text saying:
+  - the AI suggests a department only from this list;
+  - the upload form still accepts any department;
+  - a retired department stays on its documents.
+
+**Choices made in building it:**
+
+- **"Equals" means exactly equal,** in case and spacing. That is how `item_count`, "in use" on DELETE,
+  and admitting a grown department compare `Documents.department` with a name.
+- **The seed.**
+  - It keeps the spelling most documents use; a tie goes to the first by code point.
+  - It decides `grown` on that exact spelling, so seeding makes nothing newly visible to any audience.
+  - On data whose departments differ only in case, an Employee-visible document can lose a
+    department the old derivation offered it.
+- **A fresh database starts with an empty list.** The seed runs at migration time, from the documents
+  then present, so an Administrator adds departments on the Tags page. A measurement database is
+  restored from a snapshot and then migrated, so its documents are present when 0015 runs.
+  `seed_objective02_tags.py` does not seed departments.
+- **`machine_department` still records what the model said** (rule 1, unchanged). A hidden department
+  never reaches a prompt it must not, and a reply naming one anyway is discarded exactly as an unknown
+  name is.
+- **On the screen:**
+  - each row offers Retire or Delete according to `item_count`, the server's own test;
+  - a 403 on either list withdraws every control on the page, since both need `manage_tags`;
+  - `tagsNotPermitted` now names tags and departments;
+  - the copy says "the AI", as the page already did.
+- **Tests:**
+  - server: 63 new test items, each failing under a deliberate break (38 breaks), every break
+    reverted. 552 passed across the 19 files touched, and the dual-role matrix credits both roles on
+    the three routes;
+  - front end: 31 new tests under 38 scripted breaks, each reverted. 635 passed; lint and build
+    clean.
 
 **Not covered:**
 
