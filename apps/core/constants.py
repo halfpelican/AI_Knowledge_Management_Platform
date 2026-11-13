@@ -427,8 +427,10 @@ PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
 # --- Account lockout (FR-02 Server-End; FR-03, NIT3004) -------------------------------
 # FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
 # failures lock the account for 15 minutes", and FR-02 Responses: "403 forbidden if
-# account is locked". Enforcement is therefore FR-02's, not FR-03's; FR-03 adds the
-# interface (remaining-attempt warning, countdown) and the administrator release.
+# account is locked". Enforcement is therefore FR-02's, not FR-03's. FR-03 adds the
+# remaining-attempt warning, the countdown, the administrator release
+# (RELEASE_ACCOUNT_LOCKS_PERMISSION, below) and the LoginAttempts table that records
+# each lockout and each release (D-130).
 # Configuration values rather than literals, as FR-03 Business logic requires.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
@@ -439,6 +441,13 @@ LOCKOUT_DURATION = timedelta(minutes=15)
 # response said whether that guess was correct (D-26). Twice the threshold leaves a
 # user who mistypes once after locking themselves out with the useful message.
 LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
+# What a LoginAttempts row records (FR-03, D-130; docs/schema-v1.md section 3): a lockout,
+# written by login in the transaction that sets locked_until, or an Administrator's release
+# of one. Nothing else is recorded. An ordinary sign-in, failed or not, writes no row, so an
+# address with no account is never stored.
+LOGIN_ATTEMPT_LOCKOUT = "lockout"
+LOGIN_ATTEMPT_RELEASE = "release"
+LOGIN_ATTEMPT_EVENTS = (LOGIN_ATTEMPT_LOCKOUT, LOGIN_ATTEMPT_RELEASE)
 
 # Requests per minute allowed to the two anonymous authentication endpoints, per
 # client address. Lockout without a throttle is a denial-of-service primitive:
@@ -639,8 +648,9 @@ EFFECTIVE_ROLES = {
 
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
 # role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, 0007 for
-# REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below) and 0008 for
-# MANAGE_TAGS_PERMISSION; a test asserts the constants and the seed agree.
+# REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below), 0008 for
+# MANAGE_TAGS_PERMISSION and 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION; a test asserts the
+# constants and the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -666,6 +676,12 @@ MANAGE_MEETINGS_PERMISSION = "manage_meetings"
 # accounts migration 0008. The inventory is unscoped, which is safe only for a role that reads
 # every source (D-66); apps/accounts/tests/test_manage_tags_seed.py holds every holder to that.
 MANAGE_TAGS_PERMISSION = "manage_tags"
+# FR-03's administrator release (D-130): POST /api/users/{id}/unlock clears an account's lock,
+# and GET /api/users shows each live lock to a holder. FR-03: "Only a user holding the
+# Administrator role may release a lock." Held by Administrator only, seeded by accounts
+# migration 0010. A code of its own rather than manage_roles, so that granting one never grants
+# the other (D-99's reason).
+RELEASE_ACCOUNT_LOCKS_PERMISSION = "release_account_locks"
 
 # Provenance of a ContentTags row (FR-10, FR-15), and of the department a document carries
 # (DocumentAnalysis.department_applied_by, D-119 finding 10): the machine's, or a person's.

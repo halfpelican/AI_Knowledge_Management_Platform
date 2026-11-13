@@ -133,12 +133,21 @@ SCHEMA_V1 = {
         {"cycle_id", "started_at", "finished_at", "triggered_by", "queries_considered",
          "searches_considered", "entries_created", "entries_updated"},
     ),
+    # 13 November 2026 (FR-03, D-130): out of section 2's deferred table and into section 1 by
+    # accounts 0009. The proposal's five columns, then the four FR-03's clauses need. The columns
+    # are docs/schema-v1.md section 1's.
+    "login_attempts": (
+        ("attempt_id",),
+        {"attempt_id", "attempted_email", "source_ip", "success", "attempted_at",
+         "event", "user_id", "released_by", "locked_until"},
+    ),
 }
 
 # schema-v1.md section 2: deferred to NIT3004, must not exist in v1. document_analysis left this
-# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105), and knowledge_gaps on
-# 9 November 2026, when retrieval 0004 created it for FR-19 (D-107).
-SECTION_2_TABLES = {"login_attempts", "mfa_recovery_codes"}
+# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105), knowledge_gaps on
+# 9 November 2026, when retrieval 0004 created it for FR-19 (D-107), and login_attempts on
+# 13 November 2026, when accounts 0009 created it for FR-03 (D-130).
+SECTION_2_TABLES = {"mfa_recovery_codes"}
 SECTION_2_USER_COLUMNS = {"mfa_enabled", "mfa_secret"}
 
 OUR_APPS = ("core", "accounts", "documents", "meetings", "retrieval")
@@ -250,6 +259,11 @@ SECTION_5_PLAN = [
     # FR-10's tag administration (D-119 finding 5): manage_tags, Administrator only, immediately
     # after 0007.
     ("accounts", "0008_seed_manage_tags"),
+    # FR-03 (D-130), 13 November 2026: the login_attempts table, then the release_account_locks
+    # seed, Administrator only, each immediately after the one before, where the executor plans
+    # them.
+    ("accounts", "0009_login_attempts"),
+    ("accounts", "0010_seed_release_account_locks"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011

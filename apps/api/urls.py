@@ -25,6 +25,8 @@ urlpatterns = [
     # cannot collide, but reading first is the habit that keeps it true.
     path("users/directory", views.UserDirectoryView.as_view(), name="user-directory"),
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
+    # FR-03's administrator release (D-130), behind release_account_locks.
+    path("users/<uuid:pk>/unlock", views.UserUnlockView.as_view(), name="user-unlock"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
     # Stage 5 item 2: FR-15's list view, filters, sort and facets in one request (D-72).

@@ -35,6 +35,7 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 from conftest import PASSWORD
@@ -82,7 +83,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     # contribute_content inside the method, after the scoped lookup, as FR-10's
                     # routes do. apps/api/tests/test_meeting_summary.py and
                     # test_meeting_action_items.py prove the 404 before the 403 on each.
-                    "meeting-summary", "meeting-action-items", "meeting-action-item"}
+                    "meeting-summary", "meeting-action-items", "meeting-action-item",
+                    # NIT3004: FR-03's administrator release, behind release_account_locks
+                    # (D-130)
+                    "user-unlock"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -112,6 +116,9 @@ PERMISSIONED_ROUTES = {
     # both, so the 403 comes before the body is read. Nothing on either route is scoped.
     "transcription-status": CONTRIBUTE_CONTENT_PERMISSION,
     "transcription-list": CONTRIBUTE_CONTENT_PERMISSION,
+    # FR-03's release (D-130): release_account_locks, a permission_classes entry, so the 403
+    # comes before the lookup and an Employee cannot probe user ids.
+    "user-unlock": RELEASE_ACCOUNT_LOCKS_PERMISSION,
 }
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {
@@ -387,3 +394,6 @@ def test_every_permission_code_in_use_is_seeded():
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
+    # FR-03's release (D-130): Administrator only, seeded by accounts 0010.
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()

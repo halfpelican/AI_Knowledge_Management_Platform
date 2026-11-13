@@ -23,12 +23,12 @@ from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import BaseThrottle, ScopedRateThrottle
 from rest_framework.views import APIView
 
 import apps.ai
 from apps.accounts.audit import log_role_change
-from apps.accounts.models import Permission, Role
+from apps.accounts.models import LoginAttempt, Permission, Role
 from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
@@ -40,6 +40,8 @@ from apps.core.constants import (
     LOCKOUT_DURATION,
     LOCKOUT_NOTICE_CEILING,
     LOCKOUT_THRESHOLD,
+    LOGIN_ATTEMPT_LOCKOUT,
+    LOGIN_ATTEMPT_RELEASE,
     MAXIMUM_ACTION_ITEMS_PER_MEETING,
     DOCUMENT_INDEXED,
     KNOWLEDGE_GAP_OPEN,
@@ -51,6 +53,7 @@ from apps.core.constants import (
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
     TRANSCRIPTION_BUSY_RETRY_SECONDS,
@@ -158,6 +161,7 @@ from .serializers import (
     TagApplySerializer,
     TagDetailSerializer,
     TagEntrySerializer,
+    UserListEntrySerializer,
     UserSerializer,
     classification_payload,
     meeting_summary_payload,
@@ -175,16 +179,18 @@ logger = logging.getLogger(__name__)
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 # FR-01 names the duplicate case explicitly, so this response may say so.
 EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
-# FR-02 Responses: "403 forbidden if account is locked" (D-25). The wording is the
-# proposal's own, from its handleLoginAttempt pseudocode. ACCOUNT_LOCKED_CODE is the
+# FR-02 Responses: "403 forbidden if account is locked" (D-25). ACCOUNT_LOCKED_CODE is the
 # machine-readable flag for FR-02's front-end clause, "where the account is locked
 # and the submitted password was correct, a distinct message is shown": the client
 # branches on the code and never has to match on prose.
-# FR-03 defines an administrator release route; it is out of the M6 gate and
-# unbuilt, so the notice must not promise one (D-26). Waiting is the only remedy.
+# FR-03's messaging clause: "The lockout message states that an administrator can unlock the
+# account, so a locked-out user has a route forward." The proposal's handleLoginAttempt
+# pseudocode said "An Administrator can release it." D-26 finding 4 took that out while no
+# release existed, because the notice then promised something false. POST
+# /api/users/{id}/unlock is that release, so the message names it again (D-130).
 ACCOUNT_LOCKED_MESSAGE = (
     "This account is temporarily locked after repeated failed sign-ins. "
-    "Please try again later."
+    "Try again later, or ask an administrator to unlock it."
 )
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
@@ -200,6 +206,14 @@ LAST_ADMINISTRATOR_MESSAGE = (
 # FR-05 Responses: "404 Not Found if user/role doesn't exist". The user half is
 # get_object_or_404's own body; this is the role half.
 UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
+# FR-03 Validation: "An Administrator cannot release a lock on their own account, since an
+# account locked by a brute-force attempt against it must not be releasable by whoever
+# currently holds that session." FR-03 Responses: 403 where the requester "is the account
+# holder", whether or not the account is locked (D-130).
+OWN_LOCK_RELEASE_MESSAGE = "You cannot release a lock on your own account."
+# FR-03 Responses: "409 Conflict where the account is not currently locked". A lock whose
+# window has passed is not current, and is left as it is (D-130).
+NOT_LOCKED_MESSAGE = "This account is not locked."
 
 # FR-08 Responses: "415 Unsupported Media Type for a disallowed format". The four
 # accepted formats are named so the message is actionable, and they are the same four
@@ -390,6 +404,10 @@ CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMIS
 # reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an unknown
 # tag; a tag's existence is the Administrator's to know, since they read every source (D-66).
 CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
+# FR-03's release (D-130): a permission_classes entry, so the 403 comes before the lookup and an
+# Employee cannot tell a real user id from an invented one. Users are not scoped, so a 403
+# preceding the 404 discloses nothing.
+CanReleaseAccountLocks = HasRolePermission.for_code(RELEASE_ACCOUNT_LOCKS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -490,6 +508,16 @@ def _invalid_credentials() -> Response:
     return Response({"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED)
 
 
+def _source_address(request) -> str | None:
+    """The client address a LoginAttempts row records (FR-03, D-130): DRF's own ``get_ident()``,
+    the key the sign-in throttle counts against.
+
+    That is REMOTE_ADDR, because ``NUM_PROXIES`` is 0. X-Forwarded-For is never read here, as the
+    throttle never reads it (D-79): a client can write any address into that header.
+    """
+    return BaseThrottle().get_ident(request) or None
+
+
 class SendsCsrfCookieMixin:
     """Send the ``csrftoken`` cookie with every response from the view, as Django's
     ``ensure_csrf_cookie`` did, without running Django's CSRF check first (D-124).
@@ -518,9 +546,9 @@ class LoginView(SendsCsrfCookieMixin, APIView):
     H1).** ``authenticate()`` runs first, outside any transaction, so the account row is
     never locked for the length of a password hash. Then one transaction reads the
     account row with ``select_for_update()`` and makes the whole decision on that read:
-    whether the account is locked, the count, the lock itself, and on success the session
-    and the reset. Two requests for one account decide one after the other, the second on
-    the state the first committed.
+    whether the account is locked, the count, the lock itself with its LoginAttempts row,
+    and on success the session and the reset. Two requests for one account decide one
+    after the other, the second on the state the first committed.
 
     It used to decide on ``locked_until`` read without a lock, before ``authenticate()``.
     Five concurrent wrong passwords at a count of 1 all read "unlocked": the fourth set
@@ -582,8 +610,19 @@ class LoginView(SendsCsrfCookieMixin, APIView):
                 # the ceiling every attempt gets the 401, right password or wrong (D-26).
                 if not password_matched or account.failed_attempts > LOCKOUT_NOTICE_CEILING:
                     return _invalid_credentials()
+                # FR-03's countdown, which the sign-in page runs from this (D-130): whole
+                # seconds until the lock ends, from the row read under the lock, rounded up so
+                # the page never re-enables Sign in early, and at least 1. Only this response
+                # carries it, because a 401 must stay byte-identical on every path. Neither
+                # status has a Retry-After header: in this contract that header is the
+                # throttle's, on a 429, which is where the client reads it.
+                retry_after = max(1, math.ceil((account.locked_until - now).total_seconds()))
                 return Response(
-                    {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE},
+                    {
+                        "detail": ACCOUNT_LOCKED_MESSAGE,
+                        "code": ACCOUNT_LOCKED_CODE,
+                        "retry_after": retry_after,
+                    },
                     status=status.HTTP_403_FORBIDDEN,
                 )
             if not password_matched:
@@ -599,6 +638,20 @@ class LoginView(SendsCsrfCookieMixin, APIView):
                 account.failed_attempts += 1
                 if account.failed_attempts >= LOCKOUT_THRESHOLD:
                     account.locked_until = now + LOCKOUT_DURATION
+                    # FR-03: "Every lockout is recorded with the attempted email, source
+                    # address, and timestamp." Written here, in this transaction, so the row
+                    # and the lock commit together, and only here: an attempt during a live
+                    # lock never reaches this branch, because it never extends the window
+                    # (D-130).
+                    LoginAttempt.objects.create(
+                        event=LOGIN_ATTEMPT_LOCKOUT,
+                        attempted_email=email,
+                        source_ip=_source_address(request),
+                        success=False,
+                        attempted_at=now,
+                        user=account,
+                        locked_until=account.locked_until,
+                    )
                 account.save(update_fields=["failed_attempts", "locked_until"])
                 return _invalid_credentials()
             # Cycles the session key and, through the user_logged_in signal, sets
@@ -658,11 +711,32 @@ class RoleListView(APIView):
 
 
 class UserListView(APIView):
+    """``GET /api/users`` — every user, for FR-05's role management.
+
+    A requester whose role also holds ``release_account_locks`` gets each user with ``lock``,
+    for FR-03's "An Administrator viewing a locked account can release the lock" (D-130).
+    Anyone else gets the plain user object. The gate is still ``manage_roles``.
+    """
+
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def get(self, request):
         users = User.objects.select_related("role").order_by("created_at", "pk")
-        return Response(UserSerializer(users, many=True).data)
+        if not role_holds(request.user.role_id, RELEASE_ACCOUNT_LOCKS_PERMISSION):
+            return Response(UserSerializer(users, many=True).data)
+        # One instant for the whole list, so every row is judged locked or not at the same
+        # moment. The lockout rows of the locks still running come in one query for the whole
+        # list, never one per user: a row whose locked_until has passed set a lock that is over.
+        now = timezone.now()
+        users = users.prefetch_related(
+            Prefetch(
+                "login_attempts",
+                queryset=LoginAttempt.objects.filter(
+                    event=LOGIN_ATTEMPT_LOCKOUT, locked_until__gt=now
+                ),
+            )
+        )
+        return Response(UserListEntrySerializer(users, many=True, context={"now": now}).data)
 
 
 class UserDirectoryView(APIView):
@@ -741,6 +815,95 @@ class UserRoleView(APIView):
                 actor=request.user, target=user, old_role=old_role_name, new_role=new_role.role_name
             )
         return Response(UserSerializer(user).data)
+
+
+# --- FR-03 releasing a lock (NIT3004) ----------------------------------------------------
+
+
+class UserUnlockView(APIView):
+    """``POST /api/users/{id}/unlock`` — FR-03's administrator release (D-130).
+
+    FR-03: "An Administrator viewing a locked account can release the lock immediately, so a
+    locked-out user has a route forward", and "releasing a lock clears the expiry and resets the
+    failed-attempt count, returning the account to the state it would reach when the window
+    expires naturally."
+
+    **The order.** 401 without a session, then 403 for a role without
+    ``release_account_locks``, both from ``permission_classes`` and so before any lookup: an
+    Employee cannot tell a real user id from an invented one. Then, in one transaction, on the
+    target row:
+
+    1. 404, ``get_object_or_404``'s own body, for an unknown id, as FR-05's role route gives it;
+    2. 403 where the target is the requester, locked or not: FR-03 refuses a release to "the
+       account holder";
+    3. 409 where ``locked_until`` is empty or not after now, left as it is;
+    4. otherwise the lock and the count are cleared, the release row is written, and the 200 is
+       the user as ``GET /api/users`` lists it, with ``"lock": null``.
+
+    No body is read. The password, the role and every session are left alone: FR-03 "restores the
+    ability to attempt authentication and nothing more". An Administrator may release another
+    Administrator's lock, since FR-03 forbids only their own. No throttle, as FR-05's role change
+    has none.
+    """
+
+    permission_classes = [IsAuthenticated, CanReleaseAccountLocks]
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            # The administrator rows first, ordered by primary key, as FR-05's role change locks
+            # them (D-26), and only then the target. Every transaction here that locks more
+            # than one users row then takes them in the same order, so none waits on another
+            # in a cycle (D-130).
+            # - **Without it, a release could deadlock with a role change.** The role change
+            #   holds the administrator rows and waits for the account. The release holds the
+            #   account and, at commit, waits for the requester's row, which the release row's
+            #   foreign-key check takes a key-share lock on. Postgres would abort one of the
+            #   two with a 500.
+            # - **Why the requester's row is not waited for:** it is in this set, so the
+            #   key-share lock is on a row this transaction already holds. That rests on only
+            #   Administrators holding release_account_locks (0010).
+            # - **The lock mode:** FOR NO KEY UPDATE. It conflicts with the role change's FOR
+            #   UPDATE and with login's, but not with the key-share locks other inserts take on
+            #   these rows (a question logged, a meeting attendee), so it cannot deadlock with
+            #   them either.
+            list(
+                User.objects.select_for_update(no_key=True, of=("self",))
+                .filter(role__role_name=ADMINISTRATOR_ROLE_NAME)
+                .order_by("pk")
+                .only("pk")
+            )
+            # The target, FOR NO KEY UPDATE as well (security finding L2). It still conflicts
+            # with login's FOR UPDATE, so a release and a login on one account decide one after
+            # the other. of=("self",) leaves the role row unlocked.
+            account = get_object_or_404(
+                User.objects.select_for_update(no_key=True, of=("self",)).select_related("role"),
+                pk=pk,
+            )
+            if account.pk == request.user.pk:
+                return Response(
+                    {"detail": OWN_LOCK_RELEASE_MESSAGE}, status=status.HTTP_403_FORBIDDEN
+                )
+            now = timezone.now()
+            if account.locked_until is None or account.locked_until <= now:
+                return Response({"detail": NOT_LOCKED_MESSAGE}, status=status.HTTP_409_CONFLICT)
+            released = account.locked_until
+            account.locked_until = None
+            account.failed_attempts = 0
+            account.save(update_fields=["failed_attempts", "locked_until"])
+            # FR-03: "Every release is recorded with the Administrator who performed it, the
+            # account affected and the time." success is null: a release is not an
+            # authentication attempt.
+            LoginAttempt.objects.create(
+                event=LOGIN_ATTEMPT_RELEASE,
+                attempted_email=account.email,
+                source_ip=_source_address(request),
+                success=None,
+                attempted_at=now,
+                user=account,
+                released_by=request.user,
+                locked_until=released,
+            )
+        return Response(UserListEntrySerializer(account, context={"now": now}).data)
 
 
 # --- FR-08 document upload -----------------------------------------------------------

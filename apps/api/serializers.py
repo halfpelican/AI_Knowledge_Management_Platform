@@ -2,7 +2,9 @@
 
 ``UserSerializer`` is the one user object every endpoint returns. It never carries
 ``password_hash``, ``failed_attempts`` or ``locked_until``; a test asserts the exact
-key set so a field cannot leak in later.
+key set so a field cannot leak in later. The one exception is ``UserListEntrySerializer``,
+which adds a ``lock`` object to ``GET /api/users``, and to the unlock route's 200, for a
+holder of ``release_account_locks`` only (FR-03, D-130).
 """
 
 from dataclasses import dataclass
@@ -24,6 +26,7 @@ from apps.core.constants import (
     DOCUMENT_STATUS_VALUES,
     DOCUMENT_TYPES,
     KNOWLEDGE_GAP_STATUS_VALUES,
+    LOGIN_ATTEMPT_LOCKOUT,
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
     ROLE_NAMES,
@@ -54,6 +57,47 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = USER_FIELDS
         read_only_fields = USER_FIELDS
+
+
+class UserListEntrySerializer(UserSerializer):
+    """A ``GET /api/users`` entry for a requester holding ``release_account_locks``, and the
+    unlock route's 200 body: the user object plus ``lock`` (FR-03, D-130).
+
+    ``lock`` is null unless ``locked_until`` is after ``now``, which the view passes in the
+    context so a whole list is judged at one instant. Otherwise it is
+    ``{"locked_until", "locked_at", "source_ip"}``. The last two come from the lockout row whose
+    ``locked_until`` equals the account's, which is the row that set this lock and not an earlier
+    one (security finding L5). Both are null when there is no such row, for a lock older than the
+    table. ``GET /api/users`` prefetches the lockout rows, so the list reads them without a query
+    per user.
+
+    Every other route's user object is UserSerializer's, which this leaves unchanged.
+    """
+
+    lock = serializers.SerializerMethodField()
+
+    class Meta(UserSerializer.Meta):
+        fields = (*USER_FIELDS, "lock")
+        read_only_fields = fields
+
+    def get_lock(self, user):
+        now = self.context.get("now") or timezone.now()
+        if user.locked_until is None or user.locked_until <= now:
+            return None
+        lockout = next(
+            (
+                row
+                for row in user.login_attempts.all()
+                if row.event == LOGIN_ATTEMPT_LOCKOUT and row.locked_until == user.locked_until
+            ),
+            None,
+        )
+        timestamp = serializers.DateTimeField()
+        return {
+            "locked_until": timestamp.to_representation(user.locked_until),
+            "locked_at": timestamp.to_representation(lockout.attempted_at) if lockout else None,
+            "source_ip": lockout.source_ip if lockout else None,
+        }
 
 
 class DirectoryEntrySerializer(serializers.ModelSerializer):

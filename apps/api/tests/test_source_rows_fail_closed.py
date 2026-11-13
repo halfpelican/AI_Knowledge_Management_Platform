@@ -564,6 +564,8 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/users", "GET"): "Users and roles (FR-05).",
     ("api/users/directory", "GET"): "Names and addresses (D-34).",
     ("api/users/<uuid:pk>/role", "PATCH"): "The updated user.",
+    # FR-03's release (D-130): reads and writes the users and login_attempts rows only.
+    ("api/users/<uuid:pk>/unlock", "POST"): "The released user, as GET /api/users lists it.",
     ("api/documents", "POST"): (
         "Returns the document the caller has just uploaded, which D-29 places inside the "
         "caller's own scope. Its 409 duplicate check is the cross-scope existence oracle D-33 "

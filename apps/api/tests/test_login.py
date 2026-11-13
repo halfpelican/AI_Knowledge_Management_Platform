@@ -84,6 +84,9 @@ def test_login_works_for_an_administrator(api_client, administrator):
     response = login(api_client, administrator.email)
     assert response.status_code == 200
     assert response.json()["role"] == ADMINISTRATOR_ROLE_NAME
+    # The plain user object, though an Administrator holds release_account_locks: only GET
+    # /api/users and the release add FR-03's "lock" (D-130).
+    assert set(response.json()) == USER_OBJECT_KEYS
 
 
 def test_login_response_never_exposes_secret_columns(api_client, employee):
@@ -235,14 +238,20 @@ def test_a_locked_account_is_403_even_with_the_right_password(api_client, employ
     assert response.status_code == 403
     assert settings.SESSION_COOKIE_NAME not in response.cookies
     # FR-02 Front-End: "where the account is locked and the submitted password was
-    # correct, a distinct message is shown", so the body identifies the lockout.
-    assert response.json() == {
+    # correct, a distinct message is shown", so the body identifies the lockout. FR-03:
+    # the message names the administrator release, and retry_after runs the countdown
+    # (D-130). Its value depends on the clock, so it is held to its range here.
+    body = response.json()
+    assert body == {
         "detail": (
             "This account is temporarily locked after repeated failed sign-ins. "
-            "Please try again later."
+            "Try again later, or ask an administrator to unlock it."
         ),
         "code": "account_locked",
+        "retry_after": body["retry_after"],
     }
+    assert type(body["retry_after"]) is int
+    assert 1 <= body["retry_after"] <= LOCKOUT_DURATION.total_seconds()
 
 
 def test_a_locked_account_with_the_wrong_password_is_the_ordinary_401(api_client, employee):
