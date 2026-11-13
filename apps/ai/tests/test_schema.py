@@ -244,6 +244,23 @@ def test_an_escaped_surrogate_pair_is_one_character_and_parses():
     assert parse_statement_list(raw).statements[0].text == "Twenty days \U0001F600"
 
 
+def test_the_string_check_walks_a_reply_deeper_than_python_can_recurse():
+    """The walk is iterative. A reply can decode at a depth past Python's recursion limit, and a
+    recursive walk would raise RecursionError outside loads_reply's handlers: a 500 again. The
+    depth is past this interpreter's limit, and skipped where its decoder cannot follow it."""
+    depth = sys.getrecursionlimit() + 200
+    raw = '{"statements": ' + "[" * depth + '"\\u0000"' + "]" * depth + "}"
+    try:
+        json.loads(raw)
+    except RecursionError:
+        pytest.skip("this interpreter's decoder cannot follow a reply past its recursion limit")
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(raw)
+
+    assert str(caught.value) == "a NUL character in a JSON string"
+
+
 # --- The schema object itself -----------------------------------------------------------
 
 

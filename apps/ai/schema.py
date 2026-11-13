@@ -162,10 +162,12 @@ def _loads_reply(text: str):
     - a string holding an unpaired surrogate, such as a lone ``\\ud800`` escape, which neither the
       database nor DRF's JSON renderer can encode as UTF-8.
 
-    Until 13 November 2026 none of them was. The attempt loops retry a failed call
-    (ProviderUnavailable) and a SchemaViolation and nothing else, so each of these ended the work
-    it was part of. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of
-    NFR-19's 503. A meeting summary's run ended as "error", without the one retry FR-16 allows a
+    Until 13 November 2026 none of them was. The attempt loops retry only a SchemaViolation and a
+    failed call (a ProviderUnavailable that is not a ProviderRefused, which ends them at once). So
+    the first two always ended the work they were part of, and the last two did whenever the
+    string was stored or rendered, which a statement or an element that verification discarded
+    never is. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of NFR-19's
+    503. A meeting summary's run ended as "error", without the one retry FR-16 allows a
     malformed reply; run by retry_meeting_summaries or summarise_meetings, it stopped the command
     and left the row Processing until it was reclaimed as an orphan. classify_documents stopped
     without writing its record. Two security reviews and a requirements audit of that day found

@@ -20,8 +20,9 @@ everything specific to this call and redefines nothing shared with generation.
 **Passage labels.** The transcript arrives as FR-09's own passages, in order, and the prompt heads
 them ``[P1]`` to ``[Pn]``. Every element of the reply must name at least one label, so UC-04's
 "every element of the summary carries a reference to the passage of the transcript it was drawn
-from" is a schema rule. The parser checks the SHAPE of a label (``P`` and a positive number) and
-nothing else: whether that passage was sent is set membership, done by the caller
+from" is a schema rule. The parser checks the SHAPE of a label (``P`` and a positive number it can
+read: one past Python's 4,300-digit limit it cannot, and that is a violation) and nothing else:
+whether that passage was sent is set membership, done by the caller
 (apps/meetings/summaries.py), as FR-12's citations are checked outside the provider (invariant 5).
 
 **Uploaded text is untrusted.** A transcript containing ``[P3]`` would put a forged passage header
