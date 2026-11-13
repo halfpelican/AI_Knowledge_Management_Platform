@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, messageForStatus } from '../api/client.js'
+import { listDepartments } from '../api/departments.js'
 import { CREATE_TAG_DIMENSIONS, createTag, deleteTag, listTags } from '../api/tags.js'
 import Button from '../components/Button.jsx'
+import Departments from '../components/Departments.jsx'
 import Dialog from '../components/Dialog.jsx'
 import NotPermitted from '../components/NotPermitted.jsx'
 import Notice from '../components/Notice.jsx'
@@ -159,6 +161,14 @@ function TagTable({ tags, showActions, onDelete }) {
  * - 403: the delete's not-permitted handling: every action, the form included, is
  *   withdrawn, and focus goes to the page heading.
  *
+ * **The department list** (D-129, the user's decision of 13 November 2026) is a section of
+ * its own below the tags, src/components/Departments.jsx: the departments the AI may
+ * suggest, with Retire or Delete and a form that adds one. The page reads it beside the
+ * tags because the department routes ask for the same `manage_tags`: a 403 on either list,
+ * or on any action in either part, withdraws every action on the page. Where the tags'
+ * own read is refused, the department section is not shown either, so the page says it
+ * is not permitted once.
+ *
  * The route is guarded by RequireRole, which sends anyone but an Administrator to
  * /403 (FR-06), and the navigation offers the link to Administrators only. Both are
  * usability. The server checks `manage_tags` on every request (CLAUDE.md §6,
@@ -173,6 +183,9 @@ export default function Tags() {
   useDocumentTitle(TEXT.tagsHeading)
   const { data, loading, error, reload, setData } = useApiResource(listTags)
   const tags = Array.isArray(data) ? data : []
+  // D-129's department list, read here rather than in its section so that a 403 on it
+  // withdraws the tags' actions as well: both ask for `manage_tags`.
+  const departmentList = useApiResource(listDepartments)
   const headingRef = useRef(null)
 
   // The tag whose confirmation is open, and whether its DELETE is in flight. The ref
@@ -207,9 +220,11 @@ export default function Tags() {
     target?.current?.focus()
   }, [focusRequest])
 
-  const actionsWithdrawn = refused || error?.status === 403
+  // Every action on the page, the department list's included, once the server has
+  // refused any request here: the tag and department routes ask for the same code.
+  const actionsWithdrawn = refused || error?.status === 403 || departmentList.error?.status === 403
   // The form waits for the list: a 409 is told apart, retired or active, by the list.
-  const offerCreate = !loading && !error && !refused
+  const offerCreate = !loading && !error && !actionsWithdrawn
 
   function openConfirmation(tag) {
     setNotice(null)
@@ -459,6 +474,12 @@ export default function Tags() {
         <h2 id="tags-list-heading">{TEXT.tagsListHeading}</h2>
         {listBody}
       </section>
+
+      {/* Not shown once the tags' own read is refused: the page then says it is not
+          permitted once, in the tags' list, and nothing more. */}
+      {error?.status === 403 ? null : (
+        <Departments list={departmentList} withdrawn={actionsWithdrawn} onRefused={() => setRefused(true)} />
+      )}
 
       {confirming ? (
         <Dialog

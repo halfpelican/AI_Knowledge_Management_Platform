@@ -178,6 +178,17 @@ export const QUESTION_MAXIMUM_LENGTH = 500
 export const TAG_NAME_MAXIMUM_LENGTH = 255
 
 /**
+ * FR-10's department name, the one an Administrator adds to the department list on the
+ * Tags page (D-129): at most this many characters, the width of `Departments.name`, which
+ * is NAME_MAX_LENGTH as `Tags.tag_name` is. Taken from TAG_NAME_MAXIMUM_LENGTH rather than
+ * written out again, so the one copy apps/api/tests/test_front_end_constants_agreement.py
+ * holds to NAME_MAX_LENGTH covers this bound too. Counted after trimming and
+ * single-spacing, the form the name is sent in. A convenience: the server answers 400
+ * `{"name": [...]}` above it whatever the browser allowed (CLAUDE.md §6, invariant 4).
+ */
+export const DEPARTMENT_NAME_MAXIMUM_LENGTH = TAG_NAME_MAXIMUM_LENGTH
+
+/**
  * The two source types, from the fixed vocabulary the chunks, the search results
  * and the consulted sources all use (docs/schema-v1.md §3).
  */
@@ -275,6 +286,10 @@ export const VALIDATION = {
   // request on the same two rules, worded for a value of any of the three dimensions.
   tagValueRequired: 'Enter a name for the new tag value.',
   tagValueTooLong: `A tag name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // The department an Administrator adds to the department list (D-129), refused before
+  // any request on the same two rules, measured as it is sent: trimmed and single-spaced.
+  departmentNameRequired: 'Enter a name for the new department.',
+  departmentNameTooLong: `A department name can be at most ${DEPARTMENT_NAME_MAXIMUM_LENGTH} characters.`,
   // FR-16's action item: only the description is required, on an edit and on an
   // item added by hand. Refused before any request; the server answers 400
   // `{"description": [...]}` for a blank one regardless (CLAUDE.md §6, invariant 4).
@@ -1461,8 +1476,9 @@ export const TEXT = {
   tagGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
   tagDeleteFailed: 'Could not delete the tag',
   // A 403 on an add or a delete: the role does not hold `manage_tags` now, whatever it
-  // held when the list was read. Every action is withdrawn, the add form with them.
-  tagsNotPermitted: 'Your role may not manage tags, so they cannot be added, deleted or deactivated.',
+  // held when the list was read. Every action is withdrawn, the add form with them, and
+  // the department list's too, since its routes ask for the same code (D-129).
+  tagsNotPermitted: 'Your role may not manage tags or departments, so they cannot be added, deleted or deactivated.',
 
   // An Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create"). The
   // value is vocabulary: offered for every document whatever its audience, and listed
@@ -1493,4 +1509,93 @@ export const TEXT = {
   // that one is (`tagLimitReached`), and a 400 points at the field it names
   // (`classificationCheckFields`).
   tagCreateFailed: 'Could not add the tag value',
+
+  /* ---- FR-10's department list (D-129) ----------------------------------- */
+  // The scheme's fourth dimension, kept by an Administrator on the Tags page (the user's
+  // decision of 13 November 2026). The list is what the AI may suggest and nothing else:
+  // `Documents.department` stays the one field FR-14 and FR-15 read (D-72), and the
+  // upload form still takes any department. The screen is
+  // src/components/Departments.jsx; the server checks `manage_tags` on every request
+  // whatever it shows (invariant 4).
+  departmentsHeading: 'Departments',
+  // The three things the user decided, said where the list is kept: the AI suggests
+  // only listed departments, the upload form takes any, and retiring keeps a department
+  // on its documents (and in FR-14's and FR-15's filters, which read the documents).
+  departmentsSuggestNote: 'The AI suggests a department for a document only from this list.',
+  departmentsUploadNote:
+    'The upload form still accepts any department. One typed there that is not in this list stays on its document, but the AI does not suggest it.',
+  departmentsRetiredNote:
+    'A retired department stays on the documents that have it, and in the department filters, but the AI no longer suggests it. A department no document has is deleted rather than retired.',
+  departmentsListHeading: 'All departments',
+  loadingDepartments: 'Loading the departments…',
+  departmentsLoadFailed: 'Could not load the departments',
+  // The retry under a failed read. Its name says which list, after the visible words
+  // (WCAG 2.1 SC 2.5.3), since the tags' own "Try again" can be on the page as well.
+  departmentsRetryLabel: 'Try again to load the departments',
+  noDepartments: 'There are no departments in the list, so the AI suggests none.',
+  // The server's order, which the screen keeps.
+  departmentsTableCaption: 'Departments by name, with whether each is active and how many documents use it.',
+  departmentsColumnName: 'Name',
+  departmentsColumnState: 'State',
+  departmentsColumnItems: 'Documents using it',
+  departmentsColumnAction: 'Action',
+  departmentStateActive: 'Active',
+  departmentStateRetired: 'Retired',
+  // One action per row, named for what the list says it will do: Retire for an active
+  // department documents use, Delete for one no document uses or one already retired,
+  // where deleting is the only change left. The server decides from the documents as
+  // they are when it is asked, so each confirmation gives the other outcome too. Each
+  // accessible name adds the department after the visible word (WCAG 2.1 SC 2.4.6, SC
+  // 2.5.3).
+  departmentRetire: 'Retire',
+  departmentRetireLabel: (name) => `Retire department ${name}`,
+  departmentRetireConfirm: (name) => `Retire the department “${name}”?`,
+  departmentRetireBody:
+    'It stays on the documents that have it, and in the department filters, but the AI no longer suggests it. You can bring it back by adding its name again. If no document has it any more, it is deleted instead.',
+  departmentRetireConfirmLabel: 'Retire department',
+  departmentRetiring: 'Retiring…',
+  departmentRetireFailed: 'Could not retire the department',
+  departmentDelete: 'Delete',
+  departmentDeleteLabel: (name) => `Delete department ${name}`,
+  departmentDeleteConfirm: (name) => `Delete the department “${name}”?`,
+  departmentDeleteBody:
+    'If no document has this department, it is deleted. If any does, it is kept on those documents as a retired department instead, and the AI does not suggest it.',
+  departmentDeleteConfirmLabel: 'Delete department',
+  departmentDeleting: 'Deleting…',
+  departmentDeleteFailed: 'Could not delete the department',
+  departmentActionCancel: 'Cancel',
+  // The 200: retired because documents have it, or still retired, for one that was.
+  departmentRetired: (name) =>
+    `“${name}” is retired rather than deleted, because documents have it. It stays on them, and the AI no longer suggests it.`,
+  // The 204: no document had it, so it is gone.
+  departmentDeleted: (name) => `“${name}” was deleted.`,
+  // The 404: it no longer exists, so its row goes.
+  departmentGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
+  // A 403 on an add, a retire or a delete. The department routes ask for the same
+  // `manage_tags` as the tag routes, so every action on the page is withdrawn.
+  departmentsNotPermitted: 'Your role may not manage departments or tags, so they cannot be added, retired or deleted.',
+  // Adding a department. A new one is vocabulary, offered to the AI for every document
+  // whatever its audience, as a tag value added here is; the scope sentence says so, and
+  // that a retired department comes back this way, which is the only way back.
+  departmentCreateHeading: 'Add a department',
+  departmentCreateScope:
+    'A department added here can be suggested for any document, whatever its audience. Adding the name of a retired department brings it back.',
+  departmentCreateNameLabel: 'Department name',
+  // The server trims a name and single-spaces it, and keeps its case (D-129: departments
+  // keep their case on documents, unlike tags).
+  departmentCreateNameHint: `Stored with the capitals you type. Up to ${DEPARTMENT_NAME_MAXIMUM_LENGTH} characters.`,
+  departmentCreateAdd: 'Add department',
+  departmentAdding: 'Adding…',
+  // The 201, polite: the department as stored, and what it is now for.
+  departmentCreated: (name) => `“${name}” was added to the department list. The AI can now suggest it for any document.`,
+  // The 200: the name was a retired department's, and it is active again.
+  departmentReactivated: (name) => `“${name}” was retired, and has been brought back. The AI can suggest it again.`,
+  // The 409: an active department of that name, without regard to case, is in the list.
+  // Named as the list spells it, never by the reply's `detail`.
+  departmentCreateExists: (name) => `“${name}” is already in the department list, so it was not added again.`,
+  // The title over a 400, a 429 or any other failure of the add.
+  departmentCreateFailed: 'Could not add the department',
+  // The 429: the `tagging` limit, which adding a tag counts against too.
+  departmentLimitReached: (when) =>
+    `The limit on adding tags and departments has been reached, so this department was not added. You can try again ${when}.`,
 }

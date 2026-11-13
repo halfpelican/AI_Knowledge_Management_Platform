@@ -68,10 +68,16 @@ const BUDGET = { tag_id: 'tag-0004', dimension: 'Topic', tag_name: 'budget plann
  */
 const SERVER_ORDER = [PURCHASING, BRIDGE, LEGACY, BUDGET]
 
+/**
+ * The page reads D-129's department list beside the tags. It is empty here, so the
+ * department section adds no table, row or alert to what these tests look at;
+ * tests/departments.test.jsx is that section's.
+ */
 function routes(extra = {}) {
   return {
     'GET /api/auth/me': { body: ADMINISTRATOR },
     'GET /api/tags': { body: SERVER_ORDER },
+    'GET /api/departments': { body: [] },
     ...extra,
   }
 }
@@ -217,9 +223,10 @@ describe('FR-10: the tags, as the server sent them', () => {
       expect(within(action).getAllByRole('button')).toEqual([deleteButton(tag)])
       expect(deleteButton(tag).textContent).toBe(TEXT.tagDelete)
     }
-    // One read, and nothing sent.
-    expect(answered.map((request) => `${request.method} ${request.path}`)).toEqual([
+    // One read of the tags, one of D-129's department list beside them, and nothing sent.
+    expect(answered.map((request) => `${request.method} ${request.path}`).sort()).toEqual([
       'GET /api/auth/me',
+      'GET /api/departments',
       'GET /api/tags',
     ])
   })

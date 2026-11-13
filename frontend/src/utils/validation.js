@@ -1,4 +1,5 @@
 import {
+  DEPARTMENT_NAME_MAXIMUM_LENGTH,
   QUESTION_MAXIMUM_LENGTH,
   QUESTION_MINIMUM_LENGTH,
   SEARCH_MAXIMUM_LENGTH,
@@ -147,6 +148,9 @@ export function questionError(question) {
  * trimming but before single-spacing (DRF's `CharField`, then `normalise_tag_name`),
  * so a name sent single-spaced is measured exactly as `tagNameError` measured it.
  *
+ * A department added to the department list (D-129) is sent the same way, for the same
+ * reason, and measured by `departmentNameError`; its case is kept by the server too.
+ *
  * @param {string} value As typed.
  * @returns {string}
  */
@@ -171,5 +175,21 @@ export function spacedTagName(value) {
 export function tagNameError(name, { required = VALIDATION.tagNameRequired, tooLong = VALIDATION.tagNameTooLong } = {}) {
   if (name.length === 0) return required
   if ([...name].length > TAG_NAME_MAXIMUM_LENGTH) return tooLong
+  return null
+}
+
+/**
+ * FR-10's client-side check of a department name an Administrator adds to the department
+ * list (D-129), already spaced by `spacedTagName`, which is how it is sent: required, and
+ * at most DEPARTMENT_NAME_MAXIMUM_LENGTH characters, counted in code points as
+ * `tagNameError` counts them. The server trims the name and single-spaces it, keeps its
+ * case, and answers 400 `{"name": [...]}` regardless (CLAUDE.md §6, invariant 4).
+ *
+ * @param {string} name
+ * @returns {string | null} The message to show beside the field, or null.
+ */
+export function departmentNameError(name) {
+  if (name.length === 0) return VALIDATION.departmentNameRequired
+  if ([...name].length > DEPARTMENT_NAME_MAXIMUM_LENGTH) return VALIDATION.departmentNameTooLong
   return null
 }
