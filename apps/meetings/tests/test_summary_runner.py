@@ -11,8 +11,10 @@ are held here:
 - **Thread mode really is another thread, the caller is not kept waiting, and no more than
   MAXIMUM_SUMMARIES_IN_FLIGHT runs call the provider at once.**
 
-**The thread tests are the only tests in the repository marked ``transaction=True``.** A thread
-writes through its own database connection, which cannot see a test transaction's uncommitted
+**The thread tests are marked ``transaction=True``.** Until 13 November 2026 this sentence said
+they were the only such tests in the repository. ``apps/api/tests/test_login_concurrency.py`` is
+marked the same way, for the same reason (D-130). A thread writes through its own database
+connection, which cannot see a test transaction's uncommitted
 rows, so these commit for real and the database is flushed after each. ``serialized_rollback``
 restores the rows the migrations seeded (the roles and their permissions) before each one, and
 pytest-django runs transactional tests after every other database test, so the flush costs no

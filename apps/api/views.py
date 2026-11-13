@@ -478,53 +478,16 @@ class RegisterView(APIView):
 # --- FR-02 login ---------------------------------------------------------------------
 
 
-def _is_locked(user) -> bool:
-    """FR-02: the lock is evaluated before the password result is used, so that no
-    session is issued for a locked account whatever credential was submitted."""
-    return user is not None and user.locked_until is not None and user.locked_until > timezone.now()
+def _invalid_credentials() -> Response:
+    """The one 401 login gives: for an unknown address, for a wrong password whether or
+    not the account is locked, and for a locked account past LOCKOUT_NOTICE_CEILING
+    whatever the password (D-02, D-25, D-26).
 
-
-def _record_locked_attempt(email: str) -> int:
-    """Count a failed attempt made *during* an active lock, and return the new total.
-
-    The window is deliberately not extended: "locks the account for 15 minutes" stays
-    literally true rather than becoming indefinite under a sustained attack (D-25).
-    But the counter does move, which D-25 originally said it would not. Leaving it
-    still meant the lock withheld only the session cookie and not the *verification
-    oracle*: an attacker could guess without limit for the life of the window, each
-    guess answered 403 or 401 according to whether it was right. Counting is what
-    lets the caller stop announcing the answer (D-26).
+    Built in one place so the paths cannot drift apart. Any byte that differed between
+    them would tell a caller which case it had hit, and so whether an address is
+    registered or locked.
     """
-    with transaction.atomic():
-        try:
-            user = User.objects.select_for_update().get(email=email)
-        except User.DoesNotExist:  # pragma: no cover - the caller found a locked account
-            return 0
-        user.failed_attempts += 1
-        user.save(update_fields=["failed_attempts"])
-        return user.failed_attempts
-
-
-def _record_failed_attempt(email: str) -> None:
-    """FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
-    failures lock the account for 15 minutes." Reached only for an account that is
-    not currently locked, so an attempt made during a lockout window neither extends
-    the window nor moves the counter. An expired window resets the counter first: it
-    counts *consecutive* failures, and without the reset the single next failure
-    after a lock expired would re-lock the account on one attempt rather than five."""
-    with transaction.atomic():
-        try:
-            user = User.objects.select_for_update().get(email=email)
-        except User.DoesNotExist:
-            return
-        if user.locked_until is not None:
-            # A live lock never reaches here, so this window has expired.
-            user.failed_attempts = 0
-            user.locked_until = None
-        user.failed_attempts += 1
-        if user.failed_attempts >= LOCKOUT_THRESHOLD:
-            user.locked_until = timezone.now() + LOCKOUT_DURATION
-        user.save(update_fields=["failed_attempts", "locked_until"])
+    return Response({"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class SendsCsrfCookieMixin:
@@ -549,6 +512,24 @@ class SendsCsrfCookieMixin:
 
 
 class LoginView(SendsCsrfCookieMixin, APIView):
+    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26).
+
+    **The order is what makes the lock hold under concurrency (D-130, security finding
+    H1).** ``authenticate()`` runs first, outside any transaction, so the account row is
+    never locked for the length of a password hash. Then one transaction reads the
+    account row with ``select_for_update()`` and makes the whole decision on that read:
+    whether the account is locked, the count, the lock itself, and on success the session
+    and the reset. Two requests for one account decide one after the other, the second on
+    the state the first committed.
+
+    It used to decide on ``locked_until`` read without a lock, before ``authenticate()``.
+    Five concurrent wrong passwords at a count of 1 all read "unlocked": the fourth set
+    the lock, and the fifth, finding it set, took it for an expired one and erased it. A
+    right password that had read "unlocked" got a session for an account a concurrent
+    request had just locked, where FR-03 Validation says "No session is issued for a
+    locked account under any circumstance, regardless of the password submitted."
+    """
+
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
@@ -563,52 +544,77 @@ class LoginView(SendsCsrfCookieMixin, APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
-        account = User.objects.filter(email=email).first()
-        # The password is verified even for a locked account, because its result
-        # selects the response and can never grant access. Django's ModelBackend runs
-        # the hasher even when the address is unknown, so the failing cases take the
-        # same time as far as practical.
+        # The password is verified on every path, a locked account's included, because
+        # its result only selects the response and can never grant access (FR-03
+        # Validation). Django's ModelBackend runs the hasher even when the address is
+        # unknown, so the failing cases take the same time as far as practical. It runs
+        # before the row lock below, which is held for a few queries and never for a
+        # hash (D-130).
         user = authenticate(request, username=email, password=password)
-        if _is_locked(account):
-            # The lock is announced ONLY where the password also matched. The
-            # proposal's handleLoginAttempt() pseudocode branches exactly here and
-            # says why: "Confirming a lock to anyone who merely knows the email
-            # address would convert a protective measure into an account-enumeration
-            # tool." So a wrong password against a locked account is the ordinary
-            # 401, indistinguishable from a wrong password against any other
-            # address. FR-02's unqualified "403 if account is locked" is the summary;
-            # the pseudocode and FR-03's messaging clause are the detail (D-25).
-            #
-            # Announcing it for the whole window, however, leaves the lock withholding
-            # only the session and not the answer: guesses are unlimited during a
-            # lock, and each 403 or 401 says whether that guess was right. So the
-            # attempt is counted, and past LOCKOUT_NOTICE_CEILING the answer stops
-            # being given at all (D-26). The password is still verified on every path
-            # so the timing does not separate these cases from an unknown address.
-            attempts = _record_locked_attempt(email)
-            if user is None or attempts > LOCKOUT_NOTICE_CEILING:
+        with transaction.atomic():
+            # The one read the whole decision is made on (D-130). A request for the same
+            # account that is still deciding holds this lock, so this one waits for it and
+            # then sees what it committed.
+            account = User.objects.select_for_update().filter(email=email).first()
+            if account is None:
+                return _invalid_credentials()  # an unknown address writes nothing
+            # The password counts only if authenticate() verified it against this same
+            # row. A row deleted, and its address registered again, while the hash ran is
+            # a different account.
+            password_matched = user is not None and user.pk == account.pk
+            now = timezone.now()
+            if account.locked_until is not None and account.locked_until > now:
+                # The attempt is counted and the window is never extended (D-26). "Locks
+                # the account for 15 minutes" stays literally true rather than becoming
+                # indefinite under a sustained attack (D-25). Counting is what lets the
+                # notice stop once guessing passes LOCKOUT_NOTICE_CEILING, so the lock
+                # withholds the verification oracle and not only the session.
+                account.failed_attempts += 1
+                account.save(update_fields=["failed_attempts"])
+                # The lock is announced ONLY where the password also matched. The
+                # proposal's handleLoginAttempt() pseudocode branches exactly here and
+                # says why: "Confirming a lock to anyone who merely knows the email
+                # address would convert a protective measure into an account-enumeration
+                # tool." So a wrong password against a locked account is the ordinary
+                # 401, indistinguishable from a wrong password against any other
+                # address. FR-02's unqualified "403 if account is locked" is the summary;
+                # the pseudocode and FR-03's messaging clause are the detail (D-25). Past
+                # the ceiling every attempt gets the 401, right password or wrong (D-26).
+                if not password_matched or account.failed_attempts > LOCKOUT_NOTICE_CEILING:
+                    return _invalid_credentials()
                 return Response(
-                    {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
+                    {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE},
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-            return Response(
-                {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if user is None:
-            _record_failed_attempt(email)
-            return Response(
-                {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
-            )
-        # Cycles the session key and, through the user_logged_in signal, sets
-        # last_login (stored as last_login_at). The CSRF token is rotated too.
-        django_login(request, user)
-        if user.failed_attempts or user.locked_until:
-            # Both, not just the counter. A success that left locked_until standing
-            # would refuse the user's next login for the rest of the window, which is
-            # the trap D-24 recorded and D-25 closes.
-            user.failed_attempts = 0
-            user.locked_until = None
-            user.save(update_fields=["failed_attempts", "locked_until"])
+            if not password_matched:
+                # FR-02 Business Logic: "Failed attempts increment a counter; five
+                # consecutive failures lock the account for 15 minutes."
+                if account.locked_until is not None:
+                    # Found not locked on this same read, under the row lock, so this
+                    # window has expired (D-130). The counter counts *consecutive* failures
+                    # and resets with the window, or the single next failure would re-lock
+                    # the account on one attempt rather than five (D-25).
+                    account.failed_attempts = 0
+                    account.locked_until = None
+                account.failed_attempts += 1
+                if account.failed_attempts >= LOCKOUT_THRESHOLD:
+                    account.locked_until = now + LOCKOUT_DURATION
+                account.save(update_fields=["failed_attempts", "locked_until"])
+                return _invalid_credentials()
+            # Cycles the session key and, through the user_logged_in signal, sets
+            # last_login (stored as last_login_at). The CSRF token is rotated too. It runs
+            # here, under the row lock, so the account cannot be locked between the check
+            # above and the login, and the reset below commits with the new session
+            # (D-130). ``user`` rather than ``account``, because it carries the backend
+            # authenticate() recorded; the two are the same row.
+            django_login(request, user)
+            if account.failed_attempts or account.locked_until:
+                # Both, not just the counter. A success that left locked_until standing
+                # would refuse the user's next login for the rest of the window, which is
+                # the trap D-24 recorded and D-25 closes.
+                account.failed_attempts = 0
+                account.locked_until = None
+                account.save(update_fields=["failed_attempts", "locked_until"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
 
 
