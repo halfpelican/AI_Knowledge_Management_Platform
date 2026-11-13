@@ -340,7 +340,9 @@ def test_nothing_clearing_the_threshold_returns_an_empty_list():
 
 def test_each_embedding_model_gets_its_own_threshold():
     """D-120's values. Voyage's was chosen on Voyage's scores, and any model not listed,
-    EmbeddingGemma included, keeps RELEVANCE_THRESHOLD."""
+    EmbeddingGemma included, keeps RELEVANCE_THRESHOLD. FR-19's permission exclusion admits at
+    voyage-4's value too (D-126), so a change here is a change there:
+    apps/core/tests/test_constants.py holds the two together."""
     assert relevance_threshold(VOYAGE) == RELEVANCE_THRESHOLD_BY_MODEL[VOYAGE] == 0.2687
     assert relevance_threshold(UNLISTED_MODEL) == RELEVANCE_THRESHOLD == 0.30
     assert relevance_threshold("a-model-nobody-measured") == RELEVANCE_THRESHOLD
