@@ -32,7 +32,9 @@
  *
  * What the walk cannot reach, for either file:
  *
- * - **Whether anything can be seen.** jsdom applies no stylesheet.
+ * - **Whether anything can be seen.** jsdom applies no stylesheet. The walk
+ *   asserts nothing about the stylesheets; tests/tabOrder.test.jsx does, for the
+ *   keyboard stops on the screens it walks.
  * - **An anonymous visitor.** Every case is signed in.
  * - **An address no route matches.** It is not a page, and it is not walked.
  * - **Which roles a new route admits.** The route-table test cannot read a guard
@@ -47,7 +49,7 @@ import { useLayoutEffect } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import App from '../src/App.jsx'
 import { ROLES, TEXT } from '../src/constants.js'
-import { serveApi } from './fakeApi.js'
+import { serveApi, summaryRoute, summaryState } from './fakeApi.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
 
@@ -208,13 +210,20 @@ const MEETINGS = {
   },
 }
 
+// Since FR-16 the meeting page asks for the meeting's summary as well as the meeting (D-125). The
+// walk answers it with a meeting nobody has asked a summary of, and offers no controls, which is
+// the same for both roles; the page has settled once the Summary panel says so.
 const MEETING_DETAIL = {
   api: {
     [`GET /api/meetings/${MEETING.meeting_id}`]: {
       body: { ...MEETING, transcript_text: 'Alex: the supplier review is due on Friday.', can_delete: false },
     },
+    [`GET /api/meetings/${MEETING.meeting_id}/summary`]: summaryRoute(summaryState()),
   },
-  settled: () => pageHeading(MEETING.title),
+  async settled() {
+    await pageHeading(MEETING.title)
+    await screen.findByText(TEXT.summaryNone)
+  },
 }
 
 // It has a search field of its own, in the page and under the same names as the

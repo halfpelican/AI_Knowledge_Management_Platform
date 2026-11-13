@@ -12,8 +12,10 @@ Variables already set in the process environment take precedence over the file.
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 from apps.core.constants import (
+    ACTION_ITEM_THROTTLE_RATE,
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
@@ -201,6 +203,7 @@ REST_FRAMEWORK = {
         "search": SEARCH_THROTTLE_RATE,
         "tagging": TAGGING_THROTTLE_RATE,
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
+        "action_items": ACTION_ITEM_THROTTLE_RATE,
     },
     # X-Forwarded-For is not trusted: an anonymous throttle is keyed on REMOTE_ADDR, the
     # connecting address. Unset, DRF keys it on the client-sent header, so the auth limit
@@ -339,6 +342,14 @@ FLM_EMBED_MODEL = env.str("FLM_EMBED_MODEL", default="embed-gemma")
 # whisper-v3:turbo on the FLM server at FLM_BASE_URL, which must be started with --asr 1.
 TRANSCRIPTION_PROVIDER = env.str("TRANSCRIPTION_PROVIDER", default="none")
 FLM_ASR_MODEL = env.str("FLM_ASR_MODEL", default="whisper-v3:turbo")
+
+# Where a meeting summary's run happens (FR-16, D-125). The route that asks for one answers 202
+# and the run follows: "thread" (the default) is a background thread of this server process,
+# because the stack has no task queue; "inline" runs it in the caller's thread, which the test
+# suite uses. apps/meetings/summary_runner.py reads it.
+SUMMARY_RUNNER = env.str("SUMMARY_RUNNER", default="thread")
+if SUMMARY_RUNNER not in ("thread", "inline"):
+    raise ImproperlyConfigured(f"Unknown SUMMARY_RUNNER: {SUMMARY_RUNNER!r} (expected 'thread' or 'inline')")
 
 # Length of the vectors the configured embedding model returns (docs/decisions.md
 # D-03): 1024 for voyage-4, the default since D-122, and 768 for FLM's embed-gemma. The pgvector

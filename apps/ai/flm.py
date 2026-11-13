@@ -16,6 +16,7 @@ from apps.ai.base import (
     DocumentClassification,
     EmbeddingResult,
     InputType,
+    MeetingSummaryDraft,
     Passage,
     ProviderHealth,
     ProviderUnavailable,
@@ -38,6 +39,12 @@ from apps.ai.generation import (
     run_generation_attempts,
 )
 from apps.ai.prompting import build_generation_messages
+from apps.ai.summarisation import (
+    SUMMARY_MAX_TOKENS,
+    SUMMARY_TIMEOUT_SECONDS,
+    build_summary_messages,
+    run_summary_attempts,
+)
 
 
 class FLMService:
@@ -171,6 +178,24 @@ class FLMService:
             label=f"FLM at {settings.FLM_BASE_URL}",
             model=settings.FLM_CHAT_MODEL,
             input_truncated=truncated,
+            max_tokens=max_tokens,
+        )
+
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft:
+        """FR-16's summary through FLM (D-125): one structured call, the shared loop.
+
+        The prompt, the schema and the attempt policy are in apps/ai/summarisation.py, shared
+        with the Anthropic provider; this method supplies the one call (``_chat_once``, with its
+        error mapping, D-118) and names the model that answered. Verification, owners and dates
+        are apps/meetings', not this method's.
+        """
+        messages = build_summary_messages(title, passages)
+        # One value for the request and for the attempt log's record of it.
+        max_tokens = SUMMARY_MAX_TOKENS
+        return run_summary_attempts(
+            lambda: self._chat_once(messages, max_tokens=max_tokens, timeout=SUMMARY_TIMEOUT_SECONDS),
+            label=f"FLM at {settings.FLM_BASE_URL}",
+            model=settings.FLM_CHAT_MODEL,
             max_tokens=max_tokens,
         )
 

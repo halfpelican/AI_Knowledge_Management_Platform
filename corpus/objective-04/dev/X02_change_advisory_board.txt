@@ -1,0 +1,35 @@
+Marcus: This is the change advisory board for the week. Four changes are on the list. Let's go through them in order.
+
+Tomas: The first is the firewall rule update for the new payroll system. It's low risk and fully tested. I'd like to make it on Saturday morning.
+
+Marcus: Any objections? No. Approved for Saturday morning. Tomas, please make sure the rollback steps are attached to the change record before then.
+
+Tomas: I'll attach them today.
+
+Lena: The second one is mine: the upgrade of the service desk tool. The vendor needs a two-hour outage. I'd suggest the evening of the twentieth, when the desk is quiet.
+
+Marcus: Fine. Approved for the twentieth. Lena, can you tell the desk staff about the outage this week?
+
+Lena: Yes, I'll email them tomorrow.
+
+Alex: The third one is the backup server migration. I'm not confident about it yet. The test restore failed last week.
+
+Marcus: Then it doesn't go ahead this week. Let's defer it until a test restore succeeds. Alex, can you rerun the restore test by Friday?
+
+Alex: Yes, I'll rerun it by Friday.
+
+Tomas: The last one is the certificate renewal on the intranet. It expires in three weeks.
+
+Marcus: That can't slip. Who has the access to do it?
+
+Lena: Sam from the hosting company does the certificates for us. He said he can renew it next Wednesday.
+
+Marcus: Good. We'll rely on that, but someone needs to check the intranet the morning after.
+
+Tomas: I can check it the morning after.
+
+Marcus: Also, we should probably review the whole change process at some point. It's become very manual.
+
+Lena: Maybe in the new year.
+
+Marcus: Agreed, not now. So, to recap. The firewall change is approved for Saturday, and Tomas attaches the rollback steps today. The service desk upgrade is approved for the twentieth, and Lena emails the desk tomorrow. The backup migration is deferred until Alex's restore test passes, rerun by Friday. Sam renews the certificate next Wednesday, and Tomas checks the intranet the morning after.

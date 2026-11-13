@@ -1,0 +1,436 @@
+{
+  "name": "Objective 04 DEVELOPMENT reference: action items and decisions for the eight development transcripts",
+  "status": "DEVELOPMENT, written by Claude on 11 November 2026 from its own reading of each transcript. It is NOT the objective's reference and is never reported as a result: the objective's reference is corpus/objective-04/reference.json, written by people. This one exists so a prompt change can be judged on something written down before the change (D-93, D-125).",
+  "transcripts": [
+    {
+      "id": "X01",
+      "decisions": [
+        "Renew the stationery contract with Paper Trail for two years.",
+        "The limit for a purchase without a second quote rises to $5,000 from 1 December."
+      ],
+      "action_items": [
+        {
+          "ref": "X01-A1",
+          "description": "Confirm the stationery renewal with Joanne at Paper Trail",
+          "owner_as_said": "Owen",
+          "expected_owner": "Owen Fletcher",
+          "due_as_said": "today",
+          "expected_due_date": "2026-10-05",
+          "evidence": "I'll confirm with her today."
+        },
+        {
+          "ref": "X01-A2",
+          "description": "Check the renewal terms against the old contract before anyone signs",
+          "owner_as_said": "Hannah",
+          "expected_owner": "Hannah Lee",
+          "due_as_said": "by Thursday",
+          "expected_due_date": "2026-10-08",
+          "evidence": "I'll check the renewal terms against the old contract before anyone signs, by Thursday."
+        },
+        {
+          "ref": "X01-A3",
+          "description": "Update the procurement guidelines with the new limit",
+          "owner_as_said": "Hannah",
+          "expected_owner": "Hannah Lee",
+          "due_as_said": "by the end of the month",
+          "expected_due_date": "2026-10-31",
+          "evidence": "Yes, I'll update them by the end of the month."
+        },
+        {
+          "ref": "X01-A4",
+          "description": "Send the managers a note about the new limit",
+          "owner_as_said": "Ravi",
+          "expected_owner": "Ravi Sharma",
+          "due_as_said": "next Monday",
+          "expected_due_date": "2026-10-12",
+          "evidence": "I'll send them a note next Monday."
+        }
+      ],
+      "notes": "The printer lease extension was already done, and the purchasing card was declined for this year: neither is an item."
+    },
+    {
+      "id": "X02",
+      "decisions": [
+        "The firewall change is approved for Saturday morning.",
+        "The service desk upgrade is approved for the evening of the twentieth.",
+        "The backup migration is deferred until a test restore succeeds."
+      ],
+      "action_items": [
+        {
+          "ref": "X02-A1",
+          "description": "Attach the rollback steps to the firewall change record",
+          "owner_as_said": "Tomas",
+          "expected_owner": "Tomas Okafor",
+          "due_as_said": "today",
+          "expected_due_date": "2026-10-07",
+          "evidence": "I'll attach them today."
+        },
+        {
+          "ref": "X02-A2",
+          "description": "Email the desk staff about the service desk outage",
+          "owner_as_said": "Lena",
+          "expected_owner": "Lena Kowalski",
+          "due_as_said": "tomorrow",
+          "expected_due_date": "2026-10-08",
+          "evidence": "Yes, I'll email them tomorrow."
+        },
+        {
+          "ref": "X02-A3",
+          "description": "Rerun the backup restore test",
+          "owner_as_said": "Alex",
+          "expected_owner": "Alex Petrov",
+          "due_as_said": "by Friday",
+          "expected_due_date": "2026-10-09",
+          "evidence": "Yes, I'll rerun it by Friday."
+        },
+        {
+          "ref": "X02-A4",
+          "description": "Renew the intranet certificate",
+          "owner_as_said": "Sam",
+          "expected_owner": "unassigned",
+          "due_as_said": "next Wednesday",
+          "expected_due_date": "2026-10-14",
+          "evidence": "Sam from the hosting company does the certificates for us. He said he can renew it next Wednesday."
+        },
+        {
+          "ref": "X02-A5",
+          "description": "Check the intranet the morning after the certificate is renewed",
+          "owner_as_said": "Tomas",
+          "expected_owner": "Tomas Okafor",
+          "due_as_said": "the morning after",
+          "expected_due_date": null,
+          "evidence": "I can check it the morning after."
+        }
+      ],
+      "notes": "Reviewing the change process was left for the new year: not an item."
+    },
+    {
+      "id": "T01",
+      "decisions": [
+        "Lena is on call on Saturday and Tomas on Sunday for the cutover weekend."
+      ],
+      "action_items": [
+        {
+          "ref": "T01-A1",
+          "description": "Circulate the rollback plan to the change advisory board",
+          "owner_as_said": "Marcus",
+          "expected_owner": "Marcus Chen",
+          "due_as_said": "by end of day tomorrow",
+          "expected_due_date": "2026-09-15",
+          "evidence": "Yes, I'll send it by end of day tomorrow."
+        },
+        {
+          "ref": "T01-A2",
+          "description": "Lead a dry run of the cutover on Thursday night, with Lena observing",
+          "owner_as_said": "Tomas",
+          "expected_owner": "Tomas Okafor",
+          "due_as_said": "Thursday night",
+          "expected_due_date": "2026-09-17",
+          "evidence": "Thursday night dry run, Tomas to lead, Lena to observe."
+        },
+        {
+          "ref": "T01-A3",
+          "description": "Draft a short intranet notice promoting the self-service page",
+          "owner_as_said": "Lena",
+          "expected_owner": "Lena Kowalski",
+          "due_as_said": "tomorrow",
+          "expected_due_date": "2026-09-15",
+          "evidence": "Yes, I'll have a draft to you tomorrow."
+        },
+        {
+          "ref": "T01-A4",
+          "description": "Tune the file server monitoring thresholds, document the change and share it with the team",
+          "owner_as_said": "Tomas",
+          "expected_owner": "Tomas Okafor",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Approved. Please document what you change and share it with the team"
+        },
+        {
+          "ref": "T01-A5",
+          "description": "Chase Tomas's request for access to the staging environment logs",
+          "owner_as_said": "Priya",
+          "expected_owner": "Priya Raman",
+          "due_as_said": "today",
+          "expected_due_date": "2026-09-14",
+          "evidence": "I'll chase that today and copy you in."
+        }
+      ],
+      "notes": "The quarterly access review is a reminder, and the new starter's account is a plan reported as in hand: neither is an item."
+    },
+    {
+      "id": "T02",
+      "decisions": [
+        "Regulatory change is added to the top risks register.",
+        "The Fernwood contingency reserve stays ring-fenced until the forecast is reviewed."
+      ],
+      "action_items": [
+        {
+          "ref": "T02-A1",
+          "description": "Assign an owner for the regulatory change risk; Ingrid holds it until a compliance manager is appointed",
+          "owner_as_said": "Ingrid",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Ingrid, please assign an owner."
+        },
+        {
+          "ref": "T02-A2",
+          "description": "Bring a plan for alternatives to the two most critical supplier services to the next meeting",
+          "owner_as_said": "Helen",
+          "expected_owner": "unassigned",
+          "due_as_said": "the next meeting",
+          "expected_due_date": null,
+          "evidence": "Helen, can you bring a plan to the next meeting?"
+        },
+        {
+          "ref": "T02-A3",
+          "description": "Send the audit committee papers, including the updated risk register",
+          "owner_as_said": "Ingrid",
+          "expected_owner": "unassigned",
+          "due_as_said": "a week ahead",
+          "expected_due_date": null,
+          "evidence": "Ingrid, please send the papers a week ahead."
+        },
+        {
+          "ref": "T02-A4",
+          "description": "Attach the security test summary to the papers",
+          "owner_as_said": "Omar",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "I will also attach the summary of the security test"
+        },
+        {
+          "ref": "T02-A5",
+          "description": "Circulate the minutes for comment",
+          "owner_as_said": "",
+          "expected_owner": "unassigned",
+          "due_as_said": "within three days",
+          "expected_due_date": "2026-09-11",
+          "evidence": "Minutes will be circulated within three days for comment."
+        }
+      ],
+      "notes": "None of the speakers is on the roster, so every owner is unassigned."
+    },
+    {
+      "id": "T03",
+      "decisions": [
+        "The mobile redesign is deferred from this cycle.",
+        "The Tidewater feature freeze is the seventh of November."
+      ],
+      "action_items": [
+        {
+          "ref": "T03-A1",
+          "description": "Get sign-off on the requirements",
+          "owner_as_said": "Aisha",
+          "expected_owner": "Aisha Rahman",
+          "due_as_said": "by the thirtieth",
+          "expected_due_date": "2026-09-30",
+          "evidence": "I'll get sign-off on the requirements by the thirtieth."
+        },
+        {
+          "ref": "T03-A2",
+          "description": "Confirm the budget for an extra tester",
+          "owner_as_said": "Sofia",
+          "expected_owner": "Sofia Marchetti",
+          "due_as_said": "by Friday",
+          "expected_due_date": "2026-09-18",
+          "evidence": "Let me check the budget. I'll confirm by Friday."
+        },
+        {
+          "ref": "T03-A3",
+          "description": "Look at caching dependencies to speed up the build pipeline",
+          "owner_as_said": "Wei",
+          "expected_owner": "Wei Zhang",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "I can look at caching dependencies."
+        },
+        {
+          "ref": "T03-A4",
+          "description": "Write up the actions and send them",
+          "owner_as_said": "Sofia",
+          "expected_owner": "Sofia Marchetti",
+          "due_as_said": "today",
+          "expected_due_date": "2026-09-16",
+          "evidence": "I will write these up and send them today."
+        },
+        {
+          "ref": "T03-A5",
+          "description": "Write the test plan and request the extra tester",
+          "owner_as_said": "Quality",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Quality owns the test plan and the request for the extra tester."
+        },
+        {
+          "ref": "T03-A6",
+          "description": "Produce the accessibility fixes list",
+          "owner_as_said": "Product",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Product owns the requirements sign-off and the accessibility list."
+        },
+        {
+          "ref": "T03-A7",
+          "description": "Deliver the search improvements and the new dashboard this cycle",
+          "owner_as_said": "Engineering",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Engineering can commit to the search improvements and the new dashboard."
+        }
+      ],
+      "notes": "The closing recap gives teams as owners; a team is unassigned."
+    },
+    {
+      "id": "T04",
+      "decisions": [
+        "Customers are contacted at forty-five days of inactivity.",
+        "A one-page handover template will be agreed with the sales team."
+      ],
+      "action_items": [
+        {
+          "ref": "T04-A1",
+          "description": "Build the inactivity report and share it",
+          "owner_as_said": "Rania",
+          "expected_owner": "unassigned",
+          "due_as_said": "on Wednesday",
+          "expected_due_date": "2026-09-23",
+          "evidence": "I will build the inactivity report and share it on Wednesday."
+        },
+        {
+          "ref": "T04-A2",
+          "description": "Write the script for the calls to inactive customers",
+          "owner_as_said": "Ollie",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "I will write the call script and the handover template draft."
+        },
+        {
+          "ref": "T04-A3",
+          "description": "Draft the one-page handover template",
+          "owner_as_said": "Ollie",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "I will write the call script and the handover template draft."
+        },
+        {
+          "ref": "T04-A4",
+          "description": "Set up a meeting with the sales lead",
+          "owner_as_said": "Ollie",
+          "expected_owner": "unassigned",
+          "due_as_said": "this week",
+          "expected_due_date": null,
+          "evidence": "I'll set up a meeting with the sales lead this week."
+        },
+        {
+          "ref": "T04-A5",
+          "description": "Book the follow-up retrospective",
+          "owner_as_said": "Nadia",
+          "expected_owner": "Nadia Haddad",
+          "due_as_said": "the end of next quarter",
+          "expected_due_date": null,
+          "evidence": "I will book the follow-up retrospective for the end of next quarter."
+        },
+        {
+          "ref": "T04-A6",
+          "description": "Arrange a celebration of the improved satisfaction score",
+          "owner_as_said": "Nadia",
+          "expected_owner": "Nadia Haddad",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Agreed, I will arrange it."
+        }
+      ],
+      "notes": "Only Nadia is on the roster."
+    },
+    {
+      "id": "T05",
+      "decisions": [
+        "The next phishing drill is planned for the middle of next quarter."
+      ],
+      "action_items": [
+        {
+          "ref": "T05-A1",
+          "description": "Test the external email banner on mobile and report back",
+          "owner_as_said": "Dmitri",
+          "expected_owner": "unassigned",
+          "due_as_said": "next week",
+          "expected_due_date": null,
+          "evidence": "I will test the external email banner on mobile and report next week."
+        },
+        {
+          "ref": "T05-A2",
+          "description": "Draft the reminder about reporting suspicious emails and send it to Karim for approval",
+          "owner_as_said": "Beth",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "I will draft the reminder about reporting suspicious emails and send it to Karim for approval."
+        },
+        {
+          "ref": "T05-A3",
+          "description": "Report the drill results to the executive team",
+          "owner_as_said": "Karim",
+          "expected_owner": "unassigned",
+          "due_as_said": "on Thursday",
+          "expected_due_date": "2026-09-24",
+          "evidence": "And I will report the results to the executive team on Thursday."
+        }
+      ],
+      "notes": "None of the speakers is on the roster."
+    },
+    {
+      "id": "T06",
+      "decisions": [
+        "Single-use cups go from every kitchen on 1 March 2027, and reception keeps reusable cups for visitors.",
+        "A collection day for electronic waste is held every quarter, the first on 14 February."
+      ],
+      "action_items": [
+        {
+          "ref": "T06-A1",
+          "description": "Draft the announcement about single-use cups and send it to staff, with a reminder in February",
+          "owner_as_said": "Daniel",
+          "expected_owner": "Daniel Brooks",
+          "due_as_said": "the first week of December",
+          "expected_due_date": null,
+          "evidence": "I'll send it out in the first week of December, with a reminder in February."
+        },
+        {
+          "ref": "T06-A2",
+          "description": "Run a four-week waste audit and report back at the next meeting",
+          "owner_as_said": "Daniel",
+          "expected_owner": "Daniel Brooks",
+          "due_as_said": "starting next Monday",
+          "expected_due_date": null,
+          "evidence": "please run a four-week waste audit starting next Monday"
+        },
+        {
+          "ref": "T06-A3",
+          "description": "Get the refill station quotes and plan installation for the end of January",
+          "owner_as_said": "Owen",
+          "expected_owner": "Owen Fletcher",
+          "due_as_said": "by the end of next week",
+          "expected_due_date": "2026-11-06",
+          "evidence": "I've asked two suppliers for quotes and expect them by the end of next week."
+        },
+        {
+          "ref": "T06-A4",
+          "description": "Book the recycler for the 14 February collection day",
+          "owner_as_said": "Grace",
+          "expected_owner": "Grace Nguyen",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Grace books the recycler for the 14 February collection day."
+        }
+      ],
+      "notes": "The announcement and its February reminder are read as one task; an output that lists the reminder separately is counted as an extra."
+    }
+  ]
+}

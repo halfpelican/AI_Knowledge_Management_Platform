@@ -154,7 +154,12 @@ def test_each_result_carries_exactly_what_the_clause_says_it_shows(
     employee_client, shared_corpus
 ):
     """"its title, the matching passage as a snippet, its department, and its date", plus
-    the type and identifier the front end links with, and nothing else."""
+    the type and identifier the front end links with, and nothing else.
+
+    ``snippet_ai_generated`` since D-125 (FR-16): whether the snippet is from a meeting's
+    AI-generated summary rather than its transcript, which NFR-15 requires the interface to mark.
+    It describes the snippet shown and nothing about the source. False here, where both snippets
+    are the sources' own words; apps/api/tests/test_summary_in_retrieval.py covers True."""
     body = employee_client.get(SEARCH_URL, {"q": TERM}).json()
 
     [document_result] = body["documents"]["results"]
@@ -165,11 +170,13 @@ def test_each_result_carries_exactly_what_the_clause_says_it_shows(
             "source_id",
             "title",
             "snippet",
+            "snippet_ai_generated",
             "department",
             "date",
         }
         # The snippet is the matching passage, so the term is in it.
         assert TERM in result["snippet"].lower()
+        assert result["snippet_ai_generated"] is False
     assert document_result["source_type"] == DOCUMENT_SOURCE_TYPE
     assert document_result["department"] == DOCUMENT_DEPARTMENT
     assert meeting_result["source_type"] == MEETING_SOURCE_TYPE

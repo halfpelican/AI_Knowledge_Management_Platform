@@ -27,6 +27,7 @@ from apps.ai.base import (
     DocumentClassification,
     EmbeddingResult,
     InputType,
+    MeetingSummaryDraft,
     Passage,
     ProviderHealth,
     ProviderUnavailable,
@@ -48,6 +49,12 @@ from apps.ai.generation import (
     run_generation_attempts,
 )
 from apps.ai.prompting import SYSTEM_PROMPT, build_user_prompt
+from apps.ai.summarisation import (
+    SUMMARY_SYSTEM_PROMPT,
+    SUMMARY_TIMEOUT_SECONDS,
+    build_summary_user_prompt,
+    run_summary_attempts,
+)
 
 # Claude's own token ceiling, not FLM's GENERATION_MAX_TOKENS (800). Current Claude
 # models think before they answer and the thinking counts against max_tokens, so a
@@ -237,6 +244,29 @@ class AnthropicService:
             label=f"Claude ({settings.ANTHROPIC_MODEL})",
             model=settings.ANTHROPIC_MODEL,
             input_truncated=truncated,
+            max_tokens=max_tokens,
+        )
+
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft:
+        """FR-16's summary through Claude (D-125): the same prompt, schema and loop as FLM.
+
+        ``_claude_once`` carries SUMMARY_SYSTEM_PROMPT in the SDK's own parameter and the summary
+        timeout; everything else is apps/ai/summarisation.py's, shared with the FLM provider. The
+        ceiling is CLAUDE_MAX_TOKENS rather than SUMMARY_MAX_TOKENS, because Claude's thinking
+        counts against it (D-115), as classification's does.
+        """
+        user_prompt = build_summary_user_prompt(title, passages)
+        # One value for the request and for the attempt log's record of it.
+        max_tokens = CLAUDE_MAX_TOKENS
+        return run_summary_attempts(
+            lambda: self._claude_once(
+                user_prompt,
+                max_tokens=max_tokens,
+                system=SUMMARY_SYSTEM_PROMPT,
+                timeout=SUMMARY_TIMEOUT_SECONDS,
+            ),
+            label=f"Claude ({settings.ANTHROPIC_MODEL})",
+            model=settings.ANTHROPIC_MODEL,
             max_tokens=max_tokens,
         )
 
