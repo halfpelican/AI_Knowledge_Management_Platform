@@ -417,9 +417,11 @@ nothing of the reply:
 - a string holding an unpaired surrogate, which neither the database nor DRF's renderer can
   encode as UTF-8.
 
-Until then the first two escaped the attempt loops, and the last two failed where they were
-stored or rendered. Either way the ask and classify routes answered 500 instead of NFR-19's 503,
-and an FR-16 run ended as "error".
+Until then the first two escaped the attempt loops, and the last two failed wherever the string
+was stored or rendered, which a statement or an element that verification discarded never is.
+When either happened, the ask and classify routes answered 500 instead of NFR-19's 503, and a
+meeting summary's run ended as "error" in the background runner, or stopped
+`retry_meeting_summaries` or `summarise_meetings` outright.
 
 **The statement cap (step 7 phase 2a, 7 November 2026).** The schema's `statements` array
 has `maxItems` = `MAXIMUM_STATEMENTS`, a tuned constant in `apps/core/constants.py`. Each
