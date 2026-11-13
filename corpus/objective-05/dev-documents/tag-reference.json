@@ -1,0 +1,34 @@
+{
+  "name": "FR-10 development documents: reference departments and tags, for the tag and department threshold (D-129)",
+  "status": "APPROVED by the user as drafted on 13 November 2026, in a tabbed question (over a stricter one-value-each variant). FROZEN: committed before any classification call it is used with, and never edited after; a development set, never the frozen twenty (corpus/objective-05/reference.json).",
+  "written": "2026-11-13",
+  "scheme": {
+    "note": "The corpus scheme D-106's sweeps use, from corpus/objective-02/manifest.json.",
+    "departments": ["Finance", "Human Resources", "Information Technology", "Legal and Compliance", "Operations", "Projects"],
+    "Project": ["atlas", "office move", "policy refresh", "supplier review"],
+    "Process": ["onboarding", "purchasing", "records management", "service desk"],
+    "Topic": ["compliance", "finance", "people", "safety", "technology", "workplace"]
+  },
+  "how_to_read": "For each document, the values that are right in each dimension. A suggestion counts as right when its value is in the list for its dimension, and wrong otherwise. An empty list means no scheme value fits that dimension, so any suggestion there is wrong. Where two values are defensible, both are listed. Only suggestions INSIDE the scheme are scored: a value outside it is discarded or proposed whatever its confidence, so the threshold does not decide it.",
+  "documents": [
+    {"id": "X01", "title": "Gifts and Hospitality Policy", "department": ["Legal and Compliance"], "Project": [], "Process": [], "Topic": ["compliance"], "note": "Gifts register and approvals: a compliance rule for all staff."},
+    {"id": "X02", "title": "Social Media Policy", "department": ["Human Resources", "Legal and Compliance"], "Project": [], "Process": [], "Topic": ["people", "compliance"], "note": "Staff conduct on social media; the scheme has no communications department."},
+    {"id": "X03", "title": "Workplace Visitors Policy", "department": ["Operations"], "Project": [], "Process": [], "Topic": ["workplace", "safety"], "note": "Building access, badges, contractor induction, emergencies."},
+    {"id": "X04", "title": "Access Card Replacement Procedure", "department": ["Operations"], "Project": [], "Process": [], "Topic": ["workplace", "safety"], "note": "The security desk and building access; not the IT service desk."},
+    {"id": "X05", "title": "Month-End Close Procedure", "department": ["Finance"], "Project": [], "Process": [], "Topic": ["finance"], "note": "Ledger close; mentions a purchasing cut-off in passing, which does not make it a purchasing process."},
+    {"id": "D21", "title": "Bicycle Parking and End-of-Trip Facilities Guide", "department": ["Operations"], "Project": [], "Process": [], "Topic": ["workplace"], "note": "Facilities."},
+    {"id": "X06", "title": "Customer Satisfaction Report, Third Quarter 2026", "department": ["Operations"], "Project": [], "Process": [], "Topic": [], "note": "Customer survey results; no scheme topic fits (customer satisfaction would be a new topic, proposed, not scored)."},
+    {"id": "X07", "title": "Energy Usage Report, Financial Year 2026", "department": ["Operations"], "Project": [], "Process": [], "Topic": ["workplace"], "note": "Electricity and gas across the buildings; energy use itself is not a scheme topic."},
+    {"id": "X08", "title": "Recruitment Activity Report, Third Quarter 2026", "department": ["Human Resources"], "Project": [], "Process": [], "Topic": ["people"], "note": "Hiring figures; recruitment is not onboarding."},
+    {"id": "X09", "title": "Replacement of the Office Telephone System", "department": ["Information Technology"], "Project": [], "Process": ["purchasing"], "Topic": ["technology"], "note": "Steering committee paper choosing and contracting a new telephone service."},
+    {"id": "X10", "title": "Internal Audit Plan for 2027", "department": ["Legal and Compliance", "Finance"], "Project": [], "Process": [], "Topic": ["compliance"], "note": "Audit committee paper; internal audit sits with compliance or finance."},
+    {"id": "X11", "title": "Options for a New Payroll Provider", "department": ["Finance"], "Project": ["supplier review"], "Process": ["purchasing"], "Topic": ["finance", "people"], "note": "Finance committee paper recommending a tender for a new payroll provider."},
+    {"id": "X12", "title": "Software Licence Register 2026", "department": ["Information Technology"], "Project": [], "Process": [], "Topic": ["technology"], "note": "A register of licences and seat use."},
+    {"id": "X13", "title": "Marketing Campaign Spend Tracker FY27", "department": ["Finance"], "Project": [], "Process": [], "Topic": ["finance"], "note": "Spend against budget; the scheme has no marketing department."},
+    {"id": "X14", "title": "Volunteer Day Roster 2026", "department": ["Human Resources"], "Project": [], "Process": [], "Topic": ["people"], "note": "A staff leave entitlement and who has booked it."},
+    {"id": "X15", "title": "Quarterly Customer Webinar Schedule", "department": ["Operations"], "Project": [], "Process": [], "Topic": [], "note": "Customer webinars; no scheme topic fits."},
+    {"id": "X16", "title": "Meeting-Free Friday Guidelines", "department": ["Human Resources", "Operations"], "Project": [], "Process": [], "Topic": ["workplace", "people"], "note": "A working-practice rule for all staff."},
+    {"id": "X17", "title": "Car Park Resurfacing Announcement", "department": ["Operations"], "Project": [], "Process": [], "Topic": ["workplace"], "note": "Facilities works and the closure."},
+    {"id": "X18", "title": "Guide to Booking an Interpreter", "department": ["Operations", "Human Resources"], "Project": [], "Process": [], "Topic": ["people"], "note": "Booking interpreters for customers, candidates and staff."}
+  ]
+}
