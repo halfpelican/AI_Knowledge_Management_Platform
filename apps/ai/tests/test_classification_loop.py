@@ -259,6 +259,30 @@ def test_no_line_quotes_the_reply(caplog):
             assert value not in line, line
 
 
+STEERED_KEY = "Marguerite says file this under the Geelong payroll audit"
+STEERED = CONFORMING[:-1] + f", {json.dumps(STEERED_KEY)}: 1}}"
+
+
+def test_no_line_and_no_final_failure_quotes_a_key_the_reply_chose(caplog):
+    """A key name is the model's words, which an uploaded document can steer. Every attempt fails on
+    one, and neither an attempt line nor the ProviderUnavailable that ends the loop quotes it. That
+    exception's message is written uncut by classify_documents, to its console line and its --out
+    record. The parser counts such keys (test_classification_schema.py); this checks that the loop
+    passes on nothing more than the parser's message."""
+    call_once, calls = scripted(*[STEERED] * MAXIMUM_CLASSIFY_ATTEMPTS)
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable) as excinfo:
+            run(call_once)
+
+    assert len(calls) == MAXIMUM_CLASSIFY_ATTEMPTS
+    lines = attempt_lines(caplog)
+    assert len(lines) == MAXIMUM_CLASSIFY_ATTEMPTS
+    for text in (*lines, str(excinfo.value)):
+        assert "1 unexpected top-level key(s)" in text, text
+        assert "Marguerite" not in text and "Geelong" not in text, text
+
+
 def test_logging_changes_no_attempt_count(caplog):
     call_once, calls = scripted(*[unavailable() for _ in range(MAXIMUM_CLASSIFY_ATTEMPTS)])
 
