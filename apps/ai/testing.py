@@ -27,11 +27,14 @@ from apps.ai.base import (
     Assignment,
     DocumentClassification,
     EmbeddingResult,
+    ExtractedActionItem,
     InputType,
+    MeetingSummaryDraft,
     Passage,
     ProviderHealth,
     Statement,
     StatementList,
+    SummaryElement,
     TagScheme,
     TagSuggestion,
     Transcription,
@@ -64,6 +67,17 @@ def stub_transcript_text(number: int) -> str:
     """The stub's text for the ``number``-th segment it transcribes, counting from 1."""
     return f"Stub transcript of segment {number}."
 
+
+# What the stub's summarise_meeting reports (FR-16, D-125): one narrative sentence naming the title,
+# one decision and one action item with no owner and no deadline, each citing a passage that was
+# sent, so the default reply survives verification and a test of the apply layer sees every part.
+def stub_summary_sentence(title: str) -> str:
+    return f"Stub summary of the meeting {title!r}."
+
+
+STUB_DECISION = "Stub decision."
+STUB_ACTION_ITEM = "Stub action item."
+
 # Port 9 (discard) is closed on every development machine and CI runner, so a
 # connect is actively refused rather than left to time out: about 2 s per attempt
 # on Windows (measured, WinError 10061), less on Linux. Loopback, so nothing leaves
@@ -84,6 +98,7 @@ class StubAIService:
         classification=None,
         transcription=None,
         transcription_available: bool = True,
+        summary=None,
     ):
         self.dimension = settings.EMBEDDING_DIMENSION if dimension is None else dimension
         self.available = available
@@ -95,6 +110,9 @@ class StubAIService:
         # callable of (audio, filename). See the method. And what transcription_health reports.
         self.transcription = transcription
         self.transcription_available = transcription_available
+        # What summarise_meeting returns instead of the default draft: a MeetingSummaryDraft, or a
+        # callable of (title, passages). See the method.
+        self.summary = summary
         self.embed_calls: list[list[str]] = []
         # The input_type each embed() call carried (D-116), one entry per call, in step
         # with embed_calls.
@@ -103,6 +121,8 @@ class StubAIService:
         self.classify_calls: list[tuple[str, str, TagScheme]] = []
         # One (audio bytes, filename) per transcribe() call (D-123).
         self.transcribe_calls: list[tuple[bytes, str]] = []
+        # One (title, passages) per summarise_meeting() call (D-125).
+        self.summarise_calls: list[tuple[str, list[str]]] = []
 
     def vector_for(self, text: str) -> list[float]:
         # Seeded from a content hash so the same text embeds to the same vector in
@@ -204,6 +224,42 @@ class StubAIService:
         return ProviderHealth(
             available=self.transcription_available,
             detail="stub transcription" if self.transcription_available else "stub transcription down",
+        )
+
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft:
+        """FR-16's operation, deterministic (D-125).
+
+        By default: one narrative sentence, ``stub_summary_sentence(title)``, citing passage 1;
+        one decision, STUB_DECISION, citing passage 1; no highlights; and one action item,
+        STUB_ACTION_ITEM, with no owner and no deadline, citing the LAST passage sent. Every
+        reference names a passage that was sent, so the default survives verification.
+        ``model`` is STUB_CHAT_MODEL.
+
+        **Overriding it.** Pass ``summary=`` to the constructor, or set the attribute on an
+        instance (the autouse ``stub_ai_service`` fixture's, for example). A MeetingSummaryDraft
+        is returned as-is for every call. A callable is called with ``(title, passages)`` and its
+        return value returned, so a test can vary the reply per meeting, or raise
+        ProviderUnavailable, ProviderRefused or MalformedSummary to stand in for a failure.
+        Either way the call is recorded in ``summarise_calls`` first.
+        """
+        self.summarise_calls.append((title, list(passages)))
+        override = self.summary
+        if callable(override):
+            return override(title, passages)
+        if override is not None:
+            return override
+        if not passages:
+            raise ValueError("summarise_meeting() needs at least one passage")
+        return MeetingSummaryDraft(
+            narrative=(SummaryElement(text=stub_summary_sentence(title), passages=(1,)),),
+            decisions=(SummaryElement(text=STUB_DECISION, passages=(1,)),),
+            highlights=(),
+            action_items=(
+                ExtractedActionItem(
+                    description=STUB_ACTION_ITEM, owner=None, due=None, passages=(len(passages),)
+                ),
+            ),
+            model=STUB_CHAT_MODEL,
         )
 
 

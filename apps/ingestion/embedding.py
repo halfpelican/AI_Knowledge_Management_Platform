@@ -46,7 +46,13 @@ DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
 
 def embed_and_store_chunks(
-    *, chunks, source_type: str, source_id, visible_to_roles, title: str | None = None
+    *,
+    chunks,
+    source_type: str,
+    source_id,
+    visible_to_roles,
+    title: str | None = None,
+    ai_generated: bool = False,
 ) -> int:
     """Embed each chunk and write its ContentChunk row. Returns failed_chunk_count.
 
@@ -59,6 +65,10 @@ def embed_and_store_chunks(
     prefixed string is what the provider receives; ``chunk.text`` is what is stored.
     Each request also says it is a passage (``input_type=INPUT_TYPE_DOCUMENT``,
     D-116), which is how Voyage learns what EmbeddingGemma reads from the prefix.
+
+    ``ai_generated`` marks every row written as a passage of a meeting's AI-generated
+    summary (FR-16, D-125). Its one caller that passes True is apps/meetings/summaries.py;
+    every transcript and document chunk is written False.
 
     A chunk that exhausts MAXIMUM_EMBED_ATTEMPTS, or that the provider answers
     unusably for, is counted and gets no row. Every other chunk gets one. The caller
@@ -91,6 +101,7 @@ def embed_and_store_chunks(
             embedding_dimension=result.dimension,
             # Stamped from the source, so FR-11 filters before ranking (D-17).
             visible_to_roles=list(visible_to_roles),
+            ai_generated=ai_generated,
         )
     return failed_chunk_count
 

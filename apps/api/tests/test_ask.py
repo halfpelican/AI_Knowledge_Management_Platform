@@ -289,7 +289,11 @@ def test_an_answered_turn_carries_its_statements_and_the_items_consulted(
     assert source["title"] == DOCUMENT_TITLE
     # FR-12: "Each citation expands to display the source passage", so the passage the
     # statement cites travels with it.
-    assert source["passages"] == [{"chunk_id": str(chunk.id), "text": PASSAGE_TEXT}]
+    # ``ai_generated`` since D-125: False for a transcript or document passage, True only for a
+    # passage of a meeting's AI-generated summary (apps/api/tests/test_summary_in_retrieval.py).
+    assert source["passages"] == [
+        {"chunk_id": str(chunk.id), "text": PASSAGE_TEXT, "ai_generated": False}
+    ]
 
 
 def test_the_sources_panel_lists_every_item_consulted_and_not_only_the_cited_one(

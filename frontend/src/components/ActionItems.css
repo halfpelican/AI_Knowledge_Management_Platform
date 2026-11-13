@@ -1,0 +1,159 @@
+/* FR-16's "Action Items" panel on the meeting page. Tokens only. Each item's
+   boundary is AiMark.css's `ai-content` or `person-content` (NFR-15), so nothing
+   here gives an item a border of its own; the form fields are TextInput.css's. */
+
+.action-items {
+  margin: 0 0 var(--space-6);
+}
+
+.action-items .notice {
+  max-width: var(--measure-text);
+}
+
+/* The live region for the latest outcome. Empty, it takes no room and stays in
+   the accessibility tree, as the classification section's does. */
+.action-items__announcement {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.action-items__announcement:empty {
+  margin: 0;
+}
+
+/* Loading, not available, and the two kinds of empty: words, muted. */
+.action-items__state,
+.action-items__note {
+  max-width: var(--measure-text);
+  color: var(--color-text-muted);
+}
+
+/* UC-04 A1's sentence, inside NFR-15's dashed boundary. */
+.action-items__state--ai {
+  padding: var(--space-2) var(--space-3);
+}
+
+.action-items__note {
+  font-size: var(--text-sm);
+}
+
+.action-items__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  list-style: none;
+}
+
+/* One item, and the panel a new one is typed in. */
+.action-item {
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-surface);
+}
+
+.action-items__add {
+  max-width: var(--measure-text);
+  margin: 0 0 var(--space-4);
+}
+
+.action-item__description {
+  margin: 0 0 var(--space-2);
+  font-weight: var(--weight-medium);
+  word-break: break-word;
+}
+
+/* Owner and due date, each a term and its value, side by side where there is room
+   and stacked where there is not. */
+.action-item__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0 0 var(--space-2);
+}
+
+.action-item__fact {
+  flex: 1 1 var(--layout-card-min-width);
+  min-width: 0;
+}
+
+.action-item__fact dt {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.action-item__fact dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.action-item__value {
+  display: block;
+}
+
+/* What the meeting itself said, under what was recorded from it. */
+.action-item__said {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+/* Whose the item is, in words, and its actions: one row, the actions dropping to
+   a row of their own on a narrow screen, as a tag's do. */
+.action-item__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.action-item__actions,
+.action-items__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.action-item__footer .action-item__actions {
+  margin-left: auto;
+}
+
+.action-items__actions {
+  margin: 0 0 var(--space-4);
+}
+
+/* The edit and add form: one step, with its own legend, Save and Cancel. */
+.action-item__form {
+  max-width: var(--layout-field-max-width);
+}
+
+.action-item__fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.action-item__legend {
+  margin-bottom: var(--space-3);
+  padding: 0;
+  font-weight: var(--weight-semibold);
+}
+
+/* A description is a sentence or two, not a transcript: half the text area's
+   default height. Two classes, so it holds whichever stylesheet loads first. */
+.action-item__description-field .textarea-field__control {
+  min-height: calc(var(--control-min-height) * 2);
+}
+
+/* The item a confirmation is about, quoted in the dialogue. */
+.action-items__quoted {
+  word-break: break-word;
+}
+
+@media (max-width: 30rem) {
+  .action-item__footer .action-item__actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+  }
+}

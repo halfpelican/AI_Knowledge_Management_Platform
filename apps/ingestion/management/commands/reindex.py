@@ -13,6 +13,14 @@ transcript for a meeting — and never re-reads an original or re-parses a file.
 Extraction is not what changed; the embedding model is. A document whose text was
 never extracted has no chunks to rebuild and is reported as skipped, not failed.
 
+**A meeting's AI-generated summary is re-embedded with it** (FR-16, D-125). A Ready
+summary is indexed as passages of the meeting itself, so the rebuild that deletes the
+meeting's chunks deletes those too, and they are rebuilt in the same transaction from
+the summary's stored text. No model is asked to summarise anything: the summary is
+not regenerated, only embedded again. If none of its chunks can be embedded, the whole
+meeting fails and rolls back, like any other source, so a re-indexed meeting never
+loses its summary from search while keeping its transcript.
+
 Each source is rebuilt in its own transaction, so its chunks and its status commit
 together or not at all (NFR-21, CLAUDE.md invariant 9). One source failing leaves
 the sources already rebuilt committed and the rest untouched; the command reports
@@ -54,6 +62,7 @@ from apps.ingestion.embedding import (
     embed_and_store_chunks,
 )
 from apps.meetings.models import Meeting
+from apps.meetings.summaries import current_summary, index_summary
 
 PROBE_TEXT = "embedding dimension probe"
 VALID_PROVIDERS = ("flm", "anthropic")
@@ -330,6 +339,7 @@ class Command(BaseCommand):
             self.stdout.write(f"  would rebuild meeting {meeting.title!r}")
             return "rebuilt"
 
+        summary_note = ""
         try:
             with transaction.atomic():
                 locked = Meeting.objects.select_for_update().get(pk=meeting.pk)
@@ -353,6 +363,16 @@ class Command(BaseCommand):
                     else MEETING_INDEXED
                 )
                 locked.save(update_fields=["status"])
+                # FR-16 (D-125): the Ready summary's passages were among the chunks deleted
+                # above, so they are rebuilt here, under the same lock and stamped from the
+                # same row. index_summary raises if none can be embedded, which fails this
+                # meeting as a whole.
+                summary = current_summary(locked)
+                if summary is not None:
+                    summary_failed = index_summary(locked, summary)
+                    summary_note = "; its summary re-embedded" + (
+                        f" ({summary_failed} chunk(s) failed)" if summary_failed else ""
+                    )
         except Exception as exc:  # noqa: BLE001 - one source failing must not stop the run
             self.stderr.write(f"  FAIL  meeting {meeting.title!r}: {type(exc).__name__}: {exc}")
             if self._chunks_deleted:
@@ -362,6 +382,7 @@ class Command(BaseCommand):
 
         note = f" ({failed_chunk_count} chunk(s) failed)" if failed_chunk_count else ""
         self.stdout.write(
-            f"  ok    meeting {meeting.title!r}: {len(chunks)} chunk(s), {locked.status}{note}"
+            f"  ok    meeting {meeting.title!r}: {len(chunks)} chunk(s), "
+            f"{locked.status}{note}{summary_note}"
         )
         return "rebuilt"

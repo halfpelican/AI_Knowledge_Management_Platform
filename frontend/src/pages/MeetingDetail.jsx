@@ -4,6 +4,7 @@ import { ApiError, NETWORK_ERROR_STATUS, messageForStatus } from '../api/client.
 import { deleteMeeting, fetchMeeting } from '../api/meetings.js'
 import Button from '../components/Button.jsx'
 import Dialog from '../components/Dialog.jsx'
+import MeetingSummary from '../components/MeetingSummary.jsx'
 import Notice from '../components/Notice.jsx'
 import { TEXT } from '../constants.js'
 import useApiResource from '../hooks/useApiResource.js'
@@ -34,6 +35,14 @@ import './Repository.css'
  * A meeting outside the caller's scope answers 404, exactly as an id that names
  * nothing does, and both render the same message. The screen never distinguishes
  * "no such meeting" from "not yours to read" (CLAUDE.md §6, invariant 1).
+ *
+ * **FR-16's "Summary" and "Action Items" panels sit between the record and the
+ * transcript**, where the document detail keeps FR-10's classification
+ * (src/components/MeetingSummary.jsx). They read `GET /api/meetings/{id}/summary`
+ * themselves, once the meeting is on screen, so nothing they do — loading, failing,
+ * waiting on a run — delays or hides the transcript below them (NFR-20; CLAUDE.md
+ * §6, invariant 8). They are keyed on the meeting, so another meeting's panels
+ * start from nothing.
  */
 export default function MeetingDetail() {
   const { meetingId } = useParams()
@@ -171,6 +180,11 @@ export default function MeetingDetail() {
           </Button>
         </div>
       ) : null}
+
+      {/* FR-16: the AI-generated summary and the action items, each marked as
+          what it is (NFR-15). Their own read; the transcript below does not wait
+          on it. */}
+      <MeetingSummary key={meeting.meeting_id} meetingId={meeting.meeting_id} />
 
       <h2 id="transcript-heading">{TEXT.transcriptHeading}</h2>
       <p className="data-table__meta">{TEXT.transcriptVerbatim}</p>

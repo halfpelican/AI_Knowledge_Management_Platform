@@ -1,0 +1,301 @@
+{
+  "name": "Objective 04 manifest",
+  "status": "DRAFT. The ten O-transcripts are candidates for the frozen set; nothing is frozen until the references are written by people and approved (README.md).",
+  "objective": "Objective 04 (proposal section 2, due 13 November 2026): a reference set of ten transcripts for which summaries, action items and decisions have been prepared manually in advance.",
+  "attendees_note": "Attendees are recorded through FR-09's attendee field and must be users in roster.json. FR-16 uses them only to match a lone first name to an owner (D-125); meetings are scoped by role, never by attendance (invariant 3).",
+  "frozen_set": [
+    {
+      "id": "O01",
+      "file": "transcripts/O01_finance_quarterly_budget_review.txt",
+      "title": "Finance Quarterly Budget Review",
+      "meeting_date": "2026-10-14",
+      "attendees": [
+        "Ravi Sharma",
+        "Hannah Lee",
+        "Alex Morgan",
+        "Priya Raman"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O02",
+      "file": "transcripts/O02_service_desk_improvement.txt",
+      "title": "Service Desk Improvement Meeting",
+      "meeting_date": "2026-10-12",
+      "attendees": [
+        "Lena Kowalski",
+        "Marcus Chen",
+        "Alex Petrov",
+        "Alex Morgan"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O03",
+      "file": "transcripts/O03_level_four_fit_out.txt",
+      "title": "Level Four Fit-out Check-in",
+      "meeting_date": "2026-10-22",
+      "attendees": [
+        "Owen Fletcher",
+        "Priya Raman",
+        "Grace Nguyen"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O04",
+      "file": "transcripts/O04_graduate_recruitment_planning.txt",
+      "title": "Graduate Recruitment Planning",
+      "meeting_date": "2026-10-20",
+      "attendees": [
+        "Grace Nguyen",
+        "Nadia Haddad",
+        "Jamal Haddad",
+        "Sofia Marchetti"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O05",
+      "file": "transcripts/O05_customer_complaint_escalation_review.txt",
+      "title": "Customer Complaint Escalation Review",
+      "meeting_date": "2026-10-29",
+      "attendees": [
+        "Chloe Martin",
+        "Ben Carter",
+        "Priya Raman"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O06",
+      "file": "transcripts/O06_quarterly_all_staff_briefing.txt",
+      "title": "Quarterly All-Staff Briefing",
+      "meeting_date": "2026-11-02",
+      "attendees": [
+        "Priya Raman",
+        "Ravi Sharma",
+        "Sofia Marchetti",
+        "Daniel Brooks"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O07",
+      "file": "transcripts/O07_project_atlas_steering_committee.txt",
+      "title": "Project Atlas Steering Committee",
+      "meeting_date": "2026-10-28",
+      "attendees": [
+        "Sofia Marchetti",
+        "Jamal Haddad",
+        "Wei Zhang",
+        "Ravi Sharma",
+        "Aisha Rahman"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O08",
+      "file": "transcripts/O08_health_and_safety_committee.txt",
+      "title": "Health and Safety Committee",
+      "meeting_date": "2026-11-05",
+      "attendees": [
+        "Grace Nguyen",
+        "Owen Fletcher",
+        "Tomas Okafor",
+        "Hannah Lee"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O09",
+      "file": "transcripts/O09_newsletter_content_planning.txt",
+      "title": "Newsletter Content Planning",
+      "meeting_date": "2026-11-09",
+      "attendees": [
+        "Daniel Brooks",
+        "Aisha Rahman",
+        "Chloe Martin"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    },
+    {
+      "id": "O10",
+      "file": "transcripts/O10_customer_success_retrospective.txt",
+      "title": "Customer Success Retrospective Q3",
+      "meeting_date": "2026-11-03",
+      "attendees": [
+        "Ben Carter",
+        "Chloe Martin",
+        "Marcus Chen",
+        "Alex Morgan",
+        "Alex Petrov"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "frozen"
+    }
+  ],
+  "development_set": [
+    {
+      "id": "X01",
+      "file": "dev/X01_procurement_review.txt",
+      "title": "Procurement Review",
+      "meeting_date": "2026-10-05",
+      "attendees": [
+        "Hannah Lee",
+        "Ravi Sharma",
+        "Owen Fletcher"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "X02",
+      "file": "dev/X02_change_advisory_board.txt",
+      "title": "Change Advisory Board",
+      "meeting_date": "2026-10-07",
+      "attendees": [
+        "Marcus Chen",
+        "Tomas Okafor",
+        "Lena Kowalski",
+        "Alex Petrov"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "T01",
+      "file": "../objective-02/transcripts/T01_weekly_ops_standup.txt",
+      "title": "Weekly Operations Standup",
+      "meeting_date": "2026-09-14",
+      "attendees": [
+        "Priya Raman",
+        "Marcus Chen",
+        "Lena Kowalski",
+        "Tomas Okafor"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "T02",
+      "file": "../objective-02/transcripts/T02_board_risk_committee.txt",
+      "title": "Board Risk Committee Meeting",
+      "meeting_date": "2026-09-08",
+      "attendees": [],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "T03",
+      "file": "../objective-02/transcripts/T03_product_planning_workshop.txt",
+      "title": "Product Planning Workshop",
+      "meeting_date": "2026-09-16",
+      "attendees": [
+        "Sofia Marchetti",
+        "Jamal Haddad",
+        "Aisha Rahman",
+        "Wei Zhang"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "T04",
+      "file": "../objective-02/transcripts/T04_customer_success_retro.txt",
+      "title": "Customer Success Retrospective",
+      "meeting_date": "2026-09-21",
+      "attendees": [
+        "Nadia Haddad"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "T05",
+      "file": "../objective-02/transcripts/T05_security_incident_debrief.txt",
+      "title": "Security Incident Debrief",
+      "meeting_date": "2026-09-23",
+      "attendees": [],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    },
+    {
+      "id": "T06",
+      "file": "../demo/T06_sustainability_working_group.txt",
+      "title": "Sustainability Working Group",
+      "meeting_date": "2026-10-26",
+      "attendees": [
+        "Aisha Rahman",
+        "Owen Fletcher",
+        "Grace Nguyen",
+        "Daniel Brooks"
+      ],
+      "visible_to_roles": [
+        "Employee",
+        "Administrator"
+      ],
+      "set": "development"
+    }
+  ]
+}

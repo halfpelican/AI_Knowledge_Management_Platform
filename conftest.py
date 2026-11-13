@@ -100,6 +100,20 @@ def no_live_provider(monkeypatch):
         yield
 
 
+@pytest.fixture(autouse=True)
+def summaries_run_inline(settings):
+    """FR-16's summary runs in the caller's thread, never in a background one (D-125).
+
+    The server starts each run in a thread after the requesting transaction commits
+    (apps/meetings/summary_runner.py). A thread would outlive the test that started it and write
+    through its own database connection, outside the test's transaction. Inline, a test that
+    executes the commit callbacks (``django_capture_on_commit_callbacks(execute=True)``) sees the
+    finished summary, and one that does not sees the run still Processing, which is the state the
+    202 reports. The thread path has its own tests, which override this.
+    """
+    settings.SUMMARY_RUNNER = "inline"
+
+
 @dataclass
 class LogFiles:
     """The four log files one test's logging writes."""

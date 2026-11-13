@@ -6,8 +6,8 @@ obtained from apps.ai.get_ai_service(); no module outside apps/ai imports a vend
 (CLAUDE.md section 4). ``classify_document`` arrived with FR-10 on 9 November 2026
 (docs/decisions.md D-104), when NIT3004 asked for it and not before. ``transcribe`` and
 ``transcription_health`` arrived on 10 November 2026 with recording transcription
-(D-123), when the user asked for it. Summarisation (FR-16) gets its own method the same
-way, then, not speculatively now.
+(D-123), when the user asked for it. ``summarise_meeting`` arrived on 11 November 2026 with
+FR-16 (D-125), the same way.
 """
 
 from dataclasses import dataclass
@@ -131,6 +131,55 @@ class Transcription:
     model: str
 
 
+# --- FR-16 meeting summaries (D-125) -------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SummaryElement:
+    """One narrative sentence, decision or highlight, and the passages it names.
+
+    ``passages`` are passage numbers as the reply gave them (``"P3"`` is 3), in the reply's
+    order, without repeats. They are NOT verified here: whether each was among the passages
+    sent is set membership done by the caller (apps/meetings/summaries.py, invariant 5).
+    """
+
+    text: str
+    passages: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class ExtractedActionItem:
+    """One action item as the model extracted it (FR-16, UC-04).
+
+    ``owner`` and ``due`` are the transcript's own words, or None where it says nothing: the
+    name as given ("Alex", "the facilities team") and the deadline as said ("next Friday"). Who
+    that owner is on the system, and which date the phrase means, are application code
+    (apps/meetings/owners.py and due_dates.py), never the model's judgement (D-125).
+    """
+
+    description: str
+    owner: str | None
+    due: str | None
+    passages: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class MeetingSummaryDraft:
+    """What ``summarise_meeting`` returns: a conforming reply, and nothing else (invariant 10).
+
+    ``narrative`` holds 1 to MAXIMUM_SUMMARY_SENTENCES sentences; the other three may be empty,
+    and an empty ``action_items`` is UC-04 A1's "section recorded as empty", not an omission,
+    because the reply must carry the key. ``model`` names the chat model, for the summary's
+    record (UC-04: "a record of the model that produced it").
+    """
+
+    narrative: tuple[SummaryElement, ...]
+    decisions: tuple[SummaryElement, ...]
+    highlights: tuple[SummaryElement, ...]
+    action_items: tuple[ExtractedActionItem, ...]
+    model: str
+
+
 class ProviderUnavailable(Exception):
     """The provider could not be reached or did not respond usably.
 
@@ -151,6 +200,16 @@ class ProviderRefused(ProviderUnavailable):
     leaves the document unclassified. The provider logs the cause before raising it
     (apps/ai/attempt_log.py). A 429 is not this: a rate limit passes, so it is a plain
     ProviderUnavailable and is retried.
+    """
+
+
+class MalformedSummary(ProviderUnavailable):
+    """A meeting summary's replies broke SUMMARY_SCHEMA twice: the one retry FR-16 allows is spent.
+
+    FR-16: "a malformed response triggers one retry". Raised by ``summarise_meeting`` after the
+    second malformed reply, even with an attempt left (MAXIMUM_MALFORMED_SUMMARY_REPLIES,
+    D-125). A ProviderUnavailable, so a caller that knows only outages still marks the run
+    failed; apps/meetings records it under its own reason.
     """
 
 
@@ -241,5 +300,19 @@ class AIService(Protocol):
         Unavailable when ``TRANSCRIPTION_PROVIDER`` is ``none`` or FLM does not answer. Available
         means FLM answered; it cannot mean that Whisper is loaded, because FLM's model list names
         its chat catalogue and not the speech model (D-123, "What it does not cover").
+        """
+        ...
+
+    def summarise_meeting(self, title: str, passages: list[str]) -> MeetingSummaryDraft:
+        """FR-16: one meeting's summary and action items, in one structured call (D-125).
+
+        ``passages`` are the transcript's passages in order, FR-09's own chunks as the caller
+        split them; the prompt labels them ``[P1]`` to ``[Pn]`` and every element of the reply
+        must name at least one (apps/ai/summarisation.py). A reply that does not conform to
+        SUMMARY_SCHEMA is no reply: a malformed reply gets one retry
+        (MAXIMUM_MALFORMED_SUMMARY_REPLIES) and a failed call two (MAXIMUM_SUMMARY_ATTEMPTS,
+        1 initial call + 2 retries), then ProviderUnavailable; any other 4xx is ProviderRefused
+        at once (D-118). Verifying the passage numbers, matching owners and converting dates
+        are application code over the returned draft, not the model's judgement.
         """
         ...
