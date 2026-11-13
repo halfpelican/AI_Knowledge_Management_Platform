@@ -77,15 +77,17 @@ waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=5452
       2026), so the lookup does not rely on the Listen row alone. On every try it also reads
       netstat's LISTENING PIDs and the port's own socket rows (remote port 0), whatever state is
       reported.
-    - **A second process on the port means nothing is taken,** readable or not. The Listen row is
-      taken only when neither netstat nor the port's rows show another process; otherwise a process
-      is taken only when it alone holds the port and its command line can be read. Two servers can
-      listen on one address and port on Windows, and netstat shows both.
+    - **A second process on the port means nothing is taken,** readable or not, and so does
+      netstat or the port's rows that could not be read. The Listen row is taken only when both
+      were read and neither shows another process; otherwise a process is taken only when both
+      were read, it alone holds the port, and its command line can be read. Two servers can listen
+      on one address and port on Windows, and netstat shows both.
     - **It tries again every 10 s, for about a minute,** before it gives up. Each try is printed,
       and the pre-flight prints which lookup found the process (`found by`). When it gives up, its
-      note says what it saw. It says that nothing is listening only when every lookup was read and
-      none saw a process. Having seen a process it could not take, it says so. With a lookup it
-      could not read, it says that whether anything holds the port is not known.
+      note says what it saw. With netstat or the port's rows unread, it says that whether anything
+      holds the port is not known. Otherwise, having seen a process it could not take, it says so.
+      It says that nothing is listening only when netstat and the port's rows were both read and
+      neither saw a process.
   - **24 threads, from that command line.** A command line with no `--threads` reads as 4,
     Waitress's default, and is refused as 4, not as "unknown". With `-OverrideServerThreads`,
     the observed count must equal `-ServerThreads`.
