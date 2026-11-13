@@ -182,6 +182,11 @@ PARTIAL_MATCH_FLOOR = 0.0
 # Read through apps/retrieval/ranking.relevance_threshold and
 # apps/retrieval/partial_matches.partial_match_floor, never directly.
 #
+# FR-19 reads voyage-4's threshold too (D-126): its permission exclusion admits at this value, so
+# changing it moves which permission-only questions reach the gap log. D-120's rule was indifferent
+# anywhere in [0.2467, 0.2908], and Objective 06's P02 has its restricted answer at 0.2812, inside
+# that interval. apps/core/tests/test_constants.py holds the two together.
+#
 # voyage-4: D-101's margin rule (m = 0.006) on dev-set-v2's Voyage scores gave T 0.2687 and
 # F 0.2468. It declines 4 of 8 no-answer runs with margin, against 1 of 8 on EmbeddingGemma,
 # and keeps all 32 answerable runs. End to end on the same set, with Claude Sonnet 5.5, it
@@ -761,19 +766,22 @@ GAP_GROUPING_THRESHOLD = 0.5256
 # the lowest within-subject pair is 0.5157, and the highest cross-subject pair is 0.5297, the same
 # password pair. So the rule's best pairwise F1 gives 0.5054, and centroid grouping at that value
 # forms 12 entries of 3, none mixed. The lowest within-subject pair sits 0.0103 above it, about
-# twenty times Voyage's measured re-embedding jitter (0.00047). Any model not listed,
-# EmbeddingGemma included, keeps GAP_GROUPING_THRESHOLD; apps/retrieval/gaps.py's
-# grouping_threshold() reads both.
+# 8.6 times Voyage's re-embedding jitter: differences of up to 0.0012 between two passes over one
+# question (D-109's note of 12 November 2026). Any model not listed, EmbeddingGemma included, keeps
+# GAP_GROUPING_THRESHOLD; apps/retrieval/gaps.py's grouping_threshold() reads both.
 GAP_GROUPING_THRESHOLD_BY_MODEL = {"voyage-4": 0.5054}
 
 # FR-19's permission exclusion for a question, per embedding model (D-126; apps/retrieval/gaps.py's
-# exclusion_rule() reads these). The question is ranked over the Administrator's scope, and then:
+# exclusion_rule() reads these). Each string decided is ranked over the Administrator's scope: the
+# question, or for a conversation follow-up the composed string and then its own wording (D-127).
+# Then:
 # - "rank-one" (D-108's note of 10 November 2026, 333be14): the top-ranked passage decides, whether
 #   or not it clears the model's relevance threshold. A restricted top passage means the row is left
-#   out, and a readable one means the row is a gap;
+#   out, and a readable one means that string does not leave it out;
 # - "threshold-first" (D-108 as first written): if no passage reaches the model's own relevance
-#   threshold (ranking.relevance_threshold, D-120), nobody could have been answered and the row is a
-#   gap. Otherwise the top admitted passage decides, as above.
+#   threshold (ranking.relevance_threshold, D-120), nobody could have been answered and that string
+#   does not leave the row out. Otherwise the top admitted passage decides, as above.
+# A row that no string leaves out is a gap.
 GAP_EXCLUSION_RANK_ONE = "rank-one"
 GAP_EXCLUSION_THRESHOLD_FIRST = "threshold-first"
 GAP_EXCLUSION_RULES = (GAP_EXCLUSION_RANK_ONE, GAP_EXCLUSION_THRESHOLD_FIRST)
@@ -782,9 +790,9 @@ GAP_EXCLUSION_RULES = (GAP_EXCLUSION_RANK_ONE, GAP_EXCLUSION_THRESHOLD_FIRST)
 # 0.30.
 GAP_EXCLUSION_RULE = GAP_EXCLUSION_RANK_ONE
 # voyage-4: threshold-first, the user's decision of 11 November 2026 (D-126).
-# - On D-108's development questions, rank-one fails 13 of 15 on voyage-4: u36 and d27 have no
-#   answer anywhere, but their weak top matches (0.230, 0.238) are Administrator-only.
-#   Threshold-first passes 15 of 15, as does D-108's margin rule at 0.0939
+# - On D-108's development questions, rank-one fails the check on voyage-4: u36 and d27 have no
+#   answer anywhere, but their weak top matches (0.230, 0.238) are Administrator-only, so both are
+#   left out. Threshold-first passes it, as does D-108's margin rule at 0.0939
 #   (corpus/objective-06/runs/2026-11-11-anthropic/).
 # - The choice between those two was informed by the frozen thirty: under rank-one U01 was left out,
 #   and the margin rule would keep P02 (margin 0.045). That makes it a departure from D-93, disclosed

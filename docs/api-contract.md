@@ -1336,7 +1336,8 @@ The tag entry, in the list, in the `POST`'s `201` and in the `DELETE`'s `200`:
 The Administrator's list of "questions the system could not answer and searches returning no
 results, grouped by subject with an occurrence count and the ability to mark an entry as
 addressed". Decisions: D-107 (the tables, the cycle, the routes, the permission and the dashboard
-panel), D-108 (the permission exclusion) and D-109 (similarity grouping). Every route needs a
+panel), D-108 (the permission exclusion), D-109 (similarity grouping), D-126 (the exclusion's rule
+per embedding model) and D-127 (a follow-up's two strings). Every route needs a
 session **and** `review_knowledge_gaps`, which accounts 0007 gives the Administrator alone: `401`
 without a session, `403` for a role that lacks the code (invariant 4), checked before anything
 else on the request.
@@ -1382,7 +1383,7 @@ only:
   `open_count` counts every Open entry. The dashboard's `date_from`, `date_to` and `department`
   filters do not narrow either: an entry has no department, and its dates are its own.
 
-**What a cycle does** (D-107 to D-109). The scheduled trigger is `python manage.py
+**What a cycle does** (D-107 to D-109, D-126, D-127). The scheduled trigger is `python manage.py
 aggregate_knowledge_gaps`, which prints the database name, runs one cycle and prints its counts,
 and exits 1 on a provider outage. The route runs the same cycle on demand.
 
@@ -1390,23 +1391,31 @@ and exits 1 on a provider outage. The route runs the same cycle on demand.
    row with `result_count` 0, timestamped from the previous cycle's start less
    `CYCLE_GRACE_SECONDS` (60) up to this cycle's start, and not already in the log. The first
    cycle takes everything before it.
-2. **A row is left out when the asker's role explains it** (D-108, D-126). A question is embedded
-   on its own wording and ranked over the Administrator's whole scope. Which passage decides is the
-   embedding model's rule (`GAP_EXCLUSION_RULE_BY_MODEL`):
+2. **A row is left out when the asker's role explains it** (D-108, D-126, D-127). A question is
+   embedded and ranked over the Administrator's whole scope. A one-off question is decided on its
+   own wording. A conversation follow-up is decided first on the string retrieval ranked, its
+   earlier turns and then the question as the ask composed them, and then, unless that left it
+   out, on its own wording; either can leave it out. A question from a role that reads nothing is
+   left out before anything is embedded. Which passage decides is the embedding model's rule
+   (`GAP_EXCLUSION_RULE_BY_MODEL`):
    - **rank-one,** for every model the map does not list, EmbeddingGemma included: the top-ranked
      passage, whether or not it clears `RELEVANCE_THRESHOLD`;
    - **threshold-first,** for `voyage-4`: the top passage at or above the model's own relevance
-     threshold. If no passage reaches it, nobody could have been answered, and the row is kept.
+     threshold. If no passage reaches it, nobody could have been answered, and that string does not
+     leave the row out.
 
-   If the deciding passage is one the asker's role cannot read, the row is left out, and otherwise
-   it is kept, as it is when no passage of the question's embedding model exists. A search is
+   If a string's deciding passage is one the asker's role cannot read, the row is left out.
+   Otherwise that string does not leave it out, as when no passage of the question's embedding
+   model exists. A row that no string leaves out is kept. A search is
    counted again as the Administrator, writing no `SearchLog` row; above zero, it is left out. A
    kept search term longer than `MAXIMUM_QUESTION_LENGTH` is cut to that length before it is
    embedded and stored as a subject. Nothing records a row that was left out.
 3. **Kept rows are grouped by similarity** (D-109): in timestamp order, each joins the nearest
-   Open entry, embedded by the same model, whose centroid's cosine is at least
-   `GAP_GROUPING_THRESHOLD`, or starts a new entry. An Addressed entry is never joined, so a
-   subject that recurs after being addressed opens a new one.
+   Open entry, embedded by the same model, whose centroid's cosine is at least the model's
+   grouping threshold (`GAP_GROUPING_THRESHOLD`, or its own value in
+   `GAP_GROUPING_THRESHOLD_BY_MODEL`, D-122), or starts a new entry. A follow-up is grouped, and
+   shown as a subject, on its own wording. An Addressed entry is never joined, so a subject that
+   recurs after being addressed opens a new one.
 
 ## Recording transcription (D-123)
 

@@ -57,6 +57,8 @@ Rules for this file:
   | D-59, in `403087f` | "The other nine name a requirement in the body", and D-57 "found three departures" — counts over sets listed elsewhere or not at all |
   | `frontend/src/pages/Ask.jsx`, in `403087f` | "the four paths enumerated at" `apps/core/constants.py` — a count of a list held in another file |
   | D-52, and `M6-BUILD-PROMPT.md` item 2a | the download link "is built" and its storage path "depends on D-18" — the link was never built, and migration 0006 had closed the storage question on 21 September; and extracted text "is `ContentChunk.chunk_text`", while `ExtractedContent` held it whole |
+  | D-107's build note, and a comment in `apps/retrieval/gaps.py` | "the exclusion fails closed" for a role missing from `EFFECTIVE_ROLES`: which rows it covered. The role was read after the return for no passage of the question's model, from the first build, and after threshold-first's return for nothing admitted, in the first build and again from D-126 (D-107's note of 12 November 2026) |
+  | D-126 | "neither the development questions nor the thirty have one": which kinds of question the two sets hold. Neither holds a conversation turn, and threshold-first decides a follow-up differently from a one-off (D-126's note of 12 November 2026, D-127) |
 
 | ID | Decision | Status | Date |
 |---|---|---|---|
@@ -8077,6 +8079,35 @@ step, and D-114 has since let M8 run on any device. The user's decision: a daily
 bound on a search term, on FR-12's route (D-79's note of the same night). Each is reduced, not
 removed: that note says what remains.
 
+**Dated note, 12 November 2026: "the exclusion fails closed" was not true of every row when it
+was written, and for questions it now is.** The build note above says a role missing from
+`EFFECTIVE_ROLES` "has every one of its rows left out". The requirements audit and the security
+review of that day (D-126's note) found it was not so on voyage-4. The code's history shows it was
+not so from the start.
+
+- **For a question, the role was read only after a return that kept the row:**
+  - **when no passage reached the threshold,** for every model, in the first build (`3ee2d43`,
+    the commit that also wrote the sentence), until rank-one replaced it (`333be14`, 10 November);
+  - **when no chunk of the question's embedding model exists,** from the first build until now;
+  - **on voyage-4, when no passage reaches its threshold,** again from D-126 (`7e69bee`,
+    11 November).
+- **No test put such a role through the cycle,** under any rule.
+- **Now the role is read first.** `run_cycle` leaves out a question from a role that reads nothing
+  before anything is embedded, under rank-one and under threshold-first, so such a row costs no
+  provider call and cannot fail the cycle. The decision itself also fails closed for such a role,
+  for its direct callers. Four tests hold it, in `apps/retrieval/tests/test_knowledge_gaps.py`:
+  - `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out`;
+  - `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out`;
+  - `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either`;
+  - `test_the_decision_itself_leaves_out_a_role_that_reads_nothing`.
+- **For a search the asker's role is not read at all, and never was.** The search is counted again
+  as the Administrator and kept only when nobody could match it. So such a role's search is left
+  out whenever any content matches, and kept when none does. The build note's "every one of its
+  rows" was never true of searches in the literal sense, and nothing changes there.
+- **Reachability.** No route creates a role: `/api/roles` only lists them, and
+  `/api/users/<id>/role` assigns an existing one. The two seeded roles are both in
+  `EFFECTIVE_ROLES`. Such a role exists only if someone creates one in the database directly.
+
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
@@ -8211,6 +8242,22 @@ chose threshold-first for that model (D-126).**
 - **Rank-one is still the rule for every model `GAP_EXCLUSION_RULE_BY_MODEL` does not list,**
   embed-gemma included. No FLM result in this entry changes.
 
+**Dated note, 12 November 2026: step 2's "embedded on its own wording" no longer decides a
+follow-up's exclusion (D-127).** The rule above embeds a conversation turn alone, "the simpler form
+... chosen for the five days", and lists "FR-13 composition in the cycle" under "Not covered".
+
+- **What that cost,** found by the audit and the security review of D-126: a follow-up's own
+  wording is not what retrieval ranked. On voyage-4 it can admit nothing (t03 and t06 in D-112's
+  HTTP check), and threshold-first then kept it whatever it was about. Under rank-one a weak
+  passage decided it by chance.
+- **Now** a follow-up is decided on the string retrieval ranked, the turn after its earlier turns
+  as the ask composed them, and then on its own wording; either can leave it out. D-127 records
+  the decision, the check on real threads, and what it does not cover.
+- **Unchanged:**
+  - a follow-up's subject and its grouping stay on its own wording (D-109);
+  - a one-off question is decided exactly as before, except one from a role that reads nothing,
+    which is now left out (D-107's note of 12 November).
+
 ## D-109 · Gaps are grouped by cosine similarity to an Open entry's centroid, and `GAP_GROUPING_THRESHOLD` is chosen on a development paraphrase set
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Business logic clause,
@@ -8296,6 +8343,15 @@ paraphrase set with Voyage's query embeddings (`corpus/objective-06/runs/2026-11
   (0.00047).
 - **The threshold is now per embedding model** (`GAP_GROUPING_THRESHOLD_BY_MODEL`, read through
   `gaps.grouping_threshold`). embed-gemma keeps 0.5256.
+
+**Dated note, 12 November 2026: the margin's multiple of Voyage's jitter was overstated.** The note
+above calls voyage-4's grouping margin of 0.0103 "about twenty times Voyage's re-embedding jitter
+(0.00047)". 0.00047 was the largest difference one earlier check saw, not a bound. The evidence of
+D-126 has differences up to 0.0012 between two passes over one question (D-126's note of 12
+November). Against 0.0012 the margin is about 8.6 times. `voyage-http-check.md` in
+`corpus/objective-02/runs/2026-11-10/voyage-http-check/` uses 2 × 0.00047 as a bound in the same
+way. Its verdicts stand, because the shifts it needed were 0.037 and more, far above 0.0024. Nothing
+here was re-run.
 
 ## D-110 · Objective 06's thirty are frozen, with the unanswerable asks screened on retrieval scores; FR-12's decline weakness stays open
 
@@ -8448,6 +8504,12 @@ met, and FR-12's decline weakness is closed on that configuration. It stays open
 - **On FLM the weakness stays open,** as this entry and D-102's 8 November note record.
 - **Spend:** about US$0.017 of Haiku for the five draws. The thirty's seedings are counted by their
   own session.
+
+**Dated note, 12 November 2026: "clauses 2 and 3 met" on the first draw on `anthropic`.** This
+entry's note of 11 November says #86's cycle met clauses 2 and 3. The verifier tests that each
+entry's count equals its items. The salary entry counted U02 and U03, where U01, U02 and U03 were
+seeded, because U01 was the query left out. Read strictly, that is clause 1's miss showing in
+clause 2 (D-126's note of 12 November).
 
 ## D-111 · FR-13's option 3, the retrieval-only follow-up rewrite, was measured over three draws and not adopted; its code is withdrawn and its evidence kept
 
@@ -9403,6 +9465,37 @@ from the coordinating session's suggestion, and the user can drop it.
 **Where it applies:** `apps/ingestion/management/commands/reindex.py`, `docs/ai-provider.md` §4,
 `.env.example`, and a dated note on D-113.
 
+**Dated note, 12 November 2026: `--resize-column` resizes the chunks' column only, so a database moved
+across keeps FR-19's gap column at its old width.** Found while running D-127's check on real threads
+(`corpus/objective-06/runs/2026-11-12-anthropic/thread-exclusion-check/second-attempt/`).
+
+- **The cause.** `_resize_column` alters `ContentChunk`'s table only. `knowledge_gaps.embedding` is
+  sized by `retrieval 0004` from `EMBEDDING_DIMENSION` at the moment that migration runs, and
+  nothing resizes it afterwards.
+- **Where it bites.** `kmp_anthropic` was migrated under FLM's 768 and then moved to voyage-4 with
+  `--resize-column` (D-122). It has `content_chunks.embedding` `vector(1024)` and
+  `knowledge_gaps.embedding` `vector(768)`, and so does its snapshot (`8e79cb37…`). So FR-19's cycle
+  fails there with "expected 768 dimensions, not 1024" as soon as it keeps a question or a search,
+  and changes nothing.
+- **What an Administrator sees there.** `POST /api/knowledge-gaps/cycles` catches only
+  `ProviderUnavailable` (`KnowledgeGapCyclesView`, `apps/api/views.py`), so the route answers 500,
+  a status `docs/api-contract.md` does not list for it. `manage.py aggregate_knowledge_gaps`, the
+  scheduled trigger, catches only the same exception, so it fails with a traceback. Either way the
+  cycle's transaction rolls back.
+- **Where it did not.** The measurement copy Objective 06 ran on, `kmp_obj0506_anthropic_20261110`
+  (dropped on 11 November), was restored from the 1 November dump, which predates FR-19's tables,
+  and migrated under 1024. Its cycles wrote gap entries with voyage-4 vectors.
+- **What was done.** `kmp_followups_20261112`, restored from `kmp_anthropic`'s snapshot for D-127's
+  check, had the same mismatch. Its `knowledge_gaps` table was empty, and its column was altered to
+  `vector(1024)` by hand, on that copy only.
+- **Not done:**
+  - `kmp_anthropic` is untouched;
+  - `--resize-column` still resizes the chunks' column only;
+  - which way to fix it is the user's decision. An entry's centroid from one model cannot be kept
+    at another model's width (R10), so a fix decides what happens to existing entries.
+- **Not covered:** any other database that might meet it. Each FLM database at 768 does only if
+  it is moved across.
+
 ## D-118 · A provider's 4xx ends in NFR-19's 503: a rate limit is retried, any other 4xx is refused at once, and each is logged
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-10, FR-12,
@@ -10115,6 +10208,23 @@ on the second audit, with the doc corrections it asked for made after it.
 > - The commit's mutation checks ("breaks").
 > - D2's 200 comes from tracing the code. I did not run it, and no test exercises it.
 
+**Dated note, 12 November 2026: two lines of this entry have been overtaken.**
+
+- **Finding 16, "the exclusion's residual risk is unmeasured".** It was then observed. On voyage-4
+  the rank-one rule left out U01 of the frozen thirty (#86) and u36 and d27 of the development
+  questions, each a genuine gap whose weak best match is Administrator-only. The rule became per
+  embedding model (D-126), and a follow-up turn is now decided on the string retrieval ranked
+  (D-127).
+- **"No further run is planned."** Further runs were made, on the `anthropic` provider:
+  - **Objective 05, on three draws (#85):** clause 1 met on each. They ran the type definitions
+    D-106's note revised on the same twenty, so they are not an independent figure either, as #85's
+    write-up says.
+  - **Objective 06, on three draws:** one on rank-one (#86), two on D-126's rule (#90).
+- **Objective 06 still has no independent pass on either provider.** On FLM the independent cycle
+  did not meet clause 3, and on `anthropic` it did not meet clause 1. Each rule change was made with
+  the thirty in view. An independent test on a fresh question set is planned (D-126's note of 12
+  November).
+
 ## D-120 · The relevance threshold and the partial-match floor are per embedding model: `voyage-4` gets 0.2687 and 0.2468, and EmbeddingGemma keeps 0.30 and no floor
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-12, D-37, D-56, D-101,
@@ -10334,6 +10444,28 @@ the default. Since then:
   as met on `anthropic`, as a measurement (D-112's note of 12 November).
 
 This note changes nothing in the decision.
+
+**Dated note, 12 November 2026 (FR-19): one check was not run before the default moved, and the
+exclusion rule is a per-model setting this entry does not list.**
+
+- **"Every tuned value was re-derived on this provider before the default moved."** The list under
+  it names:
+  - D-120's threshold and floor;
+  - the frozen thirty, the nine threads and the HTTP check;
+  - D-121's comparison of Haiku with Sonnet;
+  - FR-19's grouping threshold;
+  - FR-10's confidence threshold.
+
+  It leaves out D-108's development check of the permission exclusion, which D-108's and D-110's
+  notes require on a new configuration before the thirty run there.
+  - It was not run before 10 November's switch.
+  - Run on 11 November, it failed on voyage-4.
+  - The exclusion rule then became per embedding model (D-126), chosen after the default had moved.
+- **"Objectives 05 and 06 stay as verified, on FLM."** Both were then run on this provider: #85, and
+  #86 with #90. Objective 06 has no independent pass on either provider (D-126's note of 12
+  November).
+- **`README.md`'s list is corrected.** `CLAUDE.md` §4 carries the same sentence. It is the user's
+  to change and is not edited here.
 
 **Dated note, 12 November 2026: FR-10's value for claude-haiku-5-5 is now 0.80 (D-128).** D-128
 revised the classification prompt, and D-106's rule, re-run on it, gives 0.80. The user chose to
@@ -11390,6 +11522,340 @@ arithmetic on the diagnosis of #86's cycle (`exclusion_diagnosis.txt` there), no
 
 **Where it applies:** `apps/core/constants.py`, `apps/retrieval/gaps.py` and
 `apps/retrieval/tests/test_knowledge_gaps.py`. D-108 and D-110 carry dated notes.
+
+**Dated note, 12 November 2026: the audit and the security review, run after the merge, and what
+they changed.**
+
+- **Run late.** `CLAUDE.md` §8 condition 5 requires the requirements-auditor before a requirement
+  is called done. #90 was opened and merged on 11 November without it, and without a security review
+  of a permission change. Both ran on 12 November, on `25f6179`.
+  - The audit's verdict: INCOMPLETE.
+  - The security review: nothing critical or high, and invariant 1 holds. Nothing an asker can
+    observe changed. A gap's subject is read only by a role holding `review_knowledge_gaps`: only
+    the Administrator holds it, and a test requires any role that holds it to read every chunk.
+- **The code matched this entry and the contract.** What follows corrects the record, the tests
+  and two behaviours.
+- **Follow-up turns: this entry's cost paragraph covered single questions only.** "Neither the
+  development questions nor the thirty have one" is true, and neither holds a conversation turn
+  either. A development thread set with three scoped threads exists (`dev-threads.json`: t28, t29,
+  t37) and was not used. The cycle judged a follow-up on its own wording, which on voyage-4 can
+  admit nothing (t03 and t06 in D-112's HTTP check), so threshold-first kept it whatever it was
+  about. D-127 changes that.
+- **A role that reads nothing** was kept on voyage-4 when its question admitted nothing. D-107
+  carries the note, and the role is now read first.
+- **Voyage's jitter was understated, so P02's headroom was overstated.** This entry says P02 sits
+  "about 27 times Voyage's jitter of 0.00047" above the threshold. 0.00047 is the largest
+  difference one earlier check saw, not a bound. This change's own evidence has larger differences
+  between two passes over the same question:
+  - d18's top score, 0.5271 and 0.5259, a difference of 0.0012
+    (`corpus/objective-06/runs/2026-11-10-anthropic/exclusion-dev-check-voyage/`, passes 1 and 2);
+  - u05's top score, 0.4642 and 0.4634, a difference of 0.0008
+    (`corpus/objective-06/runs/2026-11-11-anthropic/exclusion-dev-check-threshold-first/`);
+  - u30's best readable score, 0.1846 and 0.1857, a difference of 0.0011 (`first-run.json` and
+    `rows.json` in `exclusion-rule-exploration/`).
+
+  Against 0.0012, P02's 0.0125 is about 10 times, and the 0.0559 between the margins is about 47
+  times, where the write-up said 119. P02 itself read 0.2812 on each of the three diagnosis draws,
+  so the direction holds. The yardstick was also the wrong one for comfort: it covers the same
+  wording re-embedded against the same index, and says nothing about a paraphrase, a re-chunked
+  document or another corpus.
+- **The coupling to D-120 is now guarded.** D-120's rule was indifferent anywhere in
+  [0.2467, 0.2908], and P02's 0.2812 lies inside that interval. Any threshold above 0.2812 and up to
+  0.2908 fits D-120's evidence as well, and would log P02.
+  - `test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_restricted_answer`
+    (`apps/core/tests/test_constants.py`) fails if voyage-4's threshold rises past 0.2812, or if a
+    model is given threshold-first with no threshold of its own.
+  - The test for P02's shape is designed from the threshold, so it follows a re-tune and could not
+    detect one.
+- **A hole in the tests is closed.**
+  `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` had one question
+  admitting both chunks, with the restricted one first. A rule leaving a row out on any admitted
+  restricted passage, which D-108 declined, would have passed all eight tests (the audit's reading;
+  it was not run against them). The test now has a second question admitting both with the
+  readable one first, and it fails under that rule (D-127's break G).
+- **The development check's record shows a threshold the rule did not use.** Both passes record
+  `relevance_threshold` 0.3, the constant for a model not listed, which the script writes. The
+  decision it calls admits at 0.2687. No development question's restricted top passage falls
+  between the two, so the check cannot show which was used. P02 on draws 2 and 3 does, and so does
+  the test for P02's shape under break C.
+- **Objective 06's status, said fully.**
+  - **Draw 1's "clause 2 met".** The verifier tests that each entry's count equals its items. The
+    salary entry counted U02 and U03, where U01, U02 and U03 were seeded, because U01 was the query
+    left out. Read strictly, that is clause 1's miss showing in clause 2.
+  - **"The independent result."** Draw 1 is independent of the choices made on `anthropic` only.
+    Its rank-one rule had itself been chosen on the same thirty on FLM (`333be14`).
+  - **No configuration has an independent pass.** On FLM the independent cycle did not meet clause
+    3, and on `anthropic` it did not meet clause 1.
+  - **An independent test is planned.** The user will supply a fresh question set that no rule was
+    chosen on. One cycle on the shipped rule, against a fresh database, will be recorded as the
+    independent result. Until then Objective 06 is not independently met on either provider.
+- **"Where it applies" was incomplete.** `5366026`, later on the same branch, also changed
+  `docs/api-contract.md` and added `test_the_gap_exclusion_rules_are_d108s_and_d126s`
+  (`apps/core/tests/test_constants.py`).
+- **`b854288`'s message says "Six tests".** It added seven: every row of the table above except
+  the one for P02's shape.
+- **Why `scripts/exclusion_dev_check.py` was left.** `5366026` gives the reason "is not edited in
+  place", and that is wrong: `8c6156f` edited those lines in place on 10 November. The reason that
+  holds is that the script is FLM-gated, so it only runs under rank-one, which its comment
+  describes.
+- **Not covered, still:**
+  - D-108's check has no committed, runnable instrument for the default provider. The two runs
+    used run-folder copies.
+  - How often a real question about restricted material scores under voyage-4's threshold. A
+    scores-only screen of paraphrases per restricted document would measure it, and has not been
+    run.
+  - `CLAUDE.md` §4's sentence that every tuned value was re-derived before the default moved
+    (D-122's note of 12 November).
+- **Notes of 12 November from the same audit are also on** D-107, D-108, D-109, D-110, D-119 and
+  D-122. D-117's note of that day came from D-127's check.
+
+## D-127 · FR-19's cycle decides a follow-up on the string retrieval ranked and on its own wording, and either can leave it out
+
+**Status:** Settled by the user · **Date:** 2026-11-12 · **Concerns:** FR-19, FR-13, D-42, D-79, D-107,
+D-108, D-109, D-126, `apps/retrieval/gaps.py`, `apps/retrieval/conversation.py` · **Supersedes:** step
+2 of D-108's rule for a follow-up turn, and D-108's "Not covered: FR-13 composition in the cycle",
+for the exclusion only
+
+**What prompted it:** the requirements audit and the security review of D-126, run on 12 November
+after #90 had merged (D-126's note of that day). Both found the same gap.
+
+- **The cycle embedded a conversation turn on its own wording** (D-108's step 2). Retrieval embeds
+  the composed string: the earlier questions of the conversation, then the turn
+  (`conversation.compose`, D-42).
+- **A follow-up's own wording can score low.** In D-112's HTTP check on voyage-4, the bare
+  follow-up admitted no passage in its asker's scope for t03 (asked as the Employee) and t06 (the
+  Administrator), and eight for t04 (the Employee)
+  (`corpus/objective-02/runs/2026-11-10/voyage-http-check/history_effect.txt`). The cycle ranks
+  over the Administrator's scope, so t06 is the one that measures it directly.
+- **Threshold-first (D-126) reads "nothing admitted" as "nobody could have been answered".** So
+  such a follow-up was kept, including one about restricted material. Under rank-one it was
+  decided by whichever weak passage ranked first, in either direction.
+- **These rows are in FR-19's scope.** Its Server-End clause includes queries "arising through
+  FR-13". Neither D-108's development questions nor the frozen thirty contain a conversation turn,
+  so no check had covered them.
+
+**The decision, in two steps, both the user's on 12 November:**
+
+1. **Decide on the composed string.** The options were the composed string, recording the
+   limitation only, or rank-one for follow-ups.
+2. **Decide on both strings.** The security review of this branch, run before its pull request,
+   found the composed string alone keeps an explicit question about restricted material asked
+   after a readable turn, which main leaves out. The Ask screen puts every later question into the
+   thread, so that turn is ordinary use. The options were both strings, or the composed string with
+   both wrong cases recorded.
+
+**The rule:**
+
+- **A one-off question, and a thread's first turn,** is decided on its own wording, as before.
+- **A follow-up** is decided first on `compose(row.question, prior_questions_before(row))
+  .for_retrieval`. If that string's deciding passage is one the asker cannot read, the row is left
+  out. Otherwise it is decided on its own wording, and left out if that string's deciding passage
+  is one the asker cannot read. A follow-up that is kept is grouped, and shown as a subject, on its
+  own wording (D-109).
+- **Each string is decided by the model's rule** (D-108, D-126).
+- **No row is kept that deciding on the question's own wording alone, as main did before this
+  decision, would have left out.**
+- **The history.** `prior_questions_before(row)` returns the turns the row was composed with: the
+  same conversation and the same user, the rows that sort before it, the newest
+  `MAXIMUM_CONVERSATION_TURNS`, oldest first. It is `prior_questions`'s query with one more bound.
+- **In the same change,** from the same reviews:
+  - a role that reads nothing is left out before anything is embedded (D-107's note);
+  - a test ties the exclusion to voyage-4's threshold (D-126's note).
+
+**Verified on real threads** (`corpus/objective-06/runs/2026-11-12-anthropic/thread-exclusion-check/`):
+
+- **The check.** `thread_exclusion_check.py`, at `4c36a38`, on `kmp_followups_20261112`, was run
+  twice. Each pass wrote every thread of `corpus/objective-02/dev-threads.json`, a development set,
+  into one transaction: an answered opener, then an unanswered follow-up. It then ran the shipped
+  `run_cycle` on voyage-4's real embeddings and rolled the transaction back. Five row counts, of
+  query logs, conversations, gap entries, gap items and cycles, were 0 before and after each pass.
+- **The copy's gap column was altered by hand before the passes.** This record left it out until
+  the re-audit on `a7d11bb` found it missing. The second attempt stopped on D-117's gap-column
+  defect. By 21:50:05 on 12 November, before the first pass, whose record was written at 21:50:47,
+  the session ran `alter table knowledge_gaps alter column embedding type vector(1024)` on
+  `kmp_followups_20261112` alone, through `psql`. The command ran it only if the table held no
+  row, and the table held none. The user had approved creating the copy and running this check,
+  not this statement; it was the session's decision. A fresh restore of the snapshot needs the
+  same statement before the script will run (D-117's note of 12 November).
+- **The scoped threads, t28, t29 and t37,** have a readable opener and a follow-up whose answer is
+  only in Administrator-only material.
+  - Asked as the Employee, all three were left out, on both passes.
+  - Asked as the Administrator, all three were kept.
+- **The other sixteen threads,** t20 to t27, t30 to t36 and t38, were all kept, asked as the
+  Employee (for information).
+- **Which string decided.** On each scoped thread the composed string's top admitted passage is
+  readable, at 0.48 to 0.53. The follow-up's own wording's is restricted, at 0.33 to 0.38. So:
+  - the composed string alone, this decision's first step (`b3d6a47`), would have kept all three;
+  - the own wording alone, as on main, leaves all three out;
+  - the composed check changed no outcome on these threads.
+
+  Its benefit, a follow-up about restricted material whose own wording admits nothing, is shown
+  on designed vectors only. No scoped development thread has that shape.
+
+  For each string the record holds how many passages it admitted, its top-ranked and top admitted
+  scores, and whether the asker can read the top admitted passage, not which passage or source
+  that is. It keeps one vector per text, the last one embedded, so a scoped thread's Employee and
+  Administrator rows show the same figures. The outcomes are the cycle's own, read from the gap
+  items it wrote.
+- **Two earlier attempts stopped and changed nothing** (`first-attempt/`, `second-attempt/`). Each
+  folder holds two consoles, and the two are identical:
+  1. a user filter named a field the User model does not have;
+  2. writing a gap entry failed, because the restored copy's gap column was 768 wide (D-117's note
+     of 12 November). The column was then altered, as above.
+
+**Verified by tests with designed vectors.** Each test is named with the deliberate breaks under
+which it fails, and the breaks are listed after the table. The tests are in
+`apps/retrieval/tests/test_knowledge_gaps.py` unless another file is named.
+
+| Test | Fails under |
+|---|---|
+| `test_a_conversation_turn_is_aggregated_on_its_own_wording` (changed) | H, J |
+| `test_on_voyage_a_follow_up_about_restricted_material_is_left_out` | H, J |
+| `test_on_voyage_a_follow_up_nobody_could_answer_is_kept_on_its_own_wording` | H, I, J |
+| `test_on_voyage_a_follow_up_whose_composed_best_match_is_readable_is_kept` | J |
+| `test_on_voyage_a_restricted_question_asked_mid_thread_is_left_out` (two cases) | H, J, W |
+| `test_under_rank_one_a_follow_up_whose_own_wording_ranks_a_restricted_passage_first_is_left_out` | J, W |
+| `test_under_rank_one_a_follow_up_is_decided_on_the_composed_string_too` | H, J |
+| `test_a_follow_up_is_composed_from_the_turns_retrieval_composed_it_from` | H, J, K, L, M, N |
+| `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` | V |
+| `test_on_voyage_the_top_admitted_passage_decides_when_both_are_admitted` (changed) | G, V |
+| `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` | X |
+| `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out` | X |
+| `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either` | X |
+| `test_the_decision_itself_leaves_out_a_role_that_reads_nothing` | O, U |
+| `test_every_considered_text_goes_through_embed_question_and_nothing_reaches_the_provider` (`test_gaps_embedding_path.py`, changed) | H, J, L |
+| `test_the_history_of_a_logged_turn_is_the_history_it_was_asked_with` (`test_conversation.py`) | J, M, N |
+| `test_a_logged_one_off_has_no_history` (`test_conversation.py`) | V |
+| `test_a_logged_turns_history_is_its_own_conversations_and_its_own_users` (`test_conversation.py`) | J, K, L |
+| `test_two_turns_at_one_instant_are_ordered_as_the_ask_path_orders_them` (`test_conversation.py`) | J, P |
+| `test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_restricted_answer` (`apps/core/tests/test_constants.py`) | Q, R |
+
+The breaks were run against five files:
+- `apps/retrieval/tests/test_knowledge_gaps.py`;
+- `apps/retrieval/tests/test_gaps_embedding_path.py`;
+- `apps/retrieval/tests/test_conversation.py`;
+- `apps/core/tests/test_constants.py`;
+- `apps/retrieval/tests/test_ranking.py`.
+
+Unbroken, the five pass: 214 tests. X was run again against the knowledge-gap file's tests for a
+role that reads nothing, after three of them gained an assertion on what was embedded:
+`test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` and
+`test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out` assert that nothing was,
+and `test_a_role_that_reads_nothing_is_left_out_with_no_passage_of_the_model_either` that only the
+Employee's question was.
+
+- G: threshold-first leaves a row out when any admitted passage is restricted, the rule D-108
+  declined.
+- H: the composed string is not used, so a follow-up is decided on its own wording only, as before
+  this decision.
+- I: a kept follow-up is grouped on the composed string's vector, not on its own wording's.
+- J: a row's history includes the row itself and the turns after it.
+- K: a row's history ignores whose row it is.
+- L: a row's history ignores which conversation it is in.
+- M: a row's history has no limit.
+- N: a row's history is returned newest first.
+- O: the decision itself does not settle a role that reads nothing first.
+- P: two turns at one instant are not ordered by the primary key.
+- Q: voyage-4's relevance threshold is raised to 0.285, past P02's 0.2812. The existing
+  `test_each_embedding_model_gets_its_own_threshold` (`test_ranking.py`) fails too.
+- R: a second model is given threshold-first with no threshold of its own. The existing
+  `test_the_gap_exclusion_rules_are_d108s_and_d126s` (`test_constants.py`) fails too. The guard
+  test's pin, that voyage-4 is the only threshold-first model, catches R before its check that each
+  such model has a threshold of its own, so no break here exercises that check alone.
+- U: the decision itself fails open for a role that reads nothing.
+- V: a row with no conversation is composed from its user's earlier one-off questions. Every test
+  in the five files that has two one-off questions of one user embedded in a cycle on designed
+  vectors fails too, because a designed vector service raises on any text no test designed. So V
+  is caught broadly, and most of those catches say nothing about the failing test's own subject.
+  Two tests put such questions through a cycle and do not fail under V, because a role that reads
+  nothing is left out before anything is composed or embedded:
+  `test_on_voyage_a_role_that_reads_nothing_has_its_questions_left_out` and
+  `test_under_rank_one_a_role_that_reads_nothing_has_its_questions_left_out`. The tests of V itself
+  are `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` and
+  `test_a_logged_one_off_has_no_history`.
+- W: a follow-up's own wording is not decided, as in this decision's first step (`b3d6a47`).
+- X: `run_cycle` does not leave out a role that reads nothing before embedding its question.
+
+**What it costs:**
+
+- **Embedding calls.** A follow-up left out by its composed string costs one. Any other follow-up
+  costs two, as a kept one already did under the first step. A question from a role that reads
+  nothing costs none.
+- **The cycle reads other rows of the asker's conversation,** which it did not before: the same
+  user's, in the same conversation, their questions only.
+- **Wrong cases that remain, named as cases, not rates:**
+  - **A genuine gap asked after a turn about restricted material can be left out.** The composed
+    string's deciding passage can be the earlier turn's restricted material. The gap is
+    under-reported, the fail-closed direction. No development thread has a restricted opener, so
+    it was not measured.
+  - **A follow-up about restricted material is still kept when neither string shows it.** Under
+    threshold-first, that is when each of the two strings either admits nothing or has a readable
+    top admitted passage, in any combination, both admitting nothing included. Under rank-one, it
+    is when each string's top-ranked passage is readable. On the three scoped development threads,
+    the own wording's top admitted passage was one the Employee cannot read, each time.
+  - **Under rank-one, a follow-up whose own weak top-ranked passage is restricted is left out,** as
+    on main before this decision.
+  - **D-108's proxy, the top admitted passage, applies to each string.** A compound question, a
+    readable topic and a restricted one in one sentence, can be kept here as on main.
+
+**Not covered:**
+
+- **Real threads beyond the development set.** The frozen `threads.json` holds two scoped threads,
+  t06 and t07, and was not used.
+- **A turn whose conversation has been deleted.** `QueryLog.conversation` is SET_NULL, so its
+  earlier turns cannot be told from any other row, and it is decided on its own wording.
+  `test_a_turn_whose_conversation_is_gone_is_decided_on_its_own_wording` pins that.
+- **A history that has changed since the ask:**
+  - a deleted turn;
+  - a changed `MAXIMUM_CONVERSATION_TURNS`;
+  - two turns of one conversation at the same instant, where the primary key decides the order, as
+    it does in `prior_questions`;
+  - a turn of the same conversation logged while this one was being answered. One ask in flight
+    per user (D-79's ask slot) prevents that on the single-process server; a multi-process server,
+    or a slot that lapsed after 45 minutes, would not;
+  - a clock stepped back between turns.
+- **What the Administrator reads.** The subject is still the follow-up's own wording, which may
+  not make sense alone, and two threads' identical follow-ups still join one entry (D-109).
+- **Rows already decided.** A row an earlier cycle kept is not decided again. A row it left out is
+  decided again only if it falls in the next cycle's grace of `CYCLE_GRACE_SECONDS`. Otherwise it
+  is not looked at again, so a change to its history or to the rule does not reach it.
+- **A zero-result search.** A search has no thread, and its side of the exclusion is unchanged.
+- **embed-gemma.** The rule applies to every model and was not measured on FLM.
+- **A passage exactly on voyage-4's threshold.** `admit` takes it (`>=`). No voyage-4 exclusion test
+  puts a passage there.
+- **A configured `VOYAGE_MODEL` other than `"voyage-4"`.** Four maps in `apps/core/constants.py` are
+  keyed by the literal, and such a model gets each one's default:
+  - `GAP_EXCLUSION_RULE_BY_MODEL`: rank-one, the rule that failed D-108's check on voyage-4;
+  - `RELEVANCE_THRESHOLD_BY_MODEL`: 0.30, not 0.2687;
+  - `PARTIAL_MATCH_FLOOR_BY_MODEL`: 0.0, no floor, not 0.2468;
+  - `GAP_GROUPING_THRESHOLD_BY_MODEL`: 0.5256, not 0.5054.
+
+  No test ties the setting to the maps.
+- **What the guard test bounds.** It bounds the constants, not scores. These are not caught:
+  - a restricted answer under 0.2812 in another corpus;
+  - a change to how text is embedded, or a re-index;
+  - another model served under the name voyage-4, because the configured name is recorded, not
+    the server's echo of it;
+  - an edit to the test's own figure.
+- **An independent Objective 06 test.** The user will supply a fresh question set. It is planned on
+  `kmp_followups_20261112`, not yet run.
+- **The gap column on a database moved across with `--resize-column`.** It is unfixed; see D-117's
+  note of 12 November.
+
+**Where it applies:**
+
+- **Code:** `apps/retrieval/gaps.py`, `apps/retrieval/conversation.py`, and a comment in
+  `apps/core/constants.py`.
+- **Tests:** `apps/retrieval/tests/test_knowledge_gaps.py`,
+  `apps/retrieval/tests/test_gaps_embedding_path.py`, `apps/retrieval/tests/test_conversation.py`,
+  `apps/core/tests/test_constants.py`, and a docstring in `apps/retrieval/tests/test_ranking.py`.
+- **Evidence:** `corpus/objective-06/runs/2026-11-12-anthropic/thread-exclusion-check/`.
+- **Documents:**
+  - `docs/api-contract.md` and `README.md`;
+  - corrections to the two Objective 06 write-ups in
+    `corpus/objective-06/runs/2026-11-10-anthropic/` and
+    `corpus/objective-06/runs/2026-11-11-anthropic/`;
+  - dated notes of 12 November on D-107, D-108, D-109, D-110, D-117, D-119, D-122 and D-126.
 
 ## D-128 · FR-10: the classifier creates Project, Process and Topic values at or above the confidence threshold, holds every new value below it for a person, and an Administrator can add a value
 
