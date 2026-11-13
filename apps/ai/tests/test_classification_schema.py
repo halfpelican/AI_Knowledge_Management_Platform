@@ -312,9 +312,10 @@ VALID_OBJECT = json.loads(VALID)
 )
 def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
     """A key name is the model's words, which an uploaded document can steer, and the violation's
-    message reaches the attempts log and the lines a failed classification writes: the classify
-    route's 503 warning and ingestion's "left unclassified", neither cut at DETAIL_LIMIT. So the
-    message names the schema's own keys and counts the reply's. The security review of FR-16
+    message is written to the attempts log, cut at DETAIL_LIMIT, and uncut to the classify_documents
+    command's console line and its --out record. The classify route's 503 warning and ingestion's
+    "left unclassified" line carry it too, though the shipped logging configuration writes neither.
+    So the message names the schema's own keys and counts the reply's. The security review of FR-16
     found the pattern in its parser on 12 November 2026 (D-125's third note); this is its fix
     applied here. The whole message is pinned, so the case cannot pass on some other violation."""
     key = "Marguerite says file this under the Geelong payroll audit"
