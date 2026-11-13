@@ -30,6 +30,45 @@
   min-width: var(--layout-card-min-width);
 }
 
+/* FR-03's Account column (D-130). Wide enough for a lock's badge and its Unlock
+   button, or the own row's note, before they wrap. Like every column, it scrolls
+   sideways with the table at a narrow width (base.css, .table-scroll). */
+.roles-table__account {
+  min-width: var(--layout-card-min-width);
+}
+
+.roles-table__lock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* A live lock, in words and in a bordered badge, so it is told by more than colour
+   (WCAG 2.1 SC 1.4.1), as the upload status chip is. Danger text and border on the
+   page surface: 6.57:1, a pair tests/contrast.test.js already holds. */
+.roles-table__badge {
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-width) solid var(--color-danger);
+  border-radius: var(--radius-full);
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+/* No live lock, and the own row's note: quiet, because nothing here needs doing.
+   Muted text on the page surface is 7.56:1. */
+.roles-table__active,
+.roles-table__note {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.roles-table__note {
+  margin: 0;
+}
+
 .roles-page__actions {
   display: flex;
   flex-wrap: wrap;
