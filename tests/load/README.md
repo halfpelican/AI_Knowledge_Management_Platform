@@ -77,8 +77,8 @@ waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=5452
       2026), so the lookup does not rely on the Listen row alone. On every try it also reads
       netstat's LISTENING PIDs and the port's own socket rows (remote port 0), whatever state is
       reported.
-    - **A second process on the port means nothing is taken,** readable or not, and so does
-      netstat or the port's rows that could not be read. The Listen row is taken only when both
+    - **A second process on the port means nothing is taken,** readable or not, and so does a
+      netstat or port-row lookup that could not be read. The Listen row is taken only when both
       were read and neither shows another process; otherwise a process is taken only when both
       were read, it alone holds the port, and its command line can be read. Two servers can listen
       on one address and port on Windows, and netstat shows both.
