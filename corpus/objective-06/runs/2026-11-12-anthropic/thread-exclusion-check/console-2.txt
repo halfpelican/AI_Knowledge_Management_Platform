@@ -1,0 +1,27 @@
+Provider gate: PASS (anthropic, voyage-4 at 1024, both keys present; database kmp_followups_20261112)
+  info t20 ordinary        as Employee      -> kept     composed: admitted 1, top 0.4163, readable True | own: admitted 1, top 0.3368, readable True | And does time off looking after my kid come out of the 
+  info t21 ordinary        as Employee      -> kept     composed: admitted 4, top 0.543, readable True | own: admitted 3, top 0.3506, readable True | And when do I need sign-off before I pay for something?
+  info t22 ordinary        as Employee      -> kept     composed: admitted 12, top 0.5427, readable True | own: admitted 3, top 0.2887, readable True | How much notice does either side have to give to end it
+  info t23 ordinary        as Employee      -> kept     composed: admitted 1, top 0.4054, readable True | own: admitted 0, top None, readable None | What happens if they change their mind later?
+  info t24 ordinary        as Employee      -> kept     composed: admitted 2, top 0.5018, readable True | own: admitted 3, top 0.3, readable True | And who checks everyone has actually got out?
+  info t25 ordinary        as Employee      -> kept     composed: admitted 2, top 0.5567, readable True | own: admitted 1, top 0.4208, readable True | Who's on call over that weekend?
+  info t26 ordinary        as Employee      -> kept     composed: admitted 2, top 0.5093, readable True | own: admitted 1, top 0.3158, readable True | And at what point does it have to go out to tender inst
+  info t27 ordinary        as Employee      -> kept     composed: admitted 4, top 0.4666, readable True | own: admitted 0, top None, readable None | And who's running it?
+  ok   t28 scoped          as Employee      -> left out composed: admitted 5, top 0.5331, readable True | own: admitted 1, top 0.377, readable False | And who on the team is strongest at that side of things
+  info t28 scoped          as Administrator -> kept     composed: admitted 5, top 0.5331, readable True | own: admitted 1, top 0.377, readable True | And who on the team is strongest at that side of things
+  ok   t29 scoped          as Employee      -> left out composed: admitted 3, top 0.5225, readable True | own: admitted 1, top 0.338, readable False | And how much has been put aside to pay for it?
+  info t29 scoped          as Administrator -> kept     composed: admitted 3, top 0.5225, readable True | own: admitted 1, top 0.338, readable True | And how much has been put aside to pay for it?
+  info t30 topic-change    as Employee      -> kept     composed: admitted 4, top 0.3729, readable True | own: admitted 1, top 0.398, readable True | What should I do if the room I reserved is occupied whe
+  info t31 previous-answer as Employee      -> kept     composed: admitted 1, top 0.4264, readable True | own: admitted 0, top None, readable None | And how early do we now get in touch about that?
+  info t32 ordinary        as Employee      -> kept     composed: admitted 21, top 0.493, readable True | own: admitted 6, top 0.4083, readable True | And is there a session this quarter that would lift the
+  info t33 ordinary        as Employee      -> kept     composed: admitted 3, top 0.3899, readable True | own: admitted 1, top 0.3906, readable True | And what hours does the self-service option for those a
+  info t34 ordinary        as Employee      -> kept     composed: admitted 10, top 0.4728, readable True | own: admitted 3, top 0.3619, readable True | And if I top up the tank out of my own pocket, how long
+  info t35 ordinary        as Employee      -> kept     composed: admitted 6, top 0.5454, readable True | own: admitted 7, top 0.3997, readable True | And if we get everyone in to see it before then, how fa
+  info t36 ordinary        as Employee      -> kept     composed: admitted 2, top 0.4162, readable True | own: admitted 1, top 0.3025, readable True | And is the gear actually sorted for the one starting th
+  ok   t37 scoped          as Employee      -> left out composed: admitted 7, top 0.4798, readable True | own: admitted 2, top 0.328, readable False | And who've we got rated top for running that kind of pr
+  info t37 scoped          as Administrator -> kept     composed: admitted 7, top 0.4798, readable True | own: admitted 2, top 0.328, readable True | And who've we got rated top for running that kind of pr
+  info t38 ordinary        as Employee      -> kept     composed: admitted 20, top 0.6055, readable True | own: admitted 18, top 0.3575, readable True | And who has to hear about it if any of that information
+- Scoped follow-ups asked as the Employee, left out: 3 of 3; misses: none
+- Scoped follow-ups asked as the Administrator, kept: ['t28', 't29', 't37']
+- Other follow-ups asked as the Employee, left out (for information): none
+- PASS; database unchanged: True; texts embedded: 38

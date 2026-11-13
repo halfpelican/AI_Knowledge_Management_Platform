@@ -296,6 +296,31 @@ def test_the_gap_exclusion_rules_are_d108s_and_d126s():
     assert constants.GAP_EXCLUSION_RULE_BY_MODEL == {"voyage-4": constants.GAP_EXCLUSION_THRESHOLD_FIRST}
 
 
+# The lowest score a restricted answer has had among the questions D-126 was chosen on, per
+# embedding model: Objective 06's P02, on three draws
+# (corpus/objective-06/runs/2026-11-10-anthropic/exclusion_diagnosis.txt).
+LOWEST_MEASURED_RESTRICTED_ANSWER = {"voyage-4": 0.2812}
+
+
+def test_a_threshold_first_model_has_its_own_threshold_at_or_under_its_lowest_restricted_answer():
+    """D-126 couples FR-19's exclusion to a model's relevance threshold, and nothing held the two
+    together (the requirements audit and the security review of 12 November 2026).
+
+    - A model given threshold-first with no threshold of its own would admit at the default 0.30,
+      and voyage-4's P02 (0.2812) would be logged as a gap.
+    - D-120's rule was indifferent anywhere in [0.2467, 0.2908]. A re-tune above 0.2812 fits its
+      evidence equally and would log P02, a permission-only question, failing Objective 06's
+      clause 3. Raising the threshold past this figure is a decision about FR-19 too.
+    """
+    threshold_first = [model for model, rule in constants.GAP_EXCLUSION_RULE_BY_MODEL.items()
+                       if rule == constants.GAP_EXCLUSION_THRESHOLD_FIRST]
+    assert threshold_first == ["voyage-4"]
+    for model in threshold_first:
+        assert model in constants.RELEVANCE_THRESHOLD_BY_MODEL
+        assert model in LOWEST_MEASURED_RESTRICTED_ANSWER
+        assert constants.RELEVANCE_THRESHOLD_BY_MODEL[model] <= LOWEST_MEASURED_RESTRICTED_ANSWER[model]
+
+
 def test_session_inactivity_is_sixty_minutes():
     # FR-04, docs/decisions.md D-10.
     assert constants.SESSION_INACTIVITY_MINUTES == 60
