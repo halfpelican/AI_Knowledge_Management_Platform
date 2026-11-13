@@ -1,4 +1,4 @@
-"""The code-fence repair finds its block by a linear scan, and strips exactly what the regex did.
+"""The code-fence repair is a linear scan, and it strips exactly what the regexes it replaced did.
 
 Until 13 November 2026 apps/ai/schema.py's ``_strip_code_fences`` found the first fenced block with
 ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no
@@ -7,6 +7,11 @@ rescans the rest of the reply each time. It took 1.8 s at 20,000 spaces after th
 times as long at each doubling, so minutes at 200,000. On ``anthropic`` every call may run to
 16,000 tokens (CLAUDE_MAX_TOKENS). All three structured-output parsers strip through it: FR-12's
 statements, FR-10's classification and FR-16's summary.
+
+Its fallback, for a fence that never closes, was ``_CODE_FENCE.sub`` with
+``^\\s*```[a-zA-Z0-9_-]*\\s*|\\s*```\\s*$``. It was quadratic as well, on a whitespace run anywhere
+in such a reply but straight after a leading fence, which its first branch took in one pass:
+0.50 s at 20,000 spaces. It is a scan too, since the same day.
 
 The scan must not change what the repair returns, so that it moves none of the numbers measured
 on this parser (apps/ai/schema.py's module docstring). So the function as it was is copied below,
@@ -135,6 +140,16 @@ RUN = 200_000
 WELL_UNDER = 2.0  # seconds. The scan takes about a hundredth of a second here; the regex, minutes.
 
 
+def assert_stripped_well_under_the_bound(raw, expected):
+    """The bound is generous on purpose: against it, the scan's time is noise on any machine."""
+    began = time.perf_counter()
+    stripped = schema.strip_code_fences(raw)
+    elapsed = time.perf_counter() - began
+
+    assert stripped == expected
+    assert elapsed < WELL_UNDER, f"took {elapsed:.2f} s"
+
+
 @pytest.mark.parametrize(
     "raw,expected",
     [
@@ -148,11 +163,35 @@ def test_a_long_run_after_an_unclosed_fence_is_read_once(raw, expected):
 
     In the whitespace case the brace after the run matters. Without it ``raw.strip()`` removes the
     run before the search sees it, the regex is fast as well, and the case could not catch the
-    regression. The bound is generous on purpose: against it, the scan's time is noise on any
-    machine."""
-    began = time.perf_counter()
-    stripped = schema.strip_code_fences(raw)
-    elapsed = time.perf_counter() - began
+    regression."""
+    assert_stripped_well_under_the_bound(raw, expected)
 
-    assert stripped == expected
-    assert elapsed < WELL_UNDER, f"took {elapsed:.2f} s"
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        pytest.param(
+            "```json\n{" + " " * RUN + "}",
+            "{" + " " * RUN + "}",
+            id="a fence and a tag, then 200,000 spaces in an object, and no closing fence",
+        ),
+        pytest.param(
+            "{" + " " * RUN + "}```",
+            "{" + " " * RUN + "}",
+            id="200,000 spaces in an object, then a closing fence only",
+        ),
+        pytest.param(
+            "x" + " " * RUN + "```y",
+            "x" + " " * RUN + "```y",
+            id="200,000 spaces, then a lone fence inside text",
+        ),
+    ],
+)
+def test_a_whitespace_run_in_a_reply_whose_fence_never_closes_is_read_once(raw, expected):
+    """The fallback's worst case: a fence that never closes, and a long whitespace run anywhere in
+    the reply but straight after a leading fence, which the regex's first branch took in one pass.
+    Its second branch, ``\\s*```\\s*$``, was tried at every position in the run. Each time it took
+    the rest of the run and backtracked through it, looking for a fence. That took 0.50 s at
+    20,000, and four times as long at each doubling. The search is fast on these shapes; only the
+    fallback was slow."""
+    assert_stripped_well_under_the_bound(raw, expected)

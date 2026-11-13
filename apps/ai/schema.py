@@ -19,9 +19,9 @@ Since then the parser has changed what it accepts: the statement cap of 7 Novemb
 and the NUL and unpaired-surrogate refusals of 13 November 2026 (``_loads_reply``). The baseline
 describes it as it was before them.
 
-The code-fence repair's search was rewritten on 13 November 2026, and that rewrite moves none of
-the numbers. ``_strip_code_fences`` finds its block by a scan, because the search's regex
-backtracked quadratically, and it returns exactly what it returned before for every input.
+The code-fence repair was rewritten on 13 November 2026, and that rewrite moves none of the
+numbers. ``_strip_code_fences`` became a scan, because both its regexes backtracked
+quadratically, and it returns exactly what they returned for every input.
 ``apps/ai/tests/test_code_fence_scan.py`` checks that against a frozen copy of the old function.
 
 A response that does not parse is a FAILED ATTEMPT, never a partial answer: the caller
@@ -85,7 +85,6 @@ class StatementCapExceeded(SchemaViolation):
     """
 
 
-_CODE_FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*|\s*```\s*$")
 _TRAILING_COMMA = re.compile(r",\s*(?=[}\]])")
 # A fence's language tag, as in ```json or ```py-3: the regex class [a-zA-Z0-9_-].
 _FENCE_TAG_CHARACTERS = frozenset(string.ascii_letters + string.digits + "_-")
@@ -121,9 +120,17 @@ def _strip_code_fences(raw: str) -> str:
     closing one, that search backtracked through every split of the tag and the whitespace and
     rescanned the rest of the reply each time. That cost 1.8 s at 20,000 spaces after the fence,
     and four times as long at each doubling. Every call on ``anthropic`` may run to
-    CLAUDE_MAX_TOKENS (16,000 tokens), so a steered reply was in reach. The scan returns exactly
-    what the search returned for every input, so it moves none of the numbers measured on this
-    parser (module docstring). apps/ai/tests/test_code_fence_scan.py compares the two.
+    CLAUDE_MAX_TOKENS (16,000 tokens), so a steered reply was in reach.
+
+    The fallback for a fence that never closes was ``_CODE_FENCE.sub("", text)``, with
+    ``^\\s*```[a-zA-Z0-9_-]*\\s*|\\s*```\\s*$``, and it was quadratic too. Its second branch was
+    tried at every position the first branch had not taken. Inside a whitespace run it took the
+    rest of the run, then backtracked through it looking for a fence. That cost 0.50 s at 20,000
+    spaces in ``"```json\\n{" + spaces + "}"``. It is a scan as well, since the same day.
+
+    Both scans return exactly what the regexes returned for every input, so they move none of the
+    numbers measured on this parser (module docstring). apps/ai/tests/test_code_fence_scan.py
+    compares them with a frozen copy of the old function.
     """
     text = raw.strip()
     opening = text.find("```")
@@ -136,7 +143,14 @@ def _strip_code_fences(raw: str) -> str:
     closing = text.find("```", body)
     if closing != -1:
         return text[body:closing].strip()
-    return _CODE_FENCE.sub("", text).strip()
+    # No closing fence, so every fence in the text overlaps the first one. On a stripped text,
+    # the regex this replaced removed a fence at the start, with its tag and whitespace; failing
+    # that, a fence at the end, with the whitespace before it; failing that, nothing.
+    if opening == 0:
+        return text[body:].strip()
+    if text.endswith("```"):
+        return text[:-3].strip()
+    return text
 
 
 def _outermost_json_object(text: str) -> str:
