@@ -120,31 +120,69 @@ def _outermost_json_object(text: str) -> str:
     raise SchemaViolation("unbalanced JSON object in the response")
 
 
+# A surrogate code point still present after json.loads was unpaired: the decoder joins an escaped
+# pair, such as an emoji's, into the one character it stands for.
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
+
+
+def _unusable_string(value) -> str | None:
+    """The fixed reason a decoded reply holds a string nothing downstream can take, or None.
+
+    Keys are checked with values. Iterative, because a decoded reply can nest deeper than Python's
+    own recursion limit.
+    """
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return "a NUL character in a JSON string"
+            if _SURROGATE.search(item):
+                return "an unpaired surrogate in a JSON string"
+        elif isinstance(item, dict):
+            pending.extend(item)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return None
+
+
 def _loads_reply(text: str):
-    """``json.loads`` for a model reply: every way it can fail to decode is a SchemaViolation.
+    """``json.loads`` for a model reply: a SchemaViolation for every failure but a syntax error.
 
-    ``json.loads`` raises more than JSONDecodeError. A reply nested past the interpreter's limit,
-    a few thousand levels of ``[`` or ``{``, raises RecursionError, and an integer literal past
-    Python's 4,300-digit limit on converting a string to an int raises ValueError. Both are a
-    reply that does not conform, so both are a violation, retried like any other (invariant 10).
+    A JSONDecodeError, a syntax error, propagates unchanged, so the caller can try its
+    trailing-comma repair before it reports "not valid JSON". Four other replies are violations
+    here (invariant 10), each with a fixed message that quotes nothing of the reply:
 
-    Before 13 November 2026 they escaped the three attempt loops, which catch only
-    SchemaViolation. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of
-    NFR-19's 503, and a meeting summary's run ended as "error", without the one retry FR-16
-    allows a malformed reply. A security review found it that day.
+    - nesting past the interpreter's limit, a few thousand levels of ``[`` or ``{``, on which
+      json.loads raises RecursionError;
+    - an integer literal past Python's 4,300-digit limit on converting a string to an int, on
+      which it raises ValueError;
+    - a string holding a NUL character, which PostgreSQL text refuses;
+    - a string holding an unpaired surrogate, such as a lone ``\\ud800`` escape, which neither the
+      database nor DRF's JSON renderer can encode as UTF-8.
 
-    The two messages are fixed and quote nothing of the reply. A JSONDecodeError propagates
-    unchanged, so the caller can try its trailing-comma repair before it reports "not valid
-    JSON".
+    Until 13 November 2026 none of them was. The attempt loops retry a failed call
+    (ProviderUnavailable) and a SchemaViolation and nothing else, so each of these ended the work
+    it was part of. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of
+    NFR-19's 503. A meeting summary's run ended as "error", without the one retry FR-16 allows a
+    malformed reply; run by retry_meeting_summaries or summarise_meetings, it stopped the command
+    and left the row Processing until it was reclaimed as an orphan. classify_documents stopped
+    without writing its record. Two security reviews and a requirements audit of that day found
+    them.
     """
     try:
-        return json.loads(text)
+        value = json.loads(text)
     except json.JSONDecodeError:
         raise
     except RecursionError as exc:
         raise SchemaViolation("JSON nested too deeply to decode") from exc
     except ValueError as exc:  # after JSONDecodeError, itself a ValueError: the digit limit
         raise SchemaViolation("a JSON number too long to decode") from exc
+    reason = _unusable_string(value)
+    if reason is not None:
+        raise SchemaViolation(reason)
+    return value
 
 
 # Public names for the three repairs, added on 9 November 2026 for FR-10 (D-104):

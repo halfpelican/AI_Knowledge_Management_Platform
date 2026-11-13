@@ -211,6 +211,39 @@ def test_a_reply_json_cannot_decode_is_a_violation_not_a_crash(raw, message):
     assert str(caught.value) == message
 
 
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\x00", "chunk_id": CHUNK_ID}]}),
+                     "a NUL character in a JSON string", id="a NUL in a statement"),
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\ud800", "chunk_id": CHUNK_ID}]}),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate in a statement"),
+        pytest.param(json.dumps({"statements": [], "\x00": 1}), "a NUL character in a JSON string",
+                     id="a NUL in a key"),
+        pytest.param('{"a": [1,], "statements": [{"text": "t\\udc00", "chunk_id": "x"}]}',
+                     "an unpaired surrogate in a JSON string",
+                     id="an unpaired surrogate, after a trailing comma"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_violation(raw, message):
+    """A NUL, which PostgreSQL text refuses, or an unpaired surrogate, which neither the database
+    nor DRF's renderer can encode, decoded fine and then broke the answer's QueryLog write or its
+    rendering: POST /api/ask answered 500 until 13 November 2026. Each is a SchemaViolation now."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(raw)
+
+    assert str(caught.value) == message
+
+
+def test_an_escaped_surrogate_pair_is_one_character_and_parses():
+    """json.loads joins an escaped pair into the one character it stands for, so only an unpaired
+    surrogate is refused, and a reply with an emoji in it still parses."""
+    raw = json.dumps({"statements": [{"text": "Twenty days \U0001F600", "chunk_id": CHUNK_ID}]})
+    assert "\\ud83d\\ude00" in raw  # the pair really is escaped in the reply
+
+    assert parse_statement_list(raw).statements[0].text == "Twenty days \U0001F600"
+
+
 # --- The schema object itself -----------------------------------------------------------
 
 

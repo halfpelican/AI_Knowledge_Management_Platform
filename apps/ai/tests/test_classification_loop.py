@@ -313,6 +313,28 @@ def test_a_reply_json_cannot_decode_is_a_failed_attempt_not_a_crash(reply, messa
     assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param(CONFORMING.replace('"Finance"', json.dumps("Finance\x00")),
+                     "a NUL character in a JSON string", id="a NUL"),
+        pytest.param(CONFORMING.replace('"onboarding"', json.dumps("onboarding\ud800")),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_failed_attempt_not_a_crash(reply, message):
+    """Until 13 November 2026 such a reply parsed and broke apply_classification's write, so the
+    classify route answered 500. Each is a failed attempt now: exactly MAXIMUM_CLASSIFY_ATTEMPTS
+    calls, then ProviderUnavailable, which the route answers 503."""
+    call_once, calls = scripted(*[reply] * MAXIMUM_CLASSIFY_ATTEMPTS)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        run(call_once)
+
+    assert len(calls) == MAXIMUM_CLASSIFY_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
 def test_logging_changes_no_attempt_count(caplog):
     call_once, calls = scripted(*[unavailable() for _ in range(MAXIMUM_CLASSIFY_ATTEMPTS)])
 

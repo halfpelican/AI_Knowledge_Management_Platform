@@ -590,7 +590,8 @@ DEPTH = 100_000
 DIGITS = sys.get_int_max_str_digits() + 1
 DIGIT_LIMIT_IN_FORCE = pytest.mark.skipif(DIGITS == 1, reason="PYTHONINTMAXSTRDIGITS=0 lifts the limit")
 NESTED = "[" * DEPTH + "]" * DEPTH
-LONG_LABEL = '{"summary": [{"text": "The budget was reviewed.", "passages": [' + "7" * DIGITS + "]}]}"
+# A bare JSON number where a label belongs: json.loads refuses it before the parser reads labels.
+LONG_NUMBER = '{"summary": [{"text": "The budget was reviewed.", "passages": [' + "7" * DIGITS + "]}]}"
 TOO_DEEP = "JSON nested too deeply to decode"
 TOO_LONG = "a JSON number too long to decode"
 
@@ -599,10 +600,10 @@ TOO_LONG = "a JSON number too long to decode"
     "raw,message",
     [
         pytest.param('{"summary": ' + NESTED + "}", TOO_DEEP, id="nested too deeply"),
-        pytest.param(LONG_LABEL, TOO_LONG, id="a number too long", marks=DIGIT_LIMIT_IN_FORCE),
+        pytest.param(LONG_NUMBER, TOO_LONG, id="a number too long", marks=DIGIT_LIMIT_IN_FORCE),
         pytest.param('{"a": [1,], "summary": ' + NESTED + "}", TOO_DEEP,
                      id="nested too deeply, after a trailing comma"),
-        pytest.param('{"a": [1,], ' + LONG_LABEL[1:], TOO_LONG,
+        pytest.param('{"a": [1,], ' + LONG_NUMBER[1:], TOO_LONG,
                      id="a number too long, after a trailing comma", marks=DIGIT_LIMIT_IN_FORCE),
     ],
 )
@@ -613,6 +614,38 @@ def test_a_reply_json_cannot_decode_is_a_violation_not_a_crash(raw, message):
     quotes nothing of the reply. The whole message is pinned, so a case cannot pass on another."""
     with pytest.raises(SchemaViolation) as caught:
         parse_summary(raw)
+
+    assert str(caught.value) == message
+
+
+@DIGIT_LIMIT_IN_FORCE
+def test_a_passage_label_too_long_to_read_is_a_violation_not_a_crash():
+    """``_passages`` reads a label's digits with int(), which has the same digit limit: "P" and
+    4,301 digits decoded fine and then escaped the parser, and the run ended as "error", until
+    13 November 2026. It is a SchemaViolation now, with a message that quotes nothing of it."""
+    body = reply(summary=[element(passages=("P" + "1" * DIGITS,))])
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse(body)
+
+    assert str(caught.value) == "summary item 0 names a passage whose number is too long to read"
+
+
+@pytest.mark.parametrize(
+    "body,message",
+    [
+        pytest.param(reply(summary=[element("The budget was reviewed.\x00")]),
+                     "a NUL character in a JSON string", id="a NUL in a sentence"),
+        pytest.param(reply(action_items=[item(owner="Alex\ud800")]),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate in an owner"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_violation(body, message):
+    """A NUL, which PostgreSQL text refuses, or an unpaired surrogate, which it cannot encode,
+    decoded fine and then broke the summary's store: the run ended as "error" until 13 November
+    2026. Each is a SchemaViolation now."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse(body)
 
     assert str(caught.value) == message
 

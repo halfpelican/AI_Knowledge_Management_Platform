@@ -371,6 +371,25 @@ def test_a_reply_json_cannot_decode_is_a_violation_not_a_crash(raw, message):
     assert str(caught.value) == message
 
 
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param(reply(department="Finance\x00"), "a NUL character in a JSON string",
+                     id="a NUL in the department"),
+        pytest.param(reply(tags=(("Topic", "safety\ud800", 0.5),)), "an unpaired surrogate in a JSON string",
+                     id="an unpaired surrogate in a tag"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_violation(raw, message):
+    """A NUL, which PostgreSQL text refuses, or an unpaired surrogate, which it cannot encode,
+    decoded fine and then broke apply_classification's write: the classify route answered 500
+    until 13 November 2026. Each is a SchemaViolation now."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(raw, SCHEME)
+
+    assert str(caught.value) == message
+
+
 # --- The schema object itself ---------------------------------------------------------------
 
 

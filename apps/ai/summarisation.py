@@ -306,7 +306,13 @@ def _passages(value, where: str) -> tuple[int, ...]:
         if match is None:
             # The label is not quoted: a reply's content is not written into the attempt log.
             raise SchemaViolation(f"{where} names a passage that is not a label of the form P<n>")
-        number = int(match.group(1))
+        try:
+            number = int(match.group(1))
+        except ValueError as exc:
+            # Python's 4,300-digit limit on converting a string to an int. Until 13 November 2026
+            # this escaped the parser, as json.loads' own digit-limit error did (loads_reply in
+            # apps/ai/schema.py): the run ended as "error", and a command running it stopped.
+            raise SchemaViolation(f"{where} names a passage whose number is too long to read") from exc
         if number not in numbers:
             numbers.append(number)
     return tuple(numbers)

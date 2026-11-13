@@ -286,6 +286,40 @@ def test_a_reply_json_cannot_decode_is_malformed_and_gets_its_one_retry(reply, m
     assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
+def first_sentence(**changes) -> str:
+    """CONFORMING with its first summary sentence changed."""
+    body = json.loads(CONFORMING)
+    body["summary"][0].update(changes)
+    return json.dumps(body)
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param(first_sentence(text="The Wombat programme was paused.\x00"),
+                     "a NUL character in a JSON string", id="a NUL"),
+        pytest.param(first_sentence(text="The Wombat programme was paused.\ud800"),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate"),
+        pytest.param(first_sentence(passages=["P" + "1" * DIGITS]),
+                     "summary item 0 names a passage whose number is too long to read",
+                     id="a passage label too long to read",
+                     marks=pytest.mark.skipif(DIGITS == 1, reason="no digit limit")),
+    ],
+)
+def test_a_reply_its_store_or_its_labels_cannot_take_is_malformed_and_gets_its_one_retry(reply, message):
+    """Until 13 November 2026 a NUL or an unpaired surrogate parsed and broke the summary's store,
+    and a passage label past the digit limit escaped the parser: either way the run ended as
+    "error". Each is a malformed reply now: one retry, then MalformedSummary after exactly two
+    calls. The third reply conforms, so a loop that treated these otherwise would return it."""
+    call_once, calls = scripted(reply, reply, CONFORMING)
+
+    with pytest.raises(MalformedSummary) as excinfo:
+        run(call_once)
+
+    assert len(calls) == MAXIMUM_MALFORMED_SUMMARY_REPLIES == 2
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
 def test_malformed_summary_is_a_provider_unavailable_so_a_caller_of_outages_still_fails_the_run():
     call_once, _ = scripted(PROSE, PROSE)
 

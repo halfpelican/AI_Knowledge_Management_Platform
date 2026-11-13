@@ -250,6 +250,28 @@ def test_a_reply_json_cannot_decode_is_retried_and_ends_in_a_503_not_a_500(reply
     assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\x00", "chunk_id": CHUNK_ID}]}),
+                     "a NUL character in a JSON string", id="a NUL"),
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\ud800", "chunk_id": CHUNK_ID}]}),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_retried_and_ends_in_a_503(reply, message):
+    """Until 13 November 2026 such a reply parsed, passed verification, and broke the QueryLog write
+    or the rendering, so POST /api/ask answered 500. Each is a failed attempt now: exactly
+    MAXIMUM_GENERATION_ATTEMPTS calls, then ProviderUnavailable, which the view answers 503."""
+    handler = scripted(reply, reply, reply)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
 def test_an_empty_choices_list_is_a_failed_attempt():
     """No reply at all, which FLM can answer with; treated as the non-response it is."""
     empty = httpx2.Response(
