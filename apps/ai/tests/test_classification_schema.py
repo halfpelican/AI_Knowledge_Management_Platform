@@ -11,9 +11,11 @@ No provider, no network, no database: a pure function over a string and a scheme
 
 import json
 import math
+import sys
 
 import pytest
 
+import apps.ai.classification as classification
 import apps.ai.schema as schema
 from apps.ai.base import Assignment, TagScheme, TagSuggestion
 from apps.ai.classification import (
@@ -144,10 +146,13 @@ def test_values_are_stripped_of_surrounding_whitespace_only():
 
 
 def test_the_repairs_are_the_statement_parsers_own_code():
-    """One definition of what is repaired: the public names are the private helpers."""
+    """One definition of what is repaired: the public names are the private helpers. The decode
+    step joined them on 13 November 2026, and this module decodes through it."""
     assert schema.strip_code_fences is schema._strip_code_fences
     assert schema.outermost_json_object is schema._outermost_json_object
     assert schema.TRAILING_COMMA_PATTERN is schema._TRAILING_COMMA
+    assert schema.loads_reply is schema._loads_reply
+    assert classification.loads_reply is schema.loads_reply
 
 
 # --- Duplicate tags: a shape tolerance, not a repair ----------------------------------------
@@ -329,6 +334,60 @@ def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
     assert key not in str(caught.value)
     assert "Marguerite" not in str(caught.value)
     assert "Geelong" not in str(caught.value)
+
+
+# json.loads raises RecursionError past a few thousand levels of nesting, and ValueError past
+# Python's limit on converting a decimal string to an int: neither is a JSONDecodeError. Each is
+# reached directly and after a trailing comma the repair removes. The digit count follows the
+# interpreter's limit, which PYTHONINTMAXSTRDIGITS can change; 0 lifts it, and no reply reaches it.
+DEPTH = 100_000
+DIGITS = sys.get_int_max_str_digits() + 1
+DIGIT_LIMIT_IN_FORCE = pytest.mark.skipif(DIGITS == 1, reason="PYTHONINTMAXSTRDIGITS=0 lifts the limit")
+NESTED = "[" * DEPTH + "]" * DEPTH
+LONG_CONFIDENCE = '{"doc_type": {"value": "Policy", "confidence": ' + "7" * DIGITS + "}}"
+TOO_DEEP = "JSON nested too deeply to decode"
+TOO_LONG = "a JSON number too long to decode"
+
+
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param('{"tags": ' + NESTED + "}", TOO_DEEP, id="nested too deeply"),
+        pytest.param(LONG_CONFIDENCE, TOO_LONG, id="a number too long", marks=DIGIT_LIMIT_IN_FORCE),
+        pytest.param('{"a": [1,], "tags": ' + NESTED + "}", TOO_DEEP,
+                     id="nested too deeply, after a trailing comma"),
+        pytest.param('{"a": [1,], ' + LONG_CONFIDENCE[1:], TOO_LONG,
+                     id="a number too long, after a trailing comma", marks=DIGIT_LIMIT_IN_FORCE),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_a_violation_not_a_crash(raw, message):
+    """Until 13 November 2026 json.loads' RecursionError, and its ValueError past the digit limit,
+    escaped this parser and the attempt loop, and the classify route answered 500, not NFR-19's
+    503. Each is a SchemaViolation now, retried like any other, with a fixed message that quotes
+    nothing of the reply. The whole message is pinned, so a case cannot pass on another violation."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(raw, SCHEME)
+
+    assert str(caught.value) == message
+
+
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param(reply(department="Finance\x00"), "a NUL character in a JSON string",
+                     id="a NUL in the department"),
+        pytest.param(reply(tags=(("Topic", "safety\ud800", 0.5),)), "an unpaired surrogate in a JSON string",
+                     id="an unpaired surrogate in a tag"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_violation(raw, message):
+    """A NUL, which PostgreSQL text refuses, or an unpaired surrogate, which it cannot encode,
+    decoded fine and then broke apply_classification's write: the classify route answered 500
+    until 13 November 2026. Each is a SchemaViolation now."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_classification(raw, SCHEME)
+
+    assert str(caught.value) == message
 
 
 # --- The schema object itself ---------------------------------------------------------------

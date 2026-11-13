@@ -20,8 +20,9 @@ everything specific to this call and redefines nothing shared with generation.
 **Passage labels.** The transcript arrives as FR-09's own passages, in order, and the prompt heads
 them ``[P1]`` to ``[Pn]``. Every element of the reply must name at least one label, so UC-04's
 "every element of the summary carries a reference to the passage of the transcript it was drawn
-from" is a schema rule. The parser checks the SHAPE of a label (``P`` and a positive number) and
-nothing else: whether that passage was sent is set membership, done by the caller
+from" is a schema rule. The parser checks the SHAPE of a label (``P`` and a positive number it can
+read: one past Python's 4,300-digit limit it cannot, and that is a violation) and nothing else:
+whether that passage was sent is set membership, done by the caller
 (apps/meetings/summaries.py), as FR-12's citations are checked outside the provider (invariant 5).
 
 **Uploaded text is untrusted.** A transcript containing ``[P3]`` would put a forged passage header
@@ -57,6 +58,7 @@ from apps.ai.generation import ChatReply
 from apps.ai.schema import (
     TRAILING_COMMA_PATTERN,
     SchemaViolation,
+    loads_reply,
     outermost_json_object,
     strip_code_fences,
 )
@@ -202,10 +204,10 @@ def parse_summary(raw: str) -> ParsedSummary:
         raise SchemaViolation("empty response")
     candidate = outermost_json_object(strip_code_fences(raw))
     try:
-        decoded = json.loads(candidate)
+        decoded = loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = json.loads(TRAILING_COMMA_PATTERN.sub("", candidate))
+            decoded = loads_reply(TRAILING_COMMA_PATTERN.sub("", candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
@@ -305,7 +307,13 @@ def _passages(value, where: str) -> tuple[int, ...]:
         if match is None:
             # The label is not quoted: a reply's content is not written into the attempt log.
             raise SchemaViolation(f"{where} names a passage that is not a label of the form P<n>")
-        number = int(match.group(1))
+        try:
+            number = int(match.group(1))
+        except ValueError as exc:
+            # Python's 4,300-digit limit on converting a string to an int. Until 13 November 2026
+            # this escaped the parser, as json.loads' own digit-limit error did (loads_reply in
+            # apps/ai/schema.py): the run ended as "error", and a command running it stopped.
+            raise SchemaViolation(f"{where} names a passage whose number is too long to read") from exc
         if number not in numbers:
             numbers.append(number)
     return tuple(numbers)
