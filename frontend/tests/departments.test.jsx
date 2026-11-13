@@ -297,19 +297,19 @@ describe('D-129: the department list, as the server sent it', () => {
     expect(window.__departmentsInjected).toBeUndefined()
   })
 
-  it('says what the list is for: the AI suggests only listed departments, the upload form accepts any, and a retired one stays on its documents while the AI no longer suggests it', async () => {
+  it('says what the list is for: the AI assigns only listed departments, the upload form accepts any, and a retired one stays on its documents while the AI no longer assigns it', async () => {
     serveApi(routes())
     renderTags()
 
     const region = within(await sectionShown())
     expect(region.getByRole('heading', { level: 2, name: TEXT.departmentsHeading })).toBeTruthy()
     expect(region.getByText(TEXT.departmentsSuggestNote)).toBeTruthy()
-    expect(TEXT.departmentsSuggestNote).toMatch(/AI suggests a department for a document only from this list/)
+    expect(TEXT.departmentsSuggestNote).toMatch(/AI assigns a department to a document only from this list/)
     expect(region.getByText(TEXT.departmentsUploadNote)).toBeTruthy()
     expect(TEXT.departmentsUploadNote).toMatch(/upload form still accepts any department/)
     expect(region.getByText(TEXT.departmentsRetiredNote)).toBeTruthy()
     expect(TEXT.departmentsRetiredNote).toMatch(/retired department stays on the documents that have it/)
-    expect(TEXT.departmentsRetiredNote).toMatch(/AI no longer suggests it/)
+    expect(TEXT.departmentsRetiredNote).toMatch(/AI no longer assigns it/)
   })
 
   it('says before anything is added that a new department is offered for every document, and that adding a retired one’s name brings it back', async () => {
@@ -389,7 +389,7 @@ describe('D-129: Retire versus Delete — "Retiring keeps the department on its 
       title: TEXT.departmentRetireConfirm,
       body: TEXT.departmentRetireBody,
       confirm: TEXT.departmentRetireConfirmLabel,
-      says: [/stays on the documents that have it/, /AI no longer suggests it/, /it is deleted instead/],
+      says: [/stays on the documents that have it/, /AI no longer assigns it/, /it is deleted instead/],
     },
     {
       action: 'Delete',
@@ -432,7 +432,7 @@ describe('D-129: Retire versus Delete — "Retiring keeps the department on its 
 
     const notice = await within(await sectionShown()).findByText(TEXT.departmentRetired(FINANCE.name))
     expect(notice.closest('[role="status"]')).toBeTruthy()
-    expect(TEXT.departmentRetired(FINANCE.name)).toMatch(/stays on them, and the AI no longer suggests it/)
+    expect(TEXT.departmentRetired(FINANCE.name)).toMatch(/stays on them, and the AI no longer assigns it/)
     expect(cellsOf(FINANCE)[0].textContent).toBe(TEXT.departmentStateRetired)
     // Still listed, where it was. Retired now, so a deletion is what is left to it.
     expect(namesShown()).toEqual(SERVER_ORDER.map((department) => department.name))

@@ -1512,27 +1512,27 @@ export const TEXT = {
 
   /* ---- FR-10's department list (D-129) ----------------------------------- */
   // The scheme's fourth dimension, kept by an Administrator on the Tags page (the user's
-  // decision of 13 November 2026). The list is what the AI may suggest and nothing else:
+  // decision of 13 November 2026). The list is what the AI may assign and nothing else:
   // `Documents.department` stays the one field FR-14 and FR-15 read (D-72), and the
   // upload form still takes any department. The screen is
   // src/components/Departments.jsx; the server checks `manage_tags` on every request
   // whatever it shows (invariant 4).
   departmentsHeading: 'Departments',
-  // The three things the user decided, said where the list is kept: the AI suggests
+  // The three things the user decided, said where the list is kept: the AI assigns
   // only listed departments, the upload form takes any, and retiring keeps a department
   // on its documents (and in FR-14's and FR-15's filters, which read the documents).
-  departmentsSuggestNote: 'The AI suggests a department for a document only from this list.',
+  departmentsSuggestNote: 'The AI assigns a department to a document only from this list.',
   departmentsUploadNote:
-    'The upload form still accepts any department. One typed there that is not in this list stays on its document, but the AI does not suggest it.',
+    'The upload form still accepts any department. One typed there that is not in this list stays on its document, but the AI does not assign it.',
   departmentsRetiredNote:
-    'A retired department stays on the documents that have it, and in the department filters, but the AI no longer suggests it. A department no document has is deleted rather than retired.',
+    'A retired department stays on the documents that have it, and in the department filters, but the AI no longer assigns it. A department no document has is deleted rather than retired.',
   departmentsListHeading: 'All departments',
   loadingDepartments: 'Loading the departments…',
   departmentsLoadFailed: 'Could not load the departments',
   // The retry under a failed read. Its name says which list, after the visible words
   // (WCAG 2.1 SC 2.5.3), since the tags' own "Try again" can be on the page as well.
   departmentsRetryLabel: 'Try again to load the departments',
-  noDepartments: 'There are no departments in the list, so the AI suggests none.',
+  noDepartments: 'There are no departments in the list, so the AI assigns none.',
   // The server's order, which the screen keeps.
   departmentsTableCaption: 'Departments by name, with whether each is active and how many documents use it.',
   departmentsColumnName: 'Name',
@@ -1551,7 +1551,7 @@ export const TEXT = {
   departmentRetireLabel: (name) => `Retire department ${name}`,
   departmentRetireConfirm: (name) => `Retire the department “${name}”?`,
   departmentRetireBody:
-    'It stays on the documents that have it, and in the department filters, but the AI no longer suggests it. You can bring it back by adding its name again. If no document has it any more, it is deleted instead.',
+    'It stays on the documents that have it, and in the department filters, but the AI no longer assigns it. You can bring it back by adding its name again. If no document has it any more, it is deleted instead.',
   departmentRetireConfirmLabel: 'Retire department',
   departmentRetiring: 'Retiring…',
   departmentRetireFailed: 'Could not retire the department',
@@ -1559,14 +1559,14 @@ export const TEXT = {
   departmentDeleteLabel: (name) => `Delete department ${name}`,
   departmentDeleteConfirm: (name) => `Delete the department “${name}”?`,
   departmentDeleteBody:
-    'If no document has this department, it is deleted. If any does, it is kept on those documents as a retired department instead, and the AI does not suggest it.',
+    'If no document has this department, it is deleted. If any does, it is kept on those documents as a retired department instead, and the AI does not assign it.',
   departmentDeleteConfirmLabel: 'Delete department',
   departmentDeleting: 'Deleting…',
   departmentDeleteFailed: 'Could not delete the department',
   departmentActionCancel: 'Cancel',
   // The 200: retired because documents have it, or still retired, for one that was.
   departmentRetired: (name) =>
-    `“${name}” is retired rather than deleted, because documents have it. It stays on them, and the AI no longer suggests it.`,
+    `“${name}” is retired rather than deleted, because documents have it. It stays on them, and the AI no longer assigns it.`,
   // The 204: no document had it, so it is gone.
   departmentDeleted: (name) => `“${name}” was deleted.`,
   // The 404: it no longer exists, so its row goes.
@@ -1579,7 +1579,7 @@ export const TEXT = {
   // that a retired department comes back this way, which is the only way back.
   departmentCreateHeading: 'Add a department',
   departmentCreateScope:
-    'A department added here can be suggested for any document, whatever its audience. Adding the name of a retired department brings it back.',
+    'A department added here can be assigned to any document, whatever its audience. Adding the name of a retired department brings it back.',
   departmentCreateNameLabel: 'Department name',
   // The server trims a name and single-spaces it, and keeps its case (D-129: departments
   // keep their case on documents, unlike tags).
@@ -1587,9 +1587,9 @@ export const TEXT = {
   departmentCreateAdd: 'Add department',
   departmentAdding: 'Adding…',
   // The 201, polite: the department as stored, and what it is now for.
-  departmentCreated: (name) => `“${name}” was added to the department list. The AI can now suggest it for any document.`,
+  departmentCreated: (name) => `“${name}” was added to the department list. The AI can now assign it to any document.`,
   // The 200: the name was a retired department's, and it is active again.
-  departmentReactivated: (name) => `“${name}” was retired, and has been brought back. The AI can suggest it again.`,
+  departmentReactivated: (name) => `“${name}” was retired, and has been brought back. The AI can assign it again.`,
   // The 409: an active department of that name, without regard to case, is in the list.
   // Named as the list spells it, never by the reply's `detail`.
   departmentCreateExists: (name) => `“${name}” is already in the department list, so it was not added again.`,

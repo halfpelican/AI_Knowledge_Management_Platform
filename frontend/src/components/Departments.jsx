@@ -146,13 +146,13 @@ function DepartmentTable({ departments, showActions, onAction }) {
 
 /**
  * FR-10's department list on the Tags page (D-129, the user's decision of 13 November
- * 2026): the departments the AI may suggest, active or retired, with how many documents
+ * 2026): the departments the AI may assign, active or retired, with how many documents
  * use each, one action per department, and a form that adds one.
  *
  * **What the list is for,** said above it in three sentences, as the user decided it: the
- * AI suggests a department only from this list; the upload form still accepts any
+ * AI assigns a department only from this list; the upload form still accepts any
  * department (FR-08's form is unchanged); and a retired department stays on the documents
- * that have it, while the AI no longer suggests it.
+ * that have it, while the AI no longer assigns it.
  *
  * **Retiring and deleting.** The action asks for confirmation first, in the existing
  * Dialog, and is named for what the list says will happen (`actionOf`). The dialogue gives
@@ -160,7 +160,7 @@ function DepartmentTable({ departments, showActions, onAction }) {
  * the row then shows what the reply said:
  *
  * - 200: the department was retired, or stays retired; the row shows the entry the reply
- *   carries, and a notice says it stays on its documents and is no longer suggested.
+ *   carries, and a notice says it stays on its documents and is no longer assigned.
  * - 204: it was deleted; the row goes, and a notice says so.
  * - 404: it no longer exists; the row goes, and a notice says so.
  * - 403: every action on the page is withdrawn (`onRefused`), the tags' with this

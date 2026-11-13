@@ -1334,7 +1334,7 @@ The tag entry, in the list, in the `POST`'s `201` and in the `DELETE`'s `200`:
 ### Departments (D-129)
 
 The department list an Administrator keeps on the Tags page: FR-10's fourth dimension. The classifier
-suggests a department only from it (`tag_scheme`'s `departments`), while a document's department stays
+assigns a department only from it, applied or held for a person (`tag_scheme`'s `departments`), while a document's department stays
 the free-text `Documents.department` field that FR-14 and FR-15 read (D-72). Every route needs a session
 **and** `manage_tags`: `401`, then `403` for a role without it, before anything else. POST is throttled
 in the `tagging` scope, after the `401` and `403`, on one budget with `POST /api/tags`; GET is not.
@@ -1352,7 +1352,7 @@ in the `tagging` scope, after the `401` and `403`, on one budget with `POST /api
   never depends on whether a hidden department exists (invariant 1; the security review of D-129,
   finding F1). A department an Administrator adds is not hidden.
 - **The upload form and the classification confirm/edit control still take any department** as free
-  text. One that is not in the list stays on its document, but the classifier never suggests it.
+  text. One that is not in the list stays on its document, but the classifier never assigns it.
 
 ## NIT3004 — FR-19, Objective 06
 
