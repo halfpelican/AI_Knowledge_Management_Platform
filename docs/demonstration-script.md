@@ -51,6 +51,15 @@
 > - D-33 §1's, D-56's and D-69's entries now say what holds on the alpha's build and what holds
 >   on `main`. On `main`, FR-10 and FR-19 are built and `voyage-4` has a partial-match floor
 >   (D-104, D-105, D-107, D-120). Their 2 November text is true of the alpha only.
+>
+> **Amended 13 November 2026,** after FR-03 was built (D-130). The changes:
+>
+> - a new section, [FR-03 · Account lockout interface](#fr-03--account-lockout-interface-nit3004-windows-a-and-b),
+>   after FR-02. It shows the remaining-attempts warning, the countdown and an Administrator's
+>   release. FR-03 is NIT3004 and not one of the twelve;
+> - FR-02 step 4 says what a build that includes D-130 shows instead of its 3 November text.
+>
+> **None of this is on the alpha at `8598d19`.** It holds only on a build that includes D-130.
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -174,6 +183,72 @@ words a message, the message is quoted.
    - **After 15 minutes, sign in with the right password.**
      - **Expected:** the dashboard. The lock is never extended, so the wait is 15 minutes from the
        fifth failure. Leave this until the end of the walk, or say it rather than wait.
+   - **On a build that includes D-130, the screen says more** (13 November 2026). The server's
+     answers are the same, a 401 or a 403. Since FR-03:
+     - the third and fourth failures add the remaining-attempts warning;
+     - the fifth disables Sign in and starts a countdown;
+     - the right password's message names an administrator.
+
+     The FR-03 section below walks it. The walk can replace this step: it uses the same throwaway
+     account and the same server answers.
+
+### FR-03 · Account lockout interface (NIT3004, windows A and B)
+
+**Only on a build that includes D-130.** FR-03 is a SHOULD for NIT3004, not one of the twelve. The
+lock itself is FR-02's, above. FR-03 adds:
+
+- the warning;
+- the countdown;
+- the Administrator's release;
+- the `LoginAttempts` record.
+
+Use a throwaway account registered through FR-01, with a password used nowhere else.
+
+- **Never lock `corpus.admin@example.com`,** which window A is signed in with.
+- **Window A could not release that lock.** FR-03 forbids an Administrator from releasing their own
+  lock, so only another Administrator or the 15-minute wait would end it.
+
+1. **In window B, sign in to the throwaway account with a wrong password, four times.**
+   - **Expected:** "Invalid email or password." each time.
+   - After the third, the subtle line "2 attempts remaining before temporary lockout" appears.
+   - After the fourth, "1 attempt remaining before temporary lockout" appears.
+   - The first two show the banner only (D-130 decision 2).
+2. **A fifth wrong password.**
+   - **Expected:** Sign in is disabled.
+   - "Try again in 15:00" counts down beside it.
+   - The banner adds: "Too many failed sign-in attempts. If this address has an account, it may be
+     locked for up to 15 minutes, and an administrator can unlock it sooner."
+3. **Say why the page words it that way, or show it with an address that has no account.**
+   - The page counts its own attempts, and the server's 401 is the same whether or not the address
+     is registered.
+   - So the warning and the countdown appear identically for an address nobody registered.
+   - A failed sign-in never confirms an account or a lock (D-130 decision 1, UC-02 E1).
+4. **Reload the page, and sign in with the right password.**
+   - **Expected:** "This account is temporarily locked after too many failed sign-in attempts. Try
+     again when the timer ends, or ask an administrator to unlock it."
+   - The countdown runs from the time the lock really has left (the 403's `retry_after`). Only the
+     right password gets this message.
+   - **Stop at one attempt.** Every attempt during the lock is counted, and past ten in all even the
+     right password gets the 401 (D-26).
+5. **In window A, open `Role management`.**
+   - **Expected:** the throwaway account's Account column reads "Locked until" the time, with an
+     **Unlock** button. Every other row reads "Active".
+6. **Press Unlock.**
+   - **Expected:** a dialog, "Unlock <name>'s account?". It gives when the lock began, from which
+     address, and until when. It says the password is not changed, and asks you to check that the
+     request really comes from that person.
+   - **Say it:** on this loopback alpha every source address is `127.0.0.1`. The "distributed
+     attempt" evidence FR-03 promises cannot be shown here (D-130, security finding L4).
+7. **Press `Unlock account`.**
+   - **Expected:** "<name>'s account is unlocked.", and the row reads "Active".
+   - The release is recorded in `LoginAttempts` with the Administrator, the account and the time,
+     beside the lockout row.
+8. **In window B, sign in with the right password.**
+   - **Expected:** the dashboard, without waiting out the 15 minutes.
+9. **Say it, don't show it:** an Administrator's own locked row shows "Another administrator can
+   unlock your account." and no button. The server refuses a release of one's own account with a
+   403 whether or not it is locked, and refuses an Employee before it looks the account up. Both
+   are pytest's (D-130).
 
 ### FR-04 · Logout and session management (window B)
 
@@ -536,7 +611,8 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
       partial matches;
     - **the dashboard**, and **the repository** with its detail view;
     - **NIT3004's screens:** FR-10's classification and tag administration, FR-19's
-      knowledge-gap log, and recording transcription (D-123);
+      knowledge-gap log, and recording transcription (D-123), and since 13 November FR-03's
+      warning, countdown and Unlock control (D-130);
     - **across screens:** the 429 and 503 messages, the tab order, the text equivalents, the
       focus ring and colour contrast, the production build and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,

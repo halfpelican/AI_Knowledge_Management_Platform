@@ -30,6 +30,11 @@ The user object, wherever a user is returned:
 
 Never `password_hash`, `failed_attempts` or `locked_until`.
 
+> **13 November 2026 (D-130).** `GET /api/users` adds one field, `lock`, for a requester holding
+> `release_account_locks`, which only Administrators hold. That is FR-03's "An Administrator viewing
+> a locked account". Every other route's user object is unchanged. See "NIT3004 — FR-03" at the end
+> of this file.
+
 ## Stage 2 — FR-01, FR-02, FR-04, FR-05, FR-06
 
 Every code below is quoted from the FR's own Responses clause unless marked
@@ -81,6 +86,24 @@ there. A success resets `failed_attempts` to 0, clears
 `locked_until`, and sets `last_login_at`. The lock is FR-02's own clause and is
 enforced here; FR-03 adds only the warning interface and stays out of the gate
 (D-25).
+
+> **13 November 2026: FR-03 is built (D-130).**
+>
+> - **What it adds:** the warning, the countdown, `POST /api/users/{id}/unlock`, `lock` on
+>   `GET /api/users`, `retry_after` on the login `403`, and the `LoginAttempts` table. See
+>   "NIT3004 — FR-03" at the end of this file. The `401` is unchanged.
+> - **The locked-account message names the release again** (D-26 finding 4 removed it while no
+>   release existed): "…Try again later, or ask an administrator to unlock it."
+> - **The decision is made on the row read under lock** (D-130's H1). Login now decides on the
+>   account row read with `select_for_update()` after the password check: whether the account is
+>   locked, the count, the lock itself, and on success the sign-in and the reset. All of it happens
+>   while that row lock is held.
+>   - **Before,** it decided on an unlocked read taken before the check. Concurrent wrong passwords
+>     could erase a lock that one of them had just set, and a right password could get a session for
+>     an account a concurrent request had just locked.
+>   - **What the lock does not reach:** Django saves the new session's signed-in keys just after the
+>     view returns, which is after the row lock is released. A lock committed after that decision is
+>     D-26's residue, that a lock does not end a session.
 
 **FR-05 role change.** The body is `{"role_id": "<uuid>"}`, matching the FR's
 `{ user_id, new_role_id }`; the user id travels in the path. A user cannot remove
@@ -1575,3 +1598,67 @@ is never shown as the transcript's words (NFR-15):
   the snippet shown comes from the meeting's AI-generated summary, which happens only when the
   term occurs in the summary and nowhere in the transcript. A meeting found through its summary
   alone is still one result, in the meetings group, counted once.
+
+## NIT3004 — FR-03 account lockout interface (D-130)
+
+FR-02 enforces the lock (D-25). FR-03 adds:
+
+- the warning;
+- the countdown;
+- an Administrator's release;
+- the `LoginAttempts` record.
+
+Benjamin's six decisions of 13 November 2026 are D-130's. Every code below is quoted from FR-03's
+Responses clause unless marked *convention*.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/users/{id}/unlock` | Administrator (`release_account_locks`) | `200` the user as `GET /api/users` lists it, now with `"lock": null`. `locked_until` is cleared and `failed_attempts` is reset to 0, the state natural expiry reaches, and a release row is written to `LoginAttempts`. No body is read | `401` no session; `403 {"detail": "Your role does not hold the 'release_account_locks' permission."}`, given before any lookup, so an Employee cannot probe user ids; `404 {"detail": "No User matches the given query."}` for an unknown id; `403 {"detail": "You cannot release a lock on your own account."}` where the target is the requester, locked or not; `409 {"detail": "This account is not locked."}` where `locked_until` is empty or already past |
+
+**The release touches nothing else.**
+
+- **Never touched:** the password, the role and any session. The Administrator never sees, sets or
+  resets the password (FR-03).
+- **Who may release a lock:** an Administrator may release another Administrator's lock, but never
+  their own.
+- **No throttle,** as FR-05's role change has none.
+
+**`GET /api/users` gains `lock`** for a requester holding `release_account_locks`. Only
+Administrators hold it. A requester without it gets the plain user object.
+
+```json
+{"id": "uuid", "name": "Jane Doe", "email": "jane.doe@company.com", "role": "Employee",
+ "created_at": "2026-09-20T10:00:00+10:00",
+ "lock": {"locked_until": "2026-11-13T10:42:00+11:00",
+          "locked_at": "2026-11-13T10:27:00+11:00", "source_ip": "203.0.113.42"}}
+```
+
+- **`lock` is `null` unless the lock is active.** A `locked_until` already past reads as unlocked.
+- **`locked_at` and `source_ip`** come from the `LoginAttempts` lockout row that set this lock,
+  matched on its `locked_until`. Both are `null` for a lock that has no such row.
+- **Every other route's user object is unchanged,** and never carries `lock`, `failed_attempts` or
+  `locked_until`.
+
+**The login `403` gains `retry_after`:**
+`{"detail": "This account is temporarily locked after repeated failed sign-ins. Try again later, or ask an administrator to unlock it.", "code": "account_locked", "retry_after": 812}`.
+
+- **What it is:** whole seconds until the lock ends, rounded up, at least 1, read from the account row
+  under lock.
+- **Who gets it:** only a request whose password matched, within `LOCKOUT_NOTICE_CEILING`, as before
+  (D-26).
+- **Never on a `401`.** No `Retry-After` header is sent with either.
+- **The `401` is unchanged:** byte-identical for an unknown address, a wrong password, and a locked
+  account given a wrong password or given the right one past the ceiling.
+
+**The warning and the countdown use nothing new from the server** (D-130 decision 1).
+
+- **The count is the sign-in page's own:** consecutive `401`s for the address typed, held in memory.
+  The remaining attempts are worked out from its copy of `LOCKOUT_THRESHOLD`.
+- **At the threshold** the page disables Sign in and counts down `LOCKOUT_DURATION`.
+- **On a `403`** it counts down `retry_after` instead.
+- **Nothing in any response tells a stranger whether an address is registered or locked** (UC-02
+  E1). The cost is in D-130.
+
+**`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
+for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read
+is the `lock` object above.
