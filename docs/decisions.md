@@ -6036,8 +6036,9 @@ re-audit on `bbbda8c`, on 13 November. Their findings on the lookup, and what wa
 
   A readable process the Listen row named, which step 1 did not take because another process was
   seen or a source could not be read, is not returned at the end. A process the Listen row names
-  whose command line cannot be read is returned after the wait with its PID, no command line and a
-  note, as before these checks; two tests assert it:
+  whose command line cannot be read is returned after the wait with its PID and no command line,
+  as before these checks. It carries a note unless netstat and the port's rows were both read and
+  showed no candidate (B4's last case). Two tests assert it with a note:
   `test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over` and
   `test_a_process_nobody_can_read_is_returned_after_the_wait_with_a_note_that_says_so`. Either way
   a refused lookup gives no command line, and the pre-flight refuses.
