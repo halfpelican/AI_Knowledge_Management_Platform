@@ -6279,6 +6279,16 @@ it was measured.
   before that point.
 - **M8's hosting and database** (D-64).
 
+**Dated note, 13 November 2026: the alpha moved to Anthropic, on a new database (D-131).** By the
+user's decision of that day, a database keeps the provider it was set up with, and the alpha runs on
+Anthropic. So it no longer serves `kmp_demo_20261101`. It serves `kmp_alpha_20261113`, built fresh
+from item 6's corpus under Anthropic (D-131; `corpus/objective-02/runs/2026-11-13-alpha-anthropic/`).
+
+- **This entry's database is unchanged, and kept.** Its `.env` is kept beside the alpha's as
+  `.env.flm-20261101`, and the FLM alpha ran `8598d19`.
+- **The worktree, venv and `.env` arrangement above still holds.**
+- **`docs/alpha-deployment.md`** now describes the anthropic alpha.
+
 ## D-89 · The load-test accounts are retired: unusable on the measurement database, deleted elsewhere
 
 **Status:** Settled by the user · **Date:** 2026-11-02 · **Stage:** 5, after the gate · **Concerns:**
@@ -9657,6 +9667,31 @@ across keeps FR-19's gap column at its old width.** Found while running D-127's 
 - **Not covered:** any other database that might meet it. Each FLM database at 768 does only if
   it is moved across.
 
+**Dated note, 13 November 2026: `kmp_anthropic`'s gap column altered, and a database is no longer
+moved across.**
+
+- **The alter.** `kmp_anthropic` is on the never-write list, so the user approved this one
+  statement. On 13 November the session ran `alter table knowledge_gaps alter column embedding
+  type vector(1024)` on `kmp_anthropic`, committed at 16:17:19+11:00.
+  - **It ran in one transaction,** which first locked the table and checked four things: the table
+    held no row, the gap column was `vector(768)`, the chunks' column was `vector(1024)`, and every
+    chunk was `voyage-4`.
+  - **It read back `vector(1024)`** after the commit.
+  - **Nothing was lost,** because the table was empty.
+  - **"`kmp_anthropic` is untouched,"** in the note of 12 November, is overtaken.
+- **The cause stays until D-131 is built.** The user decided that a database keeps the provider it
+  was set up with (D-131). So `--resize-column` will be removed, not taught to resize the gap
+  column as well.
+- **The note of 12 November's "Not covered" was too narrow.** It said a database meets the defect
+  only if it is moved across. A read-only survey of 13 November found a second way: a database
+  restored from a dump made before FR-19's tables existed, then migrated under the other width.
+  - **`kmp_obj05_d128_20261113`,** the FR-10 session's, has chunks at 768 and its gap column at
+    1024.
+  - **`kmp_demo_20261101`,** the FLM alpha's, has no FR-19 tables. It would have met the defect if
+    migrated under a 1024 `.env`.
+
+  D-131's startup check is meant to refuse both.
+
 ## D-118 · A provider's 4xx ends in NFR-19's 503: a rate limit is retried, any other 4xx is refused at once, and each is logged
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-10, FR-12,
@@ -12014,3 +12049,89 @@ Employee's question was.
     `corpus/objective-06/runs/2026-11-10-anthropic/` and
     `corpus/objective-06/runs/2026-11-11-anthropic/`;
   - dated notes of 12 November on D-107, D-108, D-109, D-110, D-117, D-119, D-122 and D-126.
+
+## D-131 · The AI provider is chosen at setup and a database keeps it; the alpha runs on Anthropic, on a database built for it
+
+**Status:** Settled by the user · **Date:** 2026-11-13 · **Concerns:** `CLAUDE.md` §4, FR-08 (risk
+R10), FR-19, D-64, D-88, D-117, D-122, `docs/alpha-deployment.md` · **Supersedes:** D-88's database
+for the alpha. Once the implementation below lands, also D-117's `--resize-column` as a way to move
+a database to another provider.
+
+**What prompted it:** D-117's note of 12 November.
+
+- **The defect.** `reindex --resize-column` moved `kmp_anthropic` to voyage-4 and left FR-19's gap
+  column at 768, so FR-19's cycle failed there.
+- **The user asked whether the width could follow the provider dynamically.** The session set out
+  two ways:
+  - a column with no fixed width, so one database could hold both providers' vectors;
+  - resizing automatically on a switch. The session advised against this one: a fixed-width column
+    can change width only by deleting every vector in it.
+
+**The decision, the user's, on 13 November 2026:**
+
+1. **No switching.** In the user's words: "Switching providers once the database has been created
+   is not something I want. On setup, the user will need to decide FLM or Anthropic installation."
+   - A database keeps the provider it was set up with, and so its embedding width.
+   - To change provider, set up a new database under the new provider and ingest the content again.
+   - `CLAUDE.md` §4 already says a switch goes "onto a fresh database". `--resize-column` and
+     the README's "Switching an existing database" contradict that, and will go.
+2. **How the installer chooses:** `AI_PROVIDER` in `.env`, before the first `migrate`. The column
+   widths follow from it.
+3. **The rule is built on a branch of its own.** It gets tests and deliberate breaks, and the
+   requirements-auditor runs before any PR, which opens only when the user says. It will contain:
+   - the width derived from `AI_PROVIDER`, instead of `EMBEDDING_DIMENSION` set by hand beside it;
+   - a startup check that refuses a database set up for the other provider;
+   - `reindex --resize-column` removed, and `reindex` limited to the database's own provider;
+   - the README's setup, rewritten.
+
+   `CLAUDE.md` §4's lines on switching change only after the user approves the wording. None of
+   this is built yet.
+4. **`kmp_anthropic`'s gap column was altered to `vector(1024)`.** It is on the never-write list,
+   so the user approved this statement. See D-117's note of 13 November.
+5. **The alpha moves to Anthropic.** In the user's words: "I want the alpha deployed on the
+   Anthropic provider." Under point 1, that meant a new database, not `kmp_demo_20261101` switched.
+   The user approved:
+   - creating `kmp_alpha_20261113`, and building it fresh from item 6's corpus;
+   - moving the alpha to current `main` now, before the rule's branch;
+   - copying the two keys from the main checkout's `.env`, and keeping the FLM `.env` as
+     `.env.flm-20261101`;
+   - seeding item 6's tags, then classifying every document again (below).
+
+**What was done for the alpha:** `corpus/objective-02/runs/2026-11-13-alpha-anthropic/README.md`
+records each step.
+
+- **The setup, at `6e1efd1`:**
+  - the database created and migrated under Anthropic, with both vector columns `vector(1024)`;
+  - `check --deploy`, with exactly D-64's four HTTPS warnings;
+  - the front end built;
+  - Waitress started as `docs/alpha-deployment.md` step 6 does.
+- **The accounts and the corpus.** The two corpus accounts were made with passwords nobody knows.
+  Item 6's corpus went through the alpha's own server:
+  - D01 to D20 and T01 to T05 indexed;
+  - every invalid item refused as documented, and "Missed: none";
+  - 48 chunks, all `voyage-4` at 1024, 5 of them FR-16 summaries, all five summaries Ready.
+- **The tag order.**
+  - **What went wrong:** the ingestion classified each document at upload against no tags. The run
+    followed D-88's order, seeding after the corpus, and D-88 predates classification at upload.
+    `seed_objective02_tags.py` says to run before any document is classified.
+  - **What the user chose:** seed, then classify again.
+  - **The seed:** 14 tags and 48 links, with `atlas` marked grown.
+  - **The second classification:** 20 documents classified and 0 failed. FR-10 applied 15 tags and
+    proposed one topic.
+- **The checks.** The five smoke checks passed, and the deployment was recorded with
+  `dirty=False`.
+- **The runbook.** `docs/alpha-deployment.md` now describes the anthropic alpha, how its database
+  was built, and how to bring back the FLM one.
+
+**Not done, or not covered:**
+
+- **Runbook steps 9 and 10,** the scheduled FR-19 cycle and FR-16 retry. The session's permission
+  check refused to register scheduled tasks, so the user registers them.
+- **The passwords,** which the user sets.
+- **D-40's screening** of demonstration questions on the new database.
+- **The rule's implementation** (point 3).
+- **Other mismatched databases.** `kmp_obj05_d128_20261113`, the FR-10 session's, has chunks at 768
+  and its gap column at 1024 (D-117's note of 13 November). It is not this session's, and was left
+  as it is.
+- **The order of entries at merge.** D-128 and D-129 (#102) and D-130 (the FR-03 session's branch)
+  are not on `main` yet. Whichever of these entries merges later puts them back in number order.
