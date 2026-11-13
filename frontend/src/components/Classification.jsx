@@ -223,9 +223,9 @@ function departmentInferredForOlderServer(current, previous, next, sent) {
  * or a confirmed one, Remove; a held suggestion, Confirm and Reject. Each
  * button's accessible name names its tag, starting with the visible word.
  *
- * An AI tag whose value a classify run created reads exactly as any other AI tag,
- * with no "new" mark (D-128). The link does not say whether its tag was created, and
- * the row must not guess, from `tag_options` or anything else: a value outside the
+ * Every AI tag reads alike, with no "new" mark (D-128). A Topic a person confirmed
+ * from a proposal may be new to the database, and the row must not say so or guess
+ * it, from `tag_options` or anything else: a value outside the
  * document's scheme may be one no tag had, a retired one, or one carried only by
  * material some reader of the document cannot see, and a mark that told the first
  * apart would disclose the other two (CLAUDE.md §6, invariant 1).

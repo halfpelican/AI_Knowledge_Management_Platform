@@ -14,12 +14,15 @@ model:
 - **controlled taxonomy growth** — FR-10: "suggested tags are matched against values already held
   in the scheme. A value that does not match may be proposed only in the Topic dimension and
   requires user confirmation before it is created; suggestions falling outside the scheme in the
-  Department, Project or Process dimensions are discarded." **D-128 (12 November 2026) departs
-  from that text for tags,** on for everyone: a value outside the scheme in Project, Process or
-  Topic is created and applied when its confidence is at or above the threshold, and held as a
-  proposal for a person to confirm or reject when it is below (``confirm_proposed_tag``,
-  ``reject_proposed_tag``). A department outside the scheme is still discarded. Rules 3 and 4 of
-  ``apply_classification``.
+  Department, Project or Process dimensions are discarded." Objective 05's clause 3 says the same.
+  **Both hold as written** (D-129, 13 November 2026, which reverses D-128's creation of values):
+  - a Topic value outside the scheme is proposed, at any confidence, for a person to confirm or
+    reject (``confirm_proposed_tag``, ``reject_proposed_tag``);
+  - a Project or Process value outside the scheme is discarded, as is a department;
+  - the classifier creates, links and reactivates no Tag outside the scheme.
+
+  From 12 to 13 November 2026 D-128 created and applied such a value at or above the threshold.
+  Rules 3 and 4 of ``apply_classification``.
 - **provenance** — an AI link is ``applied_by="ai"`` and unconfirmed; a person's ``confirm_tag``
   marks it confirmed and ``reject_tag`` removes it ("either may be accepted or removed in a single
   action"). A person applies a tag of their own with ``apply_tag``, ``applied_by="user"`` (UC-09
@@ -31,11 +34,10 @@ model:
   outcomes, while the ``machine_*`` columns take every run's values. A confirmed tag "is not
   altered by later reprocessing". A removed AI tag is kept, marked ``removed``, with the machine's
   confidence, and later reprocessing neither links it again nor alters it (D-105's dated note of
-  10 November 2026, night), nor, since D-128, creates, reactivates or proposes it, in any
-  dimension. A proposal a person rejects is kept the same way, in ``rejected_tags`` with the
-  machine's confidence, and later reprocessing never proposes, creates or links that value on the
-  document, even once it is in the scheme (``reject_proposed_tag``; the requirements audit of
-  D-128, finding A5).
+  10 November 2026, night), nor proposes it again, in any dimension. A proposal a person rejects
+  is kept the same way, in ``rejected_tags`` with the machine's confidence, and later reprocessing
+  never proposes or links that value on the document, even once it is in the scheme
+  (``reject_proposed_tag``; the requirements audit of D-128, finding A5).
 
 **The scheme is built for the document's own audience** (``tag_scheme``), so the prompt never
 lists a value that exists only on material some reader of this document may not see, and a
@@ -56,19 +58,21 @@ and for the vocabulary tables.
 - **The document and the analysis row.** Every function that writes a document's classification
   records and takes both the document row and its ``DocumentAnalysis`` row takes the document
   first. No function takes the analysis row and then the document.
-- **Tags and links are not in one fixed order** across ``apply_classification``. Rule 4 takes them
-  value by value: an in-scheme value's existing link can be locked before a later out-of-scheme
-  value's ``Tag``. No cycle follows from that, for four reasons:
-  - every other writer that takes tags and this document's links first holds the document
-    (``apply_tag``) or its analysis row (``confirm_proposed_tag``), and a run holds both for its
-    whole transaction;
+- **A run takes no Tag row.** Since D-129 rule 4 only links values already in the scheme
+  (``_link_tag`` reads the tag unlocked, then creates or updates this document's link). It creates,
+  updates and reactivates no tag. Only a person's decisions take Tag rows, and no cycle follows:
+  - ``apply_tag`` and ``confirm_proposed_tag`` take a tag and then this document's links, holding
+    the document or the analysis row first, and a run holds both for its whole transaction;
   - ``confirm_tag`` and ``reject_tag`` take one link and wait on nothing after it;
-  - ``retire_tag`` and ``create_tag`` take one tag;
-  - concurrent runs create or reactivate tags in one sorted order.
+  - ``retire_tag`` and ``create_tag`` take one tag.
+
+  From D-128 until D-129 a run also created and reactivated tags, value by value; the narrowing
+  after the re-audit of ``7377d38`` (finding N3) was about that.
 
 Each one:
 
-- ``apply_classification``: the document, the analysis row, then tags and links (rule 4).
+- ``apply_classification``: the document, the analysis row, then this document's links (rule 4c).
+  It takes no Tag row.
 - ``confirm_classification``: the document, then the analysis row, and only then the document's
   department, which is already locked. Until N1 it took the analysis row first and then wrote the
   document, so a confirmation during a reprocess, which holds the document while classification
@@ -110,7 +114,6 @@ from apps.core.constants import (
     CLASSIFICATION_CONFIDENCE_THRESHOLD,
     CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL,
     DOCUMENT_TYPES,
-    MAXIMUM_CREATED_TAG_WORDS,
     REPOSITORY_TAG_DIMENSIONS,
     ROLE_NAMES,
     SOURCE_TYPES,
@@ -129,16 +132,12 @@ DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 # reported, never this three-place rendering of it (see _is_provisional).
 _CONFIDENCE_PLACES = Decimal("0.001")
 
-# Rule 4d's limits on a value outside the scheme (D-128's security review, finding 2; see
-# ``_may_become_a_tag``). The prompt lists each dimension's values joined by "; "
-# (apps/ai/classification.py), so a value holding ";" would read as several. Unicode categories Cc
-# (control: NUL among them, which neither a text column nor jsonb accepts) and Cf (format: the
-# right-to-left override U+202E, the zero-width space U+200B and their kind) let a name look
-# different from what it holds; Cs (a lone surrogate) cannot be written at all
-# (``_unsafe_character``). A discard records each such character as U+FFFD, the replacement
-# character, so the record can always be written.
-_PROMPT_LIST_SEPARATOR = ";"
-_UNSAFE_CATEGORIES = frozenset({"Cc", "Cf", "Cs"})
+# Rule 4d's one refusal of a value outside the scheme, whatever its dimension (D-129, keeping the 500
+# fix of D-128's security review): a value that cannot be stored. A NUL (U+0000) is refused by a text
+# column and by jsonb alike, and a lone surrogate (Unicode category Cs), which ``json.loads`` makes of
+# a \ud800 escape in a reply, cannot be encoded for either. Such a value is discarded, recorded
+# with U+FFFD, the replacement character, in place of each such character (``_recordable``).
+_NUL = chr(0)
 _REPLACEMENT_CHARACTER = "\ufffd"
 
 
@@ -204,7 +203,8 @@ def tag_scheme(document: Document) -> TagScheme:
     never lists a grown value that exists only on material some reader of this document may not see
     (CLAUDE.md invariant 1: the existence of out-of-scope material "must not be disclosed"), a
     suggestion that names one anyway is treated exactly as a value no Tag has
-    (``apply_classification`` rule 4, D-128), and nothing a reader can see moves when links on
+    (``apply_classification`` rule 4d: a Topic proposed, a Project or Process discarded, D-129), and
+    nothing a reader can see moves when links on
     material they cannot read are made or destroyed. Whether a role can read a source is decided by
     ``scoped_documents`` and ``scoped_meetings`` from apps/retrieval/scoping.py, the one place the
     FR-11 predicate is written (D-53, D-66); nothing here tests ``visible_to_roles`` itself.
@@ -227,16 +227,16 @@ def tag_scheme(document: Document) -> TagScheme:
       documents through ``scoped_documents``, meetings through ``scoped_meetings``, since the join
       table admits both source types. Every link counts, provisional, unconfirmed and removed ones
       included: a held suggestion, or one a person removed, on a readable document is still a
-      carrier. ``grown`` is set on a tag the classifier creates or reactivates at or above the
-      threshold and on one a person's confirmation of a proposal creates or reactivates, in
-      Project, Process or Topic (D-128), on a Topic a person's ``apply_tag`` name form creates or
-      reactivates (the lead's oracle review), and by ``documents 0011`` and the seed script's
-      linked mode on every tag carried only by material some role cannot read. An active tag any
-      of the three fetches keeps its value, and an inactive one is reactivated only from a
-      document every role reads (``_bring_into_use``; D-128's security review, finding 1), so a
-      link on material some role cannot read never brings a retired value back into a scheme
-      through an old readable carrier. So a value the classifier creates
-      from an Administrator-only document is carried by that document alone and offered only to
+      carrier. ``grown`` is set on a value a person's confirmation of a proposal creates or
+      reactivates (``confirm_proposed_tag``), on a Topic a person's ``apply_tag`` name form creates
+      or reactivates (the lead's oracle review), and by ``documents 0011`` and the seed script's
+      linked mode on every tag carried only by material some role cannot read. The classifier sets
+      it on nothing: since D-129 it creates and reactivates no tag. (From D-128 until D-129 it set
+      it on the values it created.) An active tag either person's path fetches keeps its value. An
+      inactive one is reactivated only from a document every role reads (``_bring_into_use``;
+      D-128's security review, finding 1), so a link on material some role cannot read never brings
+      a retired value back into a scheme through an old readable carrier. So a Topic a person brings
+      in on an Administrator-only document is carried by that document alone and offered only to
       an audience every role of which reads it: never to, and never in the prompt for, a document
       an Employee reads, while that stays so. A value an Administrator adds (``POST /api/tags``,
       D-128) is not grown: vocabulary, in every scheme, as a seeded value is.
@@ -348,14 +348,13 @@ def tag_options(document: Document) -> dict[str, list[dict]]:
       readers could read had changed.
     - **A tag that is not grown never moves** while it is active: no link anyone makes or destroys,
       on readable material or restricted, changes whether it is offered. That includes a person
-      confirming a proposal of its name made before it was vocabulary, and the classifier linking it
-      against a scheme built before it was vocabulary, each of which links it and leaves it
+      confirming a proposal of its name made before it was vocabulary, which links it and leaves it
       vocabulary (``_bring_into_use``). It leaves only when an Administrator retires or deletes it
-      (``DELETE /api/tags/{id}``). A retired tag comes back, grown, only through a document every
-      role reads: a person names it there (a Topic, ``apply_tag``), confirms a proposal of it
-      there (``confirm_proposed_tag``), or the classifier suggests it there at or above the
-      threshold, in Project, Process or Topic (D-128: retiring a tag no longer keeps it out of
-      classification).
+      (``DELETE /api/tags/{id}``). A retired tag comes back, grown, only through a person, on a
+      document every role reads: they name it there (a Topic, ``apply_tag``) or confirm a proposal
+      of it there (``confirm_proposed_tag``). The classifier never brings one back: since D-129 a
+      retired value it suggests is proposed (a Topic) or discarded (a Project or Process), whatever
+      its confidence. From D-128 until D-129 it reactivated one at or above the threshold.
     - So the names of every active tag that is not grown are offered to every reader: the values a
       database is seeded with, those an Administrator adds (``POST /api/tags``, D-128), and those
       vocabulary values restricted material has taken up since. That is what vocabulary means
@@ -435,76 +434,65 @@ def apply_classification(
        the column now holds (``_department_provenance``): "ai" when this run wrote it, or an
        earlier run did and nobody has written it since; "user" for any other non-blank value,
        which a person gave; null for a blank one.
-    4. **Tags** (D-128, 12 November 2026, which departs from FR-10's controlled taxonomy growth
-       clause), each suggestion by its dimension and normalised name, in this order:
+    4. **Tags**, each suggestion by its dimension and normalised name, in this order. Objective 05's
+       clause 3 holds as written (D-129, 13 November 2026, which reverses D-128's creation of
+       values):
 
        a. **Ignored**, and logged: a dimension outside REPOSITORY_TAG_DIMENSIONS, or an empty name.
        b. **A person removed or rejected it.** This document holds a REMOVED link to the tag of
           that dimension and name, or its ``rejected_tags`` holds that dimension and name because a
           person rejected it as a proposal (``reject_proposed_tag``). In any of the three
           dimensions, at any confidence, and before the in-scheme match below, so a rejected value
-          is not linked even once it has entered the scheme (an Administrator added it, or another
-          document created it). The suggestion is skipped: not linked, not created, not
-          reactivated, not proposed, not recorded (FR-10's correction clause, "not overwritten by
-          later reprocessing"; D-105's dated note of 10 November 2026, night, generalised from
-          Topic by D-128; the rejection since the requirements audit of D-128, finding A5). Only
-          this document's own links and analysis row are read.
+          is not linked even once it has entered the scheme (an Administrator added it, say). The
+          suggestion is skipped: not linked, not proposed, not discarded, not recorded (FR-10's
+          correction clause, "not overwritten by later reprocessing"; D-105's dated note of 10
+          November 2026, night, generalised from Topic by D-128; the rejection since the
+          requirements audit of D-128, finding A5). Only this document's own links and analysis row
+          are read.
        c. **In the scheme** (``scheme.tags[dimension]``) and still an active Tag: ``_link_tag``,
           unchanged. A link a person applied or confirmed is left as it is; an unconfirmed AI link
           takes the new confidence and provisional flag; otherwise a link is created,
           ``applied_by="ai"``, unconfirmed, provisional when below the threshold.
        d. **Otherwise**, outside the scheme or deactivated since it was built. The suggestions of
-          one dimension and name are taken together at their highest confidence, then:
+          one dimension and name are taken together at their highest confidence. No Tag is created,
+          linked or reactivated, at any confidence:
 
-          - **not a name a prompt can list** (``_may_become_a_tag``; D-128's security review,
-            finding 2): longer than NAME_MAX_LENGTH, more than MAXIMUM_CREATED_TAG_WORDS words,
-            holding ";", or holding a control, format or surrogate character. It goes to
-            ``discarded_suggestions`` whatever its confidence, recorded with each such character
-            replaced by U+FFFD (``_recordable``), and nothing is created, proposed or linked;
-          - **at or above the threshold**: the Tag is fetched or created (``get_or_create``, which
-            also settles a concurrent create of the same name), brought into use and linked by
-            ``_link_tag``: an AI link, unconfirmed, not provisional, with the confidence, unless a
-            person's decision is there already. ``_bring_into_use``: one created becomes active
-            and grown; an active one fetched keeps its state; an inactive one fetched is
-            reactivated, and grown, only when every role can read this document, and otherwise is
-            linked and left retired (D-128's security review, finding 1). These are taken in one
-            order, by dimension then name, in every run, so two runs that create the same values
-            wait on each other rather than deadlocking;
-          - **below the threshold**: held in ``proposed_tags`` as ``{"dimension", "value",
+          - **a Topic** is proposed: held in ``proposed_tags`` as ``{"dimension", "value",
             "confidence"}`` for a person to confirm or reject (``confirm_proposed_tag``,
-            ``reject_proposed_tag``).
+            ``reject_proposed_tag``), at any confidence, a long or many-worded one included. A
+            person who confirms one longer than the column gets ``InvalidClassification``, the
+            route's 400;
+          - **a Project or Process value** is discarded into ``discarded_suggestions`` as
+            ``{"dimension", "value", "confidence"}``, at any confidence;
+          - **a value that cannot be stored**, holding a NUL or a lone surrogate, is discarded
+            whatever its dimension, recorded with U+FFFD in place of each such character
+            (``_recordable``). That is the 500 fix from D-128's security review, kept.
 
        ``proposed_tags`` and ``discarded_suggestions`` are REPLACED by each run. Links this run
-       does not mention are left alone.
+       does not mention are left alone. From 12 to 13 November 2026, D-128 created and linked a value
+       outside the scheme at or above the threshold, and proposed one in any of the three dimensions
+       below it. D-129 reverses that.
 
     **Why every value outside the scheme gets the same treatment (CLAUDE.md invariant 1).** Seen
     from a reader of this document, such a value is one of three things, and the reader must not be
     able to tell which: (a) no Tag has it; (b) an active, grown Tag that only material some reader
     of this document cannot see carries (an active Tag that is not grown is vocabulary and always
-    in the scheme); (c) a retired Tag. What a reader can observe is identical for all three: at or
-    above the threshold the value is applied, in ``tag_details`` and afterwards in this document's
-    ``tag_options``; below it, it is a proposal. Nothing returned or recorded says whether a Tag row
-    was created, and no AI tag is labelled new, which is the precedent D-105's note set for a
-    person's name: a retired value is in no scheme, so answering it differently would disclose it.
-    **The consequence, recorded in D-128:** retiring a tag no longer keeps it out of
-    classification; a suggestion of a retired value at or above the threshold reactivates it,
-    grown, in Project and Process as in Topic, **when every role can read this document**. On a
-    document some role cannot read, a retired value is linked and stays retired (D-128's security
-    review, finding 1): reactivated there, an old readable carrier would offer it again to readers
-    who saw nothing change. That document's readers can then tell a retired value from a new one,
-    since only the new one enters its ``tag_options``. With today's two roles that reader is an
-    Administrator, who reads every source and every retired tag (D-66), so nothing is disclosed.
-    ``grown`` is what keeps a value the classifier creates away from readers who cannot see its
-    carrier (``tag_scheme``), and it is never unset.
+    in the scheme); (c) a retired Tag. What a reader can observe is identical for all three: a Topic
+    is a proposal, and a Project or Process value is discarded and never shown. Nothing returned or
+    recorded says whether a Tag row exists, which is the precedent D-105's note set for a person's
+    name: a retired value is in no scheme, so answering it differently would disclose it. The
+    classifier never brings a retired value back. Only a person's confirmation or Topic name form
+    does, on a document every role can read (``_bring_into_use``; D-128's security review, finding
+    1).
 
     The document row is locked first, as deletion and reprocess lock it, so a classification
     cannot write links for a document a concurrent delete is removing. The analysis row is locked
     next, as a person's decisions lock it, so a rejection committed meanwhile is neither missed by
-    rule 4b nor overwritten when this run saves the row. Tags and links come after, value by value,
-    which cannot cycle for the reasons "Lock order" above gives. Every writer here keeps the document
-    before the analysis row. A person's
-    decision that writes the document, ``confirm_classification``, locks the document first as
-    well, so it waits for this run rather than deadlocking with it. Until the focused re-audit of
+    rule 4b nor overwritten when this run saves the row. This document's links come after, value by
+    value, and since D-129 a run takes no Tag row, so nothing cycles ("Lock order" above). Every
+    writer here keeps the document before the analysis row. A person's decision that writes the
+    document, ``confirm_classification``, locks the document first as well, so it waits for this
+    run rather than deadlocking with it. Until the focused re-audit of
     ``5c60564`` (finding N1) this docstring claimed that a person's decision took only the analysis
     lock. That was false of ``confirm_classification``, and the auditor's probe deadlocked on it.
     """
@@ -568,14 +556,14 @@ def apply_classification(
                 analysis.department_applied_by, current, machine_wrote=machine_wrote
             )
 
-        # Rule 4: the tags (D-128).
+        # Rule 4: the tags (Objective 05's clause 3 as written; D-129).
         ignored = 0
         # 4b: the (dimension, name) of every tag a person removed from this document, and of every
         # proposal a person rejected on it (``rejected_tags``; the requirements audit of D-128,
         # finding A5), in any dimension. A removed one still in the scheme would reach _link_tag,
-        # which leaves a removed link alone; any other would otherwise be created, linked or
-        # proposed again, a rejected one even once it has entered the scheme, and a person has
-        # already said no to it here. Read from this document's own links and its own analysis
+        # which leaves a removed link alone; any other would otherwise be proposed or linked again, a
+        # rejected one even once it has entered the scheme, and a person has already said no to it
+        # here. Read from this document's own links and its own analysis
         # row only, so skipping it discloses nothing about other material (CLAUDE.md invariant 1).
         declined = set(
             ContentTag.objects.filter(
@@ -603,31 +591,24 @@ def apply_classification(
             if suggestion.confidence > outside.get(key, -1.0):
                 outside[key] = suggestion.confidence
 
-        # One treatment for every value outside the scheme, whether no Tag has it, a grown Tag
-        # only material some reader cannot see carries, or a retired Tag (CLAUDE.md invariant 1;
-        # see the docstring). Nothing below says which it was.
-        proposed, discarded, applied = [], [], []
+        # One treatment for every value outside the scheme, whether no Tag has it, a grown Tag only
+        # material some reader cannot see carries, or a retired Tag (CLAUDE.md invariant 1; see the
+        # docstring). Nothing below says which it was, and no Tag is created, linked or reactivated:
+        # Objective 05's clause 3, as written (D-129, reversing D-128's creation).
+        proposed, discarded = [], []
         for (dimension, name), confidence in outside.items():
-            if not _may_become_a_tag(name):
-                # Too long, too many words, or holding ";" or a control, format or surrogate
-                # character: never created or proposed, whatever its confidence (finding 2).
-                # Recorded with each such character replaced, so the record can be written.
+            if not _storable(name):
+                # A NUL or a lone surrogate: discarded, recorded with U+FFFD so the record can be
+                # written. Before the fix it answered the classify route 500.
                 discarded.append(
                     {"dimension": dimension, "value": _recordable(name), "confidence": confidence}
                 )
-            elif _is_provisional(confidence, classification.model):
-                # Held for a person to confirm or reject.
+            elif dimension == TOPIC_DIMENSION:
+                # Proposed for a person to confirm or reject, at any confidence.
                 proposed.append({"dimension": dimension, "value": name, "confidence": confidence})
             else:
-                applied.append((dimension, name, confidence))
-        # One order, by dimension then name, in every run: two runs creating or reactivating the
-        # same values then wait on each other at the first of them rather than deadlocking.
-        for dimension, name, confidence in sorted(applied):
-            tag, created = Tag.objects.get_or_create(tag_name=name, dimension=dimension)
-            # A retired tag is reactivated only if every role reads this document (finding 1);
-            # either way the link is made.
-            _bring_into_use(tag, created, locked)
-            _link_tag(document, tag, confidence, classification.model)
+                # Project or Process: discarded, at any confidence.
+                discarded.append({"dimension": dimension, "value": name, "confidence": confidence})
         analysis.proposed_tags = proposed
         analysis.discarded_suggestions = discarded
         analysis.save()
@@ -660,45 +641,25 @@ def _is_provisional(confidence: float, model: str) -> bool:
     return confidence < confidence_threshold(model)
 
 
-def _unsafe_character(character: str) -> bool:
-    """A control (Cc) or format (Cf) character, or a lone surrogate (Cs), for rule 4d (D-128's
-    security review, finding 2).
-
-    The review named Cc and Cf. Cs is added here: a lone surrogate, which ``json.loads`` makes of a
-    ``\\ud800`` escape in a reply, can be written neither to a text column nor to jsonb, so it 500s
-    the classify route exactly as a NUL did."""
-    return unicodedata.category(character) in _UNSAFE_CATEGORIES
+def _unstorable(character: str) -> bool:
+    """A NUL or a lone surrogate (Unicode category Cs): a character neither a text column nor jsonb
+    can hold, for rule 4d (D-129, keeping the 500 fix of D-128's security review). Any other
+    character is kept: a Topic of many words, or one holding ";", is proposed, as before D-128."""
+    return character == _NUL or unicodedata.category(character) == "Cs"
 
 
-def _may_become_a_tag(name: str) -> bool:
-    """Whether a value outside the scheme may be created or proposed (rule 4d; D-128 and its
-    security review, finding 2). ``name`` is normalised, so its words are separated by single spaces.
-
-    - At most NAME_MAX_LENGTH characters, the column's width.
-    - At most MAXIMUM_CREATED_TAG_WORDS words: rule 6 of the prompt, enforced. A created value joins
-      the scheme every later prompt lists, so a longer one would be text an uploaded document had
-      planted in other documents' prompts.
-    - No ";", the prompt's list separator, which would make one value read as several.
-    - No control, format or surrogate character (``_unsafe_character``). These can make a name look
-      different from what it holds, and a NUL or a lone surrogate cannot be written at all.
-
-    Only rule 4d asks. An existing Tag in the scheme is matched as it is (rule 4c), the department
-    is rule 3's, and a person's name form (``apply_tag``) has its own checks.
-    """
-    return (
-        len(name) <= NAME_MAX_LENGTH
-        and len(name.split()) <= MAXIMUM_CREATED_TAG_WORDS
-        and _PROMPT_LIST_SEPARATOR not in name
-        and not any(_unsafe_character(character) for character in name)
-    )
+def _storable(name: str) -> bool:
+    """Whether rule 4d may propose ``name`` or record it as written: it holds no NUL and no lone
+    surrogate (``_unstorable``)."""
+    return not any(_unstorable(character) for character in name)
 
 
 def _recordable(name: str) -> str:
-    """``name`` as ``discarded_suggestions`` records it: each control, format or surrogate character
-    replaced by U+FFFD, so the jsonb column always accepts the record (a NUL made the classify route
-    answer 500, D-128's security review). Every other character is kept as the model wrote it."""
+    """``name`` as ``discarded_suggestions`` records it: each NUL or lone surrogate replaced by U+FFFD,
+    so the jsonb column always accepts the record. A NUL made the classify route answer 500 (D-128's
+    security review). Every other character is kept as the model wrote it."""
     return "".join(
-        _REPLACEMENT_CHARACTER if _unsafe_character(character) else character for character in name
+        _REPLACEMENT_CHARACTER if _unstorable(character) else character for character in name
     )
 
 
@@ -854,8 +815,8 @@ def reject_tag(document: Document, content_tag_id) -> None:
     value linked it again, ``applied_by="ai"``, through ``_link_tag``'s create branch: for an AI link
     until D-119 finding 3, and for a person's link until the requirements re-audit of ``5377e3a``
     (D-105's dated note of 10 November 2026, night). ``_link_tag`` leaves a removed link alone, and
-    since D-128 a later run neither proposes, creates nor reactivates a removed value, in any
-    dimension (``apply_classification`` rule 4b). No read lists a removed link. The ``Tag`` row, a
+    a later run neither proposes nor links a removed value again, in any dimension
+    (``apply_classification`` rule 4b). No read lists a removed link. The ``Tag`` row, a
     vocabulary, stays.
 
     A link already removed is not found here (``_link_on``), so removing it again is the same
@@ -878,11 +839,12 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       that is unknown, inactive, in another dimension or withheld from this document's audience
       raises ``TagNotOffered``, the same for all of them.
     - ``tag_name``: a new Topic, already normalised. A person's name form is Topic-only: FR-10's
-      controlled taxonomy growth let only Topic grow, and D-128, which lets the classifier create a
-      Project or Process value and an Administrator add one (``POST /api/tags``), left this form as
-      it was. **The 409 and the rule that keeps it from disclosing anything:** a name that
-      is an active Topic in this document's scheme raises ``TopicAlreadyOffered``, because the
-      caller is already offered it. A Topic of that name that exists but is NOT in the scheme is
+      controlled taxonomy growth lets only Topic grow (D-129: the classifier creates no value).
+      An Administrator adds a value in any of the three dimensions through ``POST /api/tags``
+      (D-128), and this form is as it was. **The 409 and the rule that keeps it from disclosing
+      anything:** a name that is an active Topic in this document's scheme raises
+      ``TopicAlreadyOffered``, because the caller is already offered it. A Topic of that name that
+      exists but is NOT in the scheme is
       grown and carried by no source every reader of this document can read (only by restricted
       material, or by nothing at all), or it is inactive; a Topic that is not grown is vocabulary
       and always in the scheme of an active one. Answering 409 for one outside the scheme would tell
@@ -895,7 +857,7 @@ def apply_tag(document: Document, *, tag_id=None, tag_name: str | None = None) -
       security review, finding 1, which found this D-105 path reactivating a retired Topic from
       Administrator-only material and so putting it back in every Employee's options through an old
       readable carrier). On a document some role cannot read it is linked and left retired, as
-      ``confirm_proposed_tag`` and the classifier leave it (``_bring_into_use``). The answer is the
+      ``confirm_proposed_tag`` leaves it (``_bring_into_use``). The answer is the
       same either way.
     - **The Topic the name form brings into use is grown** (``Tag.grown``, D-105's dated note of 10
       November 2026, night), so that it is never vocabulary, whatever it was before: it is offered
@@ -950,11 +912,10 @@ def _every_role_reads(document: Document) -> bool:
 
 
 def _bring_into_use(tag: Tag, created: bool, document: Document) -> None:
-    """A tag brought into use by name on ``document``: by the classifier at or above the threshold
-    (``apply_classification`` rule 4d, D-128), by a person confirming a proposal
-    (``confirm_proposed_tag``, D-128), both in Project, Process or Topic, or by a person's
-    ``apply_tag`` name form (a Topic). The caller makes or confirms the document's link whatever
-    happens here.
+    """A tag a person brings into use by name on ``document``: by confirming a proposal
+    (``confirm_proposed_tag``), or by ``apply_tag``'s Topic name form. The classifier never calls
+    it: since D-129 it creates and reactivates no tag, as rule 4d did from D-128 until D-129. The
+    caller makes or confirms the document's link whatever happens here.
 
     - **One this call ``created``** is made grown, so that it is never vocabulary: it is offered only
       where every audience role reads a source carrying it (``tag_scheme``; D-105's dated note of 10
@@ -965,8 +926,7 @@ def _bring_into_use(tag: Tag, created: bool, document: Document) -> None:
       growing it would take it out of every audience that reads no source carrying it, because of a
       link on material that audience may not be able to read. The name form never fetches one, since
       it is offered and the name form answers 409 first; ``confirm_proposed_tag`` does, for a
-      proposal made before the name became vocabulary, and so does the classifier, for a scheme built
-      before it did.
+      proposal made before the name became vocabulary.
     - **An inactive tag it fetched is reactivated, and grown, only when every role can read
       ``document``** (``_every_role_reads``; D-128's security review, finding 1). Otherwise it is left
       exactly as it is: retired, its ``grown`` unchanged. A retired tag can still be carried by
@@ -975,8 +935,9 @@ def _bring_into_use(tag: Tag, created: bool, document: Document) -> None:
       in the options of every document that role reads, through that old carrier, while nothing
       that role can read had changed, and so would show that the restricted material carries it.
       Reactivated from a document every role reads, the change is that document's own link, which
-      every role can see, exactly as for a value created there. This path is D-105's own as well as
-      D-128's: ``apply_tag``'s name form reactivated a retired Topic the same way.
+      every role can see, exactly as for a value created there. The rule closes D-105's own path,
+      ``apply_tag``'s name form, which reactivated a retired Topic the same way, and it applies to
+      ``confirm_proposed_tag``.
 
     ``grown`` is never unset here or anywhere.
     """
@@ -1035,14 +996,15 @@ def _apply_link(document: Document, tag: Tag) -> AppliedTag:
 
 
 def confirm_proposed_tag(document: Document, dimension: str, value: str) -> ContentTag:
-    """A person confirms a value the classifier held below the threshold, in Project, Process or
-    Topic (D-128, which generalised the Topic-only confirmation that preceded it).
+    """A person confirms a proposal. Since D-129 the classifier proposes a Topic outside the scheme,
+    at any confidence. A Project or Process proposal is one a run made while D-128 was in force,
+    and this function confirms it the same way: it is dimension-generic (D-128).
 
     The proposal is matched by its dimension and normalised value, so a value proposed under
     another dimension is not this one; none matching raises ``NotOnThisDocument``, the route's 404.
     The Tag is fetched or created by dimension and normalised name and brought into use
-    (``_bring_into_use``): one created is marked grown, as the classifier and ``apply_tag``'s name
-    form mark it, so a value brought in from a proposal is never vocabulary (D-105's dated note of
+    (``_bring_into_use``): one created is marked grown, as ``apply_tag``'s name form marks it, so a
+    value brought in from a proposal is never vocabulary (D-105's dated note of
     10 November 2026, night). An active one fetched keeps its state, so confirming a proposal made
     before its name became vocabulary links the vocabulary tag and leaves it vocabulary. **An
     inactive one is reactivated, and grown, only when every role can read the document;** on a
@@ -1055,8 +1017,8 @@ def confirm_proposed_tag(document: Document, dimension: str, value: str) -> Cont
     confirmed, not provisional, not removed, with the proposal's confidence. A link the document
     already holds, removed or held, is confirmed and put back, keeping the confidence it has, or
     taking the proposal's if it has none. The proposal leaves ``proposed_tags``. Raises
-    ``InvalidClassification`` for a name longer than the column, which no run proposes since
-    D-128 (it discards one) but an older row might hold.
+    ``InvalidClassification`` for a name longer than the column, the route's 400. A run proposes a
+    Topic of any length (D-129), so this is where a long one is refused.
     """
     name = normalise_tag_name(value or "")
     with transaction.atomic():
@@ -1098,8 +1060,9 @@ def confirm_proposed_tag(document: Document, dimension: str, value: str) -> Cont
 
 
 def reject_proposed_tag(document: Document, dimension: str, value: str) -> None:
-    """A person rejects a held value (D-128), and the rejection sticks (the requirements audit of
-    D-128, finding A5: the lead's decision of 13 November 2026).
+    """A person rejects a proposed value (the route is D-128's; since D-129 a run proposes only a
+    Topic, at any confidence), and the rejection sticks (the requirements audit of D-128, finding
+    A5: the lead's decision of 13 November 2026).
 
     Matched as ``confirm_proposed_tag`` matches it, by dimension and normalised value;
     ``NotOnThisDocument`` when it is not proposed, the route's 404. The proposal leaves
@@ -1110,10 +1073,10 @@ def reject_proposed_tag(document: Document, dimension: str, value: str) -> None:
     confidence. No Tag is created or changed and no link is made.
 
     Every later classify, reprocess or ``classify_documents`` run skips the value on this document:
-    not proposed, created, reactivated or linked, at any confidence, in the scheme or out of it
+    neither proposed nor linked, at any confidence, in the scheme or out of it
     (``apply_classification`` rule 4b). Until the fix a rejection recorded nothing, and the next run
-    that suggested the value created and linked it at or above the threshold, or proposed it again
-    below it. A person may still apply it themselves (``apply_tag``, by id or by the Topic name
+    that suggested the value proposed it again (or, under D-128, created and linked it at or above
+    the threshold). A person may still apply it themselves (``apply_tag``, by id or by the Topic name
     form): the rejection blocks the machine, never a person.
     """
     name = normalise_tag_name(value or "")

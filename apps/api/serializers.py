@@ -299,11 +299,11 @@ class ClassificationSerializer(serializers.Serializer):
     ``rejected_tags``, the proposals a person rejected (the requirements audit of D-128, finding
     A5): it keeps the machine's assignment beside that decision for later runs to respect.
 
-    ``proposed_tags`` (D-128; ``proposed_topics`` until then) lists the values outside the scheme
-    the classifier held below the threshold, in Project, Process or Topic, each
-    ``{"dimension", "value", "confidence"}``, for a person to confirm or reject through the
-    proposed-tags routes. A value it applied at or above the threshold is not here: it is a
-    ``tag_details`` entry like any other AI tag, and nothing says whether its Tag was created.
+    ``proposed_tags`` (``proposed_topics`` until D-128) lists the Topic values outside the scheme
+    the classifier held, at any confidence (D-129), each ``{"dimension", "value", "confidence"}``,
+    for a person to confirm or reject through the proposed-tags routes. A Project or Process value
+    outside the scheme is discarded and never shown. A Project or Process entry here is one a run
+    made while D-128 was in force, and the routes take it as they take a Topic.
     """
 
     doc_type = serializers.CharField(read_only=True, allow_null=True)
@@ -436,11 +436,11 @@ class TagApplySerializer(serializers.Serializer):
       offered for this document is ``apply_tag``'s, so that an unknown, an inactive and a withheld
       tag share one answer.
     - ``{"dimension": "Topic", "tag_name": "..."}``: a new Topic. A person's name form is
-      Topic-only, as FR-10's "controlled taxonomy growth" had it; D-128 lets the classifier create a
-      Project or Process value and an Administrator add one (``POST /api/tags``), and left this
-      form as it was. So any other dimension is a 400 keyed on ``dimension``. ``tag_name`` is
-      trimmed, refused blank or over the column, and returned normalised as ``Tags`` normalises it
-      (``normalise_tag_name``).
+      Topic-only: FR-10's "controlled taxonomy growth" lets only Topic grow, and the classifier
+      creates no value (D-129). An Administrator adds one in any of the three dimensions
+      (``POST /api/tags``, D-128). So any other dimension is a 400 keyed on ``dimension``.
+      ``tag_name`` is trimmed, refused blank or over the column, and returned normalised as
+      ``Tags`` normalises it (``normalise_tag_name``).
 
     Neither, or both, is a 400 under ``non_field_errors``. A NUL byte in ``tag_name`` is refused by
     ``CharField``'s own validator (D-65).

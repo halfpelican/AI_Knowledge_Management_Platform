@@ -24,12 +24,12 @@ values and confidences, both outcomes, the tag links with their provisional and 
 error. The database named ``kmp`` is
 refused (D-84 decision 1) through the same gate the measurement scripts apply.
 
-**Since D-128** (12 November 2026) ``proposed_tags`` holds every value outside the scheme the run
-held below the threshold, in Project, Process or Topic, each with its dimension; it was
-``proposed_topics``, Topic values only, in records made before. A value outside the scheme at or
-above the threshold is created and linked, so it appears among ``tags`` as an AI link like any
-other: the record, like every reply, does not say whether a Tag row was created (CLAUDE.md
-invariant 1). ``scripts/objective05_verify.py`` counts such links by ``Tag.grown`` instead.
+**``proposed_tags``** holds the Topic values outside the scheme the run proposed, at any confidence,
+each with its dimension (D-129). It was ``proposed_topics``, without the dimension, in records made
+before D-128. A Project or Process value outside the scheme is recorded in
+``discarded_suggestions``. From 12 to 13 November 2026, D-128 created and linked a value outside the
+scheme at or above the threshold, and held one in any dimension below it. Records made then show
+that, and ``scripts/objective05_verify.py`` counts it as a departure from clause 3.
 """
 
 import json

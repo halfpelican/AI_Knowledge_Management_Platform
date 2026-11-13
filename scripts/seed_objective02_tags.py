@@ -30,14 +30,14 @@ nothing: its values are unlinked vocabulary, as Objective 05 measured them.
 
 **Run it before any document is classified.** Classification sees the scheme as it stands, so a
 document classified before these values existed has had a seeded name it suggested treated as a
-value outside the scheme (D-128, 12 November 2026). Below the confidence threshold it is held in the
-document's ``proposed_tags``, in Project, Process or Topic alike, not linked; the proposal stays
-pending until a person confirms or rejects it or the document is classified again, and confirming it
-after this script has run links the seeded value and leaves it vocabulary (``confirm_proposed_tag``,
-``_bring_into_use``; D-105's dated note of 10 November 2026, night). At or above the threshold the
-classifier has already created it as a GROWN Tag and linked it; this script's ``get_or_create`` then
-finds that Tag and leaves it grown, since nothing unsets ``grown``, so that value is offered only
-where every audience role reads a source carrying it, not to every reader as seeded vocabulary is.
+value outside the scheme, at any confidence (D-129). A Topic is held in the document's
+``proposed_tags``, not linked; the proposal stays pending until a person confirms or rejects it or
+the document is classified again, and confirming it after this script has run links the seeded
+value and leaves it vocabulary (``confirm_proposed_tag``, ``_bring_into_use``; D-105's dated note of
+10 November 2026, night). A Project or Process value is recorded in ``discarded_suggestions`` and
+lost to that run. Under D-128 (12 to 13 November 2026) the classifier created such a value as a
+GROWN Tag at or above the threshold. This script's ``get_or_create`` finds a Tag made then and
+leaves it grown, since nothing unsets ``grown``.
 
 **Which database.** It writes wherever ``DATABASE_URL`` points, and prints the name first. Since
 1 November 2026 the alpha's database is ``kmp_demo_20261101``, restored from item 6's snapshot, and

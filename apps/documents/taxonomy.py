@@ -27,14 +27,15 @@ Administrator's scope, as FR-19's seed test does for its log (the security revie
 active tags only, so neither the machine nor a person can newly apply it by id. Its existing links
 stay, and FR-15's reads do not consult ``Tag.active`` (D-72's clarification of 7 October): a retired
 tag still shows on the documents that carry it, as a facet value and as a filter. That is FR-10's
-"preserving historical classification". **Retiring no longer keeps a value out of classification**
-(D-128): a person who types a retired Topic's name reactivates it (``apply_tag``), a person who
-confirms a proposal of a retired value reactivates it (``confirm_proposed_tag``), and so does the
-classifier when it suggests a retired value at or above the threshold, in Project, Process or Topic,
-each answering exactly as for a new value rather than saying that the name exists. Each brings it
-back grown, **but only from a document every role can read** (D-128's security review, finding 1):
-on a document some role cannot read the value is linked and stays retired, since reactivating it
-there would let an old readable carrier offer it again to readers who saw nothing change.
+"preserving historical classification". **A retired value comes back only through a person, on a
+document every role can read**: a person who types a retired Topic's name reactivates it
+(``apply_tag``), and so does a person who confirms a proposal of a retired value
+(``confirm_proposed_tag``). Each answers exactly as for a new value rather than saying that the name
+exists, and each brings it back grown. On a document some role cannot read the value is linked and
+stays retired, since reactivating it there would let an old readable carrier offer it again to
+readers who saw nothing change (D-128's security review, finding 1). The classifier never brings
+one back: since D-129 a retired value it suggests is proposed (a Topic) or discarded (a Project or
+Process). From D-128 until D-129 it reactivated one at or above the threshold.
 ``create_tag`` never reactivates one (D-105's note: "Declined: a route that only reactivates").
 
 It lives beside ``classification.py`` and ``deletion.py`` in ``apps/documents``, outside the

@@ -6,8 +6,8 @@ machine's confidence. Since the requirements re-audit of ``5377e3a`` a person's 
 way: deleted, it was linked again as the machine's by the next classify or reprocess that suggested
 it. A removed link is in no read: not the detail's ``tags`` or ``tag_details``, not the classify
 reply's ``tag_details``, not a browse facet value and not a filter hit. A later classify or reprocess
-neither links the tag again nor alters it, and since D-128 neither creates nor proposes it, in any
-dimension (until then a removed Topic was not proposed again). A removed link is the same 404 as an
+neither links the tag again nor alters it, nor proposes it again, in any dimension (until D-128 a
+removed Topic alone was skipped). A removed link is the same 404 as an
 unknown one when it is confirmed or removed again.
 
 The classification object's ``department_applied_by`` (finding 10) is read here through the classify,

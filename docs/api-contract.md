@@ -1106,28 +1106,27 @@ Waitress, on loopback (D-64). `docs/alpha-deployment.md` is the runbook.
 
 FR-10's server side, 8 and 9 November 2026. The AI operation is `AIService.classify_document`
 (D-104). What becomes of its suggestions is application code in `apps/documents/classification.py`
-(D-105, D-128). Each value is compared with the classifying model's confidence threshold
+(D-105, D-128, D-129). Each value is compared with the classifying model's confidence threshold
 (`confidence_threshold`).
 
 - **The type:** **applied** at or above the threshold, **provisional** below it.
 - **The department:** likewise, and **discarded** outside the established scheme.
 - **A tag in the scheme:** linked `applied_by: "ai"`, provisional below the threshold.
-- **A Project, Process or Topic value outside the scheme** (D-128, 12 November 2026):
-  - at or above the threshold it is **created and applied**: an AI link, unconfirmed and not
-    provisional, its Tag grown. A retired Tag of that name is reactivated only when every role can
-    read the document; otherwise it is linked and stays retired;
-  - a value of more than three words (`MAXIMUM_CREATED_TAG_WORDS`, rule 6 of the prompt), or one
-    carrying a control, format or lone-surrogate character (Unicode Cc, Cf, Cs) or ";", is
-    **discarded**, as one too long for the column is. Not exposed;
-  - below it, it is **proposed** in `proposed_tags`, for a person to confirm (which creates it) or
-    reject;
-  - one this document's readers removed is neither linked nor proposed again.
-  Until D-128 a Topic outside the scheme was always proposed, and a Project or Process discarded.
+- **A value outside the scheme,** Objective 05's clause 3 as written:
+  - **a Topic** is **proposed** in `proposed_tags`, at any confidence, for a person to confirm (which
+    creates it) or reject. The classifier never creates, links or reactivates one;
+  - **a Project or Process value** is **discarded**;
+  - **a value that cannot be stored,** one holding U+0000 or a lone surrogate, is discarded too, with
+    U+FFFD in its place. Neither discard is exposed;
+  - **a value this document's readers removed or rejected** is neither linked nor proposed again.
+
+  For one day (12 November, D-128) the classifier created values at or above the threshold. D-129
+  reversed it.
 
 The scheme is built for the document's own audience, so the classifier is never shown a value that
 exists only on material some reader of the document may not see (invariant 1). A value outside the
 scheme gets the same treatment whether no Tag has it, a grown Tag carried only by restricted
-material has it, or a retired Tag has it, so no reply tells a reader which (D-128). A person's
+material has it, or a retired Tag has it, so no reply tells a reader which (D-105, D-129). A person's
 decision (`user_edited`, a confirmed or removed link) is never overwritten by a later run; the
 machine's values are recorded alongside it.
 
@@ -1168,14 +1167,15 @@ The classification object (`null` for a document never classified):
   says how the machine's suggestion was disposed of. `doc_type` is `null` while the type is
   provisional. The outcomes are `applied`, `provisional`, `discarded` and `confirmed`
   (`docs/schema-v1.md` §3). Confidences are numbers to three places. `discarded_suggestions` is not
-  exposed: it is a record for the Objective 05 measurement (D-106). Since D-128 it holds only a
-  value that may not become a tag: one too long for the column, of more than three words, or
-  holding ";" or a control, format or lone-surrogate character. `rejected_tags`, the proposals a
-  person rejected, is not exposed either.
-- **`proposed_tags`** (D-128, replacing `proposed_topics`) lists the new values held for a person:
-  each an out-of-scheme suggestion below the threshold, in Project, Process or Topic, deduplicated by
-  dimension and value and replaced by each run. A value at or above the threshold is never here: it
-  was created and is in `tag_details` as an AI tag, indistinguishable from any other.
+  exposed: it is a record for the Objective 05 measurement (D-106). It holds the out-of-scheme
+  Project and Process suggestions, and a value that cannot be stored (U+0000 or a lone surrogate)
+  with U+FFFD in its place (D-129). `rejected_tags`, the proposals a person rejected, is not
+  exposed either.
+- **`proposed_tags`** (D-128, replacing `proposed_topics`) lists the out-of-scheme Topic values held
+  for a person, at any confidence, each `{dimension, value, confidence}` with `dimension` "Topic". It
+  is deduplicated by value and replaced by each run.
+  - **D-129:** the shape carries a dimension because, for one day (D-128), Project and Process values
+    below the threshold were proposed too.
 - **`department_applied_by`** says whose value the document's department is, in the tags'
   provenance vocabulary (D-119 finding 10; D-105's dated note of 10 November 2026, night):
   - `"user"`: a person gave it, typed at upload or written through the confirm route. With
@@ -1224,8 +1224,8 @@ dimension sorted by name and always present:
     `POST /api/tags`. Its being offered says nothing about any source.
   - A grown tag is one of three kinds:
     - a Topic a person's name created or brought back from retirement, typed on this route;
-    - since D-128, a value in any of the three dimensions that the classifier created or brought
-      back at or above the threshold, or that a person's confirmation of a proposal did;
+    - a Topic that a person's confirmation of a proposal created or brought back (D-105). For one
+      day, D-128 also had the classifier create values; D-129 reversed it;
     - a value that only material some role cannot read carried when the database was seeded, or
       when `documents 0011` ran.
   - An inactive tag never is.
@@ -1307,34 +1307,27 @@ The tag entry, in the list, in the `POST`'s `201` and in the `DELETE`'s `200`:
   ask for it, and a test holds that every role given `manage_tags` has the Administrator's scope.
 - **A retired tag** (`active: false`) leaves every document's `tag_options` and cannot be applied
   by `tag_id` (the `400`). The classifier is no longer shown it.
-  - **Since D-128, a suggestion of it is treated as a new value,** in any of the three dimensions.
-    At or above the threshold it is linked as an AI tag. Below it, it is proposed, and a person's
-    confirmation links it.
-  - **Reactivation depends on the document.**
-    - **A document every role can read** reactivates it, grown.
-    - **A document some role cannot read** links it and leaves it retired: the security review of
-      D-128, finding 1. Reactivating it there would put the value back in front of every reader of
-      material that already carries it, though nothing they read had changed. The readers of such a
-      document are Administrators, who see retired tags in `GET /api/tags`. The same rule holds for
-      a person's Topic name form below.
-  - **So retiring a value does not keep the classifier from bringing it back through a document
-    every role reads.** Treating a retired value differently there would tell the reader that a
-    value of that name exists.
-  - **Until D-128,** a Project or Process suggestion of it was discarded, and a Topic one proposed.
+  - **A suggestion of it is treated as a new value:** a Topic one is proposed, and a Project or
+    Process one is discarded (D-129, as before D-128). The classifier never reactivates it.
+  - **A person's confirmation of a proposed Topic,** or their Topic name form below, reactivates it,
+    grown, only through a document every role can read: the security review of D-128, finding 1.
+    - Through any other document, it is linked and stays retired. Reactivating it there would put
+      the value back in front of every reader of material that already carries it, though nothing
+      they read had changed.
+    - The readers of such a document are Administrators, who see retired tags in `GET /api/tags`.
   - **It stays on the documents that carry it:** FR-15's reads do not consult `active` (D-72), so
     it is still in their `tags` and `tag_details`, a facet value and a filter.
 - **There is no reactivation route,** and `POST /api/tags` answers `409` for a retired name rather
-  than reactivating it. A retired value comes back in three ways, each only through a document
-  every role can read (D-128's security review); through any other document it is linked and stays
+  than reactivating it. A retired Topic comes back in two ways, each only through a document every
+  role can read (D-128's security review); through any other document it is linked and stays
   retired:
   - a person types the name of a retired Topic on `POST /api/documents/{id}/tags`, where it is
     linked and reactivated and answered `201` exactly as a new Topic would be. If that document
     already holds a link to it, live or removed, the link is kept or restored: `200`;
-  - a person confirms a proposal of it, in any of the three dimensions since D-128;
-  - the classifier suggests it at or above the threshold (D-128).
+  - a person confirms a proposal of it.
 
   Applying it by `tag_id` is the `400`: an inactive tag is never offered. A retired Project or
-  Process tag stayed retired until D-128.
+  Process tag stays retired (D-129; for one day D-128 let the classifier bring one back).
 
 ## NIT3004 — FR-19, Objective 06
 

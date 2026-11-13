@@ -268,8 +268,8 @@ def test_a_retired_tag_leaves_the_options_and_stays_on_the_documents_that_carry_
 
 def test_typing_a_retired_topics_name_brings_it_back(session_client, administrator_client):
     """There is no reactivation route. A retired Topic comes back the way confirming a proposal of it
-    brings one back (confirm_proposed_tag; since D-128 the classifier does too, at or above the
-    threshold): a person names it, and it is linked and reactivated, answered as a new Topic would
+    brings one back (confirm_proposed_tag; the classifier never does, since D-129): a person names it,
+    on a document every role reads, and it is linked and reactivated, answered as a new Topic would
     be, since a retired value is in no scheme. That is on a document holding no link
     to it, as here; on one that holds a link, live or removed, the link is kept or restored and the
     answer is 200 (the next test; the focused re-audit of ``88a488d``)."""

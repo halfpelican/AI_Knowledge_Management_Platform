@@ -219,11 +219,12 @@ export function reprocessDocument(docId, options = {}) {
  * - `tag_details` — every tag link, `[{content_tag_id, dimension, name,
  *   applied_by, confirmed, provisional, confidence}]`, `applied_by` "ai" or
  *   "user". A link with `provisional: true` is a held suggestion and is not among
- *   `tags`. A link a person removed is in no read. Nothing in a link says whether a
- *   classify run created its tag (D-128): a value outside the scheme may be one no
- *   tag had, a retired one, or one other material carries that some reader of this
- *   document cannot see, and a reply that told them apart would disclose the last
- *   two (CLAUDE.md §6, invariant 1). The screen shows every AI link alike.
+ *   `tags`. A link a person removed is in no read. Nothing in a link, or in a
+ *   proposal, says whether its value was new to the database, retired, or carried
+ *   by other material that some reader of this document cannot see: a reply that
+ *   told them apart would disclose the last two (CLAUDE.md §6, invariant 1). The
+ *   screen shows every AI link alike. Since D-129 the classifier creates no value
+ *   of its own; a person's confirmation of a proposed Topic does.
  * - `tag_options` — `{Project: [{tag_id, tag_name}], Process: [...], Topic: [...]}`,
  *   the tags a person may apply to this document, which are its own
  *   classification scheme: always all three keys, each sorted by name, tags
@@ -316,9 +317,9 @@ export function removeTag(docId, contentTagId, options = {}) {
 export const TAG_OPTION_DIMENSIONS = ['Project', 'Process', 'Topic']
 
 /**
- * The one dimension a person may name a new value in, through `applyTag`'s name form.
- * D-128 lets the classifier create a Project, Process or Topic value, and a person
- * confirm one it proposed (`confirmProposedTag`), but it left this form Topic-only.
+ * The one dimension a person may name a new value in, through `applyTag`'s name form,
+ * and the one dimension the classifier proposes new values in (`confirmProposedTag`;
+ * Objective 05's clause 3, D-129).
  */
 export const NEW_TAG_DIMENSION = 'Topic'
 

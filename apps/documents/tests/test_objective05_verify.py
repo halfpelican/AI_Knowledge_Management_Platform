@@ -1,10 +1,13 @@
-"""``scripts/objective05_verify.py`` reports D-128's departure from Objective 05's clause 3 rather than
-hiding it (D-128, 12 November 2026).
+"""``scripts/objective05_verify.py`` scores Objective 05's clause 3 as written, and reports a departure
+from it rather than hiding it.
 
 Clause 3: "suggested values falling outside the established scheme must be discarded in the
 Department, Project and Process dimensions while being proposed for confirmation in the Topic
-dimension only". Since D-128 the shipped build holds a Project or Process value below the threshold
-and creates and links a value at or above it, so the script counts:
+dimension only". The shipped build meets it again since D-129 (13 November 2026), which reverses
+D-128's creation of values: a classification proposes a Topic outside the scheme and discards a
+Project or Process value. From 12 to 13 November 2026, D-128 held a Project or Process value below
+the threshold and created and linked a value at or above it. The script still counts such a
+departure strictly:
 
 - a Topic entry of ``proposed_tags`` as ``topic_proposed``, which the clause asks for;
 - a Project or Process entry as ``project_process_proposed``, a clause 3 violation;
@@ -12,27 +15,32 @@ and creates and links a value at or above it, so the script counts:
   database the scheme is seeded ``--scheme-only``, never grown, and no person acts.
 
 The script runs here as an operator runs it, through ``main()`` with its arguments, against this
-test's database, on rows the apply layer itself wrote (``apply_classification``) for documents
-titled as the frozen reference set titles them. The reference set and the manifest are only read.
+test's database, for documents titled as the frozen reference set titles them, on rows the apply
+layer itself wrote (``apply_classification``). The departures D-128 produced are written onto
+those rows directly, since the shipped build no longer produces them. The reference set and the
+manifest are only read.
 Two things are replaced, because neither is under test and neither may run here: FLM's version (no
 FLM is reached) and the commit record (no git state is asserted).
 """
 
 import json
 import sys
+from decimal import Decimal
 from pathlib import Path
 
 import django
 import pytest
 
 from apps.core.constants import (
+    AI_APPLIED,
     EMPLOYEE_ROLE_NAME,
     PROCESS_DIMENSION,
     PROJECT_DIMENSION,
+    SOURCE_TYPES,
     TOPIC_DIMENSION,
 )
 from apps.documents.classification import apply_classification, confidence_threshold
-from apps.documents.models import Document, Tag
+from apps.documents.models import ContentTag, Document, DocumentAnalysis, Tag
 
 from .classification_builders import EPSILON, STUB_CHAT_MODEL, classification, scheme
 
@@ -111,11 +119,32 @@ def test_a_topic_proposal_is_what_clause_3_asks_for(titled, monkeypatch, tmp_pat
 
 
 @pytest.mark.parametrize("dimension", [PROJECT_DIMENSION, PROCESS_DIMENSION])
+@pytest.mark.parametrize("confidence", [BELOW, THRESHOLD], ids=["below", "at"])
+def test_a_project_or_process_value_outside_the_scheme_is_discarded_and_meets_clause_3(
+    titled, monkeypatch, tmp_path, dimension, confidence
+):
+    """The shipped build since D-129: discarded at any confidence, nothing proposed or created."""
+    _, document = titled()
+    classified(document, (dimension, "harbour upgrade", confidence))
+
+    result = clause_3(monkeypatch, tmp_path)
+
+    assert result["project_process_discarded"] == 1
+    assert (result["topic_proposed"], result["project_process_proposed"], result["created_by_classifier"]) == (0, 0, 0)
+    assert result["violations"] == []
+    assert result["passes"] is True
+
+
+@pytest.mark.parametrize("dimension", [PROJECT_DIMENSION, PROCESS_DIMENSION])
 def test_a_project_or_process_proposal_is_a_clause_3_violation(titled, monkeypatch, tmp_path, dimension):
+    """A Project or Process proposal as D-128 made one, written onto the row."""
     _, topic_document = titled()
     classified(topic_document, (TOPIC_DIMENSION, "budget planning", BELOW))
     reference_id, document = titled()
-    classified(document, (dimension, "harbour upgrade", BELOW))
+    classified(document)
+    analysis = DocumentAnalysis.objects.get(document=document)
+    analysis.proposed_tags = [{"dimension": dimension, "value": "harbour upgrade", "confidence": BELOW}]
+    analysis.save(update_fields=["proposed_tags"])
 
     result = clause_3(monkeypatch, tmp_path)
 
@@ -127,12 +156,18 @@ def test_a_project_or_process_proposal_is_a_clause_3_violation(titled, monkeypat
 
 def test_an_ai_link_to_a_value_the_classifier_created_is_a_clause_3_violation(titled, monkeypatch, tmp_path):
     """Against a scheme seeded ``--scheme-only`` (vocabulary, not grown), an AI link to a seeded value
-    is clause 3's business as usual, and one to a value the classifier created, grown, is not."""
+    is clause 3's business as usual, and one to a value the classifier created, grown, is not. The
+    created value is written onto the rows as D-128 made one; the shipped build makes none."""
     Tag.objects.create(tag_name="purchasing", dimension=PROCESS_DIMENSION)  # seeded, not grown
     _, seeded = titled()
     classified(seeded, (PROCESS_DIMENSION, "purchasing", THRESHOLD), process=["purchasing"])
     reference_id, created = titled()
-    classified(created, (PROJECT_DIMENSION, "harbour upgrade", THRESHOLD))
+    classified(created)
+    ContentTag.objects.create(
+        tag=Tag.objects.create(tag_name="harbour upgrade", dimension=PROJECT_DIMENSION, grown=True),
+        source_type=SOURCE_TYPES[0], source_id=created.pk, applied_by=AI_APPLIED, confirmed=False,
+        provisional=False, confidence=Decimal(str(THRESHOLD)),
+    )
     assert set(Tag.objects.values_list("tag_name", "grown")) == {("purchasing", False), ("harbour upgrade", True)}
 
     result = clause_3(monkeypatch, tmp_path)

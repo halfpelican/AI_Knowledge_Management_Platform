@@ -1892,10 +1892,10 @@ class DocumentReprocessView(APIView):
 # analysis that is not this document's) is answered with the scoped lookup's own 404 body, word
 # for word. Two of the routes are throttled, classify in the "ingestion" scope and a person's apply
 # in "tagging" (D-79 and its note on tagging). DRF checks a throttle before the method runs, so past
-# the rate their 429 comes before the 404, the same for every id. Since D-128 a classification
-# creates and applies a value outside the scheme in Project, Process or Topic at or above the
-# threshold, and holds one below it for the proposed-tags routes; no reply says whether a Tag row
-# was created (apps/documents/classification.py ``apply_classification``, CLAUDE.md invariant 1).
+# the rate their 429 comes before the 404, the same for every id. A classification proposes a Topic
+# outside the scheme, at any confidence, for the proposed-tags routes, and discards a Project or
+# Process value outside it. It creates no Tag (Objective 05's clause 3 as written; D-129, which
+# reverses D-128's creation; apps/documents/classification.py ``apply_classification``).
 
 
 class DocumentClassifyView(APIView):
@@ -2026,10 +2026,10 @@ class DocumentTagsView(APIView):
     and a throttled one writes nothing.
 
     **The other document tag routes are not throttled.** Confirming or removing a link and rejecting
-    a proposal create no Tag. ``confirm_proposed_tag`` can create a Project, Process or Topic value
-    (D-128), but only from a proposal the classifier made, and classification, which since D-128 can
-    itself create values, is reached over HTTP only through upload, reprocess and classify, which
-    share the "ingestion" budget. An Administrator adding a value (``POST /api/tags``, D-128) spends
+    a proposal create no Tag. ``confirm_proposed_tag`` can create a value, but only from a proposal
+    the classifier made, and classification is reached over HTTP only through upload, reprocess and
+    classify, which share the "ingestion" budget. Since D-129 a classification creates no value
+    itself. An Administrator adding a value (``POST /api/tags``, D-128) spends
     this route's "tagging" budget.
     """
 
@@ -2120,9 +2120,10 @@ class _ProposedTagView(APIView):
 
 
 class DocumentProposedTagConfirmView(_ProposedTagView):
-    """``POST /api/documents/{id}/proposed-tags/confirm`` — a person confirms a value the classifier
-    held below the threshold, in Project, Process or Topic (D-128). Its Tag is fetched or created
-    and brought into use, and linked ``applied_by="ai"``, confirmed (``confirm_proposed_tag``); the
+    """``POST /api/documents/{id}/proposed-tags/confirm`` — a person confirms a proposal: a Topic the
+    classifier held outside the scheme (D-129), or a Project or Process value a run held while D-128
+    was in force (the route is dimension-generic). Its Tag is fetched or created and brought into
+    use, and linked ``applied_by="ai"``, confirmed (``confirm_proposed_tag``); the
     answer is the same whether the Tag was created, fetched or reactivated."""
 
     def act(self, document, dimension, value):

@@ -206,8 +206,8 @@ def test_a_backfilled_restricted_value_stays_out_of_an_employees_options_when_it
 
 def propose(document, name):
     """The machine proposes ``name`` for ``document`` while no Topic has it, as a classification run
-    before the seed script does: outside the scheme and below the threshold, a value goes to
-    ``proposed_tags`` (D-128; at or above the threshold it would be created and applied)."""
+    before the seed script does: outside the scheme, a Topic goes to ``proposed_tags`` at any
+    confidence (D-129), here below the threshold."""
     apply_classification(
         document, classification(tags=[(TOPIC_DIMENSION, name, BELOW_THRESHOLD)]),
         scheme=tag_scheme(document),

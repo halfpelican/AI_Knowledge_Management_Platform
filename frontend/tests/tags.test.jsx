@@ -427,7 +427,7 @@ const ASSET_REGISTER = { tag_id: 'tag-0006', dimension: 'Topic', tag_name: 'asse
 const DUPLICATE_DETAIL = 'A tag with this name already exists in this dimension. A retired tag is not added again here.'
 
 describe('D-128: an Administrator adds a tag value', () => {
-  it('says the value is offered for every document whatever its audience, and that the AI adds values too, before anything is added', async () => {
+  it('says the value is offered for every document whatever its audience, and what the AI does with values outside the list, before anything is added', async () => {
     serveApi(routes())
     renderTags()
 
@@ -439,9 +439,12 @@ describe('D-128: an Administrator adds a tag value', () => {
     expect(TEXT.tagCreateScope).toMatch(/to everyone who tags a document, and to the AI when it classifies one/)
     // The AI adds values itself, and a retired one can come back that way.
     expect(section.getByText(TEXT.tagCreateAiNote)).toBeTruthy()
-    expect(TEXT.tagCreateAiNote).toMatch(/AI adds values/)
-    expect(TEXT.tagCreateAiNote).toMatch(/enough confidence/)
-    expect(TEXT.tagCreateAiNote).toMatch(/A retired value can come back/)
+    // D-129: the AI adds no value of its own; a new topic waits for a person, and a
+    // project or process outside the list is discarded (Objective 05 clause 3).
+    expect(TEXT.tagCreateAiNote).toMatch(/does not add values of its own/)
+    expect(TEXT.tagCreateAiNote).toMatch(/waits for a person to confirm it/)
+    expect(TEXT.tagCreateAiNote).toMatch(/project or process outside the list is discarded/)
+    expect(TEXT.tagCreateAiNote).toMatch(/retired topic comes back only if a person/)
     // The form: a dimension from the three tag dimensions, a name, and Add.
     expect(Array.from(dimensionSelect().options, (option) => [option.value, option.textContent])).toEqual([
       ['Project', TEXT.documentFieldProject],

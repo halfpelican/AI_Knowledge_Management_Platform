@@ -313,10 +313,8 @@ def test_effective_roles_are_closed_under_generalisation():
 
 
 def test_fr10s_confidence_threshold_is_per_classifying_model():
-    """D-122, then D-128: claude-haiku-5-5's own value, by D-106's rule on the development documents.
-    It was 0.72 on the earlier prompt (10 November 2026, corpus/objective-05/runs/2026-11-10/
-    dev-sweep-haiku/), and is 0.80 on D-128's prompt (12 November 2026, corpus/objective-05/runs/
-    2026-11-12/dev-sweep-haiku-d127/). Both times Haiku typed all 57 right, so it is the lowest
-    confidence on a correct type assignment. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
-    assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.80}
+    """D-122: claude-haiku-5-5's own value, by D-106's rule on the development documents (10 November
+    2026, corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/): the lowest confidence on a correct type
+    assignment, since Haiku typed all 57 right. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
+    assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.72}
     assert 0.0 < constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0

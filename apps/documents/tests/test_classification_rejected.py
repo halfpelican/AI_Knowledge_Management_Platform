@@ -1,8 +1,9 @@
 """A proposal a person rejects stays rejected: ``reject_proposed_tag`` and ``apply_classification`` rule
 4b (the requirements audit of D-128, finding A5; the lead's decision of 13 November 2026).
 
-The audit found that a rejection dropped the proposal and recorded nothing, so a later run created and
-linked the value at or above the threshold, or proposed it again below it. FR-10's correction clause:
+The audit found that a rejection dropped the proposal and recorded nothing, so a later run proposed the
+value again (and, while D-128 was in force, created and linked it at or above the threshold). FR-10's
+correction clause:
 "any value a user edits are retained and is not overwritten by later reprocessing", with "the machine
 assignment ... retained alongside it" (UC-09 A3). Now:
 
@@ -12,13 +13,21 @@ assignment ... retained alongside it" (UC-09 A3). Now:
   before the in-scheme match, so it is not linked even once it is a Tag in the scheme;
 - a run never replaces the record.
 
-Driven with classifications and schemes made by hand, as test_classification_apply.py is. The routes,
-from both roles, are apps/api/tests/test_fr10_rejected_proposals.py.
+Driven with classifications and schemes made by hand, as test_classification_apply.py is. Since D-129
+a run proposes a Topic outside the scheme and discards a Project or Process value, so a Project or
+Process proposal is written onto the analysis row, as a run left one while D-128 was in force. The
+routes, from both roles, are apps/api/tests/test_fr10_rejected_proposals.py.
 """
 
 import pytest
 
-from apps.core.constants import PROCESS_DIMENSION, PROJECT_DIMENSION, REPOSITORY_TAG_DIMENSIONS, SOURCE_TYPES
+from apps.core.constants import (
+    PROCESS_DIMENSION,
+    PROJECT_DIMENSION,
+    REPOSITORY_TAG_DIMENSIONS,
+    SOURCE_TYPES,
+    TOPIC_DIMENSION,
+)
 from apps.documents.classification import NotOnThisDocument, apply_classification, reject_proposed_tag
 from apps.documents.models import ContentTag, DocumentAnalysis, Tag
 
@@ -40,10 +49,15 @@ def analysis_of(document):
 
 
 def propose(document, dimension, confidence=BELOW_THRESHOLD):
-    """A run against a scheme without the value, below the threshold: the value is held."""
-    analysis = apply_classification(
-        document, classification(tags=[(dimension, "Harbour  Upgrade", confidence)]), scheme=scheme()
-    )
+    """The value held on ``document``. A Topic by a run against a scheme without it (D-129). A Project
+    or Process value is discarded by a run since D-129, so its proposal is written onto the analysis
+    row after one, as a run left it while D-128 was in force."""
+    suggested = [(dimension, "Harbour  Upgrade", confidence)] if dimension == TOPIC_DIMENSION else []
+    analysis = apply_classification(document, classification(tags=suggested), scheme=scheme())
+    if dimension != TOPIC_DIMENSION:
+        analysis.proposed_tags = [{"dimension": dimension, "value": VALUE, "confidence": confidence}]
+        analysis.save(update_fields=["proposed_tags"])
+    analysis.refresh_from_db()
     assert analysis.proposed_tags == [{"dimension": dimension, "value": VALUE, "confidence": confidence}]
 
 

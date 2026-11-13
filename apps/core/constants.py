@@ -471,9 +471,7 @@ SEARCH_THROTTLE_RATE = "30/min"
 # the rate is not about NPU time, since applying a tag calls no provider: it bounds how fast one
 # user can grow the vocabulary. The page sends one request per tag a person adds. Since D-128
 # the same scope also limits POST /api/tags, an Administrator adding a vocabulary value; its GET is
-# not throttled. The other tag routes are not throttled, and D-79's note says why. A value the
-# classifier creates (D-128) is bounded by the "ingestion" scope instead, since classification is
-# reached over HTTP only through upload, reprocess and classify.
+# not throttled. The other tag routes are not throttled, and D-79's note says why.
 TAGGING_THROTTLE_RATE = "30/min"
 # POST /api/transcriptions, scope "transcription" (D-123). The page posts one segment at a
 # time, each taking FLM 7-10 s for 30 s of audio, so a transcribing page sends about six a
@@ -706,27 +704,14 @@ CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95
 
 # Per classification model (D-122): a confidence belongs to the model that reported it, as a cosine
 # belongs to the embedding model (D-120). claude-haiku-5-5's value comes from D-106's rule, run on the
-# development documents through the shipped classify_document, 19 documents three times each.
-#   - On 10 November 2026 (corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/) Haiku typed all 57
-#     right, so nothing beats applying everything. The rule's fallback applies: the lowest confidence
-#     seen on a correct assignment, which was 0.72.
-#   - On 12 November 2026, D-128 revised rules 6 and 7 of the prompt, and the rule ran again on it
-#     (corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/). All 57 were right again, and the
-#     lowest correct confidence was 0.80. The user chose the rule's result.
-# The development set has seven more documents than when 0.95 was chosen (caf9e22, D-106's note).
-# Any model not listed, gemma3:4b included, keeps CLASSIFICATION_CONFIDENCE_THRESHOLD, which was
-# derived on the earlier prompt (D-128's "Not covered"). apps/documents/classification.py's
-# confidence_threshold() reads both.
-CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.80}
-
-# The most words a value outside the scheme may have to be created or proposed (D-128). Rule 6 of
-# the classification prompt asks for a new value of one to three words; this is that rule enforced by
-# the application rather than trusted to the model (D-128's security review, finding 2). A created
-# value joins the scheme every later prompt lists, so a longer one is text an uploaded document
-# could plant in other documents' prompts. apps/documents/classification.py's apply rule 4d sends a
-# value with more words to discarded_suggestions, as it does one with a control or format character
-# or the prompt's list separator ";". A value already a Tag in the scheme is matched as it is.
-MAXIMUM_CREATED_TAG_WORDS = 3
+# development documents through the shipped classify_document, 19 documents three times each
+# (10 November 2026, corpus/objective-05/runs/2026-11-10/dev-sweep-haiku/). Haiku typed all 57 right,
+# so nothing beats applying everything, and the rule's fallback applies: the lowest confidence seen on
+# a correct assignment, 0.72. The development set has seven more documents than when 0.95 was chosen
+# (caf9e22, D-106's note). Any model not listed, gemma3:4b included, keeps
+# CLASSIFICATION_CONFIDENCE_THRESHOLD; apps/documents/classification.py's confidence_threshold()
+# reads both.
+CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
 
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
 # recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):

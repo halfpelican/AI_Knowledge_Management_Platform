@@ -8,8 +8,9 @@ next classify or reprocess linked the tag again. Now:
 
 - an AI link that is removed stays, marked ``removed``, with the confidence and provisional flag the
   machine gave it, whether it was held, applied or confirmed;
-- a later run neither links it again nor alters it, and since D-128 neither creates, reactivates nor
-  proposes its tag, in Project, Process or Topic (until then a removed Topic was not proposed again);
+- a later run neither links it again nor alters it, nor proposes it again, in Project, Process or
+  Topic (until D-128 a removed Topic alone was skipped). The classifier never reactivates its tag,
+  since D-129;
 - a removed link is no longer found by id, so it cannot be confirmed or removed a second time;
 - ``tag_scheme`` still counts it as a link, so the tag stays in its own document's scheme: offered
   there to be applied again, and shown to the classifier, which leaves the removed link alone.

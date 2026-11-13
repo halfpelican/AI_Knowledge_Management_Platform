@@ -17,24 +17,25 @@ database. The three clauses of Objective 05, as the proposal words them:
    values appear only in discarded_suggestions and never as links, and out-of-scheme Topic values
    appear only in proposed_tags and never as links.
 
-**D-128 (12 November 2026) departs from clause 3, and this script reports the departure rather than
-hiding it.** The shipped build creates and applies a value outside the scheme in Project, Process or
-Topic when its confidence is at or above the threshold, and holds one below it in
-``DocumentAnalysis.proposed_tags`` (``proposed_topics`` until ``documents 0012``) in any of the
-three dimensions. So, counted per document:
+**The shipped build meets clause 3 again since D-129** (13 November 2026), which reverses D-128's
+creation of values. A Topic value outside the scheme is held in ``DocumentAnalysis.proposed_tags``
+(``proposed_topics`` until ``documents 0012``) at any confidence. A Project or Process value is
+discarded into ``discarded_suggestions``. No Tag is created. From 12 to 13 November 2026, D-128
+created and applied such a value at or above the threshold, and held one in any of the three
+dimensions below it. This script still counts any such departure strictly, so a run on a build or
+database from that window shows it rather than hiding it. Counted per document:
 
 - a Topic entry of ``proposed_tags`` is ``topic_proposed``, as clause 3 asks;
 - a Project or Process entry is ``project_process_proposed`` and a **clause 3 violation**: the
   clause says such a value is discarded;
 - an AI link whose Tag is ``grown`` is a value the classifier created outside the seeded scheme,
   counted as ``created_by_classifier`` and recorded as a **clause 3 violation**. On a measurement
-  database no person acts, the scheme is seeded ``--scheme-only`` (whose values are never grown),
-  and only D-128's creation makes a grown tag, so a grown tag on an AI link can have come from
-  nowhere else.
+  database no person acts, and the scheme is seeded ``--scheme-only``, whose values are never
+  grown. Only D-128's creation made a grown tag there, so a grown tag on an AI link can have come
+  from nowhere else.
 
-Clause 3 is therefore reported NOT met on any run in which D-128 held or created a Project or
-Process value, or created any value. PR 85's evidence stands for the build it ran on. The reference
-set (corpus/objective-05/reference.json) is frozen and is only read.
+Clause 3 is MET when no such violation is found. PR 85's evidence stands for the build it ran on.
+The reference set (corpus/objective-05/reference.json) is frozen and is only read.
 
 Usage, in PowerShell::
 

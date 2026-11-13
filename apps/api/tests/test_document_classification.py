@@ -476,8 +476,8 @@ PROPOSAL = {"dimension": TOPIC_DIMENSION, "value": "budget planning", "confidenc
 
 @pytest.fixture
 def proposed(session_client, stub_ai_service):
-    """A document whose classification held the out-of-scheme Topic "budget planning" below the
-    threshold (D-128: at or above it, the value would have been created and applied)."""
+    """A document whose classification held the out-of-scheme Topic "budget planning", here below the
+    threshold (D-129: a Topic outside the scheme is held at any confidence)."""
     document = make_document(session_client.user)
     stub_ai_service.classification = classification(
         department="People", tags=[(TOPIC_DIMENSION, "Budget  Planning", BELOW_THRESHOLD)]

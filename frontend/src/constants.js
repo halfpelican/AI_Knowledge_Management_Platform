@@ -762,7 +762,7 @@ export const TEXT = {
   tagAdding: 'Adding…',
   tagNewTopicLegend: 'Type a new topic',
   tagNewTopicLabel: 'New topic',
-  tagNewTopicHint: `Only a topic can be typed here. A project or process is chosen from the existing tags, or confirmed from the AI’s suggestions. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagNewTopicHint: `Only a topic can be new; a project or process is chosen from the existing tags. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
   tagNewTopicAdd: 'Add topic',
   // The 201 and the 200 are worded apart: a new link, or a tag the document already
   // had, which the server confirmed (a held suggestion), restored (one removed) or
@@ -1448,7 +1448,7 @@ export const TEXT = {
   // a person confirming it as a suggestion, brings it back, and the last sentence
   // says so rather than promising it can never be applied again.
   tagDeleteBody:
-    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired tag can come back later, if the AI suggests it again or a person confirms or names it again, on a document everyone can read.',
+    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired topic can come back later, if a person confirms it from the AI’s suggestions or names it again, on a document everyone can read; a retired project or process stays retired.',
   tagDeleteConfirmLabel: 'Delete tag',
   tagDeleting: 'Deleting…',
   tagDeleteCancel: 'Cancel',
@@ -1467,13 +1467,13 @@ export const TEXT = {
   // An Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create"). The
   // value is vocabulary: offered for every document whatever its audience, and listed
   // for the AI when it classifies one. The two sentences under the heading say so, and
-  // that the AI adds values itself, so a retired one can come back: D-128's
-  // consequence, stated where a person retiring a tag will read it.
+  // what the AI does with values outside the list (D-129, which reverses D-128's
+  // creation of values): stated where a person retiring a tag will read it.
   tagCreateHeading: 'Add a tag value',
   tagCreateScope:
     'A value added here is offered for every document, whatever its audience: to everyone who tags a document, and to the AI when it classifies one. Anyone who can read a document can see its name.',
   tagCreateAiNote:
-    'The AI adds values too. When it classifies a document with enough confidence, it can add a new project, process or topic and apply it; with less, it suggests the value instead, and the value is added if a person confirms the suggestion. A retired value can come back either way.',
+    'The AI does not add values of its own. When it classifies a document it applies values already in this list; a new topic it suggests waits for a person to confirm it, and a project or process outside the list is discarded. A retired topic comes back only if a person confirms or names it again, on a document everyone can read.',
   tagCreateNameLabel: 'Name',
   // The server stores a name trimmed, single-spaced and in lower case, so the name the
   // list shows, and the 201 announces, can differ from the one typed in case alone.

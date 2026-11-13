@@ -2,16 +2,21 @@
 (the requirements audit of D-128, finding A5; the lead's decision of 13 November 2026).
 
 The auditor executed the finding. A held value was rejected through the route, and the next classify
-created and linked it as an AI tag at or above the threshold, or proposed it again below it. That
-contradicts FR-10's correction clause ("any value a user edits are retained and is not overwritten
-by later reprocessing") and UC-09 A3. Here:
+created and linked it as an AI tag at or above the threshold, or proposed it again below it (that
+was while D-128 was in force). That contradicts FR-10's correction clause ("any value a user edits
+are retained and is not overwritten by later reprocessing") and UC-09 A3. Here:
 
-- **The audit's own case,** in Project, Process and Topic: after the rejection, a classify at the
-  threshold creates no Tag and no link, and one below it proposes nothing.
+- **The audit's own case,** in Project, Process and Topic: after the rejection, a classify at or
+  below the threshold skips the value entirely. It is not proposed, not discarded and not linked,
+  and no Tag is made.
 - **In the scheme:** an Administrator then adds the value as vocabulary (``POST /api/tags``), so the
   document's prompt lists it, and a classify still does not link it.
-- **Scope:** the rejection is this document's. The same value on another document is created at the
-  threshold and held below it, as for any value.
+- **Scope:** the rejection is this document's. On another document a classification proposes the
+  same Topic and discards the same Project or Process value, as for any value (D-129).
+
+Since D-129 a classification proposes a Topic outside the scheme and discards a Project or Process
+value, so a Project or Process proposal is written onto the analysis row before it is rejected, as a
+run left one while D-128 was in force.
 - **A person is never blocked:** a person can still apply the value by ``tag_id`` once it exists,
   and a Topic by its name.
 
@@ -24,7 +29,6 @@ import pytest
 
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
-    AI_APPLIED,
     DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
     REPOSITORY_TAG_DIMENSIONS,
@@ -33,7 +37,7 @@ from apps.core.constants import (
     USER_APPLIED,
 )
 from apps.documents.classification import confidence_threshold
-from apps.documents.models import ContentTag, Document, ExtractedContent, Tag
+from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
 from apps.documents.tests.classification_builders import EPSILON, STUB_CHAT_MODEL, classification
 
 pytestmark = pytest.mark.django_db
@@ -72,11 +76,19 @@ def classify(client, stub, document, dimension, confidence):
 
 
 def rejected_on(client, stub, document, dimension):
-    """The audit's set-up: the value is held below the threshold, then rejected through the route."""
+    """The audit's set-up: the value is held, then rejected through the route. A Topic is held by a
+    classify below the threshold. A Project or Process value is discarded by a classify since D-129,
+    so its proposal is written onto the analysis row after one, as a run left it while D-128 was in
+    force."""
     held = classify(client, stub, document, dimension, BELOW)
-    assert held["classification"]["proposed_tags"] == [
-        {"dimension": dimension, "value": VALUE, "confidence": BELOW}
-    ]
+    if dimension != TOPIC_DIMENSION:
+        analysis = DocumentAnalysis.objects.get(document=document)
+        analysis.proposed_tags = [{"dimension": dimension, "value": VALUE, "confidence": BELOW}]
+        analysis.save(update_fields=["proposed_tags"])
+    else:
+        assert held["classification"]["proposed_tags"] == [
+            {"dimension": dimension, "value": VALUE, "confidence": BELOW}
+        ]
     response = client.post(
         f"{DOCUMENTS_URL}/{document.id}/proposed-tags/reject",
         {"dimension": dimension, "value": VALUE}, format="json",
@@ -89,23 +101,21 @@ def rejected_on(client, stub, document, dimension):
 
 
 @pytest.mark.parametrize("dimension", REPOSITORY_TAG_DIMENSIONS)
-def test_a_rejected_proposal_is_neither_created_at_the_threshold_nor_proposed_again_below_it(
-    session_client, stub_ai_service, dimension
-):
+def test_a_rejected_proposal_is_skipped_by_every_later_classify(session_client, stub_ai_service, dimension):
+    """At the threshold and below it: not proposed, not discarded, not linked. Without the skip, a
+    classification would propose the Topic again, or discard the Project or Process value into the
+    record, at either confidence (D-129)."""
     client = session_client.client
     document = make_document(session_client.user)
     rejected_on(client, stub_ai_service, document, dimension)
 
-    at = classify(client, stub_ai_service, document, dimension, THRESHOLD)
+    for confidence in (THRESHOLD, BELOW):
+        body = classify(client, stub_ai_service, document, dimension, confidence)
 
-    assert (at["tag_details"], at["classification"]["proposed_tags"]) == ([], [])
-    assert not Tag.objects.filter(tag_name=VALUE).exists()
-    assert not links_of(document).exists()
-
-    below = classify(client, stub_ai_service, document, dimension, BELOW)
-
-    assert (below["tag_details"], below["classification"]["proposed_tags"]) == ([], [])
-    assert not Tag.objects.filter(tag_name=VALUE).exists()
+        assert (body["tag_details"], body["classification"]["proposed_tags"]) == ([], []), confidence
+        assert DocumentAnalysis.objects.get(document=document).discarded_suggestions == [], confidence
+        assert not Tag.objects.filter(tag_name=VALUE).exists()
+        assert not links_of(document).exists()
 
 
 @pytest.mark.parametrize("dimension", REPOSITORY_TAG_DIMENSIONS)
@@ -141,16 +151,16 @@ def test_a_rejection_on_one_document_does_not_block_the_value_on_another(
 
     body = classify(client, stub_ai_service, other, dimension, SIDES[side])
 
-    if side == "at-threshold":
-        [entry] = body["tag_details"]
-        assert (entry["dimension"], entry["name"], entry["applied_by"], entry["provisional"]) == (
-            dimension, VALUE, AI_APPLIED, False,
-        )
-        assert links_of(other).get().tag == Tag.objects.get(tag_name=VALUE, dimension=dimension)
+    entry = {"dimension": dimension, "value": VALUE, "confidence": SIDES[side]}
+    record = DocumentAnalysis.objects.get(document=other)
+    if dimension == TOPIC_DIMENSION:
+        assert body["classification"]["proposed_tags"] == [entry]
+        assert record.discarded_suggestions == []
     else:
-        assert body["classification"]["proposed_tags"] == [
-            {"dimension": dimension, "value": VALUE, "confidence": BELOW}
-        ]
+        assert body["classification"]["proposed_tags"] == []
+        assert record.discarded_suggestions == [entry]
+    assert body["tag_details"] == []
+    assert not Tag.objects.filter(tag_name=VALUE).exists()
     assert not links_of(rejecting).exists()
 
 

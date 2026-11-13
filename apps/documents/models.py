@@ -163,10 +163,10 @@ class Tag(models.Model):
     # ``documents 0010``; its meaning since ``documents 0011``: not vocabulary (D-105's dated note
     # of 10 November 2026, night: the security review of ``84b5771``). A tag that is not grown is in
     # every document's scheme whatever its links; a grown one only where every audience role reads
-    # a source carrying it (``tag_scheme``). Set on a tag the classifier creates or reactivates at
-    # or above the threshold, in Project, Process or Topic (D-128), on one a person's confirmation
-    # of a proposal creates or reactivates (``confirm_proposed_tag``, D-128), and on a Topic a
-    # person's name creates or reactivates (``apply_tag``'s name form); an active tag any of them
+    # a source carrying it (``tag_scheme``). Set on a value a person's confirmation of a proposal
+    # creates or reactivates (``confirm_proposed_tag``), and on a Topic a person's name creates or
+    # reactivates (``apply_tag``'s name form). The classifier sets it on nothing: since D-129 it
+    # creates and reactivates no tag (from D-128 until D-129 it did). An active tag either path
     # fetches keeps its value, and an inactive one is reactivated only from a document every role
     # reads, else left retired (``_bring_into_use``; D-128's security review, finding 1). Also set by
     # ``documents 0011`` and the seed script's linked mode on every tag that only material some role
@@ -241,19 +241,20 @@ class DocumentAnalysis(models.Model):
       discarded, confirmed), stated rather than inferred from which columns are null.
     - **Three JSON lists for suggestions that are not tags of the document**, each entry
       ``{"dimension", "value", "confidence"}`` with the normalised value.
-      - ``proposed_tags``: since D-128 (12 November 2026), which departs from FR-10's controlled
-        taxonomy growth clause, a value outside the scheme in Project, Process or Topic is created
-        and applied when its confidence is at or above the threshold, and HELD here when it is
-        below, for a person to confirm or reject. Deduplicated by dimension and value, and replaced
-        by each run. The field was ``proposed_topics`` until ``documents 0012`` and keeps that column
-        (``db_column``), because no migration here renames a column.
-      - ``discarded_suggestions``: a value outside the scheme that may not become a Tag, whatever
-        its confidence (D-128's security review, finding 2): longer than the column, more than
-        MAXIMUM_CREATED_TAG_WORDS words, holding ";", or holding a control, format or surrogate
-        character (Cc, Cf, Cs), recorded with each such character as U+FFFD. Replaced by each run.
-        Nothing reads it as a tag and the API does not expose it. Until D-128 it held every Project
-        or Process value outside the scheme, which FR-10 says is "discarded". A department outside
-        the scheme is still discarded, through ``department_outcome``.
+      - ``proposed_tags``: a Topic value outside the scheme, HELD here at any confidence for a
+        person to confirm or reject: FR-10's controlled taxonomy growth and Objective 05's clause 3
+        as written (D-129, 13 November 2026, which reverses D-128's creation of values).
+        Deduplicated by dimension and value, and replaced by each run. A Project or Process entry
+        is one a run made while D-128 was in force, when such a value was held below the threshold
+        and created at or above it; it can still be confirmed or rejected. The field was
+        ``proposed_topics`` until ``documents 0012`` and keeps that column (``db_column``), because
+        no migration here renames a column.
+      - ``discarded_suggestions``: every Project or Process value outside the scheme, at any
+        confidence, which FR-10 and clause 3 say is "discarded" (D-129). Also any value that cannot
+        be stored, holding a NUL or a lone surrogate, recorded with U+FFFD in place of each such
+        character (the 500 fix of D-128's security review). Replaced by each run. Nothing reads it
+        as a tag and the API does not expose it. A department outside the scheme is discarded
+        through ``department_outcome``. While D-128 was in force this list held only refused names.
       - ``rejected_tags`` (``documents 0013``; the requirements audit of D-128, finding A5, the
         lead's decision of 13 November 2026): each proposal a person rejected on this document,
         with the machine's confidence from the proposal, so the machine assignment is kept
@@ -261,8 +262,8 @@ class DocumentAnalysis(models.Model):
         by a run: every later run skips each value it holds, in every dimension, at any confidence
         and before the in-scheme match (``apply_classification`` rule 4b), as it skips a value with
         a removed link on this document. A person may still apply the value. Not exposed by the
-        API. Until then a rejection recorded nothing, and the next run created and linked the value
-        at or above the threshold, or proposed it again below it.
+        API. Until then a rejection recorded nothing, and the next run proposed the value again
+        (and, while D-128 was in force, created and linked it at or above the threshold).
     - **Whose department it is** (``department_applied_by``, ``documents 0009``): FR-10's
       provenance clause tells a machine's value from a person's, and the outcome alone cannot
       when the machine's suggestion equals the department a person typed (D-119 finding 10).
@@ -304,14 +305,14 @@ class DocumentAnalysis(models.Model):
     # Written by apps/documents/classification.py wherever it decides the department.
     department_applied_by = vocabulary_field(TAG_APPLIED_BY_VALUES, null=True, blank=True)
     user_edited = models.BooleanField(default=False)
-    # [{"dimension": "Project"|"Process"|"Topic", "value": <normalised name>, "confidence": <float>}]:
-    # the values outside the scheme the run held below the threshold (D-128), replaced by each run.
-    # Renamed from ``proposed_topics`` by ``documents 0012``; the column keeps its name.
+    # [{"dimension": "Topic", "value": <normalised name>, "confidence": <float>}]: the Topic values
+    # outside the scheme the run held, at any confidence (D-129), replaced by each run. A Project or
+    # Process entry is a run's from while D-128 was in force. Renamed from ``proposed_topics`` by
+    # ``documents 0012``; the column keeps its name.
     proposed_tags = models.JSONField(default=list, blank=True, db_column="proposed_topics")
-    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run: since D-128 only a
-    # value outside the scheme that may not become a Tag. That is one longer than a tag name, with
-    # more than MAXIMUM_CREATED_TAG_WORDS words, holding ";", or holding a Cc, Cf or Cs character,
-    # recorded as U+FFFD (D-128's security review, finding 2; classification.py ``_may_become_a_tag``).
+    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run: every Project or
+    # Process value outside the scheme, at any confidence (D-129), and any value holding a NUL or a
+    # lone surrogate, recorded with U+FFFD in its place (classification.py ``_recordable``).
     discarded_suggestions = models.JSONField(default=list, blank=True)
     # [{"dimension": ..., "value": <normalised name>, "confidence": <the proposal's>}]: each proposal a
     # person rejected on this document, deduplicated by dimension and value and never replaced by a

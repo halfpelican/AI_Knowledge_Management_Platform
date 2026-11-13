@@ -3,9 +3,11 @@
 
 FR-10: assignments below the threshold are "presented for confirmation rather than applied
 silently"; AI tags and a person's "may be accepted or removed in a single action"; "any value a
-user edits [is] retained and is not overwritten by later reprocessing". Since D-128 a value outside
-the scheme below the threshold, in Project, Process or Topic, is held as a proposal and its Tag is
-created, or brought back, only when a person confirms it (FR-10 said this of a new Topic alone).
+user edits [is] retained and is not overwritten by later reprocessing". A Topic outside the scheme is
+held as a proposal at any confidence, and its Tag is created, or brought back, only when a person
+confirms it: FR-10's "requires user confirmation before it is created" (D-129). While D-128 was in
+force a Project or Process value was held below the threshold too, and such a proposal is still
+confirmed the same way.
 Each function answers ``NotOnThisDocument`` for an id or value that is not this document's, which
 the route turns into the same 404 as a document outside the caller's scope (D-46).
 """
@@ -220,7 +222,7 @@ PROPOSAL = {"dimension": TOPIC_DIMENSION, "value": "budget planning", "confidenc
 
 @pytest.fixture
 def proposed(document):
-    """Below the threshold, so held (D-128: at or above it the value would be created and applied)."""
+    """A Topic outside the scheme, so held (D-129: at any confidence; below the threshold here)."""
     analysis = classified(document, tags=[(TOPIC_DIMENSION, "Budget  Planning", BELOW_THRESHOLD)])
     assert analysis.proposed_tags == [PROPOSAL]
     return analysis

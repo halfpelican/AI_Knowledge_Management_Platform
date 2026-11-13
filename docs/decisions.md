@@ -7142,6 +7142,9 @@ value of one to three words in Project, Process or Topic when no listed value fi
 a new department. The worked example is unchanged. The application enforces the word limit too.
 Nothing else in this entry moves.
 
+**Dated note, 13 November 2026 (later): reversed by D-129.** The prompt is this entry's again,
+byte-identical to #85's commit: a new value in Topic only. D-128's revision no longer ships.
+
 ## D-105 · Schema v2 for FR-10: `DocumentAnalysis`, two `ContentTags` columns, the audience-scoped scheme, and how a suggestion becomes a record
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-10, FR-15, invariants 1, 4
@@ -7736,6 +7739,15 @@ rules are superseded:
 run": since the audit of 13 November a rejection is kept, and later runs neither propose, create nor
 link that value for that document (D-128).
 
+**Dated note, 13 November 2026 (later): D-129 reverses D-128's creation of values.**
+
+- **Rule 4 is this entry's again** for a value outside the scheme: a Topic is proposed, and a Project
+  or Process is discarded.
+- **Stays from D-128:** the proposal record (`proposed_tags`), kept rejections, and a removed link
+  being skipped in every dimension.
+- **"A retired Project or Process tag stays retired" holds again.** A retired Topic comes back only
+  through a person, on a document every role can read.
+
 ## D-106 · Objective 05's measurement: the reference set is frozen, the database is `kmp_obj0506_20261101`, and the confidence threshold is chosen on development documents by a rule fixed in advance
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** Objective 05, FR-10, D-84,
@@ -7909,6 +7921,12 @@ times each (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`).
 - The user chose to follow the rule. `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]`
   is 0.80. gemma3:4b's 0.95 is not re-derived on the revised prompt.
 - D-128 has the comparison.
+
+**Dated note, 13 November 2026 (later): claude-haiku-5-5's value is 0.72 again (D-129).**
+
+- **Why:** D-129 restores the prompt that 0.72 was derived on and that #85 measured, so the 0.80 above,
+  derived on D-128's revised prompt, no longer applies.
+- **Objective 05's clause 3 is met by the shipped build again,** as #85 recorded it.
 
 ## D-107 · Schema v2 for FR-19: `KnowledgeGap`, its items and cycles, the `review_knowledge_gaps` permission, the aggregation cycle and its routes
 
@@ -10321,6 +10339,9 @@ This note changes nothing in the decision.
 revised the classification prompt, and D-106's rule, re-run on it, gives 0.80. The user chose to
 follow it. The 0.72 above was derived on the earlier prompt.
 
+**Dated note, 13 November 2026 (later): 0.72 again (D-129).** D-129 reverses D-128 and restores the prompt
+that 0.72 was derived on.
+
 ## D-123 · A meeting recording is transcribed by Whisper on FLM into a draft that a person must confirm, then ingested through FR-09 unchanged; live transcription stays out of scope
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** FR-09, the proposal's §1.9,
@@ -12492,3 +12513,170 @@ lock, N2 and the lock-order tests MET, each executed, and found two records poin
 - **The merge with FR-16 (#101)** came after this re-audit; it is recorded above.
 - **The suites at the merge `e0a0938`:** the front end, 604 passed with lint and build clean. The full
   pytest's result is in the pull request.
+
+**Dated note, 13 November 2026: D-128's creation of values is reversed by D-129.** At the user's
+decision, FR-10 meets Objective 05's clause 3 as written again.
+
+- **What goes back to what #85 measured:**
+  - the prompt (rules 6 and 7);
+  - claude-haiku-5-5's threshold of 0.72;
+  - the rule for values outside the scheme. A Topic is proposed, never created; a Project or
+    Process is discarded.
+- **What stays from this entry,** because none of it depends on creation:
+  - `POST /api/tags`;
+  - the proposal record and its routes;
+  - kept rejections;
+  - the reactivation guard on a person's actions;
+  - the lock-order fixes.
+- This entry's text above stays as written.
+
+## D-129 · D-128's creation of values is reversed: FR-10 meets Objective 05's clause 3 as written again, on the prompt and threshold #85 measured
+
+**Status:** Settled by the user · **Date:** 2026-11-13 · **Concerns:** FR-10, Objective 05, D-128,
+D-104, D-105, D-106, D-122, `apps/ai/classification.py`, `apps/core/constants.py`,
+`apps/documents/classification.py`, `scripts/objective05_verify.py`,
+`frontend/src/constants.js` · **Reverses:** D-128's rule change, its prompt revision and its
+threshold of 0.80
+
+**What prompted it.** The user, on 13 November, relayed by the coordinating session:
+
+- **First,** on a proposal to rewrite Objective 05's clause 3 to match D-128: "No, lets keep the
+  objective as is was."
+- **Then:** "okay so revert FR-10 to stick to objective 05 clause 3. BUT the ACTUAL issue was AI was not
+  even tagging the documents that fit the schema".
+
+**The rewrite that came first, and why it is not in the record.** The coordinating session proposed
+rewriting clause 3 to match D-128. The user approved that wording in a tabbed question that morning,
+then withdrew it the same day in the words above. None of it was committed.
+
+**The decision: clause 3 is met as written again.** The clause reads: "suggested values falling outside
+the established scheme must be discarded in the Department, Project and Process dimensions while being
+proposed for confirmation in the Topic dimension only".
+
+- **The prompt** is #85's: `apps/ai/classification.py` and its two test files are restored from `main`,
+  byte-identical to #85's commit `a9934eb`. Rule 6 allows a new Topic only, and never a new Project,
+  Process or department.
+- **The threshold:** `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.72 again
+  (D-122). The 0.80 of D-128 was derived on the revised prompt, which no longer ships.
+- **Rule 4 for a value outside the scheme,** or retired since the scheme was built:
+  - **Topic:** proposed for a person, at any confidence. Never created, linked or reactivated by the
+    classifier.
+  - **Project or Process:** discarded, at any confidence.
+  - **One exception:** a value that cannot be stored, because it holds U+0000 or a lone surrogate, is
+    discarded with U+FFFD in its place. A reply carrying one made the classify route answer 500 before
+    D-128, and this keeps that fixed.
+  - **D-128's other refusal rules go,** with `MAXIMUM_CREATED_TAG_WORDS`: more than three words, ";",
+    and other control or format characters. They guarded values the classifier created, so a long or
+    many-worded Topic is proposed again, as `main` did.
+- **Departments:** unchanged. One outside the scheme is discarded.
+
+**What stays from D-128,** because none of it depends on creation:
+
+- `POST /api/tags`, an Administrator's Add tag on the Tags page: vocabulary, a 409 for a duplicate.
+- The proposal record `proposed_tags` (`documents 0012`) and the proposed-tags confirm and reject
+  routes. In practice every proposal is now a Topic.
+- **Kept rejections:** `rejected_tags` (`documents 0013`), skipped by rule 4b, as is a link a person
+  removed, in any dimension.
+- **The reactivation guard:** a retired tag is reactivated only through a document every role can
+  read. Since the classifier no longer reactivates anything, this now guards a person's confirmation
+  of a proposed Topic and a person's Topic name form. It closes a leak that predates D-128.
+- **The lock order:** the document before the analysis row, in `confirm_classification` and
+  `delete_document`, and the analysis-row lock in `apply_classification`.
+- **The verifier's strict reading of clause 3.** A proposed Project or Process value, an AI link to a
+  grown tag, or a discarded Topic is a violation.
+- **The screen:** proposal rows that name their dimension, and AI tags never marked "new".
+- `documents 0014`, the merge migration with FR-16.
+
+**What the screen and records now say:**
+
+- **The Tags page's note on the AI:** it adds no values of its own. A new topic waits for a person,
+  and a project or process outside the list is discarded.
+- **The delete dialog:** a retired topic can come back only through a person, on a document everyone
+  can read, and a retired project or process stays retired.
+- **The name form's hint** is `main`'s again.
+- **Dated notes** sit on D-104, D-105, D-106, D-122 and D-128.
+
+**Objective 05 on the shipped build.**
+
+- **Clause 3 is met again by construction.** The shipped prompt, threshold and rule for values outside
+  the scheme are those #85 measured.
+- **D-128's additions that stay act only on:**
+  - a person's decisions, which never occur on a measurement database;
+  - values that cannot be stored, which Haiku's replies on the twenty did not contain.
+- **So #85's three draws describe the shipped build:** clause 1 met on each (19, 18 and 18 of 20), and
+  clauses 2 and 3 met on each.
+- **Two records stay, describing builds that do not ship:**
+  - D-128's development sweep (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`), on the
+    revised prompt;
+  - the 13 November classification of the twenty on D-128's build, on the new database
+    `kmp_obj05_d128_20261113` ($0.0066). It was not scored and not committed. The database is left for
+    the user to keep or drop.
+
+**What "the ACTUAL issue" was, and where it stands.** The user's report of 12 November was that
+documents were not tagged automatically.
+
+- **The cause on `kmp_anthropic`** (D-128's diagnosis):
+  - 16 of the 20 documents had never been classified;
+  - the scheme held no Project or Process value.
+- **What fixed it:** the seed and the backfill of 12 November. They ran under `main`'s rules and 0.72,
+  the same as the reverted build, so `kmp_anthropic` needs no re-run.
+- **What it left:** 15 of the 20 documents carry an applied tag, and 28 suggestions that fit the scheme
+  are held below 0.72.
+- **Open, and put to the user by the coordinating session:**
+  - whether tags and departments should get a threshold of their own, tuned on the development
+    documents, since D-106's rule tunes the one threshold on types alone;
+  - whether departments belong on the Tags page.
+
+**Choices made in building it,** none of which changes what the user decided:
+
+- **The one literal departure from clause 3: a Topic holding a NUL or a lone surrogate is discarded,**
+  because it cannot be stored. The verifier counts it as a clause 3 violation ("discarded a Topic
+  value"), so a measurement would show it. Haiku's replies on the twenty never contained one.
+- **A Topic over 255 characters is proposed,** as on `main`, and can only be rejected: confirming it
+  is the existing 400.
+- **The proposal record keeps D-128's shape:** `proposed_tags` on the `proposed_topics` column, with a
+  dimension on each entry. Migration 0012 is pushed, and the routes and the screen read that shape.
+- **A database classified under D-128 keeps what D-128 made.** Its grown tags and AI links are not
+  cleaned up, and the verifier counts those links as violations, so a measurement needs a fresh
+  database. A Project or Process proposal left by D-128 is dropped by the next run, which replaces
+  the list. `kmp_anthropic` was never classified under D-128.
+- **The test files `test_classification_d128.py` and `test_fr10_d128_invariant1.py` keep their names**
+  and test D-129's rules.
+- **Tests:** every new or changed assertion failed under a deliberate break first, 23 breaks in all,
+  each reverted. 990 passed across the FR-10, lock-order and deletion files.
+
+**The tag and department threshold: the run, and the result awaiting the user's decision.** The user
+chose, relayed on 13 November, to tune a threshold of its own for tags and departments, by D-106's
+rule on the development documents.
+
+- **The reference.** He approved it as drafted, over a stricter one-value-each variant: for each of
+  the 19 development documents, the right department and scheme tags
+  (`corpus/objective-05/dev-documents/tag-reference.json`).
+- **The order.** The reference and the rule (`tag_threshold_rule.py`, which calls D-106's
+  `choose_threshold` unchanged) were committed in `0d3b334`, before any call.
+- **The run:** 57 Haiku classifications on the shipped prompt, $0.018
+  (`corpus/objective-05/runs/2026-11-13-tag-threshold/`). A first attempt failed at import, before
+  any call; its console is kept.
+- **What the rule gives:**
+
+| | right, wrong | best split, before the cap | the rule's result |
+|---|---|---|---|
+| tags and departments together | 122, 66 | 0.50 | **0.25**, capped at the lowest right confidence, 0.30, minus 0.05 |
+| tags alone (information) | 66, 65 | 0.70 | 0.25 |
+| departments alone (information) | 56, 1 | none | 0.30, the lowest right confidence |
+
+- **Departments and tags behave differently.**
+  - **Haiku's department suggestions** were right 56 times in 57, many at low confidence.
+  - **Its tag confidence separates well.** At 0.72 the run applied 43 right tags and none wrong; at
+    0.70, 48 right and 3 wrong; at 0.25, 66 right and 62 wrong.
+- **The cap is D-106's own recorded flaw:** it defeats a separation found high in the range. The user
+  kept it on 10 November.
+- **Nothing is built on this yet.** The threshold, the per-kind verifier check, and the reading of
+  clause 2's "the configured confidence threshold" as one threshold per kind of assignment all wait
+  for his choice.
+
+**Not covered:**
+
+- **gemma3:4b:** its 0.95 stands, and the prompt it was derived on is the shipped one again.
+- **The scheme's growth:** only a person confirming a Topic, or an Administrator adding a value, grows it
+  now. D-128's growth finding is moot for the classifier.

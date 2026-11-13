@@ -8,9 +8,9 @@ keeps its value (``_bring_into_use``). A grown one, such as one only restricted 
 name form never fetches one, since it is offered and answered 409, and confirming a proposal of its
 name made before it was vocabulary links it and leaves it vocabulary. The ``tag_id`` form marks
 nothing, since an offered tag is already readable or vocabulary, and neither does the machine's own
-linking of a seeded Topic in the scheme. (Since D-128 the classifier also creates or reactivates a
-value outside the scheme at or above the threshold, through the same ``_bring_into_use``, which
-grows it: ``apply_classification`` rule 4d.)
+linking of a seeded Topic in the scheme. (From D-128 until D-129 the classifier also created or
+reactivated a value outside the scheme at or above the threshold, through the same
+``_bring_into_use``. Since D-129 it creates and reactivates nothing.)
 """
 
 import pytest
@@ -119,8 +119,8 @@ def test_confirm_proposed_tag_grows_only_a_topic_it_creates_or_reactivates(
     document, restricted, kind, grown
 ):
     existing = existing_topic(kind, restricted)
-    # A hand-written scheme with no Topics, and a confidence below the threshold, so the suggestion
-    # is proposed whatever exists (D-128: at or above it, it would be applied). For the vocabulary
+    # A hand-written scheme with no Topics, so the suggestion is proposed whatever exists (D-129: a
+    # Topic outside the scheme is proposed at any confidence; below it here). For the vocabulary
     # kinds that is a proposal made before the Topic existed, as when the seed script runs after a
     # document was classified.
     apply_classification(

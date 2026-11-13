@@ -1,12 +1,13 @@
 """The proposed-tags routes in every dimension (D-128, 12 November 2026):
 ``POST /api/documents/{id}/proposed-tags/confirm`` and ``/reject``, body ``{"dimension", "value"}``.
 
-D-128 holds a value outside the scheme for a person to confirm or reject when the classifier's
-confidence in it is below the threshold, in Project and Process as well as in Topic. Confirming it is
-when its Tag is created (or brought back), grown, and linked ``applied_by="ai"``, confirmed, not
-provisional, with the proposal's confidence; rejecting it creates nothing. A proposal is matched by
-its dimension AND its normalised value, so acting on one dimension leaves the same value proposed
-in another.
+Since D-129 (13 November 2026) a classification proposes a Topic outside the scheme, at any
+confidence, and discards a Project or Process value. A Project or Process proposal is one a run made
+while D-128 was in force, when such a value was held below the threshold, and the routes still act on
+it. Confirming a proposal is when its Tag is created (or brought back), grown, and linked
+``applied_by="ai"``, confirmed, not provisional, with the proposal's confidence; rejecting it creates
+nothing. A proposal is matched by its dimension AND its normalised value, so acting on one dimension
+leaves the same value proposed in another.
 
 The order on both routes is the session, then the scoped 404 (D-46), then ``contribute_content``'s
 403, then the body: 400 keyed on ``dimension`` for a missing one or any other (Department included),
@@ -17,8 +18,9 @@ apps/api/tests/test_document_classification.py does.
 apps/api/tests/test_document_classification.py already holds the Topic path (confirm, reject, a value
 not proposed, a value proposed under another dimension, a blank or over-long Topic value, and the
 403 with a valid Topic body). This file holds what D-128 added: every dimension. Every test runs from
-both roles through ``session_client``, and the proposals are made by the classify route, the stub
-answering below the classifying model's own threshold (``confidence_threshold``).
+both roles through ``session_client``. A Topic is proposed by the classify route, the stub answering
+below the classifying model's own threshold (``confidence_threshold``). A Project or Process
+proposal is written onto the analysis row, as a run left one while D-128 was in force.
 """
 
 from decimal import Decimal
@@ -40,7 +42,14 @@ from apps.core.constants import (
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import confidence_threshold
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.models import (
+    ContentTag,
+    Document,
+    DocumentAnalysis,
+    ExtractedContent,
+    Tag,
+    normalise_tag_name,
+)
 from apps.documents.tests.classification_builders import EPSILON, STUB_CHAT_MODEL, classification
 
 pytestmark = pytest.mark.django_db
@@ -65,15 +74,27 @@ def make_document(user):
 
 
 def propose(client, stub, document, *suggestions):
-    """Classify ``document`` through the route, the stub suggesting each ``(dimension, value)`` below
-    the threshold, so each is held as a proposal. Returns the reply's ``proposed_tags``."""
-    stub.classification = classification(
-        tags=[(dimension, value, BELOW) for dimension, value in suggestions]
-    )
+    """Hold each ``(dimension, value)`` as a proposal on ``document``, below the threshold, and
+    return ``proposed_tags`` as they then stand.
+
+    A Topic goes through the classify route, the stub suggesting it, since a classification proposes
+    a Topic outside the scheme (D-129). A classification discards a Project or Process value outside
+    the scheme, so such a proposal is written onto the analysis row after the run, as a run left one
+    while D-128 was in force."""
+    topics = [(dimension, value) for dimension, value in suggestions if dimension == TOPIC_DIMENSION]
+    others = [(dimension, value) for dimension, value in suggestions if dimension != TOPIC_DIMENSION]
+    stub.classification = classification(tags=[(dimension, value, BELOW) for dimension, value in topics])
     response = client.post(f"{DOCUMENTS_URL}/{document.id}/classify", {}, format="json")
     assert response.status_code == 200, response.content
     stub.classification = None
-    return response.json()["classification"]["proposed_tags"]
+    analysis = DocumentAnalysis.objects.get(document=document)
+    if others:
+        analysis.proposed_tags = analysis.proposed_tags + [
+            {"dimension": dimension, "value": normalise_tag_name(value), "confidence": BELOW}
+            for dimension, value in others
+        ]
+        analysis.save(update_fields=["proposed_tags"])
+    return analysis.proposed_tags
 
 
 def act(client, action, document, body):
