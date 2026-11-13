@@ -63,6 +63,7 @@ from apps.ai.generation import ChatReply
 from apps.ai.schema import (
     TRAILING_COMMA_PATTERN,
     SchemaViolation,
+    loads_reply,
     outermost_json_object,
     strip_code_fences,
 )
@@ -205,20 +206,25 @@ def parse_classification(raw: str, scheme: TagScheme) -> ParsedClassification:
         raise SchemaViolation("empty response")
     candidate = outermost_json_object(strip_code_fences(raw))
     try:
-        decoded = json.loads(candidate)
+        decoded = loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = json.loads(TRAILING_COMMA_PATTERN.sub("", candidate))
+            decoded = loads_reply(TRAILING_COMMA_PATTERN.sub("", candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
         raise SchemaViolation(f"top level is {type(decoded).__name__}, not an object")
     missing = sorted(_TOP_LEVEL_KEYS - set(decoded))
     if missing:
-        raise SchemaViolation(f"missing top-level key(s): {missing} (keys: {sorted(decoded)})")
+        # A key the reply chose is the model's words, which an uploaded document can steer, so it
+        # is counted and never quoted, here and in ``_assignment`` and ``_tag``: the message reaches
+        # the attempts log (apps/ai/attempt_log.py). ``missing`` holds the schema's own keys only.
+        # The security review of FR-16 found this pattern in its parser on 12 November 2026
+        # (D-125's third note); the fix is the same.
+        raise SchemaViolation(f"missing top-level key(s): {missing} (the reply had {len(decoded)} key(s))")
     extra = sorted(set(decoded) - _TOP_LEVEL_KEYS)
     if extra:
-        raise SchemaViolation(f"unexpected top-level key(s): {extra}")
+        raise SchemaViolation(f"{len(extra)} unexpected top-level key(s)")
 
     doc_type = _assignment(decoded["doc_type"], "doc_type")
     if doc_type.value not in scheme.doc_types:
@@ -255,7 +261,7 @@ def _assignment(item, where: str) -> Assignment:
         raise SchemaViolation(f"'{where}' is missing {missing}")
     unexpected = sorted(set(item) - _ASSIGNMENT_KEYS)
     if unexpected:
-        raise SchemaViolation(f"'{where}' has unexpected key(s): {unexpected}")
+        raise SchemaViolation(f"'{where}' has {len(unexpected)} unexpected key(s)")
     return Assignment(
         value=_text(item["value"], f"'{where}'"),
         confidence=_confidence(item["confidence"], f"'{where}'"),
@@ -272,7 +278,7 @@ def _tag(item, position: int) -> TagSuggestion:
         raise SchemaViolation(f"{where} is missing {missing}")
     unexpected = sorted(set(item) - _TAG_KEYS)
     if unexpected:
-        raise SchemaViolation(f"{where} has unexpected key(s): {unexpected}")
+        raise SchemaViolation(f"{where} has {len(unexpected)} unexpected key(s)")
     dimension = item["dimension"]
     if not isinstance(dimension, str) or dimension.strip() not in TAG_DIMENSIONS:
         raise SchemaViolation(f"{where} has a dimension outside {list(TAG_DIMENSIONS)}")

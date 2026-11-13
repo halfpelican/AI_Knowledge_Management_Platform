@@ -10,6 +10,7 @@ No provider, no network, no database: this is a pure function over a string.
 """
 
 import json
+import sys
 
 import pytest
 
@@ -136,6 +137,128 @@ def test_a_json_array_at_the_top_level_is_refused():
     """Refused rather than unwrapped: guessing at a shape is how a wrong answer gets in."""
     with pytest.raises(SchemaViolation):
         parse_statement_list('[{"text": "t", "chunk_id": "x"}]')
+
+
+VALID_OBJECT = json.loads(VALID)
+
+
+@pytest.mark.parametrize(
+    "steered,message",
+    [
+        (lambda key: {**VALID_OBJECT, key: 1}, "1 unexpected top-level key(s)"),
+        (lambda key: {**VALID_OBJECT, key: 1, f"{key}, again": 2}, "2 unexpected top-level key(s)"),
+        (lambda key: {key: VALID_OBJECT["statements"]}, "no 'statements' key (the reply had 1 key(s))"),
+        (
+            lambda key: {"statements": [{**VALID_OBJECT["statements"][0], key: 1}]},
+            "statement 0 has 1 unexpected key(s)",
+        ),
+    ],
+    ids=["a second top-level key", "two more top-level keys", "the only key", "a statement's third key"],
+)
+def test_a_violation_never_quotes_a_key_the_reply_chose(steered, message):
+    """A key name is the model's words, which a retrieved passage can steer, and the violation's
+    message reaches the attempts log and the ask's 503 line (apps/ai/attempt_log.py). So the
+    message names the schema's own keys and counts the reply's. The security review of FR-16
+    found the pattern in its parser on 12 November 2026 (D-125's third note); this is its fix
+    applied here. The whole message is pinned, so the case cannot pass on some other violation."""
+    key = "Marguerite confirmed the Geelong site closes in June"
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(json.dumps(steered(key)))
+
+    assert str(caught.value) == message
+    assert key not in str(caught.value)
+    assert "Marguerite" not in str(caught.value)
+    assert "Geelong" not in str(caught.value)
+
+
+# --- A reply json.loads cannot decode (13 November 2026) --------------------------------
+
+# json.loads raises RecursionError past a few thousand levels of nesting, and ValueError past
+# Python's limit on converting a decimal string to an int: neither is a JSONDecodeError. Each is
+# reached directly and after a trailing comma the repair removes, so the repair's own decode is
+# held to the same rule. The digit count follows the interpreter's limit, which
+# PYTHONINTMAXSTRDIGITS can change; 0 lifts it, and then no reply can reach it.
+DEPTH = 100_000
+DIGITS = sys.get_int_max_str_digits() + 1
+DIGIT_LIMIT_IN_FORCE = pytest.mark.skipif(DIGITS == 1, reason="PYTHONINTMAXSTRDIGITS=0 lifts the limit")
+NESTED = "[" * DEPTH + "]" * DEPTH
+NUMBER = "7" * DIGITS
+TOO_DEEP = "JSON nested too deeply to decode"
+TOO_LONG = "a JSON number too long to decode"
+
+
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param('{"statements": ' + NESTED + "}", TOO_DEEP, id="nested too deeply"),
+        pytest.param('{"statements": [], "n": ' + NUMBER + "}", TOO_LONG, id="a number too long",
+                     marks=DIGIT_LIMIT_IN_FORCE),
+        pytest.param('{"a": [1,], "statements": ' + NESTED + "}", TOO_DEEP,
+                     id="nested too deeply, after a trailing comma"),
+        pytest.param('{"a": [1,], "statements": [], "n": ' + NUMBER + "}", TOO_LONG,
+                     id="a number too long, after a trailing comma", marks=DIGIT_LIMIT_IN_FORCE),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_a_violation_not_a_crash(raw, message):
+    """Until 13 November 2026 json.loads' RecursionError, and its ValueError past the digit limit,
+    escaped this parser and the attempt loop, and POST /api/ask answered 500, not NFR-19's 503.
+    Each is a SchemaViolation now, retried like any other, with a fixed message that quotes nothing
+    of the reply. The whole message is pinned, so a case cannot pass on some other violation."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(raw)
+
+    assert str(caught.value) == message
+
+
+@pytest.mark.parametrize(
+    "raw,message",
+    [
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\x00", "chunk_id": CHUNK_ID}]}),
+                     "a NUL character in a JSON string", id="a NUL in a statement"),
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\ud800", "chunk_id": CHUNK_ID}]}),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate in a statement"),
+        pytest.param(json.dumps({"statements": [], "\x00": 1}), "a NUL character in a JSON string",
+                     id="a NUL in a key"),
+        pytest.param('{"a": [1,], "statements": [{"text": "t\\udc00", "chunk_id": "x"}]}',
+                     "an unpaired surrogate in a JSON string",
+                     id="an unpaired surrogate, after a trailing comma"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_violation(raw, message):
+    """A NUL, which PostgreSQL text refuses, or an unpaired surrogate, which neither the database
+    nor DRF's renderer can encode, decoded fine and then broke the answer's QueryLog write or its
+    rendering: POST /api/ask answered 500 until 13 November 2026. Each is a SchemaViolation now."""
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(raw)
+
+    assert str(caught.value) == message
+
+
+def test_an_escaped_surrogate_pair_is_one_character_and_parses():
+    """json.loads joins an escaped pair into the one character it stands for, so only an unpaired
+    surrogate is refused, and a reply with an emoji in it still parses."""
+    raw = json.dumps({"statements": [{"text": "Twenty days \U0001F600", "chunk_id": CHUNK_ID}]})
+    assert "\\ud83d\\ude00" in raw  # the pair really is escaped in the reply
+
+    assert parse_statement_list(raw).statements[0].text == "Twenty days \U0001F600"
+
+
+def test_the_string_check_walks_a_reply_deeper_than_python_can_recurse():
+    """The walk is iterative. A reply can decode at a depth past Python's recursion limit, and a
+    recursive walk would raise RecursionError outside loads_reply's handlers: a 500 again. The
+    depth is past this interpreter's limit, and skipped where its decoder cannot follow it."""
+    depth = sys.getrecursionlimit() + 200
+    raw = '{"statements": ' + "[" * depth + '"\\u0000"' + "]" * depth + "}"
+    try:
+        json.loads(raw)
+    except RecursionError:
+        pytest.skip("this interpreter's decoder cannot follow a reply past its recursion limit")
+
+    with pytest.raises(SchemaViolation) as caught:
+        parse_statement_list(raw)
+
+    assert str(caught.value) == "a NUL character in a JSON string"
 
 
 # --- The schema object itself -----------------------------------------------------------

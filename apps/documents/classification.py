@@ -541,10 +541,10 @@ def apply_classification(
     lock. That was false of ``confirm_classification``, and the auditor's probe deadlocked on it.
     """
     if classification.doc_type.value not in DOCUMENT_TYPES:
-        raise InvalidClassification(
-            f"doc_type must be one of {', '.join(DOCUMENT_TYPES)}, not "
-            f"{classification.doc_type.value!r}."
-        )
+        # The value is the model's and is not quoted: ingestion logs this message and
+        # classify_documents writes it uncut. Unreachable while the parser holds the type to the
+        # scheme's list; the same wording as confirm_classification's check of a person's input.
+        raise InvalidClassification(f"doc_type must be one of {', '.join(DOCUMENT_TYPES)}.")
     now = timezone.now()
     department_value = (classification.department.value or "").strip()
 

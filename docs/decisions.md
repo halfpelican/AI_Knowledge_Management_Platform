@@ -11601,6 +11601,10 @@ own, with its tests.
   names the schema's own keys and counts the reply's. FR-12's statement parser
   (`apps/ai/schema.py`) and FR-10's classification parser quote an unexpected key name the same
   way. They are not FR-16's, and are left open for their owners.
+  - **Fixed in `c016bbe` on 13 November 2026** (branch `fix/FR-12-violation-messages`). Both
+    parsers now name only the schema's own keys and count the reply's, with the same wording as
+    this parser. Each has a test that a key name made of a sentence never reaches the message, and
+    each attempt loop a test that no attempt line and no final failure quotes one.
 - **The stale comment** in `apps/meetings/deletion.py`: corrected (`8a2eec1`).
 - **Unchanged, as the review rated them:**
   - Revocation waits while `_store` holds the meeting's row lock through the summary's embedding.

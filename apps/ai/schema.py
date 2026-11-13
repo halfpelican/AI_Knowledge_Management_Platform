@@ -120,6 +120,73 @@ def _outermost_json_object(text: str) -> str:
     raise SchemaViolation("unbalanced JSON object in the response")
 
 
+# A surrogate code point still present after json.loads was unpaired: the decoder joins an escaped
+# pair, such as an emoji's, into the one character it stands for.
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
+
+
+def _unusable_string(value) -> str | None:
+    """The fixed reason a decoded reply holds a string nothing downstream can take, or None.
+
+    Keys are checked with values. Iterative, because a decoded reply can nest deeper than Python's
+    own recursion limit.
+    """
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return "a NUL character in a JSON string"
+            if _SURROGATE.search(item):
+                return "an unpaired surrogate in a JSON string"
+        elif isinstance(item, dict):
+            pending.extend(item)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return None
+
+
+def _loads_reply(text: str):
+    """``json.loads`` for a model reply: a SchemaViolation for every failure but a syntax error.
+
+    A JSONDecodeError, a syntax error, propagates unchanged, so the caller can try its
+    trailing-comma repair before it reports "not valid JSON". Four other replies are violations
+    here (invariant 10), each with a fixed message that quotes nothing of the reply:
+
+    - nesting past the interpreter's limit, a few thousand levels of ``[`` or ``{``, on which
+      json.loads raises RecursionError;
+    - an integer literal past Python's 4,300-digit limit on converting a string to an int, on
+      which it raises ValueError;
+    - a string holding a NUL character, which PostgreSQL text refuses;
+    - a string holding an unpaired surrogate, such as a lone ``\\ud800`` escape, which neither the
+      database nor DRF's JSON renderer can encode as UTF-8.
+
+    Until 13 November 2026 none of them was. The attempt loops retry only a SchemaViolation and a
+    failed call (a ProviderUnavailable that is not a ProviderRefused, which ends them at once). So
+    the first two always ended the work they were part of, and the last two did whenever the
+    string was stored or rendered, which a statement or an element that verification discarded
+    never is. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of NFR-19's
+    503. A meeting summary's run ended as "error", without the one retry FR-16 allows a
+    malformed reply; run by retry_meeting_summaries or summarise_meetings, it stopped the command
+    and left the row Processing until it was reclaimed as an orphan. classify_documents stopped
+    without writing its record. Two security reviews and a requirements audit of that day found
+    them.
+    """
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        raise
+    except RecursionError as exc:
+        raise SchemaViolation("JSON nested too deeply to decode") from exc
+    except ValueError as exc:  # after JSONDecodeError, itself a ValueError: the digit limit
+        raise SchemaViolation("a JSON number too long to decode") from exc
+    reason = _unusable_string(value)
+    if reason is not None:
+        raise SchemaViolation(reason)
+    return value
+
+
 # Public names for the three repairs, added on 9 November 2026 for FR-10 (D-104):
 # apps/ai/classification.py applies exactly this tolerance to a classification reply by
 # importing these rather than copying them, so there is one definition of what is
@@ -128,6 +195,9 @@ def _outermost_json_object(text: str) -> str:
 strip_code_fences = _strip_code_fences
 outermost_json_object = _outermost_json_object
 TRAILING_COMMA_PATTERN = _TRAILING_COMMA
+# And the decode step, added on 13 November 2026 on the same principle: the statement,
+# classification and summary parsers all decode through it, so all three fail the same way.
+loads_reply = _loads_reply
 
 
 def parse_statement_list(raw: str, *, max_statements: int | None = None) -> StatementList:
@@ -153,19 +223,25 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
         raise SchemaViolation("empty response")
     candidate = _outermost_json_object(_strip_code_fences(raw))
     try:
-        decoded = json.loads(candidate)
+        decoded = _loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = json.loads(_TRAILING_COMMA.sub("", candidate))
+            decoded = _loads_reply(_TRAILING_COMMA.sub("", candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
         raise SchemaViolation(f"top level is {type(decoded).__name__}, not an object")
     if "statements" not in decoded:
-        raise SchemaViolation(f"no 'statements' key (keys: {sorted(decoded)})")
+        # A key the reply chose is the model's words, which a passage can steer, so it is
+        # counted and never quoted, here and for a statement's keys below: the message reaches
+        # the attempts log (apps/ai/attempt_log.py). Only the schema's own keys are named. The
+        # security review of FR-16 found this pattern in its parser on 12 November 2026 (D-125's
+        # third note); the fix is the same. Only the wording changed: what parses and what is
+        # refused are exactly as measured.
+        raise SchemaViolation(f"no 'statements' key (the reply had {len(decoded)} key(s))")
     extra = sorted(set(decoded) - {"statements"})
     if extra:
-        raise SchemaViolation(f"unexpected top-level key(s): {extra}")
+        raise SchemaViolation(f"{len(extra)} unexpected top-level key(s)")
     items = decoded["statements"]
     if not isinstance(items, list):
         raise SchemaViolation(f"'statements' is {type(items).__name__}, not an array")
@@ -180,7 +256,7 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
             raise SchemaViolation(f"statement {position} is missing {missing}")
         unexpected = sorted(set(item) - {"text", "chunk_id"})
         if unexpected:
-            raise SchemaViolation(f"statement {position} has unexpected key(s): {unexpected}")
+            raise SchemaViolation(f"statement {position} has {len(unexpected)} unexpected key(s)")
         text, chunk_id = item["text"], item["chunk_id"]
         if not isinstance(text, str) or not text.strip():
             raise SchemaViolation(f"statement {position} has an empty or non-string 'text'")

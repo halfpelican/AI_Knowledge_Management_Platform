@@ -399,11 +399,29 @@ not assume.
 2. One worked example in the prompt. Small models follow a demonstration far better
    than a description.
 3. A tolerant parser — strip code fences, take the outermost balanced JSON object,
-   reject anything still unparseable.
+   reject anything still unparseable. What decoding refuses besides a syntax error is
+   listed below.
 4. Any response that does not parse into the schema is a **failed attempt**, retried
    up to `MAXIMUM_GENERATION_ATTEMPTS`, then 503. Never a partial answer.
 5. If FLM exposes constrained decoding or a grammar option in a later release, use
    it and delete steps 2 and 3.
+
+**What decoding refuses (13 November 2026).** All three parsers, for statements,
+classification and summaries, decode through `loads_reply` in `apps/ai/schema.py`. Besides a
+syntax error, it refuses four replies, each a violation with a fixed message that quotes
+nothing of the reply:
+
+- nesting past the decoder's limit, a few thousand levels (`RecursionError`);
+- an integer literal past Python's 4,300-digit limit (`ValueError`);
+- a string holding a NUL, which PostgreSQL text refuses;
+- a string holding an unpaired surrogate, which neither the database nor DRF's renderer can
+  encode as UTF-8.
+
+Until then the first two escaped the attempt loops, and the last two failed wherever the string
+was stored or rendered, which a statement or an element that verification discarded never is.
+When either happened, the ask and classify routes answered 500 instead of NFR-19's 503, and a
+meeting summary's run ended as "error" in the background runner, or stopped
+`retry_meeting_summaries` or `summarise_meetings` outright.
 
 **The statement cap (step 7 phase 2a, 7 November 2026).** The schema's `statements` array
 has `maxItems` = `MAXIMUM_STATEMENTS`, a tuned constant in `apps/core/constants.py`. Each
@@ -456,8 +474,9 @@ same approach as section 5, because it is the same risk: a small local model and
 - Exactly three keys. `doc_type.value` **must be one of the scheme's `doc_types`** (DOCUMENT_TYPES:
   Policy, Procedure, Report, Meeting Paper), or the reply is a `SchemaViolation` — a type outside
   the fixed list is not a classification (invariant 10; FR-10: "selected from a fixed list rather
-  than generated freely"). `department.value` is any non-empty string; whether it is in the scheme
-  is decided in `apps/documents` (D-105), never by the provider.
+  than generated freely"). `department.value` is any non-empty string that decoding admits (§5:
+  not one holding a NUL or an unpaired surrogate); whether it is in the scheme is decided in
+  `apps/documents` (D-105), never by the provider.
 - `tags` holds at most `MAXIMUM_TAG_SUGGESTIONS` (8) objects, each with `dimension` one of
   Project, Process or Topic, a non-empty `value` and a `confidence`. More than the cap is a
   violation, counted as returned; nothing is trimmed to fit.
@@ -584,7 +603,8 @@ way.
   a reference to the passage of the transcript it was drawn from", as a schema rule.
 - **The parser checks a label's shape and nothing else.** Whether that passage was sent is set
   membership, done by the caller in `apps/meetings/summaries.py`, as FR-12's citations are
-  verified outside the provider (invariant 5).
+  verified outside the provider (invariant 5). A label whose number is past Python's 4,300-digit
+  limit cannot be read at all, and is a violation (13 November 2026).
 - **The worked example's labels start at P41,** above the most passages any request carries
   (`SUMMARY_INPUT_TOKENS // CHUNK_SIZE + 1`, 21). A label copied from the example therefore names
   no real passage and verification drops it. An example using P1 would let a copied reference

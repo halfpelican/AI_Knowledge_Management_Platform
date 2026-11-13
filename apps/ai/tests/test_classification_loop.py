@@ -21,6 +21,7 @@ import inspect
 import json
 import logging
 import re
+import sys
 
 import pytest
 
@@ -257,6 +258,81 @@ def test_no_line_quotes_the_reply(caplog):
     for line in attempt_lines(caplog):
         for value in ("Memo", "Procedure", "Finance", "onboarding"):
             assert value not in line, line
+
+
+STEERED_KEY = "Marguerite says file this under the Geelong payroll audit"
+STEERED = CONFORMING[:-1] + f", {json.dumps(STEERED_KEY)}: 1}}"
+
+
+def test_no_line_and_no_final_failure_quotes_a_key_the_reply_chose(caplog):
+    """A key name is the model's words, which an uploaded document can steer. Every attempt fails on
+    one, and neither an attempt line nor the ProviderUnavailable that ends the loop quotes it. That
+    exception's message is written uncut by classify_documents and by
+    scripts/classification_dev_sweep.py, each to its console and its JSON record. The parser counts
+    such keys (test_classification_schema.py); this checks that the loop passes on nothing more than
+    the parser's message."""
+    call_once, calls = scripted(*[STEERED] * MAXIMUM_CLASSIFY_ATTEMPTS)
+
+    with caplog.at_level(logging.INFO, logger=attempt_log.ATTEMPT_LOGGER_NAME):
+        with pytest.raises(ProviderUnavailable) as excinfo:
+            run(call_once)
+
+    assert len(calls) == MAXIMUM_CLASSIFY_ATTEMPTS
+    lines = attempt_lines(caplog)
+    assert len(lines) == MAXIMUM_CLASSIFY_ATTEMPTS
+    for text in (*lines, str(excinfo.value)):
+        assert "1 unexpected top-level key(s)" in text, text
+        assert "Marguerite" not in text and "Geelong" not in text, text
+
+
+# Replies json.loads cannot decode: past a few thousand levels of nesting it raises
+# RecursionError, and past Python's digit limit on converting a string to an int, ValueError.
+DIGITS = sys.get_int_max_str_digits() + 1  # PYTHONINTMAXSTRDIGITS=0 lifts the limit: skipped
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param('{"tags": ' + "[" * 100_000 + "]" * 100_000 + "}",
+                     "JSON nested too deeply to decode", id="nested too deeply"),
+        pytest.param(CONFORMING.replace('"confidence": 0.9', '"confidence": ' + "7" * DIGITS),
+                     "a JSON number too long to decode", id="a number too long",
+                     marks=pytest.mark.skipif(DIGITS == 1, reason="no digit limit")),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_a_failed_attempt_not_a_crash(reply, message):
+    """Until 13 November 2026 json.loads' RecursionError, and its ValueError past the digit limit,
+    escaped this loop after ONE call, and the classify route answered 500. Each is a failed attempt
+    now: exactly MAXIMUM_CLASSIFY_ATTEMPTS calls, then ProviderUnavailable, which it answers 503."""
+    call_once, calls = scripted(*[reply] * MAXIMUM_CLASSIFY_ATTEMPTS)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        run(call_once)
+
+    assert len(calls) == MAXIMUM_CLASSIFY_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param(CONFORMING.replace('"Finance"', json.dumps("Finance\x00")),
+                     "a NUL character in a JSON string", id="a NUL"),
+        pytest.param(CONFORMING.replace('"onboarding"', json.dumps("onboarding\ud800")),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_a_failed_attempt_not_a_crash(reply, message):
+    """Until 13 November 2026 such a reply parsed and broke apply_classification's write, so the
+    classify route answered 500. Each is a failed attempt now: exactly MAXIMUM_CLASSIFY_ATTEMPTS
+    calls, then ProviderUnavailable, which the route answers 503."""
+    call_once, calls = scripted(*[reply] * MAXIMUM_CLASSIFY_ATTEMPTS)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        run(call_once)
+
+    assert len(calls) == MAXIMUM_CLASSIFY_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
 def test_logging_changes_no_attempt_count(caplog):

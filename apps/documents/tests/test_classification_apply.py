@@ -87,9 +87,12 @@ def test_the_type_is_provisional_below_the_threshold_and_applied_at_it(
 
 
 def test_a_type_outside_the_fixed_list_is_refused_and_nothing_is_written(document):
-    with pytest.raises(InvalidClassification):
+    with pytest.raises(InvalidClassification) as excinfo:
         apply_classification(document, classification(doc_type="Memo"), scheme=scheme())
     assert not DocumentAnalysis.objects.filter(document=document).exists()
+    # The type is the model's, so the message does not quote it (13 November 2026): ingestion logs
+    # this message and classify_documents writes it uncut.
+    assert "Memo" not in str(excinfo.value)
 
 
 # --- Rule 3: the department, the scheme and the threshold ----------------------------------------
