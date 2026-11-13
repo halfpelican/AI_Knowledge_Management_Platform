@@ -6034,16 +6034,26 @@ re-audit on `bbbda8c`, on 13 November. Their findings on the lookup, and what wa
      is the only candidate, it owns a row, and its command line can be read. PID 0 is never a
      candidate, and a row whose owner is gone is not read as an owner.
 
-  A process the Listen row named but step 1 did not take is not returned at the end. So a refused
-  lookup gives no command line, and the pre-flight refuses.
+  A readable process the Listen row named, which step 1 did not take because another process was
+  seen or a source could not be read, is not returned at the end. A process the Listen row names
+  whose command line cannot be read is returned after the wait with its PID, no command line and a
+  note, as before these checks; two tests assert it:
+  `test_a_second_process_on_the_port_that_nobody_can_read_is_not_passed_over` and
+  `test_a_process_nobody_can_read_is_returned_after_the_wait_with_a_note_that_says_so`. Either way
+  a refused lookup gives no command line, and the pre-flight refuses.
 - **B4: what the lookup says when it gives up.**
   - With netstat or the port's rows unread, `note` reads "whether anything holds port N is not
     known", whatever else was seen. The audit on `80a9301` asked for it where nothing was seen, and
     the user's decision of 13 November made it the note whatever was seen.
   - Otherwise, with a candidate seen and none taken, it reads "no single process with a readable
     command line holds port N", with what was seen.
-  - Otherwise the note is the Listen row's own: "nothing is listening on port N", or the Listen-row
-    lookup's own error when it timed out, exited non-zero or printed something that is not JSON.
+  - Otherwise the note is the Listen row's own:
+    - "nothing is listening on port N";
+    - that the Listen row names process 0, which is not a server (D-112's note of 12 November);
+    - the Listen-row lookup's own error, when PowerShell could not be started, timed out, exited
+      non-zero or printed something that is not JSON;
+    - none, beside the Listen row's PID, when that process's command line could not be read and
+      neither netstat nor the port's rows showed a candidate.
 
   So "nothing is listening" is said only when netstat and the port's rows were both read and
   neither saw a process. The runbook asks this script whether the port is free, so "nothing is
@@ -6085,7 +6095,7 @@ re-audit on `bbbda8c`, on 13 November. Their findings on the lookup, and what wa
   No trial had a source that could not be read, so a refusal on an unread source is shown by the
   tests only.
 - **Tests,** in `apps/ai/tests/test_server_record_preflight.py` unless another file is named. Every
-  test in the file's lookup section, and the two process-0 tests in
+  test in the file's lookup section, and the two listening-process tests in
   `apps/ai/tests/test_fr13_measurement_scripts.py`, fails under at least one deliberate break of
   the script. The breaks are listed after the table, which was generated from the break runs on
   `011d342`. The three files that load the script pass unbroken: 220 tests. They are
@@ -6189,6 +6199,12 @@ re-audit on `bbbda8c`, on 13 November. Their findings on the lookup, and what wa
     `-ErrorAction SilentlyContinue`, as it has since D-87, and was not changed here. On its own it
     cannot have a process taken or "nothing is listening" said, since both need netstat and the
     port's rows read.
+  - **The closing check compares PIDs only** (`finalise`). A process the Listen row names at the end
+    whose command line cannot be read is returned with its PID. If that PID is the one observed
+    before the run, the run reads as the same process, even when netstat or the port's rows could
+    not be read and the note says that whether anything holds the port is not known. #93's lookup
+    and `finalise` on main did the same, and no test covers it. Whether the closing check should
+    require more is the user's to decide; the confirmation audit on `66916cd` raised it.
   - **This code against the misreported state.** The trials ran with the fault absent, and the tests
     script each lookup's output. The trials of 11 November showed the fault with the earlier
     lookup.

@@ -376,6 +376,7 @@ def sole_owner(port: int, netstat_pids: set[int], netstat_error: str | None,
     candidates nothing is taken, and the caller refuses as it did before the fallbacks existed.
     PID 0 is never a candidate: it is not a process.
     """
+    # The PIDs netstat lists LISTENING, other than 0. netstat cannot say whether a PID is live.
     netstat_live = sorted(pid for pid in netstat_pids if pid != 0)
     if netstat_error:
         netstat_says = netstat_error
@@ -433,8 +434,8 @@ def listening_process(port: int) -> dict:
        one; netstat lists both. A second listener on another address has a row of its own, which
        netstat may miss when the state is misreported. When either source cannot be read, nothing
        is taken (the user's decision of 13 November 2026).
-    2. Otherwise two more are read, and one process is taken only when they agree on it
-       (``sole_owner``):
+    2. Otherwise one process is taken only when two more lookups, read on the same try, agree on
+       it (``sole_owner``):
 
        - ``netstat -ano``: the PIDs with a LISTENING line on the port;
        - the port's own socket rows, local port ``port`` and remote port 0, whatever state is
