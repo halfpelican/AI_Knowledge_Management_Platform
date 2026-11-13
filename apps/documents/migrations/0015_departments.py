@@ -27,6 +27,13 @@ already in use, and nothing a classification is offered changes merely because t
   before. A spelling the deduplication folds away is no longer offered at all: the list holds one
   spelling, and a department in use but not listed is not suggested.
 
+  *Corrected on 13 November 2026, after this migration was pushed, by D-129's security review,
+  finding F1. Only this comment changed; the operations did not. At run time ``tag_scheme`` now
+  offers a grown department only for an audience every role of which reads everything
+  (``reads_everything``), and consults no document carrying it. The seed's exact-spelling test
+  still decides ``grown`` and still errs toward hidden, and F1 only narrows what any audience is
+  offered.*
+
   - **Readable by role r:** the document's ``visible_to_roles`` overlaps r's effective roles,
     mirroring ``apps/retrieval/scoping.py::_in_scope``.
   - **The role mapping is frozen here** as literals, the values ``ROLE_NAMES`` and ``EFFECTIVE_ROLES``

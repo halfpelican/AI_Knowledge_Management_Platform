@@ -71,8 +71,9 @@ class TagScheme:
     audience reads a source carrying it (D-105's dated note of 10 November 2026, night).
     ``doc_types`` is DOCUMENT_TYPES; ``departments`` are the active names of the department
     list an Administrator keeps on the Tags page (``Department``, D-129), a hidden (grown) one
-    only while every role in the audience reads a document carrying it; ``tags`` maps each of
-    Project, Process and Topic to its active tag names.
+    only for an audience every role of which reads everything (``reads_everything``; D-129's
+    security review, finding F1); ``tags`` maps each of Project, Process and Topic to its active
+    tag names.
     """
 
     doc_types: tuple[str, ...]

@@ -13259,6 +13259,10 @@ proposed for confirmation in the Topic dimension only".
   byte-identical to #85's commit `a9934eb`. Since then one sentence of the module's docstring names the
   department threshold below; the prompt text is unchanged. Rule 6 allows a new Topic only, and never a new Project,
   Process or department.
+  *Since the merge of `main` on 13 November (`bc0b5b6`) these three files are no longer
+  byte-identical to `a9934eb`. `apps/ai/classification.py`, `test_classification_loop.py` and
+  `test_classification_schema.py` carry #105 and #106's parser changes. The prompt text is still
+  unchanged.*
 - **The threshold:** `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.72 again
   (D-122). The 0.80 of D-128 was derived on the revised prompt, which no longer ships.
 - **Rule 4 for a value outside the scheme,** or retired since the scheme was built:
@@ -13268,6 +13272,11 @@ proposed for confirmation in the Topic dimension only".
   - **One exception:** a value that cannot be stored, because it holds U+0000 or a lone surrogate, is
     discarded with U+FFFD in its place. A reply carrying one made the classify route answer 500 before
     D-128, and this keeps that fixed.
+    *Since the merge of `main` (`bc0b5b6`) this branch is not reached on the shipped path. #106's
+    parser refuses a reply holding a NUL or an unpaired surrogate anywhere, the department included
+    (`apps/ai/schema.py`). Such a reply is retried. After `MAXIMUM_CLASSIFY_ATTEMPTS` the classify
+    route answers 503, and ingestion leaves the document unclassified. Only a direct call of
+    `apply_classification` reaches this branch now.*
   - **D-128's other refusal rules go,** with `MAXIMUM_CREATED_TAG_WORDS`: more than three words, ";",
     and other control or format characters. They guarded values the classifier created, so a long or
     many-worded Topic is proposed again, as `main` did.
@@ -13339,6 +13348,8 @@ documents were not tagged automatically.
 - **The one literal departure from clause 3: a Topic holding a NUL or a lone surrogate is discarded,**
   because it cannot be stored. The verifier counts it as a clause 3 violation ("discarded a Topic
   value"), so a measurement would show it. Haiku's replies on the twenty never contained one.
+  *Since the merge of `main` (`bc0b5b6`) this departure does not occur on the shipped path: such a
+  reply is refused and retried as a whole (the note on the one exception, above).*
 - **A Topic over 255 characters is proposed,** as on `main`, and can only be rejected: confirming it
   is the existing 400.
 - **The proposal record keeps D-128's shape:** `proposed_tags` on the `proposed_topics` column, with a
@@ -13393,6 +13404,13 @@ rule on the development documents.
   D-129 reads that as one configured threshold per kind of assignment. A department below 0.30, or a
   type or tag below 0.72, is still held for a person, so clause 2 holds. `scripts/objective05_verify.py`
   checks each kind against its own threshold.
+  - **On Haiku, the department half of clause 2 is rarely exercised** (the re-audit of `6e77913`,
+    B4).
+    - No department suggestion among the 57 development classifications fell below 0.30: departments
+      alone score 56 at both 0 and 0.30 (`tag-threshold.json`).
+    - So a Haiku department is held almost only when it differs from a department already on the
+      document.
+    - That is the rule's fallback outcome, as 0.72 is for types, and clause 2 is still met as written.
 
 **The department list on the Tags page (the user's choices of 13 November).**
 
@@ -13496,6 +13514,8 @@ finding with probe tests against its own test database.
    - **The cost:** a hidden department is never suggested for an Employee-visible document, even after
      such documents come to carry it. "Grown is never unset", so there is no route that makes it
      vocabulary; that would need a decision.
+     *Qualified after the re-audit of `6e77913` (B8): this holds while some document uses the name,
+     compared ignoring case and exactly in spacing. See finding 3's note.*
    - **Kept:** the user's three choices.
 2. **LOW: a department retired or deleted while a classification's provider call was running was
    still written** into a blank department. Fixed: at apply time, a department with no active row is
@@ -13503,6 +13523,15 @@ finding with probe tests against its own test database.
 3. **LOW: "in use" and `item_count` compared exactly, while the list is unique ignoring case.** A
    hidden department whose remaining carriers spelled it differently counted as unused, could be
    deleted, and could come back as vocabulary. Fixed: both compare ignoring case.
+   - **Still compared exactly in spacing** (the re-audit of `6e77913`, B8).
+     - The seed collapses inner spacing when it picks a name, and "in use" does not.
+     - The upload and confirm routes trim a department but do not collapse its spacing.
+     - So a department seeded from a value with a double space lists `item_count` 0 and is offered
+       Delete. Once it is deleted, adding the name again makes it vocabulary.
+     - Only an Administrator can do that, by deleting and then adding the name. Nothing reaches an
+       Employee without that act.
+     - It is recorded rather than changed: collapsing whitespace in the database would compare by
+       PostgreSQL's idea of whitespace where the seed used Python's.
 4. **LOW, an Administrator's own input: a name could hold control or format characters, or ";", the
    separator the prompt lists departments with.** Fixed: `POST /api/departments` refuses them (400).
    A tab or line break inside a name is a control character and is refused too. Until this fix it was
@@ -13521,6 +13550,19 @@ finding with probe tests against its own test database.
   - a new department's count;
   - the scheme's independence from the scoping helpers.
 - **The front end is unchanged.** It shows the server's 400 message as it already did.
+- **The first full run after the fixes failed 26 apply-layer tests,** in four files the focused runs
+  had not included. Their hand-built scheme (`apps/documents/tests/classification_builders.py`)
+  listed departments with no `Department` row behind them, and F2 discards a listed department with
+  no active row.
+  - **Production was right.** `classify_document_now`, the only caller of `apply_classification`,
+    passes `tag_scheme(document)`, whose departments are always active rows.
+  - **The fix (`140014c`):** the builder makes each department it lists an active row, unless a row
+    of that name exists already, ignoring case.
+  - **Its limit:** a listed name whose existing row differs in case, or is retired, still reads as
+    discarded, because `_still_listed` compares exactly and needs an active row. A test that meets
+    this fails loudly.
+  - **The full pytest at `bc0b5b6`,** with the fix and the merge of `main`: 4,815 passed, the
+    dual-role matrix at 47/47.
 
 **Checked and sound by the review:**
 
@@ -13538,3 +13580,333 @@ finding with probe tests against its own test database.
 - **gemma3:4b:** its 0.95 stands, and the prompt it was derived on is the shipped one again.
 - **The scheme's growth:** only a person confirming a Topic, or an Administrator adding a value, grows it
   now. D-128's growth finding is moot for the classifier.
+- **UC-09 E1's queue:** "Where it still fails, the system marks the document unclassified and queues it
+  for a later attempt." It is not built.
+  - A document whose classification fails at upload stays unclassified until someone presses
+    Classify, reprocesses it, or runs `classify_documents`.
+  - This predates D-129. D-119's audit named it among things "not counted as gaps", and the re-audit
+    of `6e77913` found it recorded nowhere for FR-10. It is recorded here.
+- **Which departments are hidden** is not shown on the Tags page: `GET /api/departments` carries no
+  `grown`. That is an observation of the re-audit, not an FR-10 clause.
+
+**The re-audit of `6e77913` (13 November 2026), verbatim.** This is the `requirements-auditor` agent's
+report, quoted whole and unedited, and extracted mechanically from the agent's transcript. Its line
+numbers are at `6e77913`, before the merge of `main` and the notes above shifted this entry. What
+changed because of it follows the quotation.
+
+> ## Re-audit: FR-10 (D-129) at 6e77913 — 13 November 2026
+>
+> **Verdict:** INCOMPLETE. At 6e77913 the pytest suite fails: F2 broke 26 apply-layer tests, and none of the runs after F2 included their files. So CLAUDE.md §8 condition 2 is not met, although D-129's rules are otherwise built as recorded.
+>
+> ### What I checked, and how
+>
+> - **Read only.** I edited nothing in the worktree. My probes and run outputs are in C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit2\.
+> - **The head moved during the audit.**
+>   - The coordinator committed `140014c`, the test-builder fix, and merged `origin/main` as `bc0b5b6`.
+>   - `docs/decisions.md` is now modified in the working tree by the coordinator, not by me.
+>   - Every finding is at 6e77913, which I read with `git show 6e77913:<path>`. Where I ran something at `bc0b5b6`, I say so and checked that the files involved are identical to 6e77913.
+> - **D-129 is eight commits, not five.** `fa58690` (the prompt revert), `0d3b334` (the reference and the rule), `9365084` (the driver moved), `5ab1bd5`, `4e37112`, `e04a746`, `ce4e9d3` and `6e77913`. Each has FR-10 in its subject.
+> - **Measured against:**
+>   - FR-10: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:681-725;
+>   - UC-09: the same file, 2028-2082;
+>   - Objective 05: the same file, 178;
+>   - D-104, D-105, D-106, D-128 with the audits quoted in it, and D-129;
+>   - CLAUDE.md §6 and §8.
+> - **Line numbers** are at 6e77913, `docs/decisions.md` included. The merge shifts D-129's lines by four.
+>
+> ### Clause coverage (the clauses D-129 touches)
+>
+> | Clause | Status | Evidence (6e77913) |
+> |---|---|---|
+> | FR-10: "a confidence value is recorded with each assignment" | MET | classification.py:565-567, 798, 806, 650-657 |
+> | FR-10 and UC-09 step 6: below "the configured threshold", provisional and presented for confirmation | MET in code; its department tests are red (B1) | 574-579, 586-588, 797, 807 |
+> | FR-10: suggestions "matched against values already held in the scheme" | MET | 629-635 |
+> | FR-10: a non-matching value "may be proposed only in the Topic dimension and requires user confirmation before it is created" | MET | 652-654; a Tag is created only in `confirm_proposed_tag` (1111) and `apply_tag` (978) |
+> | FR-10 and UC-09 step 4: outside the scheme in Department, Project or Process, discarded | MET | 583-585, 655-657 |
+> | Objective 05 clause 2 | MET, read per kind (B4) | as above; objective05_verify.py:161-218 |
+> | Objective 05 clause 3 | MET, with one recorded literal departure (B2, B11) | 644-659 |
+> | Tag names unique within a dimension after normalising case and whitespace (departments) | MET | models.py:195-197, 246-254 |
+> | 409 on a duplicate name within a dimension (departments) | MET for an active name. A retired name answers 200: DECLINED, D-129 (decisions.md:13431-13433) | views.py:2276-2286 |
+> | Deactivated rather than deleted where content references it (departments) | MET for case; spacing is compared exactly (B8) | taxonomy.py:319-348 |
+> | CRUD: Tags Create, Read, Delete (departments) | MET | views.py:2234-2310 |
+> | Invariant 1 for departments (F1) | MET | B6 |
+>
+> ### Findings
+>
+> **B1. CONTRADICTED (CLAUDE.md §8 condition 2; §7, "main stays runnable"): pytest fails at 6e77913.**
+> - **What breaks.**
+>   - F2 added `_still_listed` to rule 3. A listed department with no active `Department` row is discarded: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py:583, 713-723.
+>   - The apply-layer tests build their scheme with `scheme()`, which creates no row: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\classification_builders.py:55-65 at 6e77913.
+>   - So every department those tests list is discarded, and each test that expects "applied" or "provisional" fails.
+> - **Executed at 6e77913.**
+>   - `test_classification_apply.py`: 17 failed, 26 passed.
+>   - 13 further FR-10 files: 9 failed and 201 passed. The failures are `test_classification_confirm.py` 2, `test_classification_department_provenance.py` 6 and `test_objective05_verify.py` 1.
+>   - These are the same 26 the coordinator's full run reports: 26 failed, 4742 passed, the matrix at 47/47. That run is reported to me, not observed.
+> - **The cause, shown by a probe** (`test_probe_f2_hand_built_scheme.py`): the same suggestion and the same hand-built scheme give "discarded" and a blank department with no row, and "applied" and "Finance" with an active row.
+> - **What the 26 include.**
+>   - Every behavioural test of the department's own threshold: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_apply.py:247-276 and 295-369.
+>   - The verifier's per-kind clause 2 test: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_objective05_verify.py:191-215.
+>   - So at 6e77913, neither the 0.30 threshold nor the verifier's per-kind check has a passing behavioural test.
+> - **Production is not affected.**
+>   - All three callers reach `apply_classification` only through `classify_document_now`: views.py:1946, C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:323, and classify_documents.py:228.
+>   - `classify_document_now` passes `tag_scheme(document)`, whose departments are active rows (classification.py:293, 331).
+> - **D-129 does not record it.** "Tests for the fixes" (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:13507-13519) names 21 new items and "Three existing tests". The 26 are absent.
+> - **Fix.** `140014c` is reported to me and is not part of 6e77913. In it, `scheme()` makes each listed department an active row unless one exists ignoring case. I ran the four files at `bc0b5b6`: 84 passed. Still to do:
+>   1. the full pytest, with its matrix line, at the head that will be pushed;
+>   2. a dated line under D-129's "Tests for the fixes" recording:
+>      - that F2 broke 26 apply-layer tests the focused runs never included;
+>      - the full run that found them;
+>      - `140014c`;
+>      - the new full result.
+>   3. one sentence on the builder's limit. A listed name whose existing row differs in case, or is retired, still reads as discarded, because `_still_listed` compares exactly and needs an active row. A test that meets this fails loudly, which is acceptable.
+>
+> **B2. MET: the clause 3 revert.**
+> - **Values outside the scheme.**
+>   - A Topic is proposed at any confidence (classification.py:652-654).
+>   - A Project or Process value is discarded at any confidence (655-657).
+>   - A department is discarded (583-585).
+> - **A run creates, links and reactivates no Tag.**
+>   - The apply path only reads tags (630-632).
+>   - `_link_tag` creates only a `ContentTag` (782-809).
+>   - `_bring_into_use` is called only from `apply_tag` (979) and `confirm_proposed_tag` (1112).
+> - **The prompt.**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\classification.py at 6e77913 differs from `a9934eb` only by the docstring sentence (25-32). `a9934eb` is the commit #85's record names as the one it measured (objective-05-anthropic.md:26).
+>   - `test_classification_prompt.py` and `test_classification_schema.py` are identical to `a9934eb`. The revert is `fa58690`.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py:721 is 0.72 again.
+> - **Kept from D-128.**
+>   - Rule 4b skips a removed or rejected value (614-618, 627-628).
+>   - `reject_proposed_tag` records the rejection (1144-1174).
+>   - `MAXIMUM_CREATED_TAG_WORDS` and `_may_become_a_tag` are gone from the code, the contract, the schema doc and `ai-provider.md`.
+> - **The one literal departure** (a Topic holding a NUL or a lone surrogate is discarded, 646-651) is recorded at decisions.md:13335-13337. See B11 for what the merge does to it.
+> - **Passing at 6e77913:** `test_classification_d128.py`, `_rejected.py`, `_removal.py`, `_grown.py` and the eleven API FR-10 files.
+>
+> **B3. MET as recorded: the thresholds. "Chosen by D-106's rule" overstates it.**
+> - **The values.**
+>   - constants.py:731 is `{"claude-haiku-5-5": 0.30}`, 721 is 0.72 and 710 is 0.95.
+>   - `department_threshold` (classification.py:682-694) falls back to the model's shared value. Rule 3 uses it (586, 707-710). The type and the tags use `_is_provisional` (574, 697-704, 797, 807).
+>   - The key matches the default model string: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\config\settings.py:331 and 365, and anthropic.py:245.
+> - **The run.**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\dev-documents\tag-reference.json has one commit, `0d3b334`, at 11:51:48.
+>   - The run's tree is `9365084`, captured at 11:53:12, and its record says 11:53:18. It read no database.
+>   - The classifier module at `9365084` is byte-identical to `a9934eb`.
+>   - D-129's table matches C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\runs\2026-11-13-tag-threshold\threshold\tag-threshold.json:
+>     - pooled: 122 right, 66 wrong, uncapped 0.5, result 0.25;
+>     - tags alone: 66 and 65, uncapped 0.7, result 0.25;
+>     - departments alone: 56 and 1, no split, result 0.30.
+>   - The figures 43 right and 0 wrong at 0.72, 48 and 3 at 0.70, and 66 and 62 at 0.25 follow from the score tables.
+> - **The frozen reference.** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\reference.json has one commit, `fb9e18a` on 9 November. No D-129 commit touches it, and the run used only the 19 development documents.
+> - **The wording.**
+>   - The rule committed before the run named the pooled 0.25 as its result. It reported departments alone "for information only".
+>   - The user chose 0.30 for departments and kept 0.72 for tags after seeing the run, as D-129 records at 13384-13385.
+>   - The tags' 0.72 is D-122's value, derived on types; this run did not produce it.
+>   - This is tuning on the development set, so it does not breach D-93.
+> - **Tests:** the behavioural ones are among B1's 26 at 6e77913. They pass at `bc0b5b6`.
+>
+> **B4. MET: clause 2 read per kind. The reasoning holds, with one point the record should state.**
+> - **Why it holds.**
+>   - The clause fixes a behaviour: an assignment below the threshold is held. It does not fix how many thresholds there are.
+>   - D-122 had already made the threshold per model.
+>   - Every assignment is compared with the value configured for its kind, so clause 2 holds by construction.
+>   - The verifier implements the reading: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\scripts\objective05_verify.py:10-16 and 161-218. Its one test is red at 6e77913 (B1).
+> - **What the record should say.** On Haiku at 0.30, the department half of clause 2 is nearly never exercised.
+>   - No department suggestion among the 57 development classifications fell below 0.30: `departments_only` scores 56 at both 0 and 0.30.
+>   - So a Haiku department is held almost only when it differs from a department already on the document.
+>   - This is the rule's fallback outcome, as 0.72 is for types, and clause 2 is still met as written.
+>   - **Fix:** one sentence after decisions.md:13391.
+> - **Not measured.** No run of the shipped build covers departments. D-129 says so at 13307-13310.
+>
+> **B5. MET: the department list, with the lead's three choices built.**
+> - **The table and migration.**
+>   - The model: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:195-257.
+>   - The migration: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0015_departments.py:103-124, a `CreateModel` and a seed whose reverse does nothing to the rows before the table is dropped.
+>   - The seed decides `grown` on the exact kept spelling (99).
+>   - `makemigrations --check --dry-run` reports "No changes detected".
+> - **The list is the only department source.** `tag_scheme` reads only `Department` (classification.py:293, 309-331).
+> - **The upload field stays free text:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\serializers.py:270-271, unchanged.
+> - **A retired department stays on its documents:** retiring never touches a document (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\taxonomy.py:319-348).
+> - **The routes.**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:2234-2310, and urls.py:114-115.
+>   - `[IsAuthenticated, CanManageTags]` on both views (2266, 2301).
+>   - The `tagging` throttle on the POST only (2267-2268).
+> - **Server tests from both roles:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\tests\test_fr10_departments.py:128-142, 177-192, 218-236, 373-385 and 416-426. The matrix at 47/47 is reported.
+> - **Front-end tests:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\departments.test.jsx, including a 403 withdrawing every control (760-863) and the Employee's route guard (892 onward).
+>
+> **B6. MET: F1.**
+> - **The fix:** classification.py:309-321 and 331, and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\retrieval\scoping.py:114-124, which fails closed for a role it does not know.
+> - **No new oracle.** `_still_listed` is reached only for a name already in the scheme (583 short-circuits).
+> - **Tests.**
+>   - test_fr10_departments.py:553-601: a planted carrier, by upload and by the confirm/edit control, from both roles, gives identical results with and without the hidden row.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\test_classification_scheme.py:410-450: Employee-only, both roles, an unknown role, an empty audience and Administrator-only.
+> - **The saved breaks** SB1 to SB4 target committed test names (reported).
+> - **The cost is recorded** at decisions.md:13492-13494.
+>
+> **B7. MET: F2, in code and with its own test (583-585, 713-723; test_fr10_departments.py:607-631). It is also the cause of B1.**
+>
+> **B8. MET for case; PARTIAL in the record of the residual: F3.**
+> - **The fix:** taxonomy.py:221-253 and 340, tested at test_fr10_departments.py:637-665.
+> - **Spacing is still compared exactly.** D-129 says so in one phrase (13447) and does not state the consequence.
+>   - The seed collapses inner spacing when it picks a name (0015:59-62, 69-75), while `documents_using` does not (221-229).
+>   - The upload and confirm routes trim a department but do not collapse its spacing (serializers.py:270-271 and 378-381; classification.py:845-846).
+>   - So a department seeded from a value with a double space lists `item_count` 0 and is offered Delete. It is deleted, and once added again it is vocabulary. Only an Administrator can do this, and nothing reaches an Employee.
+>   - D-129's "there is no route that makes it vocabulary" (13493-13494) therefore holds only while some document uses the name, ignoring case and exactly in spacing.
+> - **Fix, either of:**
+>   - compare after collapsing whitespace on both sides in `documents_using` and `department_item_counts`;
+>   - or add one sentence to D-129's F3 entry stating this consequence, and qualify 13493-13494.
+>
+> **B9. MET: F4.**
+> - **The fix and its tests:** serializers.py:440-481, tested at test_fr10_departments.py:670-707.
+> - **Executed by my probe** (`test_probe_f4_breaks.py`, 13 passed). It applied each of F4's four breaks to the committed tests. All nine break cases were caught: NB1 (4 targets), NB2 (3), NB3 (1) and NB4 (1). The unbroken tests pass.
+> - **What the saved results lack.** `break_results2.json`'s NB4 targets a test name that does not exist at 6e77913. The probe fills that gap.
+>
+> **B10. PARTIAL: the records.**
+> - **D-129, `docs/api-contract.md` and `docs/schema-v1.md`** hold no stale F1 to F4 claim.
+>   - The corrections are at decisions.md:13403-13405, 13423-13425, 13446-13448 and 13461-13464.
+>   - Also in the contract's Departments section and at schema-v1.md:311.
+>   - D-129 omits B1.
+> - **Two statements elsewhere have been false since F1:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\base.py:72-74, in the `TagScheme` docstring: "a hidden (grown) one only while every role in the audience reads a document carrying it".
+>     - **Fix:** replace it with "a hidden (grown) one only for an audience every role of which reads everything (`reads_everything`; D-129's security review, finding F1)".
+>   - 0015_departments.py:20-25: "A grown department is offered only for a document whose whole audience reads a document with that department … that is the test `tag_scheme` applies to a grown department at run time".
+>     - 0015 is pushed: `e04a746` is on origin.
+>     - **Fix:** a dated line in D-129 naming 0015:20-25 as the rule before F1. A docstring-only correction would also do: §7 forbids editing a migration's operations, not its comments. If made, log it in D-129.
+> - **Wording, low.**
+>   - Two places say the AI suggests a department only from the list:
+>     - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:1524: "The AI suggests a department for a document only from this list";
+>     - the contract: "suggests a department only from it", and "never suggests it".
+>   - The detail page says otherwise: "The AI suggested “X”, which is not one of the known departments, so it was not applied" (constants.js:698-701; C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\components\Classification.jsx:176-180).
+>   - **Accurate wording:** the AI applies or holds a department only from this list.
+> - **An observation, not an FR-10 clause.** `GET /api/departments` carries no `grown` (serializers.py:428-437), so the Tags page cannot show which departments are hidden.
+>
+> **B11. PARTIAL, after the merge (applies to `bc0b5b6`, not 6e77913): what #105 and #106 change for D-129.**
+> - **The prompt text is unchanged.** Only the parser and its messages change.
+> - **No longer byte-identical.** D-129's "byte-identical to #85's commit `a9934eb`… one sentence of the module's docstring" (13254-13256) stops being true: `apps/ai/classification.py`, `test_classification_loop.py` and `test_classification_schema.py` now carry #105 and #106's parser changes.
+> - **The "one exception" no longer happens on the shipped path.** This is D-129's 13264-13266 and 13335-13337.
+>   - `loads_reply` now refuses any reply holding a NUL or an unpaired surrogate: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\schema.py:128-147 and 150-197 at `bc0b5b6`.
+>   - Such a reply is retried. After `MAXIMUM_CLASSIFY_ATTEMPTS` the classify route answers 503, and ingestion leaves the document unclassified.
+>   - Rule 4d's U+FFFD branch (646-651) can now be reached only by calling `apply_classification` directly, so the literal clause 3 departure no longer occurs.
+> - **D-128's open residual is closed** by the same change: "a NUL in a suggested department answers 500" (decisions.md:12386-12388, 12835).
+>   - It is still open at 6e77913, where rule 1 writes `machine_department` unchecked (566).
+>   - #106 tests it at test_classification_schema.py:377-380 at `bc0b5b6`.
+> - **Fix:** a dated note on D-129 after the merge stating these four points.
+>
+> ### The summary for the lead, line by line
+>
+> | Line | Verdict | What is true at 6e77913 |
+> |---|---|---|
+> | Type: fixed list; applied at 0.72 or more, else provisional and held | Correct, but needs a qualifier | 0.72 is the threshold for Claude Haiku 5.5, the default. On FLM's gemma3:4b, or any model not in the map, it is 0.95 (constants.py:710). A type outside the list is no reply at all: it is retried, and after three attempts the document is left unclassified. |
+> | Department: suggested only from the active list | Wrong as worded | **What holds:** only a name on the active list that is admitted for the document's audience can be applied or held (classification.py:331, 583).<br>**Where the wording fails:** the model can return any name. It is told to name the document's own department whenever the admitted list is empty: a fresh database, or an Employee-visible document whose listed departments are all hidden (apps/ai/classification.py:388-390).<br>**What the page shows:** that name is recorded and shown on the detail page as "not one of the known departments" (constants.js:698-699).<br>**Matching:** exact in case and spacing, after trimming. |
+> | Written only into a blank department, at 0.30 or more | Correct, but needs a qualifier | 0.30 on Haiku, 0.95 on gemma3:4b. The department must also still be listed when the reply is applied (F2). |
+> | A typed, confirmed or edited department is never replaced | Correct for the AI, but incomplete | A different listed suggestion at 0.30 or more is held as provisional, not discarded (593-596). The page says "Confirming replaces X with Y" (constants.js:694), and a person who confirms does replace it (867-871). |
+> | Below 0.30 provisional, department unchanged | Correct, but misleading on its own | A suggestion is also provisional at 0.30 or more when the document already has a different department. |
+> | Outside the list: discarded | Correct | Two more cases are discarded: a hidden department, for any audience an Employee is in; and a department retired or deleted while the provider call ran. |
+> | A hidden department is never suggested for an Employee-readable document | Wrong as worded | **What holds:** for such a document it is never offered to the model, applied or held, even when documents an Employee reads carry it (309-321).<br>**Where the wording fails:** the model can still name it from the text. It is then discarded and shown as "not one of the known departments".<br>**What an Administrator can see:** the Tags page cannot show which departments are hidden. |
+> | Project and Process | Correct, but needs a qualifier | 0.72 on Haiku, 0.95 elsewhere. "The scheme" is the scheme for the document's audience. A grown value that only restricted material carries counts as outside it, and is discarded. |
+> | Topic | Correct at 6e77913, with two exceptions | **A NUL or a lone surrogate:** a Topic holding one is discarded. After #106 the whole reply is refused and retried instead (B11).<br>**Over 255 characters:** a Topic this long is proposed, but can only be rejected: confirming it answers 400 (1109-1110).<br>**The cap:** at most eight tag suggestions per document. |
+> | Needs a person: confirm or correct provisional assignments; confirm or reject proposed Topics; a department whose only listed match is hidden | Correct | The hidden case has to be typed, at upload or in the confirm/edit control. |
+> | Needs a person: a new Project, Process or department (the Tags page) | Needs an Administrator | **Who:** only `manage_tags`, which the Administrator alone holds (views.py:2188, 2266).<br>**Topics:** any contributor can bring in a new Topic, by name on a document or by confirming a proposal.<br>**Typed departments:** a department typed on a document stays on it, but is never suggested until an Administrator lists it. |
+> | Missing | Omitted | (a) **Applied values still need reviewing.** They stay marked "Suggested by AI" until a person confirms or removes them.<br>(b) **A failed classification is not retried.** If classification fails at upload, the document stays unclassified until someone presses Classify, reprocesses it, or runs `classify_documents` (ingestion/documents.py:303-334). UC-09 E1's "queues it for a later attempt" is not built and is recorded nowhere for FR-10. This predates D-129.<br>(c) **The list starts empty on a fresh database.** No department is applied until an Administrator adds some. |
+>
+> ### Invariant check (CLAUDE.md §6)
+>
+> - **1:** pass for D-129's changes (B6). A hidden department never enters a scheme an Employee is in, and an Employee-visible outcome is the same with or without a hidden row.
+> - **4:** pass. The department routes use `manage_tags` as a permission class, in the order 401, then 403, then 429.
+> - **8:** pass. Classification at upload keeps its own savepoint, and F2 adds one read.
+> - **9:** pass. `apply_classification` runs in one transaction, and 0015 is additive and reversible.
+> - **10:** pass. The parser is unchanged at 6e77913.
+> - **2, 3, 5, 6 and 7:** not applicable. No chunk, meeting scope or answer path changed.
+> - **Set-level:**
+>   - no AI SDK import outside `apps/ai`;
+>   - the thresholds are in constants.py only, and the remaining literals are in docstrings;
+>   - no chunk writes;
+>   - nothing is enforced only in the interface;
+>   - `reads_everything` and `_every_role_reads` answer different questions, and both sit in scoping's home.
+>
+> ### Gate impact
+>
+> - **Not an M6 requirement.** FR-10 is NIT3004 work, and M6 has passed.
+> - **The red suite blocks the merge of #102** under CLAUDE.md §7 until a full pytest passes at the pushed head.
+> - **Two MUST paths are touched:**
+>   - FR-08's upload gains one read, and its department field is unchanged;
+>   - the FR-14 and FR-15 filters still read `Documents.department` (test_fr10_departments.py:432-458).
+> - **FR-10 stays INCOMPLETE by decision** (D-104's dated note; D-119), whatever this audit finds.
+> - **Smallest fixes, in order:**
+>   1. the full pytest with `140014c` and the merge, with its matrix line;
+>   2. the B1 record;
+>   3. `base.py:72-74`, and the 0015 line;
+>   4. the merge note (B11);
+>   5. optionally, the B4 and B8 sentences and the B10 wording.
+>
+> ### What I ran
+>
+> Every pytest run used the wrapper, on `test_kmp_fr10auto_audit2`, which pytest-django creates and destroys. I did not run the full suite.
+>
+> | Run | Content | Result |
+> |---|---|---|
+> | `test_classification_apply.py` | 6e77913 | 17 failed, 26 passed |
+> | 13 FR-10 files: the documents tests and `test_fr10_tag_vocabulary.py` | 6e77913 | 9 failed, 201 passed |
+> | The lock-order tests, the ingestion hook, and 11 API FR-10 files | 6e77913 | 461 passed |
+> | Probe: F2 against a hand-built scheme | 6e77913 | 2 passed: no row gives "discarded", a row gives "applied" |
+> | vitest: `departments.test.jsx` and `tags.test.jsx` | `bc0b5b6`, whose front end is identical to 6e77913 | 57 passed |
+> | Probe: F4's four breaks against the committed tests | `bc0b5b6`, whose serializer and test file are identical to 6e77913 | 13 passed: 9 break cases caught, 4 unbroken cases pass |
+> | Probe: `makemigrations --check --dry-run`, on the test database | `bc0b5b6`, whose models, migrations and settings are identical to 6e77913 | No changes detected |
+> | The four failing files, after `140014c` | `bc0b5b6` | 84 passed |
+>
+> The probes are in C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit2\: `test_probe_f2_hand_built_scheme.py`, `test_probe_f4_breaks.py` and `test_probe_makemigrations_check.py`. Each run's output is in the `run_*.txt` file beside them.
+>
+> **Final `git status`:**
+> - `M docs/decisions.md`: the coordinator's change, not mine;
+> - `?? corpus/objective-05/runs/2026-11-13-d129/`;
+> - HEAD is `bc0b5b6`.
+>
+> The runs may have refreshed ignored caches (`__pycache__`, and vitest's under `node_modules`).
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at 6e77913.** I was told not to run them. The coordinator's result is reported, not observed; my focused runs reproduce the 26 failures.
+> - **The suites at `140014c` or `bc0b5b6`:** the full pytest, and npm test, lint and build. 635 passed at `8483735` is reported; the front end is unchanged since `ce4e9d3`.
+> - **CI on 6e77913.** It has not run, and I had no network.
+> - **Other breaks.** The F1 to F3 breaks I read only from the saved results. I did not re-run the 38 and 38 breaks of `e04a746` and `ce4e9d3`, or the 23 of `5ab1bd5`.
+> - **The user's side.** I could not see his answers or the tabbed questions. In particular, I could not tell whether the `kmp_anthropic` projection ("15 departments instead of 7", decisions.md:13386-13387) was in front of him before he chose. It uses the twenty documents' recorded confidences, not `reference.json`'s labels, and the repository does not say when it was shown.
+> - **Database figures:** those for `kmp_anthropic` and the alpha's state.
+> - **The security reviewer's probes.**
+> - **Live interface behaviour.**
+>
+> **One line:** INCOMPLETE. D-129's rules, the department list and F1 to F4 are built as recorded, but pytest is red at 6e77913 (26 tests F2 broke and no run after F2 covered), two in-code records still state the hidden-department rule F1 replaced, and the lead's summary misstates three department lines, gives a person an Administrator's task, and leaves out three tasks.
+
+**What changed because of the re-audit of `6e77913` (13 November).** It found D-129's rules, the
+department list and F1 to F4 built as recorded, and returned INCOMPLETE for the points below.
+
+- **B1, the red suite:** fixed in `140014c` before the report arrived. The full pytest at `bc0b5b6`
+  passed: 4,815, with the matrix at 47/47. It is recorded under "Tests for the fixes", with the
+  builder's limit.
+- **B3, "chosen by D-106's rule":** the overstatement was in the coordinating session's brief to the
+  auditor, not in this entry, which records the user's choice after the run. The correct account:
+  - D-106's rule, pooled as committed before the run, gave 0.25.
+  - Run on departments alone, reported for information, it gives 0.30.
+  - The user chose 0.30 for departments and kept D-122's 0.72 for types and tags.
+
+  The pull request says the same.
+- **B4:** a note on how rarely Haiku's department half of clause 2 is exercised, under "Clause 2 is
+  read per kind".
+- **B8:** recorded under finding 3, with a qualification on finding 1's cost.
+- **B10:**
+  - **`apps/ai/base.py`:** the `TagScheme` docstring now states F1's rule.
+  - **`documents 0015`:** its docstring carries a dated correction. The migration is pushed, and only
+    its comment changed, never its operations: CLAUDE.md §7 forbids editing a pushed migration's
+    operations.
+  - **"Suggests" is now "assigns"** on the Tags page's department copy (ten strings in
+    `frontend/src/constants.js`, and the comments in `Departments.jsx`) and in `docs/api-contract.md`.
+    - The model can name any department. Only a listed one, admitted for the document's audience, is
+      applied or held. A name outside the list is shown on the detail page as "not one of the known
+      departments".
+    - This entry's own "suggests only listed departments" (the upload-field choice, and the screen's
+      help text) is to be read as "assigns" in the same sense.
+    - The four tests that quote the copy were updated. Each failed when its old string was put back:
+      four breaks, each reverted.
+  - **Which departments are hidden:** recorded under "Not covered".
+- **B11, the merge of `main`:** dated notes on "byte-identical", on the one exception and on the
+  literal departure. #106 also closes D-128's open residual, a NUL in a suggested department answering
+  500, on the merged head.
+- **UC-09 E1's queue:** recorded under "Not covered".
+- **The summary for the lead** was corrected, line by line as the report gives it, before it was
+  sent.
