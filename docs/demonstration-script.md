@@ -59,7 +59,22 @@
 >   release. FR-03 is NIT3004 and not one of the twelve;
 > - FR-02 step 4 says what a build that includes D-130 shows instead of its 3 November text.
 >
-> **None of this is on the alpha at `8598d19`.** It holds only on a build that includes D-130.
+> **None of this is on either alpha:** neither the FLM alpha at `8598d19` nor, since D-131, the
+> Anthropic alpha at `6e1efd1`. It holds only on a build that includes D-130.
+>
+> **Amended 14 November 2026,** after the alpha moved to Anthropic (D-131). This script was
+> written for the FLM alpha and walked on it: `8598d19`, on `kmp_demo_20261101`. Every line below
+> that names them describes that alpha, which is kept. Since 13 November 2026 the alpha runs
+> `6e1efd1` on the anthropic provider, on a new database, `kmp_alpha_20261113`. So, before a walk
+> on it:
+>
+> - **Screen the walk's questions again.** They were screened on EmbeddingGemma's vectors only
+>   (`corpus/demo/screening-2026-11-01.json`, D-40), and Voyage's scores differ.
+> - **Check, rather than assume, the steps that waited on a redeploy,** such as FR-04's logged-out
+>   confirmation. `6e1efd1` has D-97's fix, but nobody has walked it on the new alpha.
+> - **The FR-10 lines describe `8598d19`, which had no classification.** On `6e1efd1` each document
+>   is classified at upload. On the new database FR-10 holds 15 provisional tags, which FR-15's
+>   views leave out until someone confirms them (D-105, D-131).
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
