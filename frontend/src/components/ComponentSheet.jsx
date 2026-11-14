@@ -1,9 +1,10 @@
 import { useId, useState } from 'react'
 import { messageForStatus } from '../api/client.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
-import { SOURCE_TYPE, TEXT } from '../constants.js'
+import { KNOWLEDGE_MAP_NODE_TYPE, KNOWLEDGE_MAP_RELATIONSHIP, SOURCE_TYPE, TEXT } from '../constants.js'
 import { contrastRatio } from '../utils/contrast.js'
 import { CONTRAST_PAIRS } from './contrastPairs.js'
+import { nodesOf, relationshipsOf, selectedNodeOf } from '../utils/knowledgeMap.js'
 import { FILE_INPUT_ACCEPT } from '../utils/uploads.js'
 import ActionItems from './ActionItems.jsx'
 import AiMark, { PersonMark } from './AiMark.jsx'
@@ -25,6 +26,8 @@ import { SearchResultGroup } from './SearchResults.jsx'
 import SelectInput from './SelectInput.jsx'
 import TextAreaInput from './TextAreaInput.jsx'
 import TextInput from './TextInput.jsx'
+// FR-20's legend and diagram are the knowledge map page's own, shown here from sample data.
+import { KnowledgeMapDiagram, KnowledgeMapLegend } from '../pages/KnowledgeMap.jsx'
 import './ComponentSheet.css'
 // The upload queue's status styles, for the limited row shown under "Limits (D-79)".
 import '../pages/Upload.css'
@@ -80,7 +83,67 @@ const BUILT = [
     paths: ['/documents', '/documents/:docId'],
   },
   { name: 'Meeting summary and action items, on the meeting page (FR-16)', paths: ['/meetings/:meetingId'] },
+  { name: 'Knowledge map, with its table view (FR-20, NFR-17)', paths: ['/knowledge-map'] },
 ]
+
+/* Fixture for the FR-20 section below: a map object in the contract's own shape
+   (docs/api-contract.md, "NIT3004 — FR-20"), with one node of each type, a line
+   for each relationship and the document selected. Invented, so the sheet shows
+   the diagram without asking the API for anything. */
+const SAMPLE_MAP = {
+  focus: { type: KNOWLEDGE_MAP_NODE_TYPE.document, id: 'sample-map-document' },
+  nodes: [
+    {
+      id: 'document:sample-map-document',
+      type: KNOWLEDGE_MAP_NODE_TYPE.document,
+      item_id: 'sample-map-document',
+      label: 'Leave policy 2026',
+      dimension: null,
+      connection_count: 2,
+    },
+    {
+      id: 'tag:sample-map-tag',
+      type: KNOWLEDGE_MAP_NODE_TYPE.tag,
+      item_id: 'sample-map-tag',
+      label: 'people',
+      dimension: 'Topic',
+      connection_count: 1,
+    },
+    {
+      id: 'contributor:sample-map-contributor',
+      type: KNOWLEDGE_MAP_NODE_TYPE.contributor,
+      item_id: 'sample-map-contributor',
+      label: 'Jane Doe',
+      dimension: null,
+      connection_count: 2,
+    },
+    {
+      id: 'meeting:sample-map-meeting',
+      type: KNOWLEDGE_MAP_NODE_TYPE.meeting,
+      item_id: 'sample-map-meeting',
+      label: 'Q3 planning sync',
+      dimension: null,
+      connection_count: 1,
+    },
+  ],
+  edges: [
+    { source: 'document:sample-map-document', target: 'tag:sample-map-tag', relationship: KNOWLEDGE_MAP_RELATIONSHIP.tagged },
+    {
+      source: 'contributor:sample-map-contributor',
+      target: 'document:sample-map-document',
+      relationship: KNOWLEDGE_MAP_RELATIONSHIP.uploaded,
+    },
+    {
+      source: 'contributor:sample-map-contributor',
+      target: 'meeting:sample-map-meeting',
+      relationship: KNOWLEDGE_MAP_RELATIONSHIP.attended,
+    },
+  ],
+  truncated: false,
+  truncated_by: null,
+  maximum_node_count: 50,
+  maximum_traversal_depth: 2,
+}
 
 /* Fixtures for the FR-15 section below: one dimension's values as the browse
    reply carries them, already scoped and counted by the server (D-72). */
@@ -1005,6 +1068,35 @@ export default function ComponentSheet() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section aria-labelledby="sheet-knowledge-map">
+        <h2 id="sheet-knowledge-map">Knowledge map (FR-20, NFR-17)</h2>
+        <p>
+          A node&rsquo;s type is told by its shape and its colour together, and always by a word as well: a
+          document is a square, a meeting a circle, a tag a diamond and a contributor a triangle. The four fills
+          are four tokens, each at 3:1 or better on the surface the map sits on (the Contrast table above), and
+          they are set by class in the stylesheet, never as an attribute or an inline style, so the contrast
+          checks read them. The legend lists the same four shapes the diagram draws.
+        </p>
+        <div className="demo-stack">
+          <KnowledgeMapLegend headingLevel={3} />
+        </div>
+        <p>
+          The diagram is three columns in a labelled, focusable scroll region: contributors, then documents and
+          meetings, then tags. Each node is a link that holds its shape, its label and its count of connections
+          shown, and its accessible name begins with its type; a tag is always named with its dimension. The
+          lines are a layer hidden from assistive technology, and the table view on the page says the same in
+          rows. The selected node has a heavier outline, heavier lines and the word &ldquo;Selected&rdquo;, and
+          links to the item itself; a selected contributor is not a link, because it has nothing to open.
+        </p>
+        <h3 id="sheet-knowledge-map-sample">Sample map</h3>
+        <KnowledgeMapDiagram
+          nodes={nodesOf(SAMPLE_MAP)}
+          relationships={relationshipsOf(SAMPLE_MAP)}
+          selected={selectedNodeOf(SAMPLE_MAP)}
+          labelledBy="sheet-knowledge-map-sample"
+        />
       </section>
 
       <section aria-labelledby="sheet-built">

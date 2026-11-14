@@ -253,6 +253,51 @@ export const ASK = {
   },
 }
 
+// FR-20's knowledge map (D-132): the map object of docs/api-contract.md, with one
+// document, the person who uploaded it and the line between them. The page asks for
+// it once on mount, and has settled once the Items table holds the document.
+const MAP_DOCUMENT_ID = '0b7c2a54-0000-4000-8000-000000000001'
+const MAP_CONTRIBUTOR_ID = '77f22a54-0000-4000-8000-000000000002'
+
+const KNOWLEDGE_MAP = {
+  api: {
+    'GET /api/knowledge-map': {
+      body: {
+        focus: null,
+        nodes: [
+          {
+            id: `document:${MAP_DOCUMENT_ID}`,
+            type: 'document',
+            item_id: MAP_DOCUMENT_ID,
+            label: DOCUMENT.title,
+            dimension: null,
+            connection_count: 1,
+          },
+          {
+            id: `contributor:${MAP_CONTRIBUTOR_ID}`,
+            type: 'contributor',
+            item_id: MAP_CONTRIBUTOR_ID,
+            label: EMPLOYEE.name,
+            dimension: null,
+            connection_count: 1,
+          },
+        ],
+        edges: [
+          { source: `contributor:${MAP_CONTRIBUTOR_ID}`, target: `document:${MAP_DOCUMENT_ID}`, relationship: 'uploaded' },
+        ],
+        truncated: false,
+        truncated_by: null,
+        maximum_node_count: 50,
+        maximum_traversal_depth: 2,
+      },
+    },
+  },
+  async settled() {
+    await pageHeading(TEXT.mapHeading)
+    await screen.findByRole('rowheader', { name: DOCUMENT.title })
+  },
+}
+
 // It shows a search field too, as one of the components on the sheet.
 const COMPONENT_SHEET = {
   api: {},
@@ -331,6 +376,8 @@ export const WALK = [
   ...asEachRole(`/meetings/${MEETING.meeting_id}`, MEETING_DETAIL),
   ...asEachRole(`/search?q=${SEARCH_TERM}`, SEARCH),
   ...asEachRole('/ask', ASK),
+  // FR-20 (D-132): inside RequireAuth and behind no role guard, so each role stays.
+  ...asEachRole('/knowledge-map', KNOWLEDGE_MAP),
   // Outside RequireAuth: both render before the session check has answered.
   ...asEachRole('/components', COMPONENT_SHEET),
   ...asEachRole('/403', ACCESS_DENIED),

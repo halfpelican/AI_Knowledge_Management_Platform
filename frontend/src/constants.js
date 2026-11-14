@@ -1319,6 +1319,116 @@ export const TEXT = {
   dashboardHeld: 'Held',
   dashboardAsked: 'Asked',
 
+  /* ---- FR-20 knowledge map, with NFR-17's table view (NIT3004, D-132) ---- */
+  // FR-20: "A node-link diagram showing documents, meetings, tags, and contributors,
+  // with node type distinguished by colour and shape", and "A tabular equivalent
+  // presents the same relationships as sortable rows". The screen is
+  // src/pages/KnowledgeMap.jsx. Everything it shows arrives already scoped, capped
+  // and counted by the server (CLAUDE.md §6, invariant 1), and no payload says what
+  // was left out or how much, so no sentence here says or implies that anything is
+  // kept from the reader. The page heading and the navigation link, which names the
+  // screen it opens.
+  mapHeading: 'Knowledge map',
+  mapIntro:
+    'How documents, meetings, tags and contributors relate to one another. Select an item to see what it is connected to, and select it again to open it. ' +
+    'The table view under the map holds the same items and relationships as rows.',
+  mapLoading: 'Loading the knowledge map…',
+  mapLoadFailed: 'Could not load the knowledge map',
+  // UC-11 E1: "an empty map or table rather than an error". One sentence, for an
+  // empty knowledge base and for a role with nothing in scope alike: the reply is
+  // the same for both, so the screen cannot tell them apart and must not seem to.
+  mapEmpty: 'There is nothing on the knowledge map yet.',
+  // A selection that names nothing on the reader's map, a selection in the address
+  // that is not a well-formed pair, and the server's 400 for one: the same words
+  // for all three, with the link back to the whole map.
+  mapEmptySelection: 'Nothing is connected to this selection.',
+  mapShowWhole: 'Show the whole map',
+  // The count line: counted from the nodes on screen, never a total (D-132).
+  mapCountDocuments: (count) => (count === 1 ? '1 document' : `${count} documents`),
+  mapCountMeetings: (count) => (count === 1 ? '1 meeting' : `${count} meetings`),
+  mapCountTags: (count) => (count === 1 ? '1 tag' : `${count} tags`),
+  mapCountContributors: (count) => (count === 1 ? '1 contributor' : `${count} contributors`),
+  mapCountLine: (parts) => `${parts.join(' · ')} shown`,
+  // FR-20: "truncation is reported to the interface so that a partial view is not
+  // presented as complete" (UC-11 A2). One sentence per reason and per kind of
+  // view, each worded from the two maximums the reply carries, so the page holds
+  // no copy of either cap. Each says how the view is limited, and none says that
+  // anything is kept from the reader.
+  mapTruncatedOverview: (maximum) =>
+    `The map holds at most ${maximum} items at a time. Select an item to see what is connected to it.`,
+  mapTruncatedSelection: (maximum) => `Only the first ${maximum} items connected to this selection are shown.`,
+  mapTruncatedDepth: (depth) =>
+    depth === 1 ? 'This view stops 1 step from the selected item.' : `This view stops ${depth} steps from the selected item.`,
+  // A truncated reply whose reason is not one of the two the contract names. A
+  // partial view is still said to be partial.
+  mapTruncatedOther: 'This is a partial view of the map.',
+  mapSkipToTables: 'Skip to the table view',
+  mapLegendHeading: 'Legend',
+  // Colour and shape together, and the word beside both (SC 1.4.1).
+  mapLegendTypes: 'Each type of item has its own shape and colour.',
+  mapLegendLine:
+    'A line joins two related items: a contributor to a document they uploaded or a meeting they attended, and a document or a meeting to a tag it carries.',
+  mapLegendSelected: 'The selected item has a heavier outline and heavier lines, and is marked “Selected”.',
+  mapDiagramHeading: 'Map',
+  mapColumnContributors: 'Contributors',
+  mapColumnSources: 'Documents and meetings',
+  mapColumnTags: 'Tags',
+  mapTypeDocument: 'Document',
+  mapTypeMeeting: 'Meeting',
+  mapTypeTag: 'Tag',
+  mapTypeContributor: 'Contributor',
+  // A tag's name is unique only within its dimension, so a tag is always shown with
+  // both: "Topic: people" (D-132, departure 5).
+  mapTagLabel: (dimension, name) => `${dimension}: ${name}`,
+  mapTagType: (dimension) => `Tag, ${dimension}`,
+  // A node's type before its name, where no shape or column says it: "Document: Leave policy".
+  mapTypedLabel: (type, label) => `${type}: ${label}`,
+  // `connection_count` is the number of connections in this view (the contract), so
+  // the count is always called "shown": the same item can read differently elsewhere.
+  mapConnectionsShown: (count) => (count === 1 ? '1 connection shown' : `${count} connections shown`),
+  // The selected node's mark, in a word as well as in its outline (SC 1.4.1), and
+  // what a second selection does (FR-20: "selecting again opens the underlying item").
+  mapSelectedMark: 'Selected',
+  mapSelectAgainDocument: 'Select again to open the document.',
+  mapSelectAgainMeeting: 'Select again to open the meeting.',
+  mapSelectAgainTag: 'Select again to open the documents carrying this tag.',
+  mapSelectedHeading: 'Selected',
+  mapSelectedNone: 'Nothing is selected. Select an item on the map or in the table view to see what it is connected to.',
+  // The Selected panel's groups: the relationship, read from the selected item's end of it.
+  mapGroupTags: 'Tags',
+  mapGroupTagged: 'Carrying this tag',
+  mapGroupUploaded: 'Uploaded',
+  mapGroupUploadedBy: 'Uploaded by',
+  mapGroupAttended: 'Attended',
+  mapGroupAttendedBy: 'Attended by',
+  mapOpenDocument: 'Open the document',
+  mapOpenMeeting: 'Open the meeting',
+  mapOpenTag: (name) => `Open documents tagged ${name}`,
+  // D-132, decision 5: a contributor has no underlying item, and the screen says so.
+  mapContributorNoPage: 'A contributor has no page of their own, so there is nothing to open.',
+  // NFR-17: "a keyboard-navigable, sortable table view conveying the same nodes and
+  // relationships". UC-11 A1: "Selecting a row has the same effect as selecting a node".
+  mapTablesHeading: 'Table view',
+  mapTablesIntro:
+    'The same items and relationships as the map. Selecting a name here has the same effect as selecting it on the map.',
+  mapItemsHeading: 'Items',
+  mapItemsCaption:
+    'Items on the map, one row for each document, meeting, tag and contributor. Every column heading is a button that sorts by that column.',
+  mapItemsColumnName: 'Name',
+  mapItemsColumnType: 'Type',
+  mapItemsColumnConnections: 'Connections shown',
+  mapRelationshipsHeading: 'Relationships',
+  mapRelationshipsCaption:
+    'Relationships on the map, one row for each line. Every column heading is a button that sorts by that column.',
+  mapRelationshipsColumnFrom: 'From',
+  mapRelationshipsColumnRelationship: 'Relationship',
+  mapRelationshipsColumnTo: 'To',
+  // Read "from, relationship, to": "Jane Doe uploaded Leave policy", "Leave policy is tagged Topic: people".
+  mapRelationshipUploaded: 'uploaded',
+  mapRelationshipAttended: 'attended',
+  mapRelationshipTagged: 'is tagged',
+  mapNoRelationships: 'None of these items is joined to another by a line.',
+
   /* ---- FR-19 knowledge-gap log (NIT3004, Objective 06) ------------------ */
   // FR-19: "A list, visible to Administrators, of questions the system could not
   // answer and searches returning no results, grouped by subject with an

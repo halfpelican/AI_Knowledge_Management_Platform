@@ -261,6 +261,129 @@ describe('tab order, screen by screen', () => {
   })
 })
 
+describe('FR-20 / NFR-17: the knowledge map, its diagram and its table view (D-132)', () => {
+  const ADMINISTRATOR = {
+    id: 'user-administrator',
+    name: 'Ada Administrator',
+    email: 'ada@example.com',
+    role: ROLES.administrator,
+    created_at: '2026-09-12T10:00:00+10:00',
+  }
+
+  const mapNode = (type, itemId, label, connectionCount, dimension = null) => ({
+    id: `${type}:${itemId}`,
+    type,
+    item_id: itemId,
+    label,
+    dimension,
+    connection_count: connectionCount,
+  })
+  const POLICY = mapNode('document', '0b7c2a54-0000-4000-8000-000000000001', 'Employee Leave Policy 2026', 2)
+  const PEOPLE = mapNode('tag', '0b7c2a54-0000-4000-8000-000000000002', 'people', 1, 'Topic')
+  const JANE = mapNode('contributor', '0b7c2a54-0000-4000-8000-000000000003', 'Jane Doe', 2)
+  const SYNC = mapNode('meeting', '0b7c2a54-0000-4000-8000-000000000004', 'Q3 Planning Sync', 1)
+
+  // The walk from the policy, in the server's walk order: the source, its tag, its
+  // contributor, then what they lead to. Not the order the columns are read in.
+  const MAP = {
+    focus: { type: POLICY.type, id: POLICY.item_id },
+    nodes: [POLICY, PEOPLE, JANE, SYNC],
+    edges: [
+      { source: POLICY.id, target: PEOPLE.id, relationship: 'tagged' },
+      { source: JANE.id, target: POLICY.id, relationship: 'uploaded' },
+      { source: JANE.id, target: SYNC.id, relationship: 'attended' },
+    ],
+    truncated: true,
+    truncated_by: 'depth',
+    maximum_node_count: 50,
+    maximum_traversal_depth: 2,
+  }
+
+  it.each([EMPLOYEE, ADMINISTRATOR])(
+    'as an $role: the skip link, the nodes column by column, the Selected panel, then each table region ahead of its headings and rows',
+    async (user) => {
+      serveApi({ 'GET /api/auth/me': { body: user }, 'GET /api/knowledge-map': { body: MAP } })
+      renderApp(`/knowledge-map?focus_type=${POLICY.type}&focus_id=${POLICY.item_id}`)
+      const diagram = await screen.findByRole('region', { name: TEXT.mapDiagramHeading })
+      const panel = screen.getByRole('region', { name: TEXT.mapSelectedHeading })
+      const itemsRegion = screen.getByRole('region', { name: TEXT.mapItemsHeading })
+      const relationshipsRegion = screen.getByRole('region', { name: TEXT.mapRelationshipsHeading })
+
+      // walk() also asserts that no stop is hidden by markup or by any stylesheet
+      // rule, on it or an ancestor, and that nothing carries a positive tabindex.
+      const stops = walk()
+
+      // The page in reading order: the header, the link past the diagram, the
+      // diagram, the panel, then the two tables.
+      expectOrder(stops, [
+        'Skip to content',
+        TEXT.searchFieldLabel,
+        screen.getByRole('link', { name: TEXT.mapHeading }),
+        'Log out',
+        TEXT.mapSkipToTables,
+        diagram,
+        panel.querySelector('a'),
+        itemsRegion,
+        relationshipsRegion,
+      ])
+
+      // The diagram adds one stop for its scroll region and one per node, and the
+      // nodes come column by column, top to bottom: the contributor, then the
+      // document and the meeting, then the tag. The reply's own order would have
+      // read the document, the tag, the contributor, the meeting.
+      const inDiagram = stops.filter((stop) => diagram.contains(stop))
+      expect(inDiagram).toHaveLength(1 + MAP.nodes.length)
+      expect(inDiagram[0]).toBe(diagram)
+      expect(inDiagram.slice(1).map((stop) => stop.querySelector('.knowledge-map__node-label').textContent)).toEqual([
+        JANE.label,
+        POLICY.label,
+        SYNC.label,
+        TEXT.mapTagLabel(PEOPLE.dimension, PEOPLE.label),
+      ])
+      for (const stop of inDiagram.slice(1)) expect(stop.tagName).toBe('A')
+      // Nothing in the lines' layer is a stop.
+      expect(stops.filter((stop) => stop.closest('svg') !== null)).toEqual([])
+
+      // The Selected panel: the two connections, the open action, the way back.
+      expect(stops.filter((stop) => panel.contains(stop)).map(stopName)).toEqual([
+        `${TEXT.mapTypeTag}: ${TEXT.mapTagLabel(PEOPLE.dimension, PEOPLE.label)}`,
+        `${TEXT.mapTypeContributor}: ${JANE.label}`,
+        TEXT.mapOpenDocument,
+        TEXT.mapShowWhole,
+      ])
+
+      // Each table's scroll region is itself a stop, ahead of its sort buttons,
+      // which are ahead of its rows (SC 2.1.1): three headings, then a link per
+      // node in Items and two per line in Relationships.
+      for (const [region, links] of [
+        [itemsRegion, MAP.nodes.length],
+        [relationshipsRegion, MAP.edges.length * 2],
+      ]) {
+        const inRegion = stops.filter((stop) => region.contains(stop))
+        expect(inRegion[0]).toBe(region)
+        expect(inRegion.slice(1, 4).map((stop) => stop.tagName)).toEqual(['BUTTON', 'BUTTON', 'BUTTON'])
+        expect(inRegion.slice(4).map((stop) => stop.tagName)).toEqual(Array(links).fill('A'))
+      }
+    },
+  )
+
+  it('a selected contributor is not a stop on the diagram: there is nothing for a second selection to open', async () => {
+    const map = { ...MAP, focus: { type: JANE.type, id: JANE.item_id }, truncated: false, truncated_by: null }
+    signedIn({ 'GET /api/knowledge-map': { body: map } })
+    renderApp(`/knowledge-map?focus_type=${JANE.type}&focus_id=${JANE.item_id}`)
+    const diagram = await screen.findByRole('region', { name: TEXT.mapDiagramHeading })
+
+    const stops = walk()
+
+    const inDiagram = stops.filter((stop) => diagram.contains(stop))
+    // The region and the three other nodes.
+    expect(inDiagram).toHaveLength(1 + MAP.nodes.length - 1)
+    expect(inDiagram[0]).toBe(diagram)
+    expect(inDiagram.slice(1).some((stop) => stop.textContent.includes(JANE.label))).toBe(false)
+    expect(diagram.querySelector('[aria-current="true"]').tagName).toBe('SPAN')
+  })
+})
+
 describe('FR-16: the meeting page with its Summary and Action Items panels', () => {
   it('reaches the regenerate button, every passage reference and every item control, in reading order', async () => {
     const meeting = {
