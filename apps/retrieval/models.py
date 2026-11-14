@@ -189,8 +189,8 @@ class KnowledgeGap(models.Model):
     vector is never a join candidate.
 
     **``embedding_model`` follows ``ContentChunks``' rule (risk R10).** An entry is a join
-    candidate only for an item embedded by the same model, so a provider switch starts new entries
-    rather than comparing vectors that cannot be compared.
+    candidate only for an item embedded by the same model, so a change of embedding model starts
+    new entries rather than comparing vectors that cannot be compared.
 
     No asker, no role and no department is stored here or anywhere in FR-19 (D-107, D-108).
     """

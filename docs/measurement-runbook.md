@@ -205,8 +205,13 @@ Paste the step 1 block, then, every time the server starts:
 ```powershell
 $env:DEBUG = 'False'                                 # .env says True; only the shell overrides it
 $env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"   # the same path the run.ps1 window has
+& $py manage.py check                                # Waitress runs no checks (D-131)
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
 & $waitress --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
+
+`manage.py check` refuses a database set up for another provider (ai.E005), and warns when it
+cannot read the database (ai.W004): start the database first.
 
 This is D-85 §2's command with D-124's body cap,
 `waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`,

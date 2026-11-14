@@ -357,8 +357,10 @@ if SUMMARY_RUNNER not in ("thread", "inline"):
 # embed-gemma. The pgvector columns are sized from this when the first migrate runs, and a database
 # keeps that width. An EMBEDDING_DIMENSION in .env is still read, so an existing .env keeps working,
 # but one that disagrees with the provider stops every command that runs the checks (ai.E004).
+# An unknown AI_PROVIDER is refused at startup (ai.E002), so its fallback is only a placeholder.
 EMBEDDING_DIMENSION = env.int(
-    "EMBEDDING_DIMENSION", default=EMBEDDING_DIMENSION_BY_PROVIDER.get(AI_PROVIDER, 1024)
+    "EMBEDDING_DIMENSION",
+    default=EMBEDDING_DIMENSION_BY_PROVIDER.get(AI_PROVIDER, EMBEDDING_DIMENSION_BY_PROVIDER["anthropic"]),
 )
 
 # Claude + Voyage: the proposal's production configuration, funded since D-113 and the default

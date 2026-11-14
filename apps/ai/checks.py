@@ -24,10 +24,14 @@ keep the width the first ``migrate`` gave them:
   was set up for another provider, so the process refuses to use it with this one. It names each
   column that differs, the chunks' and FR-19's gap entries'.
 - Rows embedded by another model than the configured one are a Warning (ai.W003). Retrieval
-  leaves them out (risk R10); within one provider and one width, ``reindex`` rebuilds them.
-- A table not created yet (a database before its first ``migrate``), or a database that cannot be
-  read, is passed over: there is nothing of another provider in it to refuse, and the command that
-  needs the database fails on its own.
+  leaves such chunks out (risk R10), and within one provider and one width ``reindex`` rebuilds
+  them. Nothing rebuilds a gap entry of another model, and no new question joins one (FR-19 groups
+  within one model).
+- A table not created yet is passed over: a database before its first ``migrate``, or one from
+  before FR-19, holds nothing of another provider in that table. The other table is still checked.
+- A database that cannot be read is a Warning (ai.W004): whether it was set up for this provider
+  is not known. The serve steps connect to the database before they run this check, so Waitress
+  does not start until it can be read (``docs/alpha-deployment.md``).
 
 It has a tag of its own so that ``check --tag ai``, which the suite runs without a database, does
 not query one. Waitress runs no checks, so the serve steps run ``manage.py check`` first
@@ -153,12 +157,14 @@ def check_database_provider(app_configs, **kwargs):
 
     expected = settings.EMBEDDING_DIMENSION
     wrong_width = []
+    present = []
     try:
         for model in (ContentChunk, KnowledgeGap):
             try:
                 width = stored_width(model)
             except NoSuchColumn:
                 continue  # not migrated yet: nothing of another provider can be in it
+            present.append(model)
             if width != expected:
                 wrong_width.append(f"{model._meta.db_table}.embedding is {describe_width(width)}")
         if wrong_width:
@@ -173,14 +179,23 @@ def check_database_provider(app_configs, **kwargs):
             ]
         configured = configured_embedding_model()
         others = {}
-        for model, label in ((ContentChunk, "chunk(s)"), (KnowledgeGap, "gap entr(ies)")):
+        labels = {ContentChunk: "chunk(s)", KnowledgeGap: "gap entr(ies)"}
+        for model in present:
+            label = labels[model]
             rows = model.objects.exclude(embedding_model="").exclude(embedding_model=configured)
             count = rows.count()
             if count:
                 names = sorted(set(rows.values_list("embedding_model", flat=True)))
                 others[label] = (count, names)
-    except DatabaseError:
-        return []  # the database cannot be read: the command that needs it fails on its own
+    except DatabaseError as exc:
+        return [
+            checks.Warning(
+                "The database could not be read, so whether it was set up for this provider is not "
+                f"known (D-131): {type(exc).__name__}.",
+                hint="Start the database, then run `manage.py check` again before serving it.",
+                id="ai.W004",
+            )
+        ]
     if not others:
         return []
     described = "; ".join(f"{count} {label} by {', '.join(names)}" for label, (count, names) in others.items())
@@ -189,9 +204,10 @@ def check_database_provider(app_configs, **kwargs):
             f"Rows embedded by another model than the configured {configured!r}: {described}. "
             f"Retrieval leaves them out (risk R10).",
             hint=(
-                "Within this provider, at the same width, `manage.py reindex` rebuilds them with the "
-                "configured model. A change of provider is not a re-index: a database keeps the "
-                "provider it was set up with (D-131)."
+                "Chunks: within this provider, at the same width, `manage.py reindex` rebuilds them "
+                "with the configured model. Gap entries: nothing re-embeds them, and no new question "
+                "joins one of another model (FR-19 groups within one model). A change of provider is "
+                "not a re-index: a database keeps the provider it was set up with (D-131)."
             ),
             id="ai.W003",
         )

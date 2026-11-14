@@ -254,12 +254,48 @@ def test_a_table_not_created_yet_is_passed_over(monkeypatch):
         assert check_database_provider(None) == []
 
 
-def test_a_database_that_cannot_be_read_is_passed_over(monkeypatch):
+def test_a_database_that_cannot_be_read_is_a_warning(monkeypatch):
+    """Whether it was set up for this provider is not known, and the check says so rather than
+    passing in silence. The serve steps connect to the database before they run the check."""
     def unreadable(model, field_name="embedding"):
         raise OperationalError("could not connect to server")
 
     monkeypatch.setattr(apps.ai.checks, "stored_width", unreadable)
-    assert check_database_provider(None) == []
+    messages = check_database_provider(None)
+
+    assert [message.id for message in messages] == ["ai.W004"]
+    assert messages[0].level == checks.WARNING
+    assert "OperationalError" in messages[0].msg and "D-131" in messages[0].msg
+    assert "Start the database" in messages[0].hint
+
+
+@pytest.mark.django_db
+def test_a_database_from_before_fr19_still_warns_about_its_chunks(document, monkeypatch):
+    """No knowledge_gaps table: its rows are not asked for, so the chunks of another model are still
+    reported. Asking for them would raise, and the chunks' warning would be lost with the error."""
+    from django.db import ProgrammingError
+
+    from apps.retrieval.models import KnowledgeGap
+
+    real = apps.ai.checks.stored_width
+
+    def without_gaps(model, field_name="embedding"):
+        if model is KnowledgeGap:
+            raise NoSuchColumn("knowledge_gaps.embedding")
+        return real(model, field_name)
+
+    def no_table(*args, **kwargs):
+        raise ProgrammingError('relation "knowledge_gaps" does not exist')
+
+    monkeypatch.setattr(apps.ai.checks, "stored_width", without_gaps)
+    monkeypatch.setattr(KnowledgeGap.objects, "exclude", no_table)
+    _chunk(document, "an-older-model")
+
+    with override_settings(AI_PROVIDER="anthropic", VOYAGE_MODEL="configured-model"):
+        messages = check_database_provider(None)
+
+    assert [message.id for message in messages] == ["ai.W003"]
+    assert "1 chunk(s) by an-older-model" in messages[0].msg and "gap entr" not in messages[0].msg
 
 
 def _chunk(document, model_name):
@@ -301,6 +337,9 @@ def test_rows_of_another_model_are_a_warning_naming_them(document):
     assert "1 chunk(s) by an-older-model" in warning.msg
     assert "1 gap entr(ies) by another-model" in warning.msg
     assert "D-131" in warning.hint
+    # reindex rebuilds chunks; nothing re-embeds a gap entry, and the hint must not say otherwise.
+    assert "`manage.py reindex` rebuilds them" in warning.hint
+    assert "Gap entries: nothing re-embeds them" in warning.hint
 
 
 @pytest.mark.django_db

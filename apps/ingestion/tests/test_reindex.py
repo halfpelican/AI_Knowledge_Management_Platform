@@ -17,6 +17,7 @@ from django.test import override_settings
 from apps.ai.testing import STUB_EMBEDDING_MODEL, StubAIService
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    EMBEDDING_DIMENSION_BY_PROVIDER,
     DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
     MEETING_INDEXED,
@@ -56,8 +57,9 @@ def database_name():
 def indexed_document(document):
     """A document with extracted text and one chunk recorded against an OLD model.
 
-    This is the state a provider switch leaves behind: rows that look healthy and
-    whose vectors are no longer comparable with anything the new model produces.
+    This is the state a change of embedding model leaves behind, within one provider and one
+    width (D-131): rows that look healthy and whose vectors are no longer comparable with
+    anything the new model produces.
     """
     ExtractedContent.objects.create(document=document, extracted_text=ENOUGH_TEXT)
     ContentChunk.objects.create(
@@ -205,23 +207,40 @@ def test_resize_column_is_gone(indexed_document):
 
 
 @pytest.mark.django_db
-def test_a_column_of_another_width_is_refused_and_a_new_database_is_named(
-    indexed_document, monkeypatch
-):
-    """A database set up for another provider: the setting and the provider say one width, the
-    stored column another. Nothing moves the database across, and nothing is touched."""
+def test_a_column_of_another_width_is_refused_and_a_new_database_is_named(document):
+    """A database set up for the other provider: the setting and the provider agree on one width,
+    and the stored chunk column has the other provider's. Nothing moves the database across, and
+    nothing is touched. Postgres DDL is transactional, so the column is back at
+    EMBEDDING_DIMENSION when the test's transaction rolls back; the table has no row to convert."""
+    ExtractedContent.objects.create(document=document, extracted_text=ENOUGH_TEXT)
+    other = next(width for width in EMBEDDING_DIMENSION_BY_PROVIDER.values() if width != settings.EMBEDDING_DIMENSION)
+    with connection.cursor() as cursor:
+        cursor.execute(f"ALTER TABLE content_chunks ALTER COLUMN embedding TYPE vector({other})")
+
+    with pytest.raises(CommandError) as raised:
+        call_command("reindex")
+
+    message = str(raised.value)
+    assert f"vector({other})" in message and f"embeds at {settings.EMBEDDING_DIMENSION}" in message
+    assert "D-131" in message and "set up a new one" in message
+    assert "--resize-column" not in message
+    assert column_type() == f"vector({other})"
+    assert not ContentChunk.objects.filter(source_id=document.id).exists()
+
+
+@pytest.mark.django_db
+def test_a_width_that_disagrees_with_the_provider_is_refused(indexed_document, monkeypatch):
+    """ai.E004's condition, for a caller that skips the checks: an EMBEDDING_DIMENSION that is not
+    the provider's is refused before the provider is asked, even when the provider and the stored
+    column would agree with it."""
     install(monkeypatch, StubAIService(dimension=NEW_WIDTH))
 
     with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH), pytest.raises(CommandError) as raised:
         call_command("reindex")
 
     message = str(raised.value)
-    assert f"vector({settings.EMBEDDING_DIMENSION})" in message
-    assert "D-131" in message and "set up a new one" in message
-    assert "--resize-column" not in message
-    assert column_type() == f"vector({settings.EMBEDDING_DIMENSION})"
-    chunk = ContentChunk.objects.get(source_id=indexed_document.id)
-    assert chunk.embedding_model == STALE_MODEL
+    assert f"EMBEDDING_DIMENSION is {NEW_WIDTH}" in message and "D-131" in message
+    assert ContentChunk.objects.get(source_id=indexed_document.id).embedding_model == STALE_MODEL
 
 
 @pytest.mark.django_db

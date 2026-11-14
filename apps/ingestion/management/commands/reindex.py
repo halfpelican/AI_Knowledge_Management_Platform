@@ -44,6 +44,7 @@ import apps.ai
 from apps.ai.base import ProviderUnavailable
 from apps.core.constants import (
     DOCUMENT_INDEXED,
+    EMBEDDING_DIMENSION_BY_PROVIDER,
     DOCUMENT_INDEXING_FAILED,
     DOCUMENT_PARTIALLY_INDEXED,
     MEETING_INDEXED,
@@ -93,6 +94,14 @@ class Command(BaseCommand):
                 f"{options['provider']!r}, set up a new database for it: create it, set "
                 f"AI_PROVIDER in .env, run migrate, and ingest the content again. Nothing was "
                 f"changed."
+            )
+        width = EMBEDDING_DIMENSION_BY_PROVIDER.get(provider)
+        if width is not None and settings.EMBEDDING_DIMENSION != width:
+            # ai.E004's condition, for a caller that skips the checks (D-131).
+            raise CommandError(
+                f"EMBEDDING_DIMENSION is {settings.EMBEDDING_DIMENSION}, but AI_PROVIDER="
+                f"{provider!r} embeds at {width}. The width follows the provider (D-131): remove "
+                f"EMBEDDING_DIMENSION from .env. Nothing was changed."
             )
         service = apps.ai.get_ai_service()
 
