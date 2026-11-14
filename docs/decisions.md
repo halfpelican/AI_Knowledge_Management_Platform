@@ -13534,6 +13534,15 @@ He answered three tabbed questions, each with the recommended option:
   then present, so an Administrator adds departments on the Tags page. A measurement database is
   restored from a snapshot and then migrated, so its documents are present when 0015 runs.
   `seed_objective02_tags.py` does not seed departments.
+  *The alpha, checked read-only on 15 November at the user's request ("re-check the alpha on the
+  incoming branch and main for seeding"; `corpus/objective-05/runs/2026-11-15-alpha-seed-check/`):*
+  - *`kmp_alpha_20261113` holds the full tag seed (14 values, `atlas` hidden) and is at `documents`
+    0012 of `main`.*
+  - *Its next `migrate` seeds six departments, Projects hidden.*
+  - *Every classified document carries a typed department, so nothing needs classifying again.*
+  - *Building it again would migrate before the ingestion and seed nothing. So the runbook
+    (`docs/alpha-deployment.md`) now applies 0015 again after the ingestion. That keeps the hidden
+    marking, which a department added by hand on the Tags page would lose.*
 - **`machine_department` still records what the model said** (rule 1, unchanged). A hidden department
   never reaches a prompt it must not, and a reply naming one anyway is discarded exactly as an unknown
   name is.
