@@ -7,7 +7,7 @@ import Dialog from '../components/Dialog.jsx'
 import NotPermitted from '../components/NotPermitted.jsx'
 import Notice from '../components/Notice.jsx'
 import SelectInput from '../components/SelectInput.jsx'
-import { TEXT } from '../constants.js'
+import { ROLES, TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import './RoleManagement.css'
 
@@ -66,7 +66,7 @@ function soonestLockEnd(users, now) {
  * "Active", and one the list says nothing about (no `lock` key) reads nothing,
  * because the screen was not told.
  */
-function AccountState({ user, now, own, onUnlock }) {
+function AccountState({ user, now, own, otherAdministrator, onUnlock }) {
   const lock = liveLock(user, now)
   if (!lock) {
     return 'lock' in user ? <span className="roles-table__active">{TEXT.accountActive}</span> : null
@@ -75,7 +75,9 @@ function AccountState({ user, now, own, onUnlock }) {
     <div className="roles-table__lock">
       <span className="roles-table__badge">{TEXT.accountLockedUntil(formatTime(lock.locked_until))}</span>
       {own ? (
-        <p className="roles-table__note">{TEXT.accountLockedOwn}</p>
+        <p className="roles-table__note">
+          {otherAdministrator ? TEXT.accountLockedOwn : TEXT.accountLockedOwnAlone(formatTime(lock.locked_until))}
+        </p>
       ) : (
         <Button variant="secondary" aria-label={TEXT.unlockLabel(user.name)} onClick={() => onUnlock(user)}>
           {TEXT.unlock}
@@ -130,6 +132,9 @@ export function RoleTable({
 }) {
   const options = roles.map((role) => ({ value: role.role_id, label: role.name }))
   const roleIdByName = new Map(roles.map((role) => [role.name, role.role_id]))
+  // Whether anyone but the signed-in Administrator could release their lock (the pre-PR
+  // security review, finding 2): FR-03 forbids releasing one's own.
+  const otherAdministrator = users.some((user) => user.role === ROLES.administrator && user.id !== currentUserId)
 
   if (users.length === 0) {
     return <Notice variant="info">{TEXT.noUsers}</Notice>
@@ -166,6 +171,7 @@ export function RoleTable({
                     user={user}
                     now={now}
                     own={currentUserId !== null && user.id === currentUserId}
+                    otherAdministrator={otherAdministrator}
                     onUnlock={onUnlock}
                   />
                 </td>

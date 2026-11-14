@@ -153,6 +153,7 @@ export function LoginForm({
         <Notice variant="error" title="Could not sign in">
           {formError ? <p>{formError}</p> : null}
           {lockMessage ? <p>{lockMessage}</p> : null}
+          {lockMessage ? <p>{TEXT.lockedReloadHint}</p> : null}
         </Notice>
       ) : null}
       {/* FR-03's warning: subtle text beside the banner, not a second banner. Always

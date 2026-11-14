@@ -330,6 +330,11 @@ export const TEXT = {
   accountMayBeLocked:
     `Too many failed sign-in attempts. If this address has an account, it may be locked for up to ${LOCKOUT_DURATION_WORDS}, ` +
     'and an administrator can unlock it sooner.',
+  // Shown with either lock message. A release (POST /api/users/{id}/unlock) reaches the server
+  // and not a sign-in page already open, whose countdown is its own record. So the page says how
+  // to pick the release up: a reload clears that record, and a lock still live just answers again
+  // (the pre-PR security review, finding 1). Conditional, so it is true of any address.
+  lockedReloadHint: 'If an administrator has unlocked the account, reload this page to sign in.',
   // FR-03's warning, beside FR-02's generic banner, once LOCKOUT_WARNING_REMAINING or
   // fewer attempts remain (decision 2). From the page's own count, so it is the same
   // for every address, registered or not (decision 1).
@@ -379,6 +384,10 @@ export const TEXT = {
   // The signed-in Administrator's own locked row, which has no Unlock button: FR-03
   // forbids releasing a lock on one's own account.
   accountLockedOwn: 'Another administrator can unlock your account.',
+  // The same row when the list holds no other Administrator. Nobody can release that lock, so
+  // the row says when it ends rather than promise a release (the pre-PR security review,
+  // finding 2). `time` is when the lock ends.
+  accountLockedOwnAlone: (time) => `No other administrator can unlock your account. It unlocks at ${time}.`,
   unlock: 'Unlock',
   // The accessible name, so a column of "Unlock" buttons each name their account
   // (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3).

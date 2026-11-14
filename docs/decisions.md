@@ -907,6 +907,10 @@ though different, are only ever visible to someone who already holds the permiss
 > - **Finding 2's "there is no release route"** is overtaken: an Administrator can now release any
 >   other account's lock. The throttle stays, because anyone can still lock any account with five
 >   requests.
+>   - **Except for the only Administrator.** Nobody can release that account's lock, because FR-03
+>     forbids releasing one's own and there is no other Administrator.
+>   - So for that account, finding 2 still stands as written: five requests every 15 minutes keep
+>     it out (D-130's residue, from the pre-PR security review).
 > - **What stands.** The ceiling, the throttle, and the counting of attempts during a lock are
 >   unchanged. The residue "a lock does not end an existing session" stands too, since the release
 >   touches no session.
@@ -12167,6 +12171,8 @@ two with a `500`.
 
 - **Why it holds:** the requester is in the set, so that check waits on a row the release already
   holds. This rests on only Administrators holding `release_account_locks`.
+- **Its limit:** it holds while the administrator set is stable, because each transaction reads the
+  set from its own snapshot. See the residues (the pre-PR security review, finding 4).
 - **The mode:** FOR NO KEY UPDATE conflicts with the role change's and login's FOR UPDATE, but not
   with the key-share locks other inserts take on those rows.
 - **Tested for a release against a role change,** by `test_fr03_unlock_concurrency.py`. That test
@@ -12185,7 +12191,7 @@ route forward, and FR-03 forbids only "their own account".
 |---|---|---|
 | FE "a subtle warning appears once 2+ attempts remain: '2 attempts remaining before temporary lockout'" | after the 3rd and the 4th consecutive `401` for an address (decision 2), in a polite status line beside the banner (`frontend/src/pages/Login.jsx`) | `loginLockout.test.jsx` S1, S5, S7, S8 |
 | FE "Once locked, the login button is disabled with a countdown timer shown" | at the page's 5th failure, or on the `403` (`retry_after`), Sign in is disabled and a `role="timer"` countdown runs; nothing is sent while it runs; at zero the button comes back | S2, S3, S4, S6, S9 to S12; `test_fr03_lockout_record.py`'s `retry_after` tests |
-| FE "An Administrator viewing a locked account can release the lock immediately" | Role management's Account column, the Unlock button (not on the own row) and its dialog (decision 3, `RoleManagement.jsx`) | `roleManagementUnlock.test.jsx` U1 to U11; `accessDenied.test.jsx` E1; `test_fr03_user_list_lock.py` |
+| FE "An Administrator viewing a locked account can release the lock immediately" | Role management's Account column, the Unlock button (not on the own row) and its dialog (decision 3, `RoleManagement.jsx`) | `roleManagementUnlock.test.jsx` U1 to U12; `loginLockout.test.jsx` S13 (a release picked up by a reload); `accessDenied.test.jsx` E1; `test_fr03_user_list_lock.py` |
 | FE "The lockout message states that an administrator can unlock the account" | the `403`'s `TEXT.accountLocked`, the page's `TEXT.accountMayBeLocked` and the server's `ACCOUNT_LOCKED_MESSAGE` | S2, S9; `test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
 | SE "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until…" | FR-02's, now decided on the row read under lock (H1) | `test_login.py`; `test_login_concurrency.py` |
 | SE Validation: the lock before any session; no session for a locked account; the password only selects the message; the resets; the matching password during a lock; only an Administrator, never on their own account | unchanged rules, made race-free (H1); the release's `permission_classes` and its own-account `403` | `test_login.py`; `test_login_concurrency.py`; `test_fr03_unlock.py` |
@@ -12234,11 +12240,32 @@ nothing, and every finding is "traced" or "inferred" in its own terms.
 **Residues, recorded rather than fixed.**
 
 - **A lock still does not end a session** (D-26's residue). So whoever holds a locked
-  Administrator's session can defeat FR-03's self-release ban in three requests: register an
-  account, promote it (FR-05), and release from it. The release is unthrottled too, so a stolen
-  Administrator session can refill an account's guesses five at a time. The confirmation dialog shows
-  when and from where the lock began, and asks the Administrator to check who is asking. Ending
-  sessions stays outside this work.
+  Administrator's session can defeat FR-03's self-release ban in four requests: register an
+  account, promote it (FR-05), sign in as it (registration starts no session), and release from it.
+  The release is unthrottled too, so a stolen Administrator session can refill an account's guesses
+  five at a time. The confirmation dialog shows when and from where the lock began, and asks the
+  Administrator to check who is asking. Ending sessions stays outside this work.
+- **The release is not tied to the lock the dialog showed** (the pre-PR security review, finding 3).
+  - **The scenario:** an Administrator opens Unlock on a lock set from one address, and leaves the
+    dialog open past its end. Meanwhile an attacker locks the account again from another address.
+  - **What follows:** the confirm releases the new lock, which the Administrator never saw, and
+    gives the attacker five fresh guesses past L3's "check who is asking" step.
+  - **What would close it:** the client sending the `locked_until` it showed, with a `409` when the
+    lock has changed.
+- **The only Administrator cannot be released** (the pre-PR security review, finding 2). FR-03
+  forbids releasing one's own lock, so where no other Administrator exists, five requests every 15
+  minutes keep that account out, as D-26 finding 2 described.
+  - **On Role management,** the own row says so ("No other administrator can unlock your account.
+    It unlocks at <time>.") where the list holds no other Administrator.
+  - **The sign-in page's message, and the server's,** still say "ask an administrator to unlock it",
+    which FR-03's front-end clause requires and which is false for that one account. The fix is a
+    second Administrator, not code.
+- **The lock order holds while the administrator set is stable** (the pre-PR security review,
+  finding 4). Each transaction reads the administrator set from its own snapshot. A promotion
+  committed mid-request can therefore still put a release and a role change, or two releases, in a
+  cycle, and Postgres aborts one with a `500`. It needs three Administrator actions on the same rows
+  within the same instant. Locking the administrators and the target in one statement would close
+  it.
 - **Where the row lock stops.** Login decides under the row lock, including on success. Django saves
   the new session's signed-in keys just after the view returns, which is after the lock is
   released. A lock committed after that decision is the residue above.
@@ -12270,3 +12297,29 @@ nothing, and every finding is "traced" or "inferred" in its own terms.
   without D-130. That script is amended, with a new FR-03 section.
 - **The comment above `ACCOUNT_LOCKED_MESSAGE`,** which said no release existed. It is rewritten in
   the code, which this file's rule does not cover.
+
+**The security review before the PR, 14 November 2026.** The `security-reviewer` agent read the
+build at `6ed0ef1` and ran no tests.
+
+- **It found nothing high or medium.** Nothing in login, the release route or the front end tells
+  someone without the password whether an address is registered or locked.
+- **It checked every disposition in the design review's table above against the code and the tests,
+  and found each true.**
+- **It reported five low findings:**
+
+| Finding | What | Disposition |
+|---|---|---|
+| 1 | A release reaches the server, not a sign-in page already open, which keeps its own countdown until it is reloaded. So demonstration-script step 8 failed as written | **Fixed.** Both lock states now add "If an administrator has unlocked the account, reload this page to sign in." (`TEXT.lockedReloadHint`), and step 8 says to reload first. Test S13; break R1 |
+| 2 | With a single Administrator, the own row ("Another administrator can unlock your account."), the self-refusal notice and the sign-in message promise a release nobody can make, and five requests every 15 minutes keep that account out (D-26 finding 2) | **Fixed on Role management:** the own row says "No other administrator can unlock your account. It unlocks at <time>." where the list holds no other Administrator. Test U12, and U3 now lists a second Administrator; breaks R2 to R4. **Recorded** for the sign-in and server messages, which FR-03 requires: see the residues. D-26's dated note is qualified |
+| 3 | The release is not tied to the lock the dialog showed | **Recorded** under the residues, beside L3 |
+| 4 | The lock order holds only while the administrator set is stable | **Recorded:** the claim is qualified here and in `UserUnlockView.post`'s comment |
+| 5 | This entry said the self-ban falls in "three requests"; it is four | **Fixed** in the residue |
+
+**The pre-PR fixes' tests and breaks** are in the commit whose subject begins `fix(FR-03): a
+release reaches an open sign-in page`:
+
+- **Tests:** S13 and U12 are new, and U3 is changed. `npm test` passed 614.
+- **Breaks:** R1 to R4, each caught. Each was applied alone and restored by hash, and that commit's
+  message lists them.
+- **What they replace:** break R19 in `3eee096`'s list edits the own row's single line, which these
+  fixes rewrite. R2 to R4 cover that row now.

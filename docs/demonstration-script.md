@@ -243,12 +243,20 @@ Use a throwaway account registered through FR-01, with a password used nowhere e
    - **Expected:** "<name>'s account is unlocked.", and the row reads "Active".
    - The release is recorded in `LoginAttempts` with the Administrator, the account and the time,
      beside the lockout row.
-8. **In window B, sign in with the right password.**
+8. **In window B, reload the page, then sign in with the right password.**
+   - **Reload first.** The release reaches the server, not a sign-in page that is already open. That
+     page keeps its own countdown, and says "If an administrator has unlocked the account, reload
+     this page to sign in." (the pre-PR security review, finding 1).
    - **Expected:** the dashboard, without waiting out the 15 minutes.
-9. **Say it, don't show it:** an Administrator's own locked row shows "Another administrator can
-   unlock your account." and no button. The server refuses a release of one's own account with a
-   403 whether or not it is locked, and refuses an Employee before it looks the account up. Both
-   are pytest's (D-130).
+9. **Say it, don't show it:** an Administrator's own locked row has no Unlock button.
+   - **Where the list holds another Administrator,** that row says "Another administrator can unlock
+     your account."
+   - **Where it holds none,** it says "No other administrator can unlock your account. It unlocks at
+     <time>." Nobody can release that lock (D-130's residue). The corpus scripts create only one
+     Administrator, `corpus.admin@example.com`. Whether the alpha's database holds another was not
+     checked.
+   - **The server's side:** it refuses a release of one's own account with a 403 whether or not it
+     is locked, and refuses an Employee before it looks the account up. Both are pytest's (D-130).
 
 ### FR-04 · Logout and session management (window B)
 

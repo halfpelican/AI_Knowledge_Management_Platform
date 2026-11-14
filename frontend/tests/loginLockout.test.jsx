@@ -411,3 +411,26 @@ describe("FR-03: the server's lock, a 403 account_locked with retry_after", () =
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+describe("FR-03: a lock released while the page is open", () => {
+  it("says to reload once an administrator has unlocked the account, with the page's own lock and with the server's, and not before", async () => {
+    const { replies } = serveSignIn()
+
+    // Not locked: an ordinary failure says nothing about unlocking.
+    await attempt(JANE)
+    expect(banner().textContent).not.toContain(TEXT.lockedReloadHint)
+
+    // The page's own lock, at the fifth failure: a release reaches the server, not this page.
+    for (let failure = 2; failure <= 5; failure += 1) await attempt(JANE)
+    expectLocked('Try again in 15:00')
+    expect(banner().textContent).toContain(TEXT.accountMayBeLocked)
+    expect(banner().textContent).toContain(TEXT.lockedReloadHint)
+
+    // The server's lock, on another address given the right password.
+    replies.next = serverLock(300)
+    await attempt(SAM, RIGHT_PASSWORD)
+    expectLocked('Try again in 5:00')
+    expect(banner().textContent).toContain(TEXT.accountLocked)
+    expect(banner().textContent).toContain(TEXT.lockedReloadHint)
+  })
+})

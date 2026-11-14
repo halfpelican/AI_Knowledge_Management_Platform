@@ -853,7 +853,11 @@ class UserUnlockView(APIView):
             # The administrator rows first, ordered by primary key, as FR-05's role change locks
             # them (D-26), and only then the target. Every transaction here that locks more
             # than one users row then takes them in the same order, so none waits on another
-            # in a cycle (D-130).
+            # in a cycle (D-130). That holds while the administrator set does not change during
+            # the request. Each transaction reads the set from its own snapshot, so a promotion
+            # committed mid-request can still put two requests in a cycle, and Postgres aborts
+            # one with a 500. It needs three Administrator actions on the same rows within the
+            # same instant (the pre-PR security review, finding 4).
             # - **Without it, a release could deadlock with a role change.** The role change
             #   holds the administrator rows and waits for the account. The release holds the
             #   account and, at commit, waits for the requester's row, which the release row's

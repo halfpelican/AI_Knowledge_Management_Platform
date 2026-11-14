@@ -69,6 +69,15 @@ const ERIN = {
   created_at: '2026-09-21T10:00:00+10:00',
 }
 
+/** A second Administrator, who could release Ada's lock. */
+const ABE = {
+  id: 'user-abe',
+  name: 'Abe Admin',
+  email: 'abe@example.com',
+  role: ROLES.administrator,
+  created_at: '2026-09-15T10:00:00+10:00',
+}
+
 const SAM = {
   id: 'user-sam',
   name: 'Sam Sato',
@@ -220,9 +229,9 @@ describe('FR-03: the Account column says which accounts are locked', () => {
 })
 
 describe("FR-03: the signed-in Administrator's own locked row", () => {
-  it('shows the lock and that another administrator can unlock it, with no Unlock button on that row', async () => {
+  it('shows the lock and that another administrator can unlock it, with no Unlock button on that row, where the list holds another Administrator', async () => {
     const adaLock = { locked_until: minutesFromNow(9), locked_at: minutesFromNow(-6), source_ip: '192.0.2.10' }
-    serveRoles([listed(ADA, adaLock), listed(JANE, JANE_LOCK)])
+    serveRoles([listed(ADA, adaLock), listed(ABE), listed(JANE, JANE_LOCK)])
 
     await screen.findByLabelText('Role for Jane Doe')
     const own = accountCell(ADA.name)
@@ -232,6 +241,22 @@ describe("FR-03: the signed-in Administrator's own locked row", () => {
     expect(unlockButton(ADA.name)).toBeNull()
     // The rule is the own row's: another locked account still offers its button.
     expectLockedRow(JANE, JANE_LOCK)
+  })
+
+  it('says when the lock ends, and promises no release, where the list holds no other Administrator', async () => {
+    const adaLock = { locked_until: minutesFromNow(9), locked_at: minutesFromNow(-6), source_ip: '192.0.2.10' }
+    serveRoles([listed(ADA, adaLock), listed(JANE, JANE_LOCK)])
+
+    await screen.findByLabelText('Role for Jane Doe')
+    const own = accountCell(ADA.name)
+    expect(own.textContent).toContain(`Locked until ${timeOfDay(adaLock.locked_until)}`)
+    // Nobody could release it: FR-03 forbids one's own, and there is no other Administrator
+    // (the pre-PR security review, finding 2).
+    expect(own.textContent).toContain(
+      `No other administrator can unlock your account. It unlocks at ${timeOfDay(adaLock.locked_until)}.`,
+    )
+    expect(own.textContent).not.toContain('Another administrator can unlock your account.')
+    expect(within(own).queryByRole('button')).toBeNull()
   })
 })
 
