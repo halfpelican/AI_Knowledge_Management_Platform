@@ -216,7 +216,7 @@ cannot read the database (ai.W004): start the database first.
 This is D-85 §2's command with D-124's body cap,
 `waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`,
 run from the venv's `Scripts` folder so that it is the venv's Waitress.
-The two lines before it repeat step 1's on purpose: a server started from a window without them
+The first two lines repeat step 1's on purpose: a server started from a window without them
 runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `logs\waitress.log`.
 
 - **`DEBUG=False` is explicit** (D-87 §2). With `DEBUG` on, Django serves its HTML debug pages,

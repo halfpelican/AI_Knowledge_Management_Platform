@@ -30,8 +30,8 @@ keep the width the first ``migrate`` gave them:
 - A table not created yet is passed over: a database before its first ``migrate``, or one from
   before FR-19, holds nothing of another provider in that table. The other table is still checked.
 - A database that cannot be read is a Warning (ai.W004): whether it was set up for this provider
-  is not known. The serve steps connect to the database before they run this check, so Waitress
-  does not start until it can be read (``docs/alpha-deployment.md``).
+  is not known. The alpha's serve steps connect to the database before they run this check, so
+  Waitress does not start there until it can be read (``docs/alpha-deployment.md``).
 
 It has a tag of its own so that ``check --tag ai``, which the suite runs without a database, does
 not query one. Waitress runs no checks, so the serve steps run ``manage.py check`` first

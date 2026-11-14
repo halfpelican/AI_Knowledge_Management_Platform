@@ -256,7 +256,7 @@ def test_a_table_not_created_yet_is_passed_over(monkeypatch):
 
 def test_a_database_that_cannot_be_read_is_a_warning(monkeypatch):
     """Whether it was set up for this provider is not known, and the check says so rather than
-    passing in silence. The serve steps connect to the database before they run the check."""
+    passing in silence. The alpha's serve steps connect to the database before they run the check."""
     def unreadable(model, field_name="embedding"):
         raise OperationalError("could not connect to server")
 

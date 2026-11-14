@@ -231,8 +231,8 @@ def test_a_column_of_another_width_is_refused_and_a_new_database_is_named(docume
 @pytest.mark.django_db
 def test_a_width_that_disagrees_with_the_provider_is_refused(indexed_document, monkeypatch):
     """ai.E004's condition, for a caller that skips the checks: an EMBEDDING_DIMENSION that is not
-    the provider's is refused before the provider is asked, even when the provider and the stored
-    column would agree with it."""
+    the provider's is refused before the provider is asked, even when the provider would agree
+    with it."""
     install(monkeypatch, StubAIService(dimension=NEW_WIDTH))
 
     with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH), pytest.raises(CommandError) as raised:
