@@ -104,9 +104,9 @@ class AnthropicService:
         apps/ai/prefixes.py adds EmbeddingGemma's prefixes and nothing for Voyage.
 
         No ``output_dimension`` is sent, so the width is the model's default. The
-        startup check and ``reindex`` compare it with EMBEDDING_DIMENSION, which must be
-        1024 for this provider. A database first built at FLM's 768 needs
-        ``reindex --resize-column`` (D-117).
+        startup check and ``reindex`` compare it with EMBEDDING_DIMENSION, which follows
+        AI_PROVIDER and is 1024 for this provider. A database set up for FLM, at 768, is
+        refused: a database keeps the provider it was set up with (D-131).
         """
         if not texts:
             raise ValueError("embed() needs at least one text")

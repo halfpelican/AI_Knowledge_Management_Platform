@@ -19,6 +19,7 @@ from apps.core.constants import (
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
+    EMBEDDING_DIMENSION_BY_PROVIDER,
     INGESTION_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
@@ -326,8 +327,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Application code never reads these directly; it calls apps.ai.get_ai_service().
 
 # anthropic (Claude + Voyage) is the default since D-122, after every tuned value was measured on
-# it. flm (FastFlowLM on the NPU) is the local, offline alternative. The two embed at different
-# widths, so switching is a full re-index onto a database of the other width (D-117).
+# it. flm (FastFlowLM on the NPU) is the local, offline alternative. The provider is chosen once,
+# at setup, and a database keeps it (D-131): a change of provider means a new database.
 AI_PROVIDER = env.str("AI_PROVIDER", default="anthropic")
 
 # FastFlowLM on the local NPU: the offline alternative, AI_PROVIDER=flm, pinned to v0.9.39 (D-83).
@@ -351,10 +352,14 @@ SUMMARY_RUNNER = env.str("SUMMARY_RUNNER", default="thread")
 if SUMMARY_RUNNER not in ("thread", "inline"):
     raise ImproperlyConfigured(f"Unknown SUMMARY_RUNNER: {SUMMARY_RUNNER!r} (expected 'thread' or 'inline')")
 
-# Length of the vectors the configured embedding model returns (docs/decisions.md
-# D-03): 1024 for voyage-4, the default since D-122, and 768 for FLM's embed-gemma. The pgvector
-# column is sized from this and the startup check verifies it.
-EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=1024)
+# Length of the vectors the configured embedding model returns (docs/decisions.md D-03). It follows
+# the provider (D-131): EMBEDDING_DIMENSION_BY_PROVIDER, 1024 for voyage-4 and 768 for FLM's
+# embed-gemma. The pgvector columns are sized from this when the first migrate runs, and a database
+# keeps that width. An EMBEDDING_DIMENSION in .env is still read, so an existing .env keeps working,
+# but one that disagrees with the provider stops every command that runs the checks (ai.E004).
+EMBEDDING_DIMENSION = env.int(
+    "EMBEDDING_DIMENSION", default=EMBEDDING_DIMENSION_BY_PROVIDER.get(AI_PROVIDER, 1024)
+)
 
 # Claude + Voyage: the proposal's production configuration, funded since D-113 and the default
 # since D-122.
