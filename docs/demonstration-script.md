@@ -63,7 +63,8 @@
 > - **Check, rather than assume, the steps that waited on a redeploy,** such as FR-04's logged-out
 >   confirmation. `6e1efd1` has D-97's fix, but nobody has walked it on the new alpha.
 > - **The FR-10 lines describe `8598d19`, which had no classification.** On `6e1efd1` each document
->   is classified at upload, and the new database's documents carry FR-10's tags (D-131).
+>   is classified at upload. On the new database FR-10 holds 15 provisional tags, which FR-15's
+>   views leave out until someone confirms them (D-105, D-131).
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
