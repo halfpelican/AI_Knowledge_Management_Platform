@@ -1,0 +1,9 @@
+Transcribed on 14 November 2026 from the session's tool output of tag_state.py, run read-only on 13 November 2026 after the ingestion and before the seed. The console was not saved to a file at the time. proposed_topics holds Topic proposals only (DocumentAnalysis, apps/documents/models.py).
+database: kmp_alpha_20261113
+tags by dimension (grown): []
+content_tags by applied_by, confirmed: []
+document_analysis: 20 rows; proposed topics 13 across 10 documents; discarded suggestions 0 across 0 documents; department applied by ['user']
+example proposed topics: [[{'value': 'employee leave', 'confidence': 0.9}], [{'value': 'records management', 'confidence': 0.85}], [{'value': 'procurement', 'confidence': 0.85}, {'value': 'approval limits', 'confidence': 0.6}, {'value': 'contract management', 'confidence': 0.5}]]
+meeting summaries by status: [('Ready', 5)]
+action items: 25
+chunks by source type and ai_generated: [('document', False, 38), ('meeting', False, 5), ('meeting', True, 5)]

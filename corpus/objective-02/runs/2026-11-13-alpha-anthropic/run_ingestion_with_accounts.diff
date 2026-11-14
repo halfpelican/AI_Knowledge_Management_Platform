@@ -1,0 +1,24 @@
+--- corpus/objective-02/runs/2026-11-10-anthropic/run_ingestion_with_accounts.py
++++ corpus/objective-02/runs/2026-11-13-alpha-anthropic/run_ingestion_with_accounts.py
+@@ -1,4 +1,11 @@
+-"""Objective 02 on anthropic: the run's two accounts and the ingestion, with passwords held in memory only.
++"""The alpha on anthropic (13 November 2026): its database's two accounts and the corpus ingestion.
++
++A copy of corpus/objective-02/runs/2026-11-10-anthropic/run_ingestion_with_accounts.py, changed only
++in the database it builds: kmp_alpha_20261113, a fresh database migrated under the anthropic provider
++for the alpha, by the user's decision of 13 November 2026 (no switching of an existing database).
++Everything else is the original's, whose docstring follows.
++
++Objective 02 on anthropic: the run's two accounts and the ingestion, with passwords held in memory only.
+ 
+ docs/measurement-runbook.md steps 4, 6 and 7, adapted as PR #82's FLM re-time did them:
+ 
+@@ -55,7 +62,7 @@
+     sys.path.insert(0, str(REPOSITORY_ROOT))
+ INGEST_COPY = HERE / "ingest_objective02_anthropic.py"
+ 
+-EXPECTED_DATABASE = "kmp_obj02_anthropic_20261110"
++EXPECTED_DATABASE = "kmp_alpha_20261113"
+ PROTECTED = frozenset({"kmp", "kmp_demo_20261101", "kmp_obj02_20261101", "kmp_obj0506_20261101",
+                        "kmp_voyage_20261110", "kmp_anthropic", "postgres", "template0", "template1"})
+ EXPECTED_SETTINGS = (("AI_PROVIDER", "anthropic"), ("ANTHROPIC_MODEL", "claude-haiku-5-5"),

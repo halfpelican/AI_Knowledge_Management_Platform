@@ -1,0 +1,2 @@
+The alpha's lines of %USERPROFILE%\Documents\KMP-alpha-deployments.txt (docs/alpha-deployment.md step 7), copied on 2026-11-14T15:19:02.2376688+11:00:
+2026-11-13T19:48:27.6518200+11:00  commit 6e1efd1115bfe9e85ff211000c1c0885e603505e  dirty=False  database kmp_alpha_20261113  provider anthropic: claude-haiku-5-5, voyage-4 at 1024  waitress 3.0.2 threads=24  DEBUG=False  http://127.0.0.1:8000

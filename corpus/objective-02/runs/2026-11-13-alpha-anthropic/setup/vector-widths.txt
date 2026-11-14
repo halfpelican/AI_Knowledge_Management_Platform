@@ -1,0 +1,1 @@
+database kmp_alpha_20261113: content_chunks.embedding vector(1024), knowledge_gaps.embedding vector(1024); 0 chunks, 0 gap entries
