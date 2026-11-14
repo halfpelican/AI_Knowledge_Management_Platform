@@ -64,16 +64,21 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     # theirs; apps/api/tests/test_document_classification.py proves the 404
                     # before the 403 on every one of them.
                     "document-classify", "document-classification", "document-tag-confirm",
-                    "document-tag", "document-proposed-topic-confirm",
-                    "document-proposed-topic-reject",
+                    "document-tag",
+                    # D-128: in Project, Process or Topic; they replaced proposed-topics/confirm
+                    # and /reject
+                    "document-proposed-tag-confirm", "document-proposed-tag-reject",
                     # A person applies a tag (D-105's dated note of 10 November 2026, night):
                     # contribute_content inside the method too, after the scoped lookup.
                     "document-tags",
                     # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
                     "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail",
                     # NIT3004: FR-10's tag administration, both routes behind manage_tags (D-119
-                    # finding 5; D-105's dated note of 10 November 2026, night)
+                    # finding 5; D-105's dated note of 10 November 2026, night); tag-list's POST,
+                    # an Administrator adding a value, is D-128's
                     "tag-list", "tag-detail",
+                    # NIT3004: FR-10's department list (D-129), both routes behind manage_tags
+                    "department-list", "department-detail",
                     # Recording transcription, both routes behind contribute_content
                     # (D-123)
                     "transcription-status", "transcription-list",
@@ -108,6 +113,9 @@ PERMISSIONED_ROUTES = {
     # FR-10's tag administration (D-119 finding 5): manage_tags, a permission_classes entry on both.
     "tag-list": MANAGE_TAGS_PERMISSION,
     "tag-detail": MANAGE_TAGS_PERMISSION,
+    # FR-10's department list (D-129): the same code, a permission_classes entry on both.
+    "department-list": MANAGE_TAGS_PERMISSION,
+    "department-detail": MANAGE_TAGS_PERMISSION,
     # Recording transcription (D-123): contribute_content, a permission_classes entry on
     # both, so the 403 comes before the body is read. Nothing on either route is scoped.
     "transcription-status": CONTRIBUTE_CONTENT_PERMISSION,

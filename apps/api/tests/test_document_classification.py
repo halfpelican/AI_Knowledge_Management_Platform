@@ -1,6 +1,7 @@
 """FR-10's routes (D-104, D-105): classify now, confirm or edit the classification, accept or remove a
-tag, confirm or reject a proposed topic; the detail's ``classification`` and ``tag_details``; and
-the ``classification`` the upload's and the reprocess's 201 bodies carry.
+tag, confirm or reject a proposed tag (D-128: in Project, Process or Topic; a proposed topic until
+then); the detail's ``classification`` and ``tag_details``; and the ``classification`` the upload's
+and the reprocess's 201 bodies carry.
 
 Each route: a session; the document resolved through the caller's scope FIRST, so an unknown id and
 one outside the scope are the same 404 with the same body (D-46); then ``contribute_content``, held
@@ -39,7 +40,14 @@ from apps.core.constants import (
     TOPIC_DIMENSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.models import (
+    ContentTag,
+    Department,
+    Document,
+    DocumentAnalysis,
+    ExtractedContent,
+    Tag,
+)
 from apps.documents.tests.classification_builders import (
     ABOVE_THRESHOLD,
     BELOW_THRESHOLD,
@@ -62,7 +70,7 @@ TEXT = "Employees may request annual leave in writing. Approval rests with the m
 CLASSIFICATION_KEYS = {
     "doc_type", "doc_type_outcome", "department_outcome", "machine_doc_type",
     "machine_doc_type_confidence", "machine_department", "machine_department_confidence",
-    "user_edited", "proposed_topics", "classified_at", "model", "input_truncated",
+    "user_edited", "proposed_tags", "classified_at", "model", "input_truncated",
     # D-119 finding 10: whose department it is ("user", "ai" or null).
     "department_applied_by",
 }
@@ -100,12 +108,18 @@ def remove_tag(client, doc_id, link_id):
     return client.delete(f"{DOCUMENTS_URL}/{doc_id}/tags/{link_id}")
 
 
-def confirm_topic(client, doc_id, value="budget planning"):
-    return client.post(f"{DOCUMENTS_URL}/{doc_id}/proposed-topics/confirm", {"value": value}, format="json")
+def confirm_proposal(client, doc_id, value="budget planning", dimension=TOPIC_DIMENSION):
+    return client.post(
+        f"{DOCUMENTS_URL}/{doc_id}/proposed-tags/confirm",
+        {"dimension": dimension, "value": value}, format="json",
+    )
 
 
-def reject_topic(client, doc_id, value="budget planning"):
-    return client.post(f"{DOCUMENTS_URL}/{doc_id}/proposed-topics/reject", {"value": value}, format="json")
+def reject_proposal(client, doc_id, value="budget planning", dimension=TOPIC_DIMENSION):
+    return client.post(
+        f"{DOCUMENTS_URL}/{doc_id}/proposed-tags/reject",
+        {"dimension": dimension, "value": value}, format="json",
+    )
 
 
 def detail(client, doc_id):
@@ -132,8 +146,8 @@ ROUTES = {
     "POST classification": lambda client, doc_id, link_id: confirm(client, doc_id),
     "POST tag confirm": lambda client, doc_id, link_id: accept_tag(client, doc_id, link_id),
     "DELETE tag": lambda client, doc_id, link_id: remove_tag(client, doc_id, link_id),
-    "POST proposed-topics/confirm": lambda client, doc_id, link_id: confirm_topic(client, doc_id),
-    "POST proposed-topics/reject": lambda client, doc_id, link_id: reject_topic(client, doc_id),
+    "POST proposed-tags/confirm": lambda client, doc_id, link_id: confirm_proposal(client, doc_id),
+    "POST proposed-tags/reject": lambda client, doc_id, link_id: reject_proposal(client, doc_id),
     # A person applies a tag (D-105's dated note of 10 November 2026, night): the same guards.
     "POST tags": lambda client, doc_id, link_id: client.post(
         f"{DOCUMENTS_URL}/{doc_id}/tags", {"dimension": TOPIC_DIMENSION, "tag_name": "night shifts"},
@@ -148,6 +162,7 @@ ROUTES = {
 def test_classify_returns_the_classification_and_the_tag_details(session_client):
     document = make_document(session_client.user)
     tag = Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)
+    Department.objects.create(name="People")  # the list is the scheme's departments (D-129)
 
     response = classify(session_client.client, document.id)
 
@@ -162,11 +177,12 @@ def test_classify_returns_the_classification_and_the_tag_details(session_client)
     assert result["machine_doc_type"] == POLICY
     assert result["machine_doc_type_confidence"] == STUB_CONFIDENCE
     assert isinstance(result["machine_doc_type_confidence"], float)  # a number, not a string
-    # The document's own department is in its scheme, so the stub's suggestion of it is applied.
+    # The document's own department is listed, so in its scheme, and the stub's suggestion of it is
+    # applied.
     assert (result["machine_department"], result["department_outcome"]) == ("People", ASSIGNMENT_APPLIED)
     assert result["machine_department_confidence"] == STUB_CONFIDENCE
     assert result["user_edited"] is False
-    assert result["proposed_topics"] == []
+    assert result["proposed_tags"] == []
     assert result["model"] == STUB_CHAT_MODEL
     assert result["input_truncated"] is False
     assert result["classified_at"]
@@ -182,9 +198,9 @@ def test_classify_returns_the_classification_and_the_tag_details(session_client)
 def test_classify_replies_with_the_department_the_machine_filled(session_client):
     """A blank department is filled by an applied in-scheme suggestion (D-105's note of 10
     November), and the reply carries it, re-read from the row, so the page need not reload."""
-    # "Finance" is in the scheme because another document both roles can read carries it, and it
-    # is the scheme's only department, so it is what the stub suggests, at STUB_CONFIDENCE.
-    make_document(session_client.user, title="Budget memo", department="Finance")
+    # "Finance" is in the scheme because it is listed, vocabulary (D-129), and it is the scheme's only
+    # department, so it is what the stub suggests, at STUB_CONFIDENCE.
+    Department.objects.create(name="Finance")
     document = make_document(session_client.user, department="")
 
     response = classify(session_client.client, document.id)
@@ -201,8 +217,9 @@ def test_classify_replies_with_the_department_the_machine_filled(session_client)
 def test_classify_keeps_a_different_department_and_replies_with_it(session_client):
     """A department already on the document is not the machine's to replace: the suggestion is
     held as provisional, and the reply's department is the one stored, not the suggestion."""
-    # The scheme is ("Finance", "People"), sorted, so the stub suggests "Finance".
-    make_document(session_client.user, title="Budget memo", department="Finance")
+    # The scheme is ("Finance", "People"), both listed (D-129), sorted, so the stub suggests "Finance".
+    Department.objects.create(name="Finance")
+    Department.objects.create(name="People")
     document = make_document(session_client.user, department="People")
 
     response = classify(session_client.client, document.id)
@@ -315,9 +332,9 @@ def test_a_role_without_contribute_content_is_403_on_a_document_it_can_see(
 def test_confirming_as_it_stands_applies_a_provisional_type_and_marks_both_confirmed(
     session_client, stub_ai_service
 ):
-    # "Finance" is in the scheme because another document both roles can read carries it; the
-    # document being classified starts with no department, so writing it is visible.
-    make_document(session_client.user, title="Budget memo", department="Finance")
+    # "Finance" is in the scheme because it is listed (D-129); the document being classified starts
+    # with no department, so writing it is visible.
+    Department.objects.create(name="Finance")
     document = make_document(session_client.user, department="")
     stub_ai_service.classification = classification(
         doc_type=POLICY, type_confidence=BELOW_THRESHOLD,
@@ -346,6 +363,7 @@ def test_confirming_as_it_stands_applies_a_provisional_type_and_marks_both_confi
 
 def test_an_edited_type_and_department_are_written_and_the_machine_values_kept(session_client):
     document = make_document(session_client.user)
+    Department.objects.create(name="People")  # listed, so the stub suggests it (D-129)
     classify(session_client.client, document.id)
 
     response = confirm(session_client.client, document.id, doc_type=REPORT, department="Operations")
@@ -462,65 +480,69 @@ def test_an_unknown_link_id_is_404_for_accept_and_remove(session_client, held_li
     assert links_of(document).count() == 1
 
 
-# --- Proposed topics ---------------------------------------------------------------------------
+# --- Proposed tags (D-128; proposed topics until then) -----------------------------------------
+
+PROPOSAL = {"dimension": TOPIC_DIMENSION, "value": "budget planning", "confidence": BELOW_THRESHOLD}
 
 
 @pytest.fixture
 def proposed(session_client, stub_ai_service):
-    """A document whose classification proposed the out-of-scheme Topic "budget planning"."""
+    """A document whose classification held the out-of-scheme Topic "budget planning", here below the
+    threshold (D-129: a Topic outside the scheme is held at any confidence)."""
     document = make_document(session_client.user)
     stub_ai_service.classification = classification(
-        department="People", tags=[(TOPIC_DIMENSION, "Budget  Planning", ABOVE_THRESHOLD)]
+        department="People", tags=[(TOPIC_DIMENSION, "Budget  Planning", BELOW_THRESHOLD)]
     )
     body = classify(session_client.client, document.id).json()
-    assert body["classification"]["proposed_topics"] == [
-        {"value": "budget planning", "confidence": ABOVE_THRESHOLD}
-    ]
+    assert body["classification"]["proposed_tags"] == [PROPOSAL]
     assert body["tag_details"] == []
     stub_ai_service.classification = None
     return document
 
 
 def test_confirming_a_proposed_topic_creates_the_tag_and_the_confirmed_link(session_client, proposed):
-    response = confirm_topic(session_client.client, proposed.id, "Budget Planning")
+    response = confirm_proposal(session_client.client, proposed.id, "Budget Planning")
 
     assert response.status_code == 200, response.content
     body = response.json()
     assert set(body) == {"classification", "tag_details"}
-    assert body["classification"]["proposed_topics"] == []
+    assert body["classification"]["proposed_tags"] == []
     [entry] = body["tag_details"]
     assert (entry["dimension"], entry["name"]) == (TOPIC_DIMENSION, "budget planning")
     assert (entry["applied_by"], entry["confirmed"], entry["provisional"]) == (AI_APPLIED, True, False)
-    assert entry["confidence"] == ABOVE_THRESHOLD
+    assert entry["confidence"] == BELOW_THRESHOLD
     assert Tag.objects.filter(tag_name="budget planning", dimension=TOPIC_DIMENSION, active=True).exists()
     assert detail(session_client.client, proposed.id).json()["tags"]["topic"] == ["budget planning"]
 
 
 def test_rejecting_a_proposed_topic_drops_it_and_creates_nothing(session_client, proposed):
-    response = reject_topic(session_client.client, proposed.id, "budget planning")
+    response = reject_proposal(session_client.client, proposed.id, "budget planning")
 
     assert response.status_code == 200, response.content
     body = response.json()
-    assert body["classification"]["proposed_topics"] == []
+    assert body["classification"]["proposed_tags"] == []
     assert body["tag_details"] == []
     assert not Tag.objects.filter(tag_name="budget planning").exists()
 
 
 def test_a_value_that_was_not_proposed_is_the_same_404(session_client, proposed):
-    for response in (confirm_topic(session_client.client, proposed.id, "risk appetite"),
-                     reject_topic(session_client.client, proposed.id, "risk appetite")):
+    client = session_client.client
+    for response in (confirm_proposal(client, proposed.id, "risk appetite"),
+                     reject_proposal(client, proposed.id, "risk appetite"),
+                     # D-128: matched by dimension and value, so the proposed value under another
+                     # dimension is not proposed either.
+                     confirm_proposal(client, proposed.id, "budget planning", PROJECT_DIMENSION),
+                     reject_proposal(client, proposed.id, "budget planning", PROJECT_DIMENSION)):
         assert response.status_code == 404
         assert response.json() == NOT_FOUND_BODY
-    assert not Tag.objects.filter(tag_name="risk appetite").exists()
-    assert DocumentAnalysis.objects.get(document=proposed).proposed_topics == [
-        {"value": "budget planning", "confidence": ABOVE_THRESHOLD}
-    ]
+    assert not Tag.objects.filter(tag_name__in=["risk appetite", "budget planning"]).exists()
+    assert DocumentAnalysis.objects.get(document=proposed).proposed_tags == [PROPOSAL]
 
 
 @pytest.mark.parametrize("value", ["", "   ", "x" * (NAME_MAX_LENGTH + 1)], ids=["empty", "blank", "long"])
 def test_a_blank_or_over_long_value_is_400_keyed_on_value(session_client, proposed, value):
-    for response in (confirm_topic(session_client.client, proposed.id, value),
-                     reject_topic(session_client.client, proposed.id, value)):
+    for response in (confirm_proposal(session_client.client, proposed.id, value),
+                     reject_proposal(session_client.client, proposed.id, value)):
         assert response.status_code == 400, response.content
         assert set(response.json()) == {"value"}
 

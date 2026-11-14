@@ -1,0 +1,291 @@
+{
+  "reference": "corpus\\objective-05\\dev-documents\\tag-reference.json",
+  "reference_status": "APPROVED by the user as drafted on 13 November 2026, in a tabbed question (over a stricter one-value-each variant). FROZEN: committed before any classification call it is used with, and never edited after; a development set, never the frozen twenty (corpus/objective-05/reference.json).",
+  "sweep": "corpus\\objective-05\\runs\\2026-11-13-tag-threshold\\dev-sweep\\sweep\\dev-sweep.json",
+  "sweep_record": {
+    "kind": "Objective 05 development sweep for CLASSIFICATION_CONFIDENCE_THRESHOLD (D-106)",
+    "recorded_at": "2026-11-13T11:53:18+11:00",
+    "commit_sha": "93650848b01aad529677ee80bea5c66ded79516c",
+    "uncommitted_tracked_changes": true,
+    "flm_version": null,
+    "chat_model": "claude-haiku-5-5",
+    "dev_manifest": "corpus\\objective-05\\dev-documents\\manifest.json",
+    "scheme": {
+      "doc_types": [
+        "Policy",
+        "Procedure",
+        "Report",
+        "Meeting Paper"
+      ],
+      "departments": [
+        "Finance",
+        "Human Resources",
+        "Information Technology",
+        "Legal and Compliance",
+        "Operations",
+        "Projects"
+      ],
+      "tags": {
+        "Project": [
+          "atlas",
+          "office move",
+          "policy refresh",
+          "supplier review"
+        ],
+        "Process": [
+          "onboarding",
+          "purchasing",
+          "records management",
+          "service desk"
+        ],
+        "Topic": [
+          "compliance",
+          "finance",
+          "people",
+          "safety",
+          "technology",
+          "workplace"
+        ]
+      }
+    },
+    "constants": {
+      "CLASSIFICATION_CONFIDENCE_THRESHOLD_before": 0.95,
+      "CLASSIFICATION_INPUT_TOKENS": 1500,
+      "MAXIMUM_CLASSIFY_ATTEMPTS": 3
+    },
+    "repetitions": 3,
+    "database": "none: nothing is read from or written to a database",
+    "configuration": {
+      "ai_provider": "anthropic",
+      "chat_model": "claude-haiku-5-5",
+      "embedding_model": "voyage-4"
+    },
+    "claude_usage": {
+      "calls": 57,
+      "input_tokens": 104271,
+      "output_tokens": 15039,
+      "estimated_usd": 0.0179
+    }
+  },
+  "pooled": {
+    "threshold": 0.25,
+    "separates": true,
+    "uncapped": 0.5,
+    "best_score": 147,
+    "trivial_score": 122,
+    "lowest_correct": 0.3,
+    "margin": 0.05,
+    "highest_wrong": 0.7,
+    "table": [
+      {
+        "t": 0.0,
+        "score": 122
+      },
+      {
+        "t": 0.1,
+        "score": 122
+      },
+      {
+        "t": 0.2,
+        "score": 124
+      },
+      {
+        "t": 0.3,
+        "score": 125
+      },
+      {
+        "t": 0.35,
+        "score": 126
+      },
+      {
+        "t": 0.4,
+        "score": 135
+      },
+      {
+        "t": 0.45,
+        "score": 147
+      },
+      {
+        "t": 0.5,
+        "score": 147
+      },
+      {
+        "t": 0.55,
+        "score": 141
+      },
+      {
+        "t": 0.6,
+        "score": 141
+      },
+      {
+        "t": 0.7,
+        "score": 129
+      },
+      {
+        "t": 0.75,
+        "score": 122
+      },
+      {
+        "t": 0.8,
+        "score": 119
+      },
+      {
+        "t": 0.85,
+        "score": 106
+      },
+      {
+        "t": 0.9,
+        "score": 84
+      },
+      {
+        "t": 0.95,
+        "score": 67
+      },
+      {
+        "t": 1.0,
+        "score": 66
+      }
+    ],
+    "right": 122,
+    "wrong": 66
+  },
+  "departments_only": {
+    "threshold": 0.3,
+    "separates": false,
+    "best_score": 56,
+    "trivial_score": 56,
+    "lowest_correct": 0.3,
+    "reason": "no threshold beats applying everything: confidences do not separate correct from wrong",
+    "table": [
+      {
+        "t": 0.0,
+        "score": 56
+      },
+      {
+        "t": 0.3,
+        "score": 56
+      },
+      {
+        "t": 0.4,
+        "score": 53
+      },
+      {
+        "t": 0.5,
+        "score": 51
+      },
+      {
+        "t": 0.6,
+        "score": 38
+      },
+      {
+        "t": 0.7,
+        "score": 19
+      },
+      {
+        "t": 0.8,
+        "score": 14
+      },
+      {
+        "t": 0.85,
+        "score": 13
+      },
+      {
+        "t": 0.9,
+        "score": 5
+      },
+      {
+        "t": 1.0,
+        "score": 1
+      }
+    ],
+    "right": 56,
+    "wrong": 1
+  },
+  "tags_only": {
+    "threshold": 0.25,
+    "separates": true,
+    "uncapped": 0.7,
+    "best_score": 110,
+    "trivial_score": 66,
+    "lowest_correct": 0.3,
+    "margin": 0.05,
+    "highest_wrong": 0.7,
+    "table": [
+      {
+        "t": 0.0,
+        "score": 66
+      },
+      {
+        "t": 0.1,
+        "score": 66
+      },
+      {
+        "t": 0.2,
+        "score": 68
+      },
+      {
+        "t": 0.3,
+        "score": 69
+      },
+      {
+        "t": 0.35,
+        "score": 73
+      },
+      {
+        "t": 0.4,
+        "score": 82
+      },
+      {
+        "t": 0.45,
+        "score": 96
+      },
+      {
+        "t": 0.5,
+        "score": 96
+      },
+      {
+        "t": 0.55,
+        "score": 103
+      },
+      {
+        "t": 0.6,
+        "score": 103
+      },
+      {
+        "t": 0.7,
+        "score": 110
+      },
+      {
+        "t": 0.75,
+        "score": 108
+      },
+      {
+        "t": 0.8,
+        "score": 105
+      },
+      {
+        "t": 0.85,
+        "score": 93
+      },
+      {
+        "t": 0.9,
+        "score": 79
+      },
+      {
+        "t": 0.95,
+        "score": 66
+      },
+      {
+        "t": 1.0,
+        "score": 65
+      }
+    ],
+    "right": 66,
+    "wrong": 65
+  },
+  "outside_scheme_not_scored": {
+    "department": 0,
+    "tag": 4
+  },
+  "documents_not_in_reference": []
+}

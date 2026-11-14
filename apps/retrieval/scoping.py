@@ -63,7 +63,7 @@ re-index event).
 from django.contrib.auth import get_user_model
 from django.db.models import QuerySet
 
-from apps.core.constants import EFFECTIVE_ROLES
+from apps.core.constants import EFFECTIVE_ROLES, ROLE_NAMES
 from apps.documents.models import ContentChunk, Document
 from apps.meetings.models import Meeting
 
@@ -109,6 +109,19 @@ def permission_scope(user) -> str:
 def effective_roles(role_name: str) -> tuple[str, ...]:
     """The role names whose content ``role_name`` may read (D-66); empty for an unknown role."""
     return EFFECTIVE_ROLES.get(role_name, ())
+
+
+def reads_everything(role_name: str) -> bool:
+    """Whether ``role_name`` has the full scope: its effective roles include every role in
+    ROLE_NAMES, so it reads whatever any role reads (D-66).
+
+    Today that is the Administrator and no other role. It is read from EFFECTIVE_ROLES and
+    ROLE_NAMES rather than from a role name, so a role added later is judged by what it reads. A
+    role EFFECTIVE_ROLES does not know reads nothing, so this answers False: it fails closed.
+    FR-10's department scheme uses it (D-129's security review, finding F1): a hidden department
+    is offered only to an audience every role of which reads everything, which needs no carrier.
+    """
+    return set(ROLE_NAMES) <= set(effective_roles(role_name))
 
 
 def _in_scope(model, role_name: str) -> QuerySet:

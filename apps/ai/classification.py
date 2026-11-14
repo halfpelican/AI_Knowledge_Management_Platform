@@ -25,7 +25,8 @@ function, as they do for generation.
 **What the model decides and what it does not (D-105).** The reply's ``doc_type`` is held to the
 scheme's fixed list by the parser: a type outside it is not a classification and the reply is
 rejected whole. The ``department`` and ``tags`` are returned AS SUGGESTED. Whether a suggested
-value is in the scheme, is provisional under CLASSIFICATION_CONFIDENCE_THRESHOLD, or is applied
+value is in the scheme, is provisional under its kind's threshold (types and tags under
+CLASSIFICATION_CONFIDENCE_THRESHOLD, departments under their own, D-129), or is applied
 at all is application code in apps/documents, never a judgement made here. The prompt tells the
 model the scheme rule (listed values only, a new Topic allowed when none fits, never a new
 Project, Process or department), and the application enforces it regardless of what comes back.

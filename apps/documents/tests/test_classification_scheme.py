@@ -10,7 +10,15 @@ November 2026, night: the security review of ``84b5771``); readability comes fro
 The fixtures build the smallest corpus that tells the cases apart: an Employee-visible document
 and an Administrator-only one, a grown Project linked only to the restricted document, a Process
 both carry, a Topic nothing carries, a grown Topic held provisionally on the restricted document,
-and a department each.
+and a department each, listed as ``documents 0015`` would seed them.
+
+**The departments are the list's** since D-129 (the lead's decision of 13 November 2026): the active
+``Department`` names. One that is not grown is vocabulary and in every scheme; a grown one is in only
+for an audience every role of which reads everything (``reads_everything``; D-129's security review,
+finding F1), and no document carrying it admits it anywhere else. A department in use on documents
+but not in the list is not offered. Until D-129 the departments were derived from the documents each
+audience role reads, and until finding F1 a grown one was admitted where every audience role read a
+document carrying it, a carrier a reader could plant through FR-08's free-text department field.
 """
 
 import datetime
@@ -34,8 +42,9 @@ from apps.core.constants import (
 )
 from apps.documents import classification as module
 from apps.documents.classification import tag_scheme
-from apps.documents.models import ContentTag, Document, Tag
+from apps.documents.models import ContentTag, Department, Document, Tag
 from apps.meetings.models import Meeting
+from apps.retrieval.scoping import reads_everything
 
 pytestmark = pytest.mark.django_db
 
@@ -89,6 +98,10 @@ def corpus(employee_document, administrator_document):
     Tag.objects.create(tag_name=RETIRED_PROJECT, dimension=PROJECT_DIMENSION, active=False)
     # A Department-dimension tag exists in the vocabulary and is never part of the scheme (D-72).
     Tag.objects.create(tag_name="people", dimension=DEPARTMENT_DIMENSION)
+    # The departments listed as documents 0015 seeds them (D-129): "People" is on a document every
+    # role reads, so vocabulary; "Legal" only on the Administrator-only document, so grown.
+    Department.objects.create(name="People")
+    Department.objects.create(name="Legal", grown=True)
 
 
 # --- The audience rule, per dimension -------------------------------------------------------------
@@ -133,8 +146,10 @@ def test_an_inactive_tag_is_in_neither_scheme(corpus, employee_document, adminis
 def test_a_department_carried_only_by_administrator_only_documents_is_withheld_likewise(
     corpus, employee_document, administrator_document
 ):
+    """"Legal" is listed grown, and only the Administrator-only document carries it; "People" is
+    vocabulary (D-129)."""
     assert tag_scheme(employee_document).departments == ("People",)
-    # D-66: an Administrator reads Employee-visible documents too, so both departments.
+    # An Administrator-only audience reads everything, so the grown "Legal" too (finding F1).
     assert tag_scheme(administrator_document).departments == ("Legal", "People")
 
 
@@ -307,12 +322,14 @@ def test_an_empty_audience_gets_the_full_scheme(corpus, employee):
 
 
 def test_a_role_scoping_does_not_know_fails_closed(corpus, employee):
-    """Every grown tag and every department is withheld. Vocabulary, a tag that is not grown, is in
-    whatever its links: the shared Process as well as the unlinked Topic, since the security
-    review's rule (D-105's dated note of 10 November 2026, night). It names no source."""
+    """Every grown tag and every grown department is withheld. Vocabulary, a tag or a department
+    that is not grown, is in whatever its links or documents: the shared Process as well as the
+    unlinked Topic, since the security review's rule (D-105's dated note of 10 November 2026, night),
+    and the listed "People" since D-129. It names no source. Until D-129 every department was
+    withheld here, because the departments were read from the documents this role reads."""
     unknown = make_document(employee, "Audit file", ["Auditor"], "Audit")
     the_scheme = tag_scheme(unknown)
-    assert the_scheme.departments == ()
+    assert the_scheme.departments == ("People",)
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
     assert the_scheme.tags[PROCESS_DIMENSION] == (SHARED_PROCESS,)
     assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
@@ -321,12 +338,15 @@ def test_a_role_scoping_does_not_know_fails_closed(corpus, employee):
 def test_readability_is_decided_by_the_scoping_helpers_and_not_here(
     corpus, administrator_document, monkeypatch
 ):
-    """With the helpers answering nothing, every grown value and every department is withheld:
-    the function has no predicate of its own on ``visible_to_roles``. Vocabulary needs no reader."""
+    """With the helpers answering nothing, every grown value, the grown department "Legal" included,
+    is withheld: the function has no predicate of its own on ``visible_to_roles`` and no role name of
+    its own for the full scope (``reads_everything``, finding F1). Vocabulary needs no reader, so the
+    listed "People" is in (D-129)."""
     monkeypatch.setattr(module, "scoped_documents", lambda *, role_name: Document.objects.none())
     monkeypatch.setattr(module, "scoped_meetings", lambda *, role_name: Meeting.objects.none())
+    monkeypatch.setattr(module, "reads_everything", lambda role_name: False)
     the_scheme = tag_scheme(administrator_document)
-    assert the_scheme.departments == ()
+    assert the_scheme.departments == ("People",)
     assert the_scheme.tags[PROJECT_DIMENSION] == ()
     assert the_scheme.tags[PROCESS_DIMENSION] == (SHARED_PROCESS,)
     assert the_scheme.tags[TOPIC_DIMENSION] == (UNLINKED_TOPIC,)
@@ -353,3 +373,92 @@ def test_the_scheme_has_the_fixed_types_the_three_tag_dimensions_and_sorted_tupl
 def test_blank_departments_are_never_offered(corpus, employee, employee_document):
     make_document(employee, "Undepartmented", [EMPLOYEE_ROLE_NAME], "")
     assert "" not in tag_scheme(employee_document).departments
+
+
+# --- The departments are the list's (D-129, the lead's decision of 13 November 2026) -------------
+
+
+def test_the_departments_are_the_listed_ones_not_the_documents(
+    employee, employee_document, administrator_document
+):
+    """A department every role reads on a document, but not listed, is offered to no audience; once
+    an Administrator lists it, not grown, it is offered to every audience. Until D-129 the first half
+    was the other way round: the departments were the documents'."""
+    both = make_document(employee, "Site notice", list(ROLE_NAMES), "Operations")
+    nobody = make_document(employee, "Orphaned", [], "Operations")
+    documents = (employee_document, administrator_document, both, nobody)
+    for document in documents:
+        assert tag_scheme(document).departments == (), document.title
+
+    Department.objects.create(name="Operations")
+
+    for document in documents:
+        assert tag_scheme(document).departments == ("Operations",), document.title
+
+
+def test_a_retired_department_is_in_no_scheme(corpus, employee, employee_document, administrator_document):
+    """Retired, it stays on its documents (``Documents.department`` is not touched) and leaves every
+    scheme, an empty audience's included."""
+    Department.objects.filter(name__in=["People", "Legal"]).update(active=False)
+    nobody = make_document(employee, "Orphaned", [])
+    for document in (employee_document, administrator_document, nobody):
+        assert tag_scheme(document).departments == (), document.title
+    employee_document.refresh_from_db()
+    assert employee_document.department == "People"
+
+
+def test_a_grown_department_is_in_only_for_an_audience_that_reads_everything(
+    employee, administrator, employee_document, administrator_document
+):
+    """D-129's security review, finding F1: no carrier admits a grown department. One an
+    Employee-visible document carries is still withheld from every audience an Employee is in, and an
+    Administrator-only document is offered every grown name, carried or not."""
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    nobody = make_document(employee, "Orphaned", [])
+    unknown = make_document(employee, "Audit file", ["Auditor"])
+    make_document(employee, "Roster", [EMPLOYEE_ROLE_NAME], "Atlas Office")
+    make_document(administrator, "Board minutes", [ADMINISTRATOR_ROLE_NAME], "Board Office")
+    everything = ("Atlas Office", "Board Office", "Ghost Office")
+    for name in everything:
+        Department.objects.create(name=name, grown=True)
+
+    for document in (employee_document, both, unknown):
+        assert tag_scheme(document).departments == (), document.title
+    assert tag_scheme(administrator_document).departments == everything
+    # Nobody reads that document, so nobody is protected: every active name.
+    assert tag_scheme(nobody).departments == everything
+
+
+def test_a_document_that_carries_a_grown_department_itself_is_not_offered_it(employee):
+    """The carrier a reader can plant (finding F1): the document's own department, typed at upload or
+    through the confirm/edit control. It admits nothing, so the scheme cannot tell the reader whether
+    the hidden row exists."""
+    Department.objects.create(name="Projects", grown=True)
+    carrier = make_document(employee, "Rota", [EMPLOYEE_ROLE_NAME], "Projects")
+    both = make_document(employee, "Kickoff", list(ROLE_NAMES), "Projects")
+    for document in (carrier, both):
+        assert tag_scheme(document).departments == (), document.title
+
+
+def test_reads_everything_is_true_of_a_role_whose_effective_roles_cover_every_role():
+    """The helper finding F1 added to apps/retrieval/scoping.py, read from EFFECTIVE_ROLES and
+    ROLE_NAMES; a role scoping does not know reads nothing."""
+    assert reads_everything(ADMINISTRATOR_ROLE_NAME) is True
+    assert reads_everything(EMPLOYEE_ROLE_NAME) is False
+    assert reads_everything("Auditor") is False
+
+
+@pytest.mark.parametrize("documents", ["on no document", "only on restricted documents", "on readable documents"])
+def test_a_department_that_is_not_grown_is_in_every_scheme_whatever_its_documents(
+    employee, administrator, employee_document, administrator_document, documents
+):
+    """Vocabulary, as a value added on ``/api/tags`` is: an Administrator published it."""
+    if documents == "only on restricted documents":
+        make_document(administrator, "Board minutes", [ADMINISTRATOR_ROLE_NAME], "Operations")
+    elif documents == "on readable documents":
+        make_document(employee, "Roster", [EMPLOYEE_ROLE_NAME], "Operations")
+    Department.objects.create(name="Operations")
+    both = make_document(employee, "Site notice", list(ROLE_NAMES))
+    unknown = make_document(employee, "Audit file", ["Auditor"])
+    for document in (employee_document, administrator_document, both, unknown):
+        assert tag_scheme(document).departments == ("Operations",), document.title

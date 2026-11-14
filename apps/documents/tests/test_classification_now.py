@@ -13,7 +13,7 @@ import apps.ai
 from apps.ai.base import ProviderUnavailable
 from apps.core.constants import ASSIGNMENT_APPLIED, PROJECT_DIMENSION, SOURCE_TYPES
 from apps.documents.classification import InsufficientText, classify_document_now, tag_scheme
-from apps.documents.models import ContentTag, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.models import ContentTag, Department, DocumentAnalysis, ExtractedContent, Tag
 
 from .classification_builders import ABOVE_THRESHOLD, POLICY, RecordingClassifier, classification
 
@@ -49,6 +49,7 @@ def test_the_service_is_called_exactly_once_with_the_scheme_the_result_is_then_a
 ):
     ExtractedContent.objects.create(document=document, extracted_text=TEXT)
     Tag.objects.create(tag_name="bridge maintenance", dimension=PROJECT_DIMENSION)
+    Department.objects.create(name="Finance")  # the list is the scheme's departments (D-129)
     document.department = "Finance"
     document.save(update_fields=["department"])
     service = install(

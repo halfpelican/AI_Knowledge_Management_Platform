@@ -125,6 +125,9 @@ const GAP = {
 
 const TAG = { tag_id: 'tag-0001', dimension: 'Process', tag_name: 'purchasing', active: true, item_count: 4 }
 
+/** D-129's department list, which the Tags page reads beside the tags. */
+const DEPARTMENT = { department_id: 'dept-0001', name: 'Finance', active: true, item_count: 3 }
+
 /* ---- The pages: what each asks the API for on mount, and how it shows it has rendered ---- */
 
 /** The page's own level-1 heading, once it is there. */
@@ -290,10 +293,11 @@ const KNOWLEDGE_GAPS = {
 }
 
 export const TAGS = {
-  api: { 'GET /api/tags': { body: [TAG] } },
+  api: { 'GET /api/tags': { body: [TAG] }, 'GET /api/departments': { body: [DEPARTMENT] } },
   async settled() {
     await pageHeading(TEXT.tagsHeading)
     await screen.findByRole('rowheader', { name: TAG.tag_name })
+    await screen.findByRole('rowheader', { name: DEPARTMENT.name })
   },
 }
 

@@ -1,5 +1,5 @@
-"""Documents: Documents, ExtractedContent, ContentChunks, Tags, ContentTags and, since
-migration v2's ``0008``, DocumentAnalysis (docs/schema-v1.md section 1).
+"""Documents: Documents, ExtractedContent, ContentChunks, Tags, ContentTags, since migration
+v2's ``0008`` DocumentAnalysis, and since ``0015`` Departments (docs/schema-v1.md section 1).
 
 The original file is stored separately from its extracted text so the text is
 reusable without re-parsing (FR-08, docs/decisions.md D-05). Chunks reference their
@@ -7,11 +7,13 @@ source polymorphically, with no database foreign key (D-07), and record the mode
 and dimension of every stored vector (D-08, risk R10). Tags and ContentTags are in
 v1 because FR-15's browse mode queries them; FR-10 fills them through
 apps/documents/classification.py (D-105), which also writes DocumentAnalysis.
+Departments is FR-10's department scheme, the list the classifier suggests from (D-129).
 """
 
 from django.conf import settings
 from django.contrib.postgres.fields import ArrayField
 from django.db import models
+from django.db.models.functions import Lower
 from pgvector.django import VectorField
 
 from apps.core.constants import (
@@ -163,10 +165,15 @@ class Tag(models.Model):
     # ``documents 0010``; its meaning since ``documents 0011``: not vocabulary (D-105's dated note
     # of 10 November 2026, night: the security review of ``84b5771``). A tag that is not grown is in
     # every document's scheme whatever its links; a grown one only where every audience role reads
-    # a source carrying it (``tag_scheme``). Set on a Topic a person's name creates or reactivates
-    # (``apply_tag``'s name form, ``confirm_proposed_topic``; an active one either fetches keeps its
-    # value, ``_bring_into_use``), and by ``documents 0011`` and the seed script's linked mode on
-    # every tag that only material some role cannot read carries. Never unset.
+    # a source carrying it (``tag_scheme``). Set on a value a person's confirmation of a proposal
+    # creates or reactivates (``confirm_proposed_tag``), and on a Topic a person's name creates or
+    # reactivates (``apply_tag``'s name form). The classifier sets it on nothing: since D-129 it
+    # creates and reactivates no tag (from D-128 until D-129 it did). An active tag either path
+    # fetches keeps its value, and an inactive one is reactivated only from a document every role
+    # reads, else left retired (``_bring_into_use``; D-128's security review, finding 1). Also set by
+    # ``documents 0011`` and the seed script's linked mode on every tag that only material some role
+    # cannot read carries. A value an Administrator adds (``POST /api/tags``, D-128) is created not
+    # grown: vocabulary. Never unset.
     grown = models.BooleanField(default=False)
 
     class Meta:
@@ -183,6 +190,72 @@ class Tag(models.Model):
 
     def __str__(self):
         return f"{self.dimension}: {self.tag_name}"
+
+
+def normalise_department_name(value: str) -> str:
+    """Strip, and collapse internal whitespace to one space. The case is kept (D-129)."""
+    return " ".join(value.split())
+
+
+class Department(models.Model):
+    """FR-10's department scheme: the departments the classifier may assign (D-129, the lead's
+    decision of 13 November 2026). Departments are the fourth dimension of FR-10's scheme, beside
+    Project, Process and Topic, and an Administrator keeps the list on the Tags page
+    (``GET``, ``POST`` and ``DELETE`` ``/api/departments``, behind ``manage_tags``).
+
+    **Why departments get a table of their own and not Tags rows.** ``Tag.save()`` normalises a name
+    to lower case. A department keeps its case on a document ("Human Resources"), and the classifier
+    writes the scheme's spelling into ``Documents.department`` (``apply_classification`` rule 3).
+    Lower-cased Department tags would start writing "human resources", and FR-14's and FR-15's
+    department filters, which read ``Documents.department`` (D-72), would split by case. So the
+    list is this small table, which keeps case: a name is stripped and its internal whitespace
+    collapsed to one space (``save()``), and two names that differ only in case are the same
+    department (the unique constraint on ``Lower("name")``).
+
+    **What the list supplies, and what it does not.** It supplies the classifier's choices, the
+    ``departments`` of ``tag_scheme``, and nothing else:
+
+    - ``Documents.department`` stays the one field FR-14 and FR-15 read (D-72);
+    - FR-08's upload field stays free text, and so do its server validation and the classification
+      confirm/edit control. A department typed there that is not in the list stays on the
+      document, and the classifier assigns only listed departments: the model may name any other,
+      which is discarded.
+
+    **The flags.**
+
+    - ``active``: a department any document uses is retired (``active=False``) rather than deleted.
+      It stays on those documents and in FR-14's and FR-15's filters, and no scheme offers it. One
+      no document uses is deleted. ``POST /api/departments`` with a retired name reactivates it.
+    - ``grown``: hidden, not vocabulary. ``documents 0015`` seeds a department found only on
+      documents some role cannot read as grown, and it is offered only for a document whose whole
+      audience reads everything (``tag_scheme``, ``reads_everything``; today an Administrator-only
+      document). Unlike a grown tag, no carrier admits it anywhere else: a reader can make a document
+      they read carry any department, through FR-08's upload field or the confirm/edit control, so
+      a carrier rule would tell them whether a hidden department exists (D-129's security review,
+      finding F1). A department an Administrator adds is not grown: vocabulary, offered to every
+      audience, as a value added on ``/api/tags`` is. Never unset, reactivation included.
+
+    A department is "used" by a document whose ``department`` equals its name ignoring case, as the
+    unique constraint compares names (``taxonomy.documents_using``; finding F3).
+    """
+
+    id = uuid_primary_key("department_id")
+    name = models.CharField(max_length=NAME_MAX_LENGTH)
+    active = models.BooleanField(default=True)
+    grown = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "departments"
+        constraints = [
+            models.UniqueConstraint(Lower("name"), name="departments_unique_name_ignoring_case"),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.name = normalise_department_name(self.name)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return self.name
 
 
 class ContentTag(models.Model):
@@ -234,11 +307,31 @@ class DocumentAnalysis(models.Model):
     - **An outcome per assignment**, from ASSIGNMENT_OUTCOMES: how
       apps/documents/classification.py disposed of each suggestion (applied, provisional,
       discarded, confirmed), stated rather than inferred from which columns are null.
-    - **Two JSON lists for suggestions that may not be tags yet.** A Topic outside the scheme
-      "may be proposed ... and requires user confirmation before it is created", so no Tag row
-      may exist for it while it waits in ``proposed_topics``. A Project or Process outside the
-      scheme is "discarded"; ``discarded_suggestions`` keeps the discard as evidence of that
-      clause, and nothing reads it as a tag.
+    - **Three JSON lists for suggestions that are not tags of the document**, each entry
+      ``{"dimension", "value", "confidence"}`` with the normalised value.
+      - ``proposed_tags``: a Topic value outside the scheme, HELD here at any confidence for a
+        person to confirm or reject: FR-10's controlled taxonomy growth and Objective 05's clause 3
+        as written (D-129, 13 November 2026, which reverses D-128's creation of values).
+        Deduplicated by dimension and value, and replaced by each run. A Project or Process entry
+        is one a run made while D-128 was in force, when such a value was held below the threshold
+        and created at or above it; it can still be confirmed or rejected. The field was
+        ``proposed_topics`` until ``documents 0012`` and keeps that column (``db_column``), because
+        no migration here renames a column.
+      - ``discarded_suggestions``: every Project or Process value outside the scheme, at any
+        confidence, which FR-10 and clause 3 say is "discarded" (D-129). Also any value that cannot
+        be stored, holding a NUL or a lone surrogate, recorded with U+FFFD in place of each such
+        character (the 500 fix of D-128's security review). Replaced by each run. Nothing reads it
+        as a tag and the API does not expose it. A department outside the scheme is discarded
+        through ``department_outcome``. While D-128 was in force this list held only refused names.
+      - ``rejected_tags`` (``documents 0013``; the requirements audit of D-128, finding A5, the
+        lead's decision of 13 November 2026): each proposal a person rejected on this document,
+        with the machine's confidence from the proposal, so the machine assignment is kept
+        alongside the person's decision (FR-10's correction clause; UC-09 A3). It is never replaced
+        by a run: every later run skips each value it holds, in every dimension, at any confidence
+        and before the in-scheme match (``apply_classification`` rule 4b), as it skips a value with
+        a removed link on this document. A person may still apply the value. Not exposed by the
+        API. Until then a rejection recorded nothing, and the next run proposed the value again
+        (and, while D-128 was in force, created and linked it at or above the threshold).
     - **Whose department it is** (``department_applied_by``, ``documents 0009``): FR-10's
       provenance clause tells a machine's value from a person's, and the outcome alone cannot
       when the machine's suggestion equals the department a person typed (D-119 finding 10).
@@ -280,10 +373,22 @@ class DocumentAnalysis(models.Model):
     # Written by apps/documents/classification.py wherever it decides the department.
     department_applied_by = vocabulary_field(TAG_APPLIED_BY_VALUES, null=True, blank=True)
     user_edited = models.BooleanField(default=False)
-    # [{"value": <normalised name>, "confidence": <float>}], replaced by each run.
-    proposed_topics = models.JSONField(default=list, blank=True)
-    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run.
+    # [{"dimension": "Topic", "value": <normalised name>, "confidence": <float>}]: the Topic values
+    # outside the scheme the run held, at any confidence (D-129), replaced by each run. A Project or
+    # Process entry is a run's from while D-128 was in force. Renamed from ``proposed_topics`` by
+    # ``documents 0012``; the column keeps its name.
+    proposed_tags = models.JSONField(default=list, blank=True, db_column="proposed_topics")
+    # [{"dimension": ..., "value": ..., "confidence": ...}], replaced by each run: every Project or
+    # Process value outside the scheme, at any confidence (D-129), and any value holding a NUL or a
+    # lone surrogate, recorded with U+FFFD in its place (classification.py ``_recordable``).
     discarded_suggestions = models.JSONField(default=list, blank=True)
+    # [{"dimension": ..., "value": <normalised name>, "confidence": <the proposal's>}]: each proposal a
+    # person rejected on this document, deduplicated by dimension and value and never replaced by a
+    # run, which skips each of them (rule 4b). ``documents 0013``; the requirements audit of D-128,
+    # finding A5. Not exposed by the API. A rejection made before 0013 was never recorded, because the
+    # old ``reject_proposed_tag`` wrote nothing, so it is not honoured: 0013 fills existing rows with
+    # ``[]`` and none is guessed, as D-105 left the rows from before 0009.
+    rejected_tags = models.JSONField(default=list, blank=True)
     model = models.CharField(max_length=NAME_MAX_LENGTH, blank=True)
     input_truncated = models.BooleanField(default=False)
     # Set explicitly by each run, never auto_now: a confirmation edits the row without

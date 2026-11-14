@@ -343,3 +343,16 @@ def test_fr10s_confidence_threshold_is_per_classifying_model():
     assignment, since Haiku typed all 57 right. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
     assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.72}
     assert 0.0 < constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+
+
+def test_fr10s_department_threshold_is_its_own_on_haiku():
+    """D-129, the lead's decision of 13 November 2026: D-106's rule on departments alone found no
+    split (56 right, 1 wrong) on the development documents (corpus/objective-05/runs/
+    2026-11-13-tag-threshold/), so it took the lowest right confidence, 0.30, and the user chose it
+    over the pooled 0.25. Types and tags keep 0.72 on Haiku. Any other model is not listed, and
+    falls back to the shared value for that model (department_threshold)."""
+    assert constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.30}
+    assert 0.0 < constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+    # Its own value, not the shared one's: the two maps disagree for Haiku on purpose.
+    assert (constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]
+            != constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"])

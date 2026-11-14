@@ -90,9 +90,10 @@ def documents_leaf():
 
 
 def test_0011_is_on_the_path_to_the_leaf_of_documents():
-    """0011 was the leaf of ``documents`` until 0012 (FR-16's ``ContentChunks.ai_generated``, D-125)
-    followed it, so the test checks that 0011 is on the leaf's path, and the test below ends at the
-    leaf, as the 0009 and 0010 tests do."""
+    """0011 was the leaf of ``documents`` until two migrations numbered 0012 followed it: FR-16's
+    ``ContentChunks.ai_generated`` (D-125) and ``proposed_tags`` (D-128), joined by 0014's merge. So
+    the test checks that 0011 is on the leaf's path, and the test below ends at the leaf, as the
+    0009 and 0010 tests do."""
     graph = MigrationExecutor(connection).loader.graph
     assert AFTER in graph.forwards_plan(documents_leaf())
 

@@ -28,7 +28,14 @@ from apps.core.constants import (
 )
 from apps.documents.management.commands import classify_documents as command_module
 from apps.documents.classification import reject_tag
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, ExtractedContent, Tag
+from apps.documents.models import (
+    ContentTag,
+    Department,
+    Document,
+    DocumentAnalysis,
+    ExtractedContent,
+    Tag,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -58,6 +65,7 @@ def outage(*args):
 
 def test_document_classifies_the_named_document_and_writes_the_record(employee, tmp_path):
     document = make_document(employee, "Leave policy")
+    Department.objects.create(name="People")  # listed, so the stub suggests it (D-129)
     record_path = tmp_path / "runs" / "classification.json"
 
     out, _ = run("--document", str(document.id), "--out", str(record_path))
@@ -81,7 +89,7 @@ def test_document_classifies_the_named_document_and_writes_the_record(employee, 
     assert entry["doc_type_outcome"] == ASSIGNMENT_APPLIED
     assert (entry["machine_department"], entry["department_outcome"]) == ("People", ASSIGNMENT_APPLIED)
     assert entry["department"] == "People"
-    assert entry["tags"] == [] and entry["proposed_topics"] == []
+    assert entry["tags"] == [] and entry["proposed_tags"] == []  # D-128's name for the list
     assert isinstance(entry["discarded_suggestions"], list)
     assert entry["seconds"] >= 0
     assert "error" not in entry

@@ -5,6 +5,7 @@
 key set so a field cannot leak in later.
 """
 
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -26,12 +27,18 @@ from apps.core.constants import (
     KNOWLEDGE_GAP_STATUS_VALUES,
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
+    REPOSITORY_TAG_DIMENSIONS,
     ROLE_NAMES,
     TOPIC_DIMENSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import tag_options
-from apps.documents.models import ContentTag, Document, normalise_tag_name
+from apps.documents.models import (
+    ContentTag,
+    Document,
+    normalise_department_name,
+    normalise_tag_name,
+)
 from apps.meetings.models import ActionItem, Meeting, MeetingSummary
 from apps.meetings.owners import can_read_meeting
 from apps.meetings.summaries import action_items_of, current_summary, latest_run, reported_state
@@ -294,7 +301,15 @@ class ClassificationSerializer(serializers.Serializer):
     that department is, "user", "ai" or null (D-119 finding 10): an outcome of "applied" with
     "user" is a department a person gave that the machine's suggestion matched, which the
     interface must not label as the machine's. ``discarded_suggestions`` is not exposed: it is a
-    record for the Objective 05 measurement (D-106), not for the interface.
+    record for the Objective 05 measurement (D-106), not for the interface. Neither is
+    ``rejected_tags``, the proposals a person rejected (the requirements audit of D-128, finding
+    A5): it keeps the machine's assignment beside that decision for later runs to respect.
+
+    ``proposed_tags`` (``proposed_topics`` until D-128) lists the Topic values outside the scheme
+    the classifier held, at any confidence (D-129), each ``{"dimension", "value", "confidence"}``,
+    for a person to confirm or reject through the proposed-tags routes. A Project or Process value
+    outside the scheme is discarded and never shown. A Project or Process entry here is one a run
+    made while D-128 was in force, and the routes take it as they take a Topic.
     """
 
     doc_type = serializers.CharField(read_only=True, allow_null=True)
@@ -306,7 +321,7 @@ class ClassificationSerializer(serializers.Serializer):
     machine_department = serializers.CharField(read_only=True, allow_blank=True)
     machine_department_confidence = serializers.FloatField(read_only=True, allow_null=True)
     user_edited = serializers.BooleanField(read_only=True)
-    proposed_topics = serializers.JSONField(read_only=True)
+    proposed_tags = serializers.JSONField(read_only=True)
     classified_at = serializers.DateTimeField(read_only=True)
     model = serializers.CharField(read_only=True, allow_blank=True)
     input_truncated = serializers.BooleanField(read_only=True)
@@ -340,11 +355,11 @@ def tag_details_payload(document) -> list[dict]:
 
 
 class TagEntrySerializer(serializers.Serializer):
-    """One entry of ``GET /api/tags``, and the ``DELETE /api/tags/{id}`` 200 (D-119 finding 5): a
-    Tag with ``item_count``, which ``apps/documents/taxonomy.py`` sets on it, the number of sources
-    carrying it through a link that is neither provisional nor removed. Administrator-only
-    (``manage_tags``), so neither the names nor the counts are scoped: an Administrator reads every
-    source (D-66)."""
+    """One entry of ``GET /api/tags``, the ``DELETE /api/tags/{id}`` 200 (D-119 finding 5), and the
+    ``POST /api/tags`` 201 (D-128): a Tag with ``item_count``, which ``apps/documents/taxonomy.py``
+    sets on it, the number of sources carrying it through a link that is neither provisional nor
+    removed. Administrator-only (``manage_tags``), so neither the names nor the counts are scoped:
+    an Administrator reads every source (D-66)."""
 
     tag_id = serializers.UUIDField(source="id", read_only=True)
     dimension = serializers.CharField(read_only=True)
@@ -366,11 +381,104 @@ class ClassificationConfirmSerializer(serializers.Serializer):
     )
 
 
-class ProposedTopicSerializer(serializers.Serializer):
-    """The body of the proposed-topic routes: the value as proposed or as typed. It is normalised
-    before it is matched, so case and spacing do not matter; blank, or over the column, is 400."""
+class ProposedTagSerializer(serializers.Serializer):
+    """The body of the proposed-tags routes (D-128): ``{"dimension", "value"}``, both required.
 
+    ``dimension`` is one of REPOSITORY_TAG_DIMENSIONS, read through a ChoiceField, so a missing one,
+    or any other (Department included: a department is never proposed), is 400 keyed on
+    ``dimension``. ``value`` is the value as proposed or as typed; it is normalised before it is
+    matched, so case and spacing do not matter; blank, or over the column, is 400 keyed on
+    ``value``. A NUL byte in it is refused by ``CharField``'s own validator (D-65). Whether the pair
+    is proposed on the document is the route's question, after validation: the 404."""
+
+    dimension = serializers.ChoiceField(choices=REPOSITORY_TAG_DIMENSIONS)
     value = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+
+# The 400 of POST /api/tags for a name that normalises to more than the column holds.
+TAG_NAME_TOO_LONG_MESSAGE = f"Ensure this field has no more than {NAME_MAX_LENGTH} characters."
+
+
+class TagCreateSerializer(serializers.Serializer):
+    """``POST /api/tags``: an Administrator adds a value to the scheme (D-128; FR-10's CRUD line
+    gives Tags "Create").
+
+    ``dimension`` is one of REPOSITORY_TAG_DIMENSIONS through a ChoiceField: any other, Department
+    included (a department is ``Documents.department``, D-72), is 400 keyed on ``dimension``.
+    ``tag_name`` is trimmed, refused blank or over the column, and returned normalised as ``Tags``
+    normalises it (``normalise_tag_name``); a name the normalising lengthens past the column is
+    refused too. A NUL byte is refused by ``CharField``'s own validator (D-65). Whether the name
+    already exists in the dimension is ``create_tag``'s question, after validation: the 409.
+    """
+
+    dimension = serializers.ChoiceField(choices=REPOSITORY_TAG_DIMENSIONS)
+    tag_name = serializers.CharField(
+        max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True
+    )
+
+    def validate_tag_name(self, value):
+        name = normalise_tag_name(value)
+        if not name:
+            raise serializers.ValidationError("This field may not be blank.")
+        if len(name) > NAME_MAX_LENGTH:
+            raise serializers.ValidationError(TAG_NAME_TOO_LONG_MESSAGE)
+        return name
+
+
+class DepartmentEntrySerializer(serializers.Serializer):
+    """One entry of ``GET /api/departments``, the ``POST`` 201 and 200, and the ``DELETE`` 200 (D-129):
+    a Department with ``item_count``, which ``apps/documents/taxonomy.py`` sets on it, the number of
+    documents whose ``department`` equals the name. Administrator-only (``manage_tags``), so neither
+    the names nor the counts are scoped: an Administrator reads every document (D-66)."""
+
+    department_id = serializers.UUIDField(source="id", read_only=True)
+    name = serializers.CharField(read_only=True)
+    active = serializers.BooleanField(read_only=True)
+    item_count = serializers.IntegerField(read_only=True)
+
+
+# POST /api/departments: what the classification prompt joins a scheme's department names with
+# ("; ", apps/ai/classification.py), refused in a name with the Cc and Cf characters (D-129, F4).
+DEPARTMENT_NAME_SEPARATOR = ";"
+DEPARTMENT_NAME_CHARACTERS_MESSAGE = (
+    "A department name may not contain a semicolon, or a control or invisible formatting character."
+)
+
+
+class DepartmentCreateSerializer(serializers.Serializer):
+    """``POST /api/departments``: an Administrator adds a department to FR-10's department scheme, or
+    brings a retired one back (D-129).
+
+    ``name`` is trimmed, refused blank or over the column (400 keyed on ``name``), and returned
+    normalised as ``Departments`` normalises it (``normalise_department_name``): internal whitespace
+    collapsed to one space, **the case kept**. Collapsing only shortens a name, so nothing that
+    passes the length check overruns the column afterwards. A NUL byte or a lone surrogate is
+    refused by ``CharField``'s own validators (D-65). Whether the name is already listed is
+    ``create_department``'s question, after validation: the 409, or the 200 for a retired one.
+
+    **Refused characters** (the security review of D-129, finding F4), one 400 for all of them:
+
+    - a control or format character (Unicode Cc or Cf: ESC, BEL, DEL, a right-to-left override, a
+      zero-width space, a byte order mark). No reader sees it as written, and two names could look
+      the same. It is checked on the name as sent, trimmed and before its inner whitespace is
+      collapsed, so a tab or line break inside a name is refused rather than turned into a space;
+    - ";", which the classification prompt joins a scheme's department names with, so that one name
+      could read as two.
+    """
+
+    name = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+    def validate_name(self, value):
+        if any(unicodedata.category(character) == "Cc" for character in value):
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        if any(unicodedata.category(character) == "Cf" for character in value):
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        name = normalise_department_name(value)
+        if not name:
+            raise serializers.ValidationError("This field may not be blank.")
+        if DEPARTMENT_NAME_SEPARATOR in name:
+            raise serializers.ValidationError(DEPARTMENT_NAME_CHARACTERS_MESSAGE)
+        return name
 
 
 # The 400s of POST /api/documents/{id}/tags that are about the body's shape. None says anything
@@ -389,10 +497,12 @@ class TagApplySerializer(serializers.Serializer):
     - ``{"tag_id": "<uuid>"}``: an existing tag. Only its shape is checked here; whether it is
       offered for this document is ``apply_tag``'s, so that an unknown, an inactive and a withheld
       tag share one answer.
-    - ``{"dimension": "Topic", "tag_name": "..."}``: a new Topic, FR-10's "controlled taxonomy
-      growth", which lets only the Topic dimension grow, so any other dimension is a 400 keyed on
-      ``dimension``. ``tag_name`` is trimmed, refused blank or over the column, and returned
-      normalised as ``Tags`` normalises it (``normalise_tag_name``).
+    - ``{"dimension": "Topic", "tag_name": "..."}``: a new Topic. A person's name form is
+      Topic-only: FR-10's "controlled taxonomy growth" lets only Topic grow, and the classifier
+      creates no value (D-129). An Administrator adds one in any of the three dimensions
+      (``POST /api/tags``, D-128). So any other dimension is a 400 keyed on ``dimension``.
+      ``tag_name`` is trimmed, refused blank or over the column, and returned normalised as
+      ``Tags`` normalises it (``normalise_tag_name``).
 
     Neither, or both, is a 400 under ``non_field_errors``. A NUL byte in ``tag_name`` is refused by
     ``CharField``'s own validator (D-65).

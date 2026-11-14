@@ -68,7 +68,7 @@ class GenerationAttempt:          # apps/ai/generation.py — the observer's rec
 @dataclass(frozen=True)
 class TagScheme:                  # FR-10 — the scheme one document is classified against (D-104)
     doc_types: tuple[str, ...]    # DOCUMENT_TYPES
-    departments: tuple[str, ...]  # distinct non-blank Documents.department values in the audience
+    departments: tuple[str, ...]  # the active department list's names admitted for the audience (D-129)
     tags: dict[str, tuple[str, ...]]  # Project, Process, Topic -> active tag names
 
 @dataclass(frozen=True)
@@ -543,11 +543,17 @@ lists none), one tag per dimension that lists a value, every confidence `STUB_CO
 callable is called with `(title, text, scheme)` and may raise `ProviderUnavailable` to stand in
 for an outage.
 
-**Not measured yet.** Section 5's rates were established with `scripts/citation_harness.py`
-before anything was built on them. The classification prompt has no harness run behind it: its
-conformance rate on `gemma3:4b` is unmeasured, and D-106's sweep on the development documents is
-where it gets one. Until then, treat the prompt as a first version with a tested parser and a
-tested retry path, not as a measured one.
+**What has been measured.** Section 5's rates were established with `scripts/citation_harness.py`
+before anything was built on them. The classification prompt's measurements are D-106's sweeps on
+the development documents and Objective 05's runs:
+
+- **On gemma3:4b:** the threshold of 0.95, and the runs in D-106's notes.
+- **On claude-haiku-5-5:** the threshold of 0.72 (D-122), and three draws of Objective 05 (#85),
+  all on this prompt.
+
+*Dated note, 13 November 2026:* D-128 revised rules 6 and 7 for one day, and D-106's sweep ran on
+that revision (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). D-129 reversed it,
+so the prompt above is the one those measurements describe.
 
 ---
 

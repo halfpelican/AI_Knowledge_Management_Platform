@@ -97,7 +97,7 @@ Stored separately from the original file so text is reusable without re-parsing.
 | `embedding_dimension` | integer | 768 for embed-gemma |
 | `created_at` | timestamp | |
 | `visible_to_roles` | text[] | stamped from the source at ingestion so the filter and the vector share a table — D-17 |
-| `ai_generated` | boolean, default false | true only for a passage of a meeting's AI-generated summary (FR-16); added by `documents 0012` — D-125 |
+| `ai_generated` | boolean, default false | true only for a passage of a meeting's AI-generated summary (FR-16); added by `documents 0012_content_chunk_ai_generated` — D-125 |
 
 Index on `(source_type, source_id)` and on `embedding_model` — retrieval filters by
 recorded model before ranking.
@@ -294,7 +294,21 @@ cascade deleted the row.
 | `tag_name` | text | unique within a dimension, case- and whitespace-normalised |
 | `dimension` | text | `Department`, `Project`, `Process`, `Topic` |
 | `active` | boolean | deactivated rather than deleted while content references it |
-| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. Never unset |
+| `grown` | boolean | **`documents 0010`; its meaning since `documents 0011`: not vocabulary.** A tag that is not grown is in every document's scheme, whatever its links; a grown tag is in only where every role in the audience reads a source carrying it (D-105's dated note of 10 November 2026, night: the security review). Set on a Topic a person's `POST /api/documents/{id}/tags` name form or confirmation of a proposed topic creates or reactivates (an active Topic either one reuses keeps its value, so vocabulary stays vocabulary); by `documents 0011` on every tag that then had links and no link on a source every role reads; and by `seed_objective02_tags.py`'s linked mode on the seeded values only restricted material carries. A value an Administrator adds through `POST /api/tags` (D-128) is not grown: it is vocabulary. A person's confirmation of a proposal, or their Topic name form, reactivates a retired tag only through a document every role can read (D-128's security review). For one day D-128 also had the classifier create and reactivate values; D-129 reversed it. Never unset |
+
+### Departments — FR-10 (D-129)
+
+The department list an Administrator keeps on the Tags page, and the scheme the classifier suggests a
+department from. A document's department stays the free-text `Documents.department`, the one field
+FR-14 and FR-15 read (D-72). Added by `documents 0015_departments`, which seeds it from the departments
+in use when it runs.
+
+| Field | Type | Notes |
+|---|---|---|
+| `department_id` | UUID PK | |
+| `name` | text | trimmed, internal spaces collapsed, **case kept**; unique ignoring case (`departments_unique_name_ignoring_case`, on `LOWER(name)`). Not a `Tags` row because `Tag` lower-cases names, and the classifier writes the scheme's spelling into a blank department |
+| `active` | boolean | false once retired: a department in use is retired rather than deleted, stays on its documents and in the filters, and is no longer offered to the classifier |
+| `grown` | boolean | hidden: offered only for a document whose whole audience reads everything, today an Administrator-only document, so a document an Employee can read is never offered one (invariant 1; the security review of D-129, F1). Set by the seed on a department only material some role cannot read carries; an Administrator's addition is not hidden. Never unset |
 
 ### ContentTags — FR-10, FR-15
 
@@ -353,8 +367,9 @@ by nothing else.
 | `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
 | `department_applied_by` | text, nullable | **`documents 0009`** — whose value `Documents.department` holds, in `TAG_APPLIED_BY_VALUES`: `user` a person gave it (typed at upload, or written through the confirm route); `ai` a run wrote its suggestion into a blank department and no person has written it since; null for no department, or a row classified before 0009 and not set since (D-119 finding 10) |
 | `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
-| `proposed_topics` | jsonb | out-of-scheme Topic suggestions awaiting confirmation, `[{"value", "confidence"}]`, deduplicated by normalised value; replaced by each run |
-| `discarded_suggestions` | jsonb | out-of-scheme Project and Process suggestions, `[{"dimension", "value", "confidence"}]`; evidence of the scheme clause, never shown as tags; replaced by each run |
+| `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012_proposed_tags`, D-128:** out-of-scheme Topic suggestions held for a person, at any confidence, `[{"dimension", "value", "confidence"}]` with `dimension` "Topic", deduplicated by normalised value; replaced by each run. The column keeps its first name (`db_column`) so that 0012 changes no column. 0012 stamped the earlier entries `"dimension": "Topic"`. For one day (D-128) it also held Project and Process values below the threshold; D-129 reversed that |
+| `discarded_suggestions` | jsonb | suggestions that do not become a tag or a proposal, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. The out-of-scheme Project and Process suggestions (Objective 05's clause 3), and since D-128 a value that cannot be stored (U+0000 or a lone surrogate), recorded with U+FFFD so that the column accepts it (D-129) |
+| `rejected_tags` | jsonb | **`documents 0013_rejected_tags`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run. A rejection made before 0013 was never recorded, so it is not honoured: existing rows start at `[]`, and none is guessed |
 | `model` | text | the chat model that produced the run |
 | `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
 | `classified_at` | timestamp | set by each run, not `auto_now`: a confirmation edits the row without reclassifying it |
@@ -373,10 +388,19 @@ by nothing else.
 - **An outcome per assignment** — `applied`, `provisional`, `discarded` or `confirmed` — so the
   record states how the rule disposed of each suggestion rather than leaving it to be inferred
   from which columns are null.
-- **Two JSON lists.** A Topic outside the scheme "may be proposed only in the Topic dimension
-  and requires user confirmation before it is created", so no `Tags` row may exist for it while
-  it waits; a Project or Process outside the scheme is "discarded", and the discard is kept as
-  evidence of that clause.
+- **Two JSON lists, then three.**
+  - **As first built (D-105),** a Topic outside the scheme "may be proposed only in the Topic
+    dimension and requires user confirmation before it is created", so no `Tags` row could exist
+    for it while it waited. A Project or Process outside the scheme was "discarded", and the
+    discard was kept as evidence of that clause.
+  - **Since D-128 (12 November 2026),** the list is `proposed_tags`, its entries carrying a
+    dimension. For one day the classifier also created values at or above the threshold. Since
+    D-129 it proposes a Topic outside the scheme at any confidence and discards a Project or
+    Process value, as before.
+  - **Since the audit of 13 November (D-128),** `rejected_tags` (`documents 0013`) keeps each
+    proposal a person rejected, with the machine's confidence. Later runs skip that value for that
+    document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,
+    and the machine assignment is retained alongside it".
 
 No column holds a summary or key points: FR-10's front-end clause names them, and a *document's*
 summary is still not built (D-104's note of 10 November 2026). FR-16's `summarise_meeting`
@@ -512,11 +536,12 @@ so a status can be filtered on and its meaning does not drift.
 `DOCUMENT_TYPES` is FR-10's fixed list: "the type must be selected from a fixed list rather
 than generated freely, so that filtering remains consistent". `ASSIGNMENT_OUTCOMES` is how the
 apply layer disposed of one assignment (`DocumentAnalysis.doc_type_outcome`,
-`department_outcome`): **applied**, at or above `CLASSIFICATION_CONFIDENCE_THRESHOLD` and
-written to the effective field, still marked AI-generated and editable; **provisional**, below
+`department_outcome`): **applied**, at or above the classifying model's threshold for that kind
+(`CLASSIFICATION_CONFIDENCE_THRESHOLD`, or the model's value, for the type; since D-129 the department
+has its own, `CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL`) and written to the effective field, still marked AI-generated and editable; **provisional**, below
 the threshold, held for confirmation and not written; **discarded**, outside the established
-scheme (the department only — the type is always in the fixed list because the parser refuses
-anything else); **confirmed**, a person confirmed or edited it, after which reprocessing leaves
+scheme (the department only, whose scheme since D-129 is the department list — the type is always in
+the fixed list because the parser refuses anything else); **confirmed**, a person confirmed or edited it, after which reprocessing leaves
 it alone.
 
 `KNOWLEDGE_GAP_STATUS_VALUES` is FR-19's "the ability to mark an entry as addressed": an entry
@@ -638,7 +663,15 @@ plans it immediately after `documents 0007`, `documents 0009` (`ContentTags.remo
 (`Tags.grown`) immediately after 0009, and `documents 0011` (the backfill that marks grown every tag
 only restricted material carries) immediately after 0010. 0011's backfill reads meetings'
 `visible_to_roles`, so it depends on `meetings 0002`, and a clean start now plans `meetings 0002`
-directly after `meetings 0001`, before `documents 0002`.
+directly after `meetings 0001`, before `documents 0002`. Two migrations numbered 0012 follow 0011,
+from two branches built at the same time. `documents 0012_content_chunk_ai_generated`
+(`ContentChunks.ai_generated`, FR-16, D-125) is one. `documents 0012_proposed_tags` (D-128: the
+proposal list renamed `proposed_tags` on its unchanged column, its entries stamped with a dimension)
+is the other, and `documents 0013_rejected_tags` (`DocumentAnalysis.rejected_tags`) follows it.
+`documents 0014_merge_fr16_and_d128` joins the two branches. It has no operations; it only gives
+the app one leaf again, so neither pushed migration was renumbered or edited. The executor plans
+0012_proposed_tags, 0013, 0012_content_chunk_ai_generated, 0014, `documents 0015_departments` (the
+department list, D-129), then `meetings 0003_fr16_meeting_summaries`.
 `KnowledgeGaps`, `KnowledgeGapCycles` and `KnowledgeGapItems` (v2, `retrieval 0004`) follow
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and

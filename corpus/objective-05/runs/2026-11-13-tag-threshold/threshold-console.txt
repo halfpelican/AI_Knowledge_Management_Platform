@@ -1,0 +1,4 @@
+pooled: threshold 0.25 (separates: True; right 122, wrong 66; lowest right 0.3)
+departments_only: threshold 0.3 (separates: False; right 56, wrong 1; lowest right 0.3)
+tags_only: threshold 0.25 (separates: True; right 66, wrong 65; lowest right 0.3)
+outside the scheme, not scored: {'department': 0, 'tag': 4}
