@@ -62,6 +62,7 @@ from apps.ai.generation import ChatReply
 from apps.ai.schema import (
     TRAILING_COMMA_PATTERN,
     SchemaViolation,
+    loads_reply,
     outermost_json_object,
     strip_code_fences,
 )
@@ -204,10 +205,10 @@ def parse_classification(raw: str, scheme: TagScheme) -> ParsedClassification:
         raise SchemaViolation("empty response")
     candidate = outermost_json_object(strip_code_fences(raw))
     try:
-        decoded = json.loads(candidate)
+        decoded = loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = json.loads(TRAILING_COMMA_PATTERN.sub("", candidate))
+            decoded = loads_reply(TRAILING_COMMA_PATTERN.sub("", candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
