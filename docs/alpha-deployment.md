@@ -383,7 +383,9 @@ and accounts, so do that only before the demonstration threads are built (D-40).
 5. `manage.py classify_documents --all`, so FR-10 classifies every document against those tags.
    The ingestion classified them at upload, before any tag existed. A `--scheme-only` seed before
    the ingestion would let the upload's classification see the vocabulary instead. That order was
-   not tried.
+   not tried, and it is not a safe substitute as written: `--scheme-only` marks nothing grown, so
+   `atlas` would be offered to Employees, and a held AI link on a document every role reads would
+   keep the full seed from marking it grown later.
 
 **Nobody knows either account's password.** Before the walk, set the Administrator's from this
 worktree, with its `.env`:

@@ -1,4 +1,4 @@
-docs/alpha-deployment.md step 8, run again on 2026-11-14T15:19:01.9809132+11:00 after the laptop's restart; the 13 November run's output was not saved.
+docs/alpha-deployment.md step 8, run again on 2026-11-14T15:19:01.9809132+11:00 after the laptop's restart; the 13 November run's output was not saved. An excerpt: each check's status line, and the headers and body line the runbook names, selected from curl's output.
 --- 1. the SPA
 HTTP/1.1 200 OK
 Cache-Control: no-cache

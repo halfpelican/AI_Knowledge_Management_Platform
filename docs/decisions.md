@@ -12115,15 +12115,17 @@ records each step.
   - D01 to D20 and T01 to T05 indexed;
   - every invalid item refused as documented, and "Missed: none";
   - 48 chunks, all `voyage-4` at 1024, 5 of them FR-16 summaries, all five summaries Ready
-    (`setup/database-state-2026-11-14.txt`). The ingestion's own count, 47, was read just before
-    the fifth summary's chunk was written, at 16:43:50.
+    (`setup/database-state-2026-11-14.txt`). The ingestion's own count, 47, has nine meeting
+    chunks, four of them summaries'. The fifth summary was parsed at 16:43:50
+    (`server-logs/attempts.log`), as the ingestion ended. So, by the session's reckoning, the count
+    was read just before that summary's chunk was written; the count line has no time of its own.
 - **The tag order.**
   - **The order.** The full seed finds each document by title and stops if one is missing, so it
     runs after the ingestion. The ingestion classifies each document at upload, before any tag
     exists. So the documents were first classified against no tags: 13 topic proposals across 10
     documents (`classification/state-before.txt`, transcribed). `seed_objective02_tags.py` says to
     run before any document is classified. Only a `--scheme-only` pass before the ingestion allows
-    that, and it was not tried.
+    that, and it was not tried. It is not a safe substitute as written: `--scheme-only` marks nothing grown, so `atlas` would be offered to Employees, and a held AI link on a document every role reads would keep the full seed from marking it grown later.
   - **What the user chose:** seed, then classify again.
   - **The seed:** 14 tags and 48 links, with `atlas` marked grown.
   - **The second classification:** 20 documents classified and 0 failed. FR-10 applied no tag. It

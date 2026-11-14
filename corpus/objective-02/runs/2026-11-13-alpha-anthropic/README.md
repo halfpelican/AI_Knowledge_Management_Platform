@@ -36,7 +36,9 @@ creating it.
 - **Chunks:** 48, every one `voyage-4` at 1024 (`setup/database-state-2026-11-14.txt`). 38 are from
   documents. Of the 10 from meetings, 5 are transcripts and 5 are FR-16 summaries, marked
   `ai_generated`. All five summaries are Ready, with 25 action items. The ingestion's console counts
-  47: it was read just before the fifth summary's chunk was written, at 16:43:50.
+  47, with nine meeting chunks, four of them summaries'. The fifth summary was parsed at 16:43:50
+  (`server-logs/attempts.log`), as the ingestion ended, so by the session's reckoning the count was
+  read just before its chunk was written. The count line has no time of its own.
 - **Tags:**
   - 14 tags: Process 4, Project 4 and Topic 6. One Project value, `atlas`, is marked grown, because
     only material some role cannot read carries it.
@@ -51,7 +53,7 @@ creating it.
 The ingestion classified each document at upload (FR-10, D-105), before any tag existed. The full
 seed cannot run earlier: it finds each document by title and stops if one is missing.
 `scripts/seed_objective02_tags.py` says to run it before any document is classified. Only a
-`--scheme-only` pass before the ingestion allows that, and that order was not tried. So after the
+`--scheme-only` pass before the ingestion allows that, and that order was not tried. It is not a safe substitute as written: `--scheme-only` marks nothing grown, so `atlas` would be offered to Employees, and a held AI link on a document every role reads would keep the full seed from marking it grown later. So after the
 ingestion there were no tags, only 13 topic proposals across 10 documents
 (`classification/state-before.txt`, transcribed).
 
