@@ -36,6 +36,7 @@ from apps.core.constants import (
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 from conftest import PASSWORD
 
@@ -57,6 +58,9 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "ask",  # Stage 4: FR-12's answer path, FR-13's turn
                     "conversation-list", "conversation-detail",  # Stage 4: FR-13
                     "dashboard",  # Stage 5 item 3: FR-14
+                    # NIT3004: FR-20's knowledge map, behind view_knowledge_map, which both
+                    # roles hold (D-132)
+                    "knowledge-map",
                     "document-browse",  # Stage 5 item 2: FR-15 (D-72); its DELETE is document-detail's
                     "document-download",  # Stage 5 item 2a: FR-15's download link (D-75)
                     # NIT3004: FR-10's classification routes (D-104, D-105). contribute_content is
@@ -112,6 +116,10 @@ PERMISSIONED_ROUTES = {
     # both, so the 403 comes before the body is read. Nothing on either route is scoped.
     "transcription-status": CONTRIBUTE_CONTENT_PERMISSION,
     "transcription-list": CONTRIBUTE_CONTENT_PERMISSION,
+    # FR-20 (D-132): view_knowledge_map, a permission_classes entry. The route returns a
+    # collection and no single scoped object, so the 403 has no 404 to precede.
+    # apps/api/tests/test_knowledge_map.py proves the 403 by revoking the code from each role.
+    "knowledge-map": VIEW_KNOWLEDGE_MAP_PERMISSION,
 }
 # Codes checked inside a view rather than declared on it, so the seed test below covers them.
 IN_VIEW_PERMISSION_CODES = {
@@ -387,3 +395,6 @@ def test_every_permission_code_in_use_is_seeded():
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
+    # FR-20's code is held by both roles (accounts 0011, D-132), as contribute_content is.
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()
+    assert Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()

@@ -37,6 +37,11 @@ copies a value of ``apps/core/constants.py``:
   value once. Equality and not inclusion, for ``DOCUMENT_STATUS`` especially: D-51 is the
   record of a status the server added and the client did not list, which the screens then
   displayed while applying the wrong rule to it.
+- ``KNOWLEDGE_MAP_NODE_TYPE``, ``KNOWLEDGE_MAP_RELATIONSHIP`` and
+  ``KNOWLEDGE_MAP_TRUNCATION_REASON`` (since 14 November 2026, FR-20, D-132): the node types,
+  relationships and truncation reasons ``GET /api/knowledge-map`` returns. The page picks a
+  shape, a word and a notice by each, so a value it does not list would be drawn with none. The
+  two caps are not copied: they reach the page in the response.
 
 **What it does not hold.** ``TEXT.noAnswerFallback`` and ``TEXT.provenanceRemovedFallback``
 are held by the front-end suite, which reads ``apps/core/constants.py`` itself
@@ -87,6 +92,10 @@ VOCABULARIES = [
     ("DOCUMENT_STATUS", "DOCUMENT_STATUS_VALUES"),
     ("ROLES", "ROLE_NAMES"),
     ("SOURCE_TYPE", "SOURCE_TYPES"),
+    # FR-20's knowledge map (D-132).
+    ("KNOWLEDGE_MAP_NODE_TYPE", "KNOWLEDGE_MAP_NODE_TYPES"),
+    ("KNOWLEDGE_MAP_RELATIONSHIP", "KNOWLEDGE_MAP_RELATIONSHIPS"),
+    ("KNOWLEDGE_MAP_TRUNCATION_REASON", "KNOWLEDGE_MAP_TRUNCATION_REASONS"),
 ]
 
 # `key: 'value',` inside an exported object, a single-quoted string on one line.

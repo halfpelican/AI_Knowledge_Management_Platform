@@ -250,6 +250,10 @@ SECTION_5_PLAN = [
     # FR-10's tag administration (D-119 finding 5): manage_tags, Administrator only, immediately
     # after 0007.
     ("accounts", "0008_seed_manage_tags"),
+    # FR-20 (D-132), 14 November 2026: view_knowledge_map, both roles, immediately after 0008,
+    # which it depends on. Numbered 0011 because 0009 and 0010 are held by FR-03's unmerged
+    # branch (D-130).
+    ("accounts", "0011_seed_view_knowledge_map"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
     # D-16: visible_to_roles on Meetings. Planned here, before documents 0002, since documents 0011

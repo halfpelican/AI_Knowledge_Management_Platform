@@ -133,8 +133,12 @@ meeting; nothing relies on it being so.
 
 A participation record, never an access rule (D-16). Since FR-16 it is also read to decide
 whose name an action item's owner means: an extracted item's owner is always one of the meeting's
-attendees, and one whose role can read the meeting (D-125, its third note). Nothing about who may
-see a meeting consults it.
+attendees, and one whose role can read the meeting (D-125, its third note). Since FR-20 it is read
+for the knowledge map's "attended" relationship (D-132): the attendees of a meeting the caller's
+role already reads are contributor nodes of that caller's map. The rows are read through the
+scoped meetings and never the other way round, so an attendee of a meeting their role cannot read
+is not shown it. Neither link table is unique on its pair, so a person recorded twice on one
+meeting is one edge. Nothing about who may see a meeting consults it.
 
 ### MeetingSummaries — FR-16
 
@@ -504,6 +508,10 @@ SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
 SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
                            "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
 ACTION_ITEM_ORIGINS = ("ai", "user")
+# FR-20 (D-132), 14 November 2026:
+KNOWLEDGE_MAP_NODE_TYPES = (*SOURCE_TYPES, "tag", "contributor")
+KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
+KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -533,6 +541,16 @@ kept apart as invariant 7 keeps the two no-answer paths apart), the summary coul
 embedded, the server stopped mid-run, or something unexpected was raised. `ACTION_ITEM_ORIGINS`
 is where an item came from: extracted by the model, or added by a person. `SOURCE_TYPES` did not
 gain a value for a summary: its passages are the meeting's (D-125, choice 1).
+
+The three `KNOWLEDGE_MAP_` vocabularies are FR-20's, and are values of a response, not of a
+column: FR-20 stores nothing. `KNOWLEDGE_MAP_NODE_TYPES` is what `GET /api/knowledge-map` calls
+each kind of node, the two source types and then the two kinds with no visibility column of their
+own, a tag and a contributor, which are nodes only through a link to a source the caller reads.
+`KNOWLEDGE_MAP_RELATIONSHIPS` are the three links FR-20's Server-End clause names: a source is
+**tagged** with a tag (`ContentTags`), a contributor **uploaded** a document
+(`Documents.uploaded_by`), a contributor **attended** a meeting (`MeetingAttendees`).
+`KNOWLEDGE_MAP_TRUNCATION_REASONS` says which cap cut a view short, `MAXIMUM_NODE_COUNT` or
+`MAXIMUM_TRAVERSAL_DEPTH`; `node_count` is reported when both apply (D-132).
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
@@ -643,6 +661,11 @@ directly after `meetings 0001`, before `documents 0002`.
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and
 `accounts 0008` (the `manage_tags` seed, D-119 finding 5) immediately after `accounts 0007`.
+`accounts 0011` (the `view_knowledge_map` seed, held by both roles, FR-20, D-132) depends on
+`accounts 0008` and is planned immediately after it. It adds no table: FR-20 reads existing ones.
+It is numbered 0011 because 0009 and 0010 are held by FR-03's unmerged branch (D-130), which also
+builds on 0008; once both are on `main` the pull request that merges second adds a merge
+migration naming both leaves, and no existing migration is edited.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

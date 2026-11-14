@@ -49,6 +49,7 @@ PERMISSION_GUARDED = {
     ("api/knowledge-gaps/<uuid:pk>", "PATCH"),  # review_knowledge_gaps
     ("api/tags", "GET"),  # manage_tags (D-119 finding 5)
     ("api/tags/<uuid:pk>", "DELETE"),  # manage_tags
+    ("api/knowledge-map", "GET"),  # view_knowledge_map (D-132), held by both roles until revoked
 }
 
 

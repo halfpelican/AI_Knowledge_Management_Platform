@@ -46,6 +46,14 @@ clause: an AI link so that the machine's assignment survives beside the person's
 person's so that a later classify or reprocess neither links the value again nor proposes it.
 Every read here excludes it, ``tag_details_of`` included: removed is gone, as far as any screen is
 concerned.
+
+**The live-link rule is written once, in ``live_tag_links`` (D-132).** A link that is a tag of its
+source: not provisional, not removed, in one of ``REPOSITORY_TAG_DIMENSIONS``, matched on the source
+type and the source identifier together. ``tags_of`` and the tag facets read through it, and so does
+FR-20's knowledge map (``apps/api/knowledge_map.py``), so a later change to what counts as a tag
+reaches all three. Two reads here keep their own conditions because their rule is a different one:
+``_tagged`` is a subquery over every source, narrowed by a name, and ``tag_details_of`` includes
+provisional links on purpose.
 """
 
 from dataclasses import dataclass, fields
@@ -107,6 +115,30 @@ class RepositoryFilters:
 
 
 NO_FILTERS = RepositoryFilters()
+
+
+def live_tag_links(*, source_type: str, source_ids):
+    """The ``ContentTag`` rows that are tags of the given sources: FR-15's live-link rule (D-132).
+
+    A link counts when it is not provisional (a held suggestion is not a tag, D-105), not removed
+    (nor is one a person removed), and its tag is in one of ``REPOSITORY_TAG_DIMENSIONS`` (Department
+    is the ``documents.department`` column, D-72). ``Tag.active`` and ``Tag.grown`` are not
+    consulted: a retired tag still linked is still a tag of its source.
+
+    ``source_type`` and ``source_ids`` are both required and applied together, because
+    ``source_id`` is a bare UUID with no foreign key (D-07): a meeting link can carry a document's
+    identifier, and matching on the identifier alone would draw it on that document.
+    ``source_ids`` is a list or a subquery of identifiers the caller has already scoped. This
+    function ranges over nothing else, so it returns a tag row only through a source its caller
+    may read.
+    """
+    return ContentTag.objects.filter(
+        source_type=source_type,
+        source_id__in=source_ids,
+        tag__dimension__in=REPOSITORY_TAG_DIMENSIONS,
+        provisional=False,
+        removed=False,
+    )
 
 
 @dataclass(frozen=True)
@@ -175,13 +207,7 @@ def tags_of(document) -> dict[str, list[str]]:
     """
     tags = {parameter: [] for parameter in TAG_PARAMETERS}
     rows = (
-        ContentTag.objects.filter(
-            source_type=DOCUMENT_SOURCE_TYPE,
-            source_id=document.pk,
-            tag__dimension__in=REPOSITORY_TAG_DIMENSIONS,
-            provisional=False,
-            removed=False,
-        )
+        live_tag_links(source_type=DOCUMENT_SOURCE_TYPE, source_ids=[document.pk])
         .values_list("tag__dimension", "tag__tag_name")
         .distinct()
         .order_by("tag__dimension", "tag__tag_name")
@@ -288,13 +314,10 @@ def _facet(name: str, documents) -> list[dict]:
         )
     else:
         rows = (
-            ContentTag.objects.filter(
-                source_type=DOCUMENT_SOURCE_TYPE,
-                source_id__in=documents.values("id"),
-                tag__dimension=TAG_PARAMETERS[name],
-                provisional=False,  # a held suggestion is not offered as a value (D-105)
-                removed=False,  # nor is one a person removed
-            )
+            # A held suggestion is not offered as a value (D-105), nor is a link a person removed:
+            # the live-link rule, narrowed to this facet's one dimension.
+            live_tag_links(source_type=DOCUMENT_SOURCE_TYPE, source_ids=documents.values("id"))
+            .filter(tag__dimension=TAG_PARAMETERS[name])
             .values("tag__tag_name")
             .annotate(count=Count("source_id", distinct=True))
             .order_by("tag__tag_name")

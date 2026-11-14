@@ -46,6 +46,7 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
@@ -60,7 +61,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
 )
 from apps.documents.models import ContentChunk, ContentTag, Document, DocumentAnalysis, Tag
-from apps.meetings.models import ActionItem, Meeting
+from apps.meetings.models import ActionItem, Meeting, MeetingAttendee
 from apps.retrieval.scoping import scoped_chunks, scoped_documents, scoped_meetings
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
@@ -420,6 +421,39 @@ def _browses(client, case, monkeypatch):
     return case.disclosed_in(response) or DOCUMENT_TAG in response.content.decode()
 
 
+# FR-20's knowledge map (D-132) returns each source's title and identifier, and through a source
+# the tags it carries and the people who uploaded or attended it. A Topic only the disagreeing
+# document carries and a person recorded only on the disagreeing meeting: the map would show both
+# if tags were read from the Tags table, or links and attendees from anything not narrowed to
+# the scoped sources.
+MAP_TAG = "succession candidates shortlist"
+MAP_ATTENDEE = "Nominations Observer"
+MAP_ATTENDEE_ADDRESS = "nominations.observer@example.com"
+
+
+def _maps(client, case, monkeypatch):
+    """The fixture carries no tag and no attendee, so the probe gives the document a tag and the
+    meeting an attendee first. It asks for the overview: a selection of a withheld node returns
+    the empty body, which would hold no trace whether the route failed closed or not."""
+    tag, _ = Tag.objects.get_or_create(tag_name=MAP_TAG, dimension="Topic")
+    ContentTag.objects.get_or_create(
+        tag=tag, source_type=DOCUMENT_SOURCE_TYPE, source_id=case.document.id,
+        defaults={"applied_by": "user", "confirmed": True},
+    )
+    users = get_user_model().objects
+    attendee = users.filter(email=MAP_ATTENDEE_ADDRESS).first() or users.create_user(
+        MAP_ATTENDEE_ADDRESS, None, name=MAP_ATTENDEE
+    )
+    MeetingAttendee.objects.get_or_create(meeting=case.meeting, user=attendee)
+    response = client.get("/api/knowledge-map")
+    assert response.status_code == 200
+    raw = response.content.decode()
+    # Beside the sources' own traces: the tag, the attendee, and the document's uploader, who is
+    # known to an Employee's map only through this document.
+    linked = (MAP_TAG, str(tag.id), MAP_ATTENDEE, str(attendee.id), str(case.document.uploaded_by_id))
+    return case.disclosed_in(response) or any(trace in raw for trace in linked)
+
+
 # FR-10's routes (D-105) act on a document by id, so each is a status-code probe like the delete:
 # 404 says nothing, anything else confirms the id is real. Each probe first gives the disagreeing
 # document what its route acts on (an analysis, a proposed topic, a tag link), so that the
@@ -498,6 +532,9 @@ ROUTES_RETURNING_SOURCE_ROWS = {
     # FR-14: recent documents and meetings, and the offered departments, which would carry the
     # disagreeing document's "Board office" if they were read from anything but the scoped rows.
     ("api/dashboard", "GET"): _lists("/api/dashboard"),
+    # FR-20 (D-132): the map's document and meeting nodes, and the tag and contributor nodes
+    # reached through them.
+    ("api/knowledge-map", "GET"): _maps,
     # FR-15: the documents, the department facet ("Board office") and a tag facet (D-72).
     ("api/documents/browse", "GET"): _browses,
     # FR-15's delete returns no row, but its status code is one: 404 says nothing, while 403 or
