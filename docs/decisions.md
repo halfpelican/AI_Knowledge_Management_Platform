@@ -9692,6 +9692,10 @@ moved across.**
 
   D-131's startup check is meant to refuse both.
 
+**Dated note, 14 November 2026: `--resize-column` removed.** A database keeps the provider it was
+set up with (D-131), and `reindex` no longer resizes a column or takes another provider. D-131's
+note of 14 November records what replaced it.
+
 ## D-118 · A provider's 4xx ends in NFR-19's 503: a rate limit is retried, any other 4xx is refused at once, and each is logged
 
 **Status:** Settled by the user · **Date:** 2026-11-10 · **Concerns:** NFR-19, FR-08, FR-10, FR-12,
@@ -12135,3 +12139,111 @@ records each step.
   as it is.
 - **The order of entries at merge.** D-128 and D-129 (#102) and D-130 (the FR-03 session's branch)
   are not on `main` yet. Whichever of these entries merges later puts them back in number order.
+
+**Dated note, 14 November 2026: the rule built.** On `fix/FR-08-provider-fixed-at-setup`, stacked
+on this entry's branch.
+
+- **The width follows the provider.** `EMBEDDING_DIMENSION_BY_PROVIDER` in `apps/core/constants.py`
+  gives 1024 for `anthropic` and 768 for `flm`, and `config/settings.py` takes
+  `EMBEDDING_DIMENSION`'s default from it. A line in `.env` is still read, so an existing `.env`
+  keeps working. One that disagrees with `AI_PROVIDER` is refused at startup (ai.E004).
+- **The database must have been set up for the provider.** `check_database_provider`
+  (`apps/ai/checks.py`) reads both vector columns' widths from Postgres
+  (`apps/core/vector_columns.py`).
+  - **A column of another width is an Error (ai.E005),** naming each column that differs. Every
+    command that runs the checks stops: `runserver`, `migrate`, `check`, `check --deploy`,
+    `reindex`.
+  - **Rows embedded by another model are a Warning (ai.W003).** Retrieval leaves them out (R10).
+  - **A table not created yet, or a database that cannot be read, is passed over.**
+- **`reindex`.** `--resize-column` is removed. `--provider` no longer overrides `AI_PROVIDER`: it
+  is a confirmation, and another provider is refused before the provider is asked. A stored
+  column of another width is refused, for a caller that skips the checks.
+- **ai.E001's hint** no longer sends anyone to re-index.
+- **Waitress runs no checks,** so `docs/alpha-deployment.md` step 6 runs `manage.py check` before
+  starting it.
+- **`CLAUDE.md` §4** carries the wording the user approved on 14 November: the provider chosen at
+  setup, a database keeping it, a change of provider meaning a new database, `reindex` limited to
+  the database's own provider, and no `EMBEDDING_DIMENSION=768` in the FLM block.
+- **Also updated:** `README.md` (setup, the FLM block, "Changing provider: a new database", the
+  alpha), `.env.example` (no `EMBEDDING_DIMENSION` line), `docs/ai-provider.md` §4, and
+  `docs/measurement-runbook.md` ("A database for another provider", in place of the copy that was
+  moved across).
+
+**The session's choices, not the user's:**
+- ai.W003 is a warning, not an error. Rows of another model are left out of retrieval rather than
+  ranked, and `reindex` stays usable for a change of model within one provider, at one width.
+- The database check skips silently when it cannot read the database. A command that needs the
+  database then fails on its own, and nothing is served from it.
+- The database check has a tag of its own, `embedding`, because the suite runs `check --tag ai`
+  without a database.
+
+**Tests.** Each test below fails under at least one deliberate break, listed after the table. The
+table was generated from the break runs, against `apps/ai/tests/test_checks.py` (unless another
+file is named), `apps/ingestion/tests/test_reindex.py`, `apps/ingestion/tests/test_reindex_summaries.py`
+and `apps/core/tests/test_constants.py`. Unbroken, those four pass: 134 tests.
+
+| Test | Fails under |
+|---|---|
+| `test_dimension_mismatch_is_an_error` (changed) | X12 |
+| `test_the_setting_check_is_registered_under_the_ai_tag` | X21 |
+| `test_a_width_that_agrees_with_the_provider_passes` | X19 |
+| `test_a_width_that_disagrees_with_the_provider_is_an_error` | X2, X3 |
+| `test_an_unknown_provider_is_left_to_ai_e002` | X20 |
+| `test_the_database_check_has_a_tag_of_its_own` | X11 |
+| `test_a_database_of_this_providers_width_passes` | X22 |
+| `test_a_database_set_up_for_another_width_is_an_error_naming_both_columns` | X4, X5 |
+| `test_a_gap_column_left_at_another_width_is_an_error_naming_it_alone` | X4, X22 |
+| `test_an_unsized_gap_column_is_an_error_too` | X4, X18, X22 |
+| `test_a_table_not_created_yet_is_passed_over` | X6 |
+| `test_a_database_that_cannot_be_read_is_passed_over` | X7 |
+| `test_rows_of_another_model_are_a_warning_naming_them` | X9, X22 |
+| `test_rows_of_the_configured_model_are_silent` | X10, X22 |
+| `test_rows_are_compared_with_the_providers_own_model_name` | X8, X17, X22 |
+| `test_manage_py_check_refuses_a_database_set_up_for_another_width` | X5, X11 |
+| `test_resize_column_is_gone` (`test_reindex.py`) | X23 |
+| `test_a_column_of_another_width_is_refused_and_a_new_database_is_named` (`test_reindex.py`) | X15, X16 |
+| `test_another_provider_is_refused_and_the_setting_is_left_alone` (`test_reindex.py`) | X13, X14 |
+| `test_naming_the_configured_provider_is_an_ordinary_reindex` (`test_reindex.py`) | X24 |
+| `test_each_provider_has_its_models_width` (`test_constants.py`) | X2, X25 |
+| `test_the_suites_own_width_is_its_providers` (`test_constants.py`) | X25 |
+| `test_settings_take_the_width_from_the_provider` (`test_constants.py`) | X1, X2, X25 |
+
+- X1: the width no longer follows the provider: a fixed default of 1024.
+- X2: FLM's width is given as 1024.
+- X3: ai.E004 never fires.
+- X4: ai.E005 reads the chunks' column only, not the gap column.
+- X5: a database of another width is only a warning.
+- X6: a table not created yet is not passed over.
+- X7: a database that cannot be read is not passed over.
+- X8: rows are compared with VOYAGE_MODEL whatever the provider.
+- X9: ai.W003 never fires.
+- X10: a row with no model counts as another model's.
+- X11: the database check is registered under the ai tag.
+- X12: ai.E001's hint sends people to re-index again.
+- X13: reindex no longer refuses another provider.
+- X14: reindex --provider overrides AI_PROVIDER for the run, as before D-131.
+- X15: reindex skips the column guard.
+- X16: the column guard refuses only an unsized column.
+- X17: the configured embedding model is VOYAGE_MODEL whatever the provider.
+- X18: an unsized column's modifier is taken as its width.
+- X19: ai.E004 fires on a width that agrees with the provider.
+- X20: ai.E004 reports an unknown provider instead of leaving it to ai.E002.
+- X21: ai.E004 is not registered.
+- X22: ai.E005 fires on a database of this provider's width.
+- X23: reindex accepts --resize-column again.
+- X24: reindex refuses the configured provider too.
+- X25: anthropic's width is given as 1280.
+
+The first run of X19 to X25 errored throughout because Docker had stopped. They were run again
+once the database was back, and the table uses that run.
+
+**Not covered:**
+- **`C:\kmp-demo\2026-11-13\serve-alpha.ps1`,** which is outside the repository, gains the same
+  `manage.py check` when the alpha is redeployed with this code.
+- **Databases the new check will refuse.** `kmp_obj05_d128_20261113`, the FR-10 session's, has
+  chunks at 768 and its gap column at 1024. `kmp_voyage_20261110` has no FR-19 tables, so it would
+  meet the same refusal only if migrated under the other width.
+- **A database that cannot be read passes the check vacuously,** as above.
+- **Only the default database is read.** The project has no other.
+- **The front-end suite.** No front-end file changed. The full backend suite passed at
+  `331acb3`: 4,421 tests in 29 min 29 s, with dual-role coverage 43 of 43.
