@@ -449,6 +449,7 @@ describe('D-128: an Administrator adds a tag value', () => {
     // D-129: the AI adds no value of its own; a new topic waits for a person, and a
     // project or process outside the list is discarded (Objective 05 clause 3).
     expect(TEXT.tagCreateAiNote).toMatch(/does not add values of its own/)
+    expect(TEXT.tagCreateAiNote).toMatch(/assigns values already in this list/)
     expect(TEXT.tagCreateAiNote).toMatch(/waits for a person to confirm it/)
     expect(TEXT.tagCreateAiNote).toMatch(/project or process outside the list is discarded/)
     expect(TEXT.tagCreateAiNote).toMatch(/retired topic comes back only if a person/)

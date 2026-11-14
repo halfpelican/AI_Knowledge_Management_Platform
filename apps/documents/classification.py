@@ -451,8 +451,10 @@ def apply_classification(
        ``model``, ``input_truncated``, ``classified_at`` — are ALWAYS overwritten, whatever a
        person has decided: "the machine assignment is retained alongside it so that
        classification accuracy can be measured over time".
-    2. **Type**, unless ``user_edited``: provisional when its confidence is below
-       CLASSIFICATION_CONFIDENCE_THRESHOLD, in which case ``doc_type`` is None; otherwise applied
+    2. **Type**, unless ``user_edited``: provisional when its confidence is below the classifying
+       model's threshold, ``confidence_threshold(model)`` (D-122: 0.72 for claude-haiku-5-5,
+       CLASSIFICATION_CONFIDENCE_THRESHOLD for any other model), in which case ``doc_type`` is
+       None; otherwise applied
        and ``doc_type`` is the machine type. A type outside DOCUMENT_TYPES is a contract
        violation the parser should have refused and raises ``InvalidClassification`` before
        anything is written.
@@ -684,7 +686,8 @@ def department_threshold(model: str) -> float:
     November 2026).
 
     A model CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL lists gets its own department
-    value: claude-haiku-5-5's 0.30, chosen by D-106's rule on departments alone. Any other gets the
+    value: claude-haiku-5-5's 0.30, D-106's rule's result on departments alone, which the user chose
+    over the pooled 0.25 (D-129). Any other gets the
     shared value for that model, ``confidence_threshold(model)``, so gemma3:4b keeps 0.95. The type and
     the tags never read this. Both maps are read at call time, so a test that reassigns one is
     honoured.

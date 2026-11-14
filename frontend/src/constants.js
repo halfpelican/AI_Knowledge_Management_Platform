@@ -1489,7 +1489,7 @@ export const TEXT = {
   tagCreateScope:
     'A value added here is offered for every document, whatever its audience: to everyone who tags a document, and to the AI when it classifies one. Anyone who can read a document can see its name.',
   tagCreateAiNote:
-    'The AI does not add values of its own. When it classifies a document it applies values already in this list; a new topic it suggests waits for a person to confirm it, and a project or process outside the list is discarded. A retired topic comes back only if a person confirms or names it again, on a document everyone can read.',
+    'The AI does not add values of its own. When it classifies a document it assigns values already in this list; a new topic it suggests waits for a person to confirm it, and a project or process outside the list is discarded. A retired topic comes back only if a person confirms or names it again, on a document everyone can read.',
   tagCreateNameLabel: 'Name',
   // The server stores a name trimmed, single-spaced and in lower case, so the name the
   // list shows, and the 201 announces, can differ from the one typed in case alone.
@@ -1579,7 +1579,7 @@ export const TEXT = {
   // that a retired department comes back this way, which is the only way back.
   departmentCreateHeading: 'Add a department',
   departmentCreateScope:
-    'A department added here can be assigned to any document, whatever its audience. Adding the name of a retired department brings it back.',
+    'A new department added here can be assigned to any document, whatever its audience. Adding the name of a retired department brings it back as it was before it was retired.',
   departmentCreateNameLabel: 'Department name',
   // The server trims a name and single-spaces it, and keeps its case (D-129: departments
   // keep their case on documents, unlike tags).

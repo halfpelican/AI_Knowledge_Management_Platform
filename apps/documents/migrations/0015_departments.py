@@ -25,14 +25,17 @@ already in use, and nothing a classification is offered changes merely because t
   time. So a department is seeded vocabulary only where today's rule already offers it to every
   audience, and after this migration no audience is offered a department it was not offered
   before. A spelling the deduplication folds away is no longer offered at all: the list holds one
-  spelling, and a department in use but not listed is not suggested.
+  spelling, and a department in use but not listed is not assigned.
 
   *Corrected on 13 November 2026, after this migration was pushed, by D-129's security review,
-  finding F1. Only this comment changed; the operations did not. At run time ``tag_scheme`` now
-  offers a grown department only for an audience every role of which reads everything
-  (``reads_everything``), and consults no document carrying it. The seed's exact-spelling test
-  still decides ``grown`` and still errs toward hidden, and F1 only narrows what any audience is
-  offered.*
+  finding F1, and on 14 November after the re-audit of d909537 (C6). Only this comment changed;
+  the operations did not. At run time ``tag_scheme`` now offers a grown department only for an
+  audience every role of which reads everything (``reads_everything``), and consults no document
+  carrying it. The seed's exact-spelling test still decides ``grown`` and still errs toward
+  hidden. F1 narrows what an audience with a role that does not read everything is offered (no
+  grown department), and widens what an audience every role of which reads everything is offered
+  (every active grown department, carried or not). So the guarantee above holds for every
+  audience but that one, which reads every source, so nothing is disclosed.*
 
   - **Readable by role r:** the document's ``visible_to_roles`` overlaps r's effective roles,
     mirroring ``apps/retrieval/scoping.py::_in_scope``.

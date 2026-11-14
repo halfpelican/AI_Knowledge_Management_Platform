@@ -1,5 +1,5 @@
 /**
- * FR-10's department list (D-129): the departments the AI may suggest for a document,
+ * FR-10's department list (D-129): the departments the AI may assign to a document,
  * the scheme's fourth dimension beside Project, Process and Topic, kept by an
  * Administrator on the Tags page. Thin wrappers over the one API client; no fetch and no
  * XMLHttpRequest here.

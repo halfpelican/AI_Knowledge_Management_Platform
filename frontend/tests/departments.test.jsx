@@ -312,6 +312,21 @@ describe('D-129: the department list, as the server sent it', () => {
     expect(TEXT.departmentsRetiredNote).toMatch(/AI no longer assigns it/)
   })
 
+  it('says throughout that the AI assigns departments, never that it suggests them, since the model may name one that is not listed', () => {
+    // The re-audit of d909537 (C8): six of the department strings were pinned by no test.
+    for (const copy of [
+      TEXT.departmentsUploadNote,
+      TEXT.noDepartments,
+      TEXT.departmentDeleteBody,
+      TEXT.departmentCreateScope,
+      TEXT.departmentCreated('Finance'),
+      TEXT.departmentReactivated('Finance'),
+    ]) {
+      expect(copy).toMatch(/assign/)
+      expect(copy).not.toMatch(/suggest/)
+    }
+  })
+
   it('says before anything is added that a new department is offered for every document, and that adding a retired one’s name brings it back', async () => {
     serveApi(routes())
     renderTags()
@@ -323,6 +338,7 @@ describe('D-129: the department list, as the server sent it', () => {
     expect(create.getByText(TEXT.departmentCreateScope)).toBeTruthy()
     expect(TEXT.departmentCreateScope).toMatch(/any document, whatever its audience/)
     expect(TEXT.departmentCreateScope).toMatch(/name of a retired department brings it back/)
+    expect(TEXT.departmentCreateScope).toMatch(/brings it back as it was before it was retired/)
     expect(nameField().tagName).toBe('INPUT')
     expect(addButton().getAttribute('type')).toBe('submit')
     // Someone who tabs straight to the name hears the scope as well as the hint.

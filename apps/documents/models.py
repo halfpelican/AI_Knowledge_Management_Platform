@@ -198,7 +198,7 @@ def normalise_department_name(value: str) -> str:
 
 
 class Department(models.Model):
-    """FR-10's department scheme: the departments the classifier may suggest (D-129, the lead's
+    """FR-10's department scheme: the departments the classifier may assign (D-129, the lead's
     decision of 13 November 2026). Departments are the fourth dimension of FR-10's scheme, beside
     Project, Process and Topic, and an Administrator keeps the list on the Tags page
     (``GET``, ``POST`` and ``DELETE`` ``/api/departments``, behind ``manage_tags``).
@@ -218,7 +218,8 @@ class Department(models.Model):
     - ``Documents.department`` stays the one field FR-14 and FR-15 read (D-72);
     - FR-08's upload field stays free text, and so do its server validation and the classification
       confirm/edit control. A department typed there that is not in the list stays on the
-      document, and the classifier suggests only listed departments.
+      document, and the classifier assigns only listed departments: the model may name any other,
+      which is discarded.
 
     **The flags.**
 
