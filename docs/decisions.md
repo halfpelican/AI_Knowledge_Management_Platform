@@ -12390,6 +12390,9 @@ by executing probe tests against its own test database.
 - **A NUL or lone surrogate in a suggested department** still answers 500 on the classify route,
   because rule 3 writes `machine_department` unchecked. It is the same defect as item 5, on a path
   D-128 does not change.
+  *Closed by #106, merged on 13 November: the parser now refuses a reply holding a NUL or an
+  unpaired surrogate anywhere. Such a reply is retried, and after three attempts the classify route
+  answers 503 (D-129's notes of 14 November).*
 
 **Checked and sound by the review:**
 
@@ -12836,7 +12839,8 @@ unchanged but for its opening paragraph.
   changed.** It is an Administrator's own input, and the security review's finding 5 concerned values
   that uploaded content can create. Recorded as open.
 - **Still open, unchanged:**
-  - a NUL in a suggested department answers 500;
+  - a NUL in a suggested department answers 500 (*closed by #106 on 13 November; see the note
+    above*);
   - the race between deleting a tag and an upload;
   - the scheme's growth (all above).
 
@@ -13259,10 +13263,12 @@ proposed for confirmation in the Topic dimension only".
   byte-identical to #85's commit `a9934eb`. Since then one sentence of the module's docstring names the
   department threshold below; the prompt text is unchanged. Rule 6 allows a new Topic only, and never a new Project,
   Process or department.
-  *Since the merge of `main` on 13 November (`bc0b5b6`) these three files are no longer
-  byte-identical to `a9934eb`. `apps/ai/classification.py`, `test_classification_loop.py` and
-  `test_classification_schema.py` carry #105 and #106's parser changes. The prompt text is still
-  unchanged.*
+  *Since the merge of `main` on 13 November (`bc0b5b6`), `apps/ai/classification.py` and
+  `test_classification_schema.py` are no longer byte-identical to `a9934eb`. They carry #105 and
+  #106's parser changes, as does `test_classification_loop.py`, which D-129 did not restore.
+  `test_classification_prompt.py` is still byte-identical, and the prompt text is unchanged. This
+  note first named the loop test in place of the prompt test; it was corrected on 14 November,
+  after the re-audit of `d909537` (C9).*
 - **The threshold:** `CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]` is 0.72 again
   (D-122). The 0.80 of D-128 was derived on the revised prompt, which no longer ships.
 - **Rule 4 for a value outside the scheme,** or retired since the scheme was built:
@@ -13352,6 +13358,13 @@ documents were not tagged automatically.
   reply is refused and retried as a whole (the note on the one exception, above).*
 - **A Topic over 255 characters is proposed,** as on `main`, and can only be rejected: confirming it
   is the existing 400.
+  *Corrected on 14 November, after the re-audit of `d909537` (C15): it can be neither confirmed nor
+  rejected.*
+  - *Both proposed-tags routes validate the value with `ProposedTagSerializer`, capped at 255
+    characters, as #85's `ProposedTopicSerializer` was. So both answer 400.*
+  - *The proposal stays until a run replaces the list. With no rejection recorded, a later run can
+    propose it again.*
+  - *It is recorded under "Not covered".*
 - **The proposal record keeps D-128's shape:** `proposed_tags` on the `proposed_topics` column, with a
   dimension on each entry. Migration 0012 is pushed, and the routes and the screen read that shape.
 - **A database classified under D-128 keeps what D-128 made.** Its grown tags and AI links are not
@@ -13428,6 +13441,9 @@ He answered three tabbed questions, each with the recommended option:
 - **The upload field stays free text.** FR-08's form and the classification confirm/edit control are
   unchanged. A department typed there that is not in the list stays on the document, and the
   classifier suggests only listed departments.
+  *Read "assigns" for "suggests" (14 November, the re-audit of `d909537`, C7). Only a listed
+  department admitted for the document's audience is applied or held. The model may name any other,
+  which is discarded and shown as "not one of the known departments".*
 - **Retiring keeps a department on its documents,** and in FR-14 and FR-15's filters, which read
   `Documents.department` unchanged (D-72). A department no document uses is deleted.
 
@@ -13458,6 +13474,7 @@ He answered three tabbed questions, each with the recommended option:
 - **The screen:** a Departments section on the Tags page with the list, Retire or Delete, an "Add a
   department" form, and help text saying:
   - the AI suggests a department only from this list;
+    *since `44743ce` the screen says the AI assigns a department only from this list (C7);*
   - the upload form still accepts any department;
   - a retired department stays on its documents.
 
@@ -13516,10 +13533,17 @@ finding with probe tests against its own test database.
      vocabulary; that would need a decision.
      *Qualified after the re-audit of `6e77913` (B8): this holds while some document uses the name,
      compared ignoring case and exactly in spacing. See finding 3's note.*
+     *Read "never assigned" for "never suggested" (14 November, C7). Such a department is never
+     offered to the model, applied or held there. The model may still name it from the text, and it
+     is then discarded and shown as "not one of the known departments".*
    - **Kept:** the user's three choices.
 2. **LOW: a department retired or deleted while a classification's provider call was running was
    still written** into a blank department. Fixed: at apply time, a department with no active row is
    outside the scheme and discarded, the same answer as for an unknown name.
+   - **What is left** (found by the summary checks of 14 November): the check is one unlocked read
+     just before writing. A department retired after it, but before the classification's transaction
+     commits (an upload's embedding included), is still written, as `_still_listed`'s docstring
+     says.
 3. **LOW: "in use" and `item_count` compared exactly, while the list is unique ignoring case.** A
    hidden department whose remaining carriers spelled it differently counted as unused, could be
    deleted, and could come back as vocabulary. Fixed: both compare ignoring case.
@@ -13588,6 +13612,10 @@ finding with probe tests against its own test database.
     of `6e77913` found it recorded nowhere for FR-10. It is recorded here.
 - **Which departments are hidden** is not shown on the Tags page: `GET /api/departments` carries no
   `grown`. That is an observation of the re-audit, not an FR-10 clause.
+- **A proposed Topic over 255 characters** can be neither confirmed nor rejected. Both
+  proposed-tags routes cap the value at 255 characters, as #85's routes did. Rejecting needs no such
+  cap, since `reject_proposed_tag` writes only JSON. Letting the reject route take a longer value,
+  with tests from both roles, is a follow-up for the user to decide. It predates D-128 and D-129.
 
 **The re-audit of `6e77913` (13 November 2026), verbatim.** This is the `requirements-auditor` agent's
 report, quoted whole and unedited, and extracted mechanically from the agent's transcript. Its line
@@ -13885,7 +13913,8 @@ department list and F1 to F4 built as recorded, and returned INCOMPLETE for the 
   - Run on departments alone, reported for information, it gives 0.30.
   - The user chose 0.30 for departments and kept D-122's 0.72 for types and tags.
 
-  The pull request says the same.
+  The pull request says the same. Its description was updated on 14 November, after the re-audit of
+  `d909537` found it had not been (C2).
 - **B4:** a note on how rarely Haiku's department half of clause 2 is exercised, under "Clause 2 is
   read per kind".
 - **B8:** recorded under finding 3, with a qualification on finding 1's cost.
@@ -13901,8 +13930,9 @@ department list and F1 to F4 built as recorded, and returned INCOMPLETE for the 
       departments".
     - This entry's own "suggests only listed departments" (the upload-field choice, and the screen's
       help text) is to be read as "assigns" in the same sense.
-    - The four tests that quote the copy were updated. Each failed when its old string was put back:
-      four breaks, each reverted.
+    - The four assertions that quote the copy were updated. They are in three tests, and were first
+      recorded here as "four tests" (corrected on 14 November, C8). Each failed when its old string
+      was put back: four breaks, each reverted.
   - **Which departments are hidden:** recorded under "Not covered".
 - **B11, the merge of `main`:** dated notes on "byte-identical", on the one exception and on the
   literal departure. #106 also closes D-128's open residual, a NUL in a suggested department answering
@@ -13910,3 +13940,304 @@ department list and F1 to F4 built as recorded, and returned INCOMPLETE for the 
 - **UC-09 E1's queue:** recorded under "Not covered".
 - **The summary for the lead** was corrected, line by line as the report gives it, before it was
   sent.
+
+**The focused re-audit of `d909537` (14 November 2026), verbatim.** This is the `requirements-auditor`
+agent's report, quoted whole and unedited. It was extracted mechanically from the agent's transcript,
+and checked against the workflow's own record of its result. Its line numbers are at `d909537`,
+before the corrections above shifted this entry. What changed because of it follows the quotation.
+
+> ## Focused re-audit: FR-10 (D-129) at d909537 — 14 November 2026
+>
+> **Verdict:** INCOMPLETE. D-129's code is as recorded, and every test I ran at d909537 passes, but four records are wrong or unsupported:
+> - `12e2ff8` added two false statements: documents 0015's "F1 only narrows what any audience is offered", and a merge note that names the wrong three files.
+> - "The pull request says the same" is not supported by any evidence I could find.
+> - D-129 still says a Topic over 255 characters "can only be rejected", but both proposed-tags routes refuse it.
+>
+> ### Scope and method
+>
+> - **Read only.** I edited, created, staged and deleted nothing in the worktree. The final `git status` shows only `?? corpus/objective-05/runs/2026-11-13-d129/`, which was there before I started. HEAD is `d909537`.
+> - **Where my probes and outputs are:** C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit3\r2\.
+> - **The scratch front-end copy** at C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit3\fe was made by an earlier attempt at this audit.
+>   - I checked that it is identical to the worktree's `frontend/src`, `tests`, `public` and `package.json`.
+>   - Its `vite.config.js` adds only a `cacheDir`, and its `node_modules` is a junction to the worktree's.
+>   - I re-ran everything myself.
+> - **Line numbers** are at `d909537`.
+>
+> ### Findings
+>
+> **C1. B1, the red suite and its record: MET.**
+> - **The builder:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\tests\classification_builders.py:56-68. Each listed department becomes an active row unless one exists ignoring case (67-68).
+> - **The record:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\decisions.md:13553-13565.
+>   - Production's single caller holds: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\classification.py:436 is the only call of `apply_classification` outside tests.
+> - **The builder's limit, executed (probe R2):**
+>   - with no row, a row is made and the department is applied;
+>   - with a row "FINANCE", it is discarded;
+>   - with a retired "Finance", it is discarded.
+>   - This is as recorded: `_still_listed` compares exactly and needs an active row (classification.py:713-723).
+> - **"Before the report arrived":** `140014c` is 09:22:04Z, and the report was handed back at 09:38:05Z.
+> - **The four files B1 named pass at `d909537`** (within the 878 below).
+> - **Not observed:** a full pytest at `d909537` (see "Could not check").
+>
+> **C2. B3, the account of the department threshold: PARTIAL.**
+> - **D-129's own text is accurate:** decisions.md:13380-13400, and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\core\constants.py:723-730.
+> - **"The pull request says the same" (decisions.md:13888) is unsupported.**
+>   - In the coordinator's transcript, PR #102's body was last replaced at 00:33:55Z on 13 November, from `pr-body.md`. That was before the threshold run at 00:53Z. The only later edit, at 10:04:27Z, changed the title.
+>   - The one D-129 body draft is C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\pr-body-d129.md, written at 09:07Z and applied in no transcript. Its line 33 says "It was set by D-106's rule on the 19 development documents". That is the wording B3 called an overstatement.
+> - **The same overstatement is in code:** classification.py:686-687, `department_threshold`'s docstring, says "claude-haiku-5-5's 0.30, chosen by D-106's rule on departments alone".
+> - **Fix:**
+>   - Give PR #102's body the three-point account at decisions.md:13884-13886, or delete "The pull request says the same."
+>   - Make classification.py:687 read "claude-haiku-5-5's 0.30, D-106's rule's result on departments alone, which the user chose over the pooled 0.25 (D-129)".
+>
+> **C3. B4: MET.**
+> - **The note:** decisions.md:13407-13413.
+> - **The evidence:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\corpus\objective-05\runs\2026-11-13-tag-threshold\threshold\tag-threshold.json, `departments_only`:
+>   - right 56, wrong 1;
+>   - lowest right 0.30;
+>   - no department outside the scheme;
+>   - a score of 56 at both 0.0 and 0.30.
+> - **What that means:** the table scores right-at-or-above plus wrong-below (it gives 1 at 1.0). So all 57 suggestions are at or above 0.30, as the note says.
+>
+> **C4. B8: MET.**
+> - **The record:** decisions.md:13517-13518 and 13526-13534.
+> - **Each fact holds:**
+>   - **The seed collapses spacing:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\migrations\0015_departments.py:66-69 and 80.
+>   - **It decides `grown` on the kept spelling exactly:** 0015:106.
+>   - **"In use" lowers both sides and compares spacing exactly:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\taxonomy.py:221-241.
+>   - **The upload field only trims:** C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\serializers.py:270-271.
+>   - **Confirm only strips:** classification.py:845-846.
+>   - **An added name is not grown:** taxonomy.py:303.
+>
+> **C5. B10, `apps/ai/base.py`: MET.**
+> - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\base.py:72-76 states F1's rule in the re-audit's wording.
+> - It matches `tag_scheme` (classification.py:309-321 and 331).
+>
+> **C6. B10, documents 0015's dated correction: PARTIAL.**
+> - **Only the comment changed: MET.**
+>   - Only `e04a746` and `12e2ff8` ever touched 0015.
+>   - `e04a746` is on `origin/feat/FR-10-automatic-tagging` (the local remote-tracking ref).
+>   - With its docstring removed, the module is AST-identical at `e04a746`, `6e77913` and `d909537`.
+>   - `makemigrations --check --dry-run` reports "No changes detected" (probe R1).
+> - **The correction's last clause is false.** 0015_departments.py:34-35 says "F1 only narrows what any audience is offered."
+> - **Probe R4** compares `d909537`'s `tag_scheme` with the pre-F1 rule on the same rows, with a grown "Legal". The pre-F1 rule is `ce4e9d3`'s `apps/documents/classification.py`, which is identical to `e04a746`'s.
+>
+> | Carrier, on an Administrator-only document | Administrator-only document, pre-F1 | Administrator-only document, F1 | Employee-visible document, pre-F1 | Employee-visible document, F1 |
+> |---|---|---|---|---|
+> | none | not offered | offered | not offered | not offered |
+> | "LEGAL" | not offered | offered | not offered | not offered |
+> | "Legal" | offered | offered | not offered | not offered |
+>
+> - **So F1 widens one audience.** For an audience every role of which reads everything, it offers every active grown department, whether or not a document carries it. It narrows only for other audiences.
+> - **Nothing is disclosed,** because that audience reads every source.
+> - **Why the clause matters:** it is the sentence that tells a reader the migration's own guarantee survives F1. That guarantee is at 0015:25-27: "no audience is offered a department it was not offered before".
+> - **The guarantee no longer quite holds.** Take a grown department whose kept spelling no document carries exactly, because the seed collapses spacing. It is now offered for an Administrator-only document, and no audience was offered that spelling before. This is reasoning from the same code, not a separate probe.
+> - **Fix (comment only, which §7 permits; log it in D-129):** replace "and F1 only narrows what any audience is offered" with: "F1 narrows what any audience with a role that does not read everything is offered (no grown department), and widens what an audience every role of which reads everything is offered (every active grown department, carried or not). That audience reads every source, so nothing is disclosed."
+>
+> **C7. B10, "suggests" to "assigns": PARTIAL (low).**
+> - **Done as claimed:**
+>   - the ten strings in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\constants.js:1524-1592;
+>   - the comments in C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\components\Departments.jsx:149-163;
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\api-contract.md:1336-1337 and 1354-1355.
+>   - No "suggest" is left in the department copy. No copy of the old strings is left anywhere else in the repository outside `node_modules`.
+> - **Left unchanged in D-129's own text:**
+>   - decisions.md:13428-13430 and 13458-13460 still say "suggests". They are corrected only by a reading note about 440 lines later (13902-13903), so 13460 now misreports what the screen says.
+>   - decisions.md:13514 says "a hidden department is never suggested for an Employee-visible document". The reading note does not cover it. It is the sentence the re-audit's table called "Wrong as worded" (13802): the model can name the department, and the detail page then says "The AI suggested “X”, which is not one of the known departments" (constants.js:698-699).
+> - **Left unchanged in code:**
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\documents\models.py:221 says "the classifier suggests only listed departments". That is exactly the claim B10 corrected on the screen.
+>   - Three more places say the same:
+>     - models.py:201;
+>     - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\src\api\departments.js:2;
+>     - 0015_departments.py:28.
+> - **Fix:**
+>   - At decisions.md:13430, 13460 and 13514, add inline italic dated notes like the one at 13425-13427, saying "assigns": only a listed department admitted for the audience is applied or held; the model may name any other, which is discarded and shown as not one of the known departments.
+>   - Use "assign" in models.py:201 and 221 and in departments.js:2.
+>   - Do the same at 0015:28 if 0015's comment is edited for C6.
+>
+> **C8. B10, the four changed front-end assertions: PARTIAL (low). The breaks hold; the count in the record does not.**
+> - **Each assertion fails when its string's old wording is put back.** I did this on the scratch copy only.
+>   - C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\frontend\tests\departments.test.jsx:307, 312, 392 and 435 each gave 30 passed and 1 failed, against 31 passed unbroken.
+>   - Putting each old regex back against the new copy fails it too.
+> - **They are four assertions in three tests, not "four tests".** decisions.md:13904 and `44743ce`'s message both say "four tests". Lines 307 and 312 are in the same test, at line 300.
+> - **Six of the ten strings are pinned by nothing.** Put "suggest" back in any of the following and the file still passes 31 of 31:
+>   - `departmentsUploadNote`;
+>   - `noDepartments`;
+>   - `departmentDeleteBody`;
+>   - `departmentCreateScope`;
+>   - `departmentCreated`;
+>   - `departmentReactivated`.
+> - **Fix:** say "four assertions, in three tests". Optionally, add `toMatch(/assign/)` for each of the six.
+>
+> **C9. B11, the notes on the merge: PARTIAL.**
+> - **True at `d909537`:** the one exception (decisions.md:13275-13279), the literal departure (13351-13352), and the closure of D-128's residual (13907-13909). The evidence:
+>   - `loads_reply` refuses a NUL or an unpaired surrogate in any key or value: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\schema.py:190-209 and 246-248.
+>   - Both providers parse through `run_classification_attempts`: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\anthropic.py:236 and C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\flm.py:173.
+>   - Three replies with a NUL in the department end in `ProviderUnavailable` after exactly three calls (probe R3).
+>   - The route then answers 503: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\api\views.py:1952-1959.
+>   - Ingestion leaves the document unclassified: C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ingestion\documents.py:321-334.
+>   - The refusal is #106's: `8391990` reaches `55d9455`, not `6e1efd1`.
+>   - It is tested at C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\apps\ai\tests\test_classification_schema.py:374-390.
+> - **Wrong: the note on "byte-identical", decisions.md:13262-13265.**
+>   - "These three files" are the ones D-129 restored: `apps/ai/classification.py`, plus the two test files `fa58690` restored, `test_classification_prompt.py` and `test_classification_schema.py`.
+>   - The note names `test_classification_loop.py` in place of the prompt test. D-129 never restored the loop test.
+>   - The note also says all three are no longer byte-identical. But `test_classification_prompt.py` is still byte-identical to `a9934eb`: its blob is `44bdafeefe` at both commits.
+> - **Not annotated:** D-128 still says the residual is open, at decisions.md:12390-12392 ("still answers 500 on the classify route") and 12838-12839.
+> - **Fix:**
+>   - Make 13262-13265 read: "*Since the merge of `main` on 13 November (`bc0b5b6`), `apps/ai/classification.py` and `test_classification_schema.py` are no longer byte-identical to `a9934eb`: they carry #105 and #106's parser changes, as does `test_classification_loop.py`, which D-129 did not restore. `test_classification_prompt.py` is still byte-identical. The prompt text is unchanged.*"
+>   - Add a dated note at D-128's 12390 and 12839: closed on this branch by #106 at `bc0b5b6`; such a reply is retried, then answered 503 (D-129).
+>
+> **C10. UC-09 E1, and which departments are hidden: MET.**
+> - **The record:** decisions.md:13583-13590.
+> - **The quotation** matches C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt:2075 word for word.
+> - **D-119's audit names it** at decisions.md:10055 ("Outside the FR text, not counted as gaps: UC-09 E1's queue…").
+> - **Nothing retries a failed classification by itself.** `classify_document_now` is called only by:
+>   - the classify route (views.py:1946);
+>   - ingestion (ingestion/documents.py:323);
+>   - `classify_documents`.
+> - **`GET /api/departments` carries no `grown`** (serializers.py:428-437).
+>
+> **C11. B2, B5, B6, B7 and B9, MET at `6e77913`, still hold: MET.**
+> - **What the five commits changed** in `apps/documents`, `apps/api`, `apps/core` and `apps/retrieval`:
+>   - the builder;
+>   - main's unquoted `doc_type` message (classification.py:543-547), with its assertion in `test_classification_apply.py`;
+>   - 0015's comment.
+> - **Unchanged:** the prompt, the constants, the models, the taxonomy, the serializers, the views and the scoping.
+> - **Their tests pass** in the runs below.
+> - **Invariant 1 holds:** probe R4 shows an Employee-visible document is never offered a grown department, with or without carriers.
+>
+> **C12. PR #107 changes nothing D-129 or FR-10's parsing relies on: MET.**
+> - `d909537` differs from `12e2ff8` only in `apps/ai/schema.py` and `apps/ai/tests/test_code_fence_scan.py`. Both are identical to main's `a948b50`.
+> - **What it changes:** the code-fence repair (schema.py:93-153) becomes a scan that returns what the two regexes returned. `test_code_fence_scan.py` passes, including its exhaustive comparison with a frozen copy of the old function.
+> - **What it does not change:** no classification file, prompt or NUL refusal.
+> - So D-129 needs no note for #107, and its "#105 and #106" list (13264) stays complete.
+>
+> **C13. `docs/api-contract.md`'s Departments section and `docs/schema-v1.md`'s Departments table agree with the code: MET.**
+> - **The contract** (api-contract.md:1334-1355) agrees with views.py:2234-2310, serializers.py:428-481 and taxonomy.py:221-348 on:
+>   - 401 and then 403 on every route;
+>   - a POST-only `tagging` throttle, on one budget with `POST /api/tags` (views.py:2188-2190);
+>   - 201 for a new name, not grown;
+>   - 200 for a retired name, reactivated with its spelling and `grown` kept;
+>   - 409 `{detail, department_id}`;
+>   - the 400 causes;
+>   - DELETE 200, 204, or 404 with "No Department matches the given query." (views.py:307).
+> - **The table** (C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-10-auto-tagging-9a579a\docs\schema-v1.md:299-311) agrees with models.py:195-257.
+> - **Two small points, no fix needed:**
+>   - the contract's list of POST 400s omits a lone surrogate, which `CharField` refuses (serializers.py:456);
+>   - schema-v1.md:301's "suggests a department from" claims no exclusivity.
+>
+> **C14. The quotation of the re-audit of `6e77913`: MET.**
+> - decisions.md:13597-13874 is identical, all 278 lines, to the SubagentHandback message in C:\Users\mozza\.claude\projects\C--Users-mozza-Documents-IT-Captone-Project-KMP-KMP-Prototype-KMP-Prototype--claude-worktrees-fr-10-auto-tagging-9a579a\b98e2cf8-f5bb-411a-b107-62e245fd5851\subagents\agent-a18efde1eb7e8990e.jsonl (09:38:05Z, 13 November).
+>
+> **C15. Older than these five commits, and in D-129: a Topic over 255 characters "can only be rejected": CONTRADICTED.**
+> - **What the record says:** decisions.md:13353-13354, "is proposed, as on `main`, and can only be rejected: confirming it is the existing 400". The re-audit of `6e77913` repeated it (13804).
+> - **What the code does:** both proposed-tags routes validate the body with `ProposedTagSerializer`, whose `value` has `max_length=NAME_MAX_LENGTH` (serializers.py:395; views.py:2124-2125).
+> - **Probe R5,** as an Employee, with a 359-character Topic proposal:
+>   - confirm answered 400 `{"value":["Ensure this field has no more than 255 characters."]}`;
+>   - reject answered the same 400;
+>   - the proposal stayed, and nothing was recorded in `rejected_tags`.
+> - **The consequences:**
+>   - the proposal can be neither confirmed nor rejected;
+>   - because no rejection is recorded, rule 4b does not skip the value, and the next run can propose it again.
+> - **Known but not fixed:** the coordinator's transcript records this error as found (03:29Z, 14 November), but `d909537` does not correct it.
+> - **Fix, either of:**
+>   - let the reject route take a value over the column, with tests from both roles. `reject_proposed_tag` writes only JSON and matches by normalised value, so the column limit is not needed there. This is the one that gives the person UC-09's choice.
+>   - or correct 13353-13354 to: "can be neither confirmed nor rejected: both proposed-tags routes answer 400 for a value over 255 characters, and it stays until a run replaces the list".
+>
+> ### Invariants and set-level checks
+>
+> - **1:** pass. `tag_scheme` is unchanged since `6e77913`, and probe R4 confirms the Employee-visible case.
+> - **4:** pass.
+>   - The department and proposed-tag routes are unchanged.
+>   - `test_rbac.py`'s anonymous and forged-session walks pass on every route, `DELETE /api/departments/{id}` included.
+>   - My partial matrix credits all three department routes from both roles.
+> - **8:** pass. The ingestion hook is unchanged, and `test_classification_hook.py` passes.
+> - **9:** pass. Unchanged.
+> - **10:** pass, and strengthened by #106. #107 returns exactly what the regexes did.
+> - **2, 3, 5, 6 and 7:** not applicable.
+> - **Set-level:**
+>   - no AI SDK import outside `apps/ai` (`test_boundary.py` passes);
+>   - no threshold or size literal added;
+>   - no chunk writes;
+>   - nothing enforced only in the interface.
+>
+> ### Gate impact
+>
+> - **Not an M6 requirement.** FR-10 stays INCOMPLETE by D-119, because the summary and key points are not built, whatever this audit finds.
+> - **No MUST path is touched.**
+> - **Smallest fixes, in order:**
+>   1. C9: the note's text, and the D-128 note;
+>   2. C6: the clause, comment only;
+>   3. C15: the record, or the reject route with tests;
+>   4. C2: the PR body and the docstring;
+>   5. C7 and C8: the wording and the count.
+>
+> ### What I ran
+>
+> | Run | Content | Result |
+> |---|---|---|
+> | pytest, 36 files: the 14 FR-10 documents files (ten `test_classification_*`, `test_classify_documents_command`, `test_migration_0015_departments`, `test_objective05_verify`, `test_deletion`), the 11 API `test_fr10_*` files, 9 AI classification and parser files including `test_code_fence_scan` and `test_schema`, `test_classification_hook`, `test_manage_tags_seed` | d909537 | 878 passed (304 s). The partial matrix (18/47) credits all three department routes from both roles |
+> | pytest, 14 files: `test_document_classification`, `test_rbac`, `test_front_end_constants_agreement`, and in `apps/ai` `test_boundary`, `test_prompt_is_not_duplicated`, `test_no_live_provider`, `test_observer_is_not_used_in_application_code`, `test_prompting`, `test_generation`, `test_statement_cap`, `test_summarisation_schema`, `test_summarisation_loop`, `test_anthropic`, `test_flm` | d909537 | 593 passed. In the same run, three probe cases failed on my own probe's user creation; I fixed the probe and re-ran it (next row) |
+> | Probes R1 to R5 (`test_probe_r2.py`) | d909537 | 9 passed. R1: no changes. R2: applied, discarded, discarded. R3: three calls, then ProviderUnavailable. R4: the table in C6. R5: 400 and 400 |
+> | Front-end breaks (`fe_breaks2.py`) on `departments.test.jsx`, scratch copy | d909537's front end | Control 31/31. A1-A4 each 30 passed, 1 failed (three distinct tests). A5-A10 31/31. B1-B4 each 30 passed, 1 failed. After 31/31; copy restored |
+> | vitest: `departments`, `tags`, `documentClassification`, scratch copy | d909537's front end | 107 passed |
+> | oxlint with the repository's `.oxlintrc.json` on `src` and `tests`; vite build, scratch copy | d909537's front end | 0 warnings, 0 errors on 135 files; the build succeeded |
+> | AST comparison of 0015 with its docstring removed; blob hashes at `a9934eb` and `d909537`; both merges diffed against main | — | As in C6, C9 and C12 |
+> | Round-trip of the quoted report against its transcript (`verbatim2.py`) | — | Identical, 278 lines |
+>
+> - **Pytest database:** every run used the wrapper, on `test_kmp_fr10auto_audit3`.
+> - **Outputs:** `pytest_focused.txt`, `pytest_batch2.txt`, `pytest_probes2.txt`, `fe_breaks2_console.txt`, `fe_breaks2_results.json`, `vitest_focused.txt` and `oxlint.txt`, all in C:\Users\mozza\AppData\Local\Temp\claude\415e7131518f8d68\b98e2cf8-f5bb-411a-b107-62e245fd5851\scratchpad\audit3\r2\.
+>
+> ### Could not check
+>
+> - **The full pytest and the matrix at `d909537`.** I was told not to run them.
+>   - At `bc0b5b6`: 4,815 passed and 47/47, reported. The saved log `full-pytest-bc0b5b6.txt` agrees.
+>   - At `d909537`: 1,270 passed, reported. `merge-d909537-focused.txt` agrees.
+> - **CI on `d909537`:** reported as running. The coordinator's transcript tells the user it is green (03:29:53Z, 14 November). I had no network.
+> - **The full front-end suite** (635 reported).
+> - **PR #102's body on GitHub** (C2).
+> - **The corrected summary for the lead** (decisions.md:13911-13912). It is not in the repository, and I did not find it in the coordinator's transcript.
+> - **Earlier work I did not re-run:** the security reviewer's probes, the earlier breaks, and any database figures.
+> - **Whether the screen offers Confirm and Reject for an over-long Topic proposal** (C15).
+>
+> **One line:** INCOMPLETE. At `d909537`, D-129's code and its B1, B4, B8 and UC-09 E1 records hold, and 1,471 tests pass, but three records are false: 0015's new correction, the merge note's file list, and D-129's long-Topic sentence. The claim about the pull request is unsupported.
+
+**What changed because of the re-audit of `d909537` (14 November).** It found D-129's code as recorded
+and returned INCOMPLETE on records. Each point was corrected in the commit after `d909537`:
+
+- **C2:**
+  - `department_threshold`'s docstring now says the 0.30 is D-106's rule's result on departments
+    alone, which the user chose over the pooled 0.25.
+  - The pull request's description now gives the three-point account.
+- **C6:** documents 0015's dated correction now says that F1 widens what a full-scope audience is
+  offered and narrows what any other audience is offered. Only the comment changed; the operations
+  are unchanged.
+- **C7:**
+  - "Assign" is now used in `apps/documents/models.py`, `frontend/src/api/departments.js` and 0015's
+    comment.
+  - This entry's three "suggests" sentences carry dated reading notes.
+- **C8:**
+  - The record now says "four assertions, in three tests".
+  - The six department strings no test pinned are now pinned by one test: each says "assign" and
+    never "suggest". It failed under each of six breaks, and each break was reverted.
+- **C9:**
+  - The merge note's file list is corrected.
+  - D-128's two statements of the open NUL residual carry dated notes closing it.
+- **C15:**
+  - The long-Topic sentence is corrected, and the defect is recorded under "Not covered".
+  - The routes are unchanged. The defect predates D-128 and D-129: #85 capped both routes the same
+    way.
+- **C1, C3 to C5 and C10 to C14:** MET, and nothing changed.
+
+**What changed because of the summary checks (14 November).** Five read-only agents tried to refute
+the summary for the lead, line by line, against the code at `d909537`. Their corrections are in the
+summary the lead was sent. They also found three things the records had wrong or missed:
+
+- **A stale docstring.** `apply_classification`'s docstring named only the 0.95 constant for the
+  type. It now names the per-model threshold.
+- **F2's remaining window.** It is recorded under finding 2.
+- **Two Tags page sentences.**
+  - The note on the AI said it "applies" values in the list. Values below the threshold are only
+    held, so it now says it "assigns" them.
+  - The "Add a department" help now says that a new department can be assigned to any document, and
+    that a retired one comes back as it was.
+  - Each is pinned by a new assertion that failed under its break, and each break was reverted.
+
+**The front end after these changes:** 636 passed; lint and build clean.
