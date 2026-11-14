@@ -198,8 +198,14 @@ $env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-13\logs\waitress.log'
 $name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
 "Django will connect to: $name"
 if ($name -ne 'kmp_alpha_20261113') { throw "Not starting: the database is '$name', not kmp_alpha_20261113." }
+& $py manage.py check
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
 & "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
+
+- **`manage.py check` runs first, because Waitress runs no system checks.** It refuses a database
+  set up for another provider (ai.E005) and an `EMBEDDING_DIMENSION` that disagrees with the
+  provider (ai.E004), and probes the provider once (D-131).
 
 - **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
   automatically", so `$name` holds two lines, never equals `kmp_alpha_20261113`, and the check

@@ -32,15 +32,16 @@ uv python install 3.12
 uv venv --python 3.12
 uv pip sync --python .venv/Scripts/python.exe requirements.txt
 
-# 2. Local configuration (.env is gitignored; never commit it). Then open .env and set
-#    ANTHROPIC_API_KEY and VOYAGE_API_KEY.
+# 2. Local configuration (.env is gitignored; never commit it). Choose the provider now:
+#    AI_PROVIDER=anthropic, with ANTHROPIC_API_KEY and VOYAGE_API_KEY, or flm. A database
+#    keeps the provider it was set up with (D-131), so this is chosen once.
 Copy-Item .env.example .env
 
 # 3. PostgreSQL 16 + pgvector, the same database for every developer
 docker compose up -d
 
-# 4. Build the schema from empty. The vector column is created EMBEDDING_DIMENSION wide:
-#    1024, Voyage's width, unless .env says otherwise.
+# 4. Build the schema from empty. The vector columns take AI_PROVIDER's width, and keep it:
+#    1024 for anthropic (voyage-4), 768 for flm (embed-gemma).
 .venv/Scripts/python.exe manage.py migrate
 
 # 5. Check the provider, then run the suite (the suite never touches a provider or the network)
@@ -55,6 +56,9 @@ docker compose up -d
 - **A missing key or an unreachable provider is a warning.** The command continues, and the API
   answers 503 until the provider is back.
 - **A dimension mismatch is a hard stop** (`docs/ai-provider.md` section 4).
+- **So is a database set up for the other provider** (ai.E005), and an `EMBEDDING_DIMENSION` in
+  `.env` that disagrees with `AI_PROVIDER` (ai.E004). The width follows the provider, so `.env`
+  needs no `EMBEDDING_DIMENSION` (D-131).
 
 ## The AI provider
 
@@ -86,11 +90,10 @@ embeds at 768 dimensions. In `.env`:
 
 ```
 AI_PROVIDER=flm
-EMBEDDING_DIMENSION=768
 ```
 
-Point `DATABASE_URL` at a database indexed by FLM, then start the server in a second PowerShell
-window, left running for the session:
+The width, 768, follows from it. Point `DATABASE_URL` at a database set up under FLM, then start
+the server in a second PowerShell window, left running for the session:
 
 ```powershell
 flm serve gemma3:4b --embed 1
@@ -137,28 +140,26 @@ flm serve gemma3:4b --embed 1 --asr 1
 - **A host without the NPU** keeps `TRANSCRIPTION_PROVIDER=none`. The draft can be saved as a text
   file on the laptop and added on that host as a transcript file.
 
-### Switching an existing database
+### Changing provider: a new database
 
-A database is indexed for one provider at a time:
+A database keeps the provider it was set up with (D-131):
 
-- **The vector column has one width:** 1024 for Voyage, 768 for FLM.
-- **Retrieval only reads chunks embedded by the model the question is embedded with** (risk R10). A
-  database indexed for the other provider therefore answers nothing, rather than answering wrongly.
+- **Its vector columns have one width,** fixed by its first `migrate`: 1024 for Voyage, 768 for
+  FLM.
+- **Retrieval only reads chunks embedded by the model the question is embedded with** (risk R10).
+- **The startup check refuses a database set up for the other provider** (ai.E005), so
+  `runserver`, `migrate` and `check` stop rather than use it.
 
-To move a database across, set the provider and the dimension in `.env`, then rebuild its chunks:
+To use the other provider, set up a new database for it:
+1. create it;
+2. set `AI_PROVIDER` in that checkout's `.env`;
+3. run `migrate`;
+4. ingest the content again through the API.
 
-```powershell
-.venv/Scripts/python.exe manage.py reindex --provider anthropic --resize-column <database name>
-```
-
-- **What it does:** it deletes every chunk, resizes the column and re-embeds every document and
-  transcript (D-117).
-- **What it refuses:** the name must match the database `.env` connects to.
-- **Going back:** `--provider flm` with `EMBEDDING_DIMENSION=768` returns a database to FLM.
-
-`CLAUDE.md` asks for a provider switch to land on a fresh database. The usual way is a copy:
-restore a snapshot under a new name with `scripts/snapshot_measurement_db.py restore --into`, then
-re-index that copy. `docs/measurement-runbook.md` ("A copy for another provider") has the commands.
+The alpha's database was built that way on 13 November 2026
+(`corpus/objective-02/runs/2026-11-13-alpha-anthropic/`). `reindex --resize-column`, which moved a
+database across (D-117), was removed with D-131. `reindex` now rebuilds chunks with the database's
+own provider only.
 
 ## Running the application
 
@@ -194,8 +195,8 @@ Both servers have to be running. The browser only ever talks to Vite:
 
 - **How it serves:** Django under Waitress serves the production build (`frontend/dist`) and `/api`
   from one origin, `http://127.0.0.1:8000`, with `DEBUG=False` and no Vite server.
-- **It ran on FLM** at M6. Its database is indexed at 768, so running it as it was needs
-  `AI_PROVIDER=flm` and `EMBEDDING_DIMENSION=768`.
+- **It ran on FLM** at M6, on `kmp_demo_20261101`, which is kept. Since 13 November 2026 it runs
+  on Anthropic, on `kmp_alpha_20261113`, a database built for it (D-131).
 - **The runbook** is `docs/alpha-deployment.md`.
 - **`frontend/dist` also affects development.** Once it has been built, `runserver` on port 8000
   serves that build too, so delete `frontend/dist` to get development's API-only port 8000 back.
