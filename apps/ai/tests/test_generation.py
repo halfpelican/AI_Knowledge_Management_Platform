@@ -26,6 +26,7 @@ network.
 
 import json
 import logging
+import sys
 
 import httpx2
 import openai
@@ -220,6 +221,55 @@ def test_a_reply_that_is_the_wrong_shape_is_a_failed_attempt_not_a_partial_answe
     with pytest.raises(ProviderUnavailable):
         make_service(handler).generate_statements(QUESTION, PASSAGES)
     assert len(handler.seen) == 3
+
+
+# Replies json.loads cannot decode: past a few thousand levels of nesting it raises
+# RecursionError, and past Python's digit limit on converting a string to an int, ValueError.
+DIGITS = sys.get_int_max_str_digits() + 1  # PYTHONINTMAXSTRDIGITS=0 lifts the limit: skipped
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param('{"statements": ' + "[" * 100_000 + "]" * 100_000 + "}",
+                     "JSON nested too deeply to decode", id="nested too deeply"),
+        pytest.param('{"statements": [], "n": ' + "7" * DIGITS + "}", "a JSON number too long to decode",
+                     id="a number too long", marks=pytest.mark.skipif(DIGITS == 1, reason="no digit limit")),
+    ],
+)
+def test_a_reply_json_cannot_decode_is_retried_and_ends_in_a_503_not_a_500(reply, message):
+    """NFR-19 for the replies that broke the loop until 13 November 2026: their RecursionError or
+    ValueError escaped after ONE call, and POST /api/ask answered 500. Each is a failed attempt now:
+    exactly MAXIMUM_GENERATION_ATTEMPTS calls, then ProviderUnavailable, which the view answers 503."""
+    handler = scripted(reply, reply, reply)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "reply,message",
+    [
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\x00", "chunk_id": CHUNK_ID}]}),
+                     "a NUL character in a JSON string", id="a NUL"),
+        pytest.param(json.dumps({"statements": [{"text": "Twenty days.\ud800", "chunk_id": CHUNK_ID}]}),
+                     "an unpaired surrogate in a JSON string", id="an unpaired surrogate"),
+    ],
+)
+def test_a_string_nothing_downstream_can_take_is_retried_and_ends_in_a_503(reply, message):
+    """Until 13 November 2026 such a reply parsed, passed verification, and broke the QueryLog write
+    or the rendering, so POST /api/ask answered 500. Each is a failed attempt now: exactly
+    MAXIMUM_GENERATION_ATTEMPTS calls, then ProviderUnavailable, which the view answers 503."""
+    handler = scripted(reply, reply, reply)
+
+    with pytest.raises(ProviderUnavailable) as excinfo:
+        make_service(handler).generate_statements(QUESTION, PASSAGES)
+
+    assert len(handler.seen) == MAXIMUM_GENERATION_ATTEMPTS
+    assert f"last failure: schema violation: {message}" in str(excinfo.value)
 
 
 def test_an_empty_choices_list_is_a_failed_attempt():

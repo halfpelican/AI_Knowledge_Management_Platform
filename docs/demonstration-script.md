@@ -51,6 +51,19 @@
 > - D-33 §1's, D-56's and D-69's entries now say what holds on the alpha's build and what holds
 >   on `main`. On `main`, FR-10 and FR-19 are built and `voyage-4` has a partial-match floor
 >   (D-104, D-105, D-107, D-120). Their 2 November text is true of the alpha only.
+>
+> **Amended 14 November 2026,** after the alpha moved to Anthropic (D-131). This script was
+> written for the FLM alpha and walked on it: `8598d19`, on `kmp_demo_20261101`. Every line below
+> that names them describes that alpha, which is kept. Since 13 November 2026 the alpha runs
+> `6e1efd1` on the anthropic provider, on a new database, `kmp_alpha_20261113`. So, before a walk
+> on it:
+>
+> - **Screen the walk's questions again.** They were screened on EmbeddingGemma's vectors only
+>   (`corpus/demo/screening-2026-11-01.json`, D-40), and Voyage's scores differ.
+> - **Check, rather than assume, the steps that waited on a redeploy,** such as FR-04's logged-out
+>   confirmation. `6e1efd1` has D-97's fix, but nobody has walked it on the new alpha.
+> - **The FR-10 lines describe `8598d19`, which had no classification.** On `6e1efd1` each document
+>   is classified at upload, and the new database's documents carry FR-10's tags (D-131).
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end

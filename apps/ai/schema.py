@@ -15,6 +15,15 @@ document stops describing the shipped system. The test at
 ``apps/ai/tests/test_prompt_is_not_duplicated.py`` asserts the harness holds no second
 copy, by reading its source text.
 
+Since then the parser has changed what it accepts: the statement cap of 7 November 2026 (D-100)
+and the NUL and unpaired-surrogate refusals of 13 November 2026 (``_loads_reply``). The baseline
+describes it as it was before them.
+
+The code-fence repair was rewritten on 13 November 2026, and that rewrite moves none of the
+numbers. ``_strip_code_fences`` became a scan, because both its regexes backtracked
+quadratically, and it returns exactly what they returned for every input.
+``apps/ai/tests/test_code_fence_scan.py`` checks that against a frozen copy of the old function.
+
 A response that does not parse is a FAILED ATTEMPT, never a partial answer: the caller
 retries to MAXIMUM_GENERATION_ATTEMPTS and then raises ProviderUnavailable, which the
 view turns into the NFR-19 503 (invariant 10). An empty statement list that DOES parse
@@ -24,6 +33,7 @@ the question, and it must be returned rather than retried.
 
 import json
 import re
+import string
 
 from apps.ai.base import Statement, StatementList
 from apps.core.constants import MAXIMUM_STATEMENTS
@@ -75,20 +85,72 @@ class StatementCapExceeded(SchemaViolation):
     """
 
 
-_CODE_FENCE = re.compile(r"^\s*```[a-zA-Z0-9_-]*\s*|\s*```\s*$")
 _TRAILING_COMMA = re.compile(r",\s*(?=[}\]])")
+# A fence's language tag, as in ```json or ```py-3: the regex class [a-zA-Z0-9_-].
+_FENCE_TAG_CHARACTERS = frozenset(string.ascii_letters + string.digits + "_-")
+
+
+def _end_of_opening_fence(text: str, fence: int) -> int:
+    """The index just past the fence at ``fence``, its language tag and the whitespace after it.
+
+    Each run is read once, character by character, and never revisited. The tag set must be exactly
+    the regex class [a-zA-Z0-9_-], which apps/ai/tests/test_code_fence_scan.py checks over every
+    code point. The whitespace class cannot change what the repair returns: whitespace holds no
+    backtick, and every result is stripped of the same characters, ``str.isspace``'s, which are
+    also the regex ``\\s``.
+    """
+    index = fence + 3
+    while index < len(text) and text[index] in _FENCE_TAG_CHARACTERS:
+        index += 1
+    while index < len(text) and text[index].isspace():
+        index += 1
+    return index
 
 
 def _strip_code_fences(raw: str) -> str:
-    """Remove a leading ```json (or bare ```) and a trailing ``` if both are present."""
+    """The contents of the first fenced block, or the reply with its fence markers removed.
+
+    The reply is stripped first, and so is what is returned. The first fenced block wins: from the
+    first fence, past its language tag and the whitespace after it, to the next fence. With no
+    closing fence, a fence at the start goes, with its tag and whitespace; failing that, a fence at
+    the end, with the whitespace before it; failing that, nothing.
+
+    The block is found by a scan since 13 November 2026, not by
+    ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no
+    closing one, that search backtracked through every split of the tag and the whitespace and
+    rescanned the rest of the reply each time. That cost 1.8 s at 20,000 spaces after the fence,
+    and four times as long at each doubling. Every call on ``anthropic`` may run to
+    CLAUDE_MAX_TOKENS (16,000 tokens), so a steered reply was in reach.
+
+    The fallback for a fence that never closes was ``_CODE_FENCE.sub("", text)``, with
+    ``^\\s*```[a-zA-Z0-9_-]*\\s*|\\s*```\\s*$``, and it was quadratic too. Its second branch was
+    tried at every position the first branch had not taken. Inside a whitespace run it took the
+    rest of the run, then backtracked through it looking for a fence. That cost 0.50 s at 20,000
+    spaces in ``"```json\\n{" + spaces + "}"``. It is a scan as well, since the same day.
+
+    Both scans return exactly what the regexes returned for every input, so they move none of the
+    numbers measured on this parser (module docstring). apps/ai/tests/test_code_fence_scan.py
+    compares them with a frozen copy of the old function.
+    """
     text = raw.strip()
-    if "```" not in text:
+    opening = text.find("```")
+    if opening == -1:
         return text
     # Prefer the contents of the first fenced block; fall back to stripping markers.
-    fenced = re.search(r"```[a-zA-Z0-9_-]*\s*(.*?)```", text, re.DOTALL)
-    if fenced:
-        return fenced.group(1).strip()
-    return _CODE_FENCE.sub("", text).strip()
+    body = _end_of_opening_fence(text, opening)
+    # Neither the tag nor the whitespace holds a backtick, so no fence starts inside them, and
+    # the next fence from ``body`` is the one the search's lazy group stopped at.
+    closing = text.find("```", body)
+    if closing != -1:
+        return text[body:closing].strip()
+    # No closing fence, so every fence in the text overlaps the first one. On a stripped text,
+    # the regex this replaced removed a fence at the start, with its tag and whitespace; failing
+    # that, a fence at the end, with the whitespace before it; failing that, nothing.
+    if opening == 0:
+        return text[body:].strip()
+    if text.endswith("```"):
+        return text[:-3].strip()
+    return text
 
 
 def _outermost_json_object(text: str) -> str:
@@ -120,6 +182,73 @@ def _outermost_json_object(text: str) -> str:
     raise SchemaViolation("unbalanced JSON object in the response")
 
 
+# A surrogate code point still present after json.loads was unpaired: the decoder joins an escaped
+# pair, such as an emoji's, into the one character it stands for.
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
+
+
+def _unusable_string(value) -> str | None:
+    """The fixed reason a decoded reply holds a string nothing downstream can take, or None.
+
+    Keys are checked with values. Iterative, because a decoded reply can nest deeper than Python's
+    own recursion limit.
+    """
+    pending = [value]
+    while pending:
+        item = pending.pop()
+        if isinstance(item, str):
+            if "\x00" in item:
+                return "a NUL character in a JSON string"
+            if _SURROGATE.search(item):
+                return "an unpaired surrogate in a JSON string"
+        elif isinstance(item, dict):
+            pending.extend(item)
+            pending.extend(item.values())
+        elif isinstance(item, list):
+            pending.extend(item)
+    return None
+
+
+def _loads_reply(text: str):
+    """``json.loads`` for a model reply: a SchemaViolation for every failure but a syntax error.
+
+    A JSONDecodeError, a syntax error, propagates unchanged, so the caller can try its
+    trailing-comma repair before it reports "not valid JSON". Four other replies are violations
+    here (invariant 10), each with a fixed message that quotes nothing of the reply:
+
+    - nesting past the interpreter's limit, a few thousand levels of ``[`` or ``{``, on which
+      json.loads raises RecursionError;
+    - an integer literal past Python's 4,300-digit limit on converting a string to an int, on
+      which it raises ValueError;
+    - a string holding a NUL character, which PostgreSQL text refuses;
+    - a string holding an unpaired surrogate, such as a lone ``\\ud800`` escape, which neither the
+      database nor DRF's JSON renderer can encode as UTF-8.
+
+    Until 13 November 2026 none of them was. The attempt loops retry only a SchemaViolation and a
+    failed call (a ProviderUnavailable that is not a ProviderRefused, which ends them at once). So
+    the first two always ended the work they were part of, and the last two did whenever the
+    string was stored or rendered, which a statement or an element that verification discarded
+    never is. POST /api/ask and POST /api/documents/{id}/classify answered 500 instead of NFR-19's
+    503. A meeting summary's run ended as "error", without the one retry FR-16 allows a
+    malformed reply; run by retry_meeting_summaries or summarise_meetings, it stopped the command
+    and left the row Processing until it was reclaimed as an orphan. classify_documents stopped
+    without writing its record. Two security reviews and a requirements audit of that day found
+    them.
+    """
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        raise
+    except RecursionError as exc:
+        raise SchemaViolation("JSON nested too deeply to decode") from exc
+    except ValueError as exc:  # after JSONDecodeError, itself a ValueError: the digit limit
+        raise SchemaViolation("a JSON number too long to decode") from exc
+    reason = _unusable_string(value)
+    if reason is not None:
+        raise SchemaViolation(reason)
+    return value
+
+
 # Public names for the three repairs, added on 9 November 2026 for FR-10 (D-104):
 # apps/ai/classification.py applies exactly this tolerance to a classification reply by
 # importing these rather than copying them, so there is one definition of what is
@@ -128,6 +257,9 @@ def _outermost_json_object(text: str) -> str:
 strip_code_fences = _strip_code_fences
 outermost_json_object = _outermost_json_object
 TRAILING_COMMA_PATTERN = _TRAILING_COMMA
+# And the decode step, added on 13 November 2026 on the same principle: the statement,
+# classification and summary parsers all decode through it, so all three fail the same way.
+loads_reply = _loads_reply
 
 
 def parse_statement_list(raw: str, *, max_statements: int | None = None) -> StatementList:
@@ -153,10 +285,10 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
         raise SchemaViolation("empty response")
     candidate = _outermost_json_object(_strip_code_fences(raw))
     try:
-        decoded = json.loads(candidate)
+        decoded = _loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = json.loads(_TRAILING_COMMA.sub("", candidate))
+            decoded = _loads_reply(_TRAILING_COMMA.sub("", candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):
