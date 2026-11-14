@@ -436,16 +436,28 @@ PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
 # remaining-attempt warning, the countdown, the administrator release
 # (RELEASE_ACCOUNT_LOCKS_PERMISSION, below) and the LoginAttempts table that records
 # each lockout and each release (D-130).
-# Configuration values rather than literals, as FR-03 Business logic requires.
+#
+# FR-03 Business logic: "threshold and lockout duration are configuration values rather than
+# literals, so the policy can be tightened without code changes".
+# - **These two are the defaults.** The running values are settings.LOCKOUT_THRESHOLD and
+#   settings.LOCKOUT_DURATION, read from the .env variables LOCKOUT_THRESHOLD and
+#   LOCKOUT_DURATION_MINUTES, which default to these (config/settings.py, D-130 decision 7).
+# - **Read the running values at request time:** LoginView does, and so does
+#   GET /api/auth/lockout-policy, which gives the sign-in page its copy.
+# - **Not here, and not in frontend/src/constants.js:** the browser's copy, which since D-130
+#   decision 7 it fetches at run time.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
 # How many failed attempts in total may still be answered with the distinct
-# "account is locked" notice. Past this, a locked account answers every attempt with
-# the generic message, right password or wrong. Without a ceiling the lock withheld
-# the session but not the answer: guessing during the window was unlimited and each
-# response said whether that guess was correct (D-26). Twice the threshold leaves a
-# user who mistypes once after locking themselves out with the useful message.
-LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
+# "account is locked" notice, as a multiple of the running threshold. Past it, a locked
+# account answers every attempt with the generic message, right password or wrong.
+# Without a ceiling the lock withheld the session but not the answer: guessing during the
+# window was unlimited and each response said whether that guess was correct (D-26). Twice
+# the threshold leaves a user who mistypes once after locking themselves out with the useful
+# message. LoginView multiplies it by settings.LOCKOUT_THRESHOLD.
+LOCKOUT_NOTICE_CEILING_FACTOR = 2
+# The ceiling at the default threshold, for the tests that run on the defaults.
+LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * LOCKOUT_NOTICE_CEILING_FACTOR
 # What a LoginAttempts row records (FR-03, D-130; docs/schema-v1.md section 3): a lockout,
 # written by login in the transaction that sets locked_until, or an Administrator's release
 # of one. Nothing else is recorded. An ordinary sign-in, failed or not, writes no row, so an

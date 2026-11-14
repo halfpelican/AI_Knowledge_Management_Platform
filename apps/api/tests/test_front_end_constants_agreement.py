@@ -32,10 +32,11 @@ copies a value of ``apps/core/constants.py``:
   (since 10 November 2026, D-123): the largest recording the page decodes, which only the
   client enforces because the recording never reaches the server, its label in whole megabytes,
   and the rate the page resamples to before cutting.
-- ``LOCKOUT_THRESHOLD`` and ``LOCKOUT_DURATION_SECONDS`` (since 13 November 2026, FR-03, D-130):
-  the consecutive failures at which the sign-in page's own count locks an address, equal to
-  ``LOCKOUT_THRESHOLD``, and the countdown it then shows, equal to ``LOCKOUT_DURATION`` in whole
-  seconds. A drifted copy warns, locks or counts down where the server's lock does not.
+- **FR-03's lockout policy: the absence of a copy** (since 14 November 2026, D-130 decision 7).
+  The threshold and the duration are the server's .env values, and the sign-in page fetches them
+  from ``GET /api/auth/lockout-policy``. A copy in ``constants.js`` would be the stale value the
+  decision removed, so the test fails if one comes back. From 13 November until then, this file
+  held the copies equal instead.
 - ``ACCEPTED_EXTENSIONS`` and ``ACCEPTED_FORMATS_LABEL``: D-15's four, no more, no fewer.
 - ``DOCUMENT_STATUS``, ``ROLES`` and ``SOURCE_TYPE``: the server's whole vocabulary, each
   value once. Equality and not inclusion, for ``DOCUMENT_STATUS`` especially: D-51 is the
@@ -51,8 +52,8 @@ is ``apps/api/serializers.py`` ``DATE_RANGE_REVERSED_MESSAGE``) and the four for
 Neither is tied here. Nor is the literal "50 MB" in ``apps/api/views.py``
 ``FILE_TOO_LARGE_MESSAGE``, which is the server restating its own constant and an open item
 of its own. ``LOCKOUT_WARNING_REMAINING`` is the sign-in page's own rule (Benjamin's decision 2,
-D-130) and has no server value to equal. The minutes in ``TEXT.accountMayBeLocked`` are not
-read here: ``constants.js`` derives them from ``LOCKOUT_DURATION_SECONDS``, which is.
+D-130) and has no server value to equal. The minutes in ``TEXT.accountMayBeLocked`` come from
+the fetched policy.
 """
 
 from __future__ import annotations
@@ -174,24 +175,15 @@ def test_the_clients_copy_of_each_column_width_equals_the_model_constant(client_
     )
 
 
-def test_the_clients_lockout_threshold_equals_the_servers(client_source):
-    client = _javascript_integer(_exported(client_source, "LOCKOUT_THRESHOLD"))
-    assert client == constants.LOCKOUT_THRESHOLD, (
-        f"constants.js has LOCKOUT_THRESHOLD = {client}, and apps/core/constants.py has "
-        f"LOCKOUT_THRESHOLD = {constants.LOCKOUT_THRESHOLD}. The sign-in page would warn and lock "
-        "at a different failure from the one the server locks at (FR-03)."
-    )
-
-
-def test_the_clients_lockout_duration_equals_the_servers_in_whole_seconds(client_source):
-    server = constants.LOCKOUT_DURATION.total_seconds()
-    assert server == int(server), f"the server's lock is no longer a whole number of seconds: {server}"
-    client = _javascript_integer(_exported(client_source, "LOCKOUT_DURATION_SECONDS"))
-    assert client == server, (
-        f"constants.js has LOCKOUT_DURATION_SECONDS = {client}, and apps/core/constants.py has "
-        f"LOCKOUT_DURATION = {constants.LOCKOUT_DURATION}, {int(server)} seconds. The sign-in page's "
-        "countdown would end before or after the server's lock does (FR-03)."
-    )
+def test_the_client_holds_no_copy_of_the_lockout_policy(client_source):
+    """D-130 decision 7: the policy is the server's .env, fetched at run time. A built-in copy
+    would warn, lock or count down by a value the server no longer uses after a .env change."""
+    for name in ("LOCKOUT_THRESHOLD", "LOCKOUT_DURATION"):
+        copies = re.findall(rf"^\s*(?:export\s+)?const\s+({name}\w*)\s*=", client_source, re.MULTILINE)
+        assert not copies, (
+            f"constants.js declares {copies}, a copy of FR-03's lockout policy. Since D-130 decision 7 "
+            "the sign-in page reads it from GET /api/auth/lockout-policy."
+        )
 
 
 def test_the_clients_upload_ceiling_label_states_the_servers_ceiling(client_source):

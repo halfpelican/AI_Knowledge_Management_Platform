@@ -558,6 +558,7 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/", "GET"): "DRF's API root: a map of router routes, of which there are none.",
     ("api/auth/register", "POST"): "Users only.",
     ("api/auth/login", "POST"): "Users only.",
+    ("api/auth/lockout-policy", "GET"): "Two numbers, the same for every caller (D-130).",
     ("api/auth/logout", "POST"): "A confirmation message.",
     ("api/auth/me", "GET"): "The caller's own user row.",
     ("api/roles", "GET"): "Roles and their permission codes.",

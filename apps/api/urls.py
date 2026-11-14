@@ -15,6 +15,8 @@ urlpatterns = [
     # Stage 2: FR-01, FR-02
     path("auth/register", views.RegisterView.as_view(), name="auth-register"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
+    # NIT3004: FR-03's running lockout policy, for the sign-in page (D-130 decision 7).
+    path("auth/lockout-policy", views.LockoutPolicyView.as_view(), name="auth-lockout-policy"),
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),

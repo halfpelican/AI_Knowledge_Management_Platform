@@ -65,6 +65,12 @@ function serverLock(retryAfter) {
   }
 }
 
+/** GET /api/auth/lockout-policy at the server's defaults: five failures, 15 minutes (D-130 decision 7). */
+const DEFAULT_POLICY = { lockout_threshold: 5, lockout_duration_seconds: 900 }
+
+/** The page's own lock message for the served default policy's 15 minutes. */
+const MAY_BE_LOCKED = TEXT.accountMayBeLocked(DEFAULT_POLICY.lockout_duration_seconds)
+
 beforeEach(() => {
   // Not setTimeout: the Testing Library's own waiting runs on it.
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
@@ -76,13 +82,15 @@ afterEach(() => {
 
 /**
  * Signed out, with the login route answering each attempt with whatever `replies.next`
- * holds when the attempt arrives: a reply, or a function returning one.
+ * holds when the attempt arrives: a reply, or a function returning one. The policy route
+ * answers with `replies.policy`, the server's defaults unless a test sets another.
  */
 function serveSignIn() {
-  const replies = { next: INVALID }
+  const replies = { next: INVALID, policy: { body: DEFAULT_POLICY } }
   const answered = serveApi({
     'GET /api/auth/me': NOT_SIGNED_IN,
     'POST /api/auth/login': () => (typeof replies.next === 'function' ? replies.next() : replies.next),
+    'GET /api/auth/lockout-policy': () => replies.policy,
   })
   render(
     <MemoryRouter initialEntries={['/login']}>
@@ -152,7 +160,7 @@ function expectLocked(countdown) {
 function expectNotLocked() {
   expect(signInButton().disabled).toBe(false)
   expect(screen.queryByRole('timer')).toBeNull()
-  expect(document.body.textContent).not.toContain(TEXT.accountMayBeLocked)
+  expect(document.body.textContent).not.toMatch(/If this address has an account/)
   expect(document.body.textContent).not.toContain(TEXT.accountLocked)
 }
 
@@ -378,23 +386,26 @@ describe("FR-03: the server's lock, a 403 account_locked with retry_after", () =
     expect(screen.queryByText('Could not sign in')).toBeNull()
   })
 
-  it('counts down the full 15:00 when the 403 carries no retry_after', async () => {
+  it("counts down the policy's duration, 15:00, when the 403 carries no retry_after", async () => {
     const { replies } = serveSignIn()
     replies.next = serverLock(undefined)
 
     await attempt(JANE, RIGHT_PASSWORD)
 
-    // Never sooner than the lock could end: no lock outlasts LOCKOUT_DURATION.
+    // Never sooner than the lock could end: no lock outlasts the policy's duration, which
+    // the page asks for after this first failed attempt.
+    await screen.findByRole('timer')
     expectLocked('Try again in 15:00')
     expect(banner().textContent).toContain(TEXT.accountLocked)
   })
 
-  it('counts down the full 15:00 when the 403 carries a retry_after that is not a number of seconds', async () => {
+  it("counts down the policy's duration, 15:00, when the 403 carries a retry_after that is not a number of seconds", async () => {
     const { replies } = serveSignIn()
     replies.next = serverLock('soon')
 
     await attempt(JANE, RIGHT_PASSWORD)
 
+    await screen.findByRole('timer')
     expectLocked('Try again in 15:00')
     expect(banner().textContent).toContain(TEXT.accountLocked)
   })
@@ -423,7 +434,7 @@ describe("FR-03: a lock released while the page is open", () => {
     // The page's own lock, at the fifth failure: a release reaches the server, not this page.
     for (let failure = 2; failure <= 5; failure += 1) await attempt(JANE)
     expectLocked('Try again in 15:00')
-    expect(banner().textContent).toContain(TEXT.accountMayBeLocked)
+    expect(banner().textContent).toContain(MAY_BE_LOCKED)
     expect(banner().textContent).toContain(TEXT.lockedReloadHint)
 
     // The server's lock, on another address given the right password.
@@ -432,5 +443,57 @@ describe("FR-03: a lock released while the page is open", () => {
     expectLocked('Try again in 5:00')
     expect(banner().textContent).toContain(TEXT.accountLocked)
     expect(banner().textContent).toContain(TEXT.lockedReloadHint)
+  })
+})
+
+describe("FR-03: the policy is the server's, fetched at run time (D-130 decision 7)", () => {
+  it('asks for the policy once, after the first failed attempt, and not before', async () => {
+    const { answered } = serveSignIn()
+    const policyReads = () => answered.filter((request) => request.path === '/api/auth/lockout-policy')
+
+    await screen.findByLabelText('Email')
+    expect(policyReads()).toHaveLength(0)
+
+    for (let failure = 1; failure <= 4; failure += 1) await attempt(JANE)
+    expect(policyReads()).toHaveLength(1)
+  })
+
+  it('warns, locks and counts down by the policy the server sends, here three failures and ten minutes', async () => {
+    const { replies } = serveSignIn()
+    replies.policy = { body: { lockout_threshold: 3, lockout_duration_seconds: 600 } }
+
+    await attempt(JANE)
+    await screen.findByText(TWO_REMAINING)
+    expectWarning(TWO_REMAINING)
+
+    await attempt(JANE)
+    expectWarning(ONE_REMAINING)
+
+    await attempt(JANE)
+    expectLocked('Try again in 10:00')
+    expect(banner().textContent).toContain(TEXT.accountMayBeLocked(600))
+    expect(banner().textContent).toContain('10 minutes')
+    expectNoWarning()
+  })
+
+  it('shows no warning and no lock of its own when the policy cannot be had, and still counts down the server’s 403', async () => {
+    const { answered, replies } = serveSignIn()
+    replies.policy = { status: 500, body: { detail: 'Server error.' } }
+
+    // No warning after any failure, the third and fourth included, and no lock at the fifth:
+    // the page has no threshold of its own to fall back on.
+    for (let failure = 1; failure <= 5; failure += 1) {
+      await attempt(JANE)
+      expectNoWarning()
+    }
+    expectNotLocked()
+    expect(banner().textContent).toContain(INVALID_CREDENTIALS)
+    // A refused policy is asked for again at the next failure.
+    expect(answered.filter((request) => request.path === '/api/auth/lockout-policy').length).toBeGreaterThan(1)
+
+    replies.next = serverLock(120)
+    await attempt(SAM, RIGHT_PASSWORD)
+    expectLocked('Try again in 2:00')
+    expect(banner().textContent).toContain(TEXT.accountLocked)
   })
 })

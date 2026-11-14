@@ -1615,13 +1615,15 @@ FR-02 enforces the lock (D-25). FR-03 adds:
 - the warning;
 - the countdown;
 - an Administrator's release;
-- the `LoginAttempts` record.
+- the `LoginAttempts` record;
+- the policy as `.env` configuration, with a route that gives it to the sign-in page.
 
-Benjamin's six decisions of 13 November 2026 are D-130's. Every code below is quoted from FR-03's
+Benjamin's seven decisions, of 13 and 14 November 2026, are D-130's. Every code below is quoted from FR-03's
 Responses clause unless marked *convention*.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
+| GET | `/api/auth/lockout-policy` | none | `200 {"lockout_threshold": 5, "lockout_duration_seconds": 900}`: the running policy, from `.env` (decision 7), the same for every caller. Read-only and not throttled | `405` for any method but GET (*convention*) |
 | POST | `/api/users/{id}/unlock` | Administrator (`release_account_locks`) | `200` the user as `GET /api/users` lists it, now with `"lock": null`. `locked_until` is cleared and `failed_attempts` is reset to 0, the state natural expiry reaches, and a release row is written to `LoginAttempts`. No body is read | `401` no session; `403 {"detail": "Your role does not hold the 'release_account_locks' permission."}`, given before any lookup, so an Employee cannot probe user ids; `404 {"detail": "No User matches the given query."}` for an unknown id; `403 {"detail": "You cannot release a lock on your own account."}` where the target is the requester, locked or not; `409 {"detail": "This account is not locked."}` where `locked_until` is empty or already past |
 
 **The release touches nothing else.**
@@ -1659,14 +1661,26 @@ Administrators hold it. A requester without it gets the plain user object.
 - **The `401` is unchanged:** byte-identical for an unknown address, a wrong password, and a locked
   account given a wrong password or given the right one past the ceiling.
 
-**The warning and the countdown use nothing new from the server** (D-130 decision 1).
+**The policy is `.env` configuration** (D-130 decision 7).
+
+- **The variables:** `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, which default to five and 15
+  and must each be at least 1.
+- **Who reads them:** login reads them at request time, and D-26's notice ceiling is twice the
+  threshold.
+- **When a change applies:** after a server restart, with no front-end rebuild, because the sign-in
+  page reads the policy from `GET /api/auth/lockout-policy`.
+
+**The warning and the countdown use no account's state from the server** (D-130 decision 1).
 
 - **The count is the sign-in page's own:** consecutive `401`s for the address typed, held in memory.
-  The remaining attempts are worked out from its copy of `LOCKOUT_THRESHOLD`.
-- **At the threshold** the page disables Sign in and counts down `LOCKOUT_DURATION`.
-- **On a `403`** it counts down `retry_after` instead.
+- **The policy:** after the first failed attempt the page asks `GET /api/auth/lockout-policy`, once,
+  and works out the remaining attempts from its threshold. Until it arrives, or if it cannot be had,
+  the page shows no warning and no lock of its own.
+- **At the threshold** the page disables Sign in and counts down the policy's duration.
+- **On a `403`** it counts down `retry_after` instead, or the policy's duration where the `403` gave
+  none.
 - **Nothing in any response tells a stranger whether an address is registered or locked** (UC-02
-  E1). The cost is in D-130.
+  E1). The policy route is the same two numbers for everyone. The cost is in D-130.
 
 **`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
 for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read

@@ -9,6 +9,7 @@ A ``.env`` file at the repository root is read if present (copy ``.env.example``
 Variables already set in the process environment take precedence over the file.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -20,6 +21,8 @@ from apps.core.constants import (
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
     INGESTION_THROTTLE_RATE,
+    LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
+    LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TRANSCRIPTION_THROTTLE_RATE,
@@ -162,6 +165,28 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # the same build is served over HTTPS.
 SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=False)
 CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=False)
+
+# --- Account lockout (FR-02 enforces, FR-03's configuration clause, D-130 decision 7) --------
+# FR-03: "threshold and lockout duration are configuration values rather than literals, so the
+# policy can be tightened without code changes." So they are .env variables, defaulting to
+# apps/core/constants.py's LOCKOUT_THRESHOLD and LOCKOUT_DURATION (five failures, 15 minutes).
+# - **Who reads them:** LoginView, at request time. The sign-in page reads them from GET
+#   /api/auth/lockout-policy, so a change needs no front-end rebuild.
+# - **When a change takes effect:** settings are read when the process starts, so a change
+#   applies after a restart.
+# - **The notice ceiling follows the threshold:** it is LOCKOUT_NOTICE_CEILING_FACTOR times it
+#   (D-26).
+
+LOCKOUT_THRESHOLD = env.int("LOCKOUT_THRESHOLD", default=DEFAULT_LOCKOUT_THRESHOLD)
+LOCKOUT_DURATION = timedelta(
+    minutes=env.int(
+        "LOCKOUT_DURATION_MINUTES", default=int(DEFAULT_LOCKOUT_DURATION.total_seconds() // 60)
+    )
+)
+if LOCKOUT_THRESHOLD < 1:
+    raise ImproperlyConfigured(f"LOCKOUT_THRESHOLD must be at least 1, not {LOCKOUT_THRESHOLD}")
+if LOCKOUT_DURATION < timedelta(minutes=1):
+    raise ImproperlyConfigured("LOCKOUT_DURATION_MINUTES must be at least 1")
 
 # --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
 # Every route is protected unless it opts out explicitly (registration and login).

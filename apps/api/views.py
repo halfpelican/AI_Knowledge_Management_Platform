@@ -8,6 +8,7 @@ Routes that need more than a session add ``HasRolePermission`` (FR-06).
 import logging
 import math
 
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
@@ -37,9 +38,7 @@ from apps.core.constants import (
     DASHBOARD_GAP_ITEMS,
     DASHBOARD_RECENT_ITEMS,
     DOWNLOAD_CONTENT_TYPES,
-    LOCKOUT_DURATION,
-    LOCKOUT_NOTICE_CEILING,
-    LOCKOUT_THRESHOLD,
+    LOCKOUT_NOTICE_CEILING_FACTOR,
     LOGIN_ATTEMPT_LOCKOUT,
     LOGIN_ATTEMPT_RELEASE,
     MAXIMUM_ACTION_ITEMS_PER_MEETING,
@@ -183,7 +182,7 @@ EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
 # machine-readable flag for FR-02's front-end clause, "where the account is locked
 # and the submitted password was correct, a distinct message is shown": the client
 # branches on the code and never has to match on prose.
-# FR-03's messaging clause: "The lockout message states that an administrator can unlock the
+# FR-03's Front-End clause: "The lockout message states that an administrator can unlock the
 # account, so a locked-out user has a route forward." The proposal's handleLoginAttempt
 # pseudocode said "An Administrator can release it." D-26 finding 4 took that out while no
 # release existed, because the notice then promised something false. POST
@@ -498,7 +497,7 @@ class RegisterView(APIView):
 
 def _invalid_credentials() -> Response:
     """The one 401 login gives: for an unknown address, for a wrong password whether or
-    not the account is locked, and for a locked account past LOCKOUT_NOTICE_CEILING
+    not the account is locked, and for a locked account past the notice ceiling
     whatever the password (D-02, D-25, D-26).
 
     Built in one place so the paths cannot drift apart. Any byte that differed between
@@ -595,7 +594,7 @@ class LoginView(SendsCsrfCookieMixin, APIView):
                 # The attempt is counted and the window is never extended (D-26). "Locks
                 # the account for 15 minutes" stays literally true rather than becoming
                 # indefinite under a sustained attack (D-25). Counting is what lets the
-                # notice stop once guessing passes LOCKOUT_NOTICE_CEILING, so the lock
+                # notice stop once guessing passes the notice ceiling, so the lock
                 # withholds the verification oracle and not only the session.
                 account.failed_attempts += 1
                 account.save(update_fields=["failed_attempts"])
@@ -608,7 +607,9 @@ class LoginView(SendsCsrfCookieMixin, APIView):
                 # address. FR-02's unqualified "403 if account is locked" is the summary;
                 # the pseudocode and FR-03's messaging clause are the detail (D-25). Past
                 # the ceiling every attempt gets the 401, right password or wrong (D-26).
-                if not password_matched or account.failed_attempts > LOCKOUT_NOTICE_CEILING:
+                # The ceiling follows the running threshold (D-26, D-130 decision 7).
+                ceiling = settings.LOCKOUT_THRESHOLD * LOCKOUT_NOTICE_CEILING_FACTOR
+                if not password_matched or account.failed_attempts > ceiling:
                     return _invalid_credentials()
                 # FR-03's countdown, which the sign-in page runs from this (D-130): whole
                 # seconds until the lock ends, from the row read under the lock, rounded up so
@@ -636,8 +637,9 @@ class LoginView(SendsCsrfCookieMixin, APIView):
                     account.failed_attempts = 0
                     account.locked_until = None
                 account.failed_attempts += 1
-                if account.failed_attempts >= LOCKOUT_THRESHOLD:
-                    account.locked_until = now + LOCKOUT_DURATION
+                # The running policy, from .env (D-130 decision 7).
+                if account.failed_attempts >= settings.LOCKOUT_THRESHOLD:
+                    account.locked_until = now + settings.LOCKOUT_DURATION
                     # FR-03: "Every lockout is recorded with the attempted email, source
                     # address, and timestamp." Written here, in this transaction, so the row
                     # and the lock commit together, and only here: an attempt during a live
@@ -669,6 +671,31 @@ class LoginView(SendsCsrfCookieMixin, APIView):
                 account.locked_until = None
                 account.save(update_fields=["failed_attempts", "locked_until"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+class LockoutPolicyView(APIView):
+    """``GET /api/auth/lockout-policy``: the running lockout policy, for the sign-in page (FR-03,
+    D-130 decision 7).
+
+    FR-03's threshold and duration are .env values (config/settings.py). The sign-in page counts
+    its own failures (D-130 decision 1), so it needs the threshold to know how many attempts
+    remain, and the duration for its countdown. It reads them from here at run time rather than
+    from a copy built into the bundle, so the policy can change without a front-end rebuild.
+
+    Anonymous, because the page asks before anyone is signed in. **It discloses nothing about any
+    account:** it is the same two numbers for every caller, and the warning on the page already
+    shows them. It reads nothing from the request, writes nothing, and is not throttled.
+    """
+
+    permission_classes = [AllowAny]  # the third opt-out (D-21, D-130 decision 7)
+
+    def get(self, request):
+        return Response(
+            {
+                "lockout_threshold": settings.LOCKOUT_THRESHOLD,
+                "lockout_duration_seconds": int(settings.LOCKOUT_DURATION.total_seconds()),
+            }
+        )
 
 
 # --- FR-04 logout ----------------------------------------------------------------------

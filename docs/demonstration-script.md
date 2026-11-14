@@ -160,9 +160,10 @@ words a message, the message is quoted.
 1. **Sign in with the wrong password, once.**
    - **Expected:** "Invalid email or password.", which does not say which half was wrong.
    - Five failures lock the account for 15 minutes, and a locked account gets a 403 with its own
-     message. That is **FR-02's**, not FR-03's (D-25). FR-03 adds only the warning, the countdown
-     and the administrator release. **Never lock `corpus.admin@example.com` or the demonstration
-     accounts.** Show it with its own account, in step 4.
+     message. That is **FR-02's**, not FR-03's (D-25). FR-03 adds the warning, the countdown, the
+     administrator release and the `LoginAttempts` record, and makes the policy a `.env` setting
+     (D-130). **Never lock `corpus.admin@example.com` or the demonstration accounts.** Show it with
+     its own account, in step 4.
 2. **Sign in with the right password.**
    - **Expected:** the Employee's dashboard, and the navigation shows `Signed in as` the name
      registered in FR-01.

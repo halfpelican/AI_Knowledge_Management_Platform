@@ -31,8 +31,10 @@ pytestmark = pytest.mark.django_db
 # What add_never_cache_headers sets on a response: Cache-Control with these directives, and Expires.
 NEVER_CACHE_DIRECTIVES = {"max-age=0", "no-cache", "no-store", "must-revalidate", "private"}
 
-# The two routes D-21 leaves open (test_rbac.py's OPEN_ROUTES).
-OPEN_ROUTES = {"auth-register", "auth-login"}
+# The routes left open, as test_rbac.py has them: the two D-21 leaves open, and FR-03's lockout
+# policy (D-130 decision 7), each with what it answers an anonymous empty request.
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
+OPEN_ROUTES = set(OPEN_ROUTE_STATUS)
 
 # Routes guarded by a role permission, checked before anything else on the request: with the
 # role's permissions revoked, each must answer 403. document-detail's DELETE checks its permission
@@ -99,7 +101,9 @@ def test_every_api_route_is_never_cached_when_it_answers_401():
     statuses = walk(APIClient)
 
     for endpoint in enumerate_endpoints():
-        expected = 400 if endpoint.name in OPEN_ROUTES else 401
+        # The opt-outs answer for themselves (test_rbac.py's OPEN_ROUTE_STATUS): 400 where they
+        # validate the empty body, 200 for FR-03's lockout policy (D-130 decision 7).
+        expected = OPEN_ROUTE_STATUS.get(endpoint.name, 401)
         assert statuses[endpoint.key] == expected, endpoint
 
 

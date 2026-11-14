@@ -1,19 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useLocation } from 'react-router-dom'
-import { ACCOUNT_LOCKED_CODE } from '../api/auth.js'
+import { ACCOUNT_LOCKED_CODE, getLockoutPolicy } from '../api/auth.js'
 import { ApiError, LOGIN_FAILED_MESSAGE } from '../api/client.js'
 import useAuth from '../auth/useAuth.js'
 import Button from '../components/Button.jsx'
 import Notice from '../components/Notice.jsx'
 import PasswordInput from '../components/PasswordInput.jsx'
 import TextInput from '../components/TextInput.jsx'
-import {
-  dashboardPathForRole,
-  LOCKOUT_DURATION_SECONDS,
-  LOCKOUT_THRESHOLD,
-  LOCKOUT_WARNING_REMAINING,
-  TEXT,
-} from '../constants.js'
+import { dashboardPathForRole, LOCKOUT_WARNING_REMAINING, TEXT } from '../constants.js'
 import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { validateLogin } from '../utils/validation.js'
@@ -27,9 +21,6 @@ const FIELDS = ['email', 'password']
  * tick never makes the countdown drift.
  */
 const COUNTDOWN_TICK_MS = 1000
-
-/** Who put an address into the locked state: the server's 403, or the page's own count. */
-const LOCKED_BY = { server: 'server', page: 'page' }
 
 /** Notices for how the user arrived here, keyed by `location.state.reason`. */
 const ARRIVAL_NOTICES = {
@@ -56,48 +47,75 @@ function secondsUntil(lockedUntil, now) {
   return Math.max(0, Math.ceil((lockedUntil - now) / 1000))
 }
 
-/**
- * How long the server's 403 says the lock has left: its `retry_after`, in whole
- * seconds. Where that is absent or not a positive number, the full
- * LOCKOUT_DURATION_SECONDS, which no lock outlasts, so Sign in never comes back
- * before the lock could have ended.
- */
-function lockSecondsFrom(details) {
+/** The 403's `retry_after`, in whole seconds, or null where it is absent or not a positive number. */
+function retryAfterFrom(details) {
   const retryAfter = details && typeof details === 'object' ? details.retry_after : undefined
-  return typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter > 0
-    ? Math.ceil(retryAfter)
-    : LOCKOUT_DURATION_SECONDS
+  return typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter > 0 ? Math.ceil(retryAfter) : null
+}
+
+/**
+ * The running lockout policy from GET /api/auth/lockout-policy (D-130 decision 7):
+ * `{threshold, durationSeconds}`, or null where the reply is not one.
+ */
+function policyFrom(body) {
+  const threshold = body && typeof body === 'object' ? body.lockout_threshold : undefined
+  const durationSeconds = body && typeof body === 'object' ? body.lockout_duration_seconds : undefined
+  return Number.isInteger(threshold) && threshold > 0 && Number.isFinite(durationSeconds) && durationSeconds > 0
+    ? { threshold, durationSeconds }
+    : null
 }
 
 /*
  * FR-03's record of each address this page has been given (D-130 decision 1):
- * address -> { failures, lockedUntil, lockedBy }, with `lockedUntil` in
- * milliseconds or null. It lives in component state for the screen's life and in
- * no storage of any kind, and nothing in it comes from the server except the
- * right-password 403's `retry_after`. A locked address never reaches
- * `afterFailure`, because Sign in is disabled for it.
+ * address -> { failures, lastFailureAt, serverLockAt, serverLockSeconds }, times in
+ * milliseconds or null. It lives in component state for the screen's life and in no
+ * storage of any kind. Nothing in it comes from the server except the right-password
+ * 403 and its `retry_after`. The policy it is read against comes from the server too,
+ * the same two numbers for every caller (D-130 decision 7).
  */
 
-/** After a 401: one more consecutive failure, and the page's own lock at LOCKOUT_THRESHOLD. */
+/**
+ * When the server's lock on `record` ends: the 403's time plus its `retry_after`, or
+ * the policy's duration where the 403 gave none. Null where there is no server lock,
+ * or where its length is not known yet.
+ */
+function serverLockEnd(record, policy) {
+  if (!record || record.serverLockAt === null) return null
+  const seconds = record.serverLockSeconds ?? policy?.durationSeconds ?? null
+  return seconds === null ? null : record.serverLockAt + seconds * 1000
+}
+
+/**
+ * When the page's own lock on `record` ends: its last failure plus the policy's
+ * duration, once its count has reached the policy's threshold. Null otherwise, and
+ * before the policy is known.
+ */
+function pageLockEnd(record, policy) {
+  if (!record || !policy || record.lastFailureAt === null || record.failures < policy.threshold) return null
+  return record.lastFailureAt + policy.durationSeconds * 1000
+}
+
+/** The later of `record`'s two locks' ends, or null where it has neither. */
+function lockEnd(record, policy) {
+  const ends = [serverLockEnd(record, policy), pageLockEnd(record, policy)].filter((end) => end !== null)
+  return ends.length === 0 ? null : Math.max(...ends)
+}
+
+/** After a 401: one more consecutive failure. A locked address never gets here, because Sign in is disabled for it. */
 function afterFailure(records, address, at) {
   const failures = (records[address]?.failures ?? 0) + 1
-  const locks = failures >= LOCKOUT_THRESHOLD
-  return {
-    ...records,
-    [address]: {
-      failures,
-      lockedUntil: locks ? at + LOCKOUT_DURATION_SECONDS * 1000 : null,
-      lockedBy: locks ? LOCKED_BY.page : null,
-    },
-  }
+  return { ...records, [address]: { failures, lastFailureAt: at, serverLockAt: null, serverLockSeconds: null } }
 }
 
 /** After the server's 403: its lock, and the count cleared. */
 function afterServerLock(records, address, at, seconds) {
-  return { ...records, [address]: { failures: 0, lockedUntil: at + seconds * 1000, lockedBy: LOCKED_BY.server } }
+  return {
+    ...records,
+    [address]: { failures: 0, lastFailureAt: null, serverLockAt: at, serverLockSeconds: seconds },
+  }
 }
 
-/** After a success: the address's count cleared. */
+/** After a success: the address's record cleared. */
 function withoutAddress(records, address) {
   if (!(address in records)) return records
   const next = { ...records }
@@ -105,11 +123,11 @@ function withoutAddress(records, address) {
   return next
 }
 
-/** At zero: every lock that has ended by `at` is cleared, with its count. */
-function withoutEndedLocks(records, at) {
+/** At zero: every record whose lock has ended by `at` is cleared, count and all. */
+function withoutEndedLocks(records, at, policy) {
   const ended = Object.keys(records).filter((address) => {
-    const { lockedUntil } = records[address]
-    return lockedUntil !== null && lockedUntil <= at
+    const end = lockEnd(records[address], policy)
+    return end !== null && end <= at
   })
   if (ended.length === 0) return records
   const next = { ...records }
@@ -211,16 +229,20 @@ export function LoginForm({
  *
  * FR-03 (D-130). The page counts consecutive 401s for each address, as typed and
  * normalised, in memory only. A 400, a 429 or a network failure does not count; a
- * 403 or a success clears the count. Once LOCKOUT_WARNING_REMAINING or fewer
- * attempts remain, the warning shows; at LOCKOUT_THRESHOLD the address enters the
- * page's locked state, with a message true of any address and a countdown from
- * LOCKOUT_DURATION_SECONDS. A 403 enters the same state from its `retry_after`.
- * While the countdown runs for the address typed, Sign in is disabled; typing
- * another address shows that address's own state. At zero the lock and the count
- * are cleared. None of this is security: the server enforces the lock whatever the
- * page shows (CLAUDE.md §6, invariant 4), and nothing the page shows depends on
- * what the server says of an account, except the right-password 403, so it is the
- * same for an address with no account.
+ * 403 or a success clears the count. The threshold and the duration it reads the
+ * count against are the server's running policy (decision 7), asked for once, after
+ * the first failed attempt, from GET /api/auth/lockout-policy. Until it arrives the
+ * page counts but shows no warning and no lock of its own, and if it never arrives
+ * the page shows neither. Once LOCKOUT_WARNING_REMAINING or fewer attempts remain,
+ * the warning shows; at the threshold the address enters the page's locked state,
+ * with a message true of any address and a countdown from the policy's duration. A
+ * 403 enters the server's locked state, counted down from its `retry_after`, or from
+ * the policy's duration where it gave none. While a countdown runs for the address
+ * typed, Sign in is disabled; typing another address shows that address's own
+ * state. At zero the record is cleared. None of this is security: the server
+ * enforces the lock whatever the page shows (CLAUDE.md §6, invariant 4), and nothing
+ * the page shows depends on what the server says of an account, except the
+ * right-password 403, so it is the same for an address with no account.
  *
  * On success the user goes to the page they were sent here from, else to their
  * role's dashboard.
@@ -239,22 +261,29 @@ export default function Login() {
   const [fieldErrors, setFieldErrors] = useState({})
   const [formError, setFormError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
-  // FR-03: the page's own record of each address (the note above `afterFailure`).
+  // FR-03: the page's own record of each address (the note above `serverLockEnd`).
   const [records, setRecords] = useState({})
+  // FR-03's running policy, or null until it has arrived (decision 7).
+  const [policy, setPolicy] = useState(null)
+  // Whether the policy has been asked for and not refused, so it is asked for once.
+  const policyAsked = useRef(false)
   // The clock the countdown is read from. It is set whenever a lock begins and
   // moved on once a second while any lock runs.
   const [now, setNow] = useState(() => Date.now())
 
-  const anyLock = Object.values(records).some((record) => record.lockedUntil !== null)
+  const anyLock = Object.values(records).some((record) => {
+    const end = lockEnd(record, policy)
+    return end !== null && end > now
+  })
   useEffect(() => {
     if (!anyLock) return undefined
     const timer = setInterval(() => {
       const at = Date.now()
       setNow(at)
-      setRecords((current) => withoutEndedLocks(current, at))
+      setRecords((current) => withoutEndedLocks(current, at, policy))
     }, COUNTDOWN_TICK_MS)
     return () => clearInterval(timer)
-  }, [anyLock])
+  }, [anyLock, policy])
 
   // Signed in, by this form or before arriving. FR-02: a role-specific dashboard, but a
   // guarded route the user was sent away from still wins, so they land where they were
@@ -265,13 +294,39 @@ export default function Login() {
 
   // FR-03's state for the address typed now.
   const record = records[normalisedAddress(values.email)]
-  const lockSeconds = secondsUntil(record?.lockedUntil, now)
+  const lockSeconds = secondsUntil(lockEnd(record, policy), now)
   const locked = lockSeconds > 0
-  const remaining = LOCKOUT_THRESHOLD - (record?.failures ?? 0)
+  // The server's lock is told, by its own message, from its 403 until it ends, even
+  // while its length is not known yet.
+  const serverEnd = serverLockEnd(record, policy)
+  const lockedByServer = record !== undefined && record.serverLockAt !== null && (serverEnd === null || serverEnd > now)
+  const remaining = policy && record ? policy.threshold - record.failures : null
   const warning =
-    !locked && remaining >= 1 && remaining <= LOCKOUT_WARNING_REMAINING ? TEXT.attemptsRemaining(remaining) : null
+    !locked && !lockedByServer && remaining !== null && remaining >= 1 && remaining <= LOCKOUT_WARNING_REMAINING
+      ? TEXT.attemptsRemaining(remaining)
+      : null
   let lockMessage = null
-  if (locked) lockMessage = record.lockedBy === LOCKED_BY.server ? TEXT.accountLocked : TEXT.accountMayBeLocked
+  if (lockedByServer) lockMessage = TEXT.accountLocked
+  else if (locked) lockMessage = TEXT.accountMayBeLocked(policy.durationSeconds)
+
+  /** Asks for the running policy once (decision 7). A refusal lets the next failure ask again. */
+  function requestPolicy() {
+    if (policy !== null || policyAsked.current) return
+    policyAsked.current = true
+    getLockoutPolicy()
+      .then((body) => {
+        const loaded = policyFrom(body)
+        if (loaded === null) {
+          policyAsked.current = false
+          return
+        }
+        setNow(Date.now())
+        setPolicy(loaded)
+      })
+      .catch(() => {
+        policyAsked.current = false
+      })
+  }
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -302,6 +357,7 @@ export default function Login() {
         const at = Date.now()
         setNow(at)
         setRecords((current) => afterFailure(current, attempted, at))
+        requestPolicy()
       } else if (error instanceof ApiError && error.status === 403 && error.code === ACCOUNT_LOCKED_CODE) {
         // FR-02: "Where the account is locked and the submitted password was
         // correct, a distinct message is shown." The server sends that 403 only to
@@ -310,7 +366,8 @@ export default function Login() {
         // countdown, so nothing is left in the banner when the lock ends.
         const at = Date.now()
         setNow(at)
-        setRecords((current) => afterServerLock(current, attempted, at, lockSecondsFrom(error.details)))
+        setRecords((current) => afterServerLock(current, attempted, at, retryAfterFrom(error.details)))
+        requestPolicy()
       } else {
         const extracted = extractFieldErrors(error, FIELDS)
         setFieldErrors(extracted.fieldErrors)

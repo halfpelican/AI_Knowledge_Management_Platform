@@ -44,11 +44,15 @@ User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
-# What docs/api-contract.md says: the two routes D-21 lets an anonymous client reach,
-# and every protected URL name. The tests below check the URL conf's own permission
+# What docs/api-contract.md says: the routes an anonymous client may reach, the two D-21
+# lets through and, since D-130 decision 7, FR-03's lockout policy, and every protected URL
+# name. The tests below check the URL conf's own permission
 # classes against these names; the dual-role matrix (dual_role_matrix.py) then
 # reports, per protected endpoint, whether a passing test reached it from each role.
-OPEN_ROUTES = {"auth-register", "auth-login"}
+OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy"}
+# What each opt-out answers an anonymous empty request with. Registration and login validate the
+# empty body (400). The policy reads no body and answers every caller alike (200).
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
@@ -186,17 +190,18 @@ def _walk(client, expected_for):
     assert not failures, failures
 
 
-def test_every_route_but_the_two_opt_outs_is_401_anonymously(api_client):
+def test_every_route_but_the_opt_outs_is_401_anonymously(api_client):
     def expected(name):
-        # The two opt-outs run their validation on the empty body: 400, not 401.
-        return 400 if name in OPEN_ROUTES else 401
+        # The opt-outs answer for themselves: 400 where they validate the empty body, 200 for the
+        # policy, which reads none (D-130 decision 7).
+        return OPEN_ROUTE_STATUS.get(name, 401)
 
     _walk(api_client, expected)
 
 
-def test_every_route_but_the_two_opt_outs_is_401_with_a_forged_session(api_client):
+def test_every_route_but_the_opt_outs_is_401_with_a_forged_session(api_client):
     api_client.cookies[settings.SESSION_COOKIE_NAME] = "forged-session-key"
-    _walk(api_client, lambda name: 400 if name in OPEN_ROUTES else 401)
+    _walk(api_client, lambda name: OPEN_ROUTE_STATUS.get(name, 401))
 
 
 def test_every_protected_route_names_401_as_the_scheme(api_client):

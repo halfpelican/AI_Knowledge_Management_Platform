@@ -40,6 +40,16 @@ export function logout() {
   return post('/auth/logout')
 }
 
+/**
+ * FR-03's running lockout policy (D-130 decision 7): 200
+ * `{"lockout_threshold": 5, "lockout_duration_seconds": 900}`, anonymous, the same for
+ * every caller. The sign-in page asks after its first failed attempt, so a policy set
+ * in the server's .env reaches the page without a rebuild.
+ */
+export function getLockoutPolicy() {
+  return get('/auth/lockout-policy')
+}
+
 /** The signed-in user, or 401. Also refreshes the csrftoken cookie. */
 export function fetchCurrentUser(options = {}) {
   return get('/auth/me', options)

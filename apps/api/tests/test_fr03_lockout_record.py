@@ -11,7 +11,7 @@ sign-in page runs FR-03's countdown. The 401 does not change at all (security fi
 byte-identical for an unknown address, a wrong password, a locked account given a wrong password,
 and a locked account given the right one past LOCKOUT_NOTICE_CEILING, and neither status carries a
 Retry-After header. The locked notice now names an administrator who can unlock the account
-(FR-03's messaging clause).
+(FR-03's Front-End clause).
 
 Windows' clock ticks at about 15.6 ms, so nothing here is told apart by a timestamp: an instant is
 asserted to lie between two readings taken around the request, and ``retry_after`` against the

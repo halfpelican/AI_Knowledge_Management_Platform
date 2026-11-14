@@ -29,29 +29,26 @@ export function dashboardPathForRole(role) {
   return DASHBOARD_PATHS[role] ?? DASHBOARD_PATHS[ROLES.employee]
 }
 
-/**
- * FR-03's lockout policy (D-130), copied from apps/core/constants.py: the
- * consecutive failures that lock an account (LOCKOUT_THRESHOLD) and how long the
- * lock lasts (LOCKOUT_DURATION, here in whole seconds). The sign-in page counts
- * its own failures for the address typed against the first and counts down the
- * second. Neither is security: the server enforces the lock whatever the page
- * shows (CLAUDE.md §6, invariant 4). apps/api/tests/
- * test_front_end_constants_agreement.py fails when the copies drift.
+/*
+ * FR-03's lockout policy, the failures that lock an account and how long the lock lasts, is
+ * not copied here. Since D-130 decision 7 it is the server's .env, and the sign-in page fetches
+ * it from GET /api/auth/lockout-policy (src/api/auth.js getLockoutPolicy), so a change needs no
+ * rebuild. apps/api/tests/test_front_end_constants_agreement.py fails if a copy comes back.
  */
-export const LOCKOUT_THRESHOLD = 5
-export const LOCKOUT_DURATION_SECONDS = 15 * 60
 
 /**
  * The remaining-attempts warning shows once this many attempts or fewer remain
- * before the page's own count reaches LOCKOUT_THRESHOLD, which is after the third
- * and the fourth consecutive failure (Benjamin's decision 2, D-130). The page's
- * own rule, with no counterpart on the server.
+ * before the page's own count reaches the policy's threshold, which at the default
+ * of five is after the third and the fourth consecutive failure (Benjamin's
+ * decision 2, D-130). The page's own rule, with no counterpart on the server.
  */
 export const LOCKOUT_WARNING_REMAINING = 2
 
-/** LOCKOUT_DURATION_SECONDS in words, rounded up to whole minutes, for the sentence that names it. */
-const LOCKOUT_DURATION_MINUTES = Math.ceil(LOCKOUT_DURATION_SECONDS / 60)
-const LOCKOUT_DURATION_WORDS = LOCKOUT_DURATION_MINUTES === 1 ? '1 minute' : `${LOCKOUT_DURATION_MINUTES} minutes`
+/** A lock's length in words, rounded up to whole minutes, for the sentence that names it. */
+function durationInWords(seconds) {
+  const minutes = Math.ceil(seconds / 60)
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`
+}
 
 /**
  * The two document statuses a 201 can carry (docs/schema-v1.md §3, mirrored in
@@ -322,18 +319,21 @@ export const TEXT = {
     'This account is temporarily locked after too many failed sign-in attempts. ' +
     'Try again when the timer ends, or ask an administrator to unlock it.',
   // FR-03: the sign-in page's own count of consecutive failures for the address typed
-  // reached LOCKOUT_THRESHOLD. The page does not know whether the address has an account,
+  // reached the running policy's threshold. The page does not know whether the address has an account,
   // nor whether the server locked it: the count is the page's alone (D-130 decision
   // 1), and failures elsewhere can have locked it sooner, while a success elsewhere
   // can have reset the server's count. So the sentence is true of any address (the
   // security review, finding C): "if this address has an account", "may" and "up to".
-  accountMayBeLocked:
-    `Too many failed sign-in attempts. If this address has an account, it may be locked for up to ${LOCKOUT_DURATION_WORDS}, ` +
+  // `durationSeconds` is the running policy's (D-130 decision 7).
+  accountMayBeLocked: (durationSeconds) =>
+    `Too many failed sign-in attempts. If this address has an account, it may be locked for up to ${durationInWords(durationSeconds)}, ` +
     'and an administrator can unlock it sooner.',
   // Shown with either lock message. A release (POST /api/users/{id}/unlock) reaches the server
   // and not a sign-in page already open, whose countdown is its own record. So the page says how
-  // to pick the release up: a reload clears that record, and a lock still live just answers again
-  // (the pre-PR security review, finding 1). Conditional, so it is true of any address.
+  // to pick the release up: a reload clears that record (the pre-PR security review, finding 1).
+  // Conditional, so it is true of any address. A lock still live answers again, but every attempt
+  // during it counts toward D-26's notice ceiling. Within it, the right password gets the 403
+  // again; past it, even the right password gets the generic 401 until the lock ends.
   lockedReloadHint: 'If an administrator has unlocked the account, reload this page to sign in.',
   // FR-03's warning, beside FR-02's generic banner, once LOCKOUT_WARNING_REMAINING or
   // fewer attempts remain (decision 2). From the page's own count, so it is the same

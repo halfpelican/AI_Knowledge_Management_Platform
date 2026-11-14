@@ -220,7 +220,7 @@ def test_an_unknown_email_records_nothing(api_client, employee):
 # --- FR-02 lockout enforcement (D-25) ----------------------------------------------
 # "Failed attempts increment a counter; five consecutive failures lock the account
 # for 15 minutes" and "403 forbidden if account is locked". The lock is enforced
-# here, in FR-02; FR-03 adds only the warning interface.
+# here, in FR-02. FR-03 adds the warning, the countdown, the release and LoginAttempts (D-130).
 
 
 def lock(user, remaining=LOCKOUT_DURATION):
