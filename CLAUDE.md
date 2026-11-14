@@ -215,6 +215,8 @@ set during evaluation, not guessed in a code review.
 | `TRANSCRIPTION_SILENCE_DBFS` | **-45 dBFS**, *tune* — a segment whose loudest half second is quieter is never sent to Whisper |
 | `MAXIMUM_RECORDING_BYTES` | 500 MB — the largest recording the page decodes; client-only, since the recording never reaches the server |
 | `MAXIMUM_TRANSCRIPTIONS_IN_FLIGHT` | 2 — segments the whole server sends to FLM at once (D-123) |
+| `MAXIMUM_TRAVERSAL_DEPTH` | **2**, *tune* — hops the knowledge map walks from a selected node (FR-20): the shortest walk that joins one item to another through a tag or a person they share (D-132) |
+| `MAXIMUM_NODE_COUNT` | **50**, *tune* — nodes one knowledge-map response returns before truncation is reported (FR-20): the smallest multiple of 50 that holds the reference corpus's whole map, 41 nodes (D-132) |
 | `MAXIMUM_STATEMENTS` | **6**, *tune* — chosen on the development set; a retry after a cut-off asks for fewer (D-100) |
 | `MINIMUM_QUESTION_LENGTH` | ~10 characters |
 | `MAXIMUM_QUESTION_LENGTH` | ~500 characters |

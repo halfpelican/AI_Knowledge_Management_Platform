@@ -12014,3 +12014,308 @@ Employee's question was.
     `corpus/objective-06/runs/2026-11-10-anthropic/` and
     `corpus/objective-06/runs/2026-11-11-anthropic/`;
   - dated notes of 12 November on D-107, D-108, D-109, D-110, D-117, D-119, D-122 and D-126.
+
+## D-132 · FR-20's knowledge map: one read-only route behind `view_knowledge_map`, scoped before it is capped, a hand-built diagram and a table equivalent
+
+**Status:** Settled by the user (the choices below, 14 November 2026) · **Date:** 2026-11-14 ·
+**Concerns:** FR-20, UC-11, NFR-14, NFR-16, NFR-17, FR-06, FR-09, FR-10, FR-11, FR-15, invariants 1,
+3 and 4, D-07, D-16, D-34, D-53, D-65, D-66, D-72, D-105, D-119, D-130, `apps/api/knowledge_map.py`,
+`apps/api/repository.py`, `apps/api/views.py`, `apps/api/serializers.py`, `apps/api/urls.py`,
+`apps/core/constants.py`, `apps/accounts/migrations/0011_seed_view_knowledge_map.py`,
+`frontend/src/pages/KnowledgeMap.jsx`, `scripts/knowledge_map_reach.py`, `docs/api-contract.md`,
+`docs/accessibility.md`, `docs/schema-v1.md`, `CLAUDE.md` section 5 · **Stage:** NIT3004, a COULD
+requirement built after M7's freeze at the user's instruction · **Area:** presentation and
+retrieval scoping, Benjamin Morovan's (CLAUDE.md §1)
+
+**What the proposal asks for, in its words.**
+
+- **FR-20, Front-End:** "A node-link diagram showing documents, meetings, tags, and contributors,
+  with node type distinguished by colour and shape." "Selecting a node reveals its connections;
+  selecting again opens the underlying item." "A tabular equivalent presents the same relationships
+  as sortable rows, since a node-link diagram cannot be used with a screen reader and colour-coded
+  types are indistinguishable to many users."
+- **FR-20, Server-End:** "Assembles nodes and edges from existing tables (ContentTags for
+  classification links, Documents.uploaded_by for authorship, MeetingAttendees for participation)
+  rather than maintaining a separate relationship store." "traversal depth and returned node count
+  are capped, and truncation is reported to the interface so that a partial view is not presented as
+  complete." "nodes the user cannot access are removed entirely rather than anonymised, and
+  connection counts are recomputed after filtering, since a visible placeholder would disclose both
+  the existence and the volume of restricted content." "200 OK with nodes, edges, and a truncation
+  indicator."
+- **FR-20, Database:** "Documents, Meetings, ContentTags, Tags, Users (Read)", with a field list for
+  each: Documents `doc_id`, `uploaded_by`; Meetings `meeting_id`, `title`; ContentTags
+  `content_tag_id`, `tag_id`, `source_id`; Tags `tag_id`, `tag_name`; Users `user_id`, `name`.
+- **NFR-17:** the visualisation "must provide an equivalent accessible alternative — a
+  keyboard-navigable, sortable table view conveying the same nodes and relationships — for users
+  who cannot use the graphical, colour-coded diagram." Its test: "Screen-reader test
+  (NVDA/Voiceover) confirming all node and relationship information is reachable through the
+  tabular view, satisfying WCAG 2.1 SC 1.1.1."
+- **UC-11, Explore Knowledge Map.** Primary actor: "Employee". Main flow: "03 The system assembles
+  nodes and edges from the ContentTags, Documents. Uploaded_by and MeetingAttendees relationships,
+  restricted to that scope. 04 The system applies the configured cap on traversal depth and returned
+  node count. 05 The system removes any node the Employee cannot access entirely, rather than
+  displaying it anonymised, and recomputes connection counts after that removal." "07 The Employee
+  selects a node; the system reveals its direct connections. 08 The Employee selects the same node
+  again; the system opens the underlying item." **A1:** "Instead of, or alongside, the diagram, the
+  system presents the same nodes and relationships as sortable rows"; "Selecting a row has the same
+  effect as selecting a node at step 7." **A2:** "The configured depth or node-count limit was
+  reached before every accessible relationship could be included."; "The system displays a
+  truncation indicator alongside the map or table, so a partial view is never presented as
+  complete." **E1:** "The system presents an empty map or table rather than an error, so that
+  neither reveals the existence of content the Employee cannot see." **E2:** "The system directs the
+  Employee to UC02 Log In and, on success, returns them to the knowledge map." **On failure:** "No
+  map or table is presented."
+- **The two settings:** `MAXIMUM_TRAVERSAL_DEPTH`, "To be tuned", "Maximum number of relationship
+  hops explored from any single node"; `MAXIMUM_NODE_COUNT`, "To be tuned", "Ceiling on nodes
+  returned in one request before truncation is reported".
+
+**Gaps in the proposal, recorded rather than filled silently.**
+
+- **Tags and people carry no visibility field.** The proposal's only one is
+  `Documents.visible_to_roles`. Its pseudocode assembles nodes "FROM Documents, Meetings, Tags,
+  Users WHERE permissionFilter IS SATISFIED", which has nothing to test on a Tag or a User row.
+  Read literally, a tag carried only by restricted documents, or a person who only uploaded them,
+  survives as a node with no edge, and can still take a place under the cap.
+- **The depth setting presumes a start node the request does not carry.** "Hops explored from any
+  single node" describes a walk from one node; the pseudocode's signature is `(requestingUser,
+  selectedFilters)` and it covers the use case's steps 2 to 6 only. How step 07's connections are
+  fetched is not stated.
+- **Both caps are "To be tuned" against "the verification criteria stated in the corresponding
+  objective", and no objective mentions the visualisation.**
+- **No permission, role restriction or navigation placement is stated.** The use-case diagram gives
+  UC-11 to the Employee, whom the Administrator generalises.
+- **"The underlying item" is defined for nothing.** A document has a detail view (FR-15) and a
+  meeting a page (FR-09, FR-16). The proposal has no page for a tag or for a person.
+- **"Contributor" is never defined.** The nearest text is the gap analysis: "the record of who
+  contributed to a discussion, and of which documents and meetings a person is connected to".
+- **`selectedFilters` and `filtersMatch` occur only in the pseudocode.** No FR-20 clause and no
+  UC-11 step defines a filter.
+- **The only figure of the knowledge map is Figure 8.2,** a wireframe that is an image. The user
+  supplied Figure 8.7, the Evidence mock-up ("Claims to passages, unsupported claims beneath,
+  selected claim at the right"), as the layout to follow.
+
+### The user's choices (14 November 2026, each put as a tabbed question with a recommendation)
+
+| Question | Choice |
+|---|---|
+| The diagram: a library or hand-built | **Hand-built, no package installed.** The alternatives put to him: `d3-force` 3.0.0 for layout only (5.7 kB gzipped, ISC, with `d3-dispatch`, `d3-quadtree` and `d3-timer`; pure computation with no jsdom mock, but it draws nothing and has no accessibility support); `@xyflow/react` 12 (60.1 kB gzipped, MIT, at least 18 lockfile packages; focusable HTML nodes with ARIA, but an editor whose drag and arrow-key moves must be switched off, needing four global jsdom mocks in `tests/setup.js` and bringing a stylesheet the contrast sweep cannot see). Canvas and WebGL libraries were not put: their nodes are not elements, so nothing is focusable or named |
+| The layout | The proposal's Evidence mock-up (Figure 8.7), which he supplied: a legend on the left, the diagram in columns, a "Selected" panel on the right that carries the open action |
+| The two caps | **`MAXIMUM_TRAVERSAL_DEPTH = 2`, `MAXIMUM_NODE_COUNT = 50`**, by the rules below. Not chosen: 2 hops and 100 nodes; 1 hop and 50 nodes |
+| Who may open it | **Both roles, behind a new permission code `view_knowledge_map`** held by Employee and Administrator, with the link "Knowledge map" after "Ask". Not chosen: both roles with a session only, as the dashboard and the repository are (no migration, and no 403 to prove); Administrators only |
+| Contributor nodes | **Both roles see them; the name only.** Never the email, never the role. Not chosen: name and email; Administrators only |
+| Who a contributor is | **A person who uploaded a document or attended a meeting the viewer can read.** His answer was that contributors are those who review the documents. No table records who reviewed a document (a confirmed or corrected tag stores `applied_by` as "user", not which user), so he chose to **add reviewers later, as a follow-up**, over adding a reviewed-by record in this pull request |
+| "Selecting again opens the underlying item" for a tag and a contributor | **A tag opens the repository filtered by it; a contributor opens nothing, and the screen says so.** Not chosen: both open nothing |
+| UC-11 E2, the return to the map after signing in again | **Left as it is and recorded** (item 7 below). Not chosen: the change in this pull request; a separate follow-up |
+| `CLAUDE.md` section 5 | **The two cap rows are added in this pull request** |
+| `npm ci` in the worktree's `frontend/` | Approved: the locked versions only, nothing added |
+
+### The rules behind the two caps
+
+`scripts/knowledge_map_reach.py` reads `corpus/objective-02/manifest.json` and builds, for each
+role, the graph FR-20 builds from it. Its output on 14 November 2026:
+
+```
+Employee: 34 nodes (sources 20, tags 13, contributors 1), 59 edges
+  1 hop: from one start, min 1, median 4, max 18 of 34
+  2 hops: from one start, min 1, median 20, max 31 of 34
+  3 hops: from one start, min 1, median 31, max 31 of 34
+Administrator: 41 nodes (sources 25, tags 14, contributors 2), 68 edges
+  1 hop: from one start, min 1, median 4, max 18 of 41
+  2 hops: from one start, min 1, median 11, max 31 of 41
+  3 hops: from one start, min 1, median 26, max 34 of 41
+```
+
+- **Depth 2.** One hop holds what the item's own page already lists. Two hops are the shortest walk
+  that joins one item to another through a tag or a person they share. Three hops hold most of the
+  connected map again, which is the overview.
+- **50 nodes.** The smallest multiple of 50 that holds that corpus's whole map (41 for an
+  Administrator), so a demonstration on it is not cut by the cap.
+- **What the measurement does not cover:** any other corpus; the alpha's database; attendance (no
+  loader of that corpus writes an attendee, and none of its transcripts carries a tag, so its
+  meetings are nodes with no edge); the manifest's `invalid` items, of which the stored ones would
+  add document nodes with no tag. On that corpus the node cap cannot bind: node-count truncation is
+  shown by tests, and "attended" edges by a meeting ingested with attendees.
+
+### The session's choices where the brief and the proposal were silent
+
+**The route.** `GET /api/knowledge-map`, with an optional `focus_type` and `focus_id` (both or
+neither, validated for shape only, D-65), behind `[IsAuthenticated, CanViewKnowledgeMap]`. Nothing
+on the route is a single scoped object, so the 403 has no 404 to precede, the arrangement FR-19's
+routes use. It is not throttled, as the dashboard, the repository and the meetings list are not.
+`docs/api-contract.md` holds the shape.
+
+**Two parts, and only the first touches the database.**
+
+- **Assembly** runs a fixed set of queries for the role `permission_scope` re-reads on the request,
+  each starting from or constrained by `scoped_documents` or `scoped_meetings`, and returns plain
+  nodes and edges. A tag link is a `ContentTags` row with `provisional` false, `removed` false and a
+  dimension in `REPOSITORY_TAG_DIMENSIONS`, matched on `source_type` and `source_id` together: the
+  rule FR-15's reads apply, defined once in `apps/api/repository.py`. `Tag.active` and `Tag.grown`
+  are not consulted. Attendee rows are read only for meetings already in scope. A tag or a person is
+  a node only when such a link reaches it. Edges are de-duplicated, because neither link table is
+  unique.
+- **The walk** is a pure function over those nodes and edges, the focus and the two caps. It
+  receives no queryset, no user and no identifier to look up, and it decides the returned nodes and
+  edges, both truncation fields and the counts. The focus is found by membership in the assembled
+  graph, so no statement takes it as a parameter.
+
+**The walk.** Without a focus it takes each source in turn, newest first, with its tags and its
+contributors, and includes a source only when it and its not-yet-included neighbours fit under the
+node cap; one that does not fit is skipped and the walk carries on. With a focus it starts from that
+node and takes up to `MAXIMUM_TRAVERSAL_DEPTH` hops, ring by ring, each ring ordered as a whole
+(sources newest first, then tags by dimension and name, then contributors by name), until the node
+cap. Returned edges are the scoped edges with both ends returned. Connection counts are taken last,
+over the returned edges.
+
+**Truncation.** `truncated` is true when a returned node has an in-scope neighbour that was not
+returned, or in the overview when an in-scope source was not returned. `truncated_by` is
+`"node_count"` if and only if a node within reach was left out because the count was reached,
+otherwise `"depth"`; `"node_count"` when both apply.
+
+**One answer for a focus that is not in the viewer's map.** An unknown identifier, a source outside
+the scope, a tag with no live link on an in-scope source, a person with no in-scope contribution and
+a type that does not match its identifier all get the same body: `focus` null, no nodes, no edges,
+not truncated. It is the body an empty overview gets, and it holds nothing the caller sent.
+
+**The screen.** `/knowledge-map` for both roles. Each node is a real link: an unselected one links
+to the map's own address with the selection in it, and the selected document, meeting or tag links
+to its item instead, so "selecting again" is a second activation of the same control. The selected
+contributor is not a link. The diagram is three columns from a pure layout function (contributors,
+then documents and meetings, then tags) over an `aria-hidden` layer of lines, and the links are
+rendered column by column so the tab order is the reading order. The four node types are a square,
+a circle, a diamond and a triangle, filled from `--color-primary`, `--color-success`,
+`--color-warning` and `--color-text-muted`, each of which already had a tested pair at 3:1 or better
+on `--color-surface`. Two tables, one row per node and one row per relationship, are always beside
+the diagram and sort in the page.
+
+**The migration.** `accounts 0011_seed_view_knowledge_map` depends on `0008_seed_manage_tags`. It is
+numbered 0011 because FR-03's unmerged branch holds 0009 and 0010 (D-130). Both branches build on
+0008, so once both are on `main` the accounts app has two leaves. **The pull request that merges
+second adds a merge migration naming both leaves and edits no existing migration.** After a deploy:
+run `migrate`, then confirm `GET /api/roles` lists `view_knowledge_map` under both roles. A database
+without the row answers 403 to everybody.
+
+### Departures from the proposal, and readings of it
+
+1. **All removal before the cap.** The proposal scopes at assembly (UC-11 step 03), caps (04), then
+   removes again (05). Built with every removal before the cap, including the tags and people step
+   03 cannot filter, so step 05 has nothing left to remove. Otherwise the capped set and the
+   truncation flag could turn on restricted material (invariant 1). Counts are still taken last.
+2. **"Accessible" is defined for a tag and a person:** linked to at least one in-scope source.
+3. **A permission code the proposal does not name,** at the user's choice.
+4. **No filters.**
+5. **A document node shows its title,** which FR-20's Documents field list omits, and **a tag shows
+   its dimension,** which its Tags list omits: a name is unique only within a dimension.
+6. **Tables read beyond FR-20's Database line:** `MeetingAttendees`, which its own Server-End
+   clause names, and through FR-06 `Roles`, `Permissions` and `RolePermissions`. The route's own
+   code runs SELECT statements only; the session row is still saved on every request by FR-04's
+   sliding expiry.
+7. **UC-11 E2 is met in part,** at the user's choice. Opening `/knowledge-map` while signed out
+   returns there after sign-in, without the selection, because `RequireAuth` passes the path only. A
+   session that expires during use returns to the dashboard, as FR-02 has it. No authentication code
+   changes.
+8. **NFR-17's stated test is a screen-reader run, and NFR-16's reflow at 320 px and its axe run are
+   browser measurements.** The suite asserts structure. The three are owed by a person.
+9. **Reviewers are not contributors yet** (the user's choice above).
+10. **Built after M7's freeze** ("No new functionality after this point", 13 November), at the
+    user's instruction.
+11. **A contributor has no underlying item: declined.** The second selection opens nothing and the
+    screen says so. **A tag's underlying item is read as** FR-15's repository filtered by that tag;
+    a tag carried only by meetings, which nothing writes today, would open an empty repository.
+12. **The request takes a focus, and step 07 is a second request.**
+13. **A 400 for a malformed query,** this API's convention (D-65). FR-20 states only 200.
+14. **The depth cap binds only on a focused request.** In the overview every node is one hop from a
+    source, so the depth cap is not what limits it.
+15. **Sources in every status are nodes,** as the repository and the meetings list show them.
+16. **Provisional and removed links are not edges, a retired tag still linked is a node, and
+    Department is not a tag node** (it is a column, D-72): FR-15's reading of each.
+17. **`connection_count` is the number of returned edges,** so one node can show different counts in
+    different views, and the screen says "connections shown". The response also carries `focus`,
+    `truncated_by` and the two maximums beyond "nodes, edges, and a truncation indicator".
+18. **The overview skips a source that does not fit.** A source with as many connections as the cap
+    never appears in the overview and is reached by selecting one of its connections. A person's or
+    a tag's full list is not reachable through the map when it exceeds the cap: a tag has the
+    repository filter, a person has nothing.
+19. **Two people with one name, or two documents with one title, read alike on the map,** since the
+    email is not shown. A display name is free text at registration. Each connected document's and
+    meeting's own page shows the address.
+20. **A retired tag's identifier reaches an Employee here for the first time,** when the tag is
+    still linked to a readable source. Accepted: the apply route answers one 400 for an unknown, an
+    inactive and a withheld identifier alike, and the tag routes are the Administrator's.
+
+### The design review, before anything was built (14 November 2026)
+
+The design note was reviewed by the `security-reviewer` and the `requirements-auditor`, each
+read-only, neither running anything. Their reports are in the session's records, not in the
+repository; what follows is each finding and what was done with it.
+
+**What the design rested on, and how far that was checked.** A read-only pass before the design
+mapped the requirement text, the data and its scope rules, the tag rules, the server test gates,
+the front end's gates and the diagram libraries. Each map was to be checked by a second agent told
+to refute it. The usage limit cut that short:
+
+- **checked:** the map of the requirement text (its facts were confirmed against the proposal's
+  lines, none found wrong);
+- **not checked by a second agent:** the maps of the data and scope rules, the tag rules, the server
+  test gates, the front end's gates and the diagram libraries;
+- **not produced:** the map of the records and of the two unmerged branches' conflicts.
+
+The unchecked maps were used as leads. The two reviewers above opened the code for what their
+findings rely on, and the build's tests are what hold the rest. The library sizes in the table of
+choices are bundlephobia's figures as one agent read them on 14 November 2026, and were not read a
+second time.
+
+**The `security-reviewer`'s verdict, in its words:** "I found no path in the design as written by
+which restricted material becomes a node, an edge, a count, an order, a truncation flag or a status
+difference for an Employee: section 3.1 scopes before everything, and every later step reads only
+that set."
+
+| Finding | What it is | Disposition |
+|---|---|---|
+| F1, medium | Echoing the requested focus made two byte-level tests unsatisfiable, and would trip the fail-closed probe | `focus` is null unless the focus is a returned node, so every not-in-scope cause gets one constant body |
+| F2, medium | Leaking implementations the test list would not catch: a depth flag read from an unscoped degree; a cap before scope with the restricted rows sorted last; a process-level memo of the graph; a tag whose only in-scope link is removed or provisional | The tests it specified are in the list: focus with depth, focus at the node cap, an overview over the cap with restricted rows newer, between and older, one process serving both roles in turn, the removed-only and provisional-only tags, a meeting link sharing a document's identifier |
+| F3, medium | "Re-point one dependencies line" could leave a deployed database with an applied migration whose dependency is unapplied | The merge-migration rule above, and the `GET /api/roles` check after a deploy |
+| F4, medium | "Stop at the first source that does not fit" let one source with many tags or attendees hide everything older, for every reader | The overview skips it and carries on (item 18) |
+| F5, low | "The D-53 scan covers it" overstated: the scan checks Document, Meeting and ContentChunk managers only | The two-part structure above, and a module check that the reader holds no `Tag.objects`, no user-model manager and no reverse-relation read |
+| F6, low | The focus must be found in the assembled graph, or the cost of a request would vary with restricted links | No statement takes the focus; a test compares the SQL of the probe requests |
+| F7, low | Two contributors with one name cannot be told apart, and a name is chosen at registration | Accepted, item 19 |
+| F8, low | Unthrottled is acceptable beside the meetings list and browse only if no transcript or extracted text is selected and the statement count does not grow with the corpus | Sources are read as identifiers, titles and timestamps; a test holds the statement count; nothing is cached |
+| F9, low | A tag name holding `&` or `#` would break a hand-built address; a non-canonical identifier in the address would mark nothing selected; a malformed address would offer a retry that cannot succeed; a module-level cache would cross a sign-out | Addresses are built with `URLSearchParams`; the selected node is the one the response names; a malformed selection makes no request; the API module holds no cache |
+| F10, low | Returning Tag identifiers is new surface for retired tags only | Kept, item 20 |
+| F11, low | Ring order and the reason reported at exactly the cap were not determined | Stated above |
+
+**The `requirements-auditor`'s verdict, in its words:** "INCOMPLETE as a build specification; it
+does not contradict the requirement." "I tried to break the scoping order (scope, then cap, then
+count) and found no way for restricted material to reach the cap, the truncation fields, a count or
+a focus answer".
+
+| Finding | What it is | Disposition |
+|---|---|---|
+| F-01, medium | The contributor that opens nothing, and the tag's reading, were not recorded departures | Item 11 |
+| F-02, medium | Further readings built but not listed | Items 12 to 17 |
+| F-03, medium | "Only SELECT statements run" is false at the request level: the session row is saved | Item 6; the test allows `django_session` alone |
+| F-04, medium | A table user could skip past the truncation notice | The notice comes before the skip link, and its sentence is each table's accessible description |
+| F-05, medium | A tag's dimension was in the response and nowhere on the screen | A tag reads "Topic: people" in the diagram, the panel and both tables |
+| F-06, medium | The tab order of the node links was not specified | Column by column, in the DOM |
+| F-07, medium | Colour and shape were tested by class name only | A stylesheet test of the node classes' fill tokens, a different shape element per type, and the legend against the diagram |
+| F-08, medium | Server clauses with no test | Added: the overview cap and its skip, the cap on a focused request, no email and no role in the bytes, the response contract, E1 without a focus, each 400, an isolated node, counts on a truncated view, a role change, the seed, a source in a failure status, a Department link |
+| F-09, medium | Interface clauses with no test | Added: a row selects as a node does, the served counts, no map or table on failure, the count line, focus after a selection, the navigation link, the address restoring a selection, the table regions as stops, the legend |
+| F-10, medium | The migration plan understated the second pull request's work | The merge-migration rule; the tests that pin the accounts leaf and each role's exact set change in this build |
+| F-11, medium | Records that must change and were not named | Named in the build |
+| F-12, low | The truncation reason and the ring order were open | Stated above |
+| F-13, low | The first departure described the proposal's order inaccurately | Reworded as item 1 |
+| F-14, low | UC-11 E2 was recorded imprecisely | Item 7, with a test of the path that works |
+| F-15, low | The node-count notice gave advice that is false on a focused view; counts were not said to be of what is shown | Two wordings; "connections shown"; item 18 |
+| F-16, low | A hand-edited address would get "Try again" for a 400 | No request, and no retry |
+| F-17, low | Whether a Relationships row selects, and where the sort lives | Its ends are the same links; the sort is page state and resets when the page is left |
+| F-18, low | Reflow, long labels, the selected node's own mark, and text on a fill | A labelled scroll region, wrapping labels, a heavier outline and the word "selected", and text on the surface only; the browser measurements are item 8 |
+| F-19, low | On the measured corpus meetings connect to nothing and the node cap never binds | Said under the caps' rules |
+| F-20, low | The live-link rule would be written a fifth time, and the node types restated `SOURCE_TYPES` | One predicate in `repository.py`; `KNOWLEDGE_MAP_NODE_TYPES` is built from `SOURCE_TYPES` |
+
+**Not covered by this entry, as first written:**
+
+- the build itself, its tests and its deliberate breaks;
+- the security review of the built code;
+- the requirements audit of the built code.
+
+Each gets a dated note below.

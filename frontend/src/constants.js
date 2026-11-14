@@ -210,6 +210,32 @@ export const ACTION_ITEM_ORIGIN = {
 }
 
 /**
+ * FR-20's knowledge map (D-132): the node types, the relationships and the reasons
+ * a view is cut short, as `GET /api/knowledge-map` returns them. Each mirrors a
+ * tuple in apps/core/constants.py (KNOWLEDGE_MAP_NODE_TYPES,
+ * KNOWLEDGE_MAP_RELATIONSHIPS, KNOWLEDGE_MAP_TRUNCATION_REASONS), and
+ * apps/api/tests/test_front_end_constants_agreement.py fails when the two drift.
+ * Vocabularies, not tuned values: the two caps reach the page in the response.
+ */
+export const KNOWLEDGE_MAP_NODE_TYPE = {
+  document: 'document',
+  meeting: 'meeting',
+  tag: 'tag',
+  contributor: 'contributor',
+}
+
+export const KNOWLEDGE_MAP_RELATIONSHIP = {
+  tagged: 'tagged',
+  uploaded: 'uploaded',
+  attended: 'attended',
+}
+
+export const KNOWLEDGE_MAP_TRUNCATION_REASON = {
+  nodeCount: 'node_count',
+  depth: 'depth',
+}
+
+/**
  * How often the meeting page asks `GET /api/meetings/{id}/summary` again while the
  * latest run is "Processing", in milliseconds (FR-16: "202 Accepted while
  * processing"). The page's own value with no counterpart on the server, which leaves
