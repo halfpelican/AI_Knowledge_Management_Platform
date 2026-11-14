@@ -1,0 +1,16 @@
+docs/alpha-deployment.md step 8, run again on 2026-11-14T15:19:01.9809132+11:00 after the laptop's restart; the 13 November run's output was not saved.
+--- 1. the SPA
+HTTP/1.1 200 OK
+Cache-Control: no-cache
+Content-Type: text/html; charset=utf-8
+Server: waitress
+<div id="root"></div>
+--- 2. a client route
+200 text/html; charset=utf-8
+--- 3. an asset
+HTTP/1.1 200 OK
+Cache-Control: max-age=315360000, public, immutable
+--- 4. the API signed out
+{"detail":"Authentication credentials were not provided."} 401
+--- 5. an unmatched API path
+{"detail": "Not found."} 404

@@ -1,0 +1,15 @@
+read at 2026-11-14T15:19:42+11:00 from kmp_alpha_20261113
+chunks by (source type, ai_generated, embedding model, width):
+   ('document', False, 'voyage-4', 1024, 38)
+   ('meeting', False, 'voyage-4', 1024, 5)
+   ('meeting', True, 'voyage-4', 1024, 5)
+meeting summaries (status, generated_at in local time):
+   Ready 2026-11-13T16:43:43+11:00
+   Ready 2026-11-13T16:43:44+11:00
+   Ready 2026-11-13T16:43:47+11:00
+   Ready 2026-11-13T16:43:47+11:00
+   Ready 2026-11-13T16:43:50+11:00
+documents by status: [('Extraction failed', 2), ('Indexed', 20), ('Insufficient content', 1)]
+meetings by status: [('Indexed', 5)]
+content_tags by (applied_by, confirmed): [('ai', False, 15), ('user', True, 48)]
+users: 2

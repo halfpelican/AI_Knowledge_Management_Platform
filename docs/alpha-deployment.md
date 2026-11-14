@@ -385,9 +385,11 @@ and accounts, so do that only before the demonstration threads are built (D-40).
    --noinput` and registers the Employee through FR-01, each with a password held only in memory.
    It then ingests item 6's corpus through the server, classifying each document at upload (FR-10).
 4. `scripts/seed_objective02_tags.py`, which adds item 6's tags (D-74) and marks `atlas` grown.
+   It finds each document by title, so it runs after the ingestion.
 5. `manage.py classify_documents --all`, so FR-10 classifies every document against those tags.
-   The seed script should run before any document is classified. Here the ingestion had already
-   classified them against no tags, so they were classified again.
+   The ingestion classified them at upload, before any tag existed. A `--scheme-only` seed before
+   the ingestion would let the upload's classification see the vocabulary instead. That order was
+   not tried.
 
 **Nobody knows either account's password.** Before the walk, set the Administrator's from this
 worktree, with its `.env`:

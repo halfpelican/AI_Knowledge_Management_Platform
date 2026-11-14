@@ -9672,7 +9672,9 @@ moved across.**
 
 - **The alter.** `kmp_anthropic` is on the never-write list, so the user approved this one
   statement. On 13 November the session ran `alter table knowledge_gaps alter column embedding
-  type vector(1024)` on `kmp_anthropic`, committed at 16:17:19+11:00.
+  type vector(1024)` on `kmp_anthropic`. The statement ran at 16:17:19+11:00, and the transaction
+  committed straight after. The script and its console, transcribed, are in
+  `corpus/objective-06/runs/2026-11-13-kmp-anthropic-gap-column/`.
   - **It ran in one transaction,** which first locked the table and checked four things: the table
     held no row, the gap column was `vector(768)`, the chunks' column was `vector(1024)`, and every
     chunk was `voyage-4`.
@@ -9683,10 +9685,13 @@ moved across.**
   was set up with (D-131). So `--resize-column` will be removed, not taught to resize the gap
   column as well.
 - **The note of 12 November's "Not covered" was too narrow.** It said a database meets the defect
-  only if it is moved across. A read-only survey of 13 November found a second way: a database
-  restored from a dump made before FR-19's tables existed, then migrated under the other width.
+  only if it is moved across. A read-only survey of 13 November (`survey-2026-11-13.txt` in the
+  same folder, transcribed, and `survey-2026-11-14.txt`, run again) found a database mismatched
+  without being moved across:
   - **`kmp_obj05_d128_20261113`,** the FR-10 session's, has chunks at 768 and its gap column at
-    1024.
+    1024. A database restored from a dump made before FR-19's tables existed, then migrated under
+    a 1024 `.env`, would look like that. That is the session's inference: how it was made is not
+    recorded.
   - **`kmp_demo_20261101`,** the FLM alpha's, has no FR-19 tables. It would have met the defect if
     migrated under a 1024 `.env`.
 
@@ -12113,17 +12118,24 @@ records each step.
   Item 6's corpus went through the alpha's own server:
   - D01 to D20 and T01 to T05 indexed;
   - every invalid item refused as documented, and "Missed: none";
-  - 48 chunks, all `voyage-4` at 1024, 5 of them FR-16 summaries, all five summaries Ready.
+  - 48 chunks, all `voyage-4` at 1024, 5 of them FR-16 summaries, all five summaries Ready
+    (`setup/database-state-2026-11-14.txt`). The ingestion's own count, 47, was read just before
+    the fifth summary's chunk was written, at 16:43:50.
 - **The tag order.**
-  - **What went wrong:** the ingestion classified each document at upload against no tags. The run
-    followed D-88's order, seeding after the corpus, and D-88 predates classification at upload.
-    `seed_objective02_tags.py` says to run before any document is classified.
+  - **The order.** The full seed finds each document by title and stops if one is missing, so it
+    runs after the ingestion. The ingestion classifies each document at upload, before any tag
+    exists. So the documents were first classified against no tags: 13 topic proposals across 10
+    documents (`classification/state-before.txt`, transcribed). `seed_objective02_tags.py` says to
+    run before any document is classified. Only a `--scheme-only` pass before the ingestion allows
+    that, and it was not tried.
   - **What the user chose:** seed, then classify again.
   - **The seed:** 14 tags and 48 links, with `atlas` marked grown.
-  - **The second classification:** 20 documents classified and 0 failed. FR-10 applied 15 tags and
-    proposed one topic.
-- **The checks.** The five smoke checks passed, and the deployment was recorded with
-  `dirty=False`.
+  - **The second classification:** 20 documents classified and 0 failed. FR-10 applied no tag. It
+    held 15 provisional ones, which FR-15's views leave out until someone confirms them (D-105),
+    and proposed one topic (`classification/classify-all.json`).
+- **The checks.** The five smoke checks passed on 13 November. That output was not saved, so they
+  were run again after the laptop's restart and saved (`setup/smoke-checks-2026-11-14.txt`). The
+  deployment was recorded with `dirty=False` (`setup/deployment-record.txt`).
 - **The runbook.** `docs/alpha-deployment.md` now describes the anthropic alpha, how its database
   was built, and how to bring back the FLM one.
 

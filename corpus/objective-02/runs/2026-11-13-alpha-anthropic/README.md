@@ -21,7 +21,7 @@ creating it.
 | 9 | The two accounts and the corpus, through the alpha's own server: `run_ingestion_with_accounts.py` and `ingest_objective02_anthropic.py`, this folder's copies of the 10 November anthropic run's, with only the database name changed (`*.diff`). | `ingestion/` |
 | 10 | Item 6's tags: `scripts/seed_objective02_tags.py`, a dry run and then the run. | `tags/` |
 | 11 | Every indexed document classified again against those tags: `manage.py classify_documents --all`. | `classification/` |
-| 12 | The runbook's five smoke checks passed, and the deployment was recorded in `KMP-alpha-deployments.txt`, outside the repository: commit `6e1efd1`, `dirty=False`. | |
+| 12 | The runbook's five smoke checks passed, and the deployment was recorded in `KMP-alpha-deployments.txt`, outside the repository: commit `6e1efd1`, `dirty=False`. The 13 November output of the checks was not saved. They were run again after the laptop's restart, on 14 November. | `setup/smoke-checks-2026-11-14.txt`, `setup/deployment-record.txt` |
 
 ## What it holds
 
@@ -33,28 +33,42 @@ creating it.
 - **The corpus:** D01 to D20 indexed, and T01 to T05, the meetings, indexed. The invalid items were
   refused with their documented errors: I01 415, I02 413, I03 and I05 422 extraction failed, I04 422
   insufficient content, and B01 409. "Missed: none; over the bound: none."
-- **Chunks:** 48, every one `voyage-4` at 1024. 38 are from documents. Of the 10 from meetings, 5
-  are transcripts and 5 are FR-16 summaries, marked `ai_generated`. All five summaries are Ready,
-  with 25 action items.
+- **Chunks:** 48, every one `voyage-4` at 1024 (`setup/database-state-2026-11-14.txt`). 38 are from
+  documents. Of the 10 from meetings, 5 are transcripts and 5 are FR-16 summaries, marked
+  `ai_generated`. All five summaries are Ready, with 25 action items. The ingestion's console counts
+  47: it was read just before the fifth summary's chunk was written, at 16:43:50.
 - **Tags:**
   - 14 tags: Process 4, Project 4 and Topic 6. One Project value, `atlas`, is marked grown, because
     only material some role cannot read carries it.
   - 48 links from item 6's manifest, `applied_by="user"` and confirmed.
-  - 15 links FR-10 applied when the documents were classified again (`applied_by="ai"`, not yet
-    confirmed).
+  - 15 links FR-10 held when the documents were classified again: `applied_by="ai"`, unconfirmed
+    and provisional (`classification/classify-all.json`). A provisional AI tag is held, not applied
+    (D-105), so FR-15's views leave these out until someone confirms them. FR-10 applied none.
   - One topic proposal waits for review: "customer complaints".
 
 ## The tag order, and why the documents were classified twice
 
-The ingestion classified each document at upload (FR-10, D-105). That happened before the tags
-existed, because this run followed D-88's order, seeding after the corpus, and D-88 predates
-classification at upload. `scripts/seed_objective02_tags.py` says to run it before any document is
-classified. So after the ingestion there were no tags, only 13 topic proposals across 10
-documents.
+The ingestion classified each document at upload (FR-10, D-105), before any tag existed. The full
+seed cannot run earlier: it finds each document by title and stops if one is missing.
+`scripts/seed_objective02_tags.py` says to run it before any document is classified. Only a
+`--scheme-only` pass before the ingestion allows that, and that order was not tried. So after the
+ingestion there were no tags, only 13 topic proposals across 10 documents
+(`classification/state-before.txt`, transcribed).
 
 The user then chose to seed and classify again. The seed restored item 6's tags as the FLM alpha
 had them, with `atlas` withheld from Employees. `classify_documents --all` then classified all 20
-documents against that vocabulary: 20 classified, 0 failed.
+documents against that vocabulary: 20 classified, 0 failed. FR-10 held 15 provisional tags and
+proposed one topic (`classification/state-after.txt`).
+
+## Records added on 14 November 2026
+
+The audit of this record found claims with no evidence in the repository. These were added:
+- **`setup/database_state.py` and `setup/database-state-2026-11-14.txt`:** the chunks by embedding
+  model, and each summary's time.
+- **`setup/smoke-checks-2026-11-14.txt`:** the five checks, run again after the restart.
+- **`setup/deployment-record.txt`:** the alpha's line of the deployment record.
+- **`classification/tag_state.py` and `classification/state-before.txt`:** the script behind
+  `state-after.txt`, and its output before the seed, transcribed from the session.
 
 ## Cost
 
