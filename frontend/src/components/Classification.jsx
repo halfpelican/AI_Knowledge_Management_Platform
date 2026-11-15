@@ -12,7 +12,7 @@ import {
   rejectProposedTag,
   removeTag,
 } from '../api/documents.js'
-import { TEXT } from '../constants.js'
+import { TAG_NAME_MAXIMUM_LENGTH, TEXT } from '../constants.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { whenToRetry } from '../utils/retryAfter.js'
 import { spacedTagName, tagNameError } from '../utils/validation.js'
@@ -284,18 +284,38 @@ function proposalKey(proposal) {
 }
 
 /**
+ * A proposal's length as the server measures it: in characters (code points), as
+ * Python's `len()` counts them, not in UTF-16 units, so a value of emoji is not
+ * counted twice. A run stores a proposal normalised (`normalise_tag_name`), so this is
+ * the length confirm checks against the Tags column.
+ */
+function lengthOf(value) {
+  return [...String(value ?? '')].length
+}
+
+/**
  * A value the AI proposed below the confidence threshold that is not in this
  * document's list for its dimension: Project, Process or Topic (D-128). It is no tag
  * of the document's until a person confirms it, so it has no `content_tag_id` and is
  * acted on by its dimension and value. The row names the dimension, and every
  * proposal is worded alike whatever the server holds under that name (the sentence's
  * comment in src/constants.js says why).
+ *
+ * **A proposal longer than a tag name can be offers Reject alone** (D-135). Confirming
+ * creates a tag, whose name the column limits, so the server refuses it every time
+ * (D-133). The Confirm is withheld rather than disabled, as TagRow offers Confirm only
+ * on an AI tag not yet confirmed. A sentence in the row says why, in words, and that
+ * Reject still works. The sentence goes with the controls when a 403 withdraws them,
+ * so the row never says Reject is open to a role that may not use it. The server
+ * refuses the confirm whatever the page offers (CLAUDE.md §6, invariant 4).
  */
 function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
   const confirmKey = `proposal-confirm:${proposalKey(proposal)}`
   const rejectKey = `proposal-reject:${proposalKey(proposal)}`
   const mine = pending === confirmKey || pending === rejectKey
   const otherBusy = pending !== null && !mine
+  const length = lengthOf(proposal.value)
+  const confirmable = length <= TAG_NAME_MAXIMUM_LENGTH
   return (
     <li className="tag tag--ai">
       <span className="tag__dimension">{dimensionLabel(proposal.dimension)}</span>
@@ -303,17 +323,22 @@ function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
       <span className="tag__provenance">
         {withConfidence(TEXT.proposedTagLabel(proposal.dimension), proposal.confidence)}
       </span>
+      {controls && !confirmable ? (
+        <span className="tag__note">{TEXT.proposedTagTooLong(proposal.dimension, length)}</span>
+      ) : null}
       {controls ? (
         <span className="tag__actions">
-          <Button
-            variant="secondary"
-            aria-label={TEXT.proposedTagConfirmLabel(proposal.dimension, proposal.value)}
-            loading={pending === confirmKey}
-            disabled={otherBusy || pending === rejectKey}
-            onClick={() => onConfirm(confirmKey)}
-          >
-            {TEXT.tagConfirm}
-          </Button>
+          {confirmable ? (
+            <Button
+              variant="secondary"
+              aria-label={TEXT.proposedTagConfirmLabel(proposal.dimension, proposal.value)}
+              loading={pending === confirmKey}
+              disabled={otherBusy || pending === rejectKey}
+              onClick={() => onConfirm(confirmKey)}
+            >
+              {TEXT.tagConfirm}
+            </Button>
+          ) : null}
           <Button
             variant="secondary"
             aria-label={TEXT.proposedTagRejectLabel(proposal.dimension, proposal.value)}
@@ -343,8 +368,9 @@ function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
  * suggestion named beside it. A provisional tag is listed under "Suggested tags
  * awaiting confirmation" and nowhere else; so is a value the AI proposed in Project,
  * Process or Topic (`proposed_tags`, D-128), each row naming its dimension, and each
- * confirmed or rejected by its dimension and value. A discarded department is named
- * in a sentence saying it was not applied, and the department shown is the
+ * confirmed or rejected by its dimension and value. One longer than a tag name can be
+ * is offered Reject alone, with a sentence saying why (D-135). A discarded department
+ * is named in a sentence saying it was not applied, and the department shown is the
  * document's own.
  *
  * **An AI tag is an AI tag, whoever made its value.** Since D-128 a classify run

@@ -194,7 +194,8 @@ export const QUESTION_MAXIMUM_LENGTH = 500
  * `spacedTagName`), so the server measures what the screen measured. A convenience:
  * the server answers 400 `{"tag_name": [...]}` above it whatever the browser allowed
  * (CLAUDE.md §6, invariant 4). apps/api/tests/test_front_end_constants_agreement.py
- * fails when the two drift.
+ * fails when the two drift. The document page also offers no Confirm on a proposed
+ * value longer than this, since confirming one creates a tag (D-135).
  */
 export const TAG_NAME_MAXIMUM_LENGTH = 255
 
@@ -333,6 +334,13 @@ function dimensionWords(dimension) {
   const key = String(dimension ?? '').toLowerCase()
   return DIMENSION_WORDS[key] ?? { one: key, many: key }
 }
+
+/**
+ * A whole number as a sentence writes it, thousands grouped: 1,024. Read by the
+ * sentence about a proposal too long to become a tag (D-135), whose length nothing on
+ * the page bounds.
+ */
+const COUNT_FORMAT = new Intl.NumberFormat('en-AU')
 
 /**
  * Fixed, user-facing text for every screen: auth and roles, then ingestion and
@@ -867,6 +875,12 @@ export const TEXT = {
   proposedTagRejectLabel: (dimension, value) => `Reject new ${dimensionWords(dimension).one} ${value}`,
   proposedTagConfirmed: (dimension, value) => `“${value}” was added as a ${dimensionWords(dimension).one} tag.`,
   proposedTagRejected: (dimension, value) => `The proposed ${dimensionWords(dimension).one} “${value}” was rejected.`,
+  // D-135: a proposal longer than a tag name can be. Confirming creates a tag, whose
+  // name the column limits, so the server refuses it every time (D-133). The page offers
+  // no Confirm on it, and this sentence in the row says why in words, and that Reject
+  // still works. The length is in characters (code points), as the server counts it.
+  proposedTagTooLong: (dimension, length) =>
+    `This ${dimensionWords(dimension).one} has ${COUNT_FORMAT.format(length)} characters, more than the ${TAG_NAME_MAXIMUM_LENGTH} a tag name can have, so it cannot be confirmed as a tag. You can reject it.`,
   // FR-10's provenance clause and UC-09 A3: a person applies a tag, choosing one the
   // document's own classification scheme offers (`tag_options`) or typing a new
   // Topic, the one dimension a person may name a new value in: D-128 lets the AI add
