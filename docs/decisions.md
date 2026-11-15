@@ -15829,10 +15829,10 @@ script against them.
 
 ## D-135 · The document page offers no Confirm on a proposed value longer than a tag name, and says why in the row
 
-**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (UC-09 A3: a person
-confirms or rejects what the AI proposed), D-128, D-129, D-133, D-134, `frontend/` · **Supersedes:**
-nothing. It closes D-133's "Not covered" item "The page still offers Confirm on a proposal over 255
-characters".
+**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (a Topic outside the
+scheme "requires user confirmation before it is created"), D-128, D-129, D-133, D-134, `frontend/` ·
+**Supersedes:** nothing. It closes D-133's "Not covered" item "The page still offers Confirm on a
+proposal over 255 characters".
 
 **What prompted it:** D-133 (PR 112) let the reject route read a proposed value up to 100,000
 characters, and kept confirm's 255. Confirming creates a Tag, whose name the `Tags.tag_name` column
@@ -15850,17 +15850,21 @@ the lead.
 
 **Beside D-134.** D-134 is the sibling session's decision of the same day, on its branch
 `fix/FR-10-discard-long-topic`. It was not merged when this was written. Under it, a run discards a
-Topic outside the scheme longer than 255 characters instead of proposing it; the user chose "Discard
-over 255". Once both are on `main`, no new proposal over 255 characters is made. This page change
-still covers a proposal stored before D-134, which stays until the document is classified again.
-Both branches touch `docs/decisions.md`. The sibling's claim note says it may also change comments in
-`frontend/tests/documentClassification.test.jsx`. Whichever merges second keeps both sides.
+Topic outside the scheme longer than 255 characters once normalised, instead of proposing it; the user
+chose "Discard over 255". Once both are on `main`, no new proposal over 255 characters is made. This
+page change still covers a proposal stored before D-134, which stays until the document is classified
+again. Where the two branches meet, as the sibling session described its own:
+- `docs/decisions.md`: both add a dated note right after "than build it)." under D-133's "Not
+  covered" item on the page's Confirm, and both append an entry at the end of the file. Whichever
+  merges second keeps both notes and puts D-134 above D-135.
+- `frontend/tests/documentClassification.test.jsx`: the sibling changes only the first lines of the
+  D-133 block's doc comment, which this branch leaves alone.
 
 **The number.**
 - **The collision.** This session claimed D-134 at 20:25 on 15 November 2026, in the session
   group's notes folder and by a message. The sibling session claimed D-134 for its decision too: its
   claim note there was created at 20:50, with the user's decision tied to it. When this session
-  checked, about 20:55, the sibling's worktree cited D-134 in 77 places.
+  checked, about 20:55, the sibling's worktree already used D-134 throughout its uncommitted change.
 - **This branch moved.** It cited D-134 only in comments and in the test block's title, in
   `Classification.jsx`, `Classification.css`, `constants.js` and `documentClassification.test.jsx`,
   none of it pushed. It moved to D-135 at `a517be3`, and the sibling session was told.
@@ -16011,12 +16015,54 @@ Tests outside these blocks that a break also failed:
   - A first loop on `a517be3` matched no test, because its filter still named D-134. It is not
     counted, and the loop now counts a run that passes nothing as a failure.
   - On `28c5459`, before the renumbering, the block had passed ten runs in a row too.
+- **The whole of `documentClassification.test.jsx`,** 40 runs in a row on `cc01e09`: each passed 55
+  of 55.
 - **`pytest`:** no server file changed, so the whole suite was not run here. CI runs it on the pull
   request. One server test reads a file this change touches:
   `apps/api/tests/test_front_end_constants_agreement.py`, which reads `frontend/src/constants.js`.
   It passed: 16 passed. It opens no database, so it ran with a placeholder `DATABASE_URL`.
 
+**The requirements audit of `cc01e09` (15 November 2026).** `requirements-auditor` reviewed the
+branch read-only. Its report is kept whole outside the repository, in the session group's notes
+folder, as `fr10-confirm-audit-cc01e09-verbatim.md`, saved by script straight from the agent's
+transcript. Its line numbers are at `cc01e09`. Its closing line:
+
+> **COMPLETE WITH NOTES.** The page withholds Confirm exactly where the server would refuse it and offers it at 255. The sentence and the 403 path are right and defended by tests that each fail under a recorded, reverted break. The table, the suites and the D-135 number all check out against git, the records and CI. D-135 still has to name the over-100,000-character path in its "Not covered" list (N1), with N2 optional. That is one documentation edit, and §8 condition 5 is met once it is made.
+
+- **What it recomputed:** the break table, from the run's record and without the generator; each
+  restored file's SHA-256, against the committed blobs; the suite figures, against the logs and CI.
+- **N1:** "Not covered" left out the one path where the row's sentence is false, a proposal over
+  100,000 characters. It is added below.
+- **N2, minor:** a count of the sibling's references would go stale. It is replaced with a
+  description that needs no count.
+- **Observations:**
+  - O1, a server bound at 255 that no route test checks, older than this branch: under "Not
+    covered".
+  - O2, the code-point count written twice: under "Not covered".
+  - O3: the header cited UC-09 A3, which is a person correcting a classification. It now cites
+    FR-10's own words.
+  - O4, the merge with D-134: recorded above, with where the two branches meet.
+  - O5: the 40-run loop of the whole file was unfinished when it looked. It is now under the suites.
+- **What it could not check:** the question as put, and the answer. This session checked both by
+  script against its own transcript:
+  - the question and its options are identical to the quote above, with whitespace collapsed;
+  - the answer selected "Withhold Confirm (Recommended)", with no notes;
+  - the drafted sentence is in the chosen option's preview.
+
 **Not covered:**
+- **A proposal longer than `MAXIMUM_PROPOSED_TAG_LENGTH`** (100,000 characters,
+  `apps/core/constants.py`) still reads "You can reject it", but the reject route refuses it with 400
+  (`ProposedTagRejectSerializer`), and the page shows the client's fixed 400 sentence. D-133 records
+  that such a proposal can exist (its first "Not covered" item). After D-134 it can only be one stored
+  before D-134, and none appears in measured data. Saying so on the row would need a client copy of
+  the bound and a row in the agreement test: the lead's call, not built (the requirements audit, N1).
+- **No route test confirms a proposal of exactly 255 characters.** Pytest refuses 256
+  (`apps/api/tests/test_fr10_proposed_tags.py`), and only `POST /api/tags` is tested at 255. The page
+  now offers Confirm at 255, and by reading the server accepts it: `max_length`, then a strict `>`.
+  This predates the branch (the requirements audit, O1).
+- **The code-point count is written twice:** `lengthOf` here, and `tagNameError` and
+  `departmentNameError` in `frontend/src/utils/validation.js`. They agree. No shared helper was made
+  (the requirements audit, O2, low).
 - **Any other 400 on confirm** still shows the client's fixed sentence: a dimension the server
   refuses, say. The page no longer sends a confirm that the server refuses for its length.
 - **A Project or Process proposal** over 255 characters is treated as a Topic is: the rule is
