@@ -21,6 +21,7 @@ import { NETWORK_ERROR_STATUS, messageForStatus } from '../src/api/client.js'
 import { TAG_NAME_MAXIMUM_LENGTH, TEXT, VALIDATION } from '../src/constants.js'
 import DocumentDetail from '../src/pages/DocumentDetail.jsx'
 import { TOPIC_ALREADY_OFFERED_MESSAGE, heldResponse, serveApi } from './fakeApi.js'
+import { hidingCauses } from './stylesheets.js'
 
 /* ---- Fixtures, in the contract's shapes ---------------------------------- */
 
@@ -1287,9 +1288,13 @@ const DIMENSION = {
   Topic: { label: TEXT.documentFieldTopic, one: 'topic', many: 'topics' },
 }
 
-/** The held row of one proposal, found by its Confirm, whose name carries the dimension. */
+/**
+ * The held row of one proposal, found by its Reject, whose name carries the dimension.
+ * Every proposal is offered Reject, and one longer than a tag name can be is offered
+ * nothing else (D-135), so its Confirm cannot be used to find it.
+ */
 function proposalRow({ dimension, value }) {
-  return within(heldGroup()).getByRole('button', { name: TEXT.proposedTagConfirmLabel(dimension, value) }).closest('li')
+  return within(heldGroup()).getByRole('button', { name: TEXT.proposedTagRejectLabel(dimension, value) }).closest('li')
 }
 
 /** A confidence as the section shows it. */
@@ -1452,6 +1457,157 @@ describe('D-133: a proposed topic longer than a tag name can be is still offered
     expect(requestsTo(answered, 'POST', `${DOC}/proposed-tags/reject`).map((request) => request.body)).toEqual([
       { dimension: 'Topic', value: LONG_TOPIC },
     ])
+  })
+})
+
+/* ---- D-135: no Confirm on a proposal too long to become a tag ------------- */
+
+/**
+ * D-135: confirming a proposal creates a tag, and a tag name holds at most
+ * TAG_NAME_MAXIMUM_LENGTH characters, so the server refuses to confirm a longer one
+ * every time (D-133). The lead's choice, of three put on 15 November 2026: the page
+ * withholds Confirm on such a proposal, rather than disabling it or explaining the 400
+ * afterwards, and a sentence in the row says why and that Reject still works.
+ *
+ * The length is counted as the server counts it, in code points (Python's `len()` of
+ * the normalised value, which is how a run stores a proposal). A ship emoji is one
+ * code point and two UTF-16 units, so 255 of them can still become a tag and 256
+ * cannot.
+ */
+function topicOf(length) {
+  return 'berth renewal and crane replacement '.repeat(Math.ceil(length / 36) + 1).slice(0, length)
+}
+
+const AT_THE_LIMIT = { dimension: 'Topic', value: topicOf(TAG_NAME_MAXIMUM_LENGTH), confidence: 0.62 }
+const ONE_OVER = { dimension: 'Topic', value: topicOf(TAG_NAME_MAXIMUM_LENGTH + 1), confidence: 0.51 }
+const SHIPS_AT_THE_LIMIT = { dimension: 'Topic', value: '🚢'.repeat(TAG_NAME_MAXIMUM_LENGTH), confidence: 0.47 }
+const SHIPS_ONE_OVER = { dimension: 'Topic', value: '🚢'.repeat(TAG_NAME_MAXIMUM_LENGTH + 1), confidence: 0.44 }
+const SHORT = { dimension: 'Topic', value: 'wellbeing', confidence: 0.6 }
+
+/**
+ * Every button in a row, read from the DOM rather than by role, so a Confirm still in
+ * the markup but hidden (the `hidden` attribute, `aria-hidden`) is found too.
+ */
+function buttonsIn(row) {
+  return Array.from(row.querySelectorAll('button'), (button) => button.textContent)
+}
+
+describe('D-135: a proposal longer than a tag name can be is offered Reject alone, and the row says why in words', () => {
+  it('withholds Confirm on a 256-character proposal, says in its row why and that it can be rejected, and leaves Reject enabled, while a short proposal keeps both', async () => {
+    // The premise: one character past what a tag name can hold.
+    expect(ONE_OVER.value).toHaveLength(TAG_NAME_MAXIMUM_LENGTH + 1)
+    expect(ONE_OVER.value).not.toMatch(/^\s|\s$/)
+    await renderDetail(
+      detailOf({ classification: classificationOf({ proposed_tags: [ONE_OVER, SHORT] }), tag_details: [] }),
+    )
+
+    const row = proposalRow(ONE_OVER)
+    expect(row.querySelector('.tag__name').textContent).toBe(ONE_OVER.value)
+    // No Confirm in the markup at all: withheld, not disabled and not hidden.
+    expect(buttonsIn(row)).toEqual([TEXT.tagReject])
+    expect(screen.queryByRole('button', { name: TEXT.proposedTagConfirmLabel('Topic', ONE_OVER.value) })).toBeNull()
+    // Why, in words, with the proposal's own length, and that Reject still works.
+    const note = within(row).getByText(TEXT.proposedTagTooLong('Topic', TAG_NAME_MAXIMUM_LENGTH + 1))
+    expect(note.textContent).toBe(
+      'This topic has 256 characters, more than the 255 a tag name can have, so it cannot be confirmed as a tag. You can reject it.',
+    )
+    // Nothing in the markup or the stylesheets takes the sentence off the screen.
+    expect(hidingCauses(note)).toEqual([])
+    // Asserted directly: fireEvent clicks a disabled button too.
+    const reject = within(row).getByRole('button', { name: TEXT.proposedTagRejectLabel('Topic', ONE_OVER.value) })
+    expect(reject.disabled).toBe(false)
+
+    // The short proposal beside it is offered both, Confirm enabled, and no sentence.
+    const shortRow = proposalRow(SHORT)
+    expect(buttonsIn(shortRow)).toEqual([TEXT.tagConfirm, TEXT.tagReject])
+    expect(
+      within(shortRow).getByRole('button', { name: TEXT.proposedTagConfirmLabel('Topic', SHORT.value) }).disabled,
+    ).toBe(false)
+    expect(shortRow.querySelector('.tag__note')).toBeNull()
+    expect(within(heldGroup()).getAllByText(/cannot be confirmed as a tag/)).toEqual([note])
+  })
+
+  it('offers an enabled Confirm on a proposal exactly as long as a tag name can be, counted in code points as the server counts, and Confirm sends it whole', async () => {
+    // The premise: the ships are two UTF-16 units each, so a count of units would be
+    // twice the server's.
+    expect(AT_THE_LIMIT.value).toHaveLength(TAG_NAME_MAXIMUM_LENGTH)
+    expect(SHIPS_AT_THE_LIMIT.value).toHaveLength(TAG_NAME_MAXIMUM_LENGTH * 2)
+    expect([...SHIPS_AT_THE_LIMIT.value]).toHaveLength(TAG_NAME_MAXIMUM_LENGTH)
+    const link = {
+      content_tag_id: 'ct-at-the-limit',
+      dimension: 'Topic',
+      name: AT_THE_LIMIT.value,
+      applied_by: 'ai',
+      confirmed: true,
+      provisional: false,
+      confidence: AT_THE_LIMIT.confidence,
+    }
+    const answered = await renderDetail(
+      detailOf({
+        classification: classificationOf({ proposed_tags: [AT_THE_LIMIT, SHIPS_AT_THE_LIMIT, SHIPS_ONE_OVER] }),
+        tag_details: [],
+      }),
+      {
+        [`POST ${DOC}/proposed-tags/confirm`]: {
+          body: {
+            classification: classificationOf({ proposed_tags: [SHIPS_AT_THE_LIMIT, SHIPS_ONE_OVER] }),
+            tag_details: [link],
+          },
+        },
+      },
+    )
+
+    for (const proposal of [AT_THE_LIMIT, SHIPS_AT_THE_LIMIT]) {
+      const row = proposalRow(proposal)
+      expect(buttonsIn(row)).toEqual([TEXT.tagConfirm, TEXT.tagReject])
+      expect(
+        within(row).getByRole('button', { name: TEXT.proposedTagConfirmLabel('Topic', proposal.value) }).disabled,
+      ).toBe(false)
+      expect(row.querySelector('.tag__note')).toBeNull()
+    }
+    // 256 ships is one code point over, and its sentence counts code points.
+    const over = proposalRow(SHIPS_ONE_OVER)
+    expect(buttonsIn(over)).toEqual([TEXT.tagReject])
+    expect(over.querySelector('.tag__note').textContent).toBe(TEXT.proposedTagTooLong('Topic', TAG_NAME_MAXIMUM_LENGTH + 1))
+
+    press(within(proposalRow(AT_THE_LIMIT)).getByRole('button', { name: TEXT.proposedTagConfirmLabel('Topic', AT_THE_LIMIT.value) }))
+
+    await waitFor(() => expect(announcement()).toBe(TEXT.proposedTagConfirmed('Topic', AT_THE_LIMIT.value)))
+    // One request, carrying all 255 characters.
+    expect(requestsTo(answered, 'POST', `${DOC}/proposed-tags/confirm`).map((request) => request.body)).toEqual([
+      { dimension: 'Topic', value: AT_THE_LIMIT.value },
+    ])
+  })
+
+  it('writes the length with its thousands grouped, in the proposal’s own dimension', () => {
+    expect(TEXT.proposedTagTooLong('Topic', 100000)).toBe(
+      'This topic has 100,000 characters, more than the 255 a tag name can have, so it cannot be confirmed as a tag. You can reject it.',
+    )
+    expect(TEXT.proposedTagTooLong('Project', 1024)).toMatch(/^This project has 1,024 characters, /)
+  })
+
+  it('a 403 on Reject withdraws the controls and the sentence with them, and the proposal stays listed', async () => {
+    const backendText = 'You do not have permission to perform this action.'
+    await renderDetail(
+      detailOf({ classification: classificationOf({ proposed_tags: [ONE_OVER] }), tag_details: [] }),
+      { [`POST ${DOC}/proposed-tags/reject`]: { status: 403, body: { detail: backendText } } },
+    )
+    const sentence = TEXT.proposedTagTooLong('Topic', TAG_NAME_MAXIMUM_LENGTH + 1)
+    // Not vacuous: the sentence is there before the refusal.
+    expect(within(heldGroup()).getByText(sentence)).toBeTruthy()
+
+    press(within(proposalRow(ONE_OVER)).getByRole('button', { name: TEXT.proposedTagRejectLabel('Topic', ONE_OVER.value) }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain(TEXT.classificationNotPermitted)
+    expect(document.body.textContent).not.toContain(backendText)
+    // "You can reject it" would now be untrue: the sentence goes with the controls.
+    expect(within(heldGroup()).queryByText(sentence)).toBeNull()
+    const row = within(heldGroup()).getByText(ONE_OVER.value).closest('li')
+    expect(buttonsIn(row)).toEqual([])
+    expect(row.querySelector('.tag__provenance').textContent).toBe(
+      `${TEXT.proposedTagLabel('Topic')}, ${TEXT.classificationConfidence(51)}`,
+    )
   })
 })
 
