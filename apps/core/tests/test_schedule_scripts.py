@@ -2,18 +2,20 @@
 
 Task Scheduler's defaults hold a task while the machine is on battery and stop one that is unplugged
 mid-run. On 15 November 2026 the alpha's laptop was on battery, and both of its tasks sat queued with
-no log written. The text test beside each script pins the two switches in its call. This test reads
-the conditions from the settings object the script builds, so it shows what the switches do as well
-as that they are there.
+no log written. The text test beside each script pins the two switches in the lines of its call.
+This test reads the conditions from the settings object the script builds, so it shows what the
+switches do as well as that they are there.
 
 It never runs a script. PowerShell's own parser finds the statements that assign ``$limit`` and
-``$settings``, and only those are evaluated, so nothing can be registered. (A first version ran the
-script with ``Register-ScheduledTask`` replaced by a function, and the module's own command was
-found first and registered a real task.) The test also checks that the registration passes that
-``$settings``.
+``$settings``, and only those are evaluated. Before evaluating them it refuses any command in them
+other than ``New-TimeSpan`` and ``New-ScheduledTaskSettingsSet``, neither of which registers,
+changes or starts a task. (A first version ran each script with ``Register-ScheduledTask`` replaced
+by a function of that name. The replacement was not what the script called, for a reason not
+established, and the real command registered a task; D-107's note records it.) The test also checks
+that the registration passes that ``$settings``.
 
-It needs Windows PowerShell and its ``ScheduledTasks`` module, so it is skipped anywhere else, CI's
-Linux runner included.
+It runs only where Windows PowerShell is found, and is skipped anywhere else, CI's Linux runner
+included.
 """
 
 import json
@@ -40,6 +42,17 @@ $assignments = @($ast.FindAll({
 }, $true))
 $built = @($assignments | Where-Object { $_.Left.VariablePath.UserPath -eq 'settings' })
 if ($built.Count -ne 1) { throw "Expected one assignment to `$settings, found $($built.Count)." }
+$allowed = @('New-TimeSpan', 'New-ScheduledTaskSettingsSet')
+foreach ($assignment in $assignments) {
+    $calls = $assignment.FindAll({
+        param($node) $node -is [System.Management.Automation.Language.CommandAst]
+    }, $true)
+    foreach ($call in $calls) {
+        if ($call.GetCommandName() -notin $allowed) {
+            throw "Not evaluated: it calls $($call.Extent.Text)"
+        }
+    }
+}
 $registrations = @($ast.FindAll({
     param($node)
     $node -is [System.Management.Automation.Language.CommandAst] -and
@@ -70,7 +83,7 @@ def built_settings(name: str, folder: Path) -> dict:
     return json.loads(result.stdout)
 
 
-@pytest.mark.skipif(POWERSHELL is None, reason="needs Windows PowerShell's ScheduledTasks module")
+@pytest.mark.skipif(POWERSHELL is None, reason="needs Windows PowerShell")
 @pytest.mark.parametrize("name", SCRIPTS)
 def test_the_registered_task_runs_on_battery(name, tmp_path):
     settings = built_settings(name, tmp_path)
