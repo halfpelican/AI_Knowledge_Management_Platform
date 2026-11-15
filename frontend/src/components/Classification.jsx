@@ -304,10 +304,10 @@ function lengthOf(value) {
  * **A proposal longer than a tag name can be offers Reject alone** (D-134). Confirming
  * creates a tag, whose name the column limits, so the server refuses it every time
  * (D-133). The Confirm is withheld rather than disabled, as TagRow offers Confirm only
- * on an AI tag not yet confirmed. A sentence in the row says why in words and that Reject
- * still works. Both go with the controls when a 403 withdraws them, so the row never
- * offers an action the role may not take. The server refuses it whatever the page
- * offers (CLAUDE.md §6, invariant 4).
+ * on an AI tag not yet confirmed. A sentence in the row says why, in words, and that
+ * Reject still works. The sentence goes with the controls when a 403 withdraws them,
+ * so the row never says Reject is open to a role that may not use it. The server
+ * refuses the confirm whatever the page offers (CLAUDE.md §6, invariant 4).
  */
 function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
   const confirmKey = `proposal-confirm:${proposalKey(proposal)}`
@@ -369,8 +369,8 @@ function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
  * awaiting confirmation" and nowhere else; so is a value the AI proposed in Project,
  * Process or Topic (`proposed_tags`, D-128), each row naming its dimension, and each
  * confirmed or rejected by its dimension and value. One longer than a tag name can be
- * is offered Reject alone, with a sentence saying why (D-134). A discarded department is named
- * in a sentence saying it was not applied, and the department shown is the
+ * is offered Reject alone, with a sentence saying why (D-134). A discarded department
+ * is named in a sentence saying it was not applied, and the department shown is the
  * document's own.
  *
  * **An AI tag is an AI tag, whoever made its value.** Since D-128 a classify run
