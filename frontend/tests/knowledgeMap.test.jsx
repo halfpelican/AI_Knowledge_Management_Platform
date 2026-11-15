@@ -398,6 +398,35 @@ function groupLinks(heading) {
     .map((link) => link.textContent)
 }
 
+/** Where each of a panel group's links leads, by the group's heading. */
+function groupHrefs(heading) {
+  const group = within(panel()).getByRole('heading', { level: 3, name: heading }).closest('.knowledge-map__group')
+  return within(group)
+    .getAllByRole('link')
+    .map((link) => link.getAttribute('href'))
+}
+
+/** The diagram's nodes by label, in the order they are rendered, which is the tab order. */
+function diagramOrder() {
+  return within(diagram())
+    .getAllByRole('listitem')
+    .map((cell) => cell.querySelector('.knowledge-map__node-label').textContent)
+}
+
+/** Words that would suggest something is kept from the reader. No sentence of the map's may use one. */
+const WITHHOLDING = /hidden|withheld|restrict|permi|access|allowed|not shown|omitted|left out|unavailable/i
+
+/**
+ * Lets a reply released late, and anything it sets off, finish before a test looks
+ * for something that must not have happened (tests/askThread.test.jsx does the
+ * same). Inside `act`, so every render and effect queued in the meantime has run.
+ */
+async function letLateWorkLand() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  })
+}
+
 function sortButton(table, label) {
   return within(table).getByRole('button', { name: new RegExp(`^${label}`) })
 }
@@ -436,6 +465,14 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect(drawn[TAG]).toMatch(/^polygon /)
       expect(drawn[CONTRIBUTOR]).toMatch(/^polygon /)
       expect(new Set(Object.values(drawn)).size).toBe(4)
+
+      // The words themselves, written out here: each type is called what it is.
+      expect(TYPE_WORD).toEqual({
+        [DOCUMENT]: 'Document',
+        [MEETING]: 'Meeting',
+        [TAG]: 'Tag',
+        [CONTRIBUTOR]: 'Contributor',
+      })
 
       // The legend: the same four words, each beside the shape the diagram draws for it.
       const legend = screen.getByRole('region', { name: TEXT.mapLegendHeading })
@@ -478,7 +515,8 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
           [TEXT.mapGroupUploadedBy, [JANE]],
         ],
         opens: `/documents/${LEAVE.item_id}`,
-        openLabel: TEXT.mapOpenDocument,
+        // The open action's words, written out here.
+        openLabel: 'Open the document',
         destination: {
           [`GET /api/documents/${LEAVE.item_id}`]: { status: 404, body: { detail: 'No Document matches the given query.' } },
         },
@@ -489,7 +527,7 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         reply: FOCUS_SYNC,
         groups: [[TEXT.mapGroupAttendedBy, [JANE]]],
         opens: `/meetings/${SYNC.item_id}`,
-        openLabel: TEXT.mapOpenMeeting,
+        openLabel: 'Open the meeting',
         destination: {
           [`GET /api/meetings/${SYNC.item_id}`]: { status: 404, body: { detail: 'No Meeting matches the given query.' } },
           [`GET /api/meetings/${SYNC.item_id}/summary`]: { status: 404, body: { detail: 'No Meeting matches the given query.' } },
@@ -501,7 +539,7 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         reply: FOCUS_TOPIC_PEOPLE,
         groups: [[TEXT.mapGroupTagged, [LEAVE, BUDGET]]],
         opens: '/documents?topic=people',
-        openLabel: TEXT.mapOpenTag(TOPIC_PEOPLE.label),
+        openLabel: 'Open documents tagged people',
         destination: { 'GET /api/documents/browse': { status: 204 } },
       },
     ]
@@ -528,6 +566,13 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         // The Selected panel: what it is, its served count, and its direct
         // connections grouped by relationship, each the link that selects that node.
         expect(within(panel()).getByText(overviewNode.label)).toBeTruthy()
+        // In words: its type, a tag's with its dimension, and its name.
+        expect(panel().querySelector('.knowledge-map__panel-item').textContent).toBe(
+          `${typeCell(focused)} ${focused.label}`,
+        )
+        // And in its type's shape, the one shape the panel draws.
+        expect(glyphOf(panel()).getAttribute('class')).toBe(glyphOf(selectedOnDiagram()).getAttribute('class'))
+        expect(glyphOf(panel()).classList.contains(`knowledge-map__glyph--${focused.type}`)).toBe(true)
         expect(within(panel()).getByText(TEXT.mapConnectionsShown(focused.connection_count))).toBeTruthy()
         expect(
           within(panel())
@@ -536,6 +581,8 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         ).toEqual(groups.map(([heading]) => heading))
         for (const [heading, members] of groups) {
           expect(groupLinks(heading)).toEqual(members.map(typed))
+          // Each one selects that node: the map's own address, never the item's.
+          expect(groupHrefs(heading)).toEqual(members.map((member) => `/knowledge-map${focusSearch(member)}`))
         }
 
         // Second selection: the same node is now a link to the item itself, on the
@@ -566,8 +613,12 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         expect(selectedOnDiagram().textContent).toBe(`${nodeName(JANE)}, ${TEXT.mapSelectedMark}`),
       )
       expect(mapRequests(answered)).toEqual(['', focusSearch(JANE)])
+      expect(panel().querySelector('.knowledge-map__panel-item').textContent).toBe(`${TEXT.mapTypeContributor} ${JANE.label}`)
+      expect(glyphOf(panel()).classList.contains(`knowledge-map__glyph--${CONTRIBUTOR}`)).toBe(true)
       expect(groupLinks(TEXT.mapGroupUploaded)).toEqual([typed(LEAVE)])
       expect(groupLinks(TEXT.mapGroupAttended)).toEqual([typed(SYNC)])
+      expect(groupHrefs(TEXT.mapGroupUploaded)).toEqual([`/knowledge-map${focusSearch(LEAVE)}`])
+      expect(groupHrefs(TEXT.mapGroupAttended)).toEqual([`/knowledge-map${focusSearch(SYNC)}`])
 
       // Not a link anywhere: there is nothing for a second selection to open.
       expect(selectedOnDiagram().tagName).toBe('SPAN')
@@ -656,6 +707,119 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       )
       expect(mapRequests(answered)).toEqual(['', focusSearch(JANE)])
     })
+
+    /** Each type, the walk from it, and what a second selection opens: null where nothing does. */
+    const SELECTIONS = [
+      {
+        kind: 'a document',
+        item: LEAVE,
+        reply: FOCUS_LEAVE,
+        opens: `/documents/${LEAVE.item_id}`,
+        destination: {
+          [`GET /api/documents/${LEAVE.item_id}`]: { status: 404, body: { detail: 'No Document matches the given query.' } },
+        },
+      },
+      {
+        kind: 'a meeting',
+        item: SYNC,
+        reply: FOCUS_SYNC,
+        opens: `/meetings/${SYNC.item_id}`,
+        destination: {
+          [`GET /api/meetings/${SYNC.item_id}`]: { status: 404, body: { detail: 'No Meeting matches the given query.' } },
+          [`GET /api/meetings/${SYNC.item_id}/summary`]: { status: 404, body: { detail: 'No Meeting matches the given query.' } },
+        },
+      },
+      {
+        kind: 'a tag',
+        item: TOPIC_PEOPLE,
+        reply: FOCUS_TOPIC_PEOPLE,
+        opens: '/documents?topic=people',
+        destination: { 'GET /api/documents/browse': { status: 204 } },
+      },
+      { kind: 'a contributor', item: JANE, reply: FOCUS_JANE, opens: null, destination: {} },
+    ]
+    /** The two tables, and what a node's control is called in each. */
+    const TABLES = [
+      { table: 'an Items row', inTable: itemsTable, called: shown },
+      { table: 'a Relationships row', inTable: relationshipsTable, called: typed },
+    ]
+
+    it.each(SELECTIONS.flatMap((selection) => TABLES.map((table) => ({ ...selection, ...table }))))(
+      '$kind from $table: the first selection, focus on the Selected panel, and the second selection from the same table',
+      async ({ item, reply, opens, destination, inTable, called }) => {
+        const answered = serveMap(user, { '': OVERVIEW, [item.item_id]: reply }, destination)
+        renderMap()
+        await findDiagram()
+        const focused = reply.nodes[0]
+
+        // First selection: every control this table has for the node leads to the
+        // map's own address with the node as the focus.
+        const controls = within(inTable()).getAllByRole('link', { name: called(item) })
+        for (const control of controls) {
+          expect(control.getAttribute('href')).toBe(`/knowledge-map${focusSearch(item)}`)
+          expect(control.getAttribute('aria-current')).toBeNull()
+        }
+        controls[0].focus()
+        fireEvent.click(controls[0])
+
+        await waitFor(() => expect(address()).toBe(`/knowledge-map${focusSearch(item)}`))
+        await waitFor(() =>
+          expect(selectedOnDiagram().textContent).toBe(
+            opens ? selectedNodeName(focused) : `${nodeName(focused)}, ${TEXT.mapSelectedMark}`,
+          ),
+        )
+        expect(mapRequests(answered)).toEqual(['', focusSearch(item)])
+        expect(within(panel()).getByText(item.label)).toBeTruthy()
+        // The row that was followed is gone with the overview: focus is on the panel's heading.
+        await waitFor(() => expect(document.activeElement).toBe(panelHeading()))
+
+        // Second selection, from the same table: every control it has for the
+        // selected node is marked, and opens the item, or is text where nothing opens.
+        const marked = [...inTable().querySelectorAll('[aria-current="true"]')]
+        expect(marked.length).toBeGreaterThan(0)
+        for (const control of marked) expect(control.textContent.startsWith(called(focused))).toBe(true)
+        if (opens === null) {
+          for (const control of marked) expect(control.tagName).toBe('SPAN')
+          expect(
+            within(inTable())
+              .getAllByRole('link')
+              .filter((link) => link.textContent.includes(item.label)),
+          ).toEqual([])
+          return
+        }
+        for (const control of marked) {
+          expect(control.tagName).toBe('A')
+          expect(control.getAttribute('href')).toBe(opens)
+        }
+        fireEvent.click(marked[0])
+        await waitFor(() => expect(address()).toBe(opens))
+        await waitFor(() => expect(screen.queryByRole('heading', { level: 1, name: TEXT.mapHeading })).toBeNull())
+      },
+    )
+
+    it('selecting a connection listed in the Selected panel selects that node, and focus returns to the panel’s heading', async () => {
+      const answered = serveMap(user, { '': OVERVIEW, [LEAVE.item_id]: FOCUS_LEAVE, [JANE.item_id]: FOCUS_JANE })
+      renderMap()
+      await findDiagram()
+      fireEvent.click(nodeLink(LEAVE))
+      await waitFor(() => expect(selectedOnDiagram().textContent).toBe(selectedNodeName(LEAVE)))
+      await waitFor(() => expect(document.activeElement).toBe(panelHeading()))
+
+      // The person who uploaded the policy, as the panel lists them.
+      const connection = within(panel()).getByRole('link', { name: typed(JANE) })
+      expect(connection.getAttribute('href')).toBe(`/knowledge-map${focusSearch(JANE)}`)
+      connection.focus()
+      fireEvent.click(connection)
+
+      await waitFor(() => expect(address()).toBe(`/knowledge-map${focusSearch(JANE)}`))
+      await waitFor(() =>
+        expect(selectedOnDiagram().textContent).toBe(`${nodeName(JANE)}, ${TEXT.mapSelectedMark}`),
+      )
+      expect(mapRequests(answered)).toEqual(['', focusSearch(LEAVE), focusSearch(JANE)])
+      expect(panel().querySelector('.knowledge-map__panel-item').textContent).toBe(`${TEXT.mapTypeContributor} ${JANE.label}`)
+      // The link that was followed went with the last view: focus is on the new panel's heading.
+      await waitFor(() => expect(document.activeElement).toBe(panelHeading()))
+    })
   })
 
   describe('UC-11: "Connection counts shown against each node", and the count line', () => {
@@ -678,24 +842,72 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect(rowsOf(itemsTable()).map((row) => row[2])).toEqual(['7', '9', '4', '0'])
     })
 
-    it('counts the line from the served nodes, by type, and states no total', async () => {
-      const one = node(TAG, uuid(21), 'alpha', 0, 'Topic')
-      const two = node(TAG, uuid(22), 'beta', 0, 'Process')
-      const three = node(TAG, uuid(23), 'gamma', 0, 'Project')
+    it('shows the served count in the Selected panel, not a count of the lines drawn to the selection', async () => {
+      // Two edges touch the policy, and the server says 7.
+      const policy = counted(LEAVE, 7)
+      const people = counted(TOPIC_PEOPLE, 5)
+      const jane = counted(JANE, 4)
       serveMap(user, {
-        '': mapObject({
-          nodes: [LEAVE, SYNC, RETRO, one, two, three],
-          truncatedBy: KNOWLEDGE_MAP_TRUNCATION_REASON.nodeCount,
-          maximumNodes: 6,
+        [LEAVE.item_id]: mapObject({
+          focus: policy,
+          nodes: [policy, people, jane],
+          edges: [edge(policy, TAGGED, people), edge(jane, UPLOADED, policy)],
         }),
+      })
+      renderMap(`/knowledge-map${focusSearch(LEAVE)}`)
+      await findDiagram()
+
+      expect(selectedOnDiagram().textContent).toBe(selectedNodeName(policy))
+      expect(panel().querySelector('.knowledge-map__panel-count').textContent).toBe(TEXT.mapConnectionsShown(7))
+      expect(panel().textContent).not.toContain(TEXT.mapConnectionsShown(2))
+      expect(rowsOf(itemsTable()).map((row) => row[2])).toEqual(['7', '5', '4'])
+    })
+
+    const ALPHA = node(TAG, uuid(21), 'alpha', 0, 'Topic')
+    const BETA = node(TAG, uuid(22), 'beta', 0, 'Process')
+    const GAMMA = node(TAG, uuid(23), 'gamma', 0, 'Project')
+    const KIM = node(CONTRIBUTOR, uuid(24), 'Kim Park', 0)
+    const LOU = node(CONTRIBUTOR, uuid(25), 'Lou Diaz', 0)
+    const HANDBOOK = node(DOCUMENT, uuid(26), 'Staff Handbook', 0)
+
+    it.each([
+      {
+        what: 'a view with no contributor',
+        nodes: [LEAVE, SYNC, RETRO, ALPHA, BETA, GAMMA],
+        line: '1 document · 2 meetings · 3 tags · 0 contributors shown',
+      },
+      {
+        // A different number of each type, so no figure can stand in for another.
+        what: 'a view with a different number of each type',
+        nodes: [JANE, LEAVE, ALPHA, SAM, BUDGET, BETA, KIM, HANDBOOK, LOU, SYNC],
+        line: '3 documents · 1 meeting · 2 tags · 4 contributors shown',
+      },
+    ])('counts the line from the served nodes, by type, and states no total: $what', async ({ nodes, line }) => {
+      // No edge at all: a line counted from the edges would read nothing but noughts.
+      serveMap(user, {
+        '': mapObject({ nodes, truncatedBy: KNOWLEDGE_MAP_TRUNCATION_REASON.nodeCount, maximumNodes: nodes.length }),
       })
       renderMap()
       await findDiagram()
 
-      const line = screen.getByText('1 document · 2 meetings · 3 tags · 0 contributors shown')
-      expect(line.getAttribute('role')).toBe('status')
+      const shownLine = screen.getByText(line)
+      expect(shownLine.getAttribute('role')).toBe('status')
       // A partial view, and still nothing like "6 of 40".
       expect(screen.getByRole('main').textContent).not.toMatch(/\d+ of \d+/)
+    })
+
+    it('counts the line again for each reply: the overview’s, then the selection’s', async () => {
+      serveMap(user, { '': OVERVIEW, [SYNC.item_id]: FOCUS_SYNC })
+      renderMap()
+      await findDiagram()
+      expect(screen.getByText('2 documents · 2 meetings · 2 tags · 2 contributors shown').getAttribute('role')).toBe('status')
+
+      fireEvent.click(nodeLink(SYNC))
+
+      await waitFor(() => expect(selectedOnDiagram().textContent).toBe(selectedNodeName(SYNC)))
+      // The walk from the meeting holds the meeting, one person and one document.
+      expect(screen.getByText('1 document · 1 meeting · 0 tags · 1 contributor shown').getAttribute('role')).toBe('status')
+      expect(screen.queryByText('2 documents · 2 meetings · 2 tags · 2 contributors shown')).toBeNull()
     })
   })
 
@@ -716,6 +928,16 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         relationshipRow(BUDGET, TAGGED, TOPIC_PEOPLE),
         relationshipRow(BUDGET, TAGGED, PROJECT_PEOPLE),
         relationshipRow(SAM, UPLOADED, BUDGET),
+      ])
+      // The relationship in the words D-132 gives it, written out here: a person
+      // "uploaded" a document and "attended" a meeting; a source "is tagged".
+      expect(rowsOf(relationshipsTable()).map((row) => row[1])).toEqual([
+        'is tagged',
+        'uploaded',
+        'attended',
+        'is tagged',
+        'is tagged',
+        'uploaded',
       ])
       // The diagram draws the same: a node each, a line each.
       expect(within(diagram()).getAllByRole('listitem')).toHaveLength(OVERVIEW_NODES.length)
@@ -768,6 +990,29 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect(screen.getByText(TEXT.mapNoRelationships)).toBeTruthy()
       expect(screen.queryByRole('table', { name: TEXT.mapRelationshipsCaption })).toBeNull()
     })
+
+    it('draws no line and no row for an edge whose end is not among the served nodes, and makes no node of it', async () => {
+      // Not a reply the contract allows: both ends of every edge are in `nodes`.
+      // The page still shows only the nodes it was sent, and the diagram and the
+      // Relationships table still hold the same edges as each other.
+      const absent = node(TAG, uuid(51), 'payroll', 1, 'Topic')
+      const policy = counted(LEAVE, 1)
+      const jane = counted(JANE, 1)
+      serveMap(user, {
+        '': mapObject({ nodes: [policy, jane], edges: [edge(jane, UPLOADED, policy), edge(policy, TAGGED, absent)] }),
+      })
+      renderMap()
+      await findDiagram()
+
+      expect(rowsOf(itemsTable())).toEqual([policy, jane].map(itemsRow))
+      expect(rowsOf(relationshipsTable())).toEqual([relationshipRow(jane, UPLOADED, policy)])
+      expect(within(diagram()).getAllByRole('listitem')).toHaveLength(2)
+      expect(diagram().querySelectorAll('svg.knowledge-map__lines line')).toHaveLength(1)
+      const main = screen.getByRole('main')
+      expect(main.textContent).not.toContain(absent.label)
+      expect(main.innerHTML).not.toContain(absent.item_id)
+      expect(screen.getByText('1 document · 0 meetings · 0 tags · 1 contributor shown')).toBeTruthy()
+    })
   })
 
   describe('NFR-17: "sortable"', () => {
@@ -816,19 +1061,25 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       // The reply's order, and no column claiming a sort, until one is pressed.
       expect(sortStates(table)).toEqual([null, null, null])
       expect(rowsOf(table)).toEqual(OVERVIEW_NODES.map(itemsRow))
+      const drawnBefore = diagramOrder()
+      const relationshipsBefore = rowsOf(relationshipsTable())
 
       pressSort(table, column)
       expect(sortStates(table)).toEqual(expected('ascending'))
       expect(rowsOf(table)).toEqual(ascending.map(itemsRow))
+      expect(diagramOrder()).toEqual(drawnBefore)
 
       pressSort(table, column)
       expect(sortStates(table)).toEqual(expected('descending'))
       expect(rowsOf(table)).toEqual([...ascending].reverse().map(itemsRow))
 
       // Sorting reorders the rows and removes none, and it leaves the other table,
-      // the diagram and the address as they were.
+      // the diagram and the address as they were: the sort is the table's own, and
+      // the order of the diagram's nodes, which is the tab order, is the reply's.
       expect(rowsOf(table)).toHaveLength(OVERVIEW_NODES.length)
       expect(sortStates(relationshipsTable())).toEqual([null, null, null])
+      expect(rowsOf(relationshipsTable())).toEqual(relationshipsBefore)
+      expect(diagramOrder()).toEqual(drawnBefore)
       expect(address()).toBe('/knowledge-map')
     })
 
@@ -858,6 +1109,7 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
 
         expect(sortStates(table)).toEqual([null, null, null])
         expect(rowsOf(table)).toEqual([E1, E2, E3, E4, E5, E6])
+        const drawnBefore = diagramOrder()
 
         pressSort(table, column)
         expect(sortStates(table)).toEqual(expected('ascending'))
@@ -867,9 +1119,34 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         expect(sortStates(table)).toEqual(expected('descending'))
         expect(rowsOf(table)).toEqual([...ascending].reverse())
 
+        // The other table and the diagram are as they were.
         expect(sortStates(itemsTable())).toEqual([null, null, null])
+        expect(rowsOf(itemsTable())).toEqual(OVERVIEW_NODES.map(itemsRow))
+        expect(diagramOrder()).toEqual(drawnBefore)
       },
     )
+
+    it('keeps each table’s sort its own: sorting one leaves the other sorted as it was', async () => {
+      serveMap(user, { '': OVERVIEW })
+      renderMap()
+      await findDiagram()
+
+      pressSort(itemsTable(), TEXT.mapItemsColumnName)
+      pressSort(relationshipsTable(), TEXT.mapRelationshipsColumnTo)
+      pressSort(relationshipsTable(), TEXT.mapRelationshipsColumnTo)
+
+      // Items is still sorted by Name, as it was before the other table was touched.
+      expect(sortStates(itemsTable())).toEqual(['ascending', null, null])
+      expect(rowsOf(itemsTable())).toEqual(ITEM_SORTS[0].ascending.map(itemsRow))
+      expect(sortStates(relationshipsTable())).toEqual([null, null, 'descending'])
+      expect(rowsOf(relationshipsTable())).toEqual([...RELATIONSHIP_SORTS[2].ascending].reverse())
+
+      // And the other way about: sorting Items again leaves Relationships as it is.
+      pressSort(itemsTable(), TEXT.mapItemsColumnConnections)
+      expect(sortStates(itemsTable())).toEqual([null, null, 'ascending'])
+      expect(sortStates(relationshipsTable())).toEqual([null, null, 'descending'])
+      expect(rowsOf(relationshipsTable())).toEqual([...RELATIONSHIP_SORTS[2].ascending].reverse())
+    })
 
     it('moves the sort to another column when that one is pressed, and names the direction in words', async () => {
       serveMap(user, { '': OVERVIEW })
@@ -965,6 +1242,10 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         expect(sentence).toContain(number)
         const notice = screen.getByText(sentence)
         expect(notice.closest('[role="status"]')).not.toBeNull()
+        // The notice says that sentence and nothing more, and nothing on the page
+        // is worded as though something were kept from the reader.
+        expect(notice.closest('[role="status"]').textContent).toBe(sentence)
+        expect(screen.getByRole('main').textContent).not.toMatch(WITHHOLDING)
 
         // Ahead of the skip link, so a reader who skips to the tables has passed it.
         const skip = screen.getByRole('link', { name: TEXT.mapSkipToTables })
@@ -1011,7 +1292,7 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         TEXT.mapIntro,
       ]
       for (const sentence of sentences) {
-        expect(sentence).not.toMatch(/hidden|withheld|restrict|permi|access|allowed|not shown|omitted|left out|unavailable/i)
+        expect(sentence).not.toMatch(WITHHOLDING)
       }
     })
   })
@@ -1088,6 +1369,40 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
         expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1, name: TEXT.mapHeading })),
       )
     })
+
+    it.each([
+      { late: 'a map', reply: { body: FOCUS_LEAVE } },
+      { late: 'a failure', reply: { status: 500, body: null } },
+    ])(
+      'ignores $late that lands after the address has moved on, and keeps the reply for the address it is at',
+      async ({ reply }) => {
+        const held = heldResponse()
+        const answered = serveMap(user, { [LEAVE.item_id]: held.route, '': OVERVIEW })
+        renderMap(`/knowledge-map${focusSearch(LEAVE)}`)
+        await screen.findByText(TEXT.mapLoading)
+
+        // The address moves on to the whole map while the selection's reply is on
+        // its way. The fake's fetch does not honour an abort, as a reply already
+        // on the wire does not: the earlier reply still arrives.
+        await act(async () => probe.navigate('/knowledge-map'))
+        await findDiagram()
+        expect(mapRequests(answered)).toEqual([focusSearch(LEAVE), ''])
+
+        held.release(reply)
+        await letLateWorkLand()
+
+        // The whole map is still what is shown, under its own address: the late
+        // reply is neither drawn in its place nor allowed to unseat it.
+        expect(address()).toBe('/knowledge-map')
+        expect(screen.queryByText(TEXT.mapLoading)).toBeNull()
+        expect(screen.queryByText(TEXT.mapLoadFailed)).toBeNull()
+        expect(rowsOf(itemsTable())).toEqual(OVERVIEW_NODES.map(itemsRow))
+        expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
+        expect(within(panel()).getByText(TEXT.mapSelectedNone)).toBeTruthy()
+        expect(screen.getByText('2 documents · 2 meetings · 2 tags · 2 contributors shown')).toBeTruthy()
+        expect(mapRequests(answered)).toEqual([focusSearch(LEAVE), ''])
+      },
+    )
 
     it('shows a 403 as the not-permitted notice alone, saying nothing about a map', async () => {
       const answered = serveMap(user, { '': { status: 403, body: { detail: 'You do not have permission to perform this action.' } } })
@@ -1206,6 +1521,38 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect([...new URLSearchParams(browse[0].search).entries()]).toEqual([['topic', 'r&d #1 100%']])
     })
 
+    it.each(['Project', 'Process', 'Topic'])('opens the repository filtered by %s for a tag in that dimension', async (dimension) => {
+      const tag = node(TAG, uuid(10), 'payroll', 1, dimension)
+      serveMap(user, {
+        [tag.item_id]: mapObject({ focus: tag, nodes: [tag, counted(LEAVE, 1)], edges: [edge(LEAVE, TAGGED, tag)] }),
+      })
+      renderMap(`/knowledge-map${focusSearch(tag)}`)
+      await findDiagram()
+
+      // The filter is the tag's own dimension, in the repository's lower-case spelling.
+      const opens = `/documents?${dimension.toLowerCase()}=payroll`
+      expect(selectedOnDiagram().getAttribute('href')).toBe(opens)
+      expect(within(itemsTable()).getByRole('link', { current: true }).getAttribute('href')).toBe(opens)
+      expect(within(panel()).getByRole('link', { name: TEXT.mapOpenTag(tag.label) }).getAttribute('href')).toBe(opens)
+    })
+
+    it('sends an identifier typed into the address to the server as one encoded value, and adds no parameter of its own', async () => {
+      // Whatever the address holds as `focus_id` is the server's to judge, and it
+      // reaches the server as that one value: not as a second `focus_type`, and not
+      // cut short at a `#`.
+      const written = 'x&focus_type=tag#1 100%'
+      const answered = serveMap(user, { [written]: { status: 400, body: { focus_id: ['Must be a valid UUID.'] } } })
+      renderMap(`/knowledge-map?focus_type=document&focus_id=${encodeURIComponent(written)}`)
+
+      await screen.findByText(TEXT.mapEmptySelection)
+      const requests = mapRequests(answered)
+      expect(requests).toHaveLength(1)
+      expect([...new URLSearchParams(requests[0]).entries()]).toEqual([
+        ['focus_type', 'document'],
+        ['focus_id', written],
+      ])
+    })
+
     it('marks the node the reply’s focus names when the address spells the identifier in upper case', async () => {
       const upper = LEAVE.item_id.toUpperCase()
       expect(upper).not.toBe(LEAVE.item_id)
@@ -1230,6 +1577,25 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
 
       expect(screen.getByRole('main').querySelectorAll('[aria-current="true"]')).toHaveLength(0)
       expect(within(panel()).getByText(TEXT.mapSelectedNone)).toBeTruthy()
+    })
+
+    it('marks the node of the type the reply’s focus names, where a node of another type has the same identifier', async () => {
+      // A node is its type and its identifier together, which is what the
+      // contract's `id` is. A document and a tag come from different tables, and
+      // nothing but chance makes their identifiers differ.
+      const shared = uuid(60)
+      const policy = node(DOCUMENT, shared, 'Employee Leave Policy 2026', 1)
+      const tag = node(TAG, shared, 'people', 1, 'Topic')
+      serveMap(user, { [shared]: mapObject({ focus: tag, nodes: [policy, tag], edges: [edge(policy, TAGGED, tag)] }) })
+      renderMap(`/knowledge-map${focusSearch(tag)}`)
+      await findDiagram()
+
+      // The tag, and only the tag: the document that shares its identifier still selects itself.
+      expect(selectedOnDiagram().textContent).toBe(selectedNodeName(tag))
+      expect(panel().querySelector('.knowledge-map__panel-item').textContent).toBe('Tag, Topic people')
+      expect(nodeLink(policy).getAttribute('href')).toBe(`/knowledge-map${focusSearch(policy)}`)
+      expect(itemsTable().querySelectorAll('[aria-current="true"]')).toHaveLength(1)
+      expect(groupLinks(TEXT.mapGroupTagged)).toEqual([typed(policy)])
     })
 
     it('restores the selection from the address on a reload', async () => {
@@ -1350,6 +1716,28 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect(panel().querySelector('.knowledge-map__panel-name').textContent).toBe(title.label)
       expect(groupLinks(TEXT.mapGroupTags)).toEqual([typed(tag)])
       expect(groupLinks(TEXT.mapGroupUploadedBy)).toEqual([typed(person)])
+    })
+
+    it('renders markup in a selected tag’s name as characters in the panel and in its open action, which still opens that tag', async () => {
+      const name = '<img src="x" onerror="window.__mapInjected = true"><b>tag</b>'
+      const tag = node(TAG, uuid(34), name, 1, 'Topic')
+      serveMap(user, {
+        [tag.item_id]: mapObject({ focus: tag, nodes: [tag, counted(LEAVE, 1)], edges: [edge(LEAVE, TAGGED, tag)] }),
+      })
+      renderMap(`/knowledge-map${focusSearch(tag)}`)
+      await findDiagram()
+
+      const main = screen.getByRole('main')
+      expect(main.querySelectorAll('img, b')).toHaveLength(0)
+      expect(window.__mapInjected).toBeUndefined()
+      expect(panel().querySelector('.knowledge-map__panel-name').textContent).toBe(name)
+      expect(selectedOnDiagram().textContent).toBe(selectedNodeName(tag))
+      // The open action: the name as text in its words, and as one encoded value in its address.
+      const open = within(panel()).getByRole('link', { name: TEXT.mapOpenTag(name) })
+      expect(open.children).toHaveLength(0)
+      const target = new URL(open.getAttribute('href'), 'http://localhost')
+      expect(target.pathname).toBe('/documents')
+      expect([...target.searchParams.entries()]).toEqual([['topic', name]])
     })
 
     it('draws two contributors with one name as two nodes and two rows, each selecting its own', async () => {
