@@ -15853,10 +15853,12 @@ the lead.
 Topic outside the scheme longer than 255 characters once normalised, instead of proposing it; the user
 chose "Discard over 255". Once both are on `main`, no new proposal over 255 characters is made. This
 page change still covers a proposal stored before D-134, which stays until the document is classified
-again. Where the two branches meet, as the sibling session described its own:
+again. Where the two branches meet, as the sibling session described its own branch in its messages
+to this session (received at 21:10 on 15 November 2026; its D-134 entry was not yet written in its tree
+when the requirements audit looked):
 - `docs/decisions.md`: both add a dated note right after "than build it)." under D-133's "Not
-  covered" item on the page's Confirm, and both append an entry at the end of the file. Whichever
-  merges second keeps both notes and puts D-134 above D-135.
+  covered" item on the page's Confirm. The sibling's message says its D-134 entry goes at the end of
+  the file, with D-135 after it. Whichever merges second keeps both notes and puts D-134 above D-135.
 - `frontend/tests/documentClassification.test.jsx`: the sibling changes only the first lines of the
   D-133 block's doc comment, which this branch leaves alone.
 
@@ -15865,6 +15867,10 @@ again. Where the two branches meet, as the sibling session described its own:
   group's notes folder and by a message. The sibling session claimed D-134 for its decision too: its
   claim note there was created at 20:50, with the user's decision tied to it. When this session
   checked, about 20:55, the sibling's worktree already used D-134 throughout its uncommitted change.
+- **Where the times come from.** This session read both notes' creation times with `stat` at 20:56,
+  before either note was rewritten. Rewriting them reset those times, so they cannot be read from
+  the files now. That output is in this session's transcript, beside its claim note's first write
+  (20:25:24) and its message to the sibling (20:25:28).
 - **This branch moved.** It cited D-134 only in comments and in the test block's title, in
   `Classification.jsx`, `Classification.css`, `constants.js` and `documentClassification.test.jsx`,
   none of it pushed. It moved to D-135 at `a517be3`, and the sibling session was told.
@@ -16036,18 +16042,26 @@ transcript. Its line numbers are at `cc01e09`. Its closing line:
 - **N2, minor:** a count of the sibling's references would go stale. It is replaced with a
   description that needs no count.
 - **Observations:**
-  - O1, a server bound at 255 that no route test checks, older than this branch: under "Not
-    covered".
-  - O2, the code-point count written twice: under "Not covered".
+  - O1: no test confirms a proposal of exactly 255 characters through the confirm route, though
+    `POST /api/tags` is tested at 255. It is older than this branch, and under "Not covered".
+  - O2, the code-point count not shared between files: under "Not covered".
   - O3: the header cited UC-09 A3, which is a person correcting a classification. It now cites
     FR-10's own words.
   - O4, the merge with D-134: recorded above, with where the two branches meet.
-  - O5: the 40-run loop of the whole file was unfinished when it looked. It is now under the suites.
-- **What it could not check:** the question as put, and the answer. This session checked both by
-  script against its own transcript:
-  - the question and its options are identical to the quote above, with whitespace collapsed;
-  - the answer selected "Withhold Confirm (Recommended)", with no notes;
-  - the drafted sentence is in the chosen option's preview.
+  - O5: `suites\loop40-file.txt` held 15 runs when it looked, and nothing cited it. The finished
+    loop, 40 runs, is now under the suites.
+- **What it could not check,** and where each stands:
+  - **The question as put, and the answer.** This session checked both by script against its own
+    transcript. The question and its options are identical to the quote above, with whitespace
+    collapsed. The answer selected "Withhold Confirm (Recommended)", with no notes. The drafted
+    sentence is in the chosen option's preview.
+  - **The claim times, 20:25 and 20:50.** Both notes had been rewritten by then. "The number" says
+    where the times come from.
+  - **The CI jobs of PR 113,** still pending when it looked. CI on `cc01e09` has since passed both
+    jobs: Django on Postgres with pgvector, and React. Every later commit of this branch changes only
+    this file, so the code is the same. The run on the commit that adds this note had not finished
+    when it was written.
+  - **The sentence's layout on screen:** under "Not covered".
 
 **Not covered:**
 - **A proposal longer than `MAXIMUM_PROPOSED_TAG_LENGTH`** (100,000 characters,
@@ -16060,9 +16074,12 @@ transcript. Its line numbers are at `cc01e09`. Its closing line:
   (`apps/api/tests/test_fr10_proposed_tags.py`), and only `POST /api/tags` is tested at 255. The page
   now offers Confirm at 255, and by reading the server accepts it: `max_length`, then a strict `>`.
   This predates the branch (the requirements audit, O1).
-- **The code-point count is written twice:** `lengthOf` here, and `tagNameError` and
-  `departmentNameError` in `frontend/src/utils/validation.js`. They agree. No shared helper was made
-  (the requirements audit, O2, low).
+- **The code-point count is not shared:** `lengthOf` here, and `tagNameError` and
+  `departmentNameError` in `frontend/src/utils/validation.js`, each count for themselves. They agree.
+  No shared helper was made (the requirements audit, O2, low).
+- **The sentence's layout on screen,** a line of its own under the provenance, is not tested. jsdom
+  draws nothing, so the `.tag__note` rule is the only evidence. `hidingCauses` shows only that nothing
+  hides the sentence.
 - **Any other 400 on confirm** still shows the client's fixed sentence: a dimension the server
   refuses, say. The page no longer sends a confirm that the server refuses for its length.
 - **A Project or Process proposal** over 255 characters is treated as a Topic is: the rule is
