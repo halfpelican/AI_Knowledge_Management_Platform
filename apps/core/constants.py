@@ -448,6 +448,13 @@ PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
 #   decision 7 it fetches at run time.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
+# The policy may only be tightened (FR-03's "so the policy can be tightened"; NFR-04's five
+# attempts and 15 minutes; Benjamin's decision 8, D-130). So config/settings.py refuses to start on:
+# - a threshold outside 1 to LOCKOUT_THRESHOLD;
+# - a duration outside LOCKOUT_DURATION to LOCKOUT_DURATION_MAXIMUM.
+# The maximum exists because a duration far longer overflows the lock's timestamp at the threshold
+# failure, a 500 that only a registered address could trigger (the final security review, M1).
+LOCKOUT_DURATION_MAXIMUM = timedelta(days=365)
 # How many failed attempts in total may still be answered with the distinct
 # "account is locked" notice, as a multiple of the running threshold. Past it, a locked
 # account answers every attempt with the generic message, right password or wrong.

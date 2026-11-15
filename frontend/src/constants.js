@@ -309,12 +309,12 @@ export const TEXT = {
   loggedOut: 'You’ve been logged out.',
   registered: 'Your account has been created. Sign in to continue.',
   // FR-02 and FR-03 (D-130): the server's 403 `account_locked`, which only a request whose
-  // password matched receives, and only within LOCKOUT_NOTICE_CEILING (D-26). It is
+  // password matched receives, and only within D-26's notice ceiling, twice the running threshold. It is
   // distinct from the 401 text and names no account detail, so it discloses nothing
   // to anyone without the password. It names the release, so a locked-out user has a
   // route forward (FR-03, UC-02 E2): D-26 took that promise out while no release
   // existed, and D-130 built one. "The timer" is the countdown beside Sign in, run
-  // from the reply's `retry_after`.
+  // from the reply's `retry_after`, or from the policy's duration where it gave none (decision 7).
   accountLocked:
     'This account is temporarily locked after too many failed sign-in attempts. ' +
     'Try again when the timer ends, or ask an administrator to unlock it.',

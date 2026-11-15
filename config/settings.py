@@ -22,6 +22,7 @@ from apps.core.constants import (
     CONVERSATION_CREATE_THROTTLE_RATE,
     INGESTION_THROTTLE_RATE,
     LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
+    LOCKOUT_DURATION_MAXIMUM,
     LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
@@ -176,17 +177,33 @@ CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=False)
 #   applies after a restart.
 # - **The notice ceiling follows the threshold:** it is LOCKOUT_NOTICE_CEILING_FACTOR times it
 #   (D-26).
+# - **Tightened only** (Benjamin's decision 8, D-130): the server refuses to start on a threshold
+#   outside 1 to 5, a duration outside 15 minutes to 365 days, or a value that is not a whole
+#   number. Each refusal is an ImproperlyConfigured that names the variable. NFR-04's five attempts
+#   and 15 minutes are the loosest the policy can be.
 
-LOCKOUT_THRESHOLD = env.int("LOCKOUT_THRESHOLD", default=DEFAULT_LOCKOUT_THRESHOLD)
-LOCKOUT_DURATION = timedelta(
-    minutes=env.int(
-        "LOCKOUT_DURATION_MINUTES", default=int(DEFAULT_LOCKOUT_DURATION.total_seconds() // 60)
+_DEFAULT_LOCKOUT_MINUTES = int(DEFAULT_LOCKOUT_DURATION.total_seconds() // 60)
+_MAXIMUM_LOCKOUT_MINUTES = int(LOCKOUT_DURATION_MAXIMUM.total_seconds() // 60)
+try:
+    LOCKOUT_THRESHOLD = env.int("LOCKOUT_THRESHOLD", default=DEFAULT_LOCKOUT_THRESHOLD)
+    _lockout_minutes = env.int("LOCKOUT_DURATION_MINUTES", default=_DEFAULT_LOCKOUT_MINUTES)
+except ValueError as error:
+    raise ImproperlyConfigured(
+        "LOCKOUT_THRESHOLD and LOCKOUT_DURATION_MINUTES must be whole numbers"
+    ) from error
+if not 1 <= LOCKOUT_THRESHOLD <= DEFAULT_LOCKOUT_THRESHOLD:
+    raise ImproperlyConfigured(
+        f"LOCKOUT_THRESHOLD must be from 1 to {DEFAULT_LOCKOUT_THRESHOLD}: the policy may only be "
+        f"tightened (FR-03, NFR-04), not {LOCKOUT_THRESHOLD}"
     )
-)
-if LOCKOUT_THRESHOLD < 1:
-    raise ImproperlyConfigured(f"LOCKOUT_THRESHOLD must be at least 1, not {LOCKOUT_THRESHOLD}")
-if LOCKOUT_DURATION < timedelta(minutes=1):
-    raise ImproperlyConfigured("LOCKOUT_DURATION_MINUTES must be at least 1")
+# Compared as minutes before any timedelta is built, so no value can overflow one.
+if not _DEFAULT_LOCKOUT_MINUTES <= _lockout_minutes <= _MAXIMUM_LOCKOUT_MINUTES:
+    raise ImproperlyConfigured(
+        f"LOCKOUT_DURATION_MINUTES must be from {_DEFAULT_LOCKOUT_MINUTES} to "
+        f"{_MAXIMUM_LOCKOUT_MINUTES}: the policy may only be tightened (FR-03, NFR-04), not "
+        f"{_lockout_minutes}"
+    )
+LOCKOUT_DURATION = timedelta(minutes=_lockout_minutes)
 
 # --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
 # Every route is protected unless it opts out explicitly (registration and login).

@@ -23,7 +23,7 @@ free text. All timestamps are timezone-aware.
 | `role_id` | UUID FK → Roles | defaults to Employee on registration |
 | `created_at` | timestamp | |
 | `failed_attempts` | integer | default 0; incremented on failed login (FR-02) |
-| `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02) |
+| `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02), by default; since D-130 decisions 7 and 8 the running `.env` policy, which can only be tightened |
 | `last_login_at` | timestamp, nullable | |
 
 `failed_attempts` and `locked_until` are written by FR-02 and read by FR-03. FR-02 is

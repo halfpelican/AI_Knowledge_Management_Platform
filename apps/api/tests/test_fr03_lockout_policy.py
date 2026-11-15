@@ -81,13 +81,38 @@ def test_the_policy_is_read_from_the_environment(monkeypatch):
 
 @pytest.mark.parametrize(
     ("variable", "value"),
-    [("LOCKOUT_THRESHOLD", "0"), ("LOCKOUT_THRESHOLD", "-1"), ("LOCKOUT_DURATION_MINUTES", "0")],
+    [
+        # Under 1: a threshold of 0 would lock every account before its first attempt.
+        ("LOCKOUT_THRESHOLD", "0"),
+        ("LOCKOUT_THRESHOLD", "-1"),
+        # Looser than NFR-04: the policy may only be tightened (decision 8).
+        ("LOCKOUT_THRESHOLD", "6"),
+        ("LOCKOUT_DURATION_MINUTES", "14"),
+        ("LOCKOUT_DURATION_MINUTES", "0"),
+        # Longer than 365 days, including one that would overflow a timedelta or the lock's
+        # timestamp at the threshold failure (the final security review, M1).
+        ("LOCKOUT_DURATION_MINUTES", "525601"),
+        ("LOCKOUT_DURATION_MINUTES", "9999999999"),
+        ("LOCKOUT_DURATION_MINUTES", "99999999999999"),
+        # Not a whole number (the final security review, I1).
+        ("LOCKOUT_THRESHOLD", "three"),
+        ("LOCKOUT_DURATION_MINUTES", "15.5"),
+    ],
 )
-def test_a_policy_under_one_refuses_to_start(monkeypatch, variable, value):
-    # A threshold of 0 would lock every account before its first attempt, and a duration of 0
-    # would make the lock nothing.
-    with pytest.raises(ImproperlyConfigured):
+def test_a_policy_outside_its_bounds_refuses_to_start(monkeypatch, variable, value):
+    with pytest.raises(ImproperlyConfigured, match=variable):
         load_settings(monkeypatch, **{variable: value})
+
+
+@pytest.mark.parametrize(
+    ("threshold", "minutes"),
+    [("1", "15"), ("5", "15"), ("5", "525600"), ("3", "60")],
+)
+def test_a_policy_at_or_inside_its_bounds_starts(monkeypatch, threshold, minutes):
+    loaded = load_settings(monkeypatch, LOCKOUT_THRESHOLD=threshold, LOCKOUT_DURATION_MINUTES=minutes)
+
+    assert loaded.LOCKOUT_THRESHOLD == int(threshold)
+    assert loaded.LOCKOUT_DURATION == timedelta(minutes=int(minutes))
 
 
 # --- Login follows the running values ----------------------------------------------------------
@@ -95,7 +120,7 @@ def test_a_policy_under_one_refuses_to_start(monkeypatch, variable, value):
 
 def test_login_locks_at_the_running_threshold_for_the_running_duration(api_client, employee, settings):
     settings.LOCKOUT_THRESHOLD = 3
-    settings.LOCKOUT_DURATION = timedelta(minutes=2)
+    settings.LOCKOUT_DURATION = timedelta(minutes=20)
 
     for _ in range(2):
         assert login(api_client, employee.email, WRONG_PASSWORD).status_code == 401
@@ -107,11 +132,12 @@ def test_login_locks_at_the_running_threshold_for_the_running_duration(api_clien
     after = timezone.now()
     employee.refresh_from_db()
     assert employee.failed_attempts == 3
-    assert before + timedelta(minutes=2) <= employee.locked_until <= after + timedelta(minutes=2)
+    assert before + timedelta(minutes=20) <= employee.locked_until <= after + timedelta(minutes=20)
 
     locked = login(api_client, employee.email, PASSWORD)
     assert locked.status_code == 403
-    assert 1 <= locked.json()["retry_after"] <= 120
+    # Longer than the default 15 minutes, so the running duration is what set it.
+    assert 900 < locked.json()["retry_after"] <= 1200
 
 
 def test_the_notice_ceiling_follows_the_running_threshold(api_client, employee, settings):
@@ -162,6 +188,10 @@ def test_the_policy_route_answers_every_caller_alike(api_client, session_client)
 
 
 def test_the_policy_route_is_read_only(api_client):
-    response = api_client.post(POLICY, {}, format="json")
-
-    assert response.status_code == 405
+    # POST, PUT, PATCH and DELETE are refused. HEAD and OPTIONS answer 200, as on every DRF view:
+    # HEAD as GET, and OPTIONS with DRF's metadata, which names the view and quotes its docstring
+    # (the final security review, I2).
+    for method in ("post", "put", "patch", "delete"):
+        assert getattr(api_client, method)(POLICY, {}, format="json").status_code == 405, method
+    assert api_client.head(POLICY).status_code == 200
+    assert api_client.options(POLICY).status_code == 200

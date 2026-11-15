@@ -92,6 +92,11 @@ enforced here; FR-03 adds only the warning interface and stays out of the gate
 > - **What it adds:** the warning, the countdown, `POST /api/users/{id}/unlock`, `lock` on
 >   `GET /api/users`, `retry_after` on the login `403`, and the `LoginAttempts` table. See
 >   "NIT3004 — FR-03" at the end of this file. The `401` is unchanged.
+> - **The threshold and the duration are the running `.env` policy** (D-130 decisions 7 and 8,
+>   14 and 15 November). The policy is five failures and `LOCKOUT_DURATION` (15 minutes) by
+>   default, and can only be tightened. Login reads it at request time, and
+>   `GET /api/auth/lockout-policy` gives it to the sign-in page. "Five consecutive failures"
+>   above is the default.
 > - **The locked-account message names the release again** (D-26 finding 4 removed it while no
 >   release existed): "…Try again later, or ask an administrator to unlock it."
 > - **The decision is made on the row read under lock** (D-130's H1). Login now decides on the
@@ -1618,12 +1623,12 @@ FR-02 enforces the lock (D-25). FR-03 adds:
 - the `LoginAttempts` record;
 - the policy as `.env` configuration, with a route that gives it to the sign-in page.
 
-Benjamin's seven decisions, of 13 and 14 November 2026, are D-130's. Every code below is quoted from FR-03's
+Benjamin's eight decisions, of 13, 14 and 15 November 2026, are D-130's. Every code below is quoted from FR-03's
 Responses clause unless marked *convention*.
 
 | Method | Path | Auth | Success | Failures |
 |---|---|---|---|---|
-| GET | `/api/auth/lockout-policy` | none | `200 {"lockout_threshold": 5, "lockout_duration_seconds": 900}`: the running policy, from `.env` (decision 7), the same for every caller. Read-only and not throttled | `405` for any method but GET (*convention*) |
+| GET | `/api/auth/lockout-policy` | none | `200 {"lockout_threshold": 5, "lockout_duration_seconds": 900}`: the running policy, from `.env` (decision 7), the same for every caller. Read-only and not throttled | `405` for POST, PUT, PATCH and DELETE (*convention*). HEAD answers as GET, and OPTIONS with DRF's metadata, as on every DRF view |
 | POST | `/api/users/{id}/unlock` | Administrator (`release_account_locks`) | `200` the user as `GET /api/users` lists it, now with `"lock": null`. `locked_until` is cleared and `failed_attempts` is reset to 0, the state natural expiry reaches, and a release row is written to `LoginAttempts`. No body is read | `401` no session; `403 {"detail": "Your role does not hold the 'release_account_locks' permission."}`, given before any lookup, so an Employee cannot probe user ids; `404 {"detail": "No User matches the given query."}` for an unknown id; `403 {"detail": "You cannot release a lock on your own account."}` where the target is the requester, locked or not; `409 {"detail": "This account is not locked."}` where `locked_until` is empty or already past |
 
 **The release touches nothing else.**
@@ -1655,7 +1660,7 @@ Administrators hold it. A requester without it gets the plain user object.
 
 - **What it is:** whole seconds until the lock ends, rounded up, at least 1, read from the account row
   under lock.
-- **Who gets it:** only a request whose password matched, within `LOCKOUT_NOTICE_CEILING`, as before
+- **Who gets it:** only a request whose password matched, within D-26's notice ceiling (twice the running threshold), as before
   (D-26).
 - **Never on a `401`.** No `Retry-After` header is sent with either.
 - **The `401` is unchanged:** byte-identical for an unknown address, a wrong password, and a locked
@@ -1663,8 +1668,10 @@ Administrators hold it. A requester without it gets the plain user object.
 
 **The policy is `.env` configuration** (D-130 decision 7).
 
-- **The variables:** `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, which default to five and 15
-  and must each be at least 1.
+- **The variables:** `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, which default to five and 15.
+  The policy may only be tightened (decision 8): a threshold from 1 to 5 and a duration from 15
+  minutes to 365 days. Any other value, or one that is not a whole number, stops the server
+  starting with `ImproperlyConfigured`.
 - **Who reads them:** login reads them at request time, and D-26's notice ceiling is twice the
   threshold.
 - **When a change applies:** after a server restart, with no front-end rebuild, because the sign-in
