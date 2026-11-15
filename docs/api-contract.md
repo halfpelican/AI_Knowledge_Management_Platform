@@ -1794,7 +1794,7 @@ names something the caller cannot read get the same answer.
 {
   "focus": {"type": "document", "id": "0b7c..."},
   "nodes": [
-    {"id": "document:0b7c...", "type": "document", "item_id": "0b7c...", "label": "Employee Leave Policy 2026", "dimension": null, "connection_count": 3},
+    {"id": "document:0b7c...", "type": "document", "item_id": "0b7c...", "label": "Employee Leave Policy 2026", "dimension": null, "connection_count": 2},
     {"id": "tag:9e01...", "type": "tag", "item_id": "9e01...", "label": "people", "dimension": "Topic", "connection_count": 1},
     {"id": "contributor:77f2...", "type": "contributor", "item_id": "77f2...", "label": "Jane Doe", "dimension": null, "connection_count": 2},
     {"id": "meeting:51aa...", "type": "meeting", "item_id": "51aa...", "label": "Q3 Planning Sync", "dimension": null, "connection_count": 1}
@@ -1874,8 +1874,11 @@ own scoped map and nothing wider, so the caps come after the scope and never bef
 2. **The overview** takes each source in turn, newest first, with one hop: the source, then its
    tags, then its contributors, those not yet included. A source is included only when it and all
    of those fit under `maximum_node_count`. One that does not fit is skipped and the walk carries
-   on with the next, so a source with as many connections as the cap is never in the overview and
-   is reached by selecting one of its connections. If no source fits at all, the newest is
+   on with the next, so a source with as many connections as the cap is never in the overview. A
+   source left out is reached by selecting one of its connections, where the overview shows one.
+   Where it shows none (an older source with no tag and no contributor, or none among those
+   shown) the map gives no way to it: `truncated` says the view is partial, and the source is
+   still in the repository or the meetings list. If no source fits at all, the newest is
    returned with as many of its neighbours as fit, tags before contributors. The depth cap does
    not limit the overview: every node is one hop from a source.
 3. **A selection** starts from the focus and takes up to `maximum_traversal_depth` hops, ring by

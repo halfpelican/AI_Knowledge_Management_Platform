@@ -517,8 +517,9 @@ the alpha**: the alpha needs the build that holds FR-20, `migrate`, and step 11 
      contributor is shown by name only: no address and no role (D-132).
 6. **The table view,** by keyboard: "Skip to the table view", then Tab.
    - **Expected:** every column heading is a button. Sort **Items** by "Connections shown", then
-     again for the other direction. **Relationships** reads as sentences: "Demo Employee uploaded
-     …", "… is tagged Topic: people".
+     again for the other direction. **Relationships** reads across each row, with the type named
+     at each end: "Contributor: Demo Employee", "uploaded", "Document: …"; and "Document: …",
+     "is tagged", "Tag: Topic: people".
    - The two tables hold the same items and lines as the map above them (NFR-17).
 7. **Scope, in both windows** (invariant 1): "Show the whole map" in each.
    - **Expected:** window A's map holds the Administrator-only documents and the tag

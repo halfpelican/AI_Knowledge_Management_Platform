@@ -46,7 +46,7 @@ rest by reading its source.
 
 **What is never selected:** a transcript, extracted text or a file field. A source is its
 identifier, its title and when it was added; a person is an identifier and a name, never an email
-or a role (D-132, the lead's decision 4).
+or a role (D-132, the user's choice "Contributor nodes").
 """
 
 from dataclasses import dataclass

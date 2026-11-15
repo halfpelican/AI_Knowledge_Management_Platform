@@ -1034,9 +1034,10 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       {
         column: TEXT.mapItemsColumnName,
         index: 0,
-        // By label, then by type in words: the two tags named "people" fall in
-        // the order of "Tag, Project" and "Tag, Topic".
-        ascending: [BUDGET, LEAVE, JANE, PROJECT_PEOPLE, TOPIC_PEOPLE, SYNC, SAM, RETRO],
+        // By the text the cell shows: a tag reads "Project: people" or "Topic: people",
+        // so the two tags named "people" sort under P and under T, where they read,
+        // and not side by side under "people" (the audit of 15 November 2026, A3).
+        ascending: [BUDGET, LEAVE, JANE, PROJECT_PEOPLE, SYNC, SAM, RETRO, TOPIC_PEOPLE],
       },
       {
         column: TEXT.mapItemsColumnType,
@@ -1091,11 +1092,12 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
     const E6 = relationshipRow(SAM, UPLOADED, BUDGET)
 
     const RELATIONSHIP_SORTS = [
-      // By the From node's label then type, then by the To node's.
-      { column: TEXT.mapRelationshipsColumnFrom, index: 0, ascending: [E5, E4, E1, E2, E3, E6] },
+      // By the text the From cell shows, which opens with the type ("Contributor: Jane
+      // Doe" before "Document: Budget Guide"), then by the To cell's.
+      { column: TEXT.mapRelationshipsColumnFrom, index: 0, ascending: [E2, E3, E6, E5, E4, E1] },
       // "attended", "is tagged", "uploaded".
       { column: TEXT.mapRelationshipsColumnRelationship, index: 1, ascending: [E3, E5, E4, E1, E2, E6] },
-      { column: TEXT.mapRelationshipsColumnTo, index: 2, ascending: [E6, E2, E5, E4, E1, E3] },
+      { column: TEXT.mapRelationshipsColumnTo, index: 2, ascending: [E6, E2, E3, E5, E4, E1] },
     ]
 
     it.each(RELATIONSHIP_SORTS)(

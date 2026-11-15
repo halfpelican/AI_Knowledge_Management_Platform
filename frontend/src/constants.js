@@ -1563,7 +1563,8 @@ export const TEXT = {
   mapOpenDocument: 'Open the document',
   mapOpenMeeting: 'Open the meeting',
   mapOpenTag: (name) => `Open documents tagged ${name}`,
-  // D-132, decision 5: a contributor has no underlying item, and the screen says so.
+  // D-132, the user's choice on "selecting again" for a tag and a contributor: a contributor
+  // has no underlying item, and the screen says so.
   mapContributorNoPage: 'A contributor has no page of their own, so there is nothing to open.',
   // NFR-17: "a keyboard-navigable, sortable table view conveying the same nodes and
   // relationships". UC-11 A1: "Selecting a row has the same effect as selecting a node".

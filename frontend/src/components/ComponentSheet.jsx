@@ -141,8 +141,6 @@ const SAMPLE_MAP = {
   ],
   truncated: false,
   truncated_by: null,
-  maximum_node_count: 50,
-  maximum_traversal_depth: 2,
 }
 
 /* Fixtures for the FR-15 section below: one dimension's values as the browse

@@ -35,6 +35,7 @@ import {
   truncationSentence,
   typeText,
   typeWord,
+  typedLabel,
 } from '../utils/knowledgeMap.js'
 // The table style the repository and the meetings list share.
 import './Repository.css'
@@ -144,7 +145,8 @@ function isPlainClick(event) {
  *   "selecting again opens the underlying item"), marked `aria-current`, with the
  *   word "Selected" and what a second selection does in its name;
  * - **selected, a contributor**: not a link, because there is nothing to open
- *   (D-132, decision 5). It carries the same mark.
+ *   (D-132, the user's choice on "selecting again" for a tag and a contributor).
+ *   It carries the same mark.
  *
  * Always a native link, or plain text: no key handler and no `role="button"`.
  *
@@ -212,7 +214,7 @@ function MapNode({ node, selected, variant, onSelect }) {
     content = (
       <>
         <span className="knowledge-map__ref-label">
-          {variant === 'typed' ? TEXT.mapTypedLabel(typeWord(node.type), label) : label}
+          {variant === 'typed' ? typedLabel(node) : label}
         </span>
         {mark}
       </>
@@ -352,8 +354,8 @@ function openLabel(node) {
  *
  * The connections are the reply's edges that touch the selected node, and each is
  * the same control that selects that node everywhere else. For a contributor the
- * panel says there is nothing to open (D-132, decision 5). With nothing selected it
- * says how to select. Its heading takes focus when a selection made on this page
+ * panel says there is nothing to open (D-132, the user's choice on "selecting again"
+ * for a tag and a contributor). With nothing selected it says how to select. Its heading takes focus when a selection made on this page
  * has loaded, so a keyboard or screen-reader user lands on the answer to what they
  * just did.
  */

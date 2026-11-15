@@ -561,6 +561,118 @@ def test_a_selection_exactly_at_the_cap_is_not_truncated_by_restricted_rows(
     assert (administrator_body["truncated"], administrator_body["truncated_by"]) == (True, NODE_COUNT)
 
 
+# --- 5 to 8 again, with each role as the one denied ---------------------------------------------
+#
+# The four tests above deny the Employee and mirror on the Administrator. The requirements audit
+# of 15 November 2026 (finding A7) asked for the Administrator as the denied role at a cap that
+# binds too. These run as each role, with the added rows stamped for no role that viewer's scope
+# reaches, so there is no mirror to assert: the viewer's own bytes must not change.
+
+
+def test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read(
+    session_client, monkeypatch
+):
+    """Item 5, as each role: the cap binds on readable rows alone, and unreadable sources newer
+    than, between and older than them, sharing their tags and their uploader, change nothing."""
+    cap_nodes_at(monkeypatch, 6)
+    hidden = unreadable_scope(session_client.role_name)
+    una = person("Una Uploader")
+    first = add_document("Readable one", uploader=una, added=at(40))
+    second = add_document("Readable two", uploader=una, added=at(30))
+    third = add_document("Readable three", uploader=una, added=at(20))
+    fourth = add_document("Readable four", uploader=una, added=at(10))
+    one = tag(first, "Topic", "t-one")
+    two = tag(second, "Topic", "t-two")
+    tag(third, "Topic", "t-three")
+    tag(fourth, "Topic", "t-one")
+
+    before = the_map(session_client.client).content
+    body = graph(session_client.client)
+    assert node_ids(body) == [key(first), key(one), key(una), key(second), key(two), key(fourth)]
+    assert (body["truncated"], body["truncated_by"]) == (True, NODE_COUNT)
+
+    newer = add_document("Sealed newer", uploader=una, roles=hidden, added=at(50))
+    between = add_document("Sealed between", uploader=una, roles=hidden, added=at(25))
+    older = add_document("Sealed older", uploader=una, roles=hidden, added=at(5))
+    tag(newer, "Topic", "t-one")
+    tag(newer, "Topic", "t-three")
+    tag(between, "Topic", "t-two")
+    tag(older, "Topic", "t-three")
+
+    assert the_map(session_client.client).content == before
+
+
+def test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read(
+    session_client, monkeypatch
+):
+    """Item 6, as each role: the readable map is exactly the cap, and a newer unreadable source
+    sharing a tag and the uploader does not raise the flag."""
+    cap_nodes_at(monkeypatch, 6)
+    hidden = unreadable_scope(session_client.role_name)
+    una = person("Una Uploader")
+    first = add_document("Readable one", uploader=una, added=at(30))
+    second = add_document("Readable two", uploader=una, added=at(20))
+    add_document("Readable three", uploader=una, added=at(10))
+    tag(first, "Topic", "t-one")
+    tag(second, "Topic", "t-two")
+
+    body = graph(session_client.client)
+    assert len(body["nodes"]) == 6  # the premise: exactly at the cap
+    assert (body["truncated"], body["truncated_by"]) == (False, None)
+    before = the_map(session_client.client).content
+
+    sealed = add_document("Sealed newest", uploader=una, roles=hidden, added=at(40))
+    tag(sealed, "Topic", "t-one")
+
+    assert the_map(session_client.client).content == before
+    assert graph(session_client.client)["truncated"] is False
+
+
+def test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read(session_client):
+    """Item 7, as each role, with the real caps: an unreadable document shares the readable one's
+    tag and uploader and carries a second tag three hops away. Nothing the viewer may read lies
+    beyond the second hop, so the view is complete."""
+    hidden = unreadable_scope(session_client.role_name)
+    una = person("Una Uploader")
+    readable = add_document("Readable one", uploader=una, added=at(10))
+    shared = tag(readable, "Topic", "t-one")
+    before = the_map(session_client.client, readable).content
+
+    sealed = add_document("Sealed one", uploader=una, roles=hidden, added=at(20))
+    tag(sealed, "Topic", "t-one")
+    tag(sealed, "Topic", "t-two")
+
+    assert the_map(session_client.client, readable).content == before
+    body = graph(session_client.client, readable)
+    assert node_ids(body) == [key(readable), key(shared), key(una)]
+    assert (body["truncated"], body["truncated_by"]) == (False, None)
+
+
+def test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read(
+    session_client, monkeypatch
+):
+    """Item 8, as each role: a tag's readable walk is exactly the cap with nothing beyond it, and
+    newer unreadable documents carrying the tag neither take a place nor raise the flag."""
+    cap_nodes_at(monkeypatch, 4)
+    hidden = unreadable_scope(session_client.role_name)
+    una = person("Una Uploader")
+    newer = add_document("Readable newer", uploader=una, added=at(20))
+    older = add_document("Readable older", uploader=una, added=at(10))
+    shared = tag(newer, "Topic", "t-one")
+    tag(older, "Topic", "t-one")
+
+    before = the_map(session_client.client, shared).content
+    body = graph(session_client.client, shared)
+    assert node_ids(body) == [key(shared), key(newer), key(older), key(una)]  # exactly the cap
+    assert (body["truncated"], body["truncated_by"]) == (False, None)
+
+    for n in range(2):
+        sealed = add_document(f"Sealed {n}", uploader=una, roles=hidden, added=at(30 + n))
+        tag(sealed, "Topic", "t-one")
+
+    assert the_map(session_client.client, shared).content == before
+
+
 def test_the_walk_does_not_pass_through_a_restricted_node(session_client):
     """Item 9, from both roles. A shared tag is not a way to a restricted document's other tags
     or to its uploader, and a shared person is not a way to a restricted meeting's other
@@ -853,9 +965,9 @@ def test_a_link_is_matched_on_its_source_type_and_identifier_together(session_cl
 def test_a_contributor_is_a_name_and_an_identifier_and_nothing_else(
     session_client, administrator_role
 ):
-    """Item 15, from both roles: the lead's decision 4. A contributor's email and role are
-    nowhere in the bytes, for an uploader who is an Administrator and an attendee who is an
-    Employee. A transcript is not there either."""
+    """Item 15, from both roles: the user's choice "Contributor nodes" (D-132). A contributor's
+    email and role are nowhere in the bytes, for an uploader who is an Administrator and an
+    attendee who is an Employee. A transcript is not there either."""
     uploader = person("Una Uploader", role=administrator_role)
     attendee = person("Otto Attendee")
     document = add_document("Readable one", uploader=uploader, added=at(10))

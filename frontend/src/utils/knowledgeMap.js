@@ -93,8 +93,8 @@ const TAG_FILTER_PARAMS = Object.fromEntries(
 )
 
 /**
- * Where "selecting again opens the underlying item" goes (FR-20; D-132's
- * decision 5), or null where there is nothing to open:
+ * Where "selecting again opens the underlying item" goes (FR-20; D-132, the user's
+ * choice on it for a tag and a contributor), or null where there is nothing to open:
  *
  * - a document: its detail page;
  * - a meeting: its meeting page;
@@ -258,6 +258,15 @@ export function displayLabel(node) {
   return String(node.label ?? '')
 }
 
+/**
+ * What a From or To cell, or a connection in the Selected panel, calls a node: its
+ * type in a word, then what it is called ("Tag: Topic: people"). Nothing else in
+ * such a row names the type. The Relationships table sorts on this text.
+ */
+export function typedLabel(node) {
+  return TEXT.mapTypedLabel(typeWord(node.type), displayLabel(node))
+}
+
 /** The Items table's Type cell: the type in a word, a tag's with its dimension. */
 export function typeText(node) {
   if (node.type === KNOWLEDGE_MAP_NODE_TYPE.tag && node.dimension) return TEXT.mapTagType(node.dimension)
@@ -392,9 +401,18 @@ function compareText(first, second) {
   return collator.compare(String(first ?? ''), String(second ?? ''))
 }
 
-/** By label, then by type in words (D-132: "Name, From and To sort by label then type"). */
+/**
+ * A Name cell's order: by the text the cell shows, then by type in words. A tag is
+ * shown as its dimension and its name, so "Topic: people" sorts under T, where it
+ * reads (D-132's dated note of 15 November 2026, the audit's finding A3).
+ */
 function compareNodes(first, second) {
-  return compareText(first.label, second.label) || compareText(typeText(first), typeText(second))
+  return compareText(displayLabel(first), displayLabel(second)) || compareText(typeText(first), typeText(second))
+}
+
+/** A From or To cell's order: by the text the cell shows, which opens with the type. */
+function compareTyped(first, second) {
+  return compareText(typedLabel(first), typedLabel(second))
 }
 
 function countOf(node) {
@@ -410,13 +428,13 @@ const ITEM_COMPARATORS = {
 
 const RELATIONSHIP_COMPARATORS = {
   [RELATIONSHIP_SORT_FIELDS.from]: (first, second) =>
-    compareNodes(first.source, second.source) || compareNodes(first.target, second.target),
+    compareTyped(first.source, second.source) || compareTyped(first.target, second.target),
   [RELATIONSHIP_SORT_FIELDS.relationship]: (first, second) =>
     compareText(relationshipWords(first.relationship), relationshipWords(second.relationship)) ||
-    compareNodes(first.source, second.source) ||
-    compareNodes(first.target, second.target),
+    compareTyped(first.source, second.source) ||
+    compareTyped(first.target, second.target),
   [RELATIONSHIP_SORT_FIELDS.to]: (first, second) =>
-    compareNodes(first.target, second.target) || compareNodes(first.source, second.source),
+    compareTyped(first.target, second.target) || compareTyped(first.source, second.source),
 }
 
 /**
