@@ -34,6 +34,7 @@ from apps.core.constants import (
     EMPLOYEE_ROLE_NAME,
     INGESTION_THROTTLE_RATE,
     MAXIMUM_EMBED_ATTEMPTS,
+    MAXIMUM_PROPOSED_TAG_LENGTH,
     PROCESS_DIMENSION,
     PROJECT_DIMENSION,
     SOURCE_TYPES,
@@ -539,12 +540,23 @@ def test_a_value_that_was_not_proposed_is_the_same_404(session_client, proposed)
     assert DocumentAnalysis.objects.get(document=proposed).proposed_tags == [PROPOSAL]
 
 
-@pytest.mark.parametrize("value", ["", "   ", "x" * (NAME_MAX_LENGTH + 1)], ids=["empty", "blank", "long"])
-def test_a_blank_or_over_long_value_is_400_keyed_on_value(session_client, proposed, value):
-    for response in (confirm_proposal(session_client.client, proposed.id, value),
-                     reject_proposal(session_client.client, proposed.id, value)):
+@pytest.mark.parametrize(
+    "confirmed, rejected",
+    [
+        ("", ""),
+        ("   ", "   "),
+        # Each route's own bound (D-133): confirming creates a Tag, so the column's; a rejection
+        # writes only JSON, so MAXIMUM_PROPOSED_TAG_LENGTH.
+        ("x" * (NAME_MAX_LENGTH + 1), "x" * (MAXIMUM_PROPOSED_TAG_LENGTH + 1)),
+    ],
+    ids=["empty", "blank", "long"],
+)
+def test_a_blank_or_over_long_value_is_400_keyed_on_value(session_client, proposed, confirmed, rejected):
+    for response in (confirm_proposal(session_client.client, proposed.id, confirmed),
+                     reject_proposal(session_client.client, proposed.id, rejected)):
         assert response.status_code == 400, response.content
         assert set(response.json()) == {"value"}
+    assert DocumentAnalysis.objects.get(document=proposed).proposed_tags == [PROPOSAL]
 
 
 # --- The detail's two new fields ---------------------------------------------------------------

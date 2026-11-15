@@ -11,7 +11,9 @@ leaves the same value proposed in another.
 
 The order on both routes is the session, then the scoped 404 (D-46), then ``contribute_content``'s
 403, then the body: 400 keyed on ``dimension`` for a missing one or any other (Department included),
-and 400 keyed on ``value`` for a missing, blank or over-long one. Both roles hold
+and 400 keyed on ``value`` for a missing, blank or over-long one, over-long being each route's own
+bound: the Tags column's 255 to confirm, MAXIMUM_PROPOSED_TAG_LENGTH to reject (D-133;
+apps/api/tests/test_fr10_reject_long_proposal.py holds the long proposal itself). Both roles hold
 ``contribute_content`` (accounts 0004), so the 403 is shown by taking it from the caller's role, as
 apps/api/tests/test_document_classification.py does.
 
@@ -35,6 +37,7 @@ from apps.core.constants import (
     DEPARTMENT_DIMENSION,
     DOCUMENT_INDEXED,
     EMPLOYEE_ROLE_NAME,
+    MAXIMUM_PROPOSED_TAG_LENGTH,
     PROJECT_DIMENSION,
     REPOSITORY_TAG_DIMENSIONS,
     SOURCE_TYPES,
@@ -214,11 +217,15 @@ def test_a_missing_or_other_dimension_is_400_keyed_on_dimension(session_client, 
     assert not Tag.objects.exists()
 
 
+# Each route's own bound (D-133): confirming creates a Tag, so the column's; a rejection writes only
+# JSON, so MAXIMUM_PROPOSED_TAG_LENGTH. "over-long" is one character past it.
+LONGEST = {"confirm": NAME_MAX_LENGTH, "reject": MAXIMUM_PROPOSED_TAG_LENGTH}
+OVER_LONG = object()
 VALUE_BODIES = {
     "missing": None,
     "empty": "",
     "blank": "   ",
-    "over-long": "x" * (NAME_MAX_LENGTH + 1),
+    "over-long": OVER_LONG,
 }
 
 
@@ -232,7 +239,9 @@ def test_a_missing_blank_or_over_long_value_is_400_keyed_on_value(
     document = make_document(session_client.user)
     propose(client, stub_ai_service, document, (dimension, VALUE))
     body = {"dimension": dimension}
-    if VALUE_BODIES[value] is not None:
+    if VALUE_BODIES[value] is OVER_LONG:
+        body["value"] = "x" * (LONGEST[action] + 1)
+    elif VALUE_BODIES[value] is not None:
         body["value"] = VALUE_BODIES[value]
 
     response = act(client, action, document, body)

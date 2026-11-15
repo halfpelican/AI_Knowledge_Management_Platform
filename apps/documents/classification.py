@@ -507,7 +507,8 @@ def apply_classification(
             "confidence"}`` for a person to confirm or reject (``confirm_proposed_tag``,
             ``reject_proposed_tag``), at any confidence, a long or many-worded one included. A
             person who confirms one longer than the column gets ``InvalidClassification``, the
-            route's 400;
+            route's 400, and can reject it: the reject route reads a value up to
+            MAXIMUM_PROPOSED_TAG_LENGTH characters (D-133);
           - **a Project or Process value** is discarded into ``discarded_suggestions`` as
             ``{"dimension", "value", "confidence"}``, at any confidence;
           - **a value that cannot be stored**, holding a NUL or a lone surrogate, is discarded
@@ -1156,6 +1157,12 @@ def reject_proposed_tag(document: Document, dimension: str, value: str) -> None:
     person's decision (FR-10's correction clause; UC-09 A3). An entry already there for that
     dimension and value is replaced, so one entry is kept, carrying the latest proposal's
     confidence. No Tag is created or changed and no link is made.
+
+    **No column limits the value** (D-133). The entry is JSON, and the proposal it matches was
+    proposed whatever its length (D-129), so a Topic longer than the Tags column, which
+    ``confirm_proposed_tag`` refuses, is rejected here like any other. The route reads a value up to
+    MAXIMUM_PROPOSED_TAG_LENGTH characters (``ProposedTagRejectSerializer``). Until D-133 it read
+    the confirm route's 255, and such a proposal could be neither confirmed nor rejected.
 
     Every later classify, reprocess or ``classify_documents`` run skips the value on this document:
     neither proposed nor linked, at any confidence, in the scheme or out of it
