@@ -13458,6 +13458,9 @@ proposed for confirmation in the Topic dimension only".
 - **Rule 4 for a value outside the scheme,** or retired since the scheme was built:
   - **Topic:** proposed for a person, at any confidence. Never created, linked or reactivated by the
     classifier.
+    *Since 15 November 2026 (D-134, the user's decision), a Topic longer than a tag name, 255
+    characters once normalised, is discarded instead, because no Tag could hold it. That is a second
+    literal departure from clause 3, recorded in D-134.*
   - **Project or Process:** discarded, at any confidence.
   - **One exception:** a value that cannot be stored, because it holds U+0000 or a lone surrogate, is
     discarded with U+FFFD in its place. A reply carrying one made the classify route answer 500 before
@@ -13540,6 +13543,8 @@ documents were not tagged automatically.
   value"), so a measurement would show it. Haiku's replies on the twenty never contained one.
   *Since the merge of `main` (`bc0b5b6`) this departure does not occur on the shipped path: such a
   reply is refused and retried as a whole (the note on the one exception, above).*
+  *Since 15 November 2026 there is a second literal departure: a Topic longer than a tag name is
+  discarded (D-134, the user's decision). The verifier counts it the same way.*
 - **A Topic over 255 characters is proposed,** as on `main`, and can only be rejected: confirming it
   is the existing 400.
   *Corrected on 14 November, after the re-audit of `d909537` (C15): it can be neither confirmed nor
@@ -13552,6 +13557,10 @@ documents were not tagged automatically.
 
   *Fixed on 15 November 2026 by D-133: the reject route reads a value up to 100,000 characters
   (`MAXIMUM_PROPOSED_TAG_LENGTH`), so such a proposal can be rejected. Confirming it is still 400.*
+
+  *Superseded later on 15 November 2026 by D-134, the user's decision: a run discards a Topic over
+  255 characters into `discarded_suggestions` instead of proposing it, so every proposal a run makes
+  can be confirmed. A proposal stored before D-134 can still be rejected through D-133's route.*
 - **The proposal record keeps D-128's shape:** `proposed_tags` on the `proposed_topics` column, with a
   dimension on each entry. Migration 0012 is pushed, and the routes and the screen read that shape.
 - **A database classified under D-128 keeps what D-128 made.** Its grown tags and AI links are not
@@ -13814,7 +13823,8 @@ finding with probe tests against its own test database.
   with tests from both roles, is a follow-up for the user to decide. It predates D-128 and D-129.
 
   *Fixed on 15 November 2026 by D-133, the user's decision: the reject route reads a value up to
-  100,000 characters, tested from an Employee and an Administrator session. Confirm keeps its 255.*
+  100,000 characters, tested from an Employee and an Administrator session. Confirm keeps its 255.
+  Since D-134, the same day, no run proposes such a Topic: it is discarded.*
 
 **The re-audit of `6e77913` (13 November 2026), verbatim.** This is the `requirements-auditor` agent's
 report, quoted whole and unedited, and extracted mechanically from the agent's transcript. Its line
@@ -15597,6 +15607,10 @@ rule 4d).
      "Not covered" names the residual. The third option would close it by construction, and it is
      the lead's to take up. The constant's comment and the test say the same since this correction.*
 
+   *Taken up later on 15 November 2026: the user chose the third option, with the bound at the Tags
+   column's 255 characters rather than 100,000, as D-134. A run discards a longer Topic instead of
+   proposing it. This route's 100,000 is unchanged, and now serves proposals stored before D-134.*
+
    **Why the brief's premise did not hold.** The brief sized the bound from
    `CLASSIFICATION_MAX_TOKENS`, 400 tokens. That is FLM's ceiling.
    - On Anthropic, the default since D-122 and the alpha's provider since D-131,
@@ -15782,6 +15796,7 @@ script against them.
 - Both suites ran again on the merged tree (above).
 - L1, I1 and I2 are under "Not covered". Nothing else changed: L1 and I1 close only with the third
   option, which is the lead's decision, and I2 is older than this entry.
+  *L1 and I1 were closed later on 15 November 2026 by D-134, the third option at 255 characters.*
 
 **Not covered:**
 - **A proposal longer than 100,000 characters** would still be refused 400 by reject, and stuck as
@@ -15789,6 +15804,9 @@ script against them.
   21 characters. It can be produced on purpose: a reply steered into runs of punctuation could pass
   100,000 characters within Claude's ceiling (the security review, I1). The third option in point 3
   would close it.
+  *Closed later on 15 November 2026 by D-134 for every run made since: a run discards a Topic over
+  255 characters, so it never proposes one past this bound. A proposal stored before D-134 is the
+  only one that could still be.*
 - **`rejected_tags` can grow faster** (the security review, L1, low). Nothing prunes it, and since
   D-133 an entry is as long as the proposal it rejected, up to a reply's worth. Its fixes, none
   built:
@@ -15798,6 +15816,10 @@ script against them.
     proposed again;
   - deferring the column where the detail reads the analysis (`classification_of`): it cheapens the
     read and bounds nothing.
+
+  *Closed later on 15 November 2026 by D-134, the first fix: a run proposes no Topic over 255
+  characters, so a rejection of a proposal made since then is at most 255 characters, as before
+  D-133. The list is still never pruned, at that rate.*
 - **Every validator runs past a failed length check** (the security review, I2, info). The
   proposed-tags routes have no throttle, and a value near Waitress's cap costs about 1.8 s of
   validation. This predates D-133. The reviewer's optional hardening, not built: refuse an over-long
@@ -15806,6 +15828,8 @@ script against them.
   client's fixed 400 sentence, and the row stays. Whether the page should withhold Confirm there, or
   say why, is an interface question this decision does not settle (`CLAUDE.md` §1: raise it rather
   than build it).
+  *Since D-134 (later on 15 November 2026) only a proposal stored before D-134 can be over 255
+  characters.*
 - **The 200 path for a long value is tested in Topic only.** The serializer and
   `reject_proposed_tag` are dimension-generic, and the 400 past the bound is tested in Project,
   Process and Topic. Since D-129 a run proposes no Project or Process value.
@@ -15819,3 +15843,234 @@ script against them.
   code. Nobody looked for one.
 - **`CLAUDE.md` §5's table is not changed.** Of FR-10's values it lists only
   `MAXIMUM_CLASSIFY_ATTEMPTS`.
+
+## D-134 · A classification run discards a Topic longer than a tag name instead of proposing it, so every proposal a run makes can be confirmed
+
+**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (controlled taxonomy
+growth), UC-09, Objective 05 clause 3, D-129, D-133, `apps/documents/classification.py`,
+`scripts/objective05_verify.py`, `docs/api-contract.md` · **Supersedes:** for a Topic longer than
+255 characters, D-129's rule 4 ("Topic: proposed for a person, at any confidence") and its choice
+"A Topic over 255 characters is proposed". **Closes:** D-133's "Not covered" items on a proposal
+over 100,000 characters (the security review's I1) and on the growth of `rejected_tags` (L1), for
+every run made since.
+
+**What prompted it.** D-133's security review (PASS WITH NOTES) left two notes that D-133 could not
+close, both recorded under its "Not covered":
+
+- **L1 (low):** `rejected_tags` is never pruned, and since D-133 an entry is as long as the proposal it
+  rejected. A contributor who steers a document's classification into new long Topics and rejects
+  them run after run could grow that row by up to a reply's worth a run, against about 2 KB a run
+  before D-133.
+- **I1 (info):** a proposal over 100,000 characters, past the reject route's bound, could be produced
+  on purpose by a reply steered into runs of punctuation, and would be stuck again. The review called
+  this suspected, not measured: inferred from how tokenisers generally work, not tested on Claude.
+
+For both, the review's smallest correct fix was D-133's third option, which the user had not taken:
+a run discards a Topic over a bound into `discarded_suggestions`, which each run replaces. Because it
+changes D-129's rule, it was the lead's decision. D-133's session proposed it as a follow-up, and this
+session was started for it.
+
+**The decision: the user's, on 15 November 2026,** in answer to one question. The question and its
+options, as put (checked by script against the session's transcript):
+
+> FR-10 follow-up to D-133: should a classification run discard a Topic outside the scheme that is longer than a set limit, instead of proposing it? It would go to discarded_suggestions, which is never shown and is replaced on every run. This closes the two open notes from D-133's security review. L1: since D-133, rejected_tags can grow by up to a whole reply on every run. I1: a proposal over 100,000 characters can be produced on purpose and could then be neither confirmed nor rejected. The cost: it departs from D-129's rule that a Topic is proposed whatever its length. Objective 05's verifier would count each such discard as a clause 3 violation, as it already does for D-129's NUL departure. None of the 935 Topic values in the recorded Objective 05 runs would be affected: the longest is 21 characters.
+>
+> - **Discard over 255 (Recommended):** The limit is the Tags column's 255 characters (NAME_MAX_LENGTH). A longer Topic can never be confirmed anyway, so every proposal that remains can be either confirmed or rejected. Rejected entries go back to at most 255 characters, which closes L1 and I1. The verifier stays strict, and D-134 records the departure. D-133's reject route keeps its 100,000 limit, for proposals already stored.
+> - **Discard over 100,000:** The limit is MAXIMUM_PROPOSED_TAG_LENGTH. This closes I1 only. L1 stays open, because a rejected entry can still be up to 100,000 characters long. A Topic of 256 to 100,000 characters is still proposed, and it can be rejected but never confirmed.
+> - **Leave D-129 as it is:** No change. L1 and I1 stay recorded under D-133's 'Not covered', and this session ends without building anything.
+
+The user chose "Discard over 255 (Recommended)".
+
+*Two notes on the question as put:*
+- *It says I1's proposal "can be produced on purpose", as D-133's "Not covered" does. The security
+  review called that suspected, not measured (above).*
+- *"Rejected entries go back to at most 255 characters" holds for the proposals runs make from now
+  on. A proposal stored before D-134 can still be rejected at its own length, once (below).*
+
+**What it does.**
+
+1. **Rule 4d of `apply_classification`:** a Topic outside the scheme whose normalised name is longer
+   than `NAME_MAX_LENGTH`, 255 characters, is discarded into `discarded_suggestions` as
+   `{"dimension": "Topic", "value", "confidence"}`, at any confidence, instead of being proposed.
+   - **The length is measured as `confirm_proposed_tag` measures it:** on the name after
+     `normalise_tag_name` (trimmed, single spaces, lower case). A Topic of exactly 255 characters is
+     proposed, and confirming it makes the Tag.
+   - **Whether a value can be stored is still decided first,** so a long Topic holding a NUL or a lone
+     surrogate is recorded with U+FFFD, as any such value is (D-129).
+   - **The value is recorded as written,** normalised and not cut, as a Project or Process value is.
+     `discarded_suggestions` is replaced by each run and not exposed.
+2. **Nothing else changes:**
+   - D-133's reject route keeps its 100,000 characters, for proposals stored before D-134.
+   - Confirm keeps the column's 255 and its own length check behind the serializer.
+   - Rule 4b still runs first, so a long Topic a person rejected under D-133 is skipped, not
+     discarded.
+   - The verifier still counts strictly. No model, migration, route or screen changes.
+
+**Why 255 rather than 100,000.** A Topic longer than the Tags column can never be confirmed:
+confirming creates a Tag, `Tags.tag_name` is varchar(255), and `confirm_proposed_tag` refuses the
+name (D-133). Proposing it only let a person reject it. So discarding it loses nothing a person could
+have made of it, and:
+
+- **every proposal a run makes can be confirmed or rejected;**
+- **L1:** a rejection of a proposal made since D-134 is at most 255 characters, as before D-133. A run
+  proposes at most eight tag values (`MAXIMUM_TAG_SUGGESTIONS`, `apps/ai/classification.py`), so a
+  steered document's row grows by at most about 2 KB a run, the rate before D-133. Nothing prunes the
+  list still. That predates D-133, and the review raised L1 only at D-133's rate;
+- **I1:** no proposal a run makes can come near the reject route's 100,000.
+
+At 100,000 only I1 would close. A Topic of 256 to 100,000 characters would still be proposed, rejected
+at full length, and never confirmed.
+
+**The departure from Objective 05's clause 3, accepted by the user.** The clause reads: "suggested
+values falling outside the established scheme must be discarded in the Department, Project and Process
+dimensions while being proposed for confirmation in the Topic dimension only". A Topic over 255
+characters is now discarded, not proposed. That is the second literal departure, beside D-129's value
+that cannot be stored, which since #106's parser does not occur on the shipped path.
+
+FR-10's own clause is worded more loosely: "A value that does not match may be proposed only in the
+Topic dimension and requires user confirmation before it is created". It permits a proposal in Topic
+only, and a Topic no Tag could hold could not be created by any confirmation. So the departure is from
+the objective's wording, which the verifier reads strictly, rather than from FR-10's.
+
+- **The verifier is unchanged.** `scripts/objective05_verify.py` counts a Topic in
+  `discarded_suggestions` as a clause 3 violation ("discarded a Topic value"), so a measurement would
+  show this departure rather than hide it. Its docstring now names both cases.
+- **No recorded run is affected.** D-133's measurement
+  (`corpus/objective-05/runs/2026-11-15-topic-lengths/topic-lengths.txt`) found 935 Topic values across
+  the recorded runs, the longest 21 characters. So every recorded verification of clause 3 stands.
+- **Invariant 1.** The departure turns on the suggestion's own length. No Tag name is longer than 255
+  characters, so such a value can only be one no Tag has: case (a) of rule 4's same-treatment argument.
+  Discarding it says nothing about any Tag, and `discarded_suggestions` is not exposed.
+
+**What changed:**
+- `apps/documents/classification.py`: rule 4d's length branch; the docstrings of the module, rule 4d,
+  the same-treatment argument, `confirm_proposed_tag` and `reject_proposed_tag`.
+- `apps/documents/models.py`: the comments and docstring on `proposed_tags` and
+  `discarded_suggestions`. No field changed, so no migration.
+- `apps/core/constants.py`: the comment on `MAXIMUM_PROPOSED_TAG_LENGTH`. Its value is unchanged.
+- `apps/api/serializers.py`, `apps/api/views.py`, `apps/core/tests/test_constants.py`: docstrings
+  that said a run proposes a Topic whatever its length.
+- `scripts/objective05_verify.py`: its docstring only. What it counts is unchanged.
+- `docs/api-contract.md`: the Topic line of the classification section, the `discarded_suggestions`
+  and `proposed_tags` paragraphs, and the confirm and reject rows.
+- `docs/schema-v1.md`: the `proposed_topics` and `discarded_suggestions` rows.
+- `frontend/tests/documentClassification.test.jsx`: the comment on D-133's test. No source or test
+  behaviour changed.
+- D-129 and D-133: dated notes where they say a run proposes a long Topic, and where D-133 left L1 and
+  I1 to the lead.
+
+**The tests.** Each route test runs from an Employee session and an Administrator session through
+`session_client`.
+
+- **New, `apps/api/tests/test_fr10_discard_long_topic.py`:**
+  - `test_a_classify_discards_a_topic_longer_than_a_tag_name_and_proposes_the_short_one_beside_it`: a
+    classify suggesting the re-audit's 359-character Topic and a short one. The short one is proposed
+    and the long one is not. The reply does not carry the discard, and the record holds it with its
+    confidence. No Tag or link is made. The reject route, which reads a value that long, answers the
+    document's own 404 body and records nothing.
+  - `test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_the_confirm_route_makes_the_tag`.
+- **New, in `apps/documents/tests/test_classification_d128.py`:**
+  - `test_a_topic_longer_than_a_tag_name_is_discarded_at_any_confidence_and_nothing_is_proposed`:
+    below, at and above the threshold, for both models' thresholds. It is written with padding and
+    capitals, and recorded normalised.
+  - `test_a_discarded_long_topic_is_neither_confirmed_nor_rejected_and_no_rejection_is_recorded`:
+    `NotOnThisDocument` from both functions, and `rejected_tags` stays empty.
+  - `test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_confirming_it_makes_the_tag`: written
+    longer than the column, with padding, and exactly 255 characters once normalised.
+  - `test_a_long_topic_that_cannot_be_stored_is_discarded_with_the_replacement_character`: a NUL and a
+    lone surrogate.
+  - `test_a_proposal_stored_before_d134_longer_than_the_column_cannot_be_confirmed`, which replaces
+    `test_a_topic_longer_than_the_column_is_proposed_and_confirming_it_is_refused`: a run no longer
+    makes the proposal, so the test writes it into the record as a run before D-134 left it.
+- **Changed:**
+  - `test_classification_d128.py`: the "longer than the column" case leaves `PROPOSED_AS_WRITTEN`,
+    since such a Topic is no longer proposed again.
+  - `apps/api/tests/test_fr10_reject_long_proposal.py`, D-133's file: its fixture made the
+    359-character proposal by a classify, which now discards it. The fixture now classifies with no tag
+    suggested, writes the proposal into the record as a run before D-134 left it, and checks that the
+    detail shows it. Its four tests are otherwise unchanged. Since D-134,
+    `test_a_rejected_long_topic_is_not_proposed_again`'s empty `discarded_suggestions` shows that rule 4b
+    skipped the value before rule 4d could discard it.
+
+**Deliberate breaks.** Each new or changed test failed under at least one break before it was relied
+on, and every break was reverted.
+- **How:** a script applied each break alone, ran the tests, restored every touched file byte for
+  byte and checked it by SHA-256. It is D-133's script, adapted, and kept with the runs' JUnit XML in
+  the session's scratchpad, not in the repository.
+- **K1 to K8 are this decision's.** B1, B2, B3b, B4, B5, B7 and B8 are D-133's server breaks, run again
+  because the fixture of the file they covered changed.
+- **Every break ran:** `apps/documents/tests/test_classification_d128.py`; `apps/api/tests/test_fr10_discard_long_topic.py`; `apps/api/tests/test_fr10_reject_long_proposal.py`; `apps/documents/tests/test_classification_apply.py`; `apps/documents/tests/test_classification_rejected.py`; `apps/documents/tests/test_classification_confirm.py`; `apps/api/tests/test_fr10_rejected_proposals.py`; `apps/api/tests/test_fr10_proposed_tags.py`; `apps/api/tests/test_document_classification.py`; `apps/api/tests/test_fr10_d128_invariant1.py`.
+- **The table** is generated from the runs' JUnit XML, not typed.
+
+| Test | Fails under |
+|---|---|
+| `test_classification_d128.py::test_a_discarded_long_topic_is_neither_confirmed_nor_rejected_and_no_rejection_is_recorded` | K1, K3, K7 |
+| `test_classification_d128.py::test_a_long_topic_that_cannot_be_stored_is_discarded_with_the_replacement_character`, all 2 cases (a NUL, a lone surrogate) | K5 |
+| `test_classification_d128.py::test_a_proposal_stored_before_d134_longer_than_the_column_cannot_be_confirmed` | K8, B3b |
+| `test_classification_d128.py::test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_confirming_it_makes_the_tag` | K2, K4 |
+| `test_classification_d128.py::test_a_topic_longer_than_a_tag_name_is_discarded_at_any_confidence_and_nothing_is_proposed`, all 6 cases (above-claude-haiku-5-5, above-stub-chat, at-claude-haiku-5-5, at-stub-chat, below-claude-haiku-5-5, below-stub-chat) | K1, K3, K6, K7 |
+| `test_fr10_discard_long_topic.py::test_a_classify_discards_a_topic_longer_than_a_tag_name_and_proposes_the_short_one_beside_it`, Employee and Administrator | K1, K6, K7, B1, B2 |
+| `test_fr10_discard_long_topic.py::test_a_topic_exactly_as_long_as_a_tag_name_is_proposed_and_the_confirm_route_makes_the_tag`, Employee and Administrator | K2 |
+| `test_fr10_reject_long_proposal.py::test_a_rejected_long_topic_is_not_proposed_again`, Employee and Administrator | B1, B2, B7, B8 |
+| `test_fr10_reject_long_proposal.py::test_confirming_a_topic_longer_than_the_column_is_still_400`, Employee and Administrator | B3b |
+| `test_fr10_reject_long_proposal.py::test_rejecting_a_topic_longer_than_the_column_drops_it_and_records_the_rejection`, Employee and Administrator | B1, B2, B7 |
+| `test_fr10_reject_long_proposal.py::test_the_reject_route_reads_a_value_up_to_its_bound_and_refuses_one_past_it`, Employee and Administrator | B1, B2, B4, B5 |
+
+The breaks, each applied alone, run, and reverted, with every touched file checked by SHA-256:
+
+- **K1** (server): a long Topic is proposed again: the length branch never taken (D-129 and D-133's rule).
+- **K2** (server): the bound one short: a Topic of exactly 255 characters is discarded.
+- **K3** (server): the bound one over: a Topic of 256 characters is proposed.
+- **K4** (server): the length taken as the model wrote it, before normalisation.
+- **K5** (server): the length decided before storability: a long value holding a NUL is recorded as written.
+- **K6** (server): the discarded long Topic recorded cut to the column.
+- **K7** (server): the long Topic dropped without a record: neither proposed nor discarded.
+- **K8** (server): confirm_proposed_tag's length check gone (the route's serializer kept).
+- **B1** (server): D-133: the defect restored: the reject view reads the confirm serializer (255).
+- **B2** (server): D-133: the reject serializer's bound set back to the column.
+- **B3b** (server): D-133: confirm reads the reject serializer and confirm_proposed_tag's length check is gone.
+- **B4** (server): D-133: the reject bound one short (max_length = bound - 1).
+- **B5** (server): D-133: the reject bound one over (max_length = bound + 1).
+- **B7** (server): D-133: reject_proposed_tag records no rejection for a value over the column.
+- **B8** (server): D-133: rule 4b ignores a rejection over the column (_rejected).
+
+Tests outside the section that a break also failed:
+
+- **B3b:** `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[administrator-long]`, `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[employee-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Process-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Project-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Topic-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Process-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Project-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Topic-confirm-over-long]`
+- **B5:** `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[administrator-long]`, `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[employee-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Process-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Project-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Topic-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Process-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Project-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Topic-reject-over-long]`
+
+**The suites,** on the tree committed with this entry:
+- **`pytest`, the whole suite: 4,965 passed in 1,695.96 s (0:28:15),** with dual-role coverage 48 of
+  48 protected endpoints. It ran in a temporary detached worktree at `f82fb1a` with this change applied,
+  because the breaks were running in this one at the time. The code and tests were the same bytes as
+  this commit's, checked by diff before committing. Only this entry in `docs/decisions.md` was added
+  afterwards, and no test reads it.
+- **The front end:** `npm test` 666 passed in 48 files; `npm run lint` and `npm run build` exit 0. Only
+  a comment changed there.
+- **`makemigrations --check --dry-run`:** "No changes detected". No model field changed.
+
+**Not covered:**
+- **A proposal stored before D-134 longer than 255 characters** stays on its document until a person
+  rejects it (D-133's route) or a run replaces the list. Its rejection is kept at its own length, once.
+  One longer than 100,000 characters would still be refused by the reject route until a run replaces
+  the list. Either could come only from a run made before D-134. Nobody looked for one on the alpha's
+  database or on `kmp_anthropic`.
+- **`rejected_tags` is still never pruned,** at the rate before D-133: at most eight entries a run, each
+  at most 255 characters. The review raised L1 only at D-133's rate.
+- **`discarded_suggestions` can hold a long discarded value,** up to a reply's worth, until the next run
+  replaces it. A long Project or Process value could already do so before D-134, as could a long
+  Topic in `proposed_tags` until D-134. It is not exposed. Every detail read still loads the row (the
+  security review of D-133, on L1's cost). Deferring the column in `classification_of` is not built.
+- **The page still offers Confirm on a proposal over 255 characters.** Since D-134 only a proposal
+  stored before D-134 can be one. Another session is changing the page for those, as D-135 (PR 113,
+  branch `fix/FR-10-confirm-long-proposal`). It was not merged when this was written, so nothing here
+  depends on it.
+- **A measurement that meets this departure** would report "discarded a Topic value" as a clause 3
+  violation, and it should cite D-134. None has: the longest recorded Topic is 21 characters.
+- **D-133's I2** (every validator runs past a failed length check, on routes with no throttle) is
+  unchanged, and older than both entries.
+- **No database the user works with was read or written.** The tests ran on pytest's own test
+  databases. No model changed, so nothing needs migrating. When a server runs this code, its next run
+  on each document applies the rule.
+- **`CLAUDE.md` §5's table is not changed.** It lists neither `NAME_MAX_LENGTH` nor
+  `MAXIMUM_PROPOSED_TAG_LENGTH`.

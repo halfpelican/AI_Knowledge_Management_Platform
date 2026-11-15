@@ -26,6 +26,10 @@ model:
   - a Project or Process value outside the scheme is discarded, as is a department;
   - the classifier creates, links and reactivates no Tag outside the scheme.
 
+  Two literal departures, each recorded: a value that cannot be stored is discarded (D-129), and
+  since 15 November 2026 so is a Topic longer than a tag name, which no Tag could hold (D-134).
+  Rule 4d of ``apply_classification``.
+
   From 12 to 13 November 2026 D-128 created and applied such a value at or above the threshold.
   Rules 3 and 4 of ``apply_classification``.
 - **provenance** — an AI link is ``applied_by="ai"`` and unconfirmed; a person's ``confirm_tag``
@@ -505,15 +509,27 @@ def apply_classification(
 
           - **a Topic** is proposed: held in ``proposed_tags`` as ``{"dimension", "value",
             "confidence"}`` for a person to confirm or reject (``confirm_proposed_tag``,
-            ``reject_proposed_tag``), at any confidence, a long or many-worded one included. A
-            person who confirms one longer than the column gets ``InvalidClassification``, the
-            route's 400, and can reject it: the reject route reads a value up to
-            MAXIMUM_PROPOSED_TAG_LENGTH characters (D-133);
+            ``reject_proposed_tag``), at any confidence, a many-worded one included, **unless it
+            is longer than a tag name** (below);
+          - **a Topic longer than a tag name,** over NAME_MAX_LENGTH (255) characters once
+            normalised, is discarded into ``discarded_suggestions``, at any confidence (D-134, the
+            lead's decision of 15 November 2026). No Tag can hold it, so confirming it could only
+            fail, and proposing it let a person do no more than reject it. So every proposal a run
+            makes can be confirmed. From D-129 until D-134 such a Topic was proposed, and since
+            D-133 the reject route reads a value up to MAXIMUM_PROPOSED_TAG_LENGTH characters, so
+            a proposal stored before D-134 can still be rejected;
           - **a Project or Process value** is discarded into ``discarded_suggestions`` as
             ``{"dimension", "value", "confidence"}``, at any confidence;
           - **a value that cannot be stored**, holding a NUL or a lone surrogate, is discarded
-            whatever its dimension, recorded with U+FFFD in place of each such character
-            (``_recordable``). That is the 500 fix from D-128's security review, kept.
+            whatever its dimension and length, recorded with U+FFFD in place of each such
+            character (``_recordable``). That is the 500 fix from D-128's security review, kept.
+
+          Discarding a long Topic is a literal departure from Objective 05's clause 3, which
+          proposes every Topic outside the scheme. So is discarding a value that cannot be stored
+          (D-129), although since #106 the parser refuses such a reply before it reaches this
+          function. ``scripts/objective05_verify.py`` counts a discarded Topic as a violation either
+          way, so a measurement would show it. The departure turns on the value's length alone,
+          never on what any Tag holds, so it discloses nothing (CLAUDE.md invariant 1).
 
        ``proposed_tags`` and ``discarded_suggestions`` are REPLACED by each run. Links this run
        does not mention are left alone. From 12 to 13 November 2026, D-128 created and linked a value
@@ -525,9 +541,11 @@ def apply_classification(
     able to tell which: (a) no Tag has it; (b) an active, grown Tag that only material some reader
     of this document cannot see carries (an active Tag that is not grown is vocabulary and always
     in the scheme); (c) a retired Tag. What a reader can observe is identical for all three: a Topic
-    is a proposal, and a Project or Process value is discarded and never shown. Nothing returned or
-    recorded says whether a Tag row exists, which is the precedent D-105's note set for a person's
-    name: a retired value is in no scheme, so answering it differently would disclose it. The
+    is a proposal, and a Project or Process value is discarded and never shown. A Topic longer than
+    a tag name is discarded too (D-134), but it can only ever be (a), since no Tag name is that long,
+    and the length is the suggestion's own, so discarding it says nothing about any Tag. Nothing
+    returned or recorded says whether a Tag row exists, which is the precedent D-105's note set for a
+    person's name: a retired value is in no scheme, so answering it differently would disclose it. The
     classifier never brings a retired value back. Only a person's confirmation or Topic name form
     does, on a document every role can read (``_bring_into_use``; D-128's security review, finding
     1).
@@ -648,16 +666,23 @@ def apply_classification(
         for (dimension, name), confidence in outside.items():
             if not _storable(name):
                 # A NUL or a lone surrogate: discarded, recorded with U+FFFD so the record can be
-                # written. Before the fix it answered the classify route 500.
+                # written. Before the fix it answered the classify route 500. Checked first, so a
+                # long value holding one is recorded with U+FFFD too.
                 discarded.append(
                     {"dimension": dimension, "value": _recordable(name), "confidence": confidence}
                 )
-            elif dimension == TOPIC_DIMENSION:
-                # Proposed for a person to confirm or reject, at any confidence.
-                proposed.append({"dimension": dimension, "value": name, "confidence": confidence})
-            else:
+            elif dimension != TOPIC_DIMENSION:
                 # Project or Process: discarded, at any confidence.
                 discarded.append({"dimension": dimension, "value": name, "confidence": confidence})
+            elif len(name) > NAME_MAX_LENGTH:
+                # A Topic longer than a tag name: no Tag can hold it, so confirming it could only
+                # fail. Discarded, at any confidence, rather than proposed only to be rejected
+                # (D-134, the lead's decision of 15 November 2026). Measured as confirm measures
+                # it, on the normalised name.
+                discarded.append({"dimension": dimension, "value": name, "confidence": confidence})
+            else:
+                # Proposed for a person to confirm or reject, at any confidence.
+                proposed.append({"dimension": dimension, "value": name, "confidence": confidence})
         analysis.proposed_tags = proposed
         analysis.discarded_suggestions = discarded
         analysis.save()
@@ -1103,8 +1128,10 @@ def confirm_proposed_tag(document: Document, dimension: str, value: str) -> Cont
     confirmed, not provisional, not removed, with the proposal's confidence. A link the document
     already holds, removed or held, is confirmed and put back, keeping the confidence it has, or
     taking the proposal's if it has none. The proposal leaves ``proposed_tags``. Raises
-    ``InvalidClassification`` for a name longer than the column, the route's 400. A run proposes a
-    Topic of any length (D-129), so this is where a long one is refused.
+    ``InvalidClassification`` for a name longer than the column, the route's 400. Since D-134 a run
+    proposes no Topic that long, so every proposal it makes can be confirmed. A longer one is a
+    proposal stored before D-134, when a run proposed a Topic of any length (D-129), and this is
+    where it is refused.
     """
     name = normalise_tag_name(value or "")
     with transaction.atomic():
@@ -1158,11 +1185,13 @@ def reject_proposed_tag(document: Document, dimension: str, value: str) -> None:
     dimension and value is replaced, so one entry is kept, carrying the latest proposal's
     confidence. No Tag is created or changed and no link is made.
 
-    **No column limits the value** (D-133). The entry is JSON, and the proposal it matches was
-    proposed whatever its length (D-129), so a Topic longer than the Tags column, which
-    ``confirm_proposed_tag`` refuses, is rejected here like any other. The route reads a value up to
-    MAXIMUM_PROPOSED_TAG_LENGTH characters (``ProposedTagRejectSerializer``). Until D-133 it read
-    the confirm route's 255, and such a proposal could be neither confirmed nor rejected.
+    **No column limits the value** (D-133). The entry is JSON, so a Topic longer than the Tags
+    column, which ``confirm_proposed_tag`` refuses, is rejected here like any other. The route reads
+    a value up to MAXIMUM_PROPOSED_TAG_LENGTH characters (``ProposedTagRejectSerializer``). Until
+    D-133 it read the confirm route's 255, and such a proposal could be neither confirmed nor
+    rejected. Since D-134 a run discards a Topic longer than a tag name instead of proposing it, so
+    only a proposal stored before D-134 is that long, and the entry this records is never longer
+    than the proposal it matched.
 
     Every later classify, reprocess or ``classify_documents`` run skips the value on this document:
     neither proposed nor linked, at any confidence, in the scheme or out of it

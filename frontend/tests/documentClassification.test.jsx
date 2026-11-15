@@ -1411,7 +1411,9 @@ describe('D-128: a value the AI proposed is held for a person in Project, Proces
 /* ---- D-133: a proposed topic longer than a tag name can be ------------------ */
 
 /**
- * D-133: a run proposes a Topic whatever its length (D-129). Confirming one longer
+ * D-133: from D-129 until D-134 a run proposed a Topic whatever its length, so a
+ * proposal stored then can still be this long. Since D-134 a run discards a Topic
+ * longer than a tag name instead. Confirming one longer
  * than the Tags column is the server's 400, since it would make a tag the column
  * cannot hold, but the reject route reads a value up to MAXIMUM_PROPOSED_TAG_LENGTH.
  * Until D-133 the reject route refused it too, and the proposal could be neither

@@ -2310,8 +2310,9 @@ class _ProposedTagView(APIView):
     "value"}`` with both required (``body_serializer``: 400 keyed on ``dimension`` for a missing or
     any other dimension, Department included, and on ``value`` for a blank or over-long one). Over-
     long is the route's own bound: confirm's is the Tags column, 255 characters, since confirming
-    creates a Tag; reject's is MAXIMUM_PROPOSED_TAG_LENGTH, since a rejection writes only JSON and a
-    run proposes a Topic whatever its length (D-133). The value is normalised before it is matched
+    creates a Tag; reject's is MAXIMUM_PROPOSED_TAG_LENGTH, since a rejection writes only JSON and,
+    from D-129 until D-134, a run proposed a Topic whatever its length (D-133). Since D-134 a run
+    proposes none longer than the column. The value is normalised before it is matched
     with the dimension; a pair that is not proposed on this document, a value proposed under another
     dimension included, is the document 404's exact body. 200 ``{"classification", "tag_details"}``
     as they now stand.
@@ -2363,7 +2364,8 @@ class DocumentProposedTagRejectView(_ProposedTagView):
     The value may be longer than the Tags column, up to MAXIMUM_PROPOSED_TAG_LENGTH
     (``ProposedTagRejectSerializer``, D-133), so a Topic over 255 characters, which confirm refuses,
     can still be rejected. Until D-133 both routes read the confirm serializer, and such a proposal
-    could be neither (the re-audit of ``d909537``, finding C15)."""
+    could be neither (the re-audit of ``d909537``, finding C15). Since D-134 a run discards such a
+    Topic instead of proposing it, so only a proposal stored before D-134 is that long."""
 
     body_serializer = ProposedTagRejectSerializer
 

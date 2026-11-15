@@ -8,15 +8,21 @@ again. The cap came with #85's ``ProposedTopicSerializer`` and predates D-128 an
 
 Since D-133 the reject route reads ``ProposedTagRejectSerializer``, whose ``value`` may be up to
 MAXIMUM_PROPOSED_TAG_LENGTH characters: a rejection writes only JSON and matches by normalised
-value, and a run proposes a Topic whatever its length (D-129). Confirm keeps the column's cap and
-its 400, because confirming creates a Tag. Here:
+value, and a run then proposed a Topic whatever its length (D-129). Confirm keeps the column's cap
+and its 400, because confirming creates a Tag. Here:
 
 - **The probe's case:** a 359-character Topic proposal is rejected, 200. It leaves
   ``proposed_tags``, joins ``rejected_tags`` with the machine's confidence, and nothing is created.
-- **The rejection sticks:** a later classify suggesting the same Topic skips it (rule 4b).
+- **The rejection sticks:** a later classify suggesting the same Topic skips it (rule 4b), so it is
+  neither proposed nor even discarded.
 - **Confirm is unchanged:** the same proposal confirmed is 400 keyed on ``value``, and stays.
 - **The bound:** a value of exactly MAXIMUM_PROPOSED_TAG_LENGTH characters is read (not proposed
   here, so the document's 404), and one character more is 400 keyed on ``value``.
+
+**Since D-134 (15 November 2026) a run discards a Topic longer than a tag name** instead of
+proposing it (``test_fr10_discard_long_topic.py``). So the proposal here is one stored before
+D-134: the fixture classifies the document through the route, then writes the proposal into the
+record as a run from D-129 until D-134 left it. Until D-134 the fixture made it by a classify.
 
 Every test runs from an Employee and an Administrator session through ``session_client``. The stub
 answers classification below the classifying model's own threshold, and no provider is reached.
@@ -71,10 +77,11 @@ def make_document(user):
     return document
 
 
-def classify(client, stub, document):
-    """A classify through the route, the stub suggesting the long Topic in capitals, below the
-    threshold: outside the scheme, so it is proposed (D-129), normalised."""
-    stub.classification = classification(tags=[(TOPIC_DIMENSION, LONG_TOPIC.upper(), BELOW)])
+def classify(client, stub, document, tags=((TOPIC_DIMENSION, LONG_TOPIC.upper(), BELOW),)):
+    """A classify through the route, the stub suggesting ``tags``: by default the long Topic in
+    capitals, below the threshold. Outside the scheme and longer than a tag name, so since D-134 it
+    is discarded, unless a rejection on this document skips it first (rule 4b)."""
+    stub.classification = classification(tags=list(tags))
     response = client.post(f"{DOCUMENTS_URL}/{document.id}/classify", {}, format="json")
     assert response.status_code == 200, response.content
     stub.classification = None
@@ -98,10 +105,18 @@ def links_of(document):
 
 @pytest.fixture
 def proposed(session_client, stub_ai_service):
-    """A document whose classification proposed the 359-character Topic."""
+    """A document holding the 359-character Topic proposal, as a run from D-129 until D-134 left it.
+
+    Since D-134 no run proposes it, so the document is classified through the route with no tag
+    suggested, and the proposal is then written into its record. The detail shows it, as a page
+    would read it."""
+    client = session_client.client
     document = make_document(session_client.user)
-    body = classify(session_client.client, stub_ai_service, document)
-    assert body["classification"]["proposed_tags"] == [PROPOSAL]
+    assert classify(client, stub_ai_service, document, tags=())["classification"]["proposed_tags"] == []
+    DocumentAnalysis.objects.filter(document=document).update(proposed_tags=[PROPOSAL])
+    detail = client.get(f"{DOCUMENTS_URL}/{document.id}")
+    assert detail.status_code == 200, detail.content
+    assert detail.json()["classification"]["proposed_tags"] == [PROPOSAL]
     return document
 
 
@@ -124,7 +139,9 @@ def test_rejecting_a_topic_longer_than_the_column_drops_it_and_records_the_rejec
 
 
 def test_a_rejected_long_topic_is_not_proposed_again(session_client, stub_ai_service, proposed):
-    """Before D-133 nothing was recorded, so this run proposed it again."""
+    """Before D-133 nothing was recorded, so this run proposed it again. Since D-134 a run that is
+    not told of the rejection discards it, so the empty ``discarded_suggestions`` shows that rule 4b
+    skipped it first."""
     client = session_client.client
     assert act(client, "reject", proposed, LONG_TOPIC).status_code == 200
 

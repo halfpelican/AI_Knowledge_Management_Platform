@@ -31,6 +31,12 @@ database from that window shows it rather than hiding it. Counted per document:
 - a Topic entry of ``proposed_tags`` is ``topic_proposed``, as clause 3 asks;
 - a Project or Process entry is ``project_process_proposed`` and a **clause 3 violation**: the
   clause says such a value is discarded;
+- a Topic entry of ``discarded_suggestions`` is a **clause 3 violation** ("discarded a Topic
+  value"): the clause says such a value is proposed. The shipped build makes one in two cases, each a
+  recorded literal departure: a value that cannot be stored (D-129; since #106 the parser refuses
+  such a reply first), and since D-134 a Topic longer than a tag name, 255 characters, which no Tag
+  could hold. None of the recorded runs holds either: the longest Topic in them is 21 characters
+  (D-133's measurement);
 - an AI link whose Tag is ``grown`` is a value the classifier created outside the seeded scheme,
   counted as ``created_by_classifier`` and recorded as a **clause 3 violation**. On a measurement
   database no person acts, and the scheme is seeded ``--scheme-only``, whose values are never
