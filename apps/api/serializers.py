@@ -29,6 +29,7 @@ from apps.core.constants import (
     KNOWLEDGE_GAP_STATUS_VALUES,
     KNOWLEDGE_MAP_NODE_TYPES,
     LOGIN_ATTEMPT_LOCKOUT,
+    MAXIMUM_PROPOSED_TAG_LENGTH,
     NO_ANSWER_MESSAGE,
     PROVENANCE_REMOVED_MESSAGE,
     REPOSITORY_TAG_DIMENSIONS,
@@ -427,17 +428,35 @@ class ClassificationConfirmSerializer(serializers.Serializer):
 
 
 class ProposedTagSerializer(serializers.Serializer):
-    """The body of the proposed-tags routes (D-128): ``{"dimension", "value"}``, both required.
+    """The body of the proposed-tags confirm route (D-128): ``{"dimension", "value"}``, both
+    required. The reject route reads the same body through ``ProposedTagRejectSerializer``.
 
     ``dimension`` is one of REPOSITORY_TAG_DIMENSIONS, read through a ChoiceField, so a missing one,
     or any other (Department included: a department is never proposed), is 400 keyed on
     ``dimension``. ``value`` is the value as proposed or as typed; it is normalised before it is
     matched, so case and spacing do not matter; blank, or over the column, is 400 keyed on
-    ``value``. A NUL byte in it is refused by ``CharField``'s own validator (D-65). Whether the pair
-    is proposed on the document is the route's question, after validation: the 404."""
+    ``value``. Confirming creates a Tag, so the column's length binds here. A NUL byte in it is
+    refused by ``CharField``'s own validator (D-65). Whether the pair is proposed on the document is
+    the route's question, after validation: the 404."""
 
     dimension = serializers.ChoiceField(choices=REPOSITORY_TAG_DIMENSIONS)
     value = serializers.CharField(max_length=NAME_MAX_LENGTH, allow_blank=False, trim_whitespace=True)
+
+
+class ProposedTagRejectSerializer(ProposedTagSerializer):
+    """The body of the proposed-tags reject route (D-133): ``ProposedTagSerializer``'s, except that
+    ``value`` may be up to MAXIMUM_PROPOSED_TAG_LENGTH characters rather than the column's 255.
+
+    A run proposes a Topic whatever its length (D-129), and a rejection writes only JSON
+    (``reject_proposed_tag``'s ``rejected_tags`` entry, matched by normalised value), so no column
+    limits it. Until D-133 this route read the confirm serializer, and a Topic over 255 characters
+    could be neither confirmed nor rejected: the requirements re-audit of ``d909537``, finding C15.
+    Blank, or over MAXIMUM_PROPOSED_TAG_LENGTH, is 400 keyed on ``value``. A value within the bound
+    that is not proposed on the document is the route's 404, as before."""
+
+    value = serializers.CharField(
+        max_length=MAXIMUM_PROPOSED_TAG_LENGTH, allow_blank=False, trim_whitespace=True
+    )
 
 
 # The 400 of POST /api/tags for a name that normalises to more than the column holds.

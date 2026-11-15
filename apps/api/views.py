@@ -165,6 +165,7 @@ from .serializers import (
     ActionItemSerializer,
     ActionItemWriteSerializer,
     MeetingSerializer,
+    ProposedTagRejectSerializer,
     ProposedTagSerializer,
     RecentQuestionSerializer,
     RegisterSerializer,
@@ -2305,18 +2306,22 @@ class DocumentTagView(APIView):
 
 class _ProposedTagView(APIView):
     """The two proposed-tags routes (D-128, replacing ``/proposed-topics/confirm`` and ``/reject``)
-    share everything but the function they call.
+    share everything but the function they call and how long a value they read.
 
     The FR-10 order, as on every route here: the session, then the scoped 404 (D-46), then
     ``contribute_content``'s 403, then the body, ``{"dimension": "Project"|"Process"|"Topic",
-    "value"}`` with both required (``ProposedTagSerializer``: 400 keyed on ``dimension`` for a
-    missing or any other dimension, Department included, and on ``value`` for a blank or over-long
-    one). The value is normalised before it is matched with the dimension; a pair that is not
-    proposed on this document, a value proposed under another dimension included, is the document
-    404's exact body. 200 ``{"classification", "tag_details"}`` as they now stand.
+    "value"}`` with both required (``body_serializer``: 400 keyed on ``dimension`` for a missing or
+    any other dimension, Department included, and on ``value`` for a blank or over-long one). Over-
+    long is the route's own bound: confirm's is the Tags column, 255 characters, since confirming
+    creates a Tag; reject's is MAXIMUM_PROPOSED_TAG_LENGTH, since a rejection writes only JSON and a
+    run proposes a Topic whatever its length (D-133). The value is normalised before it is matched
+    with the dimension; a pair that is not proposed on this document, a value proposed under another
+    dimension included, is the document 404's exact body. 200 ``{"classification", "tag_details"}``
+    as they now stand.
     """
 
     permission_classes = [IsAuthenticated]
+    body_serializer = ProposedTagSerializer
 
     def act(self, document, dimension, value):  # pragma: no cover - the subclasses decide
         raise NotImplementedError
@@ -2324,7 +2329,7 @@ class _ProposedTagView(APIView):
     def post(self, request, pk):
         document = scoped_document_or_404(request, pk)
         require_contribute_content(request, self)
-        serializer = ProposedTagSerializer(data=request.data)
+        serializer = self.body_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)  # 400 keyed on "dimension" or "value"
         data = serializer.validated_data
         try:
@@ -2356,7 +2361,14 @@ class DocumentProposedTagRejectView(_ProposedTagView):
     """``POST /api/documents/{id}/proposed-tags/reject`` — the proposal is dropped, nothing is
     created, and the rejection is recorded with the machine's confidence, so no later run proposes,
     creates or links the value on this document (``reject_proposed_tag``, D-128; the requirements
-    audit of D-128, finding A5). The reply is unchanged: the record is not exposed."""
+    audit of D-128, finding A5). The reply is unchanged: the record is not exposed.
+
+    The value may be longer than the Tags column, up to MAXIMUM_PROPOSED_TAG_LENGTH
+    (``ProposedTagRejectSerializer``, D-133), so a Topic over 255 characters, which confirm refuses,
+    can still be rejected. Until D-133 both routes read the confirm serializer, and such a proposal
+    could be neither (the re-audit of ``d909537``, finding C15)."""
+
+    body_serializer = ProposedTagRejectSerializer
 
     def act(self, document, dimension, value):
         reject_proposed_tag(document, dimension, value)

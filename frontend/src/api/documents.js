@@ -369,9 +369,13 @@ export async function applyTag(docId, choice, options = {}) {
  * Both routes are ordered as every action above: session, the scoped 404, then
  * `contribute_content`'s 403, then the body. 400 `{"dimension": [...]}` for a missing
  * dimension or one other than Project, Process and Topic, Department included; 400
- * `{"value": [...]}` for a blank or over-long value. 404, the document's own 404
- * body, also when that value is not proposed under that dimension on this document,
- * as after another session decided it, so the reply never says which.
+ * `{"value": [...]}` for a blank or over-long value, over-long being each route's
+ * own bound: a tag name's 255 characters to confirm, and MAXIMUM_PROPOSED_TAG_LENGTH
+ * (apps/core/constants.py) to reject, so a proposal too long to become a tag can
+ * still be rejected (D-133). The value is sent whole, as `proposed_tags` carries it.
+ * 404, the document's own 404 body, also when that value is not proposed under that
+ * dimension on this document, as after another session decided it, so the reply
+ * never says which.
  */
 
 /**
@@ -392,7 +396,8 @@ export function confirmProposedTag(docId, dimension, value, options = {}) {
 /**
  * `POST /api/documents/{id}/proposed-tags/reject`, body `{dimension, value}` — drops
  * a proposed value without creating anything (D-128). 200 `{classification,
- * tag_details}`, the entry gone from `proposed_tags`.
+ * tag_details}`, the entry gone from `proposed_tags`. A value longer than a tag name,
+ * which confirm refuses, is rejected here (D-133).
  *
  * @param {string} docId
  * @param {'Project'|'Process'|'Topic'} dimension The proposal's own dimension.
