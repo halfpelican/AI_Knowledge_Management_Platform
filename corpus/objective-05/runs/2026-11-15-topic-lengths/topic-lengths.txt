@@ -1,0 +1,10 @@
+Topic values (suggestions, proposals and links) in corpus/objective-05/runs/
+  2026-11-09: 47 values, the longest 21 characters
+  2026-11-10: 388 values, the longest 21 characters
+  2026-11-10-anthropic: 276 values, the longest 10 characters
+  2026-11-12: 118 values, the longest 21 characters
+  2026-11-13-tag-threshold: 106 values, the longest 21 characters
+  all runs: 935 values, the longest 21 characters
+
+Classification replies in the runs' attempts.log files
+  2026-11-10-anthropic: max_tokens sent 16000; the longest reply 562 completion tokens

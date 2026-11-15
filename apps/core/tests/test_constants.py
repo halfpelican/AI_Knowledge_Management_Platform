@@ -358,6 +358,28 @@ def test_fr10s_department_threshold_is_its_own_on_haiku():
             != constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"])
 
 
+# D-133's allowance: the characters one token of a classification reply is taken to carry at most.
+CHARACTERS_A_TOKEN = 6.25
+
+
+def test_the_reject_bound_covers_the_longest_classification_reply_either_provider_may_return():
+    """D-133, the lead's decision of 15 November 2026: the reject route reads a proposed value up to
+    MAXIMUM_PROPOSED_TAG_LENGTH, 100,000 characters. A run proposes a Topic whatever its length
+    (D-129) and nothing bounds a tag value in the reply, so the bound is sized for the longest reply:
+    Claude's classification ceiling, CLAUDE_MAX_TOKENS, at 6.25 characters a token. FLM's,
+    CLASSIFICATION_MAX_TOKENS, is far inside it. If either ceiling is raised past the bound, this
+    fails, and the bound is revisited rather than left to strand a long proposal again. Above the
+    Tags column, which binds only confirm."""
+    from apps.ai.anthropic import CLAUDE_MAX_TOKENS
+    from apps.ai.classification import CLASSIFICATION_MAX_TOKENS
+    from apps.core.models import NAME_MAX_LENGTH
+
+    assert constants.MAXIMUM_PROPOSED_TAG_LENGTH == 100_000
+    for ceiling in (CLAUDE_MAX_TOKENS, CLASSIFICATION_MAX_TOKENS):
+        assert constants.MAXIMUM_PROPOSED_TAG_LENGTH >= ceiling * CHARACTERS_A_TOKEN, ceiling
+    assert constants.MAXIMUM_PROPOSED_TAG_LENGTH > NAME_MAX_LENGTH
+
+
 # --- The embedding width follows the provider (D-131) ---------------------------------------------
 
 

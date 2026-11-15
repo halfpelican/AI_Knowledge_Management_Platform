@@ -1408,6 +1408,51 @@ describe('D-128: a value the AI proposed is held for a person in Project, Proces
   )
 })
 
+/* ---- D-133: a proposed topic longer than a tag name can be ------------------ */
+
+/**
+ * D-133: a run proposes a Topic whatever its length (D-129). Confirming one longer
+ * than the Tags column is the server's 400, since it would make a tag the column
+ * cannot hold, but the reject route reads a value up to MAXIMUM_PROPOSED_TAG_LENGTH.
+ * Until D-133 the reject route refused it too, and the proposal could be neither
+ * confirmed nor rejected (the re-audit of `d909537`, finding C15). The page has to
+ * offer Reject on such a proposal and send the value whole: the server matches it
+ * by its normalised value, so a value cut short would be another value, the 404.
+ * 359 characters is the re-audit's probe length.
+ */
+const LONG_TOPIC = 'berth renewal and crane replacement '.repeat(10).slice(0, 359)
+
+describe('D-133: a proposed topic longer than a tag name can be is still offered Reject, and Reject sends it whole', () => {
+  it('offers an enabled Reject on the 359-character proposal, sends all 359 characters, and drops the row', async () => {
+    // The premise: longer than any tag name, so the server refuses to confirm it.
+    expect(LONG_TOPIC).toHaveLength(359)
+    expect(LONG_TOPIC.length).toBeGreaterThan(TAG_NAME_MAXIMUM_LENGTH)
+    const proposal = { dimension: 'Topic', value: LONG_TOPIC, confidence: 0.51 }
+    const answered = await renderDetail(
+      detailOf({ classification: classificationOf({ proposed_tags: [proposal] }), tag_details: [] }),
+      {
+        [`POST ${DOC}/proposed-tags/reject`]: {
+          body: { classification: classificationOf({ proposed_tags: [] }), tag_details: [] },
+        },
+      },
+    )
+    const row = proposalRow(proposal)
+    expect(row.querySelector('.tag__name').textContent).toBe(LONG_TOPIC)
+    const reject = within(row).getByRole('button', { name: TEXT.proposedTagRejectLabel('Topic', LONG_TOPIC) })
+    // Asserted directly: fireEvent clicks a disabled button too.
+    expect(reject.disabled).toBe(false)
+
+    press(reject)
+
+    await waitFor(() => expect(announcement()).toBe(TEXT.proposedTagRejected('Topic', LONG_TOPIC)))
+    expect(heldGroup()).toBeNull()
+    // One request, carrying the value exactly as the proposal holds it.
+    expect(requestsTo(answered, 'POST', `${DOC}/proposed-tags/reject`).map((request) => request.body)).toEqual([
+      { dimension: 'Topic', value: LONG_TOPIC },
+    ])
+  })
+})
+
 describe('D-128: an AI tag whose value a classify run created reads as any AI tag does', () => {
   it('shows it as suggested by AI with its confidence, Confirm and Remove, element for element as an AI tag on a listed value, and never as new', async () => {
     // "harbour upgrade" is in none of the document's options before the run: a value

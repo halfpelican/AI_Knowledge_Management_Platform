@@ -739,6 +739,19 @@ CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
 # classification.py's department_threshold() reads this.
 CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.30}
 
+# The longest value POST /api/documents/{id}/proposed-tags/reject reads, in characters (D-133, the
+# lead's decision of 15 November 2026). A run proposes a Topic outside the scheme whatever its length
+# (D-129), and a rejection writes only JSON (``rejected_tags``), so the reject route is not held to
+# the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255 characters could be
+# neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because confirming creates a Tag.
+# Sized for the longest classification reply either provider may return: Claude's ceiling,
+# CLAUDE_MAX_TOKENS (16,000 tokens), at 6.25 characters a token. FLM's, CLASSIFICATION_MAX_TOKENS
+# (400 tokens), is far inside it. A proposal longer than this would still be refused 400: a residual,
+# since nothing bounds a tag value in the reply, but far from anything measured (the longest Topic in
+# the recorded Objective 05 runs is 21 characters). apps/core/tests/test_constants.py ties it to both
+# ceilings.
+MAXIMUM_PROPOSED_TAG_LENGTH = 100_000
+
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
 # recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):
 #   applied      at or above the classifying model's threshold for that kind of assignment
