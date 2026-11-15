@@ -328,6 +328,25 @@ cd $root
 - **No password is asked for or stored,** so the task runs while that user is logged on. If the
   host must run it while logged off, set "Run whether user is logged on or not" in Task Scheduler
   yourself; Windows asks for the password there.
+- **It runs on battery.** Task Scheduler's defaults hold a task while a laptop is on battery and
+  stop one that is unplugged mid-run, and the script turns both off (D-107's note of 15 November
+  2026). A task that stays `Queued` after `Start-ScheduledTask` is waiting on a condition like
+  these.
+- **A task registered by an earlier version of the script keeps those defaults.** Put it right in
+  either of two ways:
+  - **Run this version of the script again.** That replaces the whole task, so anything set by hand
+    in Task Scheduler, such as "Run whether user is logged on or not", has to be set again.
+  - **Change the two conditions in place:**
+
+    ```powershell
+    $task = Get-ScheduledTask -TaskName "KMP knowledge-gap aggregation"
+    $task.Settings.DisallowStartIfOnBatteries = $false
+    $task.Settings.StopIfGoingOnBatteries = $false
+    $task | Set-ScheduledTask
+    ```
+
+    If the task is already `Queued`, `Stop-ScheduledTask` and then `Start-ScheduledTask`, with the
+    same name, start it again.
 - **The provider must be reachable when it runs:** `flm serve` for `flm`, or the keys in `.env` for
   `anthropic`. A run that cannot reach it exits 1 and changes nothing, and the next run takes the
   rows it missed, because each cycle starts from the last committed one. A run missed while the
@@ -359,6 +378,9 @@ cd $root
   output to `meeting-summaries.log` in the log directory.
 - **No password is asked for or stored,** so the task runs while that user is logged on, as the
   knowledge-gap task does.
+- **It runs on battery,** as the knowledge-gap task does. A task registered by an earlier version
+  of the script does not. Put it right either of the knowledge-gap task's two ways, with this
+  task's name, "KMP meeting summary retry".
 - **What one run does:**
   1. It closes any summary a stopped server left `Processing` for over 40 minutes, and queues it.
   2. It runs every queued summary again, one at a time.
