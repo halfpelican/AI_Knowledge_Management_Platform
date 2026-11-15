@@ -21,8 +21,16 @@ describes it as it was before them.
 
 The code-fence repair was rewritten on 13 November 2026, and that rewrite moves none of the
 numbers. ``_strip_code_fences`` became a scan, because both its regexes backtracked
-quadratically, and it returns exactly what they returned for every input.
+quadratically, and it returned exactly what they returned for every input.
 ``apps/ai/tests/test_code_fence_scan.py`` checks that against a frozen copy of the old function.
+
+Since 16 November 2026 neither repair touches text inside a JSON string (D-136). Until then the
+fence repair read three backticks anywhere as a fence, so a reply that quoted a code block was cut
+in the wrong place and refused. The trailing-comma repair removed a comma before a bracket inside a
+string as well as outside, so it changed the string's text. Both now read a string as
+``_outermost_json_object`` reads one. That changes what the parser accepts, and D-136 says how. It
+moves none of the committed numbers: on 15 November none of the 685 distinct raw replies committed
+under corpus/ decoded differently.
 
 A response that does not parse is a FAILED ATTEMPT, never a partial answer: the caller
 retries to MAXIMUM_GENERATION_ATTEMPTS and then raises ProviderUnavailable, which the
@@ -85,9 +93,58 @@ class StatementCapExceeded(SchemaViolation):
     """
 
 
-_TRAILING_COMMA = re.compile(r",\s*(?=[}\]])")
 # A fence's language tag, as in ```json or ```py-3: the regex class [a-zA-Z0-9_-].
 _FENCE_TAG_CHARACTERS = frozenset(string.ascii_letters + string.digits + "_-")
+
+
+class _FenceScan:
+    """Reads a reply once, left to right, and finds the fences that lie outside JSON strings.
+
+    A JSON string is read as ``_outermost_json_object`` reads one. It opens at a double quote inside
+    braces, and closes at the next double quote that no backslash escapes. Braces inside a string do
+    not count. Outside every brace a double quote is prose and opens nothing. A closing brace there
+    is prose too: depth never goes below zero, so a stray one cannot stop the next object's strings
+    being read as strings.
+    """
+
+    def __init__(self, text: str):
+        self.text = text
+        self.position = 0  # the next character to read
+        self.depth = 0
+        self.in_string = False
+        self.escaped = False
+
+    def next_fence(self, start: int) -> int:
+        """The index of the first fence outside a JSON string at or after ``start``, or -1.
+
+        Every character from where the last call stopped is read, so the state is right at
+        ``start``. A fence before ``start`` is read and passed over. A call that finds a fence
+        stops on its first backtick, and nothing else is read twice.
+        """
+        text = self.text
+        index = self.position
+        while index < len(text):
+            character = text[index]
+            if self.in_string:
+                if self.escaped:
+                    self.escaped = False
+                elif character == "\\":
+                    self.escaped = True
+                elif character == '"':
+                    self.in_string = False
+            elif character == "`":
+                if index >= start and text.startswith("```", index):
+                    self.position = index
+                    return index
+            elif character == "{":
+                self.depth += 1
+            elif character == "}":
+                self.depth = max(self.depth - 1, 0)
+            elif character == '"' and self.depth:
+                self.in_string = True
+            index += 1
+        self.position = index
+        return -1
 
 
 def _end_of_opening_fence(text: str, fence: int) -> int:
@@ -115,6 +172,12 @@ def _strip_code_fences(raw: str) -> str:
     closing fence, a fence at the start goes, with its tag and whitespace; failing that, a fence at
     the end, with the whitespace before it; failing that, nothing.
 
+    Three backticks inside a JSON string are not a fence, since 16 November 2026 (D-136; ``_FenceScan``
+    reads the strings). Until then a fence was found anywhere. So an unfenced reply quoting a code
+    block in a string was cut to the code between its backticks, and a fenced reply holding a fence
+    in a string closed there. Both were refused, as no JSON object or an unbalanced one, and each
+    cost an attempt. The security review of PR #107 found it.
+
     The block is found by a scan since 13 November 2026, not by
     ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no
     closing one, that search backtracked through every split of the tag and the whitespace and
@@ -128,27 +191,31 @@ def _strip_code_fences(raw: str) -> str:
     rest of the run, then backtracked through it looking for a fence. That cost 0.50 s at 20,000
     spaces in ``"```json\\n{" + spaces + "}"``. It is a scan as well, since the same day.
 
-    Both scans return exactly what the regexes returned for every input, so they move none of the
-    numbers measured on this parser (module docstring). apps/ai/tests/test_code_fence_scan.py
-    compares them with a frozen copy of the old function.
+    Both scans returned exactly what the regexes returned for every input, so they moved none of
+    the numbers measured on this parser (module docstring). Since 16 November 2026 they still do
+    for every reply with no fence inside a JSON string. For the rest, they return what the regexes
+    return when the backticks inside the strings are hidden. apps/ai/tests/test_code_fence_scan.py
+    holds them to a frozen copy of the old function in both ways.
     """
     text = raw.strip()
-    opening = text.find("```")
+    scan = _FenceScan(text)
+    opening = scan.next_fence(0)
     if opening == -1:
         return text
     # Prefer the contents of the first fenced block; fall back to stripping markers.
     body = _end_of_opening_fence(text, opening)
     # Neither the tag nor the whitespace holds a backtick, so no fence starts inside them, and
     # the next fence from ``body`` is the one the search's lazy group stopped at.
-    closing = text.find("```", body)
+    closing = scan.next_fence(body)
     if closing != -1:
         return text[body:closing].strip()
-    # No closing fence, so every fence in the text overlaps the first one. On a stripped text,
+    # No closing fence, so every fence outside a string overlaps the first one. On a stripped text,
     # the regex this replaced removed a fence at the start, with its tag and whitespace; failing
-    # that, a fence at the end, with the whitespace before it; failing that, nothing.
+    # that, a fence at the end, with the whitespace before it; failing that, nothing. The scan has
+    # read to the end, so it knows whether a fence there is inside a string, which is no fence.
     if opening == 0:
         return text[body:].strip()
-    if text.endswith("```"):
+    if text.endswith("```") and not scan.in_string:
         return text[:-3].strip()
     return text
 
@@ -180,6 +247,52 @@ def _outermost_json_object(text: str) -> str:
             if depth == 0:
                 return text[start : index + 1]
     raise SchemaViolation("unbalanced JSON object in the response")
+
+
+def _remove_trailing_commas(candidate: str) -> str:
+    """``candidate`` without the trailing commas outside its JSON strings, each with its whitespace.
+
+    A trailing comma is one followed by nothing but whitespace (``str.isspace``) before a closing
+    bracket or brace. ``candidate`` is the object ``_outermost_json_object`` returned, braces from
+    end to end, so every double quote that no backslash escapes opens or closes a string, as it did
+    there. Outside strings this removes exactly what ``re.sub(r",\\s*(?=[}\\]])", "", candidate)``
+    removed, and apps/ai/tests/test_trailing_comma_repair.py holds it to a frozen copy of that.
+    Inside a string it removes nothing.
+
+    That regex was the repair until 16 November 2026 (D-136). It reached inside strings, so a reply
+    that needed the repair had "a, ]" in a string decoded as "a]". It could even make a reply
+    decode by deleting a raw newline or tab between a comma and a bracket in a string, which JSON
+    forbids. That reply is refused now. The security review of PR #107 found it.
+
+    Linear: a whitespace run is read once after the comma before it and once more in passing.
+    """
+    pieces = []
+    kept_from = 0
+    in_string = False
+    escaped = False
+    index = 0
+    while index < len(candidate):
+        character = candidate[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+        elif character == '"':
+            in_string = True
+        elif character == ",":
+            ahead = index + 1
+            while ahead < len(candidate) and candidate[ahead].isspace():
+                ahead += 1
+            if ahead < len(candidate) and candidate[ahead] in "}]":
+                pieces.append(candidate[kept_from:index])
+                kept_from = index = ahead
+                continue
+        index += 1
+    pieces.append(candidate[kept_from:])
+    return "".join(pieces)
 
 
 # A surrogate code point still present after json.loads was unpaired: the decoder joins an escaped
@@ -256,7 +369,9 @@ def _loads_reply(text: str):
 # for them.
 strip_code_fences = _strip_code_fences
 outermost_json_object = _outermost_json_object
-TRAILING_COMMA_PATTERN = _TRAILING_COMMA
+# The trailing-comma repair was the regex TRAILING_COMMA_PATTERN until 16 November 2026 (D-136).
+# That name is gone, not kept as an alias: a caller still reaching for it would edit strings again.
+remove_trailing_commas = _remove_trailing_commas
 # And the decode step, added on 13 November 2026 on the same principle: the statement,
 # classification and summary parsers all decode through it, so all three fail the same way.
 loads_reply = _loads_reply
@@ -268,7 +383,8 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
     Tolerant of the malformations a small model commonly produces — a markdown
     code fence, a sentence of preamble around the object, a trailing comma — and
     of nothing else. Anything still unparseable, or parseable but the wrong shape,
-    is rejected outright rather than repaired into a plausible-looking answer.
+    is rejected outright rather than repaired into a plausible-looking answer. No
+    repair touches text inside a JSON string (D-136).
 
     ``{"statements": []}`` parses successfully and returns an empty StatementList.
     That is a valid response and not a violation: rule 7 of the system prompt asks
@@ -288,7 +404,7 @@ def parse_statement_list(raw: str, *, max_statements: int | None = None) -> Stat
         decoded = _loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = _loads_reply(_TRAILING_COMMA.sub("", candidate))
+            decoded = _loads_reply(_remove_trailing_commas(candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):

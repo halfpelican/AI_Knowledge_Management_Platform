@@ -56,10 +56,10 @@ from apps.ai.base import (
 )
 from apps.ai.generation import ChatReply
 from apps.ai.schema import (
-    TRAILING_COMMA_PATTERN,
     SchemaViolation,
     loads_reply,
     outermost_json_object,
+    remove_trailing_commas,
     strip_code_fences,
 )
 from apps.core.constants import (
@@ -207,7 +207,7 @@ def parse_summary(raw: str) -> ParsedSummary:
         decoded = loads_reply(candidate)
     except json.JSONDecodeError:
         try:
-            decoded = loads_reply(TRAILING_COMMA_PATTERN.sub("", candidate))
+            decoded = loads_reply(remove_trailing_commas(candidate))
         except json.JSONDecodeError as exc:
             raise SchemaViolation(f"not valid JSON: {exc}") from exc
     if not isinstance(decoded, dict):

@@ -137,6 +137,37 @@ def test_a_brace_inside_a_string_does_not_end_the_object():
     assert parse_classification(raw, SCHEME).department.value == "Finance {Group}"
 
 
+# Text inside a JSON string is never repaired (16 November 2026, D-136): the statement parser's
+# three tests of it, through this parser (apps/ai/tests/test_schema.py has the history).
+
+
+def test_a_code_block_quoted_in_a_value_is_not_a_fence():
+    value = "build ```make release``` steps"
+
+    parsed = parse_classification(reply(tags=(("Topic", value, 0.6),)), SCHEME)
+
+    assert parsed.tags[0].value == value
+
+
+def test_a_fence_inside_a_value_does_not_close_the_reply_s_fence():
+    raw = f"```json\n{reply(department='Platform ``` Engineering')}\n```"
+
+    assert parse_classification(raw, SCHEME).department.value == "Platform ``` Engineering"
+
+
+def test_the_trailing_comma_repair_leaves_values_alone():
+    raw = (
+        '{"doc_type": {"value": "Report", "confidence": 0.8,}, '
+        '"department": {"value": "Finance, }", "confidence": 0.5}, '
+        '"tags": [{"dimension": "Topic", "value": "budget [q1, ]", "confidence": 0.4}],}'
+    )
+
+    parsed = parse_classification(raw, SCHEME)
+
+    assert parsed.department.value == "Finance, }"
+    assert parsed.tags[0].value == "budget [q1, ]"
+
+
 def test_values_are_stripped_of_surrounding_whitespace_only():
     raw = reply(doc_type=" Policy ", department="  Finance ", tags=(("Topic", " Supplier  Review ", 0.5),))
     parsed = parse_classification(raw, SCHEME)
@@ -146,13 +177,19 @@ def test_values_are_stripped_of_surrounding_whitespace_only():
 
 
 def test_the_repairs_are_the_statement_parsers_own_code():
-    """One definition of what is repaired: the public names are the private helpers. The decode
-    step joined them on 13 November 2026, and this module decodes through it."""
+    """One definition of what is repaired: the public names are the private helpers, and this
+    module imports them. The decode step joined them on 13 November 2026. The trailing-comma
+    repair became a function on 16 November (D-136), and its regex's name is gone."""
     assert schema.strip_code_fences is schema._strip_code_fences
     assert schema.outermost_json_object is schema._outermost_json_object
-    assert schema.TRAILING_COMMA_PATTERN is schema._TRAILING_COMMA
+    assert schema.remove_trailing_commas is schema._remove_trailing_commas
     assert schema.loads_reply is schema._loads_reply
+    assert classification.strip_code_fences is schema.strip_code_fences
+    assert classification.outermost_json_object is schema.outermost_json_object
+    assert classification.remove_trailing_commas is schema.remove_trailing_commas
     assert classification.loads_reply is schema.loads_reply
+    assert not hasattr(schema, "TRAILING_COMMA_PATTERN")
+    assert not hasattr(classification, "TRAILING_COMMA_PATTERN")
 
 
 # --- Duplicate tags: a shape tolerance, not a repair ----------------------------------------

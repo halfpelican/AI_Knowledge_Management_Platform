@@ -86,6 +86,55 @@ def test_a_brace_inside_a_string_does_not_end_the_object():
     assert parse_statement_list(raw).statements[0].text == "Use {braces} carefully."
 
 
+# --- Text inside a JSON string is never repaired (16 November 2026, D-136) --------------
+#
+# Both repairs read a JSON string as _outermost_json_object reads one, so three backticks inside a
+# string are not a fence, and a comma before a bracket inside a string is not a trailing comma.
+# Until 16 November 2026 both repairs acted on the whole reply. The security review of PR #107
+# found it, and these three tests are repeated through the classification and summary parsers.
+# apps/ai/tests/test_code_fence_scan.py and test_trailing_comma_repair.py test the repairs alone.
+
+
+def test_a_code_block_quoted_in_a_statement_is_not_a_fence():
+    """Until 16 November 2026 the backticks were read as a fenced block, so the command between
+    them became the reply. It held no JSON object: a violation, a retry, and a 503 after three."""
+    text = "Run ```pip install -r requirements.txt``` before the first deploy."
+    raw = json.dumps({"statements": [{"text": text, "chunk_id": CHUNK_ID}]})
+
+    assert parse_statement_list(raw).statements[0].text == text
+
+
+def test_a_fence_inside_a_statement_does_not_close_the_reply_s_fence():
+    """The fence around the reply closes at the first fence outside a string. Until 16 November
+    2026 it closed at the one inside the statement, and the object it cut off was unbalanced."""
+    text = "Paste the log between ``` marks when you raise a ticket."
+    raw = "```json\n" + json.dumps({"statements": [{"text": text, "chunk_id": CHUNK_ID}]}) + "\n```"
+
+    assert parse_statement_list(raw).statements[0].text == text
+
+
+def test_a_preamble_that_opens_a_brace_and_a_quote_hides_the_fence_after_it():
+    """One of the two replies D-136 turns from accepted to refused, and it is malformed. Prose before
+    the fence opens a brace and then a double quote that it never closes, so the fence reads as
+    inside a JSON string. Until 16 November 2026 the fenced block was taken and parsed. Now no block
+    is taken, and the object found from the prose's brace never closes. The other such reply is in
+    apps/ai/tests/test_trailing_comma_repair.py."""
+    raw = 'Note {see "the policy: ```json\n' + VALID + "\n```"
+
+    with pytest.raises(SchemaViolation, match="unbalanced"):
+        parse_statement_list(raw)
+
+
+def test_the_trailing_comma_repair_leaves_a_statement_s_text_alone():
+    """The repair runs only when the reply fails to decode as sent, here on the comma before
+    ``]}``. Until 16 November 2026 it then also removed the comma and space before each bracket
+    inside the statement, and the parsed text read "[annual, sick]" and "{carer's}"."""
+    text = "The form lists [annual, sick, ] leave and {carer's, } leave."
+    raw = '{"statements": [{"text": %s, "chunk_id": "%s"},]}' % (json.dumps(text), CHUNK_ID)
+
+    assert parse_statement_list(raw).statements[0].text == text
+
+
 def test_text_and_identifiers_are_stripped_of_surrounding_whitespace():
     raw = json.dumps({"statements": [{"text": "  Padded.  ", "chunk_id": f" {CHUNK_ID} "}]})
     parsed = parse_statement_list(raw)

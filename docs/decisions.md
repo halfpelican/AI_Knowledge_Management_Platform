@@ -16143,3 +16143,294 @@ transcript. Its line numbers are at `cc01e09`. Its closing line:
   its buttons in the DOM instead.
 - **No database the user works with was read or written,** and no server was started. The alpha shows
   the change once it runs this code.
+
+## D-136 · Neither repair in the shared reply parser touches text inside a JSON string
+
+**Status:** Settled by the user · **Date:** 2026-11-16 · **Concerns:** FR-12, FR-10 and FR-16, whose
+parsers share `apps/ai/schema.py`'s repairs (D-104); CLAUDE.md invariant 10 ("structured output or
+nothing") · **Supersedes:** nothing. It settles the two follow-ups that the security review of PR #107
+found. That PR made the code-fence repair a linear scan, and was merged on 13 November 2026 as
+`a948b50`. The review left both behaviours alone, because fixing either changes what the parser
+accepts.
+
+**What prompted it.** Every AI reply is parsed through `apps/ai/schema.py`. Before decoding, it
+repairs three things: a markdown code fence, a sentence of preamble around the object, and a trailing
+comma. The statement, classification and summary parsers all use the same code. Two of the repairs
+ignored JSON strings.
+
+1. **A fence inside a string.** `_strip_code_fences` took the first three backticks anywhere as a
+   fence.
+   - In an unfenced reply quoting a code block (`"Run ```pip install x``` first"`), the reply was
+     cut to the code between the backticks.
+   - In a fenced reply holding three backticks in a string, the block closed there.
+
+   Both were refused, as no JSON object or an unbalanced one. Each refusal cost an attempt, and three
+   meant a 503 for FR-12, a failed classification for FR-10, or a malformed summary for FR-16.
+2. **The trailing-comma repair inside strings.** The repair runs only when a reply fails to decode as
+   sent. It was then `re.sub(r",\s*(?=[}\]])", "", candidate)` over the whole object. So a string
+   holding "a, b, ]" decoded as "a, b]", and the reply passed with its text changed.
+
+No session had taken either up since #107. They were tracked only as a proposal card in that
+session, which has since been archived.
+
+**The question, as put.** The account came first, in this session's closing message of 15 November
+2026 (22:15 AEDT). The part that bears on the decision is quoted below, cut at paragraph boundaries
+and taken by script from the session's transcript:
+
+> **1. Three backticks inside a JSON string.**
+> - **Today:** the parser treats the first three backticks anywhere as a code fence. So a reply whose JSON quotes a code block is cut in the wrong place and refused. That happens with two runs of backticks in an unfenced reply, or one run inside a reply wrapped in a fence. Each refusal costs a retry. Three in a row means a 503 for FR-12, a failed classification for FR-10, or a malformed summary for FR-16.
+> - **With the fix:** three backticks count as a fence only outside JSON strings. A string is read the same way the object extraction already reads one: it starts at a `"` inside braces and ends at the next `"` not escaped by a backslash. Those replies are then accepted.
+> - **New refusal:** only a contrived one. A sentence before the JSON that opens a `{` and then has an odd number of `"` before the fence.
+> - **#107's guarantees:** linear time stays. Its fixed and exhaustive test cases stay exact. One of its tests generates random replies that include quotes, and that test would have to be split in two.
+>
+> **2. The trailing-comma repair inside strings.**
+> - **Today:** the repair runs only when a reply fails to decode as sent. When it runs, it also edits text inside strings, so `"a, b, ]"` silently becomes `"a, b]"`.
+> - **With the fix:** the same replies are accepted, but strings keep their text as written.
+> - **One narrowing:** a raw newline or tab inside a string, between a comma and a bracket, is invalid JSON. Today the repair deletes it and the reply parses; after the fix that reply is refused.
+> - **Code change:** the shared pattern `TRAILING_COMMA_PATTERN` becomes a function, `remove_trailing_commas`. Its three call sites change, one in each parser.
+>
+> **Would any committed measurement score differently?** No difference found.
+> - **FR-12:** I replayed all 685 distinct raw replies committed on any branch through a scratch prototype of both fixes. That covers Objectives 02 and 06, including every run on the frozen sets. None decodes differently.
+> - **FR-10 and FR-16:** their runs keep only parsed output, including the frozen Objective 04 run on the PR #114 branch. None of the 33,063 stored strings contains `]`, `}` or three backticks, so the comma repair never changed a stored value.
+> - **What can't be replayed:** four failed attempts from development sweeps on the local model (FLM). Their raw replies weren't kept.
+> - The frozen `questions.json` and `threads.json` were not touched.
+
+The question followed in the app's next-step box, with two buttons:
+
+> Should both repairs ignore text inside JSON strings, as described?
+>
+> - **Fix both**
+> - **Fence only**
+
+Benjamin chose **"Fix both"** at 09:24 AEDT on 16 November 2026.
+
+**The rule.** A JSON string is read the way `_outermost_json_object` reads one. It opens at a double
+quote inside braces, and closes at the next double quote that no backslash escapes. Braces inside a
+string do not count.
+
+1. **The fence repair** (`_FenceScan`, used by `_strip_code_fences`). Three backticks are a fence only
+   outside such a string.
+   - Outside every brace, a double quote is prose and opens nothing.
+   - A closing brace there is prose too, and depth never goes below zero.
+   - A fence that ends the reply inside a string that never closes is not stripped.
+   - The scan reads each character once, like the 13 November scan.
+2. **The trailing-comma repair** (`_remove_trailing_commas`, public as `remove_trailing_commas`). A
+   trailing comma is a comma followed by nothing but whitespace before a closing bracket or brace.
+   Whitespace means `str.isspace`, the same as the regex's `\s`. Outside strings the comma is removed
+   with that whitespace, exactly as the regex removed it.
+   - The repair takes the object `_outermost_json_object` returned, which is braces from end to end.
+     So every unescaped double quote opens or closes a string there, and the two repairs read the
+     same strings.
+3. **`TRAILING_COMMA_PATTERN` is gone,** and not kept as an alias, because a caller still using it
+   would edit strings again. The classification and summary parsers import `remove_trailing_commas`.
+
+**What it changes about what the parser accepts.**
+- **Refused before, accepted now:** a reply quoting a code block in a string, fenced or not.
+- **Accepted before with its text changed, accepted now as written:** a reply that needs the comma
+  repair and holds a comma before a bracket inside a string.
+- **Accepted before, refused now.** Both replies are malformed, and each is pinned by a test.
+  - A string holding a raw newline or tab between a comma and a bracket, which JSON forbids. The regex
+    deleted it with the comma, so the reply decoded. It is not valid JSON now.
+  - A preamble that opens a brace and then holds an odd number of double quotes before the fence. The
+    fence reads as inside a string, so no block is taken, and the object then found never closes.
+- **Unchanged:**
+  - a reply that decodes as sent, because the comma repair never runs on it;
+  - one run of three backticks in an unfenced reply, which was harmless before too;
+  - everything outside strings.
+
+**Committed measurements: none scores differently.**
+- **FR-12, replayed.** The replay took every raw reply committed under `corpus/` on any branch, at a
+  path ending in `attempts[].raw` or `attempts[].call.text`.
+  - That is 685 distinct replies, from 169 files across 44 refs: `origin/main` at `48cb537` and every
+    local branch.
+  - They include every run on Objective 02's frozen `questions.json` and `threads.json`.
+  - Each was parsed by `origin/main`'s `apps/ai/schema.py` and by this branch's, with the statement
+    cap lifted.
+  - **None parses differently.** 663 parse and 22 are refused, the same way under both.
+  - A first replay, of a scratch prototype on 15 November, found the same.
+- **FR-10 and FR-16, read.** Their runs keep parsed output, not raw replies. That covers Objective 05,
+  and Objective 04 including the frozen run merged in PR #114.
+  - None of the 33,063 strings stored in them holds a `]`, a `}` or three backticks.
+  - The comma repair leaves the bracket that follows the comma, so it altered none of them.
+  - No stored value carries a fence.
+  - The only parse failures they log are in FLM development sweeps: D21 three times, an empty tag
+    value, and X07 once, not valid JSON. Their raw replies were not kept.
+- `questions.json` and `threads.json` were not edited, and nothing was tuned against them.
+
+**What changed:**
+- `apps/ai/schema.py`:
+  - `_FenceScan`, and `_strip_code_fences` reads fences through it;
+  - `_remove_trailing_commas` replaces `_TRAILING_COMMA`;
+  - the public names;
+  - the module, function and parser docstrings.
+- `apps/ai/classification.py` and `apps/ai/summarisation.py` import and call `remove_trailing_commas`.
+- `docs/ai-provider.md`: a paragraph on what the repairs leave alone.
+
+**The tests:**
+- **Through each parser** (`test_schema.py`, `test_classification_schema.py`,
+  `test_summarisation_schema.py`):
+  - three tests each: a code block quoted in an unfenced reply, a fence in a string inside a fenced
+    reply, and the comma repair leaving a string's text alone;
+  - **written first, as pins.** Strict expected-failure markers pinned how the old code failed:
+    `raises=SchemaViolation` for the fences, `raises=AssertionError` for the comma. On `48cb537`, whose
+    parser is `f82fb1a`'s, the run was 9 xfailed and 367 passed. The markers came off with the fix;
+  - `test_schema.py` also follows the preamble refusal through the parser;
+  - the identity tests ("the repairs are the statement parser's own code") now name
+    `remove_trailing_commas`, and assert that the old name is gone.
+- **`test_code_fence_scan.py`** (PR #107's):
+  - its named cases and its exhaustive set hold no fence inside a string, and still strip exactly as
+    the frozen regex did;
+  - its generated replies are held to the frozen regex in two ways. Where no fence is inside a string
+    (49,226), it is exact. Where one is (774), the frozen regex runs on the reply with the backticks
+    inside its strings masked, and the mask is undone;
+  - new: eight named cases of fences inside strings, each pinning what the regex gave, among them the
+    preamble refusal;
+  - new: three named cases of what is outside a string;
+  - new: every string of up to seven characters over a backtick, both braces, a quote, a backslash and
+    a letter (335,923);
+  - new: 50,000 generated replies full of strings. 14,618 hold a fence inside a string, and the regex
+    strips 6,806 of them differently;
+  - new: five timing cases at 200,000 characters.
+- **`test_trailing_comma_repair.py`** (new), with the frozen regex as its reference:
+  - named cases inside and outside strings;
+  - an exhaustive set without quotes, held to the regex exactly, and one with quotes, held to the
+    regex applied between strings only;
+  - 50,000 generated objects;
+  - through the parser: the raw newline refused, and a reply that decodes keeping its strings;
+  - four timing cases.
+
+**Deliberate breaks.** Every new test failed under at least one break before it was relied on, and
+every break was reverted.
+- **How:** a script applied each break alone, as exact replacements of one file's text, and ran the
+  five test files with a JUnit report. It then restored the file from the bytes read before the
+  break, and checked it by SHA-256. It hashed the working tree's `git diff` before the first break
+  and after the last, and they matched.
+- **The tables** are generated from those reports, not typed. The script and its reports are in the
+  session's scratchpad, not in the repository.
+- **Where it ran:** on this commit's code and tests, before they were committed: the working tree on `48cb537` with this change and nothing else.
+
+| Test | Fails under |
+|---|---|
+| `test_classification_schema::test_a_code_block_quoted_in_a_value_is_not_a_fence` | B1 |
+| `test_classification_schema::test_a_fence_inside_a_value_does_not_close_the_reply_s_fence` | B1, B19 |
+| `test_classification_schema::test_the_repairs_are_the_statement_parsers_own_code` | B12, B13 |
+| `test_classification_schema::test_the_trailing_comma_repair_leaves_values_alone` | B2, B18 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a brace inside a string does not count]` | B1, B7 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a code block quoted in an unfenced reply]` | B1 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a fence after the object is a fence]` | B1, B19 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a fence at the end of a reply cut off inside a string]` | B1, B8, B19 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a fence in a string inside a fenced reply]` | B1, B19 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a preamble that opens a brace and then a quote hides the fence after it]` | B1 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a stray closing brace in prose does not hide the next object's strings]` | B1, B6 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[an escaped quote does not close the string]` | B1, B3 |
+| `test_code_fence_scan::test_every_short_string_over_quotes_and_braces_strips_as_the_regex_did_outside_strings` | B1, B3, B5, B6, B19 |
+| `test_code_fence_scan::test_generated_replies_full_of_strings_strip_as_the_regex_did_outside_strings` | B1, B3, B4, B5, B6, B7, B8, B19 |
+| `test_code_fence_scan::test_generated_replies_strip_as_the_regex_did_outside_strings` | B1, B5, B6, B7, B8, B19 |
+| `test_code_fence_scan::test_reading_json_strings_keeps_the_scan_linear[200,000 backticks inside a string]` | B1, B20 |
+| `test_code_fence_scan::test_reading_json_strings_keeps_the_scan_linear[200,000 braces, then a fence in a string]` | B1, B20 |
+| `test_code_fence_scan::test_reading_json_strings_keeps_the_scan_linear[200,000 characters of escapes, then a fence]` | B4, B19, B20 |
+| `test_code_fence_scan::test_reading_json_strings_keeps_the_scan_linear[200,000 quotes outside braces, then a fence]` | B19, B20 |
+| `test_code_fence_scan::test_reading_json_strings_keeps_the_scan_linear[a fence, then 200,000 characters of strings each holding a fence]` | B1, B19, B20 |
+| `test_code_fence_scan::test_what_is_outside_a_json_string_strips_as_the_regex_did[a quote after the object closes is prose again]` | B5, B19 |
+| `test_code_fence_scan::test_what_is_outside_a_json_string_strips_as_the_regex_did[a quote in prose before any brace opens nothing]` | B5, B19 |
+| `test_code_fence_scan::test_what_is_outside_a_json_string_strips_as_the_regex_did[an escaped backslash ends the string before the closing fence]` | B4, B19 |
+| `test_schema::test_a_code_block_quoted_in_a_statement_is_not_a_fence` | B1 |
+| `test_schema::test_a_fence_inside_a_statement_does_not_close_the_reply_s_fence` | B1, B19 |
+| `test_schema::test_a_preamble_that_opens_a_brace_and_a_quote_hides_the_fence_after_it` | B1 |
+| `test_schema::test_the_trailing_comma_repair_leaves_a_statement_s_text_alone` | B2, B11, B18 |
+| `test_summarisation_schema::test_a_code_block_quoted_in_an_element_is_not_a_fence` | B1 |
+| `test_summarisation_schema::test_a_fence_inside_an_element_does_not_close_the_reply_s_fence` | B1, B19 |
+| `test_summarisation_schema::test_the_repairs_are_the_statement_parsers_own_code` | B14 |
+| `test_summarisation_schema::test_the_trailing_comma_repair_leaves_element_text_alone` | B2, B18 |
+| `test_trailing_comma_repair::test_a_comma_inside_a_string_is_never_repaired_when_the_reply_decodes` | B11 |
+| `test_trailing_comma_repair::test_a_raw_newline_between_a_comma_and_a_bracket_in_a_string_is_refused` | B2, B11 |
+| `test_trailing_comma_repair::test_a_trailing_comma_inside_a_json_string_is_left_alone[a comma before a brace inside a string]` | B2, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_inside_a_json_string_is_left_alone[a comma before a bracket inside a string]` | B2, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_inside_a_json_string_is_left_alone[a raw newline between a comma and a bracket inside a string]` | B2, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_inside_a_json_string_is_left_alone[an escaped quote does not close the string]` | B2, B9, B15, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_outside_strings_goes_as_the_regex_removed_it[a comma before a value stays]` | B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_outside_strings_goes_as_the_regex_removed_it[a string between the comma and the closer]` | B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_outside_strings_goes_as_the_regex_removed_it[an escaped backslash ends the string]` | B10, B15, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_outside_strings_goes_as_the_regex_removed_it[only the comma next to the closer goes]` | B17, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_outside_strings_goes_as_the_regex_removed_it[the whitespace after the comma goes with it]` | B15, B18 |
+| `test_trailing_comma_repair::test_a_trailing_comma_outside_strings_goes_as_the_regex_removed_it[whitespace is str.isspace, as the regex's was]` | B15, B16 |
+| `test_trailing_comma_repair::test_every_short_string_with_quotes_is_repaired_as_the_regex_did_between_strings` | B2, B9, B10, B15, B17, B18 |
+| `test_trailing_comma_repair::test_every_short_string_without_a_quote_is_repaired_as_the_regex_did` | B15, B16, B17, B18 |
+| `test_trailing_comma_repair::test_generated_objects_are_repaired_as_the_regex_did_between_strings` | B2, B9, B10, B15, B16, B17, B18 |
+| `test_trailing_comma_repair::test_the_scan_reads_each_character_a_bounded_number_of_times[2,000 commas, each before 99 spaces]` | B15, B17, B18, B21 |
+| `test_trailing_comma_repair::test_the_scan_reads_each_character_a_bounded_number_of_times[200,000 characters of escapes, then a trailing comma]` | B10, B15, B18, B21 |
+| `test_trailing_comma_repair::test_the_scan_reads_each_character_a_bounded_number_of_times[200,000 commas]` | B17, B18, B21 |
+| `test_trailing_comma_repair::test_the_scan_reads_each_character_a_bounded_number_of_times[a string of 200,000 characters of trailing commas]` | B2, B21 |
+
+The breaks, each applied alone, run and reverted:
+
+- **B1** (`apps/ai/schema.py`): the fence fix reverted: fences found with str.find, as on 13 November. 21 failed.
+- **B2** (`apps/ai/schema.py`): the comma fix reverted: the regex over the whole object. 11 failed.
+- **B3** (`apps/ai/schema.py`): fence scan: no escapes, every quote closes a string. 3 failed.
+- **B4** (`apps/ai/schema.py`): fence scan: a quote after any backslash is escaped, even after an escaped backslash. 3 failed.
+- **B5** (`apps/ai/schema.py`): fence scan: a quote outside braces opens a string. 5 failed.
+- **B6** (`apps/ai/schema.py`): fence scan: no floor, a stray closing brace makes depth negative. 4 failed.
+- **B7** (`apps/ai/schema.py`): fence scan: a closing brace inside a string counts. 3 failed.
+- **B8** (`apps/ai/schema.py`): fence fallback: a fence ending the reply inside a string is stripped. 3 failed.
+- **B9** (`apps/ai/schema.py`): comma scan: no escapes, every quote closes a string. 3 failed.
+- **B10** (`apps/ai/schema.py`): comma scan: a quote after any backslash is escaped, even after an escaped backslash. 4 failed.
+- **B11** (`apps/ai/schema.py`): parser: the old regex repair applied before the first decode. 3 failed.
+- **B12** (`apps/ai/schema.py`): schema: the old name TRAILING_COMMA_PATTERN kept as an alias. 1 failed.
+- **B13** (`apps/ai/classification.py`): classification: its own wrapper round the repair instead of the shared one. 1 failed.
+- **B14** (`apps/ai/summarisation.py`): summarisation: its own wrapper round the repair instead of the shared one. 1 failed.
+- **B15** (`apps/ai/schema.py`): comma scan: the whitespace after a trailing comma is kept. 9 failed.
+- **B16** (`apps/ai/schema.py`): comma scan: only JSON's four whitespace characters, not str.isspace. 3 failed.
+- **B17** (`apps/ai/schema.py`): comma scan: a run of commas before a closer goes together. 6 failed.
+- **B18** (`apps/ai/schema.py`): comma scan: every comma goes, whatever follows it. 28 failed.
+- **B19** (`apps/ai/schema.py`): fence scan: a fence before start is returned, so the opening fence closes itself. 40 failed.
+- **B20** (`apps/ai/schema.py`): fence scan made quadratic: a count over the reply at each in-string backtick and backslash, brace and outside quote. 5 failed.
+- **B21** (`apps/ai/schema.py`): comma scan made quadratic: a count over the rest at each in-string character, comma and looked-at space. 4 failed.
+
+Tests older than D-136 that a break also failed, counted by file:
+
+- **B18:** 10, in `test_classification_schema.py` (3), `test_schema.py` (4), `test_summarisation_schema.py` (3).
+- **B19:** 25, in `test_classification_schema.py` (1), `test_code_fence_scan.py` (22), `test_schema.py` (1), `test_summarisation_schema.py` (1).
+
+The baseline run, with no break, passed 441 of 441. New tests: 50. Caught by no break: none.
+
+**The suites.**
+All of these ran on this commit's code and tests before they were committed. The worktree has no
+`.env`, so the main checkout's was loaded into the test process, with a database name of its own.
+- **`pytest`, the whole suite:** 5,000 passed in 21 min 43 s, exit 0. Dual-role coverage: 48 of 48
+  protected endpoints (100%).
+- **The five parser and repair files alone:** 441 passed.
+- **The timing cases:** all 14 at 200,000 characters, PR #107's five and this change's nine. Each took
+  0.02 to 0.05 s, against the 2 s bound.
+- **`npm ci`:** 0 vulnerabilities. **`npm test`:** 670 passed in 48 files, exit 0. No front-end file
+  changed.
+- **Migrations:** no model changed, so there is no migration.
+
+**The number.** Checked on 16 November 2026, before any of this was written:
+- `origin/main` at `48cb537`: highest heading D-135.
+- Every local branch: D-135 at most, on `fix/FR-10-confirm-long-proposal`,
+  `fix/FR-10-discard-long-topic` and `test/FR-10-confirm-at-column-width`.
+- Every worktree's working copy: no mention above D-135.
+
+Benjamin was told "D-136" in this session before it was used. It was checked again before the
+commit: at 10:45 AEDT, `origin/main` was still `48cb537` with D-135 its highest, and no branch, worktree or note of the session group mentioned D-136.
+
+**Reviews.**
+Pending at this commit.
+- `security-reviewer` began on the uncommitted change, read-only, while the suite ran. The code it
+  read is this commit's.
+- `requirements-auditor` reviews this commit.
+
+Their reports, and what was done about them, are recorded in a dated note below.
+
+**Not covered:**
+- **FR-10's and FR-16's raw replies** are not kept in any committed run, so only FR-12 was replayed.
+  For the other two, the stored values were read instead.
+- **`docs/flm-baseline.md`'s 50 replies** are not committed, so the baseline cannot be replayed. The
+  module docstring already says that the parser has changed since it was measured.
+- **The two refusals** are tested through the statement parser only. The classification and summary
+  parsers call the same functions, which the identity tests assert.
+- **The masked-regex reference** in `test_code_fence_scan.py` restates the definition of a JSON string
+  in the test file. The named cases pin that definition on their own, and the breaks B3 to B8 show
+  that they catch a misreading of it.
+- **A string is recognised only by a double quote.** Single-quoted pseudo-JSON is not JSON, and is
+  still refused.

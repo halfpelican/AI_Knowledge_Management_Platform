@@ -21,6 +21,16 @@ frozen, and the scan is held to it in three ways:
   and a brace;
 - on generated replies.
 
+Since 16 November 2026 three backticks inside a JSON string are not a fence (D-136). The frozen
+function is still the reference, in two ways:
+- for every reply with no fence inside a JSON string, the scan returns exactly what it returned;
+- for the rest, the scan returns what the frozen function returns from the reply with the
+  backticks inside its strings masked, and the mask then undone.
+
+The generated replies and a second exhaustive set are held to that. The named cases of the
+section on strings pin what a JSON string is: escapes, braces inside a string, quotes outside
+braces, a stray closing brace, and a reply that ends inside a string.
+
 No provider, no network, no database: pure functions over strings.
 """
 
@@ -113,11 +123,139 @@ PIECES = (
 )
 
 
-def test_generated_replies_strip_as_the_regex_did():
-    """50,000 replies of up to 24 pieces each, from a fixed seed, so a failure reproduces."""
+def test_generated_replies_strip_as_the_regex_did_outside_strings():
+    """50,000 replies of up to 24 pieces each, from a fixed seed, so a failure reproduces. Until 16
+    November 2026 every one had to strip exactly as the frozen function did. Since then the replies
+    with a fence inside a JSON string, 774 of them, are held to it with those backticks masked
+    (D-136). The other 49,226 are held to it exactly. Both kinds are counted, so neither can pass
+    empty; the next test generates thousands of the first kind."""
     rng = random.Random(20261113)
     replies = ["".join(rng.choice(PIECES) for _ in range(rng.randint(0, 24))) for _ in range(50_000)]
-    mismatches = [raw for raw in replies if schema.strip_code_fences(raw) != regex_strip_code_fences(raw)]
+    untouched = [raw for raw in replies if mask_backticks_inside_strings(raw) == raw]
+    masked = [raw for raw in replies if mask_backticks_inside_strings(raw) != raw]
+
+    assert [raw for raw in untouched if schema.strip_code_fences(raw) != regex_strip_code_fences(raw)] == []
+    assert [raw for raw in masked if schema.strip_code_fences(raw) != regex_outside_strings(raw)] == []
+    assert len(untouched) > 40_000 and len(masked) > 500
+
+
+# Braces, quotes, escapes and fences, weighted so that a fence inside a JSON string is common.
+STRING_PIECES = (
+    ["{", "}", '"', "\\", '\\"', "\\\\", "```", "```json\n", "`"]
+    + ['{"text": "', '", "chunk_id": "c"}', " ", "\n", "a", "json", ":", ",", "Here: "]
+)
+
+
+def test_generated_replies_full_of_strings_strip_as_the_regex_did_outside_strings():
+    """50,000 replies from STRING_PIECES and a fixed seed: 14,618 with a fence inside a JSON string,
+    and 6,806 on which the frozen function strips differently, because it reads such a fence."""
+    rng = random.Random(20261116)
+    replies = ["".join(rng.choice(STRING_PIECES) for _ in range(rng.randint(0, 24))) for _ in range(50_000)]
+    masked = [raw for raw in replies if mask_backticks_inside_strings(raw) != raw]
+    changed = [raw for raw in masked if regex_strip_code_fences(raw) != regex_outside_strings(raw)]
+
+    assert [raw for raw in replies if schema.strip_code_fences(raw) != regex_outside_strings(raw)] == []
+    assert len(masked) > 10_000 and len(changed) > 5_000
+
+
+# --- Fences inside JSON strings are not fences (16 November 2026, D-136) -----------------------
+#
+# A JSON string, as apps/ai/schema.py's _outermost_json_object reads one, opens at a double quote
+# inside braces and closes at the next double quote that no backslash escapes. The mask below
+# states that again, apart from the scan, so the scan can be held to the frozen function.
+
+MASK = "\ue000"  # a private-use character: not whitespace, not a tag character, in no test input
+
+
+def mask_backticks_inside_strings(raw: str) -> str:
+    """``raw`` with every backtick inside a JSON string replaced by MASK, and nothing else changed."""
+    masked = []
+    depth = 0
+    in_string = escaped = False
+    for character in raw:
+        if in_string:
+            masked.append(MASK if character == "`" else character)
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        masked.append(character)
+        if character == "{":
+            depth += 1
+        elif character == "}" and depth > 0:
+            depth -= 1
+        elif character == '"' and depth > 0:
+            in_string = True
+    return "".join(masked)
+
+
+def regex_outside_strings(raw: str) -> str:
+    """The frozen function, blind to backticks inside JSON strings. It returns a stretch of the
+    masked reply with its whitespace stripped, and masking changes no whitespace, so undoing the
+    mask gives the same stretch of ``raw``."""
+    return regex_strip_code_fences(mask_backticks_inside_strings(raw)).replace(MASK, "`")
+
+
+@pytest.mark.parametrize(
+    "raw,expected,regex_gave",
+    [
+        pytest.param('{"text": "Run ```pip install x``` first"}', '{"text": "Run ```pip install x``` first"}',
+                     "install x", id="a code block quoted in an unfenced reply"),
+        pytest.param('```json\n{"text": "a ``` b"}\n```', '{"text": "a ``` b"}', '{"text": "a',
+                     id="a fence in a string inside a fenced reply"),
+        pytest.param('{"text": "say \\"```x y```\\" now"}', '{"text": "say \\"```x y```\\" now"}', "y",
+                     id="an escaped quote does not close the string"),
+        pytest.param('{"a": "}", "b": "x ```y``` z"}', '{"a": "}", "b": "x ```y``` z"}', "",
+                     id="a brace inside a string does not count"),
+        pytest.param(':} {"a": "x ```y``` z"}', ':} {"a": "x ```y``` z"}', "",
+                     id="a stray closing brace in prose does not hide the next object's strings"),
+        pytest.param('x ``` {"a": "b```', 'x ``` {"a": "b```', '{"a": "b',
+                     id="a fence at the end of a reply cut off inside a string"),
+        pytest.param('{"a": "```"} ```', '{"a": "```"}', '"}',
+                     id="a fence after the object is a fence"),
+        pytest.param('Note {see "x: ```json\n{"a": 1}\n```', 'Note {see "x: ```json\n{"a": 1}\n```', '{"a": 1}',
+                     id="a preamble that opens a brace and then a quote hides the fence after it"),
+    ],
+)
+def test_a_fence_inside_a_json_string_is_not_a_fence(raw, expected, regex_gave):
+    """Each case pins what the frozen function gave as well, so it records a change. The last is the
+    cost of the rule: prose that opens a brace and then a double quote reads as a JSON string, so
+    the fence after it is no fence (test_schema.py follows such a reply through the parser)."""
+    assert regex_strip_code_fences(raw) == regex_gave
+    assert schema.strip_code_fences(raw) == expected
+    assert regex_outside_strings(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        pytest.param('```json\n{"path": "C:\\\\"}\n```', '{"path": "C:\\\\"}',
+                     id="an escaped backslash ends the string before the closing fence"),
+        pytest.param('Here is the "answer: ```json\n{"a": 1}\n```', '{"a": 1}',
+                     id="a quote in prose before any brace opens nothing"),
+        pytest.param('{"a": 1} "```json\n{"b": 2}\n```', '{"b": 2}',
+                     id="a quote after the object closes is prose again"),
+    ],
+)
+def test_what_is_outside_a_json_string_strips_as_the_regex_did(raw, expected):
+    """These have no fence inside a string, so the scan agrees with the frozen function. A scan that
+    misread a string would hide a fence that is really outside one."""
+    assert regex_strip_code_fences(raw) == expected
+    assert schema.strip_code_fences(raw) == expected
+
+
+def test_every_short_string_over_quotes_and_braces_strips_as_the_regex_did_outside_strings():
+    """Every string of up to seven characters over a backtick, both braces, a double quote, a
+    backslash and a tag letter: 335,923 strings. Among them are a fence inside and outside a
+    string, an escaped quote and an escaped backslash before one, and a string cut off."""
+    alphabet = ("`", "{", "}", '"', "\\", "j")
+    strings = (
+        "".join(letters) for length in range(8) for letters in itertools.product(alphabet, repeat=length)
+    )
+    mismatches = [raw for raw in strings if schema.strip_code_fences(raw) != regex_outside_strings(raw)]
 
     assert mismatches == []
 
@@ -194,4 +332,25 @@ def test_a_whitespace_run_in_a_reply_whose_fence_never_closes_is_read_once(raw, 
     the rest of the run and backtracked through it, looking for a fence. That took 0.50 s at
     20,000, and four times as long at each doubling. The search is fast on these shapes; only the
     fallback was slow."""
+    assert_stripped_well_under_the_bound(raw, expected)
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        pytest.param('{"a": "' + "`" * RUN + '"}', '{"a": "' + "`" * RUN + '"}',
+                     id="200,000 backticks inside a string"),
+        pytest.param('{"a": "' + "\\\\" * (RUN // 2) + '"} ```', '{"a": "' + "\\\\" * (RUN // 2) + '"}',
+                     id="200,000 characters of escapes, then a fence"),
+        pytest.param("{" * RUN + '"```', "{" * RUN + '"```', id="200,000 braces, then a fence in a string"),
+        pytest.param('"' * RUN + "```", '"' * RUN, id="200,000 quotes outside braces, then a fence"),
+        pytest.param("```json\n{" + '"a": "``` ", ' * (RUN // 12) + "}",
+                     "{" + '"a": "``` ", ' * (RUN // 12) + "}",
+                     id="a fence, then 200,000 characters of strings each holding a fence"),
+    ],
+)
+def test_reading_json_strings_keeps_the_scan_linear(raw, expected):
+    """Since 16 November 2026 the scan reads JSON strings to tell a fence inside one from a fence
+    (D-136). Each character is still read once: a long string, a long run of escapes, deep braces,
+    many quotes, and many strings each holding a fence."""
     assert_stripped_well_under_the_bound(raw, expected)
