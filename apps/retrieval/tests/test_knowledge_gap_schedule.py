@@ -4,7 +4,7 @@ The requirements audit of 10 November found "on a scheduled basis" met only by a
 had scheduled. The user decided on a daily run, registered on the host by a script. Registering it
 is the host owner's step, so what the repository can hold, and these tests pin, is the script and
 the runbook's instructions: the script runs the aggregation command from the checkout's own venv,
-once a day, and never takes a password.
+once a day, on battery too, and never takes a password.
 """
 
 from pathlib import Path
@@ -18,6 +18,16 @@ def script_text() -> str:
     return SCRIPT.read_text(encoding="utf-8")
 
 
+def settings_call(text: str) -> str:
+    """The ``New-ScheduledTaskSettingsSet`` statement, its backtick continuations joined."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if "New-ScheduledTaskSettingsSet" in line)
+    statement = [lines[start]]
+    while statement[-1].rstrip().endswith("`"):
+        statement.append(lines[start + len(statement)])
+    return " ".join(line.rstrip().rstrip("`").strip() for line in statement)
+
+
 def test_the_schedule_runs_the_aggregation_command_from_the_checkouts_venv():
     text = script_text()
     assert "manage.py aggregate_knowledge_gaps" in text
@@ -29,6 +39,14 @@ def test_the_schedule_is_daily():
     assert "New-ScheduledTaskTrigger -Daily" in text
     for other in ("-Once", "-Weekly", "-AtLogOn", "-AtStartup", "RepetitionInterval"):
         assert other not in text, other
+
+
+def test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged():
+    """Task Scheduler's defaults hold a task on battery and stop one that is unplugged mid-run. On
+    15 November 2026 they left the alpha laptop's tasks queued with no log (D-107's note)."""
+    call = settings_call(script_text())
+    assert "-AllowStartIfOnBatteries" in call
+    assert "-DontStopIfGoingOnBatteries" in call
 
 
 def test_the_schedule_takes_no_password():

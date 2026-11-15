@@ -14,6 +14,10 @@ No password is asked for or stored, so the task runs while this user is logged o
 run it while logged off needs "Run whether user is logged on or not" set in Task Scheduler by its
 owner, where Windows asks for the password; it is never written to a file.
 
+The task starts on battery and is not stopped when the machine is unplugged. Task Scheduler's
+defaults are the opposite, and they left both of the alpha laptop's tasks queued on 15 November 2026
+(D-107's note of that day).
+
 A run that cannot reach the AI provider exits 1 and changes nothing. The next run takes the rows it
 missed, because each cycle's window starts at the last committed cycle (D-107).
 
@@ -57,8 +61,10 @@ $arguments = "/c `"`"$python`" manage.py aggregate_knowledge_gaps >> `"$log`" 2>
 $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $arguments -WorkingDirectory $root
 $trigger = New-ScheduledTaskTrigger -Daily -At $At
 # A run missed while the machine was off starts when it is next on. Two hours bounds a run whose
-# provider hangs; the cycle is one transaction, so a stopped run changes nothing.
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+# provider hangs; the cycle is one transaction, so a stopped run changes nothing. A run starts on
+# battery and keeps going when the machine is unplugged.
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -ExecutionTimeLimit (New-TimeSpan -Hours 2)
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
     -Description "FR-19: one knowledge-gap aggregation cycle a day (D-107)." -Force | Out-Null

@@ -8350,6 +8350,52 @@ not so from the start.
   `/api/users/<id>/role` assigns an existing one. The two seeded roles are both in
   `EFFECTIVE_ROLES`. Such a role exists only if someone creates one in the database directly.
 
+**Dated note, 15 November 2026: the task ran only on mains power.** The user registered this task
+and FR-16's retry (D-125's note of the same day) on the alpha's laptop on 15 November, and started
+each by hand. Neither ran. The laptop was on battery, and `New-ScheduledTaskSettingsSet`, called
+without the two switches below, gives a task Task Scheduler's two power conditions: start only on
+mains power, and stop on going to battery. Both tasks stayed `Queued` from their starts at 11:46 and
+11:49 until they were found at 14:38, and neither wrote a log. So the note of 10 November's "daily"
+held only while the laptop was plugged in. Its tests could not see that: they read the script's
+text, and a default is not in the text.
+
+- **Both scripts now pass `-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries`.** A task starts
+  on battery, and is not stopped when the laptop is unplugged.
+- **The alpha's two tasks were changed in place the same day.** Afterwards both read `Ready`, with
+  battery allowed.
+- **A task registered by the earlier script keeps the old conditions** until its script is run
+  again, which replaces it. `docs/alpha-deployment.md` sections 9 and 10 say so.
+- **Tests:**
+  - **Each script's text test,** `test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`,
+    pins both switches in its `New-ScheduledTaskSettingsSet` call, not merely somewhere in the file.
+  - **`apps/core/tests/test_schedule_scripts.py`** reads the conditions from the settings object each
+    script builds, and checks that the script's registration passes that object. It never runs a
+    script: PowerShell's parser finds the statements that assign `$limit` and `$settings`, and only
+    those are evaluated. It needs Windows PowerShell, so CI's Linux runner skips it.
+- **A first version of that test registered a real task.** It ran each script with
+  `Register-ScheduledTask` replaced by a function, and the module's own command was found first. A
+  task named "never registered", for the current user, pointing at an empty stand-in for
+  `python.exe` in a pytest temporary folder, was found straight away and removed with
+  `Unregister-ScheduledTask`. Its trigger, daily at 02:00, had not come round.
+- **Deliberate breaks.** Each change was broken on purpose and the tests run again. This table is
+  generated from those runs:
+
+  | Break | What | Tests that failed |
+  |---|---|---|
+  | B1 | FR-19's script without `-AllowStartIfOnBatteries` | `test_knowledge_gap_schedule::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`; `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B2 | FR-19's script without `-DontStopIfGoingOnBatteries` | `test_knowledge_gap_schedule::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`; `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B3 | FR-16's script without `-AllowStartIfOnBatteries` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]`; `test_summary_commands::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged` |
+  | B4 | FR-16's script without `-DontStopIfGoingOnBatteries` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]`; `test_summary_commands::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged` |
+  | B5 | FR-19's switches moved from the call into a comment | `test_knowledge_gap_schedule::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged`; `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B6 | FR-16's switches moved from the call into a comment | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]`; `test_summary_commands::test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged` |
+  | B7 | FR-19's registration passed default settings, not `$settings` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_knowledge_gap_schedule.ps1]` |
+  | B8 | FR-16's registration passed default settings, not `$settings` | `test_schedule_scripts::test_the_registered_task_runs_on_battery[register_meeting_summary_schedule.ps1]` |
+
+  B7 and B8 are caught only by the Windows test, so CI does not catch them.
+- **Both suites.** The backend suite passed locally: 4,866 tests, with every protected endpoint
+  covered from both roles (47 of 47). It ran before the runbook's last wording change, which its
+  tests do not read. No front-end file changed, so the front-end suite is unaffected.
+
 ## D-108 · FR-19's permission exclusion: the top-ranked passage over the Administrator's scope decides, and a zero-result search is recounted as the Administrator
 
 **Status:** Settled by the user · **Date:** 2026-11-08 · **Concerns:** FR-19's Validation clause,
@@ -11669,6 +11715,11 @@ Vitest 588 tests in 45 files, all passing, and oxlint clean.
 
 **Not re-audited.** The requirements audit was of `e97d5ff`. The changes since it are these
 security fixes, and the requirements auditor has not checked them against FR-16's text.
+
+**Dated note, 15 November 2026: the retry ran only on mains power,** as FR-19's task did, and it is
+fixed the same way: D-107's note of the same day. Started by hand on the alpha's laptop at 11:46
+that day, it stayed `Queued` on battery until 14:38. Its last run time stayed at that start, so its
+hourly runs in that time did not start either.
 
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
