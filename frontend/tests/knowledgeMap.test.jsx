@@ -1084,6 +1084,29 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       expect(address()).toBe('/knowledge-map')
     })
 
+    it('orders two items that show the same name by their type', async () => {
+      // A meeting and a document with one title. The Name column cannot tell them
+      // apart, so the type decides ("Document" before "Meeting"), and not the order
+      // the reply happens to carry, which is the meeting first. The overview above
+      // has no two items showing one name since a tag's name is shown with its
+      // dimension (the audit of 15 November 2026, A3), so this is its own map.
+      const meeting = node(MEETING, uuid(41), 'Budget Review', 0)
+      const paper = node(DOCUMENT, uuid(42), 'Budget Review', 0)
+      serveMap(user, { '': mapObject({ nodes: [meeting, paper] }) })
+      renderMap()
+      await findDiagram()
+      const table = itemsTable()
+      expect(rowsOf(table)).toEqual([meeting, paper].map(itemsRow))
+
+      pressSort(table, TEXT.mapItemsColumnName)
+      expect(sortStates(table)).toEqual(['ascending', null, null])
+      expect(rowsOf(table)).toEqual([paper, meeting].map(itemsRow))
+
+      pressSort(table, TEXT.mapItemsColumnName)
+      expect(sortStates(table)).toEqual(['descending', null, null])
+      expect(rowsOf(table)).toEqual([meeting, paper].map(itemsRow))
+    })
+
     const E1 = relationshipRow(LEAVE, TAGGED, TOPIC_PEOPLE)
     const E2 = relationshipRow(JANE, UPLOADED, LEAVE)
     const E3 = relationshipRow(JANE, ATTENDED, SYNC)
