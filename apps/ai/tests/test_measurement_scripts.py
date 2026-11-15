@@ -530,11 +530,11 @@ def test_postgres_errors_have_role_and_user_names_redacted(snapshot_module):
     assert '"<redacted>"' in snapshot_module.redact('FATAL:  role "kmp" does not exist')
 
 
-# --- restore --into: a copy for a provider switch (D-117) ------------------------------------
+# --- restore --into: a copy under a new name (D-117) -------------------------------------------
 #
-# The Voyage re-index needs a copy of the FLM measurement database, made from its snapshot,
-# that leaves the database itself untouched. Plain restore can only drop and recreate the
-# database the snapshot names, which here is the FLM baseline.
+# The Voyage re-index of 10 November needed a copy of the FLM measurement database, made from its
+# snapshot, that left the database itself untouched. Since D-131 a copy keeps its provider. Plain
+# restore can only drop and recreate the database the snapshot names, here the FLM baseline.
 
 
 def restore_into(module, folder, *, media_root, copy="kmp_voyage_test"):

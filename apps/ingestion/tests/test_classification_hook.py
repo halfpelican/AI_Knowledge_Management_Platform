@@ -27,7 +27,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
     USER_APPLIED,
 )
-from apps.documents.models import ContentTag, Document, DocumentAnalysis, Tag
+from apps.documents.models import ContentTag, Department, Document, DocumentAnalysis, Tag
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
 from apps.ingestion.signatures import compute_content_hash
 from apps.ingestion.tests.ai_doubles import ScriptedEmbedService, install
@@ -56,6 +56,7 @@ def ingest(user, text=TEXT):
 def test_a_successful_ingestion_classifies_the_document_in_the_same_transaction(
     employee, stub_ai_service
 ):
+    Department.objects.create(name="People")  # the list is the scheme's departments (D-129)
     outcome = ingest(employee)
 
     assert (outcome.http_status, outcome.document.status) == (201, DOCUMENT_INDEXED)
@@ -63,7 +64,8 @@ def test_a_successful_ingestion_classifies_the_document_in_the_same_transaction(
     assert outcome.analysis == analysis
     assert analysis.machine_doc_type == DOCUMENT_TYPES[0]
     assert analysis.doc_type_outcome == ASSIGNMENT_APPLIED
-    # The upload's own department is in the scheme, so the stub's suggestion of it is applied.
+    # The upload's own department is listed, so in the scheme, and the stub's suggestion of it is
+    # applied.
     assert (analysis.machine_department, analysis.department_outcome) == ("People", ASSIGNMENT_APPLIED)
     [(title, text, scheme)] = stub_ai_service.classify_calls
     assert (title, text) == (TITLE, TEXT)

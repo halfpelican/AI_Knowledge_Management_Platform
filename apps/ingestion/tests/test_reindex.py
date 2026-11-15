@@ -1,11 +1,10 @@
-"""``manage.py reindex`` — the provider-switch path (CLAUDE.md section 4, risk R10).
+"""``manage.py reindex`` — every stored vector rebuilt with the database's own provider (risk R10).
 
-The command exists so that changing embedding model is a supported operation rather
-than an instruction in three documents that nothing implements. What these tests
-hold it to is the part that makes it worth having: every rebuilt row records the
-model that actually answered, the permission stamp is taken from the source rather
-than carried over from the stale chunk, and a provider whose width does not match
-the stored column is refused before a single row is touched.
+What these tests hold it to: every rebuilt row records the model that actually answered, the
+permission stamp is taken from the source rather than carried over from the stale chunk, and a
+provider whose width does not match the stored column is refused before a single row is touched.
+A database keeps the provider it was set up with (D-131), so the command neither resizes the
+column nor takes another provider.
 """
 
 import pytest
@@ -18,25 +17,23 @@ from django.test import override_settings
 from apps.ai.testing import STUB_EMBEDDING_MODEL, StubAIService
 from apps.core.constants import (
     ADMINISTRATOR_ROLE_NAME,
+    EMBEDDING_DIMENSION_BY_PROVIDER,
     DOCUMENT_INDEXED,
-    DOCUMENT_INDEXING_FAILED,
     EMPLOYEE_ROLE_NAME,
     MEETING_INDEXED,
     SOURCE_TYPES,
 )
 from apps.documents.models import ContentChunk, ExtractedContent
-from apps.ingestion.management.commands.reindex import PROBE_TEXT
-from apps.ingestion.tests.ai_doubles import ScriptedEmbedService, install
+from apps.ingestion.management.commands.reindex import VALID_PROVIDERS
+from apps.ingestion.tests.ai_doubles import install
 from apps.ingestion.tests.builders import words
-from apps.retrieval.models import AnswerCitation, QueryLog
 
 DOCUMENT_SOURCE_TYPE, MEETING_SOURCE_TYPE = SOURCE_TYPES
 
 # Comfortably above MINIMUM_CONTENT_LENGTH so nothing is rejected as a fragment.
 ENOUGH_TEXT = words(200)
 STALE_MODEL = "some-older-embedding-model"
-# A width the test database's column was not built at: 1024 when the suite runs at
-# FLM's 768, which is the Voyage case D-117 exists for.
+# A width the test database's column was not built at: a provider of another width (D-131).
 NEW_WIDTH = settings.EMBEDDING_DIMENSION + 256
 
 
@@ -52,7 +49,7 @@ def column_type():
 
 
 def database_name():
-    """The connected database's name, which is what --resize-column must be given."""
+    """The connected database's name, which --resize-column was given until 14 November 2026."""
     return connection.settings_dict["NAME"]
 
 
@@ -60,8 +57,9 @@ def database_name():
 def indexed_document(document):
     """A document with extracted text and one chunk recorded against an OLD model.
 
-    This is the state a provider switch leaves behind: rows that look healthy and
-    whose vectors are no longer comparable with anything the new model produces.
+    This is the state a change of embedding model leaves behind, within one provider and one
+    width (D-131): rows that look healthy and whose vectors are no longer comparable with
+    anything the new model produces.
     """
     ExtractedContent.objects.create(document=document, extracted_text=ENOUGH_TEXT)
     ContentChunk.objects.create(
@@ -193,166 +191,79 @@ def test_unknown_provider_is_rejected(indexed_document):
         call_command("reindex", "--provider", "not-a-provider")
 
 
-# --- A new width: --resize-column (D-117) ------------------------------------------------
+# --- A database keeps its provider (D-131) --------------------------------------------------
 #
-# Each test changes the width inside its own transaction. Postgres DDL is transactional,
-# so the column is back at EMBEDDING_DIMENSION once the test's transaction rolls back.
+# --resize-column (D-117) was removed on 14 November 2026, and --provider no longer overrides
+# AI_PROVIDER: it is a confirmation, and any provider but the configured one is refused.
 
 
 @pytest.mark.django_db
-def test_a_column_of_another_width_is_refused_until_resize_column_names_the_database(
-    indexed_document, monkeypatch
-):
-    """The restored-snapshot case: the setting says the new width, the column does not.
+def test_resize_column_is_gone(indexed_document):
+    with pytest.raises(CommandError, match="unrecognized arguments"):
+        call_command("reindex", "--resize-column", database_name())
 
-    migrate cannot resize it, so the command must not tell anyone to try. It names the
-    flag and the database, and touches nothing.
-    """
+    assert column_type() == f"vector({settings.EMBEDDING_DIMENSION})"
+    assert ContentChunk.objects.get(source_id=indexed_document.id).embedding_model == STALE_MODEL
+
+
+@pytest.mark.django_db
+def test_a_column_of_another_width_is_refused_and_a_new_database_is_named(document):
+    """A database set up for the other provider: the setting and the provider agree on one width,
+    and the stored chunk column has the other provider's. Nothing moves the database across, and
+    nothing is touched. Postgres DDL is transactional, so the column is back at
+    EMBEDDING_DIMENSION when the test's transaction rolls back; the table has no row to convert."""
+    ExtractedContent.objects.create(document=document, extracted_text=ENOUGH_TEXT)
+    other = next(width for width in EMBEDDING_DIMENSION_BY_PROVIDER.values() if width != settings.EMBEDDING_DIMENSION)
+    with connection.cursor() as cursor:
+        cursor.execute(f"ALTER TABLE content_chunks ALTER COLUMN embedding TYPE vector({other})")
+
+    with pytest.raises(CommandError) as raised:
+        call_command("reindex")
+
+    message = str(raised.value)
+    assert f"vector({other})" in message and f"embeds at {settings.EMBEDDING_DIMENSION}" in message
+    assert "D-131" in message and "set up a new one" in message
+    assert "--resize-column" not in message
+    assert column_type() == f"vector({other})"
+    assert not ContentChunk.objects.filter(source_id=document.id).exists()
+
+
+@pytest.mark.django_db
+def test_a_width_that_disagrees_with_the_provider_is_refused(indexed_document, monkeypatch):
+    """ai.E004's condition, for a caller that skips the checks: an EMBEDDING_DIMENSION that is not
+    the provider's is refused before the provider is asked, even when the provider would agree
+    with it."""
     install(monkeypatch, StubAIService(dimension=NEW_WIDTH))
 
     with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH), pytest.raises(CommandError) as raised:
         call_command("reindex")
 
     message = str(raised.value)
-    assert f"--resize-column {database_name()}" in message
-    assert "migrate cannot change it" in message
-    assert column_type() == f"vector({settings.EMBEDDING_DIMENSION})"
+    assert f"EMBEDDING_DIMENSION is {NEW_WIDTH}" in message and "D-131" in message
+    assert ContentChunk.objects.get(source_id=indexed_document.id).embedding_model == STALE_MODEL
+
+
+@pytest.mark.django_db
+def test_another_provider_is_refused_and_the_setting_is_left_alone(indexed_document):
+    """Until 14 November 2026 --provider overrode AI_PROVIDER for the run, which is how a database
+    was moved to another provider. Now it is refused before the provider is even asked."""
+    configured = settings.AI_PROVIDER
+    other = next(name for name in VALID_PROVIDERS if name != configured)
+
+    with pytest.raises(CommandError) as raised:
+        call_command("reindex", "--provider", other)
+
+    message = str(raised.value)
+    assert repr(other) in message and repr(configured) in message and "D-131" in message
+    assert settings.AI_PROVIDER == configured
     chunk = ContentChunk.objects.get(source_id=indexed_document.id)
     assert chunk.embedding_model == STALE_MODEL
 
 
 @pytest.mark.django_db
-def test_resize_column_deletes_every_chunk_resizes_and_rebuilds(
-    indexed_document, monkeypatch, capsys
-):
-    install(monkeypatch, StubAIService(dimension=NEW_WIDTH))
+def test_naming_the_configured_provider_is_an_ordinary_reindex(indexed_document):
+    call_command("reindex", "--provider", settings.AI_PROVIDER)
 
-    with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH):
-        call_command("reindex", "--resize-column", database_name())
-        assert column_type() == f"vector({NEW_WIDTH})"
-
-    chunks = ContentChunk.objects.filter(source_id=indexed_document.id)
+    chunks = ContentChunk.objects.filter(source_type=DOCUMENT_SOURCE_TYPE, source_id=indexed_document.id)
     assert chunks.exists()
-    assert not chunks.filter(embedding_model=STALE_MODEL).exists()
-    assert {chunk.embedding_dimension for chunk in chunks} == {NEW_WIDTH}
-    assert {len(chunk.embedding) for chunk in chunks} == {NEW_WIDTH}
-    indexed_document.refresh_from_db()
-    assert indexed_document.status == DOCUMENT_INDEXED
-    output = capsys.readouterr().out
-    assert f"from vector({settings.EMBEDDING_DIMENSION}) to vector({NEW_WIDTH})" in output
-
-
-@pytest.mark.django_db
-def test_resize_column_keeps_each_citation_with_its_chunk_nulled(
-    indexed_document, employee, monkeypatch
-):
-    """D-67: deleting every chunk sets each citation's chunk to null and keeps its identifier.
-
-    This is why --resize-column takes the database's name. It is also the case where
-    Postgres refuses the ALTER while the delete's deferred foreign-key checks are still
-    pending, which is what the command's check_constraints() call clears.
-    """
-    stale = ContentChunk.objects.get(source_id=indexed_document.id)
-    query = QueryLog.objects.create(
-        user=employee,
-        question="How much annual leave do I get?",
-        answered=True,
-        answer_text="Twenty days.",
-        no_answer_reason=None,
-    )
-    citation = AnswerCitation.objects.create(
-        query=query, chunk=stale, chunk_uuid=stale.id, statement_text="Twenty days.", position=1
-    )
-    install(monkeypatch, StubAIService(dimension=NEW_WIDTH))
-
-    with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH):
-        call_command("reindex", "--resize-column", database_name())
-
-    citation.refresh_from_db()
-    assert citation.chunk is None
-    assert citation.chunk_uuid == stale.id
-    assert column_type() == f"vector({NEW_WIDTH})"
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("width", ["the new one", "the stored one"])
-def test_resize_column_refuses_a_name_that_is_not_the_connected_database(
-    indexed_document, monkeypatch, width
-):
-    """The confirmation is what keeps the baseline and alpha databases safe (D-117).
-
-    A wrong name is refused even when no resize is needed: the caller believes they are
-    connected somewhere else, and an ordinary re-index nulls citations too.
-    """
-    dimension = NEW_WIDTH if width == "the new one" else settings.EMBEDDING_DIMENSION
-    install(monkeypatch, StubAIService(dimension=dimension))
-
-    with override_settings(EMBEDDING_DIMENSION=dimension), pytest.raises(
-        CommandError, match="connected to"
-    ):
-        call_command("reindex", "--resize-column", "kmp_demo_20261101")
-
-    assert column_type() == f"vector({settings.EMBEDDING_DIMENSION})"
-    chunk = ContentChunk.objects.get(source_id=indexed_document.id)
-    assert chunk.embedding_model == STALE_MODEL
-
-
-@pytest.mark.django_db
-def test_resize_column_with_dry_run_changes_nothing(indexed_document, monkeypatch, capsys):
-    install(monkeypatch, StubAIService(dimension=NEW_WIDTH))
-
-    with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH):
-        call_command("reindex", "--dry-run", "--resize-column", database_name())
-
-    assert column_type() == f"vector({settings.EMBEDDING_DIMENSION})"
-    chunk = ContentChunk.objects.get(source_id=indexed_document.id)
-    assert chunk.embedding_model == STALE_MODEL
-    output = capsys.readouterr().out
-    assert (
-        f"would delete 1 chunk(s) and resize the column from "
-        f"vector({settings.EMBEDDING_DIMENSION}) to vector({NEW_WIDTH})"
-    ) in output
-
-
-@pytest.mark.django_db
-def test_resize_column_on_a_column_already_that_wide_is_an_ordinary_reindex(
-    indexed_document, capsys
-):
-    call_command("reindex", "--resize-column", database_name())
-
-    assert f"already vector({settings.EMBEDDING_DIMENSION}); nothing to resize" in (
-        capsys.readouterr().out
-    )
-    chunks = ContentChunk.objects.filter(source_id=indexed_document.id)
-    assert chunks.exists()
-    assert not chunks.filter(embedding_model=STALE_MODEL).exists()
-
-
-@pytest.mark.django_db
-def test_a_source_that_fails_after_the_resize_is_marked_failed(
-    indexed_document, monkeypatch, capsys
-):
-    """Its old chunks were deleted with the rest, so "Indexed" would be untrue.
-
-    Without the resize, a failed source keeps its old chunks and status, because its
-    transaction rolls back. After it, there is nothing to roll back to.
-    """
-    install(
-        monkeypatch,
-        ScriptedEmbedService(
-            dimension=NEW_WIDTH,
-            failures=1,
-            # The width probe succeeds; the document's own chunks then fail with an
-            # error the pipeline did not decide, which fails the whole source.
-            should_fail=lambda text: text != PROBE_TEXT,
-            error=RuntimeError("unexpected provider error"),
-        ),
-    )
-
-    with override_settings(EMBEDDING_DIMENSION=NEW_WIDTH):
-        call_command("reindex", "--resize-column", database_name())
-
-    indexed_document.refresh_from_db()
-    assert indexed_document.status == DOCUMENT_INDEXING_FAILED
-    assert not ContentChunk.objects.filter(source_id=indexed_document.id).exists()
-    assert "marked failed" in capsys.readouterr().out
+    assert {chunk.embedding_model for chunk in chunks} == {STUB_EMBEDDING_MODEL}

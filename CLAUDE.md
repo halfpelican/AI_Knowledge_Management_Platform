@@ -128,9 +128,11 @@ Two implementations, selected by the `AI_PROVIDER` environment variable:
   10 November 2026:** the M6 alpha and every measurement up to then ran on it. Now the
   offline alternative.
 
-Which provider is the default, and which one M8 runs on, are decided by measurement:
-a switch is a full re-index (below), onto a fresh database, and every tuned value is
-re-derived on the new vectors before it is relied on.
+Which provider is the default, and which one M8 runs on, are decided by measurement.
+The provider is chosen once, at setup: `AI_PROVIDER` in `.env` before the first
+`migrate`. A database keeps the provider it was set up with (D-131). Changing provider
+means a new database, set up under the new provider and ingested again, with every
+tuned value re-derived on the new vectors before it is relied on.
 
 If you find yourself writing `import anthropic` or `from openai import OpenAI`
 anywhere outside `apps/ai/`, stop — that is the bug.
@@ -143,7 +145,7 @@ Development runs on **native Windows with PowerShell** — not WSL. The NPU is n
 visible from inside WSL2, so keeping everything on the Windows side means
 `127.0.0.1` genuinely is the same machine and there is no host-IP indirection. With
 the `anthropic` default nothing needs the NPU, but the scripts and runbooks still
-assume this setup. Running FLM also needs a database indexed at 768 (below).
+assume this setup. Running FLM also needs a database set up under FLM.
 
 ```powershell
 # In its own PowerShell window, left running
@@ -163,7 +165,6 @@ FLM_BASE_URL=http://127.0.0.1:8625/v1
 FLM_API_KEY=flm                          # placeholder, no real credential
 FLM_CHAT_MODEL=gemma3:4b
 FLM_EMBED_MODEL=embed-gemma
-EMBEDDING_DIMENSION=768
 ```
 
 FLM speaks the OpenAI wire format, so the `openai` Python package is the client for
@@ -178,8 +179,9 @@ similarity score, so a model change is a silent corruption, not an error. Theref
 - Retrieval executes **only** over chunks whose recorded model matches the current
   query model. Mismatched chunks are excluded, not ranked.
 - The pgvector column dimension comes from `EMBEDDING_DIMENSION`, never a literal.
-- Switching providers is a full re-index event. There is a management command for
-  it: `python manage.py reindex --provider <name>`.
+- A database keeps its provider (D-131). The startup check refuses a database set up
+  for another provider. `reindex --provider <name>` rebuilds chunks with the database's
+  own provider only.
 
 This is risk R10 in the register. It is the highest-scoring technical risk and the
 one most likely to be discovered the night before the demo.

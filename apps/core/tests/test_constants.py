@@ -355,3 +355,67 @@ def test_fr10s_confidence_threshold_is_per_classifying_model():
     assignment, since Haiku typed all 57 right. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
     assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.72}
     assert 0.0 < constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+
+
+def test_fr10s_department_threshold_is_its_own_on_haiku():
+    """D-129, the lead's decision of 13 November 2026: D-106's rule on departments alone found no
+    split (56 right, 1 wrong) on the development documents (corpus/objective-05/runs/
+    2026-11-13-tag-threshold/), so it took the lowest right confidence, 0.30, and the user chose it
+    over the pooled 0.25. Types and tags keep 0.72 on Haiku. Any other model is not listed, and
+    falls back to the shared value for that model (department_threshold)."""
+    assert constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.30}
+    assert 0.0 < constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+    # Its own value, not the shared one's: the two maps disagree for Haiku on purpose.
+    assert (constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]
+            != constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"])
+
+
+# --- The embedding width follows the provider (D-131) ---------------------------------------------
+
+
+def test_each_provider_has_its_models_width():
+    """voyage-4 returns 1024 with no output_dimension sent, and FLM's embed-gemma 768."""
+    from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+    from apps.ingestion.management.commands.reindex import VALID_PROVIDERS
+
+    assert EMBEDDING_DIMENSION_BY_PROVIDER == {"anthropic": 1024, "flm": 768}
+    assert set(EMBEDDING_DIMENSION_BY_PROVIDER) == set(VALID_PROVIDERS)
+
+
+def test_the_suites_own_width_is_its_providers():
+    """Otherwise ai.E004 would refuse the configuration the suite runs under."""
+    from django.conf import settings
+
+    from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+
+    assert settings.EMBEDDING_DIMENSION == EMBEDDING_DIMENSION_BY_PROVIDER[settings.AI_PROVIDER]
+
+
+@pytest.mark.parametrize("provider, explicit, width", [
+    ("anthropic", None, 1024),
+    ("flm", None, 768),
+    ("flm", "1024", 1024),  # read as written, and refused at startup by ai.E004
+], ids=["anthropic, no line", "flm, no line", "flm, a line that disagrees"])
+def test_settings_take_the_width_from_the_provider(provider, explicit, width):
+    """config/settings.py, imported in a clean process with no .env read: EMBEDDING_DIMENSION
+    follows AI_PROVIDER unless .env names one (D-131)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    keep = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "HOME")
+    environment = {name: os.environ[name] for name in keep if name in os.environ}
+    environment.update(SECRET_KEY="settings-test", DATABASE_URL="postgres://user:pass@127.0.0.1:5432/none",
+                       AI_PROVIDER=provider, PYTHONPATH=str(root))
+    if explicit is not None:
+        environment["EMBEDDING_DIMENSION"] = explicit
+    program = (
+        "import environ; environ.Env.read_env = classmethod(lambda cls, *a, **k: None); "
+        "import config.settings as s; print(s.EMBEDDING_DIMENSION)"
+    )
+    completed = subprocess.run([sys.executable, "-c", program], cwd=root, env=environment,
+                               capture_output=True, text=True, timeout=60)
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.stdout.strip().splitlines()[-1] == str(width)

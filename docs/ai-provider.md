@@ -12,8 +12,8 @@ Nothing else in the codebase knows which model is answering.
   10 November 2026,** when every earlier measurement ran on it, and now the offline
   alternative.
 
-Which provider is the default, and which one M8 runs on, is chosen by measurement; a switch
-is a full re-index (§4).
+Which provider is the default, and which one M8 runs on, is chosen by measurement. A database
+keeps the provider it was set up with (§4, D-131).
 
 Two things are easy to confuse and worth separating once: **Claude Code is the tool
 building this repository; the provider is what the built application calls at runtime.**
@@ -68,7 +68,7 @@ class GenerationAttempt:          # apps/ai/generation.py — the observer's rec
 @dataclass(frozen=True)
 class TagScheme:                  # FR-10 — the scheme one document is classified against (D-104)
     doc_types: tuple[str, ...]    # DOCUMENT_TYPES
-    departments: tuple[str, ...]  # distinct non-blank Documents.department values in the audience
+    departments: tuple[str, ...]  # the active department list's names admitted for the audience (D-129)
     tags: dict[str, tuple[str, ...]]  # Project, Process, Topic -> active tag names
 
 @dataclass(frozen=True)
@@ -345,14 +345,20 @@ Rules, enforced in code rather than remembered:
 2. Retrieval filters to chunks whose `embedding_model` equals the current query
    model. Mismatched chunks are excluded from the candidate set — not ranked lower,
    excluded.
-3. The pgvector column dimension is `settings.EMBEDDING_DIMENSION`, never a literal.
-4. Changing provider or model means re-indexing:
-   `python manage.py reindex --provider <name>`. A new width also needs
-   `--resize-column <database>`. Migration 0002 sizes the column from `EMBEDDING_DIMENSION`
-   when it first runs, so `migrate` cannot resize an existing column (D-117).
+3. The pgvector column dimension is `settings.EMBEDDING_DIMENSION`, never a literal, and
+   `EMBEDDING_DIMENSION` follows `AI_PROVIDER` (`EMBEDDING_DIMENSION_BY_PROVIDER`, D-131). An
+   `EMBEDDING_DIMENSION` in `.env` that disagrees is refused at startup (ai.E004).
+4. A database keeps the provider it was set up with (D-131).
+   - Migration 0002 sizes the column when it first runs, and nothing resizes it afterwards:
+     `--resize-column` (D-117) was removed.
+   - Changing provider means a new database, set up under that provider and ingested again.
+   - Within one provider, `python manage.py reindex` rebuilds every chunk with the configured
+     model, after a change of chunking or of the model at the same width.
 5. A startup check compares `EMBEDDING_DIMENSION` against the dimension the provider
    actually returns for a probe string and refuses to start on a mismatch. Silent
-   dimension drift is the failure this prevents.
+   dimension drift is the failure this prevents. A second check compares the database's
+   vector columns with `EMBEDDING_DIMENSION` and refuses a database set up for another
+   provider (ai.E005). Rows embedded by another model are a warning (ai.W003).
 6. The relevance threshold and the partial-match floor belong to the model too (D-120).
    `ranking.admit` and `partial_matches` are given the question's embedding model and look
    up its own values. A model that is not listed gets EmbeddingGemma's.
@@ -362,9 +368,8 @@ Rules, enforced in code rather than remembered:
 | `flm` | `embed-gemma` | 768 | 0.30 / none (D-102) |
 | `anthropic` | `voyage-4` | 1024, Voyage's default. 256, 512 and 2048 are offered, never 768 (Voyage's API reference, checked 10 November 2026) | 0.2687 / 0.2468 (D-120) |
 
-So moving to Voyage resizes the column. Set `EMBEDDING_DIMENSION=1024`, then run
-`reindex --provider anthropic --resize-column <database>` on a database copied for it
-(D-113, D-117).
+So the two providers never share a database. A Voyage database is set up under
+`AI_PROVIDER=anthropic` from its first `migrate`, as the alpha's was on 13 November 2026 (D-131).
 
 Dev and production are therefore **two separate indexes**. Do not point a
 FLM-embedded database at a Voyage query path and wonder why retrieval got worse.
@@ -543,11 +548,17 @@ lists none), one tag per dimension that lists a value, every confidence `STUB_CO
 callable is called with `(title, text, scheme)` and may raise `ProviderUnavailable` to stand in
 for an outage.
 
-**Not measured yet.** Section 5's rates were established with `scripts/citation_harness.py`
-before anything was built on them. The classification prompt has no harness run behind it: its
-conformance rate on `gemma3:4b` is unmeasured, and D-106's sweep on the development documents is
-where it gets one. Until then, treat the prompt as a first version with a tested parser and a
-tested retry path, not as a measured one.
+**What has been measured.** Section 5's rates were established with `scripts/citation_harness.py`
+before anything was built on them. The classification prompt's measurements are D-106's sweeps on
+the development documents and Objective 05's runs:
+
+- **On gemma3:4b:** the threshold of 0.95, and the runs in D-106's notes.
+- **On claude-haiku-5-5:** the threshold of 0.72 (D-122), and three draws of Objective 05 (#85),
+  all on this prompt.
+
+*Dated note, 13 November 2026:* D-128 revised rules 6 and 7 for one day, and D-106's sweep ran on
+that revision (`corpus/objective-05/runs/2026-11-12/dev-sweep-haiku-d127/`). D-129 reversed it,
+so the prompt above is the one those measurements describe.
 
 ---
 

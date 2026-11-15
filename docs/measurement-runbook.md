@@ -205,13 +205,18 @@ Paste the step 1 block, then, every time the server starts:
 ```powershell
 $env:DEBUG = 'False'                                 # .env says True; only the shell overrides it
 $env:WAITRESS_LOG_PATH = "$root\logs\waitress.log"   # the same path the run.ps1 window has
+& $py manage.py check                                # Waitress runs no checks (D-131)
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
 & $waitress --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
+
+`manage.py check` refuses a database set up for another provider (ai.E005), and warns when it
+cannot read the database (ai.W004): start the database first.
 
 This is D-85 §2's command with D-124's body cap,
 `waitress-serve --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application`,
 run from the venv's `Scripts` folder so that it is the venv's Waitress.
-The two lines before it repeat step 1's on purpose: a server started from a window without them
+The first two lines repeat step 1's on purpose: a server started from a window without them
 runs under `.env`'s `DEBUG=True` and logs Waitress's lines to the checkout's `logs\waitress.log`.
 
 - **`DEBUG=False` is explicit** (D-87 §2). With `DEBUG` on, Django serves its HTML debug pages,
@@ -636,42 +641,22 @@ database.
 | 12b HTTP check | 3 conversations, 6 asks, their citations; sign-ins; record | `$db`, `$root\logs`; `$runs\http_check.json` |
 | 13 NFR-09 | up to 1,210 uploads; summary, with the server observed and its queueing | `$db`, `$root\media`; `$runs\nfr09_summary.json` |
 
-## A copy for another provider (D-113, D-117)
+## A database for another provider (D-131)
 
-Measuring the `anthropic` provider needs the same corpus, indexed by Voyage. The FLM measurement
-database must stay as it is. So the copy is made from its snapshot, under a new name, in a new
-session:
+A database keeps the provider it was set up with (D-131). So measuring another provider needs a
+database set up under that provider from the start, not a copy of this one moved across.
+`reindex --resize-column`, which did that (D-117), was removed on 14 November 2026.
 
-```powershell
-$py      = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.venv\Scripts\python.exe'
-$from    = 'kmp_obj02_20261101'                    # the snapshot's database: checked, never touched
-$copy    = 'kmp_voyage_20261110'
-$copyRoot = 'C:\kmp-measurement\2026-11-10-voyage'  # outside every checkout
+1. **Create the database** with a new name, and point a session at it, with `AI_PROVIDER` set in
+   that session or in the checkout's `.env`.
+2. **Run `& $py manage.py migrate`, then `& $py manage.py check`.** Both vector columns take the
+   provider's width, and the check refuses anything else (ai.E004, ai.E005).
+3. **Start the server, as this runbook's section 5 does, and ingest the corpus through the API.**
+   `corpus/objective-02/runs/2026-11-13-alpha-anthropic/` did this for the anthropic provider, with
+   that folder's two scripts. Its README gives the order, the tags included.
+4. **Snapshot it** (`scripts/snapshot_measurement_db.py snapshot`). Later restores of that snapshot,
+   under its own provider, are plain restores.
 
-& $py scripts\snapshot_measurement_db.py restore --database $from --into $copy `
-    --media-root "$copyRoot\media" --from-dir C:\kmp-measurement\2026-11-01\snapshot
-
-$line = Get-Content .env | Where-Object { $_ -match '^DATABASE_URL=' } | Select-Object -First 1
-$env:DATABASE_URL = (($line -replace '^DATABASE_URL=', '').Trim()) -replace '/[^/]+$', "/$copy"
-$env:MEDIA_ROOT   = "$copyRoot\media"
-& $py manage.py migrate                            # migrations newer than the snapshot
-```
-
-**`restore --into`** checks the dump and media against `snapshot.json`, as a restore does. It then
-creates `$copy`, failing if it exists, and restores into it. The media go into a folder that must be
-new or empty. Nothing runs against `$from`.
-
-**Then the switch,** in the same session, with the Voyage key in `.env`:
-
-```powershell
-$env:AI_PROVIDER = 'anthropic'
-$env:EMBEDDING_DIMENSION = '1024'
-& $py manage.py check                              # one Voyage probe: 1024 wide
-& $py manage.py reindex --provider anthropic --resize-column $copy
-& $py scripts\snapshot_measurement_db.py snapshot --database $copy --media-root "$copyRoot\media" --out-dir "$copyRoot\snapshot"
-```
-
-- **Leave `.env` as it is.** The variables set in a session override it, so the everyday setup
-  stays on FLM.
-- **The copy gets its own snapshot.** Later restores of the Voyage copy are plain restores of that
-  snapshot. They need no re-index and spend no Voyage calls.
+**The copies of 10 November.** `kmp_voyage_20261110` and `kmp_anthropic` were moved from FLM with
+the old flag (D-113, D-117, D-122). They are kept as they are. `kmp_anthropic`'s gap column was
+altered to match its chunks on 13 November 2026 (D-117's note of that day).

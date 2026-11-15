@@ -524,7 +524,7 @@ def test_a_chunk_recorded_against_another_embedding_model_is_still_searchable(em
     ``candidate_chunks`` excludes a chunk embedded by another model because a cosine score
     over mismatched vectors is meaningless. A substring test over chunk_text is
     model-independent, so applying that predicate here would hide readable material after a
-    provider switch, in a path with no no-answer message to make the narrowing visible.
+    change of embedding model, in a path with no no-answer message to make the narrowing visible.
     """
     make_document(
         employee,

@@ -41,6 +41,15 @@ CHUNK_OVERLAP = 50
 # availability measure second.
 MAXIMUM_CHUNKS_PER_SOURCE = 1000
 
+# --- Embedding width (FR-08, risk R10; docs/decisions.md D-131) ------------------------
+# The length of the vectors each provider's embedding model returns. The provider is chosen once,
+# at setup: AI_PROVIDER in .env, before the first migrate. settings.EMBEDDING_DIMENSION follows
+# from it, the vector columns are created at that width, and a database keeps it. A database keeps
+# the provider it was set up with, and a change of provider means a new database (the user's
+# decision of 13 November 2026, D-131). voyage-4 returns 1024, because no output_dimension is sent
+# (apps/ai/anthropic.py), and FLM's embed-gemma returns 768.
+EMBEDDING_DIMENSION_BY_PROVIDER = {"anthropic": 1024, "flm": 768}
+
 # --- PDF extraction bounds (FR-08, FR-09; docs/decisions.md D-81) ---------------------
 # Four bounds on the work pypdf may do for one PDF (two per-stream caps, the page cap and
 # the operator budget), plus the text ceiling, which is MAXIMUM_CHUNKS_PER_SOURCE above
@@ -502,8 +511,9 @@ SEARCH_THROTTLE_RATE = "30/min"
 # person types there becomes a permanent Tag, which joins the scheme that later classification
 # prompts list with no cap (apps/ai/classification.py) and that tag_options offers. Like search's,
 # the rate is not about NPU time, since applying a tag calls no provider: it bounds how fast one
-# user can grow the vocabulary. The page sends one request per tag a person adds. The other tag
-# routes are not throttled, and D-79's note says why.
+# user can grow the vocabulary. The page sends one request per tag a person adds. Since D-128
+# the same scope also limits POST /api/tags, an Administrator adding a vocabulary value; its GET is
+# not throttled. The other tag routes are not throttled, and D-79's note says why.
 TAGGING_THROTTLE_RATE = "30/min"
 # POST /api/transcriptions, scope "transcription" (D-123). The page posts one segment at a
 # time, each taking FLM 7-10 s for 30 s of audio, so a transcribing page sends about six a
@@ -699,6 +709,8 @@ MANAGE_MEETINGS_PERMISSION = "manage_meetings"
 # a tag content still references or deletes an unused one. Held by Administrator only, seeded by
 # accounts migration 0008. The inventory is unscoped, which is safe only for a role that reads
 # every source (D-66); apps/accounts/tests/test_manage_tags_seed.py holds every holder to that.
+# Since D-129 it also guards the department list (GET, POST /api/departments and
+# DELETE /api/departments/{id}), whose counts of documents are unscoped for the same reason.
 MANAGE_TAGS_PERMISSION = "manage_tags"
 # FR-03's administrator release (D-130): POST /api/users/{id}/unlock clears an account's lock,
 # and GET /api/users shows each live lock to a holder. FR-03: "Only a user holding the
@@ -752,10 +764,21 @@ CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95
 # reads both.
 CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
 
+# A department's threshold, per classification model (D-129, the lead's decision of 13 November 2026,
+# in a tabbed question), from the run in corpus/objective-05/runs/2026-11-13-tag-threshold/. D-106's
+# rule on departments alone found no split (56 right, 1 wrong), so it took the lowest right
+# confidence, 0.30. The rule pooled with tags gave 0.25, capped from 0.50, and the user chose two
+# values instead: departments 0.30, tags 0.72 (D-129). A model not listed uses the shared value for
+# that model (CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL, else CLASSIFICATION_CONFIDENCE_THRESHOLD),
+# so gemma3:4b keeps 0.95. The type and the tags always use the shared value. apps/documents/
+# classification.py's department_threshold() reads this.
+CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.30}
+
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
 # recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):
-#   applied      at or above CLASSIFICATION_CONFIDENCE_THRESHOLD and written to the effective
-#                field, still marked AI-generated and editable;
+#   applied      at or above the classifying model's threshold for that kind of assignment
+#                (confidence_threshold for the type, department_threshold for the department,
+#                D-129) and written to the effective field, still marked AI-generated and editable;
 #   provisional  below the threshold: held and presented for confirmation, not written
 #                (FR-10 Business logic, confidence);
 #   discarded    outside the established scheme (the department only: the type is always in

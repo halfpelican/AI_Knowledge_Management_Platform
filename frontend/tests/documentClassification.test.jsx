@@ -2,7 +2,9 @@
  * FR-10's classification section of the document detail view, rendered against a
  * faked `GET /api/documents/{id}` carrying `classification`, `tag_details` and
  * `tag_options`, and the FR-10 actions, a person applying a tag among them (D-104,
- * D-105 and its dated note of 10 November 2026, night; docs/api-contract.md).
+ * D-105 and its dated note of 10 November 2026, night; docs/api-contract.md), and
+ * since D-128 a person confirming or rejecting a value the AI proposed in any of the
+ * three tag dimensions.
  *
  * Each test defends one clause only the interface can satisfy — what the screen
  * shows, withholds or offers. The threshold, the scheme rule, who may confirm,
@@ -51,7 +53,9 @@ function classificationOf(overrides = {}) {
     machine_department: 'Human Resources',
     machine_department_confidence: 0.81,
     user_edited: false,
-    proposed_topics: [],
+    // D-128: the values the AI proposed below the threshold, in any of the three
+    // tag dimensions, each `{dimension, value, confidence}`.
+    proposed_tags: [],
     classified_at: '2026-11-09T10:00:00+11:00',
     model: 'gemma3:4b',
     input_truncated: false,
@@ -673,65 +677,6 @@ describe('FR-10: tags applied automatically are distinguished from those applied
     expect(requestsTo(answered, 'DELETE', `${DOC}/tags/${HELD_TAG.content_tag_id}`)).toHaveLength(1)
     expect(answered.filter((request) => request.method !== 'GET')).toHaveLength(2)
   })
-
-  it('a proposed new Topic value can be confirmed, which makes it a tag, or rejected', async () => {
-    const proposed = [
-      { value: 'wellbeing', confidence: 0.6 },
-      { value: 'retention', confidence: 0.5 },
-    ]
-    const newTag = {
-      content_tag_id: 'ct-new',
-      dimension: 'Topic',
-      name: 'wellbeing',
-      applied_by: 'ai',
-      confirmed: true,
-      provisional: false,
-      confidence: 0.6,
-    }
-    const answered = await renderDetail(
-      detailOf({
-        tags: { project: [], process: [], topic: ['people'] },
-        classification: classificationOf({ proposed_topics: proposed }),
-        tag_details: [PERSON_TAG],
-      }),
-      {
-        [`POST ${DOC}/proposed-topics/confirm`]: {
-          body: {
-            classification: classificationOf({ proposed_topics: [proposed[1]] }),
-            tag_details: [PERSON_TAG, newTag],
-          },
-        },
-        [`POST ${DOC}/proposed-topics/reject`]: {
-          body: { classification: classificationOf({ proposed_topics: [] }), tag_details: [PERSON_TAG, newTag] },
-        },
-      },
-    )
-
-    // Proposed, not a tag: in the suggestions, labelled as a new topic, and not in Topic.
-    const held = within(heldGroup())
-    expect(held.getByText('wellbeing')).toBeTruthy()
-    expect(held.getAllByText(TEXT.proposedTopicLabel, { exact: false })).toHaveLength(2)
-    expect(within(tagGroup(TEXT.documentFieldTopic)).queryByText('wellbeing')).toBeNull()
-    expect(metadata(TEXT.documentFieldTopic)).toBe('people')
-
-    press(held.getByRole('button', { name: TEXT.proposedTopicConfirmLabel('wellbeing') }))
-    await waitFor(() => expect(within(tagGroup(TEXT.documentFieldTopic)).getByText('wellbeing')).toBeTruthy())
-    expect(within(heldGroup()).queryByText('wellbeing')).toBeNull()
-    expect(metadata(TEXT.documentFieldTopic)).toBe('people, wellbeing')
-    expect(screen.getByRole('status').textContent).toBe(TEXT.proposedTopicConfirmed('wellbeing'))
-
-    press(within(heldGroup()).getByRole('button', { name: TEXT.proposedTopicRejectLabel('retention') }))
-    await waitFor(() => expect(heldGroup()).toBeNull())
-    expect(screen.queryByText('retention')).toBeNull()
-    expect(screen.getByRole('status').textContent).toBe(TEXT.proposedTopicRejected('retention'))
-
-    expect(requestsTo(answered, 'POST', `${DOC}/proposed-topics/confirm`).map((request) => request.body)).toEqual([
-      { value: 'wellbeing' },
-    ])
-    expect(requestsTo(answered, 'POST', `${DOC}/proposed-topics/reject`).map((request) => request.body)).toEqual([
-      { value: 'retention' },
-    ])
-  })
 })
 
 /* ---- Classify now -------------------------------------------------------- */
@@ -858,12 +803,20 @@ describe('FR-10: a 403 and a 404 on an action', () => {
     await renderDetail(
       detailOf({
         tags: { project: ['policy refresh'], process: [], topic: ['people'] },
-        classification: classificationOf({ proposed_topics: [{ value: 'wellbeing', confidence: 0.6 }] }),
+        classification: classificationOf({
+          proposed_tags: [
+            { dimension: 'Topic', value: 'wellbeing', confidence: 0.6 },
+            { dimension: 'Project', value: 'harbour upgrade', confidence: 0.55 },
+          ],
+        }),
         tag_details: [AI_TAG, PERSON_TAG, HELD_TAG],
       }),
       { [`POST ${DOC}/tags/${AI_TAG.content_tag_id}/confirm`]: { status: 403, body: { detail: backendText } } },
     )
     expect(within(section()).getAllByRole('button').length).toBeGreaterThan(5)
+    // Not vacuous: each proposal is offered its Confirm before the refusal.
+    expect(screen.getByRole('button', { name: TEXT.proposedTagConfirmLabel('Topic', 'wellbeing') })).toBeTruthy()
+    expect(screen.getByRole('button', { name: TEXT.proposedTagConfirmLabel('Project', 'harbour upgrade') })).toBeTruthy()
 
     press(screen.getByRole('button', { name: TEXT.tagConfirmLabel(AI_TAG.name) }))
 
@@ -877,7 +830,10 @@ describe('FR-10: a 403 and a 404 on an action', () => {
     expect(within(tagGroup(TEXT.documentFieldProject)).getByText(AI_TAG.name)).toBeTruthy()
     expect(within(tagGroup(TEXT.documentFieldTopic)).getByText(TEXT.tagAddedByPerson)).toBeTruthy()
     expect(within(heldGroup()).getByText(HELD_TAG.name)).toBeTruthy()
+    // The proposals stay listed, by dimension and value, with their controls gone.
     expect(within(heldGroup()).getByText('wellbeing')).toBeTruthy()
+    expect(within(heldGroup()).getByText('harbour upgrade')).toBeTruthy()
+    expect(within(heldGroup()).getByText(`${TEXT.proposedTagLabel('Project')}, ${TEXT.classificationConfidence(55)}`)).toBeTruthy()
   })
 
   it('a 404 says the record could not be found, as the delete path does, and nothing more', async () => {
@@ -1306,6 +1262,202 @@ describe('FR-10: the add control’s refusals', () => {
     expect(document.body.textContent).not.toContain('Request was throttled.')
     expect(document.body.textContent).not.toContain(TEXT.tagApplied(name))
     expect(addSection()).toBeTruthy()
+  })
+})
+
+/* ---- D-128: values the AI proposed, in every dimension ------------------- */
+
+/**
+ * D-128: below the confidence threshold, a value outside the document's scheme is
+ * held as a proposal in Project, Process or Topic, where until then only a Topic was
+ * and a Project or Process was discarded. "procurement" is proposed in all three, so
+ * the dimension is the only thing that tells the three apart, and it is what a
+ * Confirm or a Reject has to send.
+ */
+const PROPOSED = [
+  { dimension: 'Project', value: 'procurement', confidence: 0.64 },
+  { dimension: 'Process', value: 'procurement', confidence: 0.58 },
+  { dimension: 'Topic', value: 'procurement', confidence: 0.51 },
+]
+
+/** Each dimension's label in the section, and its words in a sentence, singular and plural. */
+const DIMENSION = {
+  Project: { label: TEXT.documentFieldProject, one: 'project', many: 'projects' },
+  Process: { label: TEXT.documentFieldProcess, one: 'process', many: 'processes' },
+  Topic: { label: TEXT.documentFieldTopic, one: 'topic', many: 'topics' },
+}
+
+/** The held row of one proposal, found by its Confirm, whose name carries the dimension. */
+function proposalRow({ dimension, value }) {
+  return within(heldGroup()).getByRole('button', { name: TEXT.proposedTagConfirmLabel(dimension, value) }).closest('li')
+}
+
+/** A confidence as the section shows it. */
+function confidenceOf(entry) {
+  return TEXT.classificationConfidence(Math.round(entry.confidence * 100))
+}
+
+describe('D-128: a value the AI proposed is held for a person in Project, Process or Topic', () => {
+  it('lists one proposal per dimension under the suggestions, each naming its dimension in its row and in its controls, and none among the document’s tags', async () => {
+    await renderDetail(
+      detailOf({
+        tags: { project: [], process: [], topic: ['people'] },
+        classification: classificationOf({ proposed_tags: PROPOSED }),
+        tag_details: [PERSON_TAG],
+      }),
+    )
+
+    for (const proposal of PROPOSED) {
+      const { label, one, many } = DIMENSION[proposal.dimension]
+      const row = proposalRow(proposal)
+      expect(row.querySelector('.tag__dimension').textContent).toBe(label)
+      expect(row.querySelector('.tag__name').textContent).toBe(proposal.value)
+      // The Topic's words, as they were before D-128, and their equivalent in the other two.
+      expect(TEXT.proposedTagLabel(proposal.dimension)).toBe(`New ${one}, not yet in the list of ${many}`)
+      expect(row.querySelector('.tag__provenance').textContent).toBe(
+        `${TEXT.proposedTagLabel(proposal.dimension)}, ${confidenceOf(proposal)}`,
+      )
+      // Each button names its dimension and value after its visible word, so three
+      // proposals of one value are three distinct controls.
+      const buttons = within(row).getAllByRole('button')
+      expect(buttons.map((button) => button.textContent)).toEqual([TEXT.tagConfirm, TEXT.tagReject])
+      expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+        `Confirm new ${one} ${proposal.value}`,
+        `Reject new ${one} ${proposal.value}`,
+      ])
+    }
+    expect(within(heldGroup()).getAllByRole('listitem')).toHaveLength(3)
+    // Proposed, not a tag: in no dimension's tags, and not in the metadata list above.
+    for (const { label } of Object.values(DIMENSION)) {
+      expect(within(tagGroup(label)).queryByText('procurement')).toBeNull()
+    }
+    expect(metadata(TEXT.documentFieldProject)).toBe(TEXT.documentNoTags)
+    expect(metadata(TEXT.documentFieldProcess)).toBe(TEXT.documentNoTags)
+    expect(metadata(TEXT.documentFieldTopic)).toBe('people')
+  })
+
+  it.each([
+    { dimension: 'Project', other: 'Process' },
+    { dimension: 'Process', other: 'Topic' },
+    { dimension: 'Topic', other: 'Project' },
+  ])(
+    'Confirm on the $dimension proposal sends its dimension with the value and makes it a tag there, and Reject on the $other one sends its own',
+    async ({ dimension, other }) => {
+      const confirmed = PROPOSED.find((entry) => entry.dimension === dimension)
+      const rejected = PROPOSED.find((entry) => entry.dimension === other)
+      const afterConfirm = PROPOSED.filter((entry) => entry !== confirmed)
+      // What the confirm made: the AI's link, confirmed, keeping the proposal's confidence.
+      const link = {
+        content_tag_id: `ct-${dimension.toLowerCase()}`,
+        dimension,
+        name: confirmed.value,
+        applied_by: 'ai',
+        confirmed: true,
+        provisional: false,
+        confidence: confirmed.confidence,
+      }
+      const answered = await renderDetail(
+        detailOf({ classification: classificationOf({ proposed_tags: PROPOSED }), tag_details: [] }),
+        {
+          [`POST ${DOC}/proposed-tags/confirm`]: {
+            body: { classification: classificationOf({ proposed_tags: afterConfirm }), tag_details: [link] },
+          },
+          [`POST ${DOC}/proposed-tags/reject`]: {
+            body: {
+              classification: classificationOf({ proposed_tags: afterConfirm.filter((entry) => entry !== rejected) }),
+              tag_details: [link],
+            },
+          },
+        },
+      )
+
+      press(within(proposalRow(confirmed)).getByRole('button', { name: TEXT.proposedTagConfirmLabel(dimension, confirmed.value) }))
+
+      // Announced, naming the dimension it was added in.
+      await waitFor(() => expect(announcement()).toBe(TEXT.proposedTagConfirmed(dimension, confirmed.value)))
+      expect(announcement()).toContain(`${DIMENSION[dimension].one} tag`)
+      // A tag of the document's now, in that dimension, as the AI's and confirmed.
+      const group = within(tagGroup(DIMENSION[dimension].label))
+      expect(group.getByText(confirmed.value)).toBeTruthy()
+      expect(group.getByText(`${TEXT.tagConfirmedAI}, ${confidenceOf(confirmed)}`)).toBeTruthy()
+      // Its proposal has gone, and the other two are still held.
+      expect(
+        within(heldGroup()).queryByRole('button', { name: TEXT.proposedTagConfirmLabel(dimension, confirmed.value) }),
+      ).toBeNull()
+      expect(afterConfirm.map((entry) => proposalRow(entry).querySelector('.tag__dimension').textContent)).toEqual(
+        afterConfirm.map((entry) => DIMENSION[entry.dimension].label),
+      )
+
+      press(within(proposalRow(rejected)).getByRole('button', { name: TEXT.proposedTagRejectLabel(other, rejected.value) }))
+
+      await waitFor(() => expect(announcement()).toBe(TEXT.proposedTagRejected(other, rejected.value)))
+      expect(announcement()).toContain(`proposed ${DIMENSION[other].one}`)
+      expect(
+        within(heldGroup()).queryByRole('button', { name: TEXT.proposedTagRejectLabel(other, rejected.value) }),
+      ).toBeNull()
+      expect(within(heldGroup()).getAllByRole('listitem')).toHaveLength(1)
+
+      // One request each, the proposal's own dimension beside the value.
+      expect(requestsTo(answered, 'POST', `${DOC}/proposed-tags/confirm`).map((request) => request.body)).toEqual([
+        { dimension, value: confirmed.value },
+      ])
+      expect(requestsTo(answered, 'POST', `${DOC}/proposed-tags/reject`).map((request) => request.body)).toEqual([
+        { dimension: other, value: rejected.value },
+      ])
+    },
+  )
+})
+
+describe('D-128: an AI tag whose value a classify run created reads as any AI tag does', () => {
+  it('shows it as suggested by AI with its confidence, Confirm and Remove, element for element as an AI tag on a listed value, and never as new', async () => {
+    // "harbour upgrade" is in none of the document's options before the run: a value
+    // the run created, at or above the threshold. "policy refresh" is a listed value.
+    // Nothing in either link says which is which, and the screen must not work it out:
+    // the value could as well be a retired tag, or one only material some reader of
+    // this document cannot see carries (CLAUDE.md §6, invariant 1).
+    const created = {
+      content_tag_id: 'ct-created',
+      dimension: 'Project',
+      name: 'harbour upgrade',
+      applied_by: 'ai',
+      confirmed: false,
+      provisional: false,
+      confidence: 0.83,
+    }
+    await renderDetail(detailOf({ tag_options: optionsOf() }), {
+      [`POST ${DOC}/classify`]: {
+        body: { classification: classificationOf(), tag_details: [AI_TAG, created], department: LEAVE.department },
+      },
+    })
+    // Not vacuous: the value is not among the options offered, and the other is.
+    const offered = offeredNames(chooser().getByLabelText(TEXT.tagChooseLabel))
+    expect(offered).not.toContain(created.name)
+    expect(offered).toContain(AI_TAG.name)
+
+    press(screen.getByRole('button', { name: TEXT.classifyNow }))
+    await waitFor(() => expect(announcement()).toBe(TEXT.classifyDone))
+
+    const project = within(tagGroup(TEXT.documentFieldProject))
+    const rowOf = (tag) => project.getByText(tag.name).closest('li')
+    for (const tag of [AI_TAG, created]) {
+      const row = rowOf(tag)
+      // The whole row, word for word: the name, the provenance, then Confirm and Remove.
+      expect(row.textContent).toBe(
+        `${tag.name}${TEXT.tagSuggestedByAI}, ${confidenceOf(tag)}${TEXT.tagConfirm}${TEXT.tagRemove}`,
+      )
+      expect(row.className).toBe('tag tag--ai')
+      expect(within(row).getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
+        TEXT.tagConfirmLabel(tag.name),
+        TEXT.tagRemoveLabel(tag.name),
+      ])
+    }
+    // The same elements, in the same order, as the listed value's row.
+    const shape = (row) => Array.from(row.querySelectorAll('*'), (element) => `${element.tagName}.${element.className}`)
+    expect(shape(rowOf(created))).toEqual(shape(rowOf(AI_TAG)))
+    expect(rowOf(created).textContent).not.toMatch(/\bnew\b|\bcreated\b/i)
+    expect(announcement()).not.toMatch(/\bnew\b|\bcreated\b/i)
+    // Applied, so not held: nothing awaits confirmation.
+    expect(heldGroup()).toBeNull()
   })
 })
 

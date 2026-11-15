@@ -16,6 +16,7 @@ from apps.core.constants import (
     PROJECT_DIMENSION,
     TOPIC_DIMENSION,
 )
+from apps.documents.models import Department
 
 EPSILON = 0.001
 BELOW_THRESHOLD = round(CLASSIFICATION_CONFIDENCE_THRESHOLD - EPSILON, 3)
@@ -53,7 +54,18 @@ def classification(
 
 
 def scheme(*, departments=(), project=(), process=(), topic=()) -> TagScheme:
-    """A scheme written by hand, so the apply tests do not depend on ``tag_scheme``."""
+    """A scheme written by hand, so the apply tests do not depend on ``tag_scheme``.
+
+    **Each department it lists is made an active ``Department`` row,** unless a row of that name
+    exists already, ignoring case as the list's uniqueness does. That is what ``tag_scheme``'s
+    departments always are, and rule 3 relies on it: it discards a listed department with no active
+    row, as one retired or deleted since the scheme was built (D-129's security review, finding F2).
+    A row that exists is left as it is, so a test can retire a department and still list it. The
+    database writes mean callers must be database tests, as every one is.
+    """
+    for name in departments:
+        if not Department.objects.filter(name__iexact=name).exists():
+            Department.objects.create(name=name)
     return TagScheme(
         doc_types=tuple(DOCUMENT_TYPES),
         departments=tuple(departments),

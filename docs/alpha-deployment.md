@@ -116,10 +116,11 @@ ANTHROPIC_MODEL=claude-haiku-5-5
 VOYAGE_API_KEY=<the key>
 VOYAGE_MODEL=voyage-4
 VOYAGE_BASE_URL=https://api.voyageai.com/v1
-EMBEDDING_DIMENSION=1024
 ```
 
-The keys are the ones in the main checkout's `.env`. Never print them, and never commit either
+The width follows `AI_PROVIDER` (D-131), so the template names no `EMBEDDING_DIMENSION`. The
+alpha's `.env` of 13 November also has `EMBEDDING_DIMENSION=1024`, which agrees with the provider
+and so is accepted. The keys are the ones in the main checkout's `.env`. Never print them, and never commit either
 file. On 13 November 2026 the alpha's `.env` kept its four `FLM_*` lines from the FLM alpha. They
 are read only for recording transcription, which is off.
 
@@ -136,6 +137,21 @@ Then, in the deployment window:
 
 `migrate` is safe to run on a database that already holds the demonstration corpus. Re-indexing,
 reprocessing or deleting is not (D-40).
+
+**The first `migrate` after FR-10's department list (#102, D-129)** applies `documents` 0012 to 0015.
+- **0015** creates the department list the AI assigns departments from, and seeds it from the
+  departments the documents already carry.
+- **0012** marks each stored proposal as a Topic.
+- **On `kmp_alpha_20261113`,** checked read-only on 15 November 2026
+  (`corpus/objective-05/runs/2026-11-15-alpha-seed-check/`), 0015 seeds six departments.
+  Finance, Human Resources, Information Technology, Legal and Compliance and Operations are
+  ordinary. Projects is hidden, because only Administrator-only documents carry it.
+- **Nothing needs classifying again.** Every document there carries the department typed at upload,
+  which FR-10 never replaces.
+  - `classify_documents --all` would mark 9 department suggestions applied rather than awaiting
+    confirmation, because they matched the typed department below the old 0.72.
+  - It would also replace the one unanswered proposal, and re-score the 15 held tags.
+  - It costs a model call per document, and it is the user's call.
 
 **`check --deploy` on loopback HTTP** should report exactly four warnings, all about HTTPS, which
 D-64 puts out of scope for the alpha (NFR-03's scan moves to round 2):
@@ -195,11 +211,22 @@ $env:SESSION_COOKIE_SECURE = 'False'      # plain HTTP on loopback (D-64)
 $env:CSRF_COOKIE_SECURE    = 'False'
 $env:SPA_DIST_DIR          = "$root\frontend\dist"
 $env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-13\logs\waitress.log'
-$name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
+$name = & $py manage.py shell --no-imports -c "from django.db import connection; connection.ensure_connection(); print(connection.settings_dict['NAME'])"
+if ($LASTEXITCODE -ne 0) { throw "Not starting: the database did not answer." }
 "Django will connect to: $name"
 if ($name -ne 'kmp_alpha_20261113') { throw "Not starting: the database is '$name', not kmp_alpha_20261113." }
+& $py manage.py check
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
 & "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
+
+- **`manage.py check` runs first, because Waitress runs no system checks.** It refuses a database
+  set up for another provider (ai.E005) and an `EMBEDDING_DIMENSION` that disagrees with the
+  provider (ai.E004), and probes the provider once (D-131).
+- **The line that names the database connects to it first.** A database that is not up yet, as
+  after a restart before Docker Desktop is started, stops the start there. The check would only
+  warn that it could not read it (ai.W004), and Waitress would then serve a database nobody
+  checked.
 
 - **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
   automatically", so `$name` holds two lines, never equals `kmp_alpha_20261113`, and the check
@@ -386,6 +413,29 @@ and accounts, so do that only before the demonstration threads are built (D-40).
    not tried, and it is not a safe substitute as written: `--scheme-only` marks nothing grown, so
    `atlas` would be offered to Employees, and a held AI link on a document every role reads would
    keep the full seed from marking it grown later.
+
+**Building it again after FR-10's department list (#102, D-129).** `documents` 0015 seeds the
+department list when it runs, from the documents present at that moment. Step 1's `migrate` runs
+before any document exists, so the list would start empty. Every document's page would then show
+the AI's department as "not one of the known departments", and the Tags page would list none.
+- **The fix:** after step 3, apply 0015 again, so it seeds the list from the ingested documents, as
+  `migrate` does on the database above:
+
+  ```powershell
+  & $py manage.py migrate documents 0014
+  & $py manage.py migrate
+  ```
+
+- **What it does:** the first command reverses 0015, which drops the department table, empty at
+  that point. The second applies 0015 again. A department that only Administrator-only documents
+  carry is seeded hidden.
+- **It is tested:** `apps/documents/tests/test_migration_0015_departments.py`'s
+  `test_0015_backwards_drops_the_table_and_forward_seeds_it_again` runs exactly this.
+- **Do not add the departments by hand on the Tags page instead.** A department added there is
+  never hidden.
+- **When it is safe:** while no later migration depends on 0015, and before anyone has added a
+  department by hand, because the reversal drops any such department.
+- **Then steps 4 and 5,** so the classification sees the list.
 
 **Nobody knows either account's password.** Before the walk, set the Administrator's from this
 worktree, with its `.env`:
