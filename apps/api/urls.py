@@ -51,10 +51,12 @@ urlpatterns = [
          views.DocumentTagConfirmView.as_view(), name="document-tag-confirm"),
     path("documents/<uuid:pk>/tags/<uuid:content_tag_id>", views.DocumentTagView.as_view(),
          name="document-tag"),
-    path("documents/<uuid:pk>/proposed-topics/confirm",
-         views.DocumentProposedTopicConfirmView.as_view(), name="document-proposed-topic-confirm"),
-    path("documents/<uuid:pk>/proposed-topics/reject",
-         views.DocumentProposedTopicRejectView.as_view(), name="document-proposed-topic-reject"),
+    # D-128: a value the classifier held below the threshold, in Project, Process or Topic, confirmed
+    # or rejected; body {"dimension", "value"}. They replace proposed-topics/confirm and /reject.
+    path("documents/<uuid:pk>/proposed-tags/confirm",
+         views.DocumentProposedTagConfirmView.as_view(), name="document-proposed-tag-confirm"),
+    path("documents/<uuid:pk>/proposed-tags/reject",
+         views.DocumentProposedTagRejectView.as_view(), name="document-proposed-tag-reject"),
     # Stage 4 item 10b: the route a document citation links to, so FR-12's "links to the
     # source document or meeting" reaches the document rather than the repository (D-46).
     # Stage 5 item 2 adds FR-15's detail fields to its GET, and the DELETE method (D-73).
@@ -102,7 +104,13 @@ urlpatterns = [
     path("knowledge-gaps/<uuid:pk>", views.KnowledgeGapDetailView.as_view(),
          name="knowledge-gap-detail"),
     # NIT3004: FR-10's tag administration (D-119 finding 5), both routes behind manage_tags. The
-    # inventory with item counts, and DELETE: deactivate a tag in use, delete an unused one.
+    # inventory with item counts; POST, an Administrator adds a value, vocabulary, throttled in
+    # "tagging" (D-128); and DELETE: deactivate a tag in use, delete an unused one.
     path("tags", views.TagListView.as_view(), name="tag-list"),
     path("tags/<uuid:pk>", views.TagDetailView.as_view(), name="tag-detail"),
+    # NIT3004: FR-10's department list (D-129), the scheme's fourth dimension, behind manage_tags as
+    # the tag routes are. The list with item counts; POST adds a department, or reactivates a retired
+    # one, throttled in "tagging"; DELETE deactivates a department in use and deletes an unused one.
+    path("departments", views.DepartmentListView.as_view(), name="department-list"),
+    path("departments/<uuid:pk>", views.DepartmentDetailView.as_view(), name="department-detail"),
 ] + router.urls

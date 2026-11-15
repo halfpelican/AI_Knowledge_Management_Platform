@@ -1,0 +1,27 @@
+HEAD: 0d3b334075fb34a45fed087fd50a4e5795efcce9
+captured: 2026-11-13T11:51:58+11:00
+== git status --short --untracked-files=no (the revert in progress, outside the sweep's code path)
+ M apps/api/serializers.py
+ M apps/api/tests/test_fr10_proposed_tags.py
+ M apps/api/tests/test_fr10_rejected_proposals.py
+ M apps/api/views.py
+ M apps/core/constants.py
+ M apps/core/tests/test_constants.py
+ M apps/documents/classification.py
+ M apps/documents/management/commands/classify_documents.py
+ M apps/documents/models.py
+ M apps/documents/taxonomy.py
+ M apps/documents/tests/test_classification_apply.py
+ M apps/documents/tests/test_classification_d128.py
+ M apps/documents/tests/test_classification_rejected.py
+ M docs/api-contract.md
+ M docs/decisions.md
+ M docs/schema-v1.md
+ M frontend/src/api/documents.js
+ M frontend/src/components/Classification.jsx
+ M frontend/src/constants.js
+ M frontend/tests/tags.test.jsx
+ M scripts/objective05_verify.py
+ M scripts/seed_objective02_tags.py
+== git diff --stat HEAD -- apps/ai apps/ingestion config (the sweep's code path; empty means none)
+== end

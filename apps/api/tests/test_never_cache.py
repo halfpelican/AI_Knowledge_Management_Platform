@@ -49,6 +49,9 @@ PERMISSION_GUARDED = {
     ("api/knowledge-gaps/<uuid:pk>", "PATCH"),  # review_knowledge_gaps
     ("api/tags", "GET"),  # manage_tags (D-119 finding 5)
     ("api/tags/<uuid:pk>", "DELETE"),  # manage_tags
+    ("api/departments", "GET"),  # manage_tags (D-129)
+    ("api/departments", "POST"),  # manage_tags
+    ("api/departments/<uuid:pk>", "DELETE"),  # manage_tags
 }
 
 
@@ -112,14 +115,19 @@ def test_every_api_route_is_never_cached_from_both_roles_and_its_unknown_ids_are
     # FR-19's entry route checks review_knowledge_gaps before the lookup (D-107), so the Employee
     # meets its 403 and the Administrator its 404.
     gap_route = ("api/knowledge-gaps/<uuid:pk>", "PATCH")
-    # FR-10's tag delete checks manage_tags before the lookup too (D-119 finding 5).
+    # FR-10's tag delete checks manage_tags before the lookup too (D-119 finding 5), and so does its
+    # department delete (D-129).
     tag_route = ("api/tags/<uuid:pk>", "DELETE")
-    for key in routes_naming_an_id() - {role_route, gap_route, tag_route}:
+    department_route = ("api/departments/<uuid:pk>", "DELETE")
+    for key in routes_naming_an_id() - {role_route, gap_route, tag_route, department_route}:
         assert statuses[key] == 404, key
     expected_role_status = 400 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403
     assert statuses[role_route] == expected_role_status
     assert statuses[gap_route] == (404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403)
     assert statuses[tag_route] == (404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403)
+    assert statuses[department_route] == (
+        404 if session_client.role_name == ADMINISTRATOR_ROLE_NAME else 403
+    )
 
 
 def test_every_permission_guarded_route_is_never_cached_when_it_answers_403(session_client):

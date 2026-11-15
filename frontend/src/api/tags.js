@@ -1,15 +1,25 @@
 /**
  * FR-10 tag administration, per docs/api-contract.md "Tag administration (D-119
- * finding 5; D-105's dated note of 10 November 2026, night)". Thin wrappers over
- * the one API client; no fetch and no XMLHttpRequest here.
+ * finding 5; D-105's dated note of 10 November 2026, night; D-128)". Thin wrappers
+ * over the one API client; no fetch and no XMLHttpRequest here.
  *
- * Both routes need a session **and** `manage_tags`, which accounts 0008 gives the
+ * Every route needs a session **and** `manage_tags`, which accounts 0008 gives the
  * Administrator alone: 401 without a session, 403 for a role that lacks the code,
  * checked before anything else on the request. The screen that calls these is
  * offered to an Administrator only, and that is usability: the server checks the
  * code on every request whatever the interface showed (CLAUDE.md §6, invariant 4).
  */
-import { get, requestWithStatus } from './client.js'
+import { TAG_OPTION_DIMENSIONS } from './documents.js'
+import { get, post, requestWithStatus } from './client.js'
+
+/**
+ * The dimensions `createTag` accepts, in the order the screen offers them: the three
+ * tag dimensions, mirroring apps/core/constants.py REPOSITORY_TAG_DIMENSIONS, the same
+ * three a person applies a tag in. Department is the document's own field, not a tag
+ * (D-72). The server answers 400 `{"dimension": [...]}` for any other, whatever the
+ * screen offered.
+ */
+export const CREATE_TAG_DIMENSIONS = TAG_OPTION_DIMENSIONS
 
 /**
  * `GET /api/tags` — every Tag in Project, Process and Topic, active or not,
@@ -27,6 +37,30 @@ import { get, requestWithStatus } from './client.js'
  */
 export function listTags(options = {}) {
   return get('/tags', options)
+}
+
+/**
+ * `POST /api/tags` — an Administrator adds a value to a dimension (D-128; FR-10's
+ * CRUD line gives Tags "Create"). Body `{dimension, tag_name}`; the server trims the
+ * name, single-spaces it and lower-cases it.
+ *
+ * 201 with the new entry, `{tag_id, dimension, tag_name, active: true, item_count:
+ * 0}`, `tag_name` as stored. The value is vocabulary: offered in every document's
+ * `tag_options` and listed for the AI when it classifies any document, whatever the
+ * document's audience. 409 `{detail, tag_id}` when a tag of that name is already in
+ * the dimension, active or retired; `error.details.tag_id` is that tag, and nothing
+ * is changed: a retired tag is not brought back here. 400 keyed on `dimension` (any
+ * other than Project, Process and Topic) or `tag_name` (blank or over 255
+ * characters). 429 past the `tagging` limit, the one adding a tag to a document
+ * counts against too, with `error.retryAfter`. 403 without `manage_tags`; 401.
+ *
+ * @param {{dimension: string, tagName: string}} value
+ * @param {object} [options]
+ * @param {AbortSignal} [options.signal]
+ * @returns {Promise<object>} The 201's entry.
+ */
+export function createTag({ dimension, tagName }, options = {}) {
+  return post('/tags', { dimension, tag_name: tagName }, options)
 }
 
 /**

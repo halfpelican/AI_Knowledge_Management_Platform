@@ -66,15 +66,24 @@ from apps.documents.classification import (
     apply_tag,
     classify_document_now,
     confirm_classification,
-    confirm_proposed_topic,
+    confirm_proposed_tag,
     confirm_tag,
-    reject_proposed_topic,
+    reject_proposed_tag,
     reject_tag,
 )
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
-from apps.documents.models import Document, Tag
-from apps.documents.taxonomy import retire_tag, tag_inventory
+from apps.documents.models import Department, Document, Tag
+from apps.documents.taxonomy import (
+    DepartmentAlreadyExists,
+    TagAlreadyExists,
+    create_department,
+    create_tag,
+    department_inventory,
+    retire_department,
+    retire_tag,
+    tag_inventory,
+)
 from apps.ingestion import audio
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
@@ -134,6 +143,8 @@ from .serializers import (
     ConversationDetailSerializer,
     ConversationSerializer,
     DashboardQuerySerializer,
+    DepartmentCreateSerializer,
+    DepartmentEntrySerializer,
     DirectoryEntrySerializer,
     DocumentBrowseQuerySerializer,
     DocumentDetailSerializer,
@@ -149,13 +160,14 @@ from .serializers import (
     ActionItemSerializer,
     ActionItemWriteSerializer,
     MeetingSerializer,
-    ProposedTopicSerializer,
+    ProposedTagSerializer,
     RecentQuestionSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
     SearchResultsSerializer,
     TagApplySerializer,
+    TagCreateSerializer,
     TagDetailSerializer,
     TagEntrySerializer,
     UserSerializer,
@@ -284,6 +296,19 @@ DOCUMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Document._meta.o
 # DELETE /api/tags/{id} for an id that names no tag it acts on: get_object_or_404's own wording, as
 # DOCUMENT_NOT_FOUND_MESSAGE above restates it for documents.
 TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
+# POST /api/tags (D-128): FR-10 Responses, "409 Conflict on a duplicate tag name within a dimension",
+# for a name already in the dimension, active or retired. The body carries that tag's id, which the
+# Administrator, the route's only caller, already sees in the inventory, retired ones included.
+TAG_ALREADY_EXISTS_MESSAGE = (
+    "A tag with this name already exists in this dimension. A retired tag is not added again here."
+)
+# DELETE /api/departments/{id} for an id that names no Department (D-129): get_object_or_404's own
+# wording, as TAG_NOT_FOUND_MESSAGE restates it for tags.
+DEPARTMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Department._meta.object_name
+# POST /api/departments (D-129) for a name an ACTIVE department already has, ignoring case. A retired
+# one is reactivated instead (200), so this message never says the name is retired. The body carries
+# that department's id, which the Administrator, the route's only caller, already sees in the list.
+DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name is already listed."
 # FR-16's action-item routes (D-125), for an item id that names nothing on the meeting in the path:
 # the scoped meeting lookup's own 404 body, so an item that belongs to another meeting, one that
 # was deleted and one that never existed are one answer.
@@ -386,9 +411,11 @@ CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
 # before anything else. Nothing on those routes is scoped, so there is nothing for a 403 to
 # disclose by preceding a 404: an entry's existence is the Administrator's to know.
 CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMISSION)
-# FR-10's tag administration (D-119 finding 5): the same arrangement as FR-19's, for the same
-# reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an unknown
-# tag; a tag's existence is the Administrator's to know, since they read every source (D-66).
+# FR-10's tag administration (D-119 finding 5; D-128's POST): the same arrangement as FR-19's, for
+# the same reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an
+# unknown tag, and a POST's 400, 409 and throttle; a tag's existence is the Administrator's to know,
+# since they read every source (D-66). Since D-129 it guards the department list's two routes the
+# same way, for the same reason.
 CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
 
 
@@ -1884,7 +1911,10 @@ class DocumentReprocessView(APIView):
 # analysis that is not this document's) is answered with the scoped lookup's own 404 body, word
 # for word. Two of the routes are throttled, classify in the "ingestion" scope and a person's apply
 # in "tagging" (D-79 and its note on tagging). DRF checks a throttle before the method runs, so past
-# the rate their 429 comes before the 404, the same for every id.
+# the rate their 429 comes before the 404, the same for every id. A classification proposes a Topic
+# outside the scheme, at any confidence, for the proposed-tags routes, and discards a Project or
+# Process value outside it. It creates no Tag (Objective 05's clause 3 as written; D-129, which
+# reverses D-128's creation; apps/documents/classification.py ``apply_classification``).
 
 
 class DocumentClassifyView(APIView):
@@ -2014,10 +2044,12 @@ class DocumentTagsView(APIView):
     before any query runs. Every request the throttle admits counts, whatever ``post`` then answers,
     and a throttled one writes nothing.
 
-    **The other tag routes are not throttled.** Confirming or removing a link and rejecting a
-    proposal create no Tag. ``confirm_proposed_topic`` can create a Topic, but only from a proposal
+    **The other document tag routes are not throttled.** Confirming or removing a link and rejecting
+    a proposal create no Tag. ``confirm_proposed_tag`` can create a value, but only from a proposal
     the classifier made, and classification is reached over HTTP only through upload, reprocess and
-    classify, which share the "ingestion" budget.
+    classify, which share the "ingestion" budget. Since D-129 a classification creates no value
+    itself. An Administrator adding a value (``POST /api/tags``, D-128) spends
+    this route's "tagging" budget.
     """
 
     permission_classes = [IsAuthenticated]
@@ -2068,23 +2100,32 @@ class DocumentTagView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class _ProposedTopicView(APIView):
-    """The two proposed-topic routes share everything but the function they call: body
-    ``{value}``, validated after the 404 and the 403; the value normalised before it is matched;
-    200 with the classification and the tag details as they now stand."""
+class _ProposedTagView(APIView):
+    """The two proposed-tags routes (D-128, replacing ``/proposed-topics/confirm`` and ``/reject``)
+    share everything but the function they call.
+
+    The FR-10 order, as on every route here: the session, then the scoped 404 (D-46), then
+    ``contribute_content``'s 403, then the body, ``{"dimension": "Project"|"Process"|"Topic",
+    "value"}`` with both required (``ProposedTagSerializer``: 400 keyed on ``dimension`` for a
+    missing or any other dimension, Department included, and on ``value`` for a blank or over-long
+    one). The value is normalised before it is matched with the dimension; a pair that is not
+    proposed on this document, a value proposed under another dimension included, is the document
+    404's exact body. 200 ``{"classification", "tag_details"}`` as they now stand.
+    """
 
     permission_classes = [IsAuthenticated]
 
-    def act(self, document, value):  # pragma: no cover - the subclasses decide
+    def act(self, document, dimension, value):  # pragma: no cover - the subclasses decide
         raise NotImplementedError
 
     def post(self, request, pk):
         document = scoped_document_or_404(request, pk)
         require_contribute_content(request, self)
-        serializer = ProposedTopicSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  # 400 keyed on "value"
+        serializer = ProposedTagSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 keyed on "dimension" or "value"
+        data = serializer.validated_data
         try:
-            self.act(document, serializer.validated_data["value"])
+            self.act(document, data["dimension"], data["value"])
         except NotOnThisDocument:
             raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
         except InvalidClassification as exc:
@@ -2097,40 +2138,72 @@ class _ProposedTopicView(APIView):
         )
 
 
-class DocumentProposedTopicConfirmView(_ProposedTopicView):
-    """``POST /api/documents/{id}/proposed-topics/confirm`` — a person confirms an out-of-scheme
-    Topic, which is when the tag is created (FR-10: "requires user confirmation before it is
-    created") and linked ``applied_by="ai"``, confirmed."""
+class DocumentProposedTagConfirmView(_ProposedTagView):
+    """``POST /api/documents/{id}/proposed-tags/confirm`` — a person confirms a proposal: a Topic the
+    classifier held outside the scheme (D-129), or a Project or Process value a run held while D-128
+    was in force (the route is dimension-generic). Its Tag is fetched or created and brought into
+    use, and linked ``applied_by="ai"``, confirmed (``confirm_proposed_tag``); the
+    answer is the same whether the Tag was created, fetched or reactivated."""
 
-    def act(self, document, value):
-        confirm_proposed_topic(document, value)
-
-
-class DocumentProposedTopicRejectView(_ProposedTopicView):
-    """``POST /api/documents/{id}/proposed-topics/reject`` — the proposal is dropped and nothing
-    is created."""
-
-    def act(self, document, value):
-        reject_proposed_topic(document, value)
+    def act(self, document, dimension, value):
+        confirm_proposed_tag(document, dimension, value)
 
 
-# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night) --
+class DocumentProposedTagRejectView(_ProposedTagView):
+    """``POST /api/documents/{id}/proposed-tags/reject`` — the proposal is dropped, nothing is
+    created, and the rejection is recorded with the machine's confidence, so no later run proposes,
+    creates or links the value on this document (``reject_proposed_tag``, D-128; the requirements
+    audit of D-128, finding A5). The reply is unchanged: the record is not exposed."""
+
+    def act(self, document, dimension, value):
+        reject_proposed_tag(document, dimension, value)
 
 
-class TagListView(APIView):
+# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night;
+# D-128) ------------------------------------------------------------------------------------------
+
+
+class TagListView(ThrottlePostOnlyMixin, APIView):
     """``GET /api/tags`` — every Tag in Project, Process and Topic, active or not, ordered by dimension
     then name, each with ``item_count`` (``apps/documents/taxonomy.py::tag_inventory``).
+    ``POST /api/tags`` — an Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create").
 
     ``manage_tags`` is a permission class, so 401 and then 403 come before anything else, as on
     FR-19's routes. The list is not scoped and needs no scope: its one reader, the Administrator,
     reads every source (D-66), and the seed's test holds every holder of the code to that. 200 with a
     bare list, ``[]`` for none.
+
+    The POST: body ``{"dimension": "Project"|"Process"|"Topic", "tag_name"}`` (``TagCreateSerializer``:
+    400 keyed on ``dimension`` for any other, Department included, and on ``tag_name`` for a blank or
+    over-long name, which is normalised). 201 with the new entry, ``TagEntrySerializer``'s shape,
+    ``active`` true and ``item_count`` 0. The value is created **not grown**: vocabulary, offered in
+    every document's ``tag_options`` and listed in every classification prompt, as a seeded value is
+    (``create_tag``). 409 ``{"detail", "tag_id"}`` when the name is already a Tag in the dimension,
+    active or retired, a concurrent create of it included; nothing is changed, and a retired tag is
+    not reactivated. **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``, D-128),
+    the POST only (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission
+    classes before the throttles, so the order is 401, 403, then 429.
     """
 
     permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
 
     def get(self, request):
         return Response(TagEntrySerializer(tag_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = TagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            tag = create_tag(data["dimension"], data["tag_name"])
+        except TagAlreadyExists as exc:
+            return Response(
+                {"detail": TAG_ALREADY_EXISTS_MESSAGE, "tag_id": str(exc.tag_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(TagEntrySerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
 class TagDetailView(APIView):
@@ -2153,6 +2226,88 @@ class TagDetailView(APIView):
         if tag is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(TagEntrySerializer(tag).data)
+
+
+# --- FR-10's department list (D-129, the lead's decision of 13 November 2026) -------------------------
+
+
+class DepartmentListView(ThrottlePostOnlyMixin, APIView):
+    """``GET /api/departments`` — every Department, active or not, ordered by name ignoring case, each
+    ``{department_id, name, active, item_count}``, ``item_count`` being the number of documents whose
+    ``department`` equals the name ignoring case (``apps/documents/taxonomy.py::department_inventory``;
+    D-129's security review, finding F3).
+    ``POST /api/departments`` — an Administrator adds a department to FR-10's department scheme, the
+    list the classifier suggests from (``tag_scheme``).
+
+    ``manage_tags`` is a permission class, as on ``/api/tags``, so 401 and then 403 come before
+    anything else. The list is not scoped and needs no scope: its one reader, the Administrator, reads
+    every document (D-66), and ``apps/accounts/tests/test_manage_tags_seed.py`` holds every holder of
+    the code to that. 200 with a bare list, ``[]`` for none.
+
+    The POST: body ``{"name"}`` (``DepartmentCreateSerializer``: 400 ``{"name": [...]}`` for a blank or
+    over-long name, and for one holding a control or format character or ";" (finding F4); a name is
+    normalised with its case kept).
+
+    - A new name: 201 with the entry, created **not grown**: vocabulary, offered to every audience,
+      as a value added on ``/api/tags`` is.
+    - A name an ACTIVE department has, ignoring case, a concurrent create of it included: 409
+      ``{"detail", "department_id"}``, and nothing changes.
+    - A RETIRED department's name: **200 with the entry, reactivated**, keeping its ``grown`` and its
+      spelling. ``/api/tags`` answers 409 for a retired tag instead, because a retired tag comes back
+      when a person names it on a document every role reads (``apply_tag``, ``confirm_proposed_tag``);
+      a department has no such path, so this is the only way back for one, and only an Administrator,
+      who reads every document, can take it.
+
+    **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``), the POST only
+    (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission classes before
+    the throttles, so the order is 401, 403, then 429.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
+
+    def get(self, request):
+        return Response(DepartmentEntrySerializer(department_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = DepartmentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        try:
+            added = create_department(serializer.validated_data["name"])
+        except DepartmentAlreadyExists as exc:
+            return Response(
+                {"detail": DEPARTMENT_ALREADY_EXISTS_MESSAGE, "department_id": str(exc.department_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            DepartmentEntrySerializer(added.department).data,
+            status=status.HTTP_201_CREATED if added.created else status.HTTP_200_OK,
+        )
+
+
+class DepartmentDetailView(APIView):
+    """``DELETE /api/departments/{id}`` — retire a department (D-129).
+
+    401, then 403 without ``manage_tags``, then 404 ``{"detail": "No Department matches the given
+    query."}`` for an id naming no Department. A department any document uses is deactivated and
+    answered 200 with its entry, again for one already inactive: it stays on those documents and in
+    FR-14's and FR-15's filters, which read ``Documents.department`` (D-72), and the classifier no
+    longer sees it. A department no document uses is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_department``). ``POST /api/departments`` with its name brings
+    a retired one back.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            department = retire_department(pk)
+        except Department.DoesNotExist:
+            raise Http404(DEPARTMENT_NOT_FOUND_MESSAGE)
+        if department is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(DepartmentEntrySerializer(department).data)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------
