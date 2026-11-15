@@ -878,7 +878,7 @@ describe.each(BOTH_ROLES)('FR-20 knowledge map, as an $role', (user) => {
       },
       {
         // A different number of each type, so no figure can stand in for another.
-        what: 'a view with a different number of each type',
+        what: 'a view with unequal numbers per type',
         nodes: [JANE, LEAVE, ALPHA, SAM, BUDGET, BETA, KIM, HANDBOOK, LOU, SYNC],
         line: '3 documents · 1 meeting · 2 tags · 4 contributors shown',
       },
