@@ -25,6 +25,7 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
 )
 
@@ -86,11 +87,11 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=MANAGE_MEETINGS_PERMISSION
     ).exists()
-    # 0003's, 0004's, 0005's, 0007's and 0008's seeds are untouched: unseeding one migration must
-    # not undo another.
+    # 0003's, 0004's, 0005's, 0007's, 0008's and 0010's seeds are untouched: unseeding one
+    # migration must not undo another.
     assert permission_names(administrator_role) == {
         MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
-        REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION,
+        REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION, RELEASE_ACCOUNT_LOCKS_PERMISSION,
     }
     assert permission_names(employee_role) == {CONTRIBUTE_CONTENT_PERMISSION}
     assert Role.objects.count() == 2  # the roles themselves are 0002's

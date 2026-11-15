@@ -113,6 +113,8 @@ describe('FR-02: a locked account is told so, distinctly', () => {
         attempt += 1
         return attempt === 1 ? { status: 401, body: { detail: INVALID_CREDENTIALS } } : LOCKED
       },
+      // FR-03: after a failed attempt the page asks for the running lockout policy (D-130).
+      'GET /api/auth/lockout-policy': { body: { lockout_threshold: 5, lockout_duration_seconds: 900 } },
     })
     renderApp('/login')
 
@@ -170,6 +172,8 @@ describe("FR-02: on submit, the 'Login' button disables and shows a loading indi
     const answered = serveApi({
       'GET /api/auth/me': NOT_SIGNED_IN,
       'POST /api/auth/login': attempt.route,
+      // FR-03: after the failed attempt the page asks for the running lockout policy (D-130).
+      'GET /api/auth/lockout-policy': { body: { lockout_threshold: 5, lockout_duration_seconds: 900 } },
     })
     renderApp('/login')
 

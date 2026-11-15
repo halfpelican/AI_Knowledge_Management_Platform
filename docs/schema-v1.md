@@ -23,12 +23,16 @@ free text. All timestamps are timezone-aware.
 | `role_id` | UUID FK → Roles | defaults to Employee on registration |
 | `created_at` | timestamp | |
 | `failed_attempts` | integer | default 0; incremented on failed login (FR-02) |
-| `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02) |
+| `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02), by default; since D-130 decisions 7 and 8 the running `.env` policy, which can only be tightened |
 | `last_login_at` | timestamp, nullable | |
 
 `failed_attempts` and `locked_until` are written by FR-02 and read by FR-03. FR-02 is
 MUST, so the columns belong in v1 even though the full lockout interface is FR-03
 (SHOULD, NIT3004).
+
+> **13 November 2026 (D-130).** FR-03 now writes both columns too: an Administrator's release
+> (`POST /api/users/{id}/unlock`) sets `locked_until` to null and `failed_attempts` to 0, the state
+> natural expiry reaches. Each lockout and each release is recorded in `LoginAttempts` (below).
 
 ### Roles — FR-05, FR-06, FR-11
 
@@ -478,13 +482,46 @@ in the cycle's transaction.
 left out is stored or returned anywhere." A count of the window's rows, less the rows added, would
 be that number, so no such count exists.
 
+### LoginAttempts — FR-03
+
+Added by `accounts 0009_login_attempts` (D-130). FR-03: "Every lockout is recorded with the attempted
+email, source address, and timestamp", and "Every release is recorded with the Administrator who
+performed it, the account affected and the time" ("LoginAttempts (Create — release recorded as an
+administrative event)"). **One row per lockout and one per release, and nothing else** (Benjamin's
+decision 5, D-130). An ordinary failed or successful sign-in writes no row, so an unregistered
+address is never stored.
+
+| Field | Type | Notes |
+|---|---|---|
+| `attempt_id` | UUID PK | |
+| `attempted_email` | text | a lockout: the address submitted, normalised to lower case; a release: the account's address |
+| `source_ip` | text, nullable | DRF's `get_ident()`, which is `REMOTE_ADDR` under `NUM_PROXIES = 0` (the same key as the sign-in throttle); `X-Forwarded-For` is never trusted. On the loopback alpha it is always `127.0.0.1` |
+| `success` | boolean, nullable | `false` on a lockout row (the attempt that locked the account failed); **null on a release row**, which is not an authentication attempt |
+| `attempted_at` | timestamp | |
+| `event` | text | `LOGIN_ATTEMPT_EVENTS` (§3): `lockout` or `release` |
+| `user_id` | UUID FK → Users | the account affected |
+| `released_by` | UUID FK → Users, nullable | the Administrator, on a release row; null on a lockout row |
+| `locked_until` | timestamp, nullable | the end of the lock this row set (lockout) or cleared (release) |
+
+**The last four columns are not in the proposal's field table,** which has the first five. FR-03's
+own release clause needs the Administrator and the account, and a table that holds two kinds of
+event needs the kind. `locked_until` lets `GET /api/users` find the lockout row that set the current
+lock rather than an earlier one (D-130, security finding L5).
+
+**The Read** is `GET /api/users`'s `lock` object, which only Administrators receive. It holds the
+lockout row's `attempted_at` and `source_ip` (`docs/api-contract.md`, "NIT3004 — FR-03"). No route
+lists the table.
+
+**No retention rule** (D-130). A lockout row is written once per lock, and attempts during a live
+lock write none, so the table grows by at most one row per account per lock window, plus one per
+release.
+
 ---
 
 ## 2. Deferred to NIT3004 — not in migration v1
 
 | Table | Requirement | Tier |
 |---|---|---|
-| `LoginAttempts` | FR-03 account lockout interface | SHOULD |
 | `MFARecoveryCodes`, `Users.mfa_enabled`, `Users.mfa_secret` | FR-07 | COULD |
 
 Add these in migration v2 when their requirement is built. Do not create empty tables
@@ -499,6 +536,10 @@ now for work that may be descoped.
 > built: `retrieval 0004_fr19_knowledge_gaps` creates it, with `KnowledgeGapItems` and
 > `KnowledgeGapCycles` (D-107). FR-14's `KnowledgeGaps (Read)`, deferred by D-69, is now the
 > dashboard's knowledge-gap panel.
+
+> **13 November 2026.** `LoginAttempts` (FR-03) left this table for §1 when FR-03 was built:
+> `accounts 0009_login_attempts` creates it, with four columns the proposal's field table lacks, and
+> `accounts 0010_seed_release_account_locks` seeds the release permission (D-130).
 
 > **11 November 2026.** `MeetingSummaries` and `ActionItems` (FR-16) were never listed here, though
 > they were deferred with the rest of NIT3004. `meetings 0003_fr16_meeting_summaries` creates both
@@ -528,6 +569,8 @@ SUMMARY_STATUS_VALUES = ("Processing", "Ready", "Unavailable")
 SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malformed",
                            "no_verified_narrative", "indexing_failed", "orphaned", "error", "busy")
 ACTION_ITEM_ORIGINS = ("ai", "user")
+# FR-03 (D-130), 13 November 2026:
+LOGIN_ATTEMPT_EVENTS = ("lockout", "release")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -676,6 +719,9 @@ department list, D-129), then `meetings 0003_fr16_meeting_summaries`.
 QueryLog and SearchLogs; the executor plans them immediately after `retrieval 0003`, and
 `accounts 0007` (the `review_knowledge_gaps` seed) immediately after `accounts 0006`, and
 `accounts 0008` (the `manage_tags` seed, D-119 finding 5) immediately after `accounts 0007`.
+`LoginAttempts` (v2, `accounts 0009`, FR-03) follows Users. The executor plans it immediately after
+`accounts 0008`, and `accounts 0010` (the `release_account_locks` seed) immediately after 0009,
+both before `documents 0001` (D-130).
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

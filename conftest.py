@@ -45,7 +45,14 @@ import logging.config
 
 import apps.ai
 from apps.ai.testing import UNROUTABLE_PROVIDER_HOST, UNROUTABLE_PROVIDER_URL, StubAIService
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES, SOURCE_TYPES
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    EMPLOYEE_ROLE_NAME,
+    LOCKOUT_DURATION,
+    LOCKOUT_THRESHOLD,
+    ROLE_NAMES,
+    SOURCE_TYPES,
+)
 from apps.core.logging_config import ERROR_FILE_HANDLER, platform_logging
 
 # The suite's one password. It satisfies FR-01's complexity rules (min 8 characters,
@@ -81,6 +88,15 @@ def stub_ai_service(monkeypatch):
     stub = StubAIService()
     monkeypatch.setattr(apps.ai, "get_ai_service", lambda: stub)
     return stub
+
+
+@pytest.fixture(autouse=True)
+def lockout_policy_defaults(settings):
+    # FR-03's policy at its defaults, whatever a developer's .env tightens it to (D-130 decision 7;
+    # the final security review, L4). The tests are written against the default five and 15
+    # minutes, and a test that needs another policy sets it on `settings` itself.
+    settings.LOCKOUT_THRESHOLD = LOCKOUT_THRESHOLD
+    settings.LOCKOUT_DURATION = LOCKOUT_DURATION
 
 
 @pytest.fixture(autouse=True)

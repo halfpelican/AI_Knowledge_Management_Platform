@@ -29,6 +29,27 @@ export function dashboardPathForRole(role) {
   return DASHBOARD_PATHS[role] ?? DASHBOARD_PATHS[ROLES.employee]
 }
 
+/*
+ * FR-03's lockout policy, the failures that lock an account and how long the lock lasts, is
+ * not copied here. Since D-130 decision 7 it is the server's .env, and the sign-in page fetches
+ * it from GET /api/auth/lockout-policy (src/api/auth.js getLockoutPolicy), so a change needs no
+ * rebuild. apps/api/tests/test_front_end_constants_agreement.py fails if a copy comes back.
+ */
+
+/**
+ * The remaining-attempts warning shows once this many attempts or fewer remain
+ * before the page's own count reaches the policy's threshold, which at the default
+ * of five is after the third and the fourth consecutive failure (Benjamin's
+ * decision 2, D-130). The page's own rule, with no counterpart on the server.
+ */
+export const LOCKOUT_WARNING_REMAINING = 2
+
+/** A lock's length in words, rounded up to whole minutes, for the sentence that names it. */
+function durationInWords(seconds) {
+  const minutes = Math.ceil(seconds / 60)
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`
+}
+
 /**
  * The two document statuses a 201 can carry (docs/schema-v1.md §3, mirrored in
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on
@@ -323,12 +344,45 @@ export const TEXT = {
   // FR-04 wording: "a brief confirmation 'You've been logged out'".
   loggedOut: 'You’ve been logged out.',
   registered: 'Your account has been created. Sign in to continue.',
-  // FR-02: "Where the account is locked and the submitted password was correct,
-  // a distinct message is shown." Distinct from the 401 text, and it names no
-  // account detail, so it discloses nothing a 401 does not.
+  // FR-02 and FR-03 (D-130): the server's 403 `account_locked`, which only a request whose
+  // password matched receives, and only within D-26's notice ceiling, twice the running threshold. It is
+  // distinct from the 401 text and names no account detail, so it discloses nothing
+  // to anyone without the password. It names the release, so a locked-out user has a
+  // route forward (FR-03, UC-02 E2): D-26 took that promise out while no release
+  // existed, and D-130 built one. "The timer" is the countdown beside Sign in, run
+  // from the reply's `retry_after`, or from the policy's duration where it gave none (decision 7).
   accountLocked:
     'This account is temporarily locked after too many failed sign-in attempts. ' +
-    'Please try again later.',
+    'Try again when the timer ends, or ask an administrator to unlock it.',
+  // FR-03: the sign-in page's own count of consecutive failures for the address typed
+  // reached the running policy's threshold. The page does not know whether the address has an account,
+  // nor whether the server locked it: the count is the page's alone (D-130 decision
+  // 1), and failures elsewhere can have locked it sooner, while a success elsewhere
+  // can have reset the server's count. So the sentence is true of any address (the
+  // security review, finding C): "if this address has an account", "may" and "up to".
+  // `durationSeconds` is the running policy's (D-130 decision 7).
+  accountMayBeLocked: (durationSeconds) =>
+    `Too many failed sign-in attempts. If this address has an account, it may be locked for up to ${durationInWords(durationSeconds)}, ` +
+    'and an administrator can unlock it sooner.',
+  // Shown with either lock message. A release (POST /api/users/{id}/unlock) reaches the server
+  // and not a sign-in page already open, whose countdown is its own record. So the page says how
+  // to pick the release up: a reload clears that record (the pre-PR security review, finding 1).
+  // Conditional, so it is true of any address. A lock still live answers again, but every attempt
+  // during it counts toward D-26's notice ceiling. Within it, the right password gets the 403
+  // again; past it, even the right password gets the generic 401 until the lock ends.
+  lockedReloadHint: 'If an administrator has unlocked the account, reload this page to sign in.',
+  // FR-03's warning, beside FR-02's generic banner, once LOCKOUT_WARNING_REMAINING or
+  // fewer attempts remain (decision 2). From the page's own count, so it is the same
+  // for every address, registered or not (decision 1).
+  attemptsRemaining: (count) =>
+    count === 1
+      ? '1 attempt remaining before temporary lockout'
+      : `${count} attempts remaining before temporary lockout`,
+  // FR-03's countdown beside the disabled Sign in button, in minutes and seconds.
+  lockoutCountdown: (seconds) => {
+    const whole = Math.max(0, Math.ceil(seconds))
+    return `Try again in ${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
+  },
   // FR-06: the "403 - Access Denied" page a guarded route redirects to. It never
   // describes what the requested screen would have contained.
   accessDeniedTitle: '403 – Access Denied',
@@ -347,6 +401,63 @@ export const TEXT = {
   // accidental lockout of the last administrator."
   roleChangeSelfDemotion:
     'You cannot remove your own Administrator role. Ask another Administrator to change it for you.',
+
+  /* ---- FR-03 unlocking an account, on Role management (D-130) ---------- */
+  // The page's introduction: FR-05's two sentences, as they were, then FR-03's. An
+  // Administrator may unlock any account but their own (FR-03).
+  rolesIntro:
+    `Choose a role for a user and save the row. Changes take effect on that user's next request and are recorded in the audit log. ` +
+    'An account locked after repeated failed sign-ins can be unlocked from its row, except your own.',
+  // The Account column. `lock` arrives on each user of GET /api/users for a holder of
+  // release_account_locks; the server checks that permission on every unlock
+  // whatever this screen shows (CLAUDE.md §6, invariant 4).
+  accountColumn: 'Account',
+  // A live lock, in words and in a bordered badge, so it is told by more than colour
+  // (WCAG 2.1 SC 1.4.1). `time` is when the lock ends.
+  accountLockedUntil: (time) => `Locked until ${time}`,
+  // An account with no live lock: quiet, because nothing needs doing.
+  accountActive: 'Active',
+  // The signed-in Administrator's own locked row, which has no Unlock button: FR-03
+  // forbids releasing a lock on one's own account.
+  accountLockedOwn: 'Another administrator can unlock your account.',
+  // The same row when the list holds no other Administrator. Nobody can release that lock, so
+  // the row says when it ends rather than promise a release (the pre-PR security review,
+  // finding 2). `time` is when the lock ends.
+  accountLockedOwnAlone: (time) => `No other administrator can unlock your account. It unlocks at ${time}.`,
+  unlock: 'Unlock',
+  // The accessible name, so a column of "Unlock" buttons each name their account
+  // (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3).
+  unlockLabel: (name) => `Unlock ${name}'s account`,
+  unlockConfirm: (name) => `Unlock ${name}'s account?`,
+  unlockConfirmLabel: 'Unlock account',
+  unlocking: 'Unlocking…',
+  unlockCancel: 'Cancel',
+  // When the lock began and from which address, where the lockout that set it was
+  // recorded; both are missing for a lock older than the LoginAttempts table, and
+  // then only its end is said. Each argument is already formatted for display.
+  unlockLockDetails: (lockedAt, sourceIp, lockedUntil) => {
+    const at = lockedAt ? ` at ${lockedAt}` : ''
+    const from = sourceIp ? ` from ${sourceIp}` : ''
+    return at || from ? `Locked${at}${from}, until ${lockedUntil}.` : `Locked until ${lockedUntil}.`
+  },
+  // FR-03: a release restores the ability to attempt authentication and nothing
+  // more; the Administrator never sees, sets or resets the password.
+  unlockPasswordUnchanged: 'Unlocking lets them try to sign in again at once. Their password is not changed.',
+  // The security review, finding L3: the request to unlock can come from whoever has
+  // been guessing the password, so the dialogue asks for the check before the press.
+  unlockCheckRequest: (name) =>
+    `Check that the request to unlock really comes from ${name}. ` +
+    'A lock can mean that someone else has been trying to guess the password.',
+  unlockedTitle: 'Account unlocked',
+  accountUnlocked: (name) => `${name}'s account is unlocked.`,
+  unlockFailedTitle: 'Could not unlock',
+  // The 409: the lock ended, or another administrator released it, since the list
+  // was read. Not a failure of anything the reader wanted, so said as information.
+  unlockNotLocked: 'That account is no longer locked. The list has been reloaded.',
+  // The 403 for the requester's own account. There is no button for it, so this is
+  // reached only if the screen's idea of who is signed in is out of date.
+  unlockRefusedTitle: 'Unlock refused',
+  unlockSelfRefused: 'You cannot unlock your own account. Ask another administrator to unlock it.',
 
   /* ---- D-79's limits and D-85's in-flight refusal, on every screen that can meet one */
   // Login and registration keep the API client's own 429 text (D-26). These are
