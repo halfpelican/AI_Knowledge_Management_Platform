@@ -1,0 +1,159 @@
+{
+  "reference_items": 50,
+  "matched_reference_items": 48,
+  "recall": 0.96,
+  "recall_met": true,
+  "extracted_items": 51,
+  "extras": 3,
+  "extras_rate": 0.058823529411764705,
+  "extras_met": true,
+  "items_with_a_named_owner": 47,
+  "wrong_owner": [
+    {
+      "where": "O01 row 4",
+      "resolved_owner": "Alex Morgan",
+      "expected_owner": "unassigned"
+    },
+    {
+      "where": "O07 row 7",
+      "resolved_owner": "Jamal Haddad",
+      "expected_owner": "unassigned"
+    }
+  ],
+  "attribution_met": false,
+  "met": false,
+  "transcripts_without_a_ready_summary": [],
+  "missed": [
+    {
+      "ref": "O03-A5",
+      "transcript": "O03",
+      "description": "Deliver and label moving crates by team before the office move."
+    },
+    {
+      "ref": "O07-A7",
+      "transcript": "O07",
+      "description": "Complete the payments-system integration adapter."
+    }
+  ],
+  "extra_items": [
+    {
+      "where": "O07 row 8",
+      "description": "Pair on the search page performance fix"
+    },
+    {
+      "where": "O08 row 2",
+      "description": "Fix the loose carpet tile near the level two kitchen"
+    },
+    {
+      "where": "O08 row 7",
+      "description": "Let the floor wardens know about the fire drill a week in advance"
+    }
+  ],
+  "due_dates": {
+    "compared": 0,
+    "agree": 0,
+    "differ": []
+  },
+  "per_transcript": [
+    {
+      "transcript": "O01",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 6,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "O02",
+      "status": "Ready",
+      "reference_items": 6,
+      "matched": 6,
+      "extracted_items": 6,
+      "extras": 0,
+      "reference_decisions": 5,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "O03",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 6,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "O04",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 6,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "O05",
+      "status": "Ready",
+      "reference_items": 6,
+      "matched": 6,
+      "extracted_items": 6,
+      "extras": 0,
+      "reference_decisions": 6,
+      "extracted_decisions": 3
+    },
+    {
+      "transcript": "O06",
+      "status": "Ready",
+      "reference_items": 0,
+      "matched": 0,
+      "extracted_items": 0,
+      "extras": 0,
+      "reference_decisions": 5,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "O07",
+      "status": "Ready",
+      "reference_items": 9,
+      "matched": 8,
+      "extracted_items": 9,
+      "extras": 1,
+      "reference_decisions": 5,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "O08",
+      "status": "Ready",
+      "reference_items": 6,
+      "matched": 6,
+      "extracted_items": 8,
+      "extras": 2,
+      "reference_decisions": 8,
+      "extracted_decisions": 2
+    },
+    {
+      "transcript": "O09",
+      "status": "Ready",
+      "reference_items": 4,
+      "matched": 4,
+      "extracted_items": 4,
+      "extras": 0,
+      "reference_decisions": 7,
+      "extracted_decisions": 4
+    },
+    {
+      "transcript": "O10",
+      "status": "Ready",
+      "reference_items": 5,
+      "matched": 5,
+      "extracted_items": 5,
+      "extras": 0,
+      "reference_decisions": 5,
+      "extracted_decisions": 3
+    }
+  ]
+}

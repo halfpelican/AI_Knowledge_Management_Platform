@@ -11810,6 +11810,55 @@ fixed the same way: D-107's note of the same day. Started by hand on the alpha's
 that day, it was still `Queued` on battery when found at 14:38. Its last run time stayed at that start, so its
 hourly runs in that time did not start either.
 
+**Dated note, 15 November 2026: Objective 04 measured on the frozen set. NOT MET, on attribution.**
+
+- **The reference.** Benjamin Morovan and Sagarika Dey wrote and checked it. Claude checked its
+  format only, never its answers (choice 4): each owner a roster name or `unassigned`, each quote
+  word for word, refs and dates well formed. The writers fixed every problem themselves over five
+  checks. It was frozen as `corpus/objective-04/reference.json` (`06bfe73`), and Benjamin approved
+  the README's measurement method the same day.
+- **The run** (`caa0b99`). The ten transcripts were ingested through FR-09 into a database made
+  empty for it, and each was summarised once on `anthropic` (Haiku 5.5, voyage-4).
+  - Ten of ten summaries were ready on the first attempt; 51 items were extracted; $0.0068.
+  - A person completed the adjudication sheet, and 7 of its 51 decisions differ from the script's
+    proposals.
+
+| Criterion | Bar | Result | |
+|---|---|---|---|
+| Reference action items extracted | at least 80% | 48 of 50 (96.0%) | met |
+| Extracted items absent from the reference | at most 10% | 3 of 51 (5.9%) | met |
+| Named owners given to the wrong person | none | 2 of 47 | **NOT met** |
+
+- **The two wrong owners.**
+  - **`O01-A4`: two rules Claude wrote disagree. It is not a model error.**
+    - The model's owner phrase is the reference's own: a lone first name that two roster users
+      share and one attendee has.
+    - This decision's owner rule, as the security review left it, gives such a name to that
+      attendee.
+    - The README's instructions for writing the reference, which Claude wrote on 11 November, say a
+      name that fits more than one roster user is `unassigned`, and the writers followed them.
+    - Claude's own development reference had resolved such a name to the attendee (`X02-A3`), so
+      the development draws could not show the disagreement.
+    - It is the only extracted item stored for a first name that two roster users share.
+  - **`O07-A8`: a model error.** The reference records two people jointly, so `unassigned`. The
+    model named one person who is neither of them, and the owner rule resolved that name to an
+    attendee.
+- **Reported, not scored.**
+  - 28 decisions were extracted, against 59 in the reference.
+  - No matched reference item sets an expected due date, so no date was compared.
+  - The misses are `O03-A5` and `O07-A7`. The extras are one in `O07` and two in `O08`.
+  - All are quoted in `corpus/objective-04/runs/2026-11-15/frozen/results.md`.
+- **Nothing was changed in response, and nothing may be (D-93).** The result stands as measured.
+  - Changing `O01-A4`'s expected owner would be a correction made to fit a result, which the
+    reference's README forbids.
+  - Changing the owner rule and re-running these ten transcripts would tune against the frozen
+    set.
+  - **For the team to decide:**
+    - which of the two rules the system should follow for a first name that two roster users share;
+    - whether any re-measurement uses a new frozen set.
+
+    Either is judged on the development set first, with a reference that follows the chosen rule.
+
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
 **Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,

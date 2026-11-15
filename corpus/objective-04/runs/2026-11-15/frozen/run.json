@@ -1,0 +1,1513 @@
+{
+  "objective": "Objective 04",
+  "set": "frozen",
+  "mode": "ingest",
+  "database": "kmp_obj04_frozen_20261115",
+  "ai_provider": "anthropic",
+  "chat_model": "claude-haiku-5-5",
+  "embedding_model": "voyage-4",
+  "commit": "06bfe73d79439a1f5738f4f8baa54c482097103d",
+  "uncommitted_tracked_files": [],
+  "started": "2026-11-15T10:11:53.432790+00:00",
+  "finished": "2026-11-15T10:12:57.292109+00:00",
+  "usage": {
+    "attempts": 10,
+    "attempts_without_reported_tokens": 0,
+    "prompt_tokens": 25890,
+    "completion_tokens": 8328,
+    "prices_per_million_tokens": {
+      "input": 0.1,
+      "output": 0.5
+    },
+    "cost_usd": 0.006753,
+    "not_counted": "embedding calls (billed by the embedding provider)"
+  },
+  "meetings": [
+    {
+      "set_id": "O01",
+      "transcript_sha256": "17158af2f48054f22f1574f439a5b35d8959c9242010c881d62bbaac37c8a61a",
+      "meeting_status": "Indexed",
+      "id": "8a8cd7f0-5549-49de-83ed-80a55b347853",
+      "title": "Finance Quarterly Budget Review",
+      "meeting_date": "2026-10-14",
+      "attendees": [
+        "Alex Morgan",
+        "Hannah Lee",
+        "Priya Raman",
+        "Ravi Sharma"
+      ],
+      "summary_id": "bdfc38f6-6ac9-4d40-b3de-85a2d8b108f8",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 17.536,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The first-quarter FY27 budget review found operating spend about two and a half percent over budget, driven mainly by travel, which ran at 180 thousand against a budget of 90 thousand. Ravi decided to freeze discretionary travel until the thirty-first of January, with already-booked client-facing trips allowed to proceed. Actions were assigned for the manager notice, the executive briefing, the revised forecast and the reconciliation of September card statements, while the expense tool and any release of contingency were not taken forward.",
+      "narrative": [
+        {
+          "text": "The first-quarter FY27 budget review found operating spend about two and a half percent over budget, driven mainly by travel, which ran at 180 thousand against a budget of 90 thousand.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Ravi decided to freeze discretionary travel until the thirty-first of January, with already-booked client-facing trips allowed to proceed.",
+          "passages": [
+            1,
+            2
+          ]
+        },
+        {
+          "text": "Actions were assigned for the manager notice, the executive briefing, the revised forecast and the reconciliation of September card statements, while the expense tool and any release of contingency were not taken forward.",
+          "passages": [
+            1,
+            2
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Discretionary travel is frozen until the thirty-first of January; client-facing trips already booked can go ahead, and other travel needs Ravi's approval.",
+          "passages": [
+            1,
+            2
+          ]
+        },
+        {
+          "text": "Contingency stays at five percent for now.",
+          "passages": [
+            1,
+            2
+          ]
+        },
+        {
+          "text": "The expense tool that reads receipts automatically will wait for next year's budget round.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Travel overspend was about half from the Brisbane client workshops, which were approved in July; the rest came from project teams.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "About forty September card transactions lack receipts, mostly from the Brisbane trip, and must be fixed before the auditors arrive.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Hannah noted the contingency may be needed for the Atlas contractor.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 2,
+      "passages_total": 2,
+      "action_items_extracted": 4,
+      "action_items": [
+        {
+          "description": "Send a short notice to all managers explaining the travel freeze",
+          "owner_name": "Priya",
+          "owner": "Priya Raman",
+          "due_text": "by Friday",
+          "due_date": "2026-10-16",
+          "passages": [
+            1,
+            2
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Brief the executive team on the travel freeze",
+          "owner_name": "Ravi",
+          "owner": "Ravi Sharma",
+          "due_text": "tomorrow morning",
+          "due_date": "2026-10-15",
+          "passages": [
+            1,
+            2
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Rebuild and send the revised full-year forecast with the travel freeze and slipped renewals",
+          "owner_name": "Hannah",
+          "owner": "Hannah Lee",
+          "due_text": "Wednesday the twenty-eighth",
+          "due_date": "2026-10-28",
+          "passages": [
+            1,
+            2
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Chase missing receipts and reconcile September corporate card statements",
+          "owner_name": "Alex",
+          "owner": "Alex Morgan",
+          "due_text": "next Friday",
+          "due_date": "2026-10-23",
+          "passages": [
+            1,
+            2
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O02",
+      "transcript_sha256": "a6658510a2f54a1ca8683749241a48a4c7e7042a3db3b08462dd1d7618884384",
+      "meeting_status": "Indexed",
+      "id": "aa49f7e3-2963-40dd-8a45-2fc893025bd6",
+      "title": "Service Desk Improvement Meeting",
+      "meeting_date": "2026-10-12",
+      "attendees": [
+        "Alex Morgan",
+        "Alex Petrov",
+        "Lena Kowalski",
+        "Marcus Chen"
+      ],
+      "summary_id": "47b1b897-8fb8-4aa2-b020-087c1515cd8f",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 8.331,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The service desk meeting aimed to reduce the backlog before year end, since last month about 800 tickets were opened and 740 closed. The team agreed to rewrite the outdated password reset article, pursue about ten loan laptops pending finance approval, and introduce a daily triage rota starting next Monday. Several follow-up tasks were assigned, including tidying the shared mailbox rules, checking the remote support licence count, and taking the approval request to Ravi.",
+      "narrative": [
+        {
+          "text": "The service desk meeting aimed to reduce the backlog before year end, since last month about 800 tickets were opened and 740 closed.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The team agreed to rewrite the outdated password reset article, pursue about ten loan laptops pending finance approval, and introduce a daily triage rota starting next Monday.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Several follow-up tasks were assigned, including tidying the shared mailbox rules, checking the remote support licence count, and taking the approval request to Ravi.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The password reset knowledge base article will be rewritten.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Ten loan laptops will be ordered once finance approves the request.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "A daily triage rota, with one person each morning sorting the queue, will be introduced and start next Monday.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Password resets are the biggest ticket category, about a quarter of everything, and many could be handled through the self-service page that people do not know about.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The vendor has already agreed to a service credit for the email gateway outage, so Lena's planned request is no longer needed.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Alex Morgan noted that finance asked whether a loan pool would save money or just move the cost, and Marcus argued it would save money.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 6,
+      "action_items": [
+        {
+          "description": "Rewrite the password reset knowledge base article and put the new version up",
+          "owner_name": "Alex Petrov",
+          "owner": "Alex Petrov",
+          "due_text": "by Friday",
+          "due_date": "2026-10-16",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Tidy up the shared mailbox rules so access requests reach the right queue",
+          "owner_name": "",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Order the loan laptops once finance approval comes through",
+          "owner_name": "Marcus",
+          "owner": "Marcus Chen",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Take the loan laptop approval request to Ravi and report when it is signed",
+          "owner_name": "Alex Morgan",
+          "owner": "Alex Morgan",
+          "due_text": "this week",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Draft the triage rota and send it round so it can start next Monday",
+          "owner_name": "Lena",
+          "owner": "Lena Kowalski",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Check the remote support tool licence count against new starters",
+          "owner_name": "Alex Petrov",
+          "owner": "Alex Petrov",
+          "due_text": "by Thursday",
+          "due_date": "2026-10-15",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O03",
+      "transcript_sha256": "b572282a003954f188831f81ef5d356bc692e0f5a6067902b82c035ce78ba666",
+      "meeting_status": "Indexed",
+      "id": "8f3c7504-a21f-4eac-bb06-d206a418a2b5",
+      "title": "Level Four Fit-out Check-in",
+      "meeting_date": "2026-10-22",
+      "attendees": [
+        "Grace Nguyen",
+        "Owen Fletcher",
+        "Priya Raman"
+      ],
+      "summary_id": "f5fcd7f1-b45e-4559-b8aa-c6ead6fac6df",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 4.164,
+      "model": "claude-haiku-5-5",
+      "summary_text": "Owen chaired the weekly check-in on the level four fit-out with Brendan from Northgate Fitouts, who reported demolition finished, the ceiling grid in, electricians starting Monday, and the floor still due back in the third week of November. The team discussed a power variation to raise the desk power points from four to six per bank, costing roughly four thousand dollars, and agreed Brendan would send revised drawings by Monday before Priya signs off. Following staff complaints about noise on level three, the team agreed noisy work moves to after six in the evening, the quiet room stays open, and facilities will deliver and label crates before the move.",
+      "narrative": [
+        {
+          "text": "Owen chaired the weekly check-in on the level four fit-out with Brendan from Northgate Fitouts, who reported demolition finished, the ceiling grid in, electricians starting Monday, and the floor still due back in the third week of November.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The team discussed a power variation to raise the desk power points from four to six per bank, costing roughly four thousand dollars, and agreed Brendan would send revised drawings by Monday before Priya signs off.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Following staff complaints about noise on level three, the team agreed noisy work moves to after six in the evening, the quiet room stays open, and facilities will deliver and label crates before the move.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Noisy work moves to after hours from now on.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The quiet room on level three stays open.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Facilities deliver and label crates by team before the move, and people pack their own desks.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The power variation to raise desk power points from four to six per bank is roughly four thousand dollars for the whole floor.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "New desks arrive on the fifth of November and the delivery truck needs the goods lift for most of the morning.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Plants on the new floor were suggested, but Priya preferred to wait until the new year.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 4,
+      "action_items": [
+        {
+          "description": "Send revised drawings with the extra power points",
+          "owner_name": "Brendan",
+          "owner": null,
+          "due_text": "by Monday",
+          "due_date": "2026-10-26",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Approve the power variation once the revised drawings are seen",
+          "owner_name": "Priya",
+          "owner": "Priya Raman",
+          "due_text": "by the end of next week",
+          "due_date": "2026-10-30",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Book the goods lift with building management for the fifth",
+          "owner_name": "Owen",
+          "owner": "Owen Fletcher",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Tell level three staff about the noise handling",
+          "owner_name": "Grace",
+          "owner": "Grace Nguyen",
+          "due_text": "tomorrow",
+          "due_date": "2026-10-23",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O04",
+      "transcript_sha256": "2c4a5ca3f9e90f46fba319a99dd7fcc1877f74e092761b4b9789c9ee44b7efb3",
+      "meeting_status": "Indexed",
+      "id": "99b3f4b7-a7fe-4142-aaa9-5671eeb55802",
+      "title": "Graduate Recruitment Planning",
+      "meeting_date": "2026-10-20",
+      "attendees": [
+        "Grace Nguyen",
+        "Jamal Haddad",
+        "Nadia Haddad",
+        "Sofia Marchetti"
+      ],
+      "summary_id": "bc732821-2b23-4c4e-a0dc-ceb9399a73ca",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 4.733,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The graduate recruitment planning meeting reviewed about three hundred applications for next year's intake, which closed on Friday. The team agreed to offer six places, as set in the workforce plan, and set out the shortlisting, technical exercise, assessment day and interview timetable. A paid internship for candidates who narrowly miss out was parked because there is no budget for it this year.",
+      "narrative": [
+        {
+          "text": "The graduate recruitment planning meeting reviewed about three hundred applications for next year's intake, which closed on Friday.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The team agreed to offer six places, as set in the workforce plan, and set out the shortlisting, technical exercise, assessment day and interview timetable.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "A paid internship for candidates who narrowly miss out was parked because there is no budget for it this year.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Six graduate places will be offered, as agreed in the workforce plan.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The paid internship idea is parked because there is no budget this year.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Shortlisting goes to forty candidates, who then take the online exercise.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Last year's technical exercise leaked online, and last year's took most people three hours against a one-hour target.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Rooms three and four were already reserved for the assessment day on the twelfth of November.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 5,
+      "action_items": [
+        {
+          "description": "Do a first-pass screen of written answers down to about forty candidates",
+          "owner_name": "Nadia",
+          "owner": "Nadia Haddad",
+          "due_text": "by Friday",
+          "due_date": "2026-10-23",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write a new one-hour technical exercise for the engineering stream",
+          "owner_name": "Jamal",
+          "owner": "Jamal Haddad",
+          "due_text": "by next Wednesday",
+          "due_date": "2026-10-28",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Confirm the interview panel members",
+          "owner_name": "Sofia",
+          "owner": "Sofia Marchetti",
+          "due_text": "within two weeks",
+          "due_date": "2026-11-03",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Coordinate catering for the assessment day",
+          "owner_name": "Ms Haddad",
+          "owner": null,
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write a one-page interviewing guide and send it to the panel",
+          "owner_name": "Grace",
+          "owner": "Grace Nguyen",
+          "due_text": "by the sixth of November",
+          "due_date": "2026-11-06",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O05",
+      "transcript_sha256": "079e8b0983981391a51e0395b588ec9dc1fb768755f04d0091c4206af5c25096",
+      "meeting_status": "Indexed",
+      "id": "733d2650-cc08-4095-a3c6-3abc24e9234c",
+      "title": "Customer Complaint Escalation Review",
+      "meeting_date": "2026-10-29",
+      "attendees": [
+        "Ben Carter",
+        "Chloe Martin",
+        "Priya Raman"
+      ],
+      "summary_id": "b4e516ca-22e3-4706-935d-6e4b42e1b79a",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 5.535,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The review covered three escalated complaints, starting with Mrs Delaney, who was charged twice for her subscription and had not been told the refund had gone through. The team agreed that a wrong phone number on about two thousand brochures would be reprinted by Coastal Print at their cost by the sixth of November, with a website correction going up the same day. Refund approval was identified as part of the problem, and the team agreed that refunds up to five hundred dollars can now be approved by the team leader. The complaints register is to be updated with all three cases before the quarterly audit, and the escalation threshold will go on the agenda for the next monthly meeting.",
+      "narrative": [
+        {
+          "text": "The review covered three escalated complaints, starting with Mrs Delaney, who was charged twice for her subscription and had not been told the refund had gone through.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The team agreed that a wrong phone number on about two thousand brochures would be reprinted by Coastal Print at their cost by the sixth of November, with a website correction going up the same day.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Refund approval was identified as part of the problem, and the team agreed that refunds up to five hundred dollars can now be approved by the team leader.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The complaints register is to be updated with all three cases before the quarterly audit, and the escalation threshold will go on the agenda for the next monthly meeting.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Refunds up to five hundred dollars can be approved by the team leader; only refunds over five hundred dollars need a manager.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The complaints register will have all three cases added before the quarterly audit.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The escalation threshold itself will be reviewed at the next monthly meeting.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The third complaint, a customer who waited forty minutes on hold, has been resolved and the customer was called back.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Coastal Print have already apologised for the wrong phone number on the brochures.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 6,
+      "action_items": [
+        {
+          "description": "Call Mrs Delaney back and apologise",
+          "owner_name": "Ben",
+          "owner": "Ben Carter",
+          "due_text": "today",
+          "due_date": "2026-10-29",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Draft apology letter for Mrs Delaney and get it to Priya for signing",
+          "owner_name": "Chloe",
+          "owner": "Chloe Martin",
+          "due_text": "by tomorrow",
+          "due_date": "2026-10-30",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Reprint brochures with corrected phone number",
+          "owner_name": "Mei from Coastal Print",
+          "owner": null,
+          "due_text": "by the sixth of November",
+          "due_date": "2026-11-06",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Put correction on the website",
+          "owner_name": "",
+          "owner": null,
+          "due_text": "today",
+          "due_date": "2026-10-29",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Add all three cases to the complaints register and tidy it",
+          "owner_name": "",
+          "owner": null,
+          "due_text": "before the quarterly audit",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Put escalation threshold review on the agenda for the next monthly meeting",
+          "owner_name": "Priya",
+          "owner": "Priya Raman",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O06",
+      "transcript_sha256": "1c5a89b09294ee9e28adbf21e5c0cd3842bbf7c06e9c4b9d06f5769e9848c0da",
+      "meeting_status": "Indexed",
+      "id": "f586f62d-94c4-45e2-a5f8-b27b1a58271f",
+      "title": "Quarterly All-Staff Briefing",
+      "meeting_date": "2026-11-02",
+      "attendees": [
+        "Daniel Brooks",
+        "Priya Raman",
+        "Ravi Sharma",
+        "Sofia Marchetti"
+      ],
+      "summary_id": "94e49577-de33-4f80-a934-971ea88d5411",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 4.002,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The quarterly all-staff briefing was an information session covering the office move, first-quarter results, and Project Atlas, followed by online questions. The Collins Street office is on schedule, with level four finished in the third week of November and the move on the weekend of the twenty-eighth. Revenue was eleven point six million, three percent ahead of plan, and the travel freeze is in place until the end of January. The steering committee moved the Project Atlas go-live date to the fourteenth of December, and the mobile app will follow in the new year. Briefings will now be held every two months instead of every quarter, with the next one in the new office in January.",
+      "narrative": [
+        {
+          "text": "The quarterly all-staff briefing was an information session covering the office move, first-quarter results, and Project Atlas, followed by online questions.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The Collins Street office is on schedule, with level four finished in the third week of November and the move on the weekend of the twenty-eighth.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Revenue was eleven point six million, three percent ahead of plan, and the travel freeze is in place until the end of January.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The steering committee moved the Project Atlas go-live date to the fourteenth of December, and the mobile app will follow in the new year.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Briefings will now be held every two months instead of every quarter, with the next one in the new office in January.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The Project Atlas go-live date moved from the thirtieth of November to the fourteenth of December, and the mobile app is no longer part of the first release.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Briefings will be held every two months instead of every quarter.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Customer retention was ninety-one percent, the best quarter in two years.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "October's travel spend was less than half of September's since the freeze began.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Approved conferences before the travel freeze are unaffected; the freeze applies only to new discretionary travel.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The Atlas delay does not affect the customer launch event, which remains planned for February.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 0,
+      "action_items": []
+    },
+    {
+      "set_id": "O07",
+      "transcript_sha256": "19b98acac54773d45d408f96f07d43426c7e6f7a0849f9429423b5b01a4b86c1",
+      "meeting_status": "Indexed",
+      "id": "294b5071-455d-428a-a904-ba892434f42c",
+      "title": "Project Atlas Steering Committee",
+      "meeting_date": "2026-10-28",
+      "attendees": [
+        "Aisha Rahman",
+        "Jamal Haddad",
+        "Ravi Sharma",
+        "Sofia Marchetti",
+        "Wei Zhang"
+      ],
+      "summary_id": "17f02a15-26bb-4f63-8442-bab6adc1bbf4",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 5.445,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The steering committee met to decide whether to keep the thirtieth of November go-live, given that data migration for historical invoices was still unfinished and testing needed more time. The committee agreed to move go-live to the fourteenth of December, accepting a roughly twenty-thousand-dollar contractor extension, and to remove the mobile app from the first release. Actions were assigned across migration scripts, regression testing, the contract extension, release notes, the board presentation, the payments adapter, search performance and user acceptance testing.",
+      "narrative": [
+        {
+          "text": "The steering committee met to decide whether to keep the thirtieth of November go-live, given that data migration for historical invoices was still unfinished and testing needed more time.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The committee agreed to move go-live to the fourteenth of December, accepting a roughly twenty-thousand-dollar contractor extension, and to remove the mobile app from the first release.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Actions were assigned across migration scripts, regression testing, the contract extension, release notes, the board presentation, the payments adapter, search performance and user acceptance testing.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "Go-live moves from the thirtieth of November to the fourteenth of December.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The mobile app moves out of the first release to a second release in the new year.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Development is about eighty-five percent done, and the blocker is the historical invoice migration scripts.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Moving go-live costs roughly twenty thousand dollars in the contractor's extension, with no other cost change.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The search page is slow with more than a thousand records, probably due to a missing index.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 9,
+      "action_items": [
+        {
+          "description": "Finish the invoice migration scripts",
+          "owner_name": "Jamal",
+          "owner": "Jamal Haddad",
+          "due_text": "by the thirteenth",
+          "due_date": "2026-11-13",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Run the full regression suite on the customer records",
+          "owner_name": "Wei",
+          "owner": "Wei Zhang",
+          "due_text": "by the end of next week",
+          "due_date": "2026-11-06",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Approve and sign off the contractor extension",
+          "owner_name": "Ravi",
+          "owner": "Ravi Sharma",
+          "due_text": "this Friday",
+          "due_date": "2026-10-30",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Rewrite and update the release notes",
+          "owner_name": "Aisha",
+          "owner": "Aisha Rahman",
+          "due_text": "by Monday",
+          "due_date": "2026-11-02",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Present the revised timeline to the board",
+          "owner_name": "Sofia",
+          "owner": "Sofia Marchetti",
+          "due_text": "on the nineteenth of November",
+          "due_date": "2026-11-19",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Join the board presentation for the budget part",
+          "owner_name": "Ravi",
+          "owner": "Ravi Sharma",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Pair on the search page performance fix",
+          "owner_name": "Jamal",
+          "owner": "Jamal Haddad",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Pair on the search page performance fix",
+          "owner_name": "Wei",
+          "owner": "Wei Zhang",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Set up user acceptance testing sessions with business users",
+          "owner_name": "Aisha",
+          "owner": "Aisha Rahman",
+          "due_text": "in the week after next",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O08",
+      "transcript_sha256": "f6d43cf492431680a8004cd374535acca235a3d00e2da8eda830d5192baf343b",
+      "meeting_status": "Indexed",
+      "id": "87e5fac7-6fe2-48b1-bb74-4757043ab870",
+      "title": "Health and Safety Committee",
+      "meeting_date": "2026-11-05",
+      "attendees": [
+        "Grace Nguyen",
+        "Hannah Lee",
+        "Owen Fletcher",
+        "Tomas Okafor"
+      ],
+      "summary_id": "2a81b70b-c541-4781-90cd-9e843644ef06",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 5.934,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The health and safety committee reviewed two October incidents, a fire drill that is overdue, first-aid kit and officer gaps, and a proposal on meeting frequency. The committee agreed to replace the broken level-two exit sign, enter both incidents in the register, run the fire drill on the twentieth, recruit first-aid officers, and meet monthly until the move is complete.",
+      "narrative": [
+        {
+          "text": "The health and safety committee reviewed two October incidents, a fire drill that is overdue, first-aid kit and officer gaps, and a proposal on meeting frequency.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The committee agreed to replace the broken level-two exit sign, enter both incidents in the register, run the fire drill on the twentieth, recruit first-aid officers, and meet monthly until the move is complete.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The committee will meet monthly from now on, until the move is complete.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The next meeting is on the third of December.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "Two incidents in October: a trip on a loose carpet tile near the level two kitchen, with no injury, and the level two emergency exit sign that stopped lighting.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Two first-aid officers have left, so two new volunteers are needed.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The stairwell lights between levels three and four flicker, but the landlord is responsible for them as a common area.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "A workstation assessment for the new office was raised and deferred until after the move.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 8,
+      "action_items": [
+        {
+          "description": "Replace the emergency exit sign on level two",
+          "owner_name": "Owen Fletcher",
+          "owner": "Owen Fletcher",
+          "due_text": "by tomorrow",
+          "due_date": "2026-11-06",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Fix the loose carpet tile near the level two kitchen",
+          "owner_name": "Owen Fletcher",
+          "owner": "Owen Fletcher",
+          "due_text": "",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Report the flickering stairwell lights to the building manager",
+          "owner_name": "Owen Fletcher",
+          "owner": "Owen Fletcher",
+          "due_text": "today",
+          "due_date": "2026-11-05",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Enter both October incidents in the incident register",
+          "owner_name": "Hannah Lee",
+          "owner": "Hannah Lee",
+          "due_text": "by Monday",
+          "due_date": "2026-11-09",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Order replacement first-aid kits and defibrillator pads",
+          "owner_name": "Hannah Lee",
+          "owner": "Hannah Lee",
+          "due_text": "this week",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Run the fire drill",
+          "owner_name": "Tomas Okafor",
+          "owner": "Tomas Okafor",
+          "due_text": "on the twentieth",
+          "due_date": "2026-11-20",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Let the floor wardens know about the fire drill a week in advance",
+          "owner_name": "Tomas Okafor",
+          "owner": "Tomas Okafor",
+          "due_text": "a week in advance",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Ask for first-aid officer volunteers in the staff newsletter",
+          "owner_name": "Grace Nguyen",
+          "owner": "Grace Nguyen",
+          "due_text": "on the sixteenth",
+          "due_date": "2026-11-16",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O09",
+      "transcript_sha256": "36a5a60c615aae07d25163b82f2c828aff33a9c43a10ce214bc6a5c93b045b67",
+      "meeting_status": "Indexed",
+      "id": "8354102a-fb70-40e0-97ed-8c784b0f1feb",
+      "title": "Newsletter Content Planning",
+      "meeting_date": "2026-11-09",
+      "attendees": [
+        "Aisha Rahman",
+        "Chloe Martin",
+        "Daniel Brooks"
+      ],
+      "summary_id": "01c24988-8e11-484a-9d9e-27a8a6c2b567",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 3.408,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The team agreed to move the customer newsletter to a monthly schedule, starting on the first of December, so readers know when to expect it. For the first issue the webinars will be the lead story with customer quotes, and the team assigned the quotes, article, social posts and layout approval. A proposed podcast was dropped because the team was not convinced anyone would listen.",
+      "narrative": [
+        {
+          "text": "The team agreed to move the customer newsletter to a monthly schedule, starting on the first of December, so readers know when to expect it.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "For the first issue the webinars will be the lead story with customer quotes, and the team assigned the quotes, article, social posts and layout approval.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "A proposed podcast was dropped because the team was not convinced anyone would listen.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The customer newsletter will be sent monthly, in the same week each month, starting on the first of December.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The new onboarding webinars will be the lead story of the first issue.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "One person, Aisha, will approve the final newsletter layout.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The podcast idea will not be pursued.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "The layout had gone back and forth for days last time, which is why a single approver was chosen.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 4,
+      "action_items": [
+        {
+          "description": "Pull three customer quotes from the recent survey",
+          "owner_name": "Chloe",
+          "owner": "Chloe Martin",
+          "due_text": "by Thursday",
+          "due_date": "2026-11-12",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Write and draft the lead article about the webinars",
+          "owner_name": "",
+          "owner": null,
+          "due_text": "over the weekend",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Schedule the social media posts for the newsletter",
+          "owner_name": "Daniel",
+          "owner": "Daniel Brooks",
+          "due_text": "next week",
+          "due_date": null,
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Approve the final newsletter layout",
+          "owner_name": "Aisha",
+          "owner": "Aisha Rahman",
+          "due_text": "by the sixteenth",
+          "due_date": "2026-11-16",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    },
+    {
+      "set_id": "O10",
+      "transcript_sha256": "a84c78f68302ffe4c80e83c76d98afdb7b900ae7f66d34740cf06fe9470f347b",
+      "meeting_status": "Indexed",
+      "id": "308958c4-37d0-43e9-9325-5e9a986221d5",
+      "title": "Customer Success Retrospective Q3",
+      "meeting_date": "2026-11-03",
+      "attendees": [
+        "Alex Morgan",
+        "Alex Petrov",
+        "Ben Carter",
+        "Chloe Martin",
+        "Marcus Chen"
+      ],
+      "summary_id": "5f248cc7-5fda-4d6f-96b1-452bab2d18b7",
+      "run_number": 1,
+      "status": "Ready",
+      "failure_reason": "",
+      "queued_for_retry": false,
+      "seconds": 4.402,
+      "model": "claude-haiku-5-5",
+      "summary_text": "The Q3 customer success retrospective reviewed what went well and what did not, and agreed a set of changes for the coming quarter. Renewals went well at ninety-one percent and the new onboarding checklist cut time to first value by about a week, while the CRM sync failure and late churn warnings were the main problems. The team agreed to send renewal lists to account managers eight weeks ahead, and to move the NPS survey to quarterly.",
+      "narrative": [
+        {
+          "text": "The Q3 customer success retrospective reviewed what went well and what did not, and agreed a set of changes for the coming quarter.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Renewals went well at ninety-one percent and the new onboarding checklist cut time to first value by about a week, while the CRM sync failure and late churn warnings were the main problems.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The team agreed to send renewal lists to account managers eight weeks ahead, and to move the NPS survey to quarterly.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "decisions": [
+        {
+          "text": "The renewal list will be sent to account managers eight weeks ahead from now on.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The NPS survey moves from monthly to quarterly.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The customer advisory board idea was not committed to and is set aside for now.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "highlights": [
+        {
+          "text": "About twenty accounts last quarter received invoices addressed to people who had left the customer, because contact updates did not reach billing.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "Two large accounts cancelled without the team seeing warning signs, because there was no view of account health.",
+          "passages": [
+            1
+          ]
+        },
+        {
+          "text": "The September onboarding webinars were very popular.",
+          "passages": [
+            1
+          ]
+        }
+      ],
+      "input_truncated": false,
+      "passages_sent": 1,
+      "passages_total": 1,
+      "action_items_extracted": 5,
+      "action_items": [
+        {
+          "description": "Fix the CRM to billing sync bug",
+          "owner_name": "Marcus",
+          "owner": "Marcus Chen",
+          "due_text": "by the end of the month",
+          "due_date": "2026-11-30",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Build a churn dashboard combining usage, tickets and survey scores",
+          "owner_name": "Ben",
+          "owner": "Ben Carter",
+          "due_text": "by next Monday",
+          "due_date": "2026-11-09",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Start fortnightly onboarding webinars",
+          "owner_name": "Chloe",
+          "owner": "Chloe Martin",
+          "due_text": "on the seventeenth",
+          "due_date": "2026-11-17",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Send the renewal list to the account managers",
+          "owner_name": "Alex",
+          "owner": null,
+          "due_text": "tomorrow",
+          "due_date": "2026-11-04",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        },
+        {
+          "description": "Update the NPS survey schedule to quarterly in the system",
+          "owner_name": "Alex Petrov",
+          "owner": "Alex Petrov",
+          "due_text": "by Friday",
+          "due_date": "2026-11-06",
+          "passages": [
+            1
+          ],
+          "origin": "ai",
+          "edited": false
+        }
+      ]
+    }
+  ]
+}
