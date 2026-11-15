@@ -7,8 +7,8 @@
   itself, once, and records what the application stored.
 - ``scripts/register_meeting_summary_schedule.ps1`` is what makes the retry automatic on the host.
   Registering it is the host owner's step, so what the repository can hold, and these tests pin, is
-  the script and the runbook: the retry command, from the checkout's venv, every hour, and never a
-  password (the pattern of apps/retrieval/tests/test_knowledge_gap_schedule.py).
+  the script and the runbook: the retry command, from the checkout's venv, every hour, on battery
+  too, and never a password (the pattern of apps/retrieval/tests/test_knowledge_gap_schedule.py).
 """
 
 import io
@@ -348,6 +348,16 @@ def script_text() -> str:
     return SCRIPT.read_text(encoding="utf-8")
 
 
+def settings_call(text: str) -> str:
+    """The ``New-ScheduledTaskSettingsSet`` statement, its backtick continuations joined."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if "New-ScheduledTaskSettingsSet" in line)
+    statement = [lines[start]]
+    while statement[-1].rstrip().endswith("`"):
+        statement.append(lines[start + len(statement)])
+    return " ".join(line.rstrip().rstrip("`").strip() for line in statement)
+
+
 def test_the_schedule_runs_the_retry_command_from_the_checkouts_venv():
     text = script_text()
     assert "manage.py retry_meeting_summaries" in text
@@ -361,6 +371,14 @@ def test_the_schedule_repeats_hourly_by_default_and_never_overlaps_itself():
     assert "-MultipleInstances IgnoreNew" in text
     for other in ("-Daily", "-Weekly", "-AtLogOn", "-AtStartup"):
         assert other not in text, other
+
+
+def test_the_schedule_starts_on_battery_and_keeps_running_when_unplugged():
+    """Task Scheduler's defaults hold a task on battery and stop one that is unplugged mid-run. On
+    15 November 2026 they left the alpha laptop's tasks queued with no log (D-107's note)."""
+    call = settings_call(script_text())
+    assert "-AllowStartIfOnBatteries" in call
+    assert "-DontStopIfGoingOnBatteries" in call
 
 
 def test_the_schedule_takes_no_password():

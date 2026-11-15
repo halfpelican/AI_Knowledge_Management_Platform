@@ -9,6 +9,7 @@ A ``.env`` file at the repository root is read if present (copy ``.env.example``
 Variables already set in the process environment take precedence over the file.
 """
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -19,7 +20,11 @@ from apps.core.constants import (
     ASK_THROTTLE_RATE,
     AUTHENTICATION_THROTTLE_RATE,
     CONVERSATION_CREATE_THROTTLE_RATE,
+    EMBEDDING_DIMENSION_BY_PROVIDER,
     INGESTION_THROTTLE_RATE,
+    LOCKOUT_DURATION as DEFAULT_LOCKOUT_DURATION,
+    LOCKOUT_DURATION_MAXIMUM,
+    LOCKOUT_THRESHOLD as DEFAULT_LOCKOUT_THRESHOLD,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TRANSCRIPTION_THROTTLE_RATE,
@@ -162,6 +167,44 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # the same build is served over HTTPS.
 SESSION_COOKIE_SECURE = env.bool("SESSION_COOKIE_SECURE", default=False)
 CSRF_COOKIE_SECURE = env.bool("CSRF_COOKIE_SECURE", default=False)
+
+# --- Account lockout (FR-02 enforces, FR-03's configuration clause, D-130 decision 7) --------
+# FR-03: "threshold and lockout duration are configuration values rather than literals, so the
+# policy can be tightened without code changes." So they are .env variables, defaulting to
+# apps/core/constants.py's LOCKOUT_THRESHOLD and LOCKOUT_DURATION (five failures, 15 minutes).
+# - **Who reads them:** LoginView, at request time. The sign-in page reads them from GET
+#   /api/auth/lockout-policy, so a change needs no front-end rebuild.
+# - **When a change takes effect:** settings are read when the process starts, so a change
+#   applies after a restart.
+# - **The notice ceiling follows the threshold:** it is LOCKOUT_NOTICE_CEILING_FACTOR times it
+#   (D-26).
+# - **Tightened only** (Benjamin's decision 8, D-130): the server refuses to start on a threshold
+#   outside 1 to 5, a duration outside 15 minutes to 365 days, or a value that is not a whole
+#   number. Each refusal is an ImproperlyConfigured that names the variable. NFR-04's five attempts
+#   and 15 minutes are the loosest the policy can be.
+
+_DEFAULT_LOCKOUT_MINUTES = int(DEFAULT_LOCKOUT_DURATION.total_seconds() // 60)
+_MAXIMUM_LOCKOUT_MINUTES = int(LOCKOUT_DURATION_MAXIMUM.total_seconds() // 60)
+try:
+    LOCKOUT_THRESHOLD = env.int("LOCKOUT_THRESHOLD", default=DEFAULT_LOCKOUT_THRESHOLD)
+    _lockout_minutes = env.int("LOCKOUT_DURATION_MINUTES", default=_DEFAULT_LOCKOUT_MINUTES)
+except ValueError as error:
+    raise ImproperlyConfigured(
+        "LOCKOUT_THRESHOLD and LOCKOUT_DURATION_MINUTES must be whole numbers"
+    ) from error
+if not 1 <= LOCKOUT_THRESHOLD <= DEFAULT_LOCKOUT_THRESHOLD:
+    raise ImproperlyConfigured(
+        f"LOCKOUT_THRESHOLD must be from 1 to {DEFAULT_LOCKOUT_THRESHOLD}: the policy may only be "
+        f"tightened (FR-03, NFR-04), not {LOCKOUT_THRESHOLD}"
+    )
+# Compared as minutes before any timedelta is built, so no value can overflow one.
+if not _DEFAULT_LOCKOUT_MINUTES <= _lockout_minutes <= _MAXIMUM_LOCKOUT_MINUTES:
+    raise ImproperlyConfigured(
+        f"LOCKOUT_DURATION_MINUTES must be from {_DEFAULT_LOCKOUT_MINUTES} to "
+        f"{_MAXIMUM_LOCKOUT_MINUTES}: the policy may only be tightened (FR-03, NFR-04), not "
+        f"{_lockout_minutes}"
+    )
+LOCKOUT_DURATION = timedelta(minutes=_lockout_minutes)
 
 # --- REST framework (CLAUDE.md section 6 invariant 4, D-21) -----------------------
 # Every route is protected unless it opts out explicitly (registration and login).
@@ -326,8 +369,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # Application code never reads these directly; it calls apps.ai.get_ai_service().
 
 # anthropic (Claude + Voyage) is the default since D-122, after every tuned value was measured on
-# it. flm (FastFlowLM on the NPU) is the local, offline alternative. The two embed at different
-# widths, so switching is a full re-index onto a database of the other width (D-117).
+# it. flm (FastFlowLM on the NPU) is the local, offline alternative. The provider is chosen once,
+# at setup, and a database keeps it (D-131): a change of provider means a new database.
 AI_PROVIDER = env.str("AI_PROVIDER", default="anthropic")
 
 # FastFlowLM on the local NPU: the offline alternative, AI_PROVIDER=flm, pinned to v0.9.39 (D-83).
@@ -351,10 +394,16 @@ SUMMARY_RUNNER = env.str("SUMMARY_RUNNER", default="thread")
 if SUMMARY_RUNNER not in ("thread", "inline"):
     raise ImproperlyConfigured(f"Unknown SUMMARY_RUNNER: {SUMMARY_RUNNER!r} (expected 'thread' or 'inline')")
 
-# Length of the vectors the configured embedding model returns (docs/decisions.md
-# D-03): 1024 for voyage-4, the default since D-122, and 768 for FLM's embed-gemma. The pgvector
-# column is sized from this and the startup check verifies it.
-EMBEDDING_DIMENSION = env.int("EMBEDDING_DIMENSION", default=1024)
+# Length of the vectors the configured embedding model returns (docs/decisions.md D-03). It follows
+# the provider (D-131): EMBEDDING_DIMENSION_BY_PROVIDER, 1024 for voyage-4 and 768 for FLM's
+# embed-gemma. The pgvector columns are sized from this when the first migrate runs, and a database
+# keeps that width. An EMBEDDING_DIMENSION in .env is still read, so an existing .env keeps working,
+# but one that disagrees with the provider stops every command that runs the checks (ai.E004).
+# An unknown AI_PROVIDER is refused at startup (ai.E002), so its fallback is only a placeholder.
+EMBEDDING_DIMENSION = env.int(
+    "EMBEDDING_DIMENSION",
+    default=EMBEDDING_DIMENSION_BY_PROVIDER.get(AI_PROVIDER, EMBEDDING_DIMENSION_BY_PROVIDER["anthropic"]),
+)
 
 # Claude + Voyage: the proposal's production configuration, funded since D-113 and the default
 # since D-122.

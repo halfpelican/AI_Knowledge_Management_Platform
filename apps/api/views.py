@@ -8,6 +8,7 @@ Routes that need more than a session add ``HasRolePermission`` (FR-06).
 import logging
 import math
 
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
@@ -23,12 +24,12 @@ from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.throttling import BaseThrottle, ScopedRateThrottle
 from rest_framework.views import APIView
 
 import apps.ai
 from apps.accounts.audit import log_role_change
-from apps.accounts.models import Permission, Role
+from apps.accounts.models import LoginAttempt, Permission, Role
 from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
@@ -37,9 +38,9 @@ from apps.core.constants import (
     DASHBOARD_GAP_ITEMS,
     DASHBOARD_RECENT_ITEMS,
     DOWNLOAD_CONTENT_TYPES,
-    LOCKOUT_DURATION,
-    LOCKOUT_NOTICE_CEILING,
-    LOCKOUT_THRESHOLD,
+    LOCKOUT_NOTICE_CEILING_FACTOR,
+    LOGIN_ATTEMPT_LOCKOUT,
+    LOGIN_ATTEMPT_RELEASE,
     MAXIMUM_ACTION_ITEMS_PER_MEETING,
     DOCUMENT_INDEXED,
     KNOWLEDGE_GAP_OPEN,
@@ -51,6 +52,7 @@ from apps.core.constants import (
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
     TRANSCRIPTION_BUSY_RETRY_SECONDS,
@@ -67,15 +69,24 @@ from apps.documents.classification import (
     apply_tag,
     classify_document_now,
     confirm_classification,
-    confirm_proposed_topic,
+    confirm_proposed_tag,
     confirm_tag,
-    reject_proposed_topic,
+    reject_proposed_tag,
     reject_tag,
 )
 from apps.documents.deletion import delete_document
 from apps.documents.downloads import download_filename
-from apps.documents.models import Document, Tag
-from apps.documents.taxonomy import retire_tag, tag_inventory
+from apps.documents.models import Department, Document, Tag
+from apps.documents.taxonomy import (
+    DepartmentAlreadyExists,
+    TagAlreadyExists,
+    create_department,
+    create_tag,
+    department_inventory,
+    retire_department,
+    retire_tag,
+    tag_inventory,
+)
 from apps.ingestion import audio
 from apps.ingestion.chunking import length_in_tokens
 from apps.ingestion.documents import ingest_and_index_document, reprocess_document
@@ -136,6 +147,8 @@ from .serializers import (
     ConversationDetailSerializer,
     ConversationSerializer,
     DashboardQuerySerializer,
+    DepartmentCreateSerializer,
+    DepartmentEntrySerializer,
     DirectoryEntrySerializer,
     DocumentBrowseQuerySerializer,
     DocumentDetailSerializer,
@@ -152,15 +165,17 @@ from .serializers import (
     ActionItemSerializer,
     ActionItemWriteSerializer,
     MeetingSerializer,
-    ProposedTopicSerializer,
+    ProposedTagSerializer,
     RecentQuestionSerializer,
     RegisterSerializer,
     RoleChangeSerializer,
     RoleSerializer,
     SearchResultsSerializer,
     TagApplySerializer,
+    TagCreateSerializer,
     TagDetailSerializer,
     TagEntrySerializer,
+    UserListEntrySerializer,
     UserSerializer,
     classification_payload,
     meeting_summary_payload,
@@ -178,16 +193,18 @@ logger = logging.getLogger(__name__)
 INVALID_CREDENTIALS_MESSAGE = "Invalid email or password."
 # FR-01 names the duplicate case explicitly, so this response may say so.
 EMAIL_ALREADY_REGISTERED_MESSAGE = "This email address is already registered."
-# FR-02 Responses: "403 forbidden if account is locked" (D-25). The wording is the
-# proposal's own, from its handleLoginAttempt pseudocode. ACCOUNT_LOCKED_CODE is the
+# FR-02 Responses: "403 forbidden if account is locked" (D-25). ACCOUNT_LOCKED_CODE is the
 # machine-readable flag for FR-02's front-end clause, "where the account is locked
 # and the submitted password was correct, a distinct message is shown": the client
 # branches on the code and never has to match on prose.
-# FR-03 defines an administrator release route; it is out of the M6 gate and
-# unbuilt, so the notice must not promise one (D-26). Waiting is the only remedy.
+# FR-03's Front-End clause: "The lockout message states that an administrator can unlock the
+# account, so a locked-out user has a route forward." The proposal's handleLoginAttempt
+# pseudocode said "An Administrator can release it." D-26 finding 4 took that out while no
+# release existed, because the notice then promised something false. POST
+# /api/users/{id}/unlock is that release, so the message names it again (D-130).
 ACCOUNT_LOCKED_MESSAGE = (
     "This account is temporarily locked after repeated failed sign-ins. "
-    "Please try again later."
+    "Try again later, or ask an administrator to unlock it."
 )
 ACCOUNT_LOCKED_CODE = "account_locked"
 # FR-04 Front-End: "a brief confirmation 'You've been logged out'".
@@ -203,6 +220,14 @@ LAST_ADMINISTRATOR_MESSAGE = (
 # FR-05 Responses: "404 Not Found if user/role doesn't exist". The user half is
 # get_object_or_404's own body; this is the role half.
 UNKNOWN_ROLE_MESSAGE = "No role with that role_id exists."
+# FR-03 Validation: "An Administrator cannot release a lock on their own account, since an
+# account locked by a brute-force attempt against it must not be releasable by whoever
+# currently holds that session." FR-03 Responses: 403 where the requester "is the account
+# holder", whether or not the account is locked (D-130).
+OWN_LOCK_RELEASE_MESSAGE = "You cannot release a lock on your own account."
+# FR-03 Responses: "409 Conflict where the account is not currently locked". A lock whose
+# window has passed is not current, and is left as it is (D-130).
+NOT_LOCKED_MESSAGE = "This account is not locked."
 
 # FR-08 Responses: "415 Unsupported Media Type for a disallowed format". The four
 # accepted formats are named so the message is actionable, and they are the same four
@@ -287,6 +312,19 @@ DOCUMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Document._meta.o
 # DELETE /api/tags/{id} for an id that names no tag it acts on: get_object_or_404's own wording, as
 # DOCUMENT_NOT_FOUND_MESSAGE above restates it for documents.
 TAG_NOT_FOUND_MESSAGE = "No %s matches the given query." % Tag._meta.object_name
+# POST /api/tags (D-128): FR-10 Responses, "409 Conflict on a duplicate tag name within a dimension",
+# for a name already in the dimension, active or retired. The body carries that tag's id, which the
+# Administrator, the route's only caller, already sees in the inventory, retired ones included.
+TAG_ALREADY_EXISTS_MESSAGE = (
+    "A tag with this name already exists in this dimension. A retired tag is not added again here."
+)
+# DELETE /api/departments/{id} for an id that names no Department (D-129): get_object_or_404's own
+# wording, as TAG_NOT_FOUND_MESSAGE restates it for tags.
+DEPARTMENT_NOT_FOUND_MESSAGE = "No %s matches the given query." % Department._meta.object_name
+# POST /api/departments (D-129) for a name an ACTIVE department already has, ignoring case. A retired
+# one is reactivated instead (200), so this message never says the name is retired. The body carries
+# that department's id, which the Administrator, the route's only caller, already sees in the list.
+DEPARTMENT_ALREADY_EXISTS_MESSAGE = "A department with this name is already listed."
 # FR-16's action-item routes (D-125), for an item id that names nothing on the meeting in the path:
 # the scoped meeting lookup's own 404 body, so an item that belongs to another meeting, one that
 # was deleted and one that never existed are one answer.
@@ -389,10 +427,16 @@ CanManageMeetings = HasRolePermission.for_code(MANAGE_MEETINGS_PERMISSION)
 # before anything else. Nothing on those routes is scoped, so there is nothing for a 403 to
 # disclose by preceding a 404: an entry's existence is the Administrator's to know.
 CanReviewKnowledgeGaps = HasRolePermission.for_code(REVIEW_KNOWLEDGE_GAPS_PERMISSION)
-# FR-10's tag administration (D-119 finding 5): the same arrangement as FR-19's, for the same
-# reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an unknown
-# tag; a tag's existence is the Administrator's to know, since they read every source (D-66).
+# FR-10's tag administration (D-119 finding 5; D-128's POST): the same arrangement as FR-19's, for
+# the same reason. A permission_classes entry on both routes, so the 403 precedes the 404 for an
+# unknown tag, and a POST's 400, 409 and throttle; a tag's existence is the Administrator's to know,
+# since they read every source (D-66). Since D-129 it guards the department list's two routes the
+# same way, for the same reason.
 CanManageTags = HasRolePermission.for_code(MANAGE_TAGS_PERMISSION)
+# FR-03's release (D-130): a permission_classes entry, so the 403 comes before the lookup and an
+# Employee cannot tell a real user id from an invented one. Users are not scoped, so a 403
+# preceding the 404 discloses nothing.
+CanReleaseAccountLocks = HasRolePermission.for_code(RELEASE_ACCOUNT_LOCKS_PERMISSION)
 
 
 class ThrottlePostOnlyMixin:
@@ -481,53 +525,26 @@ class RegisterView(APIView):
 # --- FR-02 login ---------------------------------------------------------------------
 
 
-def _is_locked(user) -> bool:
-    """FR-02: the lock is evaluated before the password result is used, so that no
-    session is issued for a locked account whatever credential was submitted."""
-    return user is not None and user.locked_until is not None and user.locked_until > timezone.now()
+def _invalid_credentials() -> Response:
+    """The one 401 login gives: for an unknown address, for a wrong password whether or
+    not the account is locked, and for a locked account past the notice ceiling
+    whatever the password (D-02, D-25, D-26).
 
-
-def _record_locked_attempt(email: str) -> int:
-    """Count a failed attempt made *during* an active lock, and return the new total.
-
-    The window is deliberately not extended: "locks the account for 15 minutes" stays
-    literally true rather than becoming indefinite under a sustained attack (D-25).
-    But the counter does move, which D-25 originally said it would not. Leaving it
-    still meant the lock withheld only the session cookie and not the *verification
-    oracle*: an attacker could guess without limit for the life of the window, each
-    guess answered 403 or 401 according to whether it was right. Counting is what
-    lets the caller stop announcing the answer (D-26).
+    Built in one place so the paths cannot drift apart. Any byte that differed between
+    them would tell a caller which case it had hit, and so whether an address is
+    registered or locked.
     """
-    with transaction.atomic():
-        try:
-            user = User.objects.select_for_update().get(email=email)
-        except User.DoesNotExist:  # pragma: no cover - the caller found a locked account
-            return 0
-        user.failed_attempts += 1
-        user.save(update_fields=["failed_attempts"])
-        return user.failed_attempts
+    return Response({"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED)
 
 
-def _record_failed_attempt(email: str) -> None:
-    """FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
-    failures lock the account for 15 minutes." Reached only for an account that is
-    not currently locked, so an attempt made during a lockout window neither extends
-    the window nor moves the counter. An expired window resets the counter first: it
-    counts *consecutive* failures, and without the reset the single next failure
-    after a lock expired would re-lock the account on one attempt rather than five."""
-    with transaction.atomic():
-        try:
-            user = User.objects.select_for_update().get(email=email)
-        except User.DoesNotExist:
-            return
-        if user.locked_until is not None:
-            # A live lock never reaches here, so this window has expired.
-            user.failed_attempts = 0
-            user.locked_until = None
-        user.failed_attempts += 1
-        if user.failed_attempts >= LOCKOUT_THRESHOLD:
-            user.locked_until = timezone.now() + LOCKOUT_DURATION
-        user.save(update_fields=["failed_attempts", "locked_until"])
+def _source_address(request) -> str | None:
+    """The client address a LoginAttempts row records (FR-03, D-130): DRF's own ``get_ident()``,
+    the key the sign-in throttle counts against.
+
+    That is REMOTE_ADDR, because ``NUM_PROXIES`` is 0. X-Forwarded-For is never read here, as the
+    throttle never reads it (D-79): a client can write any address into that header.
+    """
+    return BaseThrottle().get_ident(request) or None
 
 
 class SendsCsrfCookieMixin:
@@ -552,6 +569,24 @@ class SendsCsrfCookieMixin:
 
 
 class LoginView(SendsCsrfCookieMixin, APIView):
+    """FR-02 login, and the lockout FR-02 enforces (D-25, D-26).
+
+    **The order is what makes the lock hold under concurrency (D-130, security finding
+    H1).** ``authenticate()`` runs first, outside any transaction, so the account row is
+    never locked for the length of a password hash. Then one transaction reads the
+    account row with ``select_for_update()`` and makes the whole decision on that read:
+    whether the account is locked, the count, the lock itself with its LoginAttempts row,
+    and on success the session and the reset. Two requests for one account decide one
+    after the other, the second on the state the first committed.
+
+    It used to decide on ``locked_until`` read without a lock, before ``authenticate()``.
+    Five concurrent wrong passwords at a count of 1 all read "unlocked": the fourth set
+    the lock, and the fifth, finding it set, took it for an expired one and erased it. A
+    right password that had read "unlocked" got a session for an account a concurrent
+    request had just locked, where FR-03 Validation says "No session is issued for a
+    locked account under any circumstance, regardless of the password submitted."
+    """
+
     permission_classes = [AllowAny]  # one of the two opt-outs (D-21)
     # Five requests lock any account, so without this anyone could hold every
     # account in the organisation locked indefinitely (D-26).
@@ -566,53 +601,131 @@ class LoginView(SendsCsrfCookieMixin, APIView):
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
-        account = User.objects.filter(email=email).first()
-        # The password is verified even for a locked account, because its result
-        # selects the response and can never grant access. Django's ModelBackend runs
-        # the hasher even when the address is unknown, so the failing cases take the
-        # same time as far as practical.
+        # The password is verified on every path, a locked account's included, because
+        # its result only selects the response and can never grant access (FR-03
+        # Validation). Django's ModelBackend runs the hasher even when the address is
+        # unknown, so the failing cases take the same time as far as practical. It runs
+        # before the row lock below, which is held for a few queries and never for a
+        # hash (D-130).
         user = authenticate(request, username=email, password=password)
-        if _is_locked(account):
-            # The lock is announced ONLY where the password also matched. The
-            # proposal's handleLoginAttempt() pseudocode branches exactly here and
-            # says why: "Confirming a lock to anyone who merely knows the email
-            # address would convert a protective measure into an account-enumeration
-            # tool." So a wrong password against a locked account is the ordinary
-            # 401, indistinguishable from a wrong password against any other
-            # address. FR-02's unqualified "403 if account is locked" is the summary;
-            # the pseudocode and FR-03's messaging clause are the detail (D-25).
-            #
-            # Announcing it for the whole window, however, leaves the lock withholding
-            # only the session and not the answer: guesses are unlimited during a
-            # lock, and each 403 or 401 says whether that guess was right. So the
-            # attempt is counted, and past LOCKOUT_NOTICE_CEILING the answer stops
-            # being given at all (D-26). The password is still verified on every path
-            # so the timing does not separate these cases from an unknown address.
-            attempts = _record_locked_attempt(email)
-            if user is None or attempts > LOCKOUT_NOTICE_CEILING:
+        with transaction.atomic():
+            # The one read the whole decision is made on (D-130). A request for the same
+            # account that is still deciding holds this lock, so this one waits for it and
+            # then sees what it committed.
+            account = User.objects.select_for_update().filter(email=email).first()
+            if account is None:
+                return _invalid_credentials()  # an unknown address writes nothing
+            # The password counts only if authenticate() verified it against this same
+            # row. A row deleted, and its address registered again, while the hash ran is
+            # a different account.
+            password_matched = user is not None and user.pk == account.pk
+            now = timezone.now()
+            if account.locked_until is not None and account.locked_until > now:
+                # The attempt is counted and the window is never extended (D-26). "Locks
+                # the account for 15 minutes" stays literally true rather than becoming
+                # indefinite under a sustained attack (D-25). Counting is what lets the
+                # notice stop once guessing passes the notice ceiling, so the lock
+                # withholds the verification oracle and not only the session.
+                account.failed_attempts += 1
+                account.save(update_fields=["failed_attempts"])
+                # The lock is announced ONLY where the password also matched. The
+                # proposal's handleLoginAttempt() pseudocode branches exactly here and
+                # says why: "Confirming a lock to anyone who merely knows the email
+                # address would convert a protective measure into an account-enumeration
+                # tool." So a wrong password against a locked account is the ordinary
+                # 401, indistinguishable from a wrong password against any other
+                # address. FR-02's unqualified "403 if account is locked" is the summary;
+                # the pseudocode and FR-03's messaging clause are the detail (D-25). Past
+                # the ceiling every attempt gets the 401, right password or wrong (D-26).
+                # The ceiling follows the running threshold (D-26, D-130 decision 7).
+                ceiling = settings.LOCKOUT_THRESHOLD * LOCKOUT_NOTICE_CEILING_FACTOR
+                if not password_matched or account.failed_attempts > ceiling:
+                    return _invalid_credentials()
+                # FR-03's countdown, which the sign-in page runs from this (D-130): whole
+                # seconds until the lock ends, from the row read under the lock, rounded up so
+                # the page never re-enables Sign in early, and at least 1. Only this response
+                # carries it, because a 401 must stay byte-identical on every path. Neither
+                # status has a Retry-After header: in this contract that header is the
+                # throttle's, on a 429, which is where the client reads it.
+                retry_after = max(1, math.ceil((account.locked_until - now).total_seconds()))
                 return Response(
-                    {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
+                    {
+                        "detail": ACCOUNT_LOCKED_MESSAGE,
+                        "code": ACCOUNT_LOCKED_CODE,
+                        "retry_after": retry_after,
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
                 )
-            return Response(
-                {"detail": ACCOUNT_LOCKED_MESSAGE, "code": ACCOUNT_LOCKED_CODE},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        if user is None:
-            _record_failed_attempt(email)
-            return Response(
-                {"detail": INVALID_CREDENTIALS_MESSAGE}, status=status.HTTP_401_UNAUTHORIZED
-            )
-        # Cycles the session key and, through the user_logged_in signal, sets
-        # last_login (stored as last_login_at). The CSRF token is rotated too.
-        django_login(request, user)
-        if user.failed_attempts or user.locked_until:
-            # Both, not just the counter. A success that left locked_until standing
-            # would refuse the user's next login for the rest of the window, which is
-            # the trap D-24 recorded and D-25 closes.
-            user.failed_attempts = 0
-            user.locked_until = None
-            user.save(update_fields=["failed_attempts", "locked_until"])
+            if not password_matched:
+                # FR-02 Business Logic: "Failed attempts increment a counter; five
+                # consecutive failures lock the account for 15 minutes."
+                if account.locked_until is not None:
+                    # Found not locked on this same read, under the row lock, so this
+                    # window has expired (D-130). The counter counts *consecutive* failures
+                    # and resets with the window, or the single next failure would re-lock
+                    # the account on one attempt rather than five (D-25).
+                    account.failed_attempts = 0
+                    account.locked_until = None
+                account.failed_attempts += 1
+                # The running policy, from .env (D-130 decision 7).
+                if account.failed_attempts >= settings.LOCKOUT_THRESHOLD:
+                    account.locked_until = now + settings.LOCKOUT_DURATION
+                    # FR-03: "Every lockout is recorded with the attempted email, source
+                    # address, and timestamp." Written here, in this transaction, so the row
+                    # and the lock commit together, and only here: an attempt during a live
+                    # lock never reaches this branch, because it never extends the window
+                    # (D-130).
+                    LoginAttempt.objects.create(
+                        event=LOGIN_ATTEMPT_LOCKOUT,
+                        attempted_email=email,
+                        source_ip=_source_address(request),
+                        success=False,
+                        attempted_at=now,
+                        user=account,
+                        locked_until=account.locked_until,
+                    )
+                account.save(update_fields=["failed_attempts", "locked_until"])
+                return _invalid_credentials()
+            # Cycles the session key and, through the user_logged_in signal, sets
+            # last_login (stored as last_login_at). The CSRF token is rotated too. It runs
+            # here, under the row lock, so the account cannot be locked between the check
+            # above and the login, and the reset below commits with the new session
+            # (D-130). ``user`` rather than ``account``, because it carries the backend
+            # authenticate() recorded; the two are the same row.
+            django_login(request, user)
+            if account.failed_attempts or account.locked_until:
+                # Both, not just the counter. A success that left locked_until standing
+                # would refuse the user's next login for the rest of the window, which is
+                # the trap D-24 recorded and D-25 closes.
+                account.failed_attempts = 0
+                account.locked_until = None
+                account.save(update_fields=["failed_attempts", "locked_until"])
         return Response(UserSerializer(user).data, status=status.HTTP_200_OK)
+
+
+class LockoutPolicyView(APIView):
+    """``GET /api/auth/lockout-policy``: the running lockout policy, for the sign-in page (FR-03,
+    D-130 decision 7).
+
+    FR-03's threshold and duration are .env values (config/settings.py). The sign-in page counts
+    its own failures (D-130 decision 1), so it needs the threshold to know how many attempts
+    remain, and the duration for its countdown. It reads them from here at run time rather than
+    from a copy built into the bundle, so the policy can change without a front-end rebuild.
+
+    Anonymous, because the page asks before anyone is signed in. **It discloses nothing about any
+    account:** it is the same two numbers for every caller, and the warning on the page already
+    shows them. It reads nothing from the request, writes nothing, and is not throttled.
+    """
+
+    permission_classes = [AllowAny]  # the third opt-out (D-21, D-130 decision 7)
+
+    def get(self, request):
+        return Response(
+            {
+                "lockout_threshold": settings.LOCKOUT_THRESHOLD,
+                "lockout_duration_seconds": int(settings.LOCKOUT_DURATION.total_seconds()),
+            }
+        )
 
 
 # --- FR-04 logout ----------------------------------------------------------------------
@@ -655,11 +768,32 @@ class RoleListView(APIView):
 
 
 class UserListView(APIView):
+    """``GET /api/users`` — every user, for FR-05's role management.
+
+    A requester whose role also holds ``release_account_locks`` gets each user with ``lock``,
+    for FR-03's "An Administrator viewing a locked account can release the lock" (D-130).
+    Anyone else gets the plain user object. The gate is still ``manage_roles``.
+    """
+
     permission_classes = [IsAuthenticated, CanManageRoles]
 
     def get(self, request):
         users = User.objects.select_related("role").order_by("created_at", "pk")
-        return Response(UserSerializer(users, many=True).data)
+        if not role_holds(request.user.role_id, RELEASE_ACCOUNT_LOCKS_PERMISSION):
+            return Response(UserSerializer(users, many=True).data)
+        # One instant for the whole list, so every row is judged locked or not at the same
+        # moment. The lockout rows of the locks still running come in one query for the whole
+        # list, never one per user: a row whose locked_until has passed set a lock that is over.
+        now = timezone.now()
+        users = users.prefetch_related(
+            Prefetch(
+                "login_attempts",
+                queryset=LoginAttempt.objects.filter(
+                    event=LOGIN_ATTEMPT_LOCKOUT, locked_until__gt=now
+                ),
+            )
+        )
+        return Response(UserListEntrySerializer(users, many=True, context={"now": now}).data)
 
 
 class UserDirectoryView(APIView):
@@ -738,6 +872,99 @@ class UserRoleView(APIView):
                 actor=request.user, target=user, old_role=old_role_name, new_role=new_role.role_name
             )
         return Response(UserSerializer(user).data)
+
+
+# --- FR-03 releasing a lock (NIT3004) ----------------------------------------------------
+
+
+class UserUnlockView(APIView):
+    """``POST /api/users/{id}/unlock`` — FR-03's administrator release (D-130).
+
+    FR-03: "An Administrator viewing a locked account can release the lock immediately, so a
+    locked-out user has a route forward", and "releasing a lock clears the expiry and resets the
+    failed-attempt count, returning the account to the state it would reach when the window
+    expires naturally."
+
+    **The order.** 401 without a session, then 403 for a role without
+    ``release_account_locks``, both from ``permission_classes`` and so before any lookup: an
+    Employee cannot tell a real user id from an invented one. Then, in one transaction, on the
+    target row:
+
+    1. 404, ``get_object_or_404``'s own body, for an unknown id, as FR-05's role route gives it;
+    2. 403 where the target is the requester, locked or not: FR-03 refuses a release to "the
+       account holder";
+    3. 409 where ``locked_until`` is empty or not after now, left as it is;
+    4. otherwise the lock and the count are cleared, the release row is written, and the 200 is
+       the user as ``GET /api/users`` lists it, with ``"lock": null``.
+
+    No body is read. The password, the role and every session are left alone: FR-03 "restores the
+    ability to attempt authentication and nothing more". An Administrator may release another
+    Administrator's lock, since FR-03 forbids only their own. No throttle, as FR-05's role change
+    has none.
+    """
+
+    permission_classes = [IsAuthenticated, CanReleaseAccountLocks]
+
+    def post(self, request, pk):
+        with transaction.atomic():
+            # The administrator rows first, ordered by primary key, as FR-05's role change locks
+            # them (D-26), and only then the target. Every transaction here that locks more
+            # than one users row then takes them in the same order, so none waits on another
+            # in a cycle (D-130). That holds while the administrator set does not change during
+            # the request. Each transaction reads the set from its own snapshot, so a promotion
+            # committed mid-request can still put two requests in a cycle, and Postgres aborts
+            # one with a 500. It needs three Administrator actions on the same rows within the
+            # same instant (the pre-PR security review, finding 4).
+            # - **Without it, a release could deadlock with a role change.** The role change
+            #   holds the administrator rows and waits for the account. The release holds the
+            #   account and, at commit, waits for the requester's row, which the release row's
+            #   foreign-key check takes a key-share lock on. Postgres would abort one of the
+            #   two with a 500.
+            # - **Why the requester's row is not waited for:** it is in this set, so the
+            #   key-share lock is on a row this transaction already holds. That rests on only
+            #   Administrators holding release_account_locks (0010).
+            # - **The lock mode:** FOR NO KEY UPDATE. It conflicts with the role change's FOR
+            #   UPDATE and with login's, but not with the key-share locks other inserts take on
+            #   these rows (a question logged, a meeting attendee), so it cannot deadlock with
+            #   them either.
+            list(
+                User.objects.select_for_update(no_key=True, of=("self",))
+                .filter(role__role_name=ADMINISTRATOR_ROLE_NAME)
+                .order_by("pk")
+                .only("pk")
+            )
+            # The target, FOR NO KEY UPDATE as well (security finding L2). It still conflicts
+            # with login's FOR UPDATE, so a release and a login on one account decide one after
+            # the other. of=("self",) leaves the role row unlocked.
+            account = get_object_or_404(
+                User.objects.select_for_update(no_key=True, of=("self",)).select_related("role"),
+                pk=pk,
+            )
+            if account.pk == request.user.pk:
+                return Response(
+                    {"detail": OWN_LOCK_RELEASE_MESSAGE}, status=status.HTTP_403_FORBIDDEN
+                )
+            now = timezone.now()
+            if account.locked_until is None or account.locked_until <= now:
+                return Response({"detail": NOT_LOCKED_MESSAGE}, status=status.HTTP_409_CONFLICT)
+            released = account.locked_until
+            account.locked_until = None
+            account.failed_attempts = 0
+            account.save(update_fields=["failed_attempts", "locked_until"])
+            # FR-03: "Every release is recorded with the Administrator who performed it, the
+            # account affected and the time." success is null: a release is not an
+            # authentication attempt.
+            LoginAttempt.objects.create(
+                event=LOGIN_ATTEMPT_RELEASE,
+                attempted_email=account.email,
+                source_ip=_source_address(request),
+                success=None,
+                attempted_at=now,
+                user=account,
+                released_by=request.user,
+                locked_until=released,
+            )
+        return Response(UserListEntrySerializer(account, context={"now": now}).data)
 
 
 # --- FR-08 document upload -----------------------------------------------------------
@@ -1887,7 +2114,10 @@ class DocumentReprocessView(APIView):
 # analysis that is not this document's) is answered with the scoped lookup's own 404 body, word
 # for word. Two of the routes are throttled, classify in the "ingestion" scope and a person's apply
 # in "tagging" (D-79 and its note on tagging). DRF checks a throttle before the method runs, so past
-# the rate their 429 comes before the 404, the same for every id.
+# the rate their 429 comes before the 404, the same for every id. A classification proposes a Topic
+# outside the scheme, at any confidence, for the proposed-tags routes, and discards a Project or
+# Process value outside it. It creates no Tag (Objective 05's clause 3 as written; D-129, which
+# reverses D-128's creation; apps/documents/classification.py ``apply_classification``).
 
 
 class DocumentClassifyView(APIView):
@@ -2017,10 +2247,12 @@ class DocumentTagsView(APIView):
     before any query runs. Every request the throttle admits counts, whatever ``post`` then answers,
     and a throttled one writes nothing.
 
-    **The other tag routes are not throttled.** Confirming or removing a link and rejecting a
-    proposal create no Tag. ``confirm_proposed_topic`` can create a Topic, but only from a proposal
+    **The other document tag routes are not throttled.** Confirming or removing a link and rejecting
+    a proposal create no Tag. ``confirm_proposed_tag`` can create a value, but only from a proposal
     the classifier made, and classification is reached over HTTP only through upload, reprocess and
-    classify, which share the "ingestion" budget.
+    classify, which share the "ingestion" budget. Since D-129 a classification creates no value
+    itself. An Administrator adding a value (``POST /api/tags``, D-128) spends
+    this route's "tagging" budget.
     """
 
     permission_classes = [IsAuthenticated]
@@ -2071,23 +2303,32 @@ class DocumentTagView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
-class _ProposedTopicView(APIView):
-    """The two proposed-topic routes share everything but the function they call: body
-    ``{value}``, validated after the 404 and the 403; the value normalised before it is matched;
-    200 with the classification and the tag details as they now stand."""
+class _ProposedTagView(APIView):
+    """The two proposed-tags routes (D-128, replacing ``/proposed-topics/confirm`` and ``/reject``)
+    share everything but the function they call.
+
+    The FR-10 order, as on every route here: the session, then the scoped 404 (D-46), then
+    ``contribute_content``'s 403, then the body, ``{"dimension": "Project"|"Process"|"Topic",
+    "value"}`` with both required (``ProposedTagSerializer``: 400 keyed on ``dimension`` for a
+    missing or any other dimension, Department included, and on ``value`` for a blank or over-long
+    one). The value is normalised before it is matched with the dimension; a pair that is not
+    proposed on this document, a value proposed under another dimension included, is the document
+    404's exact body. 200 ``{"classification", "tag_details"}`` as they now stand.
+    """
 
     permission_classes = [IsAuthenticated]
 
-    def act(self, document, value):  # pragma: no cover - the subclasses decide
+    def act(self, document, dimension, value):  # pragma: no cover - the subclasses decide
         raise NotImplementedError
 
     def post(self, request, pk):
         document = scoped_document_or_404(request, pk)
         require_contribute_content(request, self)
-        serializer = ProposedTopicSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)  # 400 keyed on "value"
+        serializer = ProposedTagSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 keyed on "dimension" or "value"
+        data = serializer.validated_data
         try:
-            self.act(document, serializer.validated_data["value"])
+            self.act(document, data["dimension"], data["value"])
         except NotOnThisDocument:
             raise Http404(DOCUMENT_NOT_FOUND_MESSAGE)
         except InvalidClassification as exc:
@@ -2100,40 +2341,72 @@ class _ProposedTopicView(APIView):
         )
 
 
-class DocumentProposedTopicConfirmView(_ProposedTopicView):
-    """``POST /api/documents/{id}/proposed-topics/confirm`` — a person confirms an out-of-scheme
-    Topic, which is when the tag is created (FR-10: "requires user confirmation before it is
-    created") and linked ``applied_by="ai"``, confirmed."""
+class DocumentProposedTagConfirmView(_ProposedTagView):
+    """``POST /api/documents/{id}/proposed-tags/confirm`` — a person confirms a proposal: a Topic the
+    classifier held outside the scheme (D-129), or a Project or Process value a run held while D-128
+    was in force (the route is dimension-generic). Its Tag is fetched or created and brought into
+    use, and linked ``applied_by="ai"``, confirmed (``confirm_proposed_tag``); the
+    answer is the same whether the Tag was created, fetched or reactivated."""
 
-    def act(self, document, value):
-        confirm_proposed_topic(document, value)
-
-
-class DocumentProposedTopicRejectView(_ProposedTopicView):
-    """``POST /api/documents/{id}/proposed-topics/reject`` — the proposal is dropped and nothing
-    is created."""
-
-    def act(self, document, value):
-        reject_proposed_topic(document, value)
+    def act(self, document, dimension, value):
+        confirm_proposed_tag(document, dimension, value)
 
 
-# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night) --
+class DocumentProposedTagRejectView(_ProposedTagView):
+    """``POST /api/documents/{id}/proposed-tags/reject`` — the proposal is dropped, nothing is
+    created, and the rejection is recorded with the machine's confidence, so no later run proposes,
+    creates or links the value on this document (``reject_proposed_tag``, D-128; the requirements
+    audit of D-128, finding A5). The reply is unchanged: the record is not exposed."""
+
+    def act(self, document, dimension, value):
+        reject_proposed_tag(document, dimension, value)
 
 
-class TagListView(APIView):
+# --- FR-10 tag administration (D-119 finding 5; D-105's dated note of 10 November 2026, night;
+# D-128) ------------------------------------------------------------------------------------------
+
+
+class TagListView(ThrottlePostOnlyMixin, APIView):
     """``GET /api/tags`` — every Tag in Project, Process and Topic, active or not, ordered by dimension
     then name, each with ``item_count`` (``apps/documents/taxonomy.py::tag_inventory``).
+    ``POST /api/tags`` — an Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create").
 
     ``manage_tags`` is a permission class, so 401 and then 403 come before anything else, as on
     FR-19's routes. The list is not scoped and needs no scope: its one reader, the Administrator,
     reads every source (D-66), and the seed's test holds every holder of the code to that. 200 with a
     bare list, ``[]`` for none.
+
+    The POST: body ``{"dimension": "Project"|"Process"|"Topic", "tag_name"}`` (``TagCreateSerializer``:
+    400 keyed on ``dimension`` for any other, Department included, and on ``tag_name`` for a blank or
+    over-long name, which is normalised). 201 with the new entry, ``TagEntrySerializer``'s shape,
+    ``active`` true and ``item_count`` 0. The value is created **not grown**: vocabulary, offered in
+    every document's ``tag_options`` and listed in every classification prompt, as a seeded value is
+    (``create_tag``). 409 ``{"detail", "tag_id"}`` when the name is already a Tag in the dimension,
+    active or retired, a concurrent create of it included; nothing is changed, and a retired tag is
+    not reactivated. **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``, D-128),
+    the POST only (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission
+    classes before the throttles, so the order is 401, 403, then 429.
     """
 
     permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
 
     def get(self, request):
         return Response(TagEntrySerializer(tag_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = TagCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        data = serializer.validated_data
+        try:
+            tag = create_tag(data["dimension"], data["tag_name"])
+        except TagAlreadyExists as exc:
+            return Response(
+                {"detail": TAG_ALREADY_EXISTS_MESSAGE, "tag_id": str(exc.tag_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(TagEntrySerializer(tag).data, status=status.HTTP_201_CREATED)
 
 
 class TagDetailView(APIView):
@@ -2156,6 +2429,88 @@ class TagDetailView(APIView):
         if tag is None:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return Response(TagEntrySerializer(tag).data)
+
+
+# --- FR-10's department list (D-129, the lead's decision of 13 November 2026) -------------------------
+
+
+class DepartmentListView(ThrottlePostOnlyMixin, APIView):
+    """``GET /api/departments`` — every Department, active or not, ordered by name ignoring case, each
+    ``{department_id, name, active, item_count}``, ``item_count`` being the number of documents whose
+    ``department`` equals the name ignoring case (``apps/documents/taxonomy.py::department_inventory``;
+    D-129's security review, finding F3).
+    ``POST /api/departments`` — an Administrator adds a department to FR-10's department scheme, the
+    list the classifier suggests from (``tag_scheme``).
+
+    ``manage_tags`` is a permission class, as on ``/api/tags``, so 401 and then 403 come before
+    anything else. The list is not scoped and needs no scope: its one reader, the Administrator, reads
+    every document (D-66), and ``apps/accounts/tests/test_manage_tags_seed.py`` holds every holder of
+    the code to that. 200 with a bare list, ``[]`` for none.
+
+    The POST: body ``{"name"}`` (``DepartmentCreateSerializer``: 400 ``{"name": [...]}`` for a blank or
+    over-long name, and for one holding a control or format character or ";" (finding F4); a name is
+    normalised with its case kept).
+
+    - A new name: 201 with the entry, created **not grown**: vocabulary, offered to every audience,
+      as a value added on ``/api/tags`` is.
+    - A name an ACTIVE department has, ignoring case, a concurrent create of it included: 409
+      ``{"detail", "department_id"}``, and nothing changes.
+    - A RETIRED department's name: **200 with the entry, reactivated**, keeping its ``grown`` and its
+      spelling. ``/api/tags`` answers 409 for a retired tag instead, because a retired tag comes back
+      when a person names it on a document every role reads (``apply_tag``, ``confirm_proposed_tag``);
+      a department has no such path, so this is the only way back for one, and only an Administrator,
+      who reads every document, can take it.
+
+    **Throttled per user in the "tagging" scope** (``TAGGING_THROTTLE_RATE``), the POST only
+    (``ThrottlePostOnlyMixin``), so the GET stays unthrottled. DRF checks the permission classes before
+    the throttles, so the order is 401, 403, then 429.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "tagging"
+
+    def get(self, request):
+        return Response(DepartmentEntrySerializer(department_inventory(), many=True).data)
+
+    def post(self, request):
+        serializer = DepartmentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)  # 400 in DRF's shape, keyed on the field
+        try:
+            added = create_department(serializer.validated_data["name"])
+        except DepartmentAlreadyExists as exc:
+            return Response(
+                {"detail": DEPARTMENT_ALREADY_EXISTS_MESSAGE, "department_id": str(exc.department_id)},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(
+            DepartmentEntrySerializer(added.department).data,
+            status=status.HTTP_201_CREATED if added.created else status.HTTP_200_OK,
+        )
+
+
+class DepartmentDetailView(APIView):
+    """``DELETE /api/departments/{id}`` — retire a department (D-129).
+
+    401, then 403 without ``manage_tags``, then 404 ``{"detail": "No Department matches the given
+    query."}`` for an id naming no Department. A department any document uses is deactivated and
+    answered 200 with its entry, again for one already inactive: it stays on those documents and in
+    FR-14's and FR-15's filters, which read ``Documents.department`` (D-72), and the classifier no
+    longer sees it. A department no document uses is deleted, 204 with no body
+    (``apps/documents/taxonomy.py::retire_department``). ``POST /api/departments`` with its name brings
+    a retired one back.
+    """
+
+    permission_classes = [IsAuthenticated, CanManageTags]
+
+    def delete(self, request, pk):
+        try:
+            department = retire_department(pk)
+        except Department.DoesNotExist:
+            raise Http404(DEPARTMENT_NOT_FOUND_MESSAGE)
+        if department is None:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(DepartmentEntrySerializer(department).data)
 
 
 # --- FR-12 answer generation and FR-13 conversations -------------------------------------

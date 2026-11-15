@@ -94,6 +94,9 @@ SCHEMA_V1 = {
          # Topic brought into use by a name, which is not vocabulary once unlinked.
          "grown"},
     ),
+    # documents 0015, 13 November 2026 (FR-10, D-129): the department list the classifier suggests
+    # from, a table of its own because Tags lower-cases names and a department keeps its case.
+    "departments": (("department_id",), {"department_id", "name", "active", "grown"}),
     "content_tags": (
         ("content_tag_id",),
         {"content_tag_id", "tag_id", "source_type", "source_id", "applied_by", "confirmed",
@@ -107,6 +110,8 @@ SCHEMA_V1 = {
     ),
     # Migration v2, 8 November 2026 (FR-10, D-105): out of §2's deferred table and into §1 by
     # documents 0008, when FR-10 was built. The columns are docs/schema-v1.md §1's.
+    # "proposed_topics" is the column of the field documents 0012 renamed proposed_tags (D-128),
+    # which kept the column's name.
     "document_analysis": (
         ("analysis_id",),
         {"analysis_id", "doc_id", "machine_doc_type", "machine_doc_type_confidence",
@@ -114,7 +119,10 @@ SCHEMA_V1 = {
          "department_outcome", "user_edited", "proposed_topics", "discarded_suggestions",
          "model", "input_truncated", "classified_at",
          # documents 0009, 10 November 2026 (FR-10, D-119 finding 10): whose department it is.
-         "department_applied_by"},
+         "department_applied_by",
+         # documents 0013, 13 November 2026 (FR-10; the requirements audit of D-128, finding A5):
+         # the proposals a person rejected, which no later run proposes, creates or links.
+         "rejected_tags"},
     ),
     # Schema v2, 9 November 2026 (FR-19, D-107): out of section 2's deferred table and into
     # section 1 by retrieval 0004, with its membership and cycle tables. The columns are
@@ -133,12 +141,21 @@ SCHEMA_V1 = {
         {"cycle_id", "started_at", "finished_at", "triggered_by", "queries_considered",
          "searches_considered", "entries_created", "entries_updated"},
     ),
+    # 13 November 2026 (FR-03, D-130): out of section 2's deferred table and into section 1 by
+    # accounts 0009. The proposal's five columns, then the four FR-03's clauses need. The columns
+    # are docs/schema-v1.md section 1's.
+    "login_attempts": (
+        ("attempt_id",),
+        {"attempt_id", "attempted_email", "source_ip", "success", "attempted_at",
+         "event", "user_id", "released_by", "locked_until"},
+    ),
 }
 
 # schema-v1.md section 2: deferred to NIT3004, must not exist in v1. document_analysis left this
-# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105), and knowledge_gaps on
-# 9 November 2026, when retrieval 0004 created it for FR-19 (D-107).
-SECTION_2_TABLES = {"login_attempts", "mfa_recovery_codes"}
+# set on 8 November 2026, when documents 0008 created it for FR-10 (D-105), knowledge_gaps on
+# 9 November 2026, when retrieval 0004 created it for FR-19 (D-107), and login_attempts on
+# 13 November 2026, when accounts 0009 created it for FR-03 (D-130).
+SECTION_2_TABLES = {"mfa_recovery_codes"}
 SECTION_2_USER_COLUMNS = {"mfa_enabled", "mfa_secret"}
 
 OUR_APPS = ("core", "accounts", "documents", "meetings", "retrieval")
@@ -250,9 +267,14 @@ SECTION_5_PLAN = [
     # FR-10's tag administration (D-119 finding 5): manage_tags, Administrator only, immediately
     # after 0007.
     ("accounts", "0008_seed_manage_tags"),
-    # FR-20 (D-132), 14 November 2026: view_knowledge_map, both roles, immediately after 0008,
-    # which it depends on. Numbered 0011 because 0009 and 0010 are held by FR-03's unmerged
-    # branch (D-130).
+    # FR-03 (D-130), 13 November 2026: the login_attempts table, then the release_account_locks
+    # seed, Administrator only, each immediately after the one before, where the executor plans
+    # them.
+    ("accounts", "0009_login_attempts"),
+    ("accounts", "0010_seed_release_account_locks"),
+    # FR-20 (D-132), 14 November 2026: view_knowledge_map, both roles, immediately after 0010,
+    # which it depends on. It was written against 0008 while FR-03's branch held 0009 and 0010,
+    # and was re-pointed in the merge of 15 November 2026, before any database had applied it.
     ("accounts", "0011_seed_view_knowledge_map"),
     ("documents", "0001_initial"),
     ("meetings", "0001_initial"),
@@ -286,9 +308,19 @@ SECTION_5_PLAN = [
     # The security review's backfill (D-105's dated note of 10 November 2026, night), immediately
     # after 0010.
     ("documents", "0011_grown_marks_withheld_tags"),
-    # FR-16 (D-125), 11 November 2026: ContentChunks.ai_generated, immediately after 0011, and
+    # D-128, 12 November 2026: DocumentAnalysis.proposed_topics renamed proposed_tags, the column
+    # kept, and each entry given its dimension; then 13 November (the requirements audit of D-128,
+    # finding A5): DocumentAnalysis.rejected_tags. Both follow 0011 on their own branch.
+    ("documents", "0012_proposed_tags"),
+    ("documents", "0013_rejected_tags"),
+    # FR-16 (D-125), 11 November 2026: ContentChunks.ai_generated, also numbered 0012 and also on
+    # 0011, so the app had two leaves. 0014 is the merge migration that joins them (no operations),
     # then the summary and action-item tables, where the executor plans them.
     ("documents", "0012_content_chunk_ai_generated"),
+    ("documents", "0014_merge_fr16_and_d128"),
+    # FR-10's department list (D-129), 13 November 2026: Departments, seeded from the departments
+    # documents carry, immediately after 0014, where its dependency puts it.
+    ("documents", "0015_departments"),
     ("meetings", "0003_fr16_meeting_summaries"),
     # Stage 4 item 8: the fabrication signal invariant 7 needs, which no_answer_reason
     # cannot carry on its own (docs/schema-v1.md §1 QueryLog).

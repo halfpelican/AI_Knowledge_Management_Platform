@@ -15,6 +15,8 @@ urlpatterns = [
     # Stage 2: FR-01, FR-02
     path("auth/register", views.RegisterView.as_view(), name="auth-register"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
+    # NIT3004: FR-03's running lockout policy, for the sign-in page (D-130 decision 7).
+    path("auth/lockout-policy", views.LockoutPolicyView.as_view(), name="auth-lockout-policy"),
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),
@@ -25,6 +27,8 @@ urlpatterns = [
     # cannot collide, but reading first is the habit that keeps it true.
     path("users/directory", views.UserDirectoryView.as_view(), name="user-directory"),
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
+    # FR-03's administrator release (D-130), behind release_account_locks.
+    path("users/<uuid:pk>/unlock", views.UserUnlockView.as_view(), name="user-unlock"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
     # Stage 5 item 2: FR-15's list view, filters, sort and facets in one request (D-72).
@@ -51,10 +55,12 @@ urlpatterns = [
          views.DocumentTagConfirmView.as_view(), name="document-tag-confirm"),
     path("documents/<uuid:pk>/tags/<uuid:content_tag_id>", views.DocumentTagView.as_view(),
          name="document-tag"),
-    path("documents/<uuid:pk>/proposed-topics/confirm",
-         views.DocumentProposedTopicConfirmView.as_view(), name="document-proposed-topic-confirm"),
-    path("documents/<uuid:pk>/proposed-topics/reject",
-         views.DocumentProposedTopicRejectView.as_view(), name="document-proposed-topic-reject"),
+    # D-128: a value the classifier held below the threshold, in Project, Process or Topic, confirmed
+    # or rejected; body {"dimension", "value"}. They replace proposed-topics/confirm and /reject.
+    path("documents/<uuid:pk>/proposed-tags/confirm",
+         views.DocumentProposedTagConfirmView.as_view(), name="document-proposed-tag-confirm"),
+    path("documents/<uuid:pk>/proposed-tags/reject",
+         views.DocumentProposedTagRejectView.as_view(), name="document-proposed-tag-reject"),
     # Stage 4 item 10b: the route a document citation links to, so FR-12's "links to the
     # source document or meeting" reaches the document rather than the repository (D-46).
     # Stage 5 item 2 adds FR-15's detail fields to its GET, and the DELETE method (D-73).
@@ -105,7 +111,13 @@ urlpatterns = [
     path("knowledge-gaps/<uuid:pk>", views.KnowledgeGapDetailView.as_view(),
          name="knowledge-gap-detail"),
     # NIT3004: FR-10's tag administration (D-119 finding 5), both routes behind manage_tags. The
-    # inventory with item counts, and DELETE: deactivate a tag in use, delete an unused one.
+    # inventory with item counts; POST, an Administrator adds a value, vocabulary, throttled in
+    # "tagging" (D-128); and DELETE: deactivate a tag in use, delete an unused one.
     path("tags", views.TagListView.as_view(), name="tag-list"),
     path("tags/<uuid:pk>", views.TagDetailView.as_view(), name="tag-detail"),
+    # NIT3004: FR-10's department list (D-129), the scheme's fourth dimension, behind manage_tags as
+    # the tag routes are. The list with item counts; POST adds a department, or reactivates a retired
+    # one, throttled in "tagging"; DELETE deactivates a department in use and deletes an unused one.
+    path("departments", views.DepartmentListView.as_view(), name="department-list"),
+    path("departments/<uuid:pk>", views.DepartmentDetailView.as_view(), name="department-detail"),
 ] + router.urls

@@ -1,10 +1,10 @@
 # Alpha deployment runbook
 
-Stage 5 item 9, as D-64 settles it: the M6 alpha runs on the NPU laptop and is used on that
-laptop. It is served by Waitress with 24 threads (D-85), under `DEBUG=False`, with the production
-build of the front end and `/api` on one origin, `http://127.0.0.1:8000`. These are the exact
-steps to deploy it from `main`, in native Windows PowerShell (not WSL: the NPU is not visible
-there).
+Stage 5 item 9, as D-64 settles it: the alpha runs on this laptop and is used on it. It is served
+by Waitress with 24 threads (D-85), under `DEBUG=False`, with the production build of the front end
+and `/api` on one origin, `http://127.0.0.1:8000`. **Since 13 November 2026 it runs on the
+anthropic provider** (Claude Haiku 5.5 and Voyage `voyage-4`), on a database built for that
+provider (D-131). These are the exact steps to deploy it from `main`, in native Windows PowerShell.
 
 > **Registration (FR-01) is open to anyone who can reach the address.** That is why the alpha
 > stays on loopback. `--listen=127.0.0.1:8000` accepts connections from this laptop only. Do not
@@ -18,12 +18,18 @@ there).
   checkout is left alone, and GitHub Desktop can still switch it to `main`.
 - **Its own `.venv`.** A `uv pip sync` from an older checkout into a shared venv would remove
   WhiteNoise, and a local `.venv` makes every `$root\.venv` path below work as written.
-- **Its own `.env`,** naming the alpha's database, `kmp_demo_20261101`, its `MEDIA_ROOT` and its
-  own log paths.
+- **Its own `.env`,** naming the alpha's database, `kmp_alpha_20261113`, its `MEDIA_ROOT`, its own
+  log paths, the provider and its two keys.
 
-**Its database is `kmp_demo_20261101`,** restored once from item 6's measured snapshot (D-88).
-The media and logs live in `C:\kmp-demo\2026-11-01`, outside every checkout.
+**Its database is `kmp_alpha_20261113`,** built once, on 13 November 2026, from item 6's corpus
+under the anthropic provider (D-131, and "Building the database" below). The media and logs live
+in `C:\kmp-demo\2026-11-13`, outside every checkout.
 
+- **A database keeps the provider it was set up with** (D-131). The alpha's is an anthropic
+  database. Never point the alpha at one set up for FLM, and never switch this one.
+- **The FLM alpha's database, `kmp_demo_20261101`,** restored from item 6's snapshot (D-88), is
+  kept as it was. Its `.env` is kept beside the alpha's as `.env.flm-20261101`, and it ran
+  `8598d19`.
 - **Never point the alpha at `kmp` or at the measurement database `kmp_obj02_20261101`.**
 - **Do not re-index, reprocess or delete** between building the demonstration threads and
   demonstrating them (D-40).
@@ -36,7 +42,8 @@ server first.
 
 - the commit to deploy is merged to `main`, and CI passed on it;
 - Docker Desktop is running, with the database up (`docker compose up -d`);
-- `flm` is v0.9.39, with `gemma3:4b` and `embed-gemma` pulled (`README.md`, D-83);
+- the alpha's `.env` holds `ANTHROPIC_API_KEY` and `VOYAGE_API_KEY` (step 4), and the laptop can
+  reach both APIs;
 - Node and npm are installed (`node --version`), and so is `uv`.
 
 ## 1. The code
@@ -62,25 +69,12 @@ git status --porcelain     # must print nothing, so the commit recorded in step 
 git log --oneline -1
 ```
 
-## 2. FLM
+## 2. The provider
 
-In its own PowerShell window, left running:
-
-```powershell
-flm serve gemma3:4b --embed 1
-```
-
-Then, in the deployment window:
-
-```powershell
-flm version                                     # must say v0.9.39 (D-83). Anything else: stop here.
-$env:FLM_BASE_URL = 'http://127.0.0.1:8625/v1'  # the URL .env names; check_flm.py reads the shell, not .env
-& $py scripts\check_flm.py
-$LASTEXITCODE                                   # must be 0
-```
-
-`check_flm.py` exits 1 if the embeddings are not deterministic. Do not deploy past that. The first
-time, run this step after step 3, because `$py` does not exist until then.
+Nothing to start. The anthropic provider is reached over the network with the two keys in `.env`.
+Step 4's `check --deploy` shows whether it answers: Django probes it before any command, and
+`ai.W001` means it did not. FLM takes no part. Recording transcription (D-123) stays off unless
+`.env` sets `TRANSCRIPTION_PROVIDER=flm`.
 
 ## 3. Python dependencies, in the worktree's own venv
 
@@ -110,19 +104,25 @@ else syncs into it.
 SECRET_KEY=<the generated key>
 DEBUG=False
 ALLOWED_HOSTS=127.0.0.1,localhost
-DATABASE_URL=postgres://kmp:kmp@127.0.0.1:5432/kmp_demo_20261101
-MEDIA_ROOT=C:\kmp-demo\2026-11-01\media
-AUDIT_LOG_PATH=C:\kmp-demo\2026-11-01\logs\audit.log
-ERROR_LOG_PATH=C:\kmp-demo\2026-11-01\logs\errors.log
-WAITRESS_LOG_PATH=C:\kmp-demo\2026-11-01\logs\waitress.log
-ATTEMPTS_LOG_PATH=C:\kmp-demo\2026-11-01\logs\attempts.log
-AI_PROVIDER=flm
-FLM_BASE_URL=http://127.0.0.1:8625/v1
-FLM_API_KEY=flm
-FLM_CHAT_MODEL=gemma3:4b
-FLM_EMBED_MODEL=embed-gemma
-EMBEDDING_DIMENSION=768
+DATABASE_URL=postgres://kmp:kmp@127.0.0.1:5432/kmp_alpha_20261113
+MEDIA_ROOT=C:\kmp-demo\2026-11-13\media
+AUDIT_LOG_PATH=C:\kmp-demo\2026-11-13\logs\audit.log
+ERROR_LOG_PATH=C:\kmp-demo\2026-11-13\logs\errors.log
+WAITRESS_LOG_PATH=C:\kmp-demo\2026-11-13\logs\waitress.log
+ATTEMPTS_LOG_PATH=C:\kmp-demo\2026-11-13\logs\attempts.log
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=<the key>
+ANTHROPIC_MODEL=claude-haiku-5-5
+VOYAGE_API_KEY=<the key>
+VOYAGE_MODEL=voyage-4
+VOYAGE_BASE_URL=https://api.voyageai.com/v1
 ```
+
+The width follows `AI_PROVIDER` (D-131), so the template names no `EMBEDDING_DIMENSION`. The
+alpha's `.env` of 13 November also has `EMBEDDING_DIMENSION=1024`, which agrees with the provider
+and so is accepted. The keys are the ones in the main checkout's `.env`. Never print them, and never commit either
+file. On 13 November 2026 the alpha's `.env` kept its four `FLM_*` lines from the FLM alpha. They
+are read only for recording transcription, which is off.
 
 `ATTEMPTS_LOG_PATH` (step 7, 7 November 2026) is where every generation attempt is logged, parsed or
 failed, with what its reply reported; `errors.log` keeps the failures only. A commit from before
@@ -138,6 +138,21 @@ Then, in the deployment window:
 `migrate` is safe to run on a database that already holds the demonstration corpus. Re-indexing,
 reprocessing or deleting is not (D-40).
 
+**The first `migrate` after FR-10's department list (#102, D-129)** applies `documents` 0012 to 0015.
+- **0015** creates the department list the AI assigns departments from, and seeds it from the
+  departments the documents already carry.
+- **0012** marks each stored proposal as a Topic.
+- **On `kmp_alpha_20261113`,** checked read-only on 15 November 2026
+  (`corpus/objective-05/runs/2026-11-15-alpha-seed-check/`), 0015 seeds six departments.
+  Finance, Human Resources, Information Technology, Legal and Compliance and Operations are
+  ordinary. Projects is hidden, because only Administrator-only documents carry it.
+- **Nothing needs classifying again.** Every document there carries the department typed at upload,
+  which FR-10 never replaces.
+  - `classify_documents --all` would mark 9 department suggestions applied rather than awaiting
+    confirmation, because they matched the typed department below the old 0.72.
+  - It would also replace the one unanswered proposal, and re-score the 15 held tags.
+  - It costs a model call per document, and it is the user's call.
+
 **`check --deploy` on loopback HTTP** should report exactly four warnings, all about HTTPS, which
 D-64 puts out of scope for the alpha (NFR-03's scan moves to round 2):
 
@@ -148,7 +163,7 @@ D-64 puts out of scope for the alpha (NFR-03's scan moves to round 2):
 
 Anything else is a stop:
 
-- `ai.W001` means FLM is unreachable. Go back to step 2.
+- `ai.W001` means the provider did not answer. Check the keys in `.env` and the network (step 2).
 - `security.W009` means `SECRET_KEY` is weak. Put a generated one in `.env`, as above. Changing the
   key signs everyone out, because sessions are signed with it. Stored passwords and data are not
   affected.
@@ -179,30 +194,42 @@ The build writes `frontend\dist`: `index.html`, `favicon.svg`, and `assets\index
 **Open a new PowerShell window for the server.** Never use the measurement window, or any window
 that has set `DATABASE_URL` or `MEDIA_ROOT` for something else. In it, the database and its media
 are set together, as `.env` names them. Django is then asked which database it will connect to,
-and the server starts only if that is `kmp_demo_20261101`:
+and the server starts only if that is `kmp_alpha_20261113`. The same block, reading the database URL
+from `.env` instead of naming it, is `C:\kmp-demo\2026-11-13\serve-alpha.ps1`, outside the
+repository:
 
 ```powershell
 $root = 'C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype-alpha'
 $py   = "$root\.venv\Scripts\python.exe"
 Set-Location $root
 $env:DEBUG                 = 'False'
-$env:DATABASE_URL          = 'postgres://kmp:kmp@127.0.0.1:5432/kmp_demo_20261101'
-$env:MEDIA_ROOT            = 'C:\kmp-demo\2026-11-01\media'
+$env:DATABASE_URL          = 'postgres://kmp:kmp@127.0.0.1:5432/kmp_alpha_20261113'
+$env:MEDIA_ROOT            = 'C:\kmp-demo\2026-11-13\media'
 $env:ALLOWED_HOSTS         = '127.0.0.1,localhost'
 $env:CSRF_TRUSTED_ORIGINS  = 'http://127.0.0.1:8000,http://localhost:8000'
 $env:SESSION_COOKIE_SECURE = 'False'      # plain HTTP on loopback (D-64)
 $env:CSRF_COOKIE_SECURE    = 'False'
 $env:SPA_DIST_DIR          = "$root\frontend\dist"
-$env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-01\logs\waitress.log'
-$env:FLM_BASE_URL          = 'http://127.0.0.1:8625/v1'
-$name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
+$env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-13\logs\waitress.log'
+$name = & $py manage.py shell --no-imports -c "from django.db import connection; connection.ensure_connection(); print(connection.settings_dict['NAME'])"
+if ($LASTEXITCODE -ne 0) { throw "Not starting: the database did not answer." }
 "Django will connect to: $name"
-if ($name -ne 'kmp_demo_20261101') { throw "Not starting: the database is '$name', not kmp_demo_20261101." }
+if ($name -ne 'kmp_alpha_20261113') { throw "Not starting: the database is '$name', not kmp_alpha_20261113." }
+& $py manage.py check
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
 & "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
 
+- **`manage.py check` runs first, because Waitress runs no system checks.** It refuses a database
+  set up for another provider (ai.E005) and an `EMBEDDING_DIMENSION` that disagrees with the
+  provider (ai.E004), and probes the provider once (D-131).
+- **The line that names the database connects to it first.** A database that is not up yet, as
+  after a restart before Docker Desktop is started, stops the start there. The check would only
+  warn that it could not read it (ai.W004), and Waitress would then serve a database nobody
+  checked.
+
 - **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
-  automatically", so `$name` holds two lines, never equals `kmp_demo_20261101`, and the check
+  automatically", so `$name` holds two lines, never equals `kmp_alpha_20261113`, and the check
   refuses even the right database.
 - **24 threads, set explicitly** (D-85). Waitress defaults to 4.
 - **A request body is capped at 54,525,952 bytes, set explicitly** (D-124). That is
@@ -217,11 +244,11 @@ if ($name -ne 'kmp_demo_20261101') { throw "Not starting: the database is '$name
     before sending it.
   - **Under the cap:** a body over 50 MB still gets the API's own 413.
 - **The console stays quiet.** Waitress's own lines go to `WAITRESS_LOG_PATH` (D-87). From another
-  window, `Get-Content C:\kmp-demo\2026-11-01\logs\waitress.log -Tail 1` shows
+  window, `Get-Content C:\kmp-demo\2026-11-13\logs\waitress.log -Tail 1` shows
   `Serving on http://127.0.0.1:8000`.
 - **`UserWarning: No directory at: ...frontend\dist\`** in the console means there is no build at
   `SPA_DIST_DIR`. Stop the server, do step 5, and start it again.
-- **Errors** go to `C:\kmp-demo\2026-11-01\logs\errors.log` (D-75), with failed provider attempts
+- **Errors** go to `C:\kmp-demo\2026-11-13\logs\errors.log` (D-75), with failed provider attempts
   as WARNINGs (D-82's note).
 - **To stop:** Ctrl+C. A restart also clears the throttle counters and in-flight slots, which live
   in the process's memory (D-79).
@@ -238,9 +265,8 @@ $record = "$env:USERPROFILE\Documents\KMP-alpha-deployments.txt"
 Set-Location $root
 $sha      = git rev-parse HEAD
 $dirty    = [bool](git status --porcelain)
-$flm      = flm version | Select-Object -First 1
 $waitress = & $py -c "import importlib.metadata as m; print(m.version('waitress'))"
-"$(Get-Date -Format o)  commit $sha  dirty=$dirty  database kmp_demo_20261101  flm '$flm'  waitress $waitress threads=24  DEBUG=False  http://127.0.0.1:8000" |
+"$(Get-Date -Format o)  commit $sha  dirty=$dirty  database kmp_alpha_20261113  provider anthropic: claude-haiku-5-5, voyage-4 at 1024  waitress $waitress threads=24  DEBUG=False  http://127.0.0.1:8000" |
     Add-Content $record
 Get-Content $record -Tail 1
 ```
@@ -292,7 +318,7 @@ worktree, in PowerShell:
 
 ```powershell
 cd $root
-.\scripts\register_knowledge_gap_schedule.ps1 -LogDirectory C:\kmp-demo\2026-11-01
+.\scripts\register_knowledge_gap_schedule.ps1 -LogDirectory C:\kmp-demo\2026-11-13
 ```
 
 - **It registers a task for the current Windows user,** daily at 02:00. `-At` sets another time,
@@ -302,6 +328,25 @@ cd $root
 - **No password is asked for or stored,** so the task runs while that user is logged on. If the
   host must run it while logged off, set "Run whether user is logged on or not" in Task Scheduler
   yourself; Windows asks for the password there.
+- **It runs on battery.** Task Scheduler's defaults hold a task while a laptop is on battery and
+  stop one that is unplugged mid-run, and the script turns both off (D-107's note of 15 November
+  2026). A task that stays `Queued` after `Start-ScheduledTask` is waiting on a condition like
+  these.
+- **A task registered by an earlier version of the script keeps those defaults.** Put it right in
+  either of two ways:
+  - **Run this version of the script again.** That replaces the whole task, so anything set by hand
+    in Task Scheduler, such as "Run whether user is logged on or not", has to be set again.
+  - **Change the two conditions in place:**
+
+    ```powershell
+    $task = Get-ScheduledTask -TaskName "KMP knowledge-gap aggregation"
+    $task.Settings.DisallowStartIfOnBatteries = $false
+    $task.Settings.StopIfGoingOnBatteries = $false
+    $task | Set-ScheduledTask
+    ```
+
+    If the task is already `Queued`, `Stop-ScheduledTask` and then `Start-ScheduledTask`, with the
+    same name, start it again.
 - **The provider must be reachable when it runs:** `flm serve` for `flm`, or the keys in `.env` for
   `anthropic`. A run that cannot reach it exits 1 and changes nothing, and the next run takes the
   rows it missed, because each cycle starts from the last committed one. A run missed while the
@@ -324,7 +369,7 @@ in PowerShell:
 
 ```powershell
 cd $root
-.\scripts\register_meeting_summary_schedule.ps1 -LogDirectory C:\kmp-demo\2026-11-01
+.\scripts\register_meeting_summary_schedule.ps1 -LogDirectory C:\kmp-demo\2026-11-13
 ```
 
 - **It registers a task for the current Windows user,** repeating every 60 minutes.
@@ -333,6 +378,9 @@ cd $root
   output to `meeting-summaries.log` in the log directory.
 - **No password is asked for or stored,** so the task runs while that user is logged on, as the
   knowledge-gap task does.
+- **It runs on battery,** as the knowledge-gap task does. A task registered by an earlier version
+  of the script does not. Put it right either of the knowledge-gap task's two ways, with this
+  task's name, "KMP meeting summary retry".
 - **What one run does:**
   1. It closes any summary a stopped server left `Processing` for over 40 minutes, and queues it.
   2. It runs every queued summary again, one at a time.
@@ -365,9 +413,9 @@ both roles hold only once `accounts 0011_seed_view_knowledge_map` has run. Until
 
 - **After step 4's `migrate`,** sign in in the browser and open `http://127.0.0.1:8000/api/roles`.
   Both roles must list `view_knowledge_map`.
-- **If `migrate` stops with "Conflicting migrations detected; multiple leaf nodes" in `accounts`,**
-  do not edit a migration. Two pull requests each added an accounts migration on top of 0008, and
-  the one that merged second owes a merge migration naming both leaves (D-132, D-130).
+- **`accounts 0011` follows FR-03's `0009` and `0010` in one line.** A database at 0008 gets all
+  three from step 4's `migrate`, in order. There is no merge migration: 0011 was re-pointed onto
+  0010 before it was pushed or applied anywhere (D-132's dated note of 15 November 2026; D-130).
 
 The map reads existing tables only, so it needs no data step: a document's uploader, a meeting's
 attendees and the applied tags are what it draws.
@@ -380,9 +428,60 @@ attendees and the applied tags are what it draws.
 3. Start the server in a **new** window (step 6), then do steps 7 and 8. Step 7 appends a new line,
    so the record keeps every deployment in order.
 
-Redeploying does not touch the database. Restoring it again from the snapshot (D-88) resets the
-demonstration's threads and accounts, so do that only before the demonstration threads are
-built (D-40).
+Redeploying does not touch the database. Building it again resets the demonstration's threads
+and accounts, so do that only before the demonstration threads are built (D-40).
+
+## Building the database (once)
+
+`kmp_alpha_20261113` was built on 13 November 2026, with the user's approval, as
+`corpus/objective-02/runs/2026-11-13-alpha-anthropic/README.md` records step by step:
+
+1. `CREATE DATABASE`, then step 4's `migrate` and `check --deploy`. Both vector columns are
+   `vector(1024)`, because the database was set up under the anthropic provider.
+2. The server, as in step 6.
+3. That folder's `run_ingestion_with_accounts.py`. It makes the Administrator with `createsuperuser
+   --noinput` and registers the Employee through FR-01, each with a password held only in memory.
+   It then ingests item 6's corpus through the server, classifying each document at upload (FR-10).
+4. `scripts/seed_objective02_tags.py`, which adds item 6's tags (D-74) and marks `atlas` grown.
+   It finds each document by title, so it runs after the ingestion.
+5. `manage.py classify_documents --all`, so FR-10 classifies every document against those tags.
+   The ingestion classified them at upload, before any tag existed. A `--scheme-only` seed before
+   the ingestion would let the upload's classification see the vocabulary instead. That order was
+   not tried, and it is not a safe substitute as written: `--scheme-only` marks nothing grown, so
+   `atlas` would be offered to Employees, and a held AI link on a document every role reads would
+   keep the full seed from marking it grown later.
+
+**Building it again after FR-10's department list (#102, D-129).** `documents` 0015 seeds the
+department list when it runs, from the documents present at that moment. Step 1's `migrate` runs
+before any document exists, so the list would start empty. Every document's page would then show
+the AI's department as "not one of the known departments", and the Tags page would list none.
+- **The fix:** after step 3, apply 0015 again, so it seeds the list from the ingested documents, as
+  `migrate` does on the database above:
+
+  ```powershell
+  & $py manage.py migrate documents 0014
+  & $py manage.py migrate
+  ```
+
+- **What it does:** the first command reverses 0015, which drops the department table, empty at
+  that point. The second applies 0015 again. A department that only Administrator-only documents
+  carry is seeded hidden.
+- **It is tested:** `apps/documents/tests/test_migration_0015_departments.py`'s
+  `test_0015_backwards_drops_the_table_and_forward_seeds_it_again` runs exactly this.
+- **Do not add the departments by hand on the Tags page instead.** A department added there is
+  never hidden.
+- **When it is safe:** while no later migration depends on 0015, and before anyone has added a
+  department by hand, because the reversal drops any such department.
+- **Then steps 4 and 5,** so the classification sees the list.
+
+**Nobody knows either account's password.** Before the walk, set the Administrator's from this
+worktree, with its `.env`:
+
+```powershell
+& $py manage.py changepassword corpus.admin@example.com
+```
+
+The Employee for a walk registers through FR-01, or has its password set the same way.
 
 ## What this deployment does not do
 
@@ -390,3 +489,6 @@ built (D-40).
   in step 4 and the cookie flags left off.
 - **No access from another machine.** That is the registration point at the top.
 - **It is not M8's hosting.** Where the system is hosted for M8 is a later decision (D-64).
+- **It does not switch providers.** A database keeps the provider it was set up with (D-131). To
+  bring back the FLM alpha, check out `8598d19` and restore `.env.flm-20261101` as `.env`, with FLM
+  running as that commit's runbook says. It serves `kmp_demo_20261101`, which is unchanged.

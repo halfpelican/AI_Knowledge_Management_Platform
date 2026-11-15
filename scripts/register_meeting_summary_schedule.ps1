@@ -20,6 +20,9 @@ No password is asked for or stored, so the task runs while this user is logged o
 run it while logged off needs "Run whether user is logged on or not" set in Task Scheduler by its
 owner, where Windows asks for the password; it is never written to a file.
 
+The task starts on battery and is not stopped when the machine is unplugged, as FR-19's does
+(D-107's note of 15 November 2026).
+
 .PARAMETER EveryMinutes
 How often to run, in minutes. Default 60.
 
@@ -65,9 +68,11 @@ $start = (Get-Date).AddMinutes(1)
 $trigger = New-ScheduledTaskTrigger -Once -At $start -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes)
 # A run missed while the machine was off starts when it is next on. A run is stopped ten minutes
 # short of the next one, and Task Scheduler never starts a second while one is going, so two runs
-# never overlap; a stopped run leaves its summary Processing, which a later run reclaims.
+# never overlap; a stopped run leaves its summary Processing, which a later run reclaims. A run
+# starts on battery and keeps going when the machine is unplugged.
 $limit = New-TimeSpan -Minutes ([Math]::Max(5, $EveryMinutes - 10))
-$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -ExecutionTimeLimit $limit -MultipleInstances IgnoreNew
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -ExecutionTimeLimit $limit -MultipleInstances IgnoreNew
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings `
     -Description "FR-16: retry queued meeting summaries (NFR-20, D-125)." -Force | Out-Null

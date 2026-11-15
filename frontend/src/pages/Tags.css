@@ -1,7 +1,8 @@
-/* FR-10 tag administration (NIT3004, D-119 finding 5): the page frame and the
-   tags table. Tokens only, and no colour pair that tokens.css does not already
-   document with its contrast ratio: body and muted text on the surface, and the
-   two button variants. */
+/* FR-10 tag administration (NIT3004, D-119 finding 5; D-128): the page frame, the
+   form that adds a value, and the tags table. Tokens only, and no colour pair that
+   tokens.css does not already document with its contrast ratio: body and muted text
+   on the surface and the alt surface, a field error on the alt surface, and the two
+   button variants. */
 
 .tags-page {
   max-width: var(--content-max-width);
@@ -17,6 +18,23 @@
   flex-wrap: wrap;
   gap: var(--space-3);
   margin-top: var(--space-4);
+}
+
+/* FR-10: an Administrator adds a value (D-128). One panel, its fields stacked as every
+   form's are, no wider than a field, so it reads as one step at any width. Text on
+   the alt surface keeps the documented ratios (body 13.41:1, muted 6.87:1, a field
+   error 5.97:1), and the panel's border is a separator, not the boundary of a
+   control: the fields and the button draw their own. */
+.tags-create {
+  margin-bottom: var(--space-5);
+}
+
+.tags-create__form {
+  max-width: var(--layout-field-max-width);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-alt);
 }
 
 /* At a narrow width the table scrolls sideways inside its own labelled, focusable

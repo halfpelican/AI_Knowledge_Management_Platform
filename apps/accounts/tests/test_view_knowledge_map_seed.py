@@ -8,12 +8,13 @@ and the test that proves the gate works takes it away from a role and asserts th
 (``apps/api/tests/test_knowledge_map.py``, from both roles).
 
 The reversal is tested two ways, as 0006's to 0008's are: through the migration's own functions,
-and through the migration executor, migrating ``accounts`` back to 0008 and forward again.
+and through the migration executor, migrating ``accounts`` back to 0010 and forward again.
 
-**The number.** 0009 and 0010 are held by FR-03's unmerged branch (D-130), which builds on 0008 as
-this does. While only one of the two is on ``main``, ``accounts`` has one leaf, and the executor
-test below says so. When both are, the pull request that merges second adds a merge migration
-naming both, and that test's leaf becomes the merge.
+**The number and the dependency.** 0009 and 0010 are FR-03's (D-130). This migration was written
+while they were on FR-03's branch, and depended on 0008 as 0009 did. FR-03 reached ``main`` first,
+so the dependency was re-pointed to 0010 in the merge of 15 November 2026, before this migration
+had been pushed or applied anywhere (D-132's dated note). ``accounts`` has one leaf, 0011, and the
+executor test below says so.
 """
 
 import importlib
@@ -32,6 +33,7 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
@@ -41,10 +43,11 @@ pytestmark = pytest.mark.django_db
 seed = importlib.import_module("apps.accounts.migrations.0011_seed_view_knowledge_map")
 
 THIS_MIGRATION = ("accounts", "0011_seed_view_knowledge_map")
-PREVIOUS_MIGRATION = ("accounts", "0008_seed_manage_tags")
+PREVIOUS_MIGRATION = ("accounts", "0010_seed_release_account_locks")
 EARLIER_ADMINISTRATOR_CODES = {
     MANAGE_ROLES_PERMISSION, CONTRIBUTE_CONTENT_PERMISSION, MANAGE_DOCUMENTS_PERMISSION,
     MANAGE_MEETINGS_PERMISSION, REVIEW_KNOWLEDGE_GAPS_PERMISSION, MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
 }
 EARLIER_EMPLOYEE_CODES = {CONTRIBUTE_CONTENT_PERMISSION}
 
@@ -63,9 +66,9 @@ def test_the_migration_uses_the_permission_constant():
     }
 
 
-def test_the_migration_depends_on_0008_and_nothing_else():
-    """It builds on the last accounts migration ``main`` holds, not on FR-03's 0009 or 0010, which
-    are on another branch (D-130): a dependency on either would not load here."""
+def test_the_migration_depends_on_0010_and_nothing_else():
+    """It builds on the last accounts migration ``main`` holds, FR-03's 0010 (D-130). A dependency
+    on 0008, which it had before the merge of 15 November 2026, would give ``accounts`` two leaves."""
     assert seed.Migration.dependencies == [PREVIOUS_MIGRATION]
 
 
@@ -105,7 +108,7 @@ def test_seed_is_reversible(employee_role, administrator_role):
     assert not RolePermission.objects.filter(
         permission__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION
     ).exists()
-    # 0003's to 0008's seeds are untouched: unseeding one migration must not undo another.
+    # 0003's to 0010's seeds are untouched: unseeding one migration must not undo another.
     assert permission_names(administrator_role) == EARLIER_ADMINISTRATOR_CODES
     assert permission_names(employee_role) == EARLIER_EMPLOYEE_CODES
     assert Role.objects.count() == 2  # the roles themselves are 0002's
@@ -123,7 +126,7 @@ def migrate_accounts_to(node):
 
 
 def test_the_migration_reverses_through_the_executor(employee_role, administrator_role):
-    """Migrating ``accounts`` back to 0008 runs ``unseed_permissions`` as Django would, and forward
+    """Migrating ``accounts`` back to 0010 runs ``unseed_permissions`` as Django would, and forward
     again restores the seed for both roles. This also proves ``accounts`` has one leaf and that
     0011 is it: a second leaf stops ``migrate`` and ``makemigrations --check``, which are CI's two
     steps before the suite."""

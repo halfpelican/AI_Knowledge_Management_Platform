@@ -29,6 +29,27 @@ export function dashboardPathForRole(role) {
   return DASHBOARD_PATHS[role] ?? DASHBOARD_PATHS[ROLES.employee]
 }
 
+/*
+ * FR-03's lockout policy, the failures that lock an account and how long the lock lasts, is
+ * not copied here. Since D-130 decision 7 it is the server's .env, and the sign-in page fetches
+ * it from GET /api/auth/lockout-policy (src/api/auth.js getLockoutPolicy), so a change needs no
+ * rebuild. apps/api/tests/test_front_end_constants_agreement.py fails if a copy comes back.
+ */
+
+/**
+ * The remaining-attempts warning shows once this many attempts or fewer remain
+ * before the page's own count reaches the policy's threshold, which at the default
+ * of five is after the third and the fourth consecutive failure (Benjamin's
+ * decision 2, D-130). The page's own rule, with no counterpart on the server.
+ */
+export const LOCKOUT_WARNING_REMAINING = 2
+
+/** A lock's length in words, rounded up to whole minutes, for the sentence that names it. */
+function durationInWords(seconds) {
+  const minutes = Math.ceil(seconds / 60)
+  return minutes === 1 ? '1 minute' : `${minutes} minutes`
+}
+
 /**
  * The two document statuses a 201 can carry (docs/schema-v1.md §3, mirrored in
  * apps/core/constants.py DOCUMENT_STATUS_VALUES). The interface branches on
@@ -178,6 +199,17 @@ export const QUESTION_MAXIMUM_LENGTH = 500
 export const TAG_NAME_MAXIMUM_LENGTH = 255
 
 /**
+ * FR-10's department name, the one an Administrator adds to the department list on the
+ * Tags page (D-129): at most this many characters, the width of `Departments.name`, which
+ * is NAME_MAX_LENGTH as `Tags.tag_name` is. Taken from TAG_NAME_MAXIMUM_LENGTH rather than
+ * written out again, so the one copy apps/api/tests/test_front_end_constants_agreement.py
+ * holds to NAME_MAX_LENGTH covers this bound too. Counted after trimming and
+ * single-spacing, the form the name is sent in. A convenience: the server answers 400
+ * `{"name": [...]}` above it whatever the browser allowed (CLAUDE.md §6, invariant 4).
+ */
+export const DEPARTMENT_NAME_MAXIMUM_LENGTH = TAG_NAME_MAXIMUM_LENGTH
+
+/**
  * The two source types, from the fixed vocabulary the chunks, the search results
  * and the consulted sources all use (docs/schema-v1.md §3).
  */
@@ -297,10 +329,35 @@ export const VALIDATION = {
   // run of spaces one space. The limit is named, so a refusal says what would do.
   tagNameRequired: 'Enter a name for the new topic.',
   tagNameTooLong: `A topic name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // The value an Administrator adds on the tags page (D-128), refused before any
+  // request on the same two rules, worded for a value of any of the three dimensions.
+  tagValueRequired: 'Enter a name for the new tag value.',
+  tagValueTooLong: `A tag name can be at most ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  // The department an Administrator adds to the department list (D-129), refused before
+  // any request on the same two rules, measured as it is sent: trimmed and single-spaced.
+  departmentNameRequired: 'Enter a name for the new department.',
+  departmentNameTooLong: `A department name can be at most ${DEPARTMENT_NAME_MAXIMUM_LENGTH} characters.`,
   // FR-16's action item: only the description is required, on an edit and on an
   // item added by hand. Refused before any request; the server answers 400
   // `{"description": [...]}` for a blank one regardless (CLAUDE.md §6, invariant 4).
   actionItemDescriptionRequired: 'Enter a description.',
+}
+
+/**
+ * A tag dimension in the words a sentence uses, singular and plural, keyed on the
+ * contract's "Project", "Process" and "Topic" without regard to case. Any other is
+ * used as it came, lower-cased. Read by the sentences about a value the AI proposed
+ * (D-128), which name the proposal's own dimension.
+ */
+const DIMENSION_WORDS = {
+  project: { one: 'project', many: 'projects' },
+  process: { one: 'process', many: 'processes' },
+  topic: { one: 'topic', many: 'topics' },
+}
+
+function dimensionWords(dimension) {
+  const key = String(dimension ?? '').toLowerCase()
+  return DIMENSION_WORDS[key] ?? { one: key, many: key }
 }
 
 /**
@@ -313,12 +370,45 @@ export const TEXT = {
   // FR-04 wording: "a brief confirmation 'You've been logged out'".
   loggedOut: 'You’ve been logged out.',
   registered: 'Your account has been created. Sign in to continue.',
-  // FR-02: "Where the account is locked and the submitted password was correct,
-  // a distinct message is shown." Distinct from the 401 text, and it names no
-  // account detail, so it discloses nothing a 401 does not.
+  // FR-02 and FR-03 (D-130): the server's 403 `account_locked`, which only a request whose
+  // password matched receives, and only within D-26's notice ceiling, twice the running threshold. It is
+  // distinct from the 401 text and names no account detail, so it discloses nothing
+  // to anyone without the password. It names the release, so a locked-out user has a
+  // route forward (FR-03, UC-02 E2): D-26 took that promise out while no release
+  // existed, and D-130 built one. "The timer" is the countdown beside Sign in, run
+  // from the reply's `retry_after`, or from the policy's duration where it gave none (decision 7).
   accountLocked:
     'This account is temporarily locked after too many failed sign-in attempts. ' +
-    'Please try again later.',
+    'Try again when the timer ends, or ask an administrator to unlock it.',
+  // FR-03: the sign-in page's own count of consecutive failures for the address typed
+  // reached the running policy's threshold. The page does not know whether the address has an account,
+  // nor whether the server locked it: the count is the page's alone (D-130 decision
+  // 1), and failures elsewhere can have locked it sooner, while a success elsewhere
+  // can have reset the server's count. So the sentence is true of any address (the
+  // security review, finding C): "if this address has an account", "may" and "up to".
+  // `durationSeconds` is the running policy's (D-130 decision 7).
+  accountMayBeLocked: (durationSeconds) =>
+    `Too many failed sign-in attempts. If this address has an account, it may be locked for up to ${durationInWords(durationSeconds)}, ` +
+    'and an administrator can unlock it sooner.',
+  // Shown with either lock message. A release (POST /api/users/{id}/unlock) reaches the server
+  // and not a sign-in page already open, whose countdown is its own record. So the page says how
+  // to pick the release up: a reload clears that record (the pre-PR security review, finding 1).
+  // Conditional, so it is true of any address. A lock still live answers again, but every attempt
+  // during it counts toward D-26's notice ceiling. Within it, the right password gets the 403
+  // again; past it, even the right password gets the generic 401 until the lock ends.
+  lockedReloadHint: 'If an administrator has unlocked the account, reload this page to sign in.',
+  // FR-03's warning, beside FR-02's generic banner, once LOCKOUT_WARNING_REMAINING or
+  // fewer attempts remain (decision 2). From the page's own count, so it is the same
+  // for every address, registered or not (decision 1).
+  attemptsRemaining: (count) =>
+    count === 1
+      ? '1 attempt remaining before temporary lockout'
+      : `${count} attempts remaining before temporary lockout`,
+  // FR-03's countdown beside the disabled Sign in button, in minutes and seconds.
+  lockoutCountdown: (seconds) => {
+    const whole = Math.max(0, Math.ceil(seconds))
+    return `Try again in ${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`
+  },
   // FR-06: the "403 - Access Denied" page a guarded route redirects to. It never
   // describes what the requested screen would have contained.
   accessDeniedTitle: '403 – Access Denied',
@@ -337,6 +427,63 @@ export const TEXT = {
   // accidental lockout of the last administrator."
   roleChangeSelfDemotion:
     'You cannot remove your own Administrator role. Ask another Administrator to change it for you.',
+
+  /* ---- FR-03 unlocking an account, on Role management (D-130) ---------- */
+  // The page's introduction: FR-05's two sentences, as they were, then FR-03's. An
+  // Administrator may unlock any account but their own (FR-03).
+  rolesIntro:
+    `Choose a role for a user and save the row. Changes take effect on that user's next request and are recorded in the audit log. ` +
+    'An account locked after repeated failed sign-ins can be unlocked from its row, except your own.',
+  // The Account column. `lock` arrives on each user of GET /api/users for a holder of
+  // release_account_locks; the server checks that permission on every unlock
+  // whatever this screen shows (CLAUDE.md §6, invariant 4).
+  accountColumn: 'Account',
+  // A live lock, in words and in a bordered badge, so it is told by more than colour
+  // (WCAG 2.1 SC 1.4.1). `time` is when the lock ends.
+  accountLockedUntil: (time) => `Locked until ${time}`,
+  // An account with no live lock: quiet, because nothing needs doing.
+  accountActive: 'Active',
+  // The signed-in Administrator's own locked row, which has no Unlock button: FR-03
+  // forbids releasing a lock on one's own account.
+  accountLockedOwn: 'Another administrator can unlock your account.',
+  // The same row when the list holds no other Administrator. Nobody can release that lock, so
+  // the row says when it ends rather than promise a release (the pre-PR security review,
+  // finding 2). `time` is when the lock ends.
+  accountLockedOwnAlone: (time) => `No other administrator can unlock your account. It unlocks at ${time}.`,
+  unlock: 'Unlock',
+  // The accessible name, so a column of "Unlock" buttons each name their account
+  // (WCAG 2.1 SC 2.4.6), starting with the visible word (SC 2.5.3).
+  unlockLabel: (name) => `Unlock ${name}'s account`,
+  unlockConfirm: (name) => `Unlock ${name}'s account?`,
+  unlockConfirmLabel: 'Unlock account',
+  unlocking: 'Unlocking…',
+  unlockCancel: 'Cancel',
+  // When the lock began and from which address, where the lockout that set it was
+  // recorded; both are missing for a lock older than the LoginAttempts table, and
+  // then only its end is said. Each argument is already formatted for display.
+  unlockLockDetails: (lockedAt, sourceIp, lockedUntil) => {
+    const at = lockedAt ? ` at ${lockedAt}` : ''
+    const from = sourceIp ? ` from ${sourceIp}` : ''
+    return at || from ? `Locked${at}${from}, until ${lockedUntil}.` : `Locked until ${lockedUntil}.`
+  },
+  // FR-03: a release restores the ability to attempt authentication and nothing
+  // more; the Administrator never sees, sets or resets the password.
+  unlockPasswordUnchanged: 'Unlocking lets them try to sign in again at once. Their password is not changed.',
+  // The security review, finding L3: the request to unlock can come from whoever has
+  // been guessing the password, so the dialogue asks for the check before the press.
+  unlockCheckRequest: (name) =>
+    `Check that the request to unlock really comes from ${name}. ` +
+    'A lock can mean that someone else has been trying to guess the password.',
+  unlockedTitle: 'Account unlocked',
+  accountUnlocked: (name) => `${name}'s account is unlocked.`,
+  unlockFailedTitle: 'Could not unlock',
+  // The 409: the lock ended, or another administrator released it, since the list
+  // was read. Not a failure of anything the reader wanted, so said as information.
+  unlockNotLocked: 'That account is no longer locked. The list has been reloaded.',
+  // The 403 for the requester's own account. There is no button for it, so this is
+  // reached only if the screen's idea of who is signed in is out of date.
+  unlockRefusedTitle: 'Unlock refused',
+  unlockSelfRefused: 'You cannot unlock your own account. Ask another administrator to unlock it.',
 
   /* ---- D-79's limits and D-85's in-flight refusal, on every screen that can meet one */
   // Login and registration keep the API client's own 429 text (D-26). These are
@@ -724,21 +871,33 @@ export const TEXT = {
   tagConfirmed: (name) => `“${name}” is now a confirmed tag.`,
   tagRemoved: (name) => `“${name}” was removed.`,
   tagRejected: (name) => `The suggestion “${name}” was rejected.`,
-  // Held suggestions: provisional AI tags and proposed new Topic values. They are
-  // not the document's tags until confirmed (FR-10), and the heading says so.
+  // Held suggestions: provisional AI tags, and the values the AI proposed below the
+  // confidence threshold in Project, Process or Topic (D-128). They are not the
+  // document's tags until confirmed (FR-10), and the heading says so.
   suggestedTagsHeading: 'Suggested tags awaiting confirmation',
   suggestedTagsIntro:
     'These are suggestions, not tags of the document. Confirm one to add it as a tag, or reject it.',
-  // A Topic value the AI proposed that is not yet in the list of topics: FR-10
-  // allows a new value in Topic only, and only once a person confirms it.
-  proposedTopicLabel: 'New topic, not yet in the list of topics',
-  proposedTopicConfirmLabel: (value) => `Confirm new topic ${value}`,
-  proposedTopicRejectLabel: (value) => `Reject new topic ${value}`,
-  proposedTopicConfirmed: (value) => `“${value}” was added as a topic tag.`,
-  proposedTopicRejected: (value) => `The proposed topic “${value}” was rejected.`,
+  // A value the AI proposed below the threshold that is not in this document's list
+  // for its dimension (D-128; `proposed_tags`). It is no tag of the document's until a
+  // person confirms it. Worded alike whether no tag has that name, a retired one has,
+  // or one carried only by material some reader of the document cannot see has,
+  // because the reader must not be able to tell which (CLAUDE.md §6, invariant 1).
+  // An AI tag applied at or above the threshold is a different thing and is never
+  // called new: it reads as any AI tag reads (`tagSuggestedByAI`). Each sentence
+  // names the proposal's dimension; Topic's words are the ones it had before D-128.
+  proposedTagLabel: (dimension) => {
+    const { one, many } = dimensionWords(dimension)
+    return `New ${one}, not yet in the list of ${many}`
+  },
+  proposedTagConfirmLabel: (dimension, value) => `Confirm new ${dimensionWords(dimension).one} ${value}`,
+  proposedTagRejectLabel: (dimension, value) => `Reject new ${dimensionWords(dimension).one} ${value}`,
+  proposedTagConfirmed: (dimension, value) => `“${value}” was added as a ${dimensionWords(dimension).one} tag.`,
+  proposedTagRejected: (dimension, value) => `The proposed ${dimensionWords(dimension).one} “${value}” was rejected.`,
   // FR-10's provenance clause and UC-09 A3: a person applies a tag, choosing one the
   // document's own classification scheme offers (`tag_options`) or typing a new
-  // Topic, the one dimension FR-10 lets grow. What they add reads as a person's tag.
+  // Topic, the one dimension a person may name a new value in: D-128 lets the AI add
+  // Project and Process values and left this form as it was. What a person adds
+  // reads as a person's tag.
   tagAddHeading: 'Add a tag',
   tagAddIntro:
     'Choose a tag offered for this document, or type a new topic. A tag you add is marked as added by a person.',
@@ -1511,11 +1670,12 @@ export const TEXT = {
   // The contract: the dashboard's filters narrow neither the count nor the list.
   dashboardGapsNote: 'The open entries that came up most often. The filters above do not apply to this panel.',
 
-  /* ---- FR-10 tag administration (D-119 finding 5) ----------------------- */
+  /* ---- FR-10 tag administration (D-119 finding 5; D-128) ---------------- */
   // FR-10's taxonomy clause: "Tags are deactivated rather than deleted where content
-  // still references them, preserving historical classification", and its CRUD line
-  // gives Tags "Delete". The screen is src/pages/Tags.jsx, an Administrator's; the
-  // server checks `manage_tags` on every request whatever it shows (invariant 4).
+  // still references them, preserving historical classification", and its CRUD line,
+  // which gives Tags "Create" and "Delete". The screen is src/pages/Tags.jsx, an
+  // Administrator's; the server checks `manage_tags` on every request whatever it
+  // shows (invariant 4).
   // The page heading and the navigation link, which names the screen it opens.
   tagsHeading: 'Tags',
   tagsIntro:
@@ -1545,9 +1705,12 @@ export const TEXT = {
   tagDeleteLabel: (dimension, name) => `Delete ${dimension} tag ${name}`,
   tagDeleteConfirm: (dimension, name) => `Delete the ${dimension} tag “${name}”?`,
   // What the DELETE will do, said before it is sent. The server decides which from
-  // the references it finds, so the sentence gives both.
+  // the references it finds, so the sentence gives both. Since D-128 a retired tag is
+  // not out of reach for good: the AI applying the value with enough confidence, or
+  // a person confirming it as a suggestion, brings it back, and the last sentence
+  // says so rather than promising it can never be applied again.
   tagDeleteBody:
-    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, it is shown as retired, and it can no longer be applied.',
+    'If no document or meeting references this tag, it is deleted. If any still does, it is deactivated instead: it stays on that content, so past classification is kept, and it is shown as retired and no longer offered for tagging. A retired topic can come back later, if a person confirms it from the AI’s suggestions or names it again, on a document everyone can read; a retired project or process stays retired.',
   tagDeleteConfirmLabel: 'Delete tag',
   tagDeleting: 'Deleting…',
   tagDeleteCancel: 'Cancel',
@@ -1559,7 +1722,127 @@ export const TEXT = {
   // The 404: it no longer exists, so its row goes.
   tagGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
   tagDeleteFailed: 'Could not delete the tag',
-  // A 403 on a delete: the role does not hold `manage_tags` now, whatever it held when
-  // the list was read. Every action is withdrawn.
-  tagsNotPermitted: 'Your role may not manage tags, so they cannot be deleted or deactivated.',
+  // A 403 on an add or a delete: the role does not hold `manage_tags` now, whatever it
+  // held when the list was read. Every action is withdrawn, the add form with them, and
+  // the department list's too, since its routes ask for the same code (D-129).
+  tagsNotPermitted: 'Your role may not manage tags or departments, so they cannot be added, deleted or deactivated.',
+
+  // An Administrator adds a value (D-128; FR-10's CRUD line gives Tags "Create"). The
+  // value is vocabulary: offered for every document whatever its audience, and listed
+  // for the AI when it classifies one. The two sentences under the heading say so, and
+  // what the AI does with values outside the list (D-129, which reverses D-128's
+  // creation of values): stated where a person retiring a tag will read it.
+  tagCreateHeading: 'Add a tag value',
+  tagCreateScope:
+    'A value added here is offered for every document, whatever its audience: to everyone who tags a document, and to the AI when it classifies one. Anyone who can read a document can see its name.',
+  tagCreateAiNote:
+    'The AI does not add values of its own. When it classifies a document it assigns values already in this list; a new topic it suggests waits for a person to confirm it, and a project or process outside the list is discarded. A retired topic comes back only if a person confirms or names it again, on a document everyone can read.',
+  tagCreateNameLabel: 'Name',
+  // The server stores a name trimmed, single-spaced and in lower case, so the name the
+  // list shows, and the 201 announces, can differ from the one typed in case alone.
+  tagCreateNameHint: `Stored in lower case. Up to ${TAG_NAME_MAXIMUM_LENGTH} characters.`,
+  tagCreateAdd: 'Add tag value',
+  // The 201, polite: the value as stored, its dimension, and where it is now offered.
+  tagCreated: (dimension, name) => `“${name}” was added as a ${dimension} tag. It is now offered for every document.`,
+  // The 409: a tag of that name is already in the dimension, active or retired. The
+  // tag its `tag_id` names is looked up in the list, read again first, so a retired one
+  // is said to be retired: this form does not bring a retired tag back, and nor does
+  // any other route (D-105's note). Never the reply's `detail`.
+  tagCreateExists: (dimension, name) => `“${name}” is already a ${dimension} tag, so it was not added again.`,
+  tagCreateExistsRetired: (dimension, name) =>
+    `“${name}” is already a ${dimension} tag, and it is retired. A retired tag is not added again here.`,
+  // The title over a 400, a 429 or any other failure of the add. A 429 is the
+  // `tagging` limit adding a tag to a document counts against too, so it is worded as
+  // that one is (`tagLimitReached`), and a 400 points at the field it names
+  // (`classificationCheckFields`).
+  tagCreateFailed: 'Could not add the tag value',
+
+  /* ---- FR-10's department list (D-129) ----------------------------------- */
+  // The scheme's fourth dimension, kept by an Administrator on the Tags page (the user's
+  // decision of 13 November 2026). The list is what the AI may assign and nothing else:
+  // `Documents.department` stays the one field FR-14 and FR-15 read (D-72), and the
+  // upload form still takes any department. The screen is
+  // src/components/Departments.jsx; the server checks `manage_tags` on every request
+  // whatever it shows (invariant 4).
+  departmentsHeading: 'Departments',
+  // The three things the user decided, said where the list is kept: the AI assigns
+  // only listed departments, the upload form takes any, and retiring keeps a department
+  // on its documents (and in FR-14's and FR-15's filters, which read the documents).
+  departmentsSuggestNote: 'The AI assigns a department to a document only from this list.',
+  departmentsUploadNote:
+    'The upload form still accepts any department. One typed there that is not in this list stays on its document, but the AI does not assign it.',
+  departmentsRetiredNote:
+    'A retired department stays on the documents that have it, and in the department filters, but the AI no longer assigns it. A department no document has is deleted rather than retired.',
+  departmentsListHeading: 'All departments',
+  loadingDepartments: 'Loading the departments…',
+  departmentsLoadFailed: 'Could not load the departments',
+  // The retry under a failed read. Its name says which list, after the visible words
+  // (WCAG 2.1 SC 2.5.3), since the tags' own "Try again" can be on the page as well.
+  departmentsRetryLabel: 'Try again to load the departments',
+  noDepartments: 'There are no departments in the list, so the AI assigns none.',
+  // The server's order, which the screen keeps.
+  departmentsTableCaption: 'Departments by name, with whether each is active and how many documents use it.',
+  departmentsColumnName: 'Name',
+  departmentsColumnState: 'State',
+  departmentsColumnItems: 'Documents using it',
+  departmentsColumnAction: 'Action',
+  departmentStateActive: 'Active',
+  departmentStateRetired: 'Retired',
+  // One action per row, named for what the list says it will do: Retire for an active
+  // department documents use, Delete for one no document uses or one already retired,
+  // where deleting is the only change left. The server decides from the documents as
+  // they are when it is asked, so each confirmation gives the other outcome too. Each
+  // accessible name adds the department after the visible word (WCAG 2.1 SC 2.4.6, SC
+  // 2.5.3).
+  departmentRetire: 'Retire',
+  departmentRetireLabel: (name) => `Retire department ${name}`,
+  departmentRetireConfirm: (name) => `Retire the department “${name}”?`,
+  departmentRetireBody:
+    'It stays on the documents that have it, and in the department filters, but the AI no longer assigns it. You can bring it back by adding its name again. If no document has it any more, it is deleted instead.',
+  departmentRetireConfirmLabel: 'Retire department',
+  departmentRetiring: 'Retiring…',
+  departmentRetireFailed: 'Could not retire the department',
+  departmentDelete: 'Delete',
+  departmentDeleteLabel: (name) => `Delete department ${name}`,
+  departmentDeleteConfirm: (name) => `Delete the department “${name}”?`,
+  departmentDeleteBody:
+    'If no document has this department, it is deleted. If any does, it is kept on those documents as a retired department instead, and the AI does not assign it.',
+  departmentDeleteConfirmLabel: 'Delete department',
+  departmentDeleting: 'Deleting…',
+  departmentDeleteFailed: 'Could not delete the department',
+  departmentActionCancel: 'Cancel',
+  // The 200: retired because documents have it, or still retired, for one that was.
+  departmentRetired: (name) =>
+    `“${name}” is retired rather than deleted, because documents have it. It stays on them, and the AI no longer assigns it.`,
+  // The 204: no document had it, so it is gone.
+  departmentDeleted: (name) => `“${name}” was deleted.`,
+  // The 404: it no longer exists, so its row goes.
+  departmentGone: (name) => `“${name}” no longer exists, so it has been taken off the list.`,
+  // A 403 on an add, a retire or a delete. The department routes ask for the same
+  // `manage_tags` as the tag routes, so every action on the page is withdrawn.
+  departmentsNotPermitted: 'Your role may not manage departments or tags, so they cannot be added, retired or deleted.',
+  // Adding a department. A new one is vocabulary, offered to the AI for every document
+  // whatever its audience, as a tag value added here is; the scope sentence says so, and
+  // that a retired department comes back this way, which is the only way back.
+  departmentCreateHeading: 'Add a department',
+  departmentCreateScope:
+    'A new department added here can be assigned to any document, whatever its audience. Adding the name of a retired department brings it back as it was before it was retired.',
+  departmentCreateNameLabel: 'Department name',
+  // The server trims a name and single-spaces it, and keeps its case (D-129: departments
+  // keep their case on documents, unlike tags).
+  departmentCreateNameHint: `Stored with the capitals you type. Up to ${DEPARTMENT_NAME_MAXIMUM_LENGTH} characters.`,
+  departmentCreateAdd: 'Add department',
+  departmentAdding: 'Adding…',
+  // The 201, polite: the department as stored, and what it is now for.
+  departmentCreated: (name) => `“${name}” was added to the department list. The AI can now assign it to any document.`,
+  // The 200: the name was a retired department's, and it is active again.
+  departmentReactivated: (name) => `“${name}” was retired, and has been brought back. The AI can assign it again.`,
+  // The 409: an active department of that name, without regard to case, is in the list.
+  // Named as the list spells it, never by the reply's `detail`.
+  departmentCreateExists: (name) => `“${name}” is already in the department list, so it was not added again.`,
+  // The title over a 400, a 429 or any other failure of the add.
+  departmentCreateFailed: 'Could not add the department',
+  // The 429: the `tagging` limit, which adding a tag counts against too.
+  departmentLimitReached: (when) =>
+    `The limit on adding tags and departments has been reached, so this department was not added. You can try again ${when}.`,
 }

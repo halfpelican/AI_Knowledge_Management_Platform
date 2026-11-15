@@ -7,9 +7,11 @@ browse would demonstrate empty, so this script writes the Project, Process and T
 - ``Tag`` rows by name and dimension (``Tag.save`` normalises the name to lower case);
 - ``ContentTag`` rows with ``applied_by="user"`` and ``confirmed=True``.
 
-**Not through the API.** There is no tagging route, and adding one would build part of FR-10's
-surface early. The ORM is the honest path for seed data, and it writes nothing a route could not
-later write the same way.
+**Not through the API.** When this was written (D-74) there was no tagging route, and adding one
+would have built part of FR-10's surface early. FR-10's routes exist now: ``POST /api/tags`` adds a
+vocabulary value as ``--scheme-only`` does (D-128), and ``POST /api/documents/{id}/tags`` applies a
+tag as a person. The script stays on the ORM because it seeds a whole database in one run,
+idempotently and without a session.
 
 **Idempotent.** Each tag and each document-tag link is ``get_or_create``d, so a second run adds
 nothing and says so.
@@ -27,11 +29,15 @@ every reader whatever happens to its links later. ``--scheme-only`` links nothin
 nothing: its values are unlinked vocabulary, as Objective 05 measured them.
 
 **Run it before any document is classified.** Classification sees the scheme as it stands, so a
-document classified before these values existed holds a seeded name it suggested in its
-``proposed_topics`` (a Topic) or ``discarded_suggestions`` (a Project or Process), not as a link. A
-proposal stays pending until a person confirms or rejects it or the document is classified again;
-confirming it links the seeded Topic and leaves it vocabulary (``_bring_into_use``; D-105's dated
-note of 10 November 2026, night).
+document classified before these values existed has had a seeded name it suggested treated as a
+value outside the scheme, at any confidence (D-129). A Topic is held in the document's
+``proposed_tags``, not linked; the proposal stays pending until a person confirms or rejects it or
+the document is classified again, and confirming it after this script has run links the seeded
+value and leaves it vocabulary (``confirm_proposed_tag``, ``_bring_into_use``; D-105's dated note of
+10 November 2026, night). A Project or Process value is recorded in ``discarded_suggestions`` and
+lost to that run. Under D-128 (12 to 13 November 2026) the classifier created such a value as a
+GROWN Tag at or above the threshold. This script's ``get_or_create`` finds a Tag made then and
+leaves it grown, since nothing unsets ``grown``.
 
 **Which database.** It writes wherever ``DATABASE_URL`` points, and prints the name first. Since
 1 November 2026 the alpha's database is ``kmp_demo_20261101``, restored from item 6's snapshot, and

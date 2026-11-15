@@ -11,15 +11,16 @@ the gate works takes the code away from a role and asserts the 403
 (``apps/api/tests/test_knowledge_map.py``). What a holder is shown is still only what their own
 role may read, so the code is safe for a role that does not read every source.
 
-**Why it is numbered 0011 and depends on 0008.** 0009 and 0010 are held by FR-03's unmerged
-branch (``0009_login_attempts`` and ``0010_seed_release_account_locks``, D-130), which also builds
-on ``0008_seed_manage_tags``. Taking 0009 here would give two different migrations one number.
-Once both branches are on ``main`` the accounts app has two leaves, and the pull request that
-merges second adds a merge migration naming both; neither branch edits a migration the other has
-pushed (CLAUDE.md section 7).
+**Why it is numbered 0011 and depends on 0010.** It was written while FR-03's branch held 0009
+and 0010 (``0009_login_attempts`` and ``0010_seed_release_account_locks``, D-130), and at first
+depended on ``0008_seed_manage_tags``, as FR-03's 0009 did. FR-03 reached ``main`` first, so this
+migration's dependency was re-pointed to 0010 in the merge of 15 November 2026: it had never been
+pushed, and no database had applied it (D-132's dated note of that day records the check). The
+accounts app keeps one leaf, and no merge migration is needed. The dependency is a property of the
+node and not an operation; the operations are as first written (CLAUDE.md section 7).
 
 Administrator's permission set stays a superset of Employee's, which is what "Administrator
-generalises Employee" means here. The name is frozen here as 0003 to 0008 freeze theirs; a test
+generalises Employee" means here. The name is frozen here as the earlier seeds freeze theirs; a test
 asserts ``VIEW_KNOWLEDGE_MAP_PERMISSION`` in ``apps.core.constants`` agrees. Idempotent and
 reversible.
 """
@@ -55,7 +56,7 @@ def unseed_permissions(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("accounts", "0008_seed_manage_tags"),
+        ("accounts", "0010_seed_release_account_locks"),
     ]
 
     operations = [

@@ -41,6 +41,15 @@ CHUNK_OVERLAP = 50
 # availability measure second.
 MAXIMUM_CHUNKS_PER_SOURCE = 1000
 
+# --- Embedding width (FR-08, risk R10; docs/decisions.md D-131) ------------------------
+# The length of the vectors each provider's embedding model returns. The provider is chosen once,
+# at setup: AI_PROVIDER in .env, before the first migrate. settings.EMBEDDING_DIMENSION follows
+# from it, the vector columns are created at that width, and a database keeps it. A database keeps
+# the provider it was set up with, and a change of provider means a new database (the user's
+# decision of 13 November 2026, D-131). voyage-4 returns 1024, because no output_dimension is sent
+# (apps/ai/anthropic.py), and FLM's embed-gemma returns 768.
+EMBEDDING_DIMENSION_BY_PROVIDER = {"anthropic": 1024, "flm": 768}
+
 # --- PDF extraction bounds (FR-08, FR-09; docs/decisions.md D-81) ---------------------
 # Four bounds on the work pypdf may do for one PDF (two per-stream caps, the page cap and
 # the operator budget), plus the text ceiling, which is MAXIMUM_CHUNKS_PER_SOURCE above
@@ -464,18 +473,46 @@ PASSWORD_SPECIAL_CHARACTERS = frozenset(string.punctuation)
 # --- Account lockout (FR-02 Server-End; FR-03, NIT3004) -------------------------------
 # FR-02 Business Logic: "Failed attempts increment a counter; five consecutive
 # failures lock the account for 15 minutes", and FR-02 Responses: "403 forbidden if
-# account is locked". Enforcement is therefore FR-02's, not FR-03's; FR-03 adds the
-# interface (remaining-attempt warning, countdown) and the administrator release.
-# Configuration values rather than literals, as FR-03 Business logic requires.
+# account is locked". Enforcement is therefore FR-02's, not FR-03's. FR-03 adds the
+# remaining-attempt warning, the countdown, the administrator release
+# (RELEASE_ACCOUNT_LOCKS_PERMISSION, below) and the LoginAttempts table that records
+# each lockout and each release (D-130).
+#
+# FR-03 Business logic: "threshold and lockout duration are configuration values rather than
+# literals, so the policy can be tightened without code changes".
+# - **These two are the defaults.** The running values are settings.LOCKOUT_THRESHOLD and
+#   settings.LOCKOUT_DURATION, read from the .env variables LOCKOUT_THRESHOLD and
+#   LOCKOUT_DURATION_MINUTES, which default to these (config/settings.py, D-130 decision 7).
+# - **Read the running values at request time:** LoginView does, and so does
+#   GET /api/auth/lockout-policy, which gives the sign-in page its copy.
+# - **Not here, and not in frontend/src/constants.js:** the browser's copy, which since D-130
+#   decision 7 it fetches at run time.
 LOCKOUT_THRESHOLD = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
+# The policy may only be tightened (FR-03's "so the policy can be tightened"; NFR-04's five
+# attempts and 15 minutes; Benjamin's decision 8, D-130). So config/settings.py refuses to start on:
+# - a threshold outside 1 to LOCKOUT_THRESHOLD;
+# - a duration outside LOCKOUT_DURATION to LOCKOUT_DURATION_MAXIMUM.
+# The maximum exists because a duration far longer overflows the lock's timestamp at the threshold
+# failure, a 500 that only a registered address could trigger (the final security review, M1).
+LOCKOUT_DURATION_MAXIMUM = timedelta(days=365)
 # How many failed attempts in total may still be answered with the distinct
-# "account is locked" notice. Past this, a locked account answers every attempt with
-# the generic message, right password or wrong. Without a ceiling the lock withheld
-# the session but not the answer: guessing during the window was unlimited and each
-# response said whether that guess was correct (D-26). Twice the threshold leaves a
-# user who mistypes once after locking themselves out with the useful message.
-LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * 2
+# "account is locked" notice, as a multiple of the running threshold. Past it, a locked
+# account answers every attempt with the generic message, right password or wrong.
+# Without a ceiling the lock withheld the session but not the answer: guessing during the
+# window was unlimited and each response said whether that guess was correct (D-26). Twice
+# the threshold leaves a user who mistypes once after locking themselves out with the useful
+# message. LoginView multiplies it by settings.LOCKOUT_THRESHOLD.
+LOCKOUT_NOTICE_CEILING_FACTOR = 2
+# The ceiling at the default threshold, for the tests that run on the defaults.
+LOCKOUT_NOTICE_CEILING = LOCKOUT_THRESHOLD * LOCKOUT_NOTICE_CEILING_FACTOR
+# What a LoginAttempts row records (FR-03, D-130; docs/schema-v1.md section 3): a lockout,
+# written by login in the transaction that sets locked_until, or an Administrator's release
+# of one. Nothing else is recorded. An ordinary sign-in, failed or not, writes no row, so an
+# address with no account is never stored.
+LOGIN_ATTEMPT_LOCKOUT = "lockout"
+LOGIN_ATTEMPT_RELEASE = "release"
+LOGIN_ATTEMPT_EVENTS = (LOGIN_ATTEMPT_LOCKOUT, LOGIN_ATTEMPT_RELEASE)
 
 # Requests per minute allowed to the two anonymous authentication endpoints, per
 # client address. Lockout without a throttle is a denial-of-service primitive:
@@ -506,8 +543,9 @@ SEARCH_THROTTLE_RATE = "30/min"
 # person types there becomes a permanent Tag, which joins the scheme that later classification
 # prompts list with no cap (apps/ai/classification.py) and that tag_options offers. Like search's,
 # the rate is not about NPU time, since applying a tag calls no provider: it bounds how fast one
-# user can grow the vocabulary. The page sends one request per tag a person adds. The other tag
-# routes are not throttled, and D-79's note says why.
+# user can grow the vocabulary. The page sends one request per tag a person adds. Since D-128
+# the same scope also limits POST /api/tags, an Administrator adding a vocabulary value; its GET is
+# not throttled. The other tag routes are not throttled, and D-79's note says why.
 TAGGING_THROTTLE_RATE = "30/min"
 # POST /api/transcriptions, scope "transcription" (D-123). The page posts one segment at a
 # time, each taking FLM 7-10 s for 30 s of audio, so a transcribing page sends about six a
@@ -695,8 +733,8 @@ EFFECTIVE_ROLES = {
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
 # role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, 0007 for
 # REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below), 0008 for
-# MANAGE_TAGS_PERMISSION and 0011 for VIEW_KNOWLEDGE_MAP_PERMISSION (under "Knowledge map"
-# above; 0009 and 0010 are FR-03's, on its own branch, D-130); a test asserts the constants and
+# MANAGE_TAGS_PERMISSION, 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION and 0011 for
+# VIEW_KNOWLEDGE_MAP_PERMISSION (under "Knowledge map" above); a test asserts the constants and
 # the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
@@ -722,7 +760,15 @@ MANAGE_MEETINGS_PERMISSION = "manage_meetings"
 # a tag content still references or deletes an unused one. Held by Administrator only, seeded by
 # accounts migration 0008. The inventory is unscoped, which is safe only for a role that reads
 # every source (D-66); apps/accounts/tests/test_manage_tags_seed.py holds every holder to that.
+# Since D-129 it also guards the department list (GET, POST /api/departments and
+# DELETE /api/departments/{id}), whose counts of documents are unscoped for the same reason.
 MANAGE_TAGS_PERMISSION = "manage_tags"
+# FR-03's administrator release (D-130): POST /api/users/{id}/unlock clears an account's lock,
+# and GET /api/users shows each live lock to a holder. FR-03: "Only a user holding the
+# Administrator role may release a lock." Held by Administrator only, seeded by accounts
+# migration 0010. A code of its own rather than manage_roles, so that granting one never grants
+# the other (D-99's reason).
+RELEASE_ACCOUNT_LOCKS_PERMISSION = "release_account_locks"
 
 # Provenance of a ContentTags row (FR-10, FR-15), and of the department a document carries
 # (DocumentAnalysis.department_applied_by, D-119 finding 10): the machine's, or a person's.
@@ -769,10 +815,21 @@ CLASSIFICATION_CONFIDENCE_THRESHOLD = 0.95
 # reads both.
 CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
 
+# A department's threshold, per classification model (D-129, the lead's decision of 13 November 2026,
+# in a tabbed question), from the run in corpus/objective-05/runs/2026-11-13-tag-threshold/. D-106's
+# rule on departments alone found no split (56 right, 1 wrong), so it took the lowest right
+# confidence, 0.30. The rule pooled with tags gave 0.25, capped from 0.50, and the user chose two
+# values instead: departments 0.30, tags 0.72 (D-129). A model not listed uses the shared value for
+# that model (CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL, else CLASSIFICATION_CONFIDENCE_THRESHOLD),
+# so gemma3:4b keeps 0.95. The type and the tags always use the shared value. apps/documents/
+# classification.py's department_threshold() reads this.
+CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.30}
+
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
 # recorded per assignment on DocumentAnalysis (doc_type_outcome, department_outcome):
-#   applied      at or above CLASSIFICATION_CONFIDENCE_THRESHOLD and written to the effective
-#                field, still marked AI-generated and editable;
+#   applied      at or above the classifying model's threshold for that kind of assignment
+#                (confidence_threshold for the type, department_threshold for the department,
+#                D-129) and written to the effective field, still marked AI-generated and editable;
 #   provisional  below the threshold: held and presented for confirmation, not written
 #                (FR-10 Business logic, confidence);
 #   discarded    outside the established scheme (the department only: the type is always in

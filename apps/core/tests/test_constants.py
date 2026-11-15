@@ -52,6 +52,8 @@ VOCABULARIES = [
     "ASSIGNMENT_OUTCOMES",
     # FR-19 (D-107), 9 November 2026: a knowledge-gap entry's status.
     "KNOWLEDGE_GAP_STATUS_VALUES",
+    # FR-03 (D-130), 13 November 2026: what a LoginAttempts row records.
+    "LOGIN_ATTEMPT_EVENTS",
     # FR-20 (D-132), 14 November 2026: the knowledge map's node types, relationships and the
     # reasons a view is cut short.
     "KNOWLEDGE_MAP_NODE_TYPES",
@@ -115,6 +117,16 @@ def test_lockout_values():
     # minutes". Enforcement is FR-02's, not FR-03's (D-25).
     assert constants.LOCKOUT_THRESHOLD == 5
     assert constants.LOCKOUT_DURATION == timedelta(minutes=15)
+
+
+def test_the_login_attempt_vocabulary_and_release_code_are_d130s():
+    """FR-03 (D-130; docs/schema-v1.md section 3). A LoginAttempts row is a lockout or a release
+    and nothing else (Benjamin's decision 5), and the release route checks its own code, which
+    accounts 0010 freezes under the same name (apps/accounts/tests/test_release_account_locks_seed.py)."""
+    assert constants.LOGIN_ATTEMPT_EVENTS == ("lockout", "release")
+    assert constants.LOGIN_ATTEMPT_LOCKOUT == "lockout"
+    assert constants.LOGIN_ATTEMPT_RELEASE == "release"
+    assert constants.RELEASE_ACCOUNT_LOCKS_PERMISSION == "release_account_locks"
 
 
 def test_password_complexity_constants_are_fr_01s_four_rules():
@@ -373,3 +385,67 @@ def test_fr10s_confidence_threshold_is_per_classifying_model():
     assignment, since Haiku typed all 57 right. Every other model keeps CLASSIFICATION_CONFIDENCE_THRESHOLD."""
     assert constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.72}
     assert 0.0 < constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+
+
+def test_fr10s_department_threshold_is_its_own_on_haiku():
+    """D-129, the lead's decision of 13 November 2026: D-106's rule on departments alone found no
+    split (56 right, 1 wrong) on the development documents (corpus/objective-05/runs/
+    2026-11-13-tag-threshold/), so it took the lowest right confidence, 0.30, and the user chose it
+    over the pooled 0.25. Types and tags keep 0.72 on Haiku. Any other model is not listed, and
+    falls back to the shared value for that model (department_threshold)."""
+    assert constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL == {"claude-haiku-5-5": 0.30}
+    assert 0.0 < constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"] <= 1.0
+    # Its own value, not the shared one's: the two maps disagree for Haiku on purpose.
+    assert (constants.CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"]
+            != constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"])
+
+
+# --- The embedding width follows the provider (D-131) ---------------------------------------------
+
+
+def test_each_provider_has_its_models_width():
+    """voyage-4 returns 1024 with no output_dimension sent, and FLM's embed-gemma 768."""
+    from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+    from apps.ingestion.management.commands.reindex import VALID_PROVIDERS
+
+    assert EMBEDDING_DIMENSION_BY_PROVIDER == {"anthropic": 1024, "flm": 768}
+    assert set(EMBEDDING_DIMENSION_BY_PROVIDER) == set(VALID_PROVIDERS)
+
+
+def test_the_suites_own_width_is_its_providers():
+    """Otherwise ai.E004 would refuse the configuration the suite runs under."""
+    from django.conf import settings
+
+    from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+
+    assert settings.EMBEDDING_DIMENSION == EMBEDDING_DIMENSION_BY_PROVIDER[settings.AI_PROVIDER]
+
+
+@pytest.mark.parametrize("provider, explicit, width", [
+    ("anthropic", None, 1024),
+    ("flm", None, 768),
+    ("flm", "1024", 1024),  # read as written, and refused at startup by ai.E004
+], ids=["anthropic, no line", "flm, no line", "flm, a line that disagrees"])
+def test_settings_take_the_width_from_the_provider(provider, explicit, width):
+    """config/settings.py, imported in a clean process with no .env read: EMBEDDING_DIMENSION
+    follows AI_PROVIDER unless .env names one (D-131)."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    keep = ("PATH", "SYSTEMROOT", "TEMP", "TMP", "USERPROFILE", "HOME")
+    environment = {name: os.environ[name] for name in keep if name in os.environ}
+    environment.update(SECRET_KEY="settings-test", DATABASE_URL="postgres://user:pass@127.0.0.1:5432/none",
+                       AI_PROVIDER=provider, PYTHONPATH=str(root))
+    if explicit is not None:
+        environment["EMBEDDING_DIMENSION"] = explicit
+    program = (
+        "import environ; environ.Env.read_env = classmethod(lambda cls, *a, **k: None); "
+        "import config.settings as s; print(s.EMBEDDING_DIMENSION)"
+    )
+    completed = subprocess.run([sys.executable, "-c", program], cwd=root, env=environment,
+                               capture_output=True, text=True, timeout=60)
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.stdout.strip().splitlines()[-1] == str(width)

@@ -2,13 +2,15 @@
 the lead's revision, and the lead's decision after the security review of ``84b5771``).
 
 A Topic a person's name brings into use is grown when the call creates it or reactivates it, the
-``apply_tag`` name form's and ``confirm_proposed_topic``'s alike. An active Topic either one fetches
+``apply_tag`` name form's and ``confirm_proposed_tag``'s alike. An active Topic either one fetches
 keeps its value (``_bring_into_use``). A grown one, such as one only restricted material carries
 (``documents 0011`` marks those), stays grown. One that is not grown is vocabulary and stays so: the
 name form never fetches one, since it is offered and answered 409, and confirming a proposal of its
 name made before it was vocabulary links it and leaves it vocabulary. The ``tag_id`` form marks
 nothing, since an offered tag is already readable or vocabulary, and neither does the machine's own
-linking of a seeded Topic.
+linking of a seeded Topic in the scheme. (From D-128 until D-129 the classifier also created or
+reactivated a value outside the scheme at or above the threshold, through the same
+``_bring_into_use``. Since D-129 it creates and reactivates nothing.)
 """
 
 import pytest
@@ -18,11 +20,11 @@ from apps.documents.classification import (
     TopicAlreadyOffered,
     apply_classification,
     apply_tag,
-    confirm_proposed_topic,
+    confirm_proposed_tag,
 )
 from apps.documents.models import ContentTag, Document, Tag
 
-from .classification_builders import ABOVE_THRESHOLD, classification, scheme
+from .classification_builders import ABOVE_THRESHOLD, BELOW_THRESHOLD, classification, scheme
 
 pytestmark = pytest.mark.django_db
 
@@ -30,7 +32,7 @@ DOCUMENT_SOURCE_TYPE = SOURCE_TYPES[0]
 NAME = "merger talks"
 KINDS = ["created", "restricted", "inactive"]
 # Active and not grown: vocabulary, in every scheme. Only a proposal made before the Topic existed
-# can name one to confirm_proposed_topic, and the name form answers 409 for one.
+# can name one to confirm_proposed_tag, and the name form answers 409 for one.
 VOCABULARY_KINDS = ["vocabulary, unlinked", "vocabulary, on restricted material"]
 
 
@@ -113,18 +115,19 @@ CONFIRM_CASES = [
 
 
 @pytest.mark.parametrize("kind, grown", CONFIRM_CASES)
-def test_confirm_proposed_topic_grows_only_a_topic_it_creates_or_reactivates(
+def test_confirm_proposed_tag_grows_only_a_topic_it_creates_or_reactivates(
     document, restricted, kind, grown
 ):
     existing = existing_topic(kind, restricted)
-    # A hand-written scheme with no Topics, so the suggestion is proposed whatever exists. For the
-    # vocabulary kinds that is a proposal made before the Topic existed, as when the seed script
-    # runs after a document was classified.
+    # A hand-written scheme with no Topics, so the suggestion is proposed whatever exists (D-129: a
+    # Topic outside the scheme is proposed at any confidence; below it here). For the vocabulary
+    # kinds that is a proposal made before the Topic existed, as when the seed script runs after a
+    # document was classified.
     apply_classification(
-        document, classification(tags=[(TOPIC_DIMENSION, NAME, ABOVE_THRESHOLD)]), scheme=scheme()
+        document, classification(tags=[(TOPIC_DIMENSION, NAME, BELOW_THRESHOLD)]), scheme=scheme()
     )
 
-    confirm_proposed_topic(document, NAME)
+    confirm_proposed_tag(document, TOPIC_DIMENSION, NAME)
 
     topic = Tag.objects.get(tag_name=NAME, dimension=TOPIC_DIMENSION)
     assert (topic.grown, topic.active) == (grown, True)

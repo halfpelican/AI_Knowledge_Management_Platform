@@ -1,0 +1,22 @@
+read at 2026-11-15T10:40:19+11:00, read-only, at the user's request of 15 November 2026
+read-only session: on
+database: kmp_alpha_20261113
+documents migrations applied: 12 ; last three: ['0010_tag_grown', '0011_grown_marks_withheld_tags', '0012_content_chunk_ai_generated']
+departments table present: False
+tags (dimension, grown, active, count): [('Process', False, True, 4), ('Project', False, True, 3), ('Project', True, True, 1), ('Topic', False, True, 6)]
+documents: 23 ; with a department: 20
+what documents 0015 would seed here (name, documents, hidden, all spellings):
+   "Finance" 3 vocabulary 
+   "Human Resources" 5 vocabulary 
+   "Information Technology" 3 vocabulary 
+   "Legal and Compliance" 2 vocabulary 
+   "Operations" 5 vocabulary 
+   "Projects" 2 hidden 
+proposals: 1 across 1 documents; entry keys: [('confidence', 'value')]
+document_analysis rows: 20
+department outcomes (outcome, applied_by, model, AI matched the typed department, >=0.72, >=0.30, user_edited, documents):
+   ('applied', 'user', 'claude-haiku-5-5', True, True, True, False, 8)
+   ('provisional', 'user', 'claude-haiku-5-5', False, False, True, False, 2)
+   ('provisional', 'user', 'claude-haiku-5-5', False, True, True, False, 1)
+   ('provisional', 'user', 'claude-haiku-5-5', True, False, True, False, 9)
+indexed documents with a blank department: 0

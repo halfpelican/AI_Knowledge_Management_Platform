@@ -1,15 +1,22 @@
 /**
- * Role management endpoints (FR-05), per docs/api-contract.md.
- * Thin wrappers over the one API client; no fetch here.
+ * Role management endpoints (FR-05), and FR-03's release of a lock, per
+ * docs/api-contract.md. Thin wrappers over the one API client; no fetch here.
  */
-import { get, patch } from './client.js'
+import { get, patch, post } from './client.js'
 
 /** Any signed-in user. 200 [{role_id, name, description, permissions}]. */
 export function listRoles(options = {}) {
   return get('/roles', options)
 }
 
-/** Administrator only. 200 [user object] ordered by created_at; 403 for an Employee. */
+/**
+ * Administrator only. 200 [user object] ordered by created_at; 403 for an Employee.
+ *
+ * FR-03 (D-130): for a holder of `release_account_locks` each user also carries
+ * `lock`, either null or `{locked_until, locked_at, source_ip}`; `locked_at` and
+ * `source_ip` are null for a lock older than the LoginAttempts table. A requester
+ * without the permission gets the plain user object, with no `lock` key at all.
+ */
 export function listUsers(options = {}) {
   return get('/users', options)
 }
@@ -45,4 +52,22 @@ export function listUserDirectory(options = {}) {
  */
 export function updateUserRole(userId, roleId) {
   return patch(`/users/${encodeURIComponent(userId)}/role`, { role_id: roleId })
+}
+
+/**
+ * FR-03 (D-130). Releases a lock: clears `locked_until` and resets the failed
+ * attempts, the state natural expiry reaches. The password, the role and any session
+ * are never touched. No body is sent.
+ *
+ * - 200 the user as `listUsers` lists it, now with `lock: null`;
+ * - 401 no session;
+ * - 403 a role without `release_account_locks`, before any lookup, or the target is
+ *   the requester, locked or not;
+ * - 404 no such user;
+ * - 409 the account is not locked: `locked_until` is empty or already past.
+ *
+ * @param {string} userId UUID of the user whose lock is released.
+ */
+export function unlockUser(userId) {
+  return post(`/users/${encodeURIComponent(userId)}/unlock`)
 }

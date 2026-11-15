@@ -1,0 +1,29 @@
+HEAD: 5dcb6ff5ae8269f344705b33c31a5e90186aa8cf
+captured: 2026-11-12T20:17:14+11:00
+== git status --short --untracked-files=no (work of other agents in progress, outside the sweep's code path)
+ M apps/api/serializers.py
+ M apps/api/tests/test_configuration.py
+ M apps/api/tests/test_document_classification.py
+ M apps/api/tests/test_fr10_removed_tags.py
+ M apps/api/tests/test_fr10_tag_administration.py
+ M apps/api/tests/test_fr10_tag_vocabulary.py
+ M apps/api/tests/test_rbac.py
+ M apps/api/tests/test_source_rows_fail_closed.py
+ M apps/api/urls.py
+ M apps/api/views.py
+ M apps/core/tests/test_schema.py
+ M apps/documents/classification.py
+ M apps/documents/management/commands/classify_documents.py
+ M apps/documents/models.py
+ M apps/documents/taxonomy.py
+ M apps/documents/tests/test_classification_apply.py
+ M apps/documents/tests/test_classification_confirm.py
+ M apps/documents/tests/test_classification_grown.py
+ M apps/documents/tests/test_classification_removal.py
+ M apps/documents/tests/test_classify_documents_command.py
+ M apps/documents/tests/test_migration_0011_grown_backfill.py
+ M docs/schema-v1.md
+ M scripts/objective05_verify.py
+ M scripts/seed_objective02_tags.py
+== git diff --stat HEAD -- apps/ai apps/ingestion config (the sweep's code path; empty means none)
+== end

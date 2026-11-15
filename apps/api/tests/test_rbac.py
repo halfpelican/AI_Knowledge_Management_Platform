@@ -35,6 +35,7 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
@@ -44,11 +45,15 @@ User = get_user_model()
 
 pytestmark = pytest.mark.django_db
 
-# What docs/api-contract.md says: the two routes D-21 lets an anonymous client reach,
-# and every protected URL name. The tests below check the URL conf's own permission
+# What docs/api-contract.md says: the routes an anonymous client may reach, the two D-21
+# lets through and, since D-130 decision 7, FR-03's lockout policy, and every protected URL
+# name. The tests below check the URL conf's own permission
 # classes against these names; the dual-role matrix (dual_role_matrix.py) then
 # reports, per protected endpoint, whether a passing test reached it from each role.
-OPEN_ROUTES = {"auth-register", "auth-login"}
+OPEN_ROUTES = {"auth-register", "auth-login", "auth-lockout-policy"}
+# What each opt-out answers an anonymous empty request with. Registration and login validate the
+# empty body (400). The policy reads no body and answers every caller alike (200).
+OPEN_ROUTE_STATUS = {"auth-register": 400, "auth-login": 400, "auth-lockout-policy": 200}
 PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-list", "user-role",
                     "user-directory",  # FR-09 attendee selection (D-34)
                     "document-list", "document-reprocess",  # Stage 3: FR-08 (D-32)
@@ -68,16 +73,21 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     # theirs; apps/api/tests/test_document_classification.py proves the 404
                     # before the 403 on every one of them.
                     "document-classify", "document-classification", "document-tag-confirm",
-                    "document-tag", "document-proposed-topic-confirm",
-                    "document-proposed-topic-reject",
+                    "document-tag",
+                    # D-128: in Project, Process or Topic; they replaced proposed-topics/confirm
+                    # and /reject
+                    "document-proposed-tag-confirm", "document-proposed-tag-reject",
                     # A person applies a tag (D-105's dated note of 10 November 2026, night):
                     # contribute_content inside the method too, after the scoped lookup.
                     "document-tags",
                     # NIT3004: FR-19's knowledge-gap log, every route behind a permission (D-107)
                     "knowledge-gap-list", "knowledge-gap-cycles", "knowledge-gap-detail",
                     # NIT3004: FR-10's tag administration, both routes behind manage_tags (D-119
-                    # finding 5; D-105's dated note of 10 November 2026, night)
+                    # finding 5; D-105's dated note of 10 November 2026, night); tag-list's POST,
+                    # an Administrator adding a value, is D-128's
                     "tag-list", "tag-detail",
+                    # NIT3004: FR-10's department list (D-129), both routes behind manage_tags
+                    "department-list", "department-detail",
                     # Recording transcription, both routes behind contribute_content
                     # (D-123)
                     "transcription-status", "transcription-list",
@@ -86,7 +96,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     # contribute_content inside the method, after the scoped lookup, as FR-10's
                     # routes do. apps/api/tests/test_meeting_summary.py and
                     # test_meeting_action_items.py prove the 404 before the 403 on each.
-                    "meeting-summary", "meeting-action-items", "meeting-action-item"}
+                    "meeting-summary", "meeting-action-items", "meeting-action-item",
+                    # NIT3004: FR-03's administrator release, behind release_account_locks
+                    # (D-130)
+                    "user-unlock"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method
@@ -112,10 +125,16 @@ PERMISSIONED_ROUTES = {
     # FR-10's tag administration (D-119 finding 5): manage_tags, a permission_classes entry on both.
     "tag-list": MANAGE_TAGS_PERMISSION,
     "tag-detail": MANAGE_TAGS_PERMISSION,
+    # FR-10's department list (D-129): the same code, a permission_classes entry on both.
+    "department-list": MANAGE_TAGS_PERMISSION,
+    "department-detail": MANAGE_TAGS_PERMISSION,
     # Recording transcription (D-123): contribute_content, a permission_classes entry on
     # both, so the 403 comes before the body is read. Nothing on either route is scoped.
     "transcription-status": CONTRIBUTE_CONTENT_PERMISSION,
     "transcription-list": CONTRIBUTE_CONTENT_PERMISSION,
+    # FR-03's release (D-130): release_account_locks, a permission_classes entry, so the 403
+    # comes before the lookup and an Employee cannot probe user ids.
+    "user-unlock": RELEASE_ACCOUNT_LOCKS_PERMISSION,
     # FR-20 (D-132): view_knowledge_map, a permission_classes entry. The route returns a
     # collection and no single scoped object, so the 403 has no 404 to precede.
     # apps/api/tests/test_knowledge_map.py proves the 403 by revoking the code from each role.
@@ -187,17 +206,18 @@ def _walk(client, expected_for):
     assert not failures, failures
 
 
-def test_every_route_but_the_two_opt_outs_is_401_anonymously(api_client):
+def test_every_route_but_the_opt_outs_is_401_anonymously(api_client):
     def expected(name):
-        # The two opt-outs run their validation on the empty body: 400, not 401.
-        return 400 if name in OPEN_ROUTES else 401
+        # The opt-outs answer for themselves: 400 where they validate the empty body, 200 for the
+        # policy, which reads none (D-130 decision 7).
+        return OPEN_ROUTE_STATUS.get(name, 401)
 
     _walk(api_client, expected)
 
 
-def test_every_route_but_the_two_opt_outs_is_401_with_a_forged_session(api_client):
+def test_every_route_but_the_opt_outs_is_401_with_a_forged_session(api_client):
     api_client.cookies[settings.SESSION_COOKIE_NAME] = "forged-session-key"
-    _walk(api_client, lambda name: 400 if name in OPEN_ROUTES else 401)
+    _walk(api_client, lambda name: OPEN_ROUTE_STATUS.get(name, 401))
 
 
 def test_every_protected_route_names_401_as_the_scheme(api_client):
@@ -395,6 +415,9 @@ def test_every_permission_code_in_use_is_seeded():
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=REVIEW_KNOWLEDGE_GAPS_PERMISSION).exists()
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
     assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=MANAGE_TAGS_PERMISSION).exists()
+    # FR-03's release (D-130): Administrator only, seeded by accounts 0010.
+    assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
+    assert not Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=RELEASE_ACCOUNT_LOCKS_PERMISSION).exists()
     # FR-20's code is held by both roles (accounts 0011, D-132), as contribute_content is.
     assert Role.objects.filter(role_name=ADMINISTRATOR_ROLE_NAME, permissions__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()
     assert Role.objects.filter(role_name=EMPLOYEE_ROLE_NAME, permissions__permission_name=VIEW_KNOWLEDGE_MAP_PERMISSION).exists()

@@ -24,7 +24,7 @@ reprocess and re-index.
 from django.db import transaction
 
 from apps.core.constants import SOURCE_TYPES
-from apps.documents.models import ContentChunk, ContentTag, Document
+from apps.documents.models import ContentChunk, ContentTag, Document, DocumentAnalysis
 
 DOCUMENT_SOURCE_TYPE = SOURCE_TYPES[0]
 
@@ -41,6 +41,12 @@ def delete_document(document: Document) -> None:
        committed before the reprocess began, and the reprocess would then commit fresh chunks
        for a document that no longer exists, embedded and retrievable. Waiting means the
        delete runs after the reprocess commits and removes what it wrote.
+    1a. **Its ``DocumentAnalysis`` row, locked next**, before any link (FR-10's lock order:
+       document, then analysis, then tags, then links; apps/documents/classification.py, "Lock
+       order"; the focused re-audit of ``5c60564``). Step 4's cascade deletes that row, so without
+       this lock the links of step 3 were locked first. A person confirming a proposal holds the
+       analysis row and then updates the document's link, so the two deadlocked; now the deletion
+       waits for the confirmation and removes what it wrote.
     2. **Its ``ContentChunk`` rows**, by ``source_type`` and ``source_id``. A queryset
        ``delete()``, so Django's ``on_delete`` applies to ``AnswerCitation.chunk``: SET_NULL,
        and the FR-12 record of what was answered survives with ``chunk_uuid`` naming what was
@@ -52,8 +58,8 @@ def delete_document(document: Document) -> None:
        removes, and a grown tag left without a source every audience role reads is offered nowhere
        (``tag_scheme``; D-105's dated note of 10 November 2026, night: the security review).
        Deleting a document therefore never makes a restricted value appear anywhere.
-    4. **The document**, and with it its ``ExtractedContent`` rows, through their CASCADE
-       foreign key.
+    4. **The document**, and with it its ``ExtractedContent`` rows and its ``DocumentAnalysis`` row,
+       through their CASCADE foreign keys.
 
     **The stored original is removed in ``transaction.on_commit``**, so a delete that rolls
     back, here or in any transaction that encloses this one, keeps the file its surviving row
@@ -69,6 +75,9 @@ def delete_document(document: Document) -> None:
     """
     with transaction.atomic():
         locked = Document.objects.select_for_update().filter(pk=document.pk).first()
+        # Its analysis row next, before any link: FR-10's lock order (classification.py, "Lock
+        # order"). The cascade below deletes that row, so without this the links were locked first.
+        DocumentAnalysis.objects.select_for_update().filter(document_id=document.pk).first()
         ContentChunk.objects.filter(
             source_type=DOCUMENT_SOURCE_TYPE, source_id=document.pk
         ).delete()

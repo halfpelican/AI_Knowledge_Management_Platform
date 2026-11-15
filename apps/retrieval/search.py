@@ -100,7 +100,7 @@ two different models returns a plausible number that means nothing (risk R10). T
 is a property of comparing vectors, and this path compares none: ``chunk_text`` is the same
 text whatever embedded it. Excluding those rows here would hide readable material from a
 user for a reason that does not apply, and — worse — would make the search results silently
-narrow after a provider switch, in a path with no no-answer message to make the narrowing
+narrow after a change of embedding model, in a path with no no-answer message to make the narrowing
 visible. So keyword search over a corpus awaiting ``manage.py reindex`` still works. That
 is a feature, and it is the only place in retrieval where the two predicates come apart.
 
