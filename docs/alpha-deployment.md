@@ -344,6 +344,9 @@ cd $root
     $task.Settings.StopIfGoingOnBatteries = $false
     $task | Set-ScheduledTask
     ```
+
+    If the task is already `Queued`, `Stop-ScheduledTask` and then `Start-ScheduledTask`, with the
+    same name, start it again.
 - **The provider must be reachable when it runs:** `flm serve` for `flm`, or the keys in `.env` for
   `anthropic`. A run that cannot reach it exits 1 and changes nothing, and the next run takes the
   rows it missed, because each cycle starts from the last committed one. A run missed while the

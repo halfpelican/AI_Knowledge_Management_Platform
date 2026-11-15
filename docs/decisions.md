@@ -8386,15 +8386,16 @@ they read the script's text, and a default is not in the text.
     - otherwise it evaluates only those statements.
 
     It runs only where Windows PowerShell is found, so CI's Linux runner skips it.
-- **A first version of that test registered a real task, and replaced it three times.**
+- **A first version of that test registered a real task, and replaced it on every run.**
   - **What it did:** it ran each script with `Register-ScheduledTask` replaced by a function of
     that name, in a stand-in checkout with empty stand-ins for `python.exe`, `manage.py` and
     `.env`, under the name "never registered". The replacement was not what the script called, for
     a reason not established, so the real command registered the task for the current user.
   - **Its runs:** that version ran four times, at 14:50:15, 14:51:19, 14:51:45 and 14:52:17. Each
     run replaced the task.
-    - The first and third ran both scripts, FR-19's case first. So each left the meeting script's
-      task: hourly, with its first run a minute after it was registered.
+    - The first and third ran both scripts, FR-19's case first. So, by the same path, each left the
+      meeting script's task: hourly, with its first run a minute after it was registered. This is
+      inferred; no output shows it.
     - The second and fourth ran FR-19's case alone. So each replaced it with FR-19's: daily at
       02:00.
   - **Found and removed:** the last task, FR-19's, was found at 14:52:39 and removed with
@@ -11751,7 +11752,7 @@ security fixes, and the requirements auditor has not checked them against FR-16'
 
 **Dated note, 15 November 2026: the retry ran only on mains power,** as FR-19's task did, and it is
 fixed the same way: D-107's note of the same day. Started by hand on the alpha's laptop at 11:46
-that day, it stayed `Queued` on battery until 14:38. Its last run time stayed at that start, so its
+that day, it was still `Queued` on battery when found at 14:38. Its last run time stayed at that start, so its
 hourly runs in that time did not start either.
 
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
