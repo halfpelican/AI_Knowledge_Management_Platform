@@ -49,6 +49,8 @@ VOCABULARIES = [
     "ASSIGNMENT_OUTCOMES",
     # FR-19 (D-107), 9 November 2026: a knowledge-gap entry's status.
     "KNOWLEDGE_GAP_STATUS_VALUES",
+    # FR-03 (D-130), 13 November 2026: what a LoginAttempts row records.
+    "LOGIN_ATTEMPT_EVENTS",
 ]
 
 
@@ -107,6 +109,16 @@ def test_lockout_values():
     # minutes". Enforcement is FR-02's, not FR-03's (D-25).
     assert constants.LOCKOUT_THRESHOLD == 5
     assert constants.LOCKOUT_DURATION == timedelta(minutes=15)
+
+
+def test_the_login_attempt_vocabulary_and_release_code_are_d130s():
+    """FR-03 (D-130; docs/schema-v1.md section 3). A LoginAttempts row is a lockout or a release
+    and nothing else (Benjamin's decision 5), and the release route checks its own code, which
+    accounts 0010 freezes under the same name (apps/accounts/tests/test_release_account_locks_seed.py)."""
+    assert constants.LOGIN_ATTEMPT_EVENTS == ("lockout", "release")
+    assert constants.LOGIN_ATTEMPT_LOCKOUT == "lockout"
+    assert constants.LOGIN_ATTEMPT_RELEASE == "release"
+    assert constants.RELEASE_ACCOUNT_LOCKS_PERMISSION == "release_account_locks"
 
 
 def test_password_complexity_constants_are_fr_01s_four_rules():

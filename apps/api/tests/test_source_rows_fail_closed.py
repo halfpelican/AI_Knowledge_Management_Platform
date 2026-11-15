@@ -558,12 +558,15 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/", "GET"): "DRF's API root: a map of router routes, of which there are none.",
     ("api/auth/register", "POST"): "Users only.",
     ("api/auth/login", "POST"): "Users only.",
+    ("api/auth/lockout-policy", "GET"): "Two numbers, the same for every caller (D-130).",
     ("api/auth/logout", "POST"): "A confirmation message.",
     ("api/auth/me", "GET"): "The caller's own user row.",
     ("api/roles", "GET"): "Roles and their permission codes.",
     ("api/users", "GET"): "Users and roles (FR-05).",
     ("api/users/directory", "GET"): "Names and addresses (D-34).",
     ("api/users/<uuid:pk>/role", "PATCH"): "The updated user.",
+    # FR-03's release (D-130): reads and writes the users and login_attempts rows only.
+    ("api/users/<uuid:pk>/unlock", "POST"): "The released user, as GET /api/users lists it.",
     ("api/documents", "POST"): (
         "Returns the document the caller has just uploaded, which D-29 places inside the "
         "caller's own scope. Its 409 duplicate check is the cross-scope existence oracle D-33 "

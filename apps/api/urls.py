@@ -15,6 +15,8 @@ urlpatterns = [
     # Stage 2: FR-01, FR-02
     path("auth/register", views.RegisterView.as_view(), name="auth-register"),
     path("auth/login", views.LoginView.as_view(), name="auth-login"),
+    # NIT3004: FR-03's running lockout policy, for the sign-in page (D-130 decision 7).
+    path("auth/lockout-policy", views.LockoutPolicyView.as_view(), name="auth-lockout-policy"),
     # Stage 2: FR-04
     path("auth/logout", views.LogoutView.as_view(), name="auth-logout"),
     path("auth/me", views.MeView.as_view(), name="auth-me"),
@@ -25,6 +27,8 @@ urlpatterns = [
     # cannot collide, but reading first is the habit that keeps it true.
     path("users/directory", views.UserDirectoryView.as_view(), name="user-directory"),
     path("users/<uuid:pk>/role", views.UserRoleView.as_view(), name="user-role"),
+    # FR-03's administrator release (D-130), behind release_account_locks.
+    path("users/<uuid:pk>/unlock", views.UserUnlockView.as_view(), name="user-unlock"),
     # Stage 3: FR-08
     path("documents", views.DocumentsView.as_view(), name="document-list"),
     # Stage 5 item 2: FR-15's list view, filters, sort and facets in one request (D-72).

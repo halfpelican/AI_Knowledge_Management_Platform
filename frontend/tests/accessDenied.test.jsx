@@ -6,6 +6,8 @@
  *   on the role embedded in the user's session token."
  * - FR-06: "Unauthorised navigation attempts (e.g., manually typing an admin URL)
  *   redirect to a '403 – Access Denied' page."
+ * - FR-03 (D-130): the Unlock control lives in the Role management table, so an
+ *   Employee, who never reaches that screen, is never offered it.
  *
  * Usability only, and these tests claim nothing more: the server refuses an Employee
  * on every protected route whatever the interface shows (CLAUDE.md §6, invariant 4),
@@ -120,5 +122,42 @@ describe('FR-05, FR-06: the role management screen is an Administrator\'s only',
     expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeTruthy()
     expect(probe.location.pathname).toBe('/login')
     expect(screen.queryByRole('heading', { name: ACCESS_DENIED })).toBeNull()
+  })
+})
+
+describe('FR-03: an Employee is never offered the Unlock control', () => {
+  it('sends an Employee at /admin/roles to the 403 page, with no Unlock control, before a list holding a locked account is read', async () => {
+    // Served as though the server answered an Employee, with a locked account in the
+    // list, so the route guard alone keeps the control off this screen. The server
+    // refuses an Employee the list and the release (pytest's dual-role matrix).
+    const answered = serveApi({
+      'GET /api/auth/me': { body: EMPLOYEE },
+      'GET /api/users': {
+        body: [
+          { ...ADMINISTRATOR, lock: null },
+          {
+            ...EMPLOYEE,
+            id: 'user-jane',
+            name: 'Jane Doe',
+            email: 'jane.doe@company.com',
+            lock: { locked_until: '2999-01-01T00:00:00Z', locked_at: null, source_ip: null },
+          },
+        ],
+      },
+      'GET /api/roles': {
+        body: [
+          { role_id: 'role-employee', name: ROLES.employee, description: '', permissions: [] },
+          { role_id: 'role-administrator', name: ROLES.administrator, description: '', permissions: [] },
+        ],
+      },
+      'POST /api/users/user-jane/unlock': { body: null },
+    })
+    renderApp('/admin/roles')
+
+    expect(await screen.findByRole('heading', { level: 1, name: ACCESS_DENIED })).toBeTruthy()
+    expect(probe.location.pathname).toBe('/403')
+    expect(screen.queryByRole('button', { name: /unlock/i })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/unlock|locked until/i)
+    expect(answered.map((request) => request.path)).toEqual(['/api/auth/me'])
   })
 })

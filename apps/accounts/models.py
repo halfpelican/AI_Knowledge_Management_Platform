@@ -1,4 +1,5 @@
-"""Accounts: Users, Roles, Permissions and RolePermissions (docs/schema-v1.md section 1).
+"""Accounts: Users, Roles, Permissions, RolePermissions and LoginAttempts (docs/schema-v1.md
+section 1).
 
 Permissions are held against roles, never against individual users (FR-05, FR-06).
 Every table and column is named as the schema document names it; the email address
@@ -9,7 +10,12 @@ from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from apps.core.constants import ADMINISTRATOR_ROLE_NAME, EMPLOYEE_ROLE_NAME, ROLE_NAMES
+from apps.core.constants import (
+    ADMINISTRATOR_ROLE_NAME,
+    EMPLOYEE_ROLE_NAME,
+    LOGIN_ATTEMPT_EVENTS,
+    ROLE_NAMES,
+)
 from apps.core.models import NAME_MAX_LENGTH, uuid_primary_key, vocabulary_field
 
 
@@ -107,3 +113,50 @@ class User(AbstractBaseUser):
 
     def __str__(self):
         return self.email
+
+
+class LoginAttempt(models.Model):
+    """One row per lockout and one per release, and nothing else (FR-03, D-130).
+
+    FR-03: "Every lockout is recorded with the attempted email, source address, and timestamp",
+    and "Every release is recorded with the Administrator who performed it, the account affected
+    and the time". An ordinary sign-in, failed or successful, writes no row, so an address with
+    no account is never stored.
+
+    - **A lockout** is written by login, in the transaction that sets ``locked_until``: the
+      address submitted, the source address, ``success`` false (the attempt that locked the
+      account failed), the account, and the ``locked_until`` just set. An attempt during a live
+      lock writes none, because it never extends the window.
+    - **A release** is written by ``POST /api/users/{id}/unlock``, in the transaction that clears
+      the lock: the account's address, the Administrator's source address, ``success`` null (a
+      release is not an authentication attempt), the account, ``released_by``, and the
+      ``locked_until`` it cleared.
+
+    The first five columns are the proposal's field table. ``event``, ``user``, ``released_by``
+    and ``locked_until`` are the four its clauses need and the table lacks
+    (docs/schema-v1.md section 1). ``locked_until`` is how ``GET /api/users`` finds the lockout
+    row that set the account's current lock rather than an earlier one (security finding L5).
+    """
+
+    id = uuid_primary_key("attempt_id")
+    attempted_email = models.EmailField()
+    # DRF's get_ident(), REMOTE_ADDR under NUM_PROXIES = 0: the key the sign-in throttle uses.
+    source_ip = models.TextField(null=True, blank=True)
+    success = models.BooleanField(null=True)
+    attempted_at = models.DateTimeField()
+    event = vocabulary_field(LOGIN_ATTEMPT_EVENTS)
+    # PROTECT, as every reference to Users is (D-12): an account with a recorded lockout or
+    # release cannot be deleted, and is retired as D-89 retires one instead.
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name="login_attempts")
+    released_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        db_column="released_by",
+        related_name="locks_released",
+    )
+    locked_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "login_attempts"

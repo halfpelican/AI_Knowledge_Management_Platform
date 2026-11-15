@@ -34,6 +34,7 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
 )
@@ -82,8 +83,8 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
     by_name = {role["name"]: role for role in body}
     # Both roles contribute content (D-30); manage_roles, manage_documents (accounts 0005,
     # D-73), manage_meetings (accounts 0006, D-99), review_knowledge_gaps (accounts 0007,
-    # D-107) and manage_tags (accounts 0008, D-119 finding 5) are Administrator's alone. Listed by
-    # name.
+    # D-107), manage_tags (accounts 0008, D-119 finding 5) and release_account_locks (accounts
+    # 0010, FR-03, D-130) are Administrator's alone. Listed by name.
     assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == [CONTRIBUTE_CONTENT_PERMISSION]
     assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [
         CONTRIBUTE_CONTENT_PERMISSION,
@@ -91,6 +92,7 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
         MANAGE_MEETINGS_PERMISSION,
         MANAGE_ROLES_PERMISSION,
         MANAGE_TAGS_PERMISSION,
+        RELEASE_ACCOUNT_LOCKS_PERMISSION,
         REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ]
 
@@ -139,7 +141,10 @@ def test_users_lists_every_user_for_an_administrator(administrator_client, emplo
     assert response.status_code == 200
     body = response.json()
     assert {user["id"] for user in body} == {str(employee.id), str(administrator.id)}
-    assert all(set(user) == USER_OBJECT_KEYS for user in body)
+    # The Administrator also holds release_account_locks, so each entry adds FR-03's "lock",
+    # null for an account that is not locked (D-130). Nothing else is added.
+    assert all(set(user) == USER_OBJECT_KEYS | {"lock"} for user in body)
+    assert all(user["lock"] is None for user in body)
     assert all(SECRET_COLUMNS.isdisjoint(user) for user in body)
 
 

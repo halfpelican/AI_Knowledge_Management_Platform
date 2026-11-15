@@ -19,6 +19,13 @@ passes on a machine with nothing but Python.
 Beyond the copies listed in ``CLIENT_COPIES``, every ``*_CODE`` the client exports must name a
 constant of ``apps/api/views.py`` with the same value, so a new copy is held to the same rule from
 the day it is added.
+
+**FR-03 (D-130) lists one code that is not an in-flight one.** ``ACCOUNT_LOCKED_CODE``, in
+``frontend/src/api/auth.js``, is how the sign-in page tells login's 403 for a locked account,
+which carries the countdown's ``retry_after``, from any other 403. A drifted copy reads the lock
+as an ordinary refusal: no countdown, Sign in left enabled, and the message that names an
+administrator never shown. The sweep held its value from the day it was exported. Listing it in
+``CLIENT_COPIES`` also fails when it stops being exported, which the sweep alone does not notice.
 """
 
 from __future__ import annotations
@@ -44,6 +51,9 @@ CLIENT_COPIES = [
     ("TRANSCRIPTION_DISABLED_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
     ("TRANSCRIPTION_UNAVAILABLE_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
     ("TRANSCRIPTION_BUSY_CODE", FRONTEND_SOURCE / "api" / "transcriptions.js"),
+    # FR-02 and FR-03 (D-130): the sign-in page tells the locked account's 403 from any other
+    # 403 by this, and only then runs the countdown from its `retry_after`.
+    ("ACCOUNT_LOCKED_CODE", FRONTEND_SOURCE / "api" / "auth.js"),
 ]
 
 # `export const NAME_CODE = '...'`, a single-quoted string on one line, as both files write it.
@@ -70,7 +80,8 @@ def test_the_clients_copy_of_each_in_flight_code_equals_the_one_the_server_sends
     assert isinstance(server, str), f"apps/api/views.py no longer defines {name} as a string"
     assert client[name] == server, (
         f"{path.name} has {name} = {client[name]!r}, and the server sends {server!r}. The screen "
-        "would read that 429 as the rate limit's."
+        "would not tell the reply that carries it from another of the same status: an in-flight "
+        "429 from the rate limit's, or the locked account's 403 from any other."
     )
 
 
@@ -80,7 +91,7 @@ def test_every_code_the_client_exports_is_a_server_constant_with_the_same_value(
         for name, value in _exported_codes(path).items():
             exported[name] = (value, path.relative_to(FRONTEND_SOURCE).as_posix())
 
-    # Not vacuous: the sweep finds the two copies the screens branch on.
+    # Not vacuous: the sweep finds every copy the screens branch on.
     assert {name for name, _ in CLIENT_COPIES} <= exported.keys()
 
     for name, (value, where) in exported.items():

@@ -786,6 +786,31 @@ before Stage 3, which ships more screens.
 >   account. That is step 3 of the user's post-M6 order. The server side is already tested
 >   (`test_login.py`), and the front-end message is step 6's (D-94).
 
+> **Dated note, 13 November 2026: FR-03 is built, and the login decision is made under a row lock
+> (D-130).**
+>
+> - **"A gap that arrived with enforcement" is closed.** This entry recorded that a lockout had no
+>   evidence trail and that a locked user's only remedy was to wait. Now:
+>   - `LoginAttempts` records every lockout, with the address, the source address and the time, and
+>     every release, with the Administrator, the account and the time;
+>   - an Administrator can release a lock from Role management (`POST /api/users/{id}/unlock`).
+> - **"Deferred: FR-03's lockout interface … stays out of the M6 gate" stands for the gate.** FR-03
+>   is NIT3004 work. Its warning, countdown and release were built on 13 November, not for M6.
+> - **The login order this entry fixed had a race,** which the FR-03 design review found (D-130,
+>   security finding H1). The handler decided "locked or not" on a read taken before the password
+>   check, without a lock.
+>   - **Erasing a lock:** five concurrent wrong passwords at a count of 1 all read "unlocked". The
+>     fourth set the lock, and the fifth, finding it set, took it for an expired one and cleared it.
+>   - **A session for a locked account:** a right password that had read "unlocked" got a session
+>     for an account a concurrent request had just locked.
+>   - **The fix:** the decision is now made on the account row read with `select_for_update()` after
+>     the password check. The rules are unchanged:
+>     - a wrong password during a lock is the 401, and the right one is the 403;
+>     - the window is never extended;
+>     - the counter resets with an expired window;
+>     - a success clears both fields.
+> - **Left as written:** the entry's text above, as this file's rules require.
+
 ## D-26 · Stage 2 security review, round two
 
 **Status:** Settled · **Date:** 2026-09-13 · **Amends:** one bullet of D-25
@@ -860,6 +885,36 @@ matters because the 403 is by design the one distinguishable outcome;
 the counter and window cannot be set by a caller; no path authenticates except the
 login view; no mass assignment through the role change; and the two 403 bodies,
 though different, are only ever visible to someone who already holds the permission.
+
+> **Dated note, 13 November 2026: the locked-account message names the release again (D-130).**
+> Finding 4 removed "An Administrator can release it." because FR-03's release route did not exist,
+> so the promise was false in that build.
+>
+> - **What changed.** FR-03 is now built. `POST /api/users/{id}/unlock` releases a lock (D-130), so
+>   the message may name it. FR-03's front-end clause asks for it: "The lockout message states that
+>   an administrator can unlock the account, so a locked-out user has a route forward."
+> - **Both texts now name it:**
+>   - the server's `ACCOUNT_LOCKED_MESSAGE`: "This account is temporarily locked after repeated
+>     failed sign-ins. Try again later, or ask an administrator to unlock it.";
+>   - the client's `TEXT.accountLocked`, which the sign-in page shows for the 403: "This account is
+>     temporarily locked after too many failed sign-in attempts. Try again when the timer ends, or
+>     ask an administrator to unlock it."
+> - **Finding 4's defect could return in a new place.** The sign-in page now has a locked state of
+>   its own, entered when its own count of failures reaches five (D-130 decision 1). There the page
+>   does not know whether the address has an account, or whether the server locked it. So that
+>   text is worded to be true for any address: "If this address has an account, it may be locked
+>   for up to 15 minutes, and an administrator can unlock it sooner" (D-130, security finding C).
+> - **Finding 2's "there is no release route"** is overtaken: an Administrator can now release any
+>   other account's lock. The throttle stays, because anyone can still lock any account with five
+>   requests.
+>   - **Except for the only Administrator.** Nobody can release that account's lock, because FR-03
+>     forbids releasing one's own and there is no other Administrator.
+>   - So for that account, finding 2 still stands as written: five requests every 15 minutes keep
+>     it out (D-130's residue, from the pre-PR security review).
+> - **What stands.** The ceiling, the throttle, and the counting of attempts during a lock are
+>   unchanged. The residue "a lock does not end an existing session" stands too, since the release
+>   touches no session.
+> - **Left as written:** finding 4 and the residue above, as this file's rules require.
 
 ## D-27  NO_ANSWER_MESSAGE wording — "This question cannot be answered from the available knowledge base."  2026-09-14
 **The PROVISIONAL marker is removed: the proposal never specifies this string.**
@@ -14300,6 +14355,862 @@ summary the lead was sent. They also found three things the records had wrong or
   - Each is pinned by a new assertion that failed under its break, and each break was reverted.
 
 **The front end after these changes:** 636 passed; lint and build clean.
+
+## D-130 · FR-03: the warning and the countdown are counted in the browser, an Administrator releases a lock from Role management, `LoginAttempts` records lockouts and releases, and the login decision is made under a row lock
+
+**Status:** Settled by the user (six decisions on 13 November 2026, a seventh on 14 November, an eighth on 15 November) · **Date:** 2026-11-13 ·
+**Concerns:** FR-03, FR-02, NFR-04, UC-02, D-12, D-24, D-25, D-26, D-99, D-119 finding 5 ·
+**Amends:** D-26 finding 4 (dated note there). **Overtakes** D-25's "A gap that arrived with
+enforcement" (dated note there).
+
+FR-03 is a SHOULD for NIT3004 and not one of the twelve M6 requirements. FR-02 already enforced the
+lock (D-25). This entry records what FR-03 adds, Benjamin's eight decisions, the three security reviews,
+and the requirements audit, the last verbatim.
+
+**Decision.** Benjamin's decisions. Each of the six of 13 November 2026 was the option recommended to
+him; the seventh, of 14 November, was not; the eighth, of 15 November, was:
+
+1. **The attempt count is kept in the browser.** The sign-in page counts its own consecutive `401`s
+   for the address typed and works out what remains from the running threshold, which since
+   decision 7 it fetches from the server, five by default. The server's `401` does not change, and
+   no response carries a count.
+2. **The warning shows when two or fewer attempts remain,** after the third and the fourth failure:
+   "2 attempts remaining before temporary lockout", then "1 attempt remaining before temporary
+   lockout". FR-03's "a subtle warning appears once 2+ attempts remain" does not settle when, so it
+   was put to him.
+3. **The release control sits in the Role management table** (`/admin/roles`). There is no new
+   screen.
+4. **The route is `POST /api/users/{id}/unlock`.** `docs/api-contract.md` did not fix one.
+5. **`LoginAttempts` records lockouts and releases only.** An ordinary attempt writes no row, so an
+   unregistered address is never stored.
+6. **The pre-existing login race the design review found (H1, below) is fixed as this PR's first
+   commit.**
+7. **The threshold and the duration are `.env` values, and the sign-in page fetches them** (his
+   decision of 14 November 2026, after the requirements audit found the configuration clause's
+   "without code changes" unmet).
+   - `config/settings.py` reads `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, defaulting to
+     `apps/core/constants.py`'s five and 15 minutes.
+   - Login reads them at request time.
+   - The new anonymous `GET /api/auth/lockout-policy` gives them to the sign-in page, which keeps
+     no copy.
+   - It was put to him with "decline it, recorded" recommended. He chose this instead. See "Decision
+     7" below.
+8. **The policy may only be tightened** (his decision of 15 November 2026, the option recommended
+   to him, after the final security review). The server refuses to start on a threshold outside 1
+   to 5, a duration outside 15 minutes to 365 days, or a value that is not a whole number.
+   - FR-03 gives the values "so the policy can be tightened", and NFR-04's five attempts and 15
+     minutes are the loosest the policy can be.
+   - The maximum closes finding M1 below.
+
+**Why the count is the page's own.**
+
+- **The rule.** UC-02's exception flow E1.03 has a failed attempt return a generic message
+  "disclosing neither whether the email is registered nor whether the account is locked, so that a
+  failed attempt cannot be used to enumerate accounts". FR-03's messaging clause says the same of
+  the lock notice.
+- **What a server count would leak.** A remaining-attempts figure computed on the server for the
+  account behind an address is exactly that disclosure. A registered address's count falls, an
+  unregistered one's never does, and a count of zero announces the lock.
+- **The alternative of counting every address, with a shadow counter and shadow lock for addresses
+  that are not accounts, leaks too.** The real user's own typos lower a registered account's count,
+  and their sign-ins reset it. The design review concluded: "No server-side count can be accurate
+  across devices without an oracle. Accuracy means reflecting other people's attempts, and that
+  information is the oracle."
+- **The browser count discloses nothing.** It comes only from the page's own history and from
+  `401`s that are identical for anyone without the password.
+
+**The cost of decision 1, stated rather than glossed.** The page's count sees only its own attempts:
+
+- failures from another device or tab, or before a reload, are not in it, so the warning can come
+  late or not at all;
+- a success elsewhere resets the server's counter but not the page's, so the warning and the
+  page's locked state can come early;
+- when the page's own count reaches the running threshold, five by default, it shows a locked state and a countdown that may not match
+  the server's lock. So that state's text is true for any address: "If this address has an account,
+  it may be locked for up to 15 minutes, and an administrator can unlock it sooner" (security
+  finding C). The front-end build added "may": the server may not have locked the account at all,
+  if a success elsewhere reset its count;
+- the right password during a lock still gets the server's `403`, and its `retry_after` gives the
+  real time left, within D-26's notice ceiling. Every attempt during a lock counts toward that
+  ceiling, and past it even the right password gets the generic `401`.
+
+None of this is security. The server enforces the lock whatever the page shows (invariant 4).
+
+**The schema.** `LoginAttempts` is `docs/schema-v1.md` §1's entry, created by
+`accounts 0009_login_attempts`.
+
+- **The proposal's five fields:** `attempt_id`, `attempted_email`, `source_ip`, `success` and
+  `attempted_at`.
+- **Four columns its field table lacks, which its own clauses need:**
+  - `event` (`lockout` or `release`), because one table holds two kinds of event;
+  - `user_id` and `released_by`, for "the Administrator who performed it, the account affected";
+  - `locked_until`, so the user list can tell the lockout row that set the current lock from an
+    earlier one (security finding L5).
+- **`success`** is `false` on a lockout row and null on a release row, which is not an
+  authentication attempt.
+- **Both foreign keys are `PROTECT`** (D-12). An account with a lockout or a release row cannot be
+  deleted, as QueryLog rows already prevent. No code deletes users, and D-89's remedy, retiring the
+  account with an unusable password, stands.
+
+**The permission.**
+
+- **`release_account_locks`** is seeded for Administrator only by
+  `accounts 0010_seed_release_account_locks`. FR-03: "Only a user holding the Administrator role
+  may release a lock."
+- **It is a code of its own,** as D-99 and D-119 finding 5 gave their routes, so that granting one
+  never grants the other.
+- **Where the route checks it:** in `permission_classes`, so an Employee is refused with a `403`
+  before any lookup and cannot tell a real user id from an invented one.
+- **`GET /api/users` keeps its gate,** `manage_roles`, and adds `lock` only for a holder of this
+  code.
+
+**The lock order.** The release locks rows in this order (`UserUnlockView.post`):
+
+1. the administrator rows, ordered by primary key, as FR-05's role change locks them (D-26);
+2. then the target, both with `select_for_update(no_key=True)`.
+
+The backend build found the deadlock this prevents. A role change holds the administrator rows and
+waits for the account. A release that had locked only the account would wait, at commit, for the
+requester's row, which its release row's foreign-key check needs. Postgres would abort one of the
+two with a `500`.
+
+- **Why it holds:** the requester is in the set, so that check waits on a row the release already
+  holds. This rests on only Administrators holding `release_account_locks`.
+- **Its limit:** it holds while the administrator set is stable, because each transaction reads the
+  set from its own snapshot. See the residues (the pre-PR security review, finding 4).
+- **The mode:** FOR NO KEY UPDATE conflicts with the role change's and login's FOR UPDATE, but not
+  with the key-share locks other inserts take on those rows.
+- **Tested for a release against a role change,** by `test_fr03_unlock_concurrency.py`. That test
+  holds the release inside its row write until `pg_stat_activity` shows the role change waiting on a
+  lock, so the interleaving is forced, not timed. With the administrator-set lock removed (break
+  U12), it hit `DeadlockDetected` in 10 runs of 10. Unbroken, it passed in 15 runs of 15.
+- **Argued, not tested:** a release against a login, and two locked Administrators releasing each
+  other (security finding L2).
+
+**Two Administrators.** One may release another's lock. That is a locked Administrator's only
+route forward, and FR-03 forbids only "their own account".
+
+**What each FR-03 clause now does** (`proposal.txt` lines 338-395, untracked).
+
+| Clause | Built | Tests |
+|---|---|---|
+| FE "a subtle warning appears once 2+ attempts remain: '2 attempts remaining before temporary lockout'" | after the 3rd and the 4th consecutive `401` for an address (decision 2), in a polite status line beside the banner (`frontend/src/pages/Login.jsx`) | `loginLockout.test.jsx` S1, S5, S7, S8 |
+| FE "Once locked, the login button is disabled with a countdown timer shown" | at the page's count reaching the running threshold (the 5th failure by default), or on the `403` (`retry_after`), Sign in is disabled and a `role="timer"` countdown runs; nothing is sent while it runs; at zero the button comes back | S2, S3, S4, S6, S9 to S12; `test_fr03_lockout_record.py`'s `retry_after` tests |
+| FE "An Administrator viewing a locked account can release the lock immediately" | Role management's Account column, the Unlock button (not on the own row) and its dialog (decision 3, `RoleManagement.jsx`) | `roleManagementUnlock.test.jsx` U1 to U12; `loginLockout.test.jsx` S13 (the reload hint, shown in both lock states; no test reloads the page); `accessDenied.test.jsx` E1; `test_fr03_user_list_lock.py` |
+| FE "The lockout message states that an administrator can unlock the account" | the `403`'s `TEXT.accountLocked`, the page's `TEXT.accountMayBeLocked` and the server's `ACCOUNT_LOCKED_MESSAGE` | S2, S9; `test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
+| SE "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until…" | FR-02's, now decided on the row read under lock (H1) | `test_login.py`; `test_login_concurrency.py` |
+| SE Validation: the lock before any session; no session for a locked account; the password only selects the message; the resets; the matching password during a lock; only an Administrator, never on their own account | unchanged rules, made race-free (H1); the release's `permission_classes` and its own-account `403` | `test_login.py`; `test_login_concurrency.py`; `test_fr03_unlock.py` |
+| SE configuration: "threshold and lockout duration are configuration values rather than literals, so the policy can be tightened without code changes"; every lockout recorded with the email, source address and timestamp | since decision 7, the `.env` variables `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES` (`config/settings.py`), defaulting to `apps/core/constants.py`, read by login at request time and fetched by the sign-in page from `GET /api/auth/lockout-policy`, with no copy in the bundle; the lockout row. Until decision 7 this row named only the first half, and the audit below found the second unmet | `test_fr03_lockout_policy.py`; `loginLockout.test.jsx`'s decision-7 tests; `test_front_end_constants_agreement.py::test_the_client_holds_no_copy_of_the_lockout_policy`; `test_fr03_lockout_record.py` |
+| SE messaging: the notice only where the password matched | unchanged (D-25, D-26); the page's own state looks the same for any address (decision 1) | `test_login.py`; `test_every_401_is_byte_identical_to_an_unknown_addresses` (M1) |
+| SE release: clears the expiry and resets the count; never the password; recorded with the Administrator, the account and the time | `UserUnlockView` and the release row | `test_an_administrator_releases_another_users_lock` |
+| SE Responses: 200; 403 for a non-Administrator or the account holder; 404; 409 | `UserUnlockView` | `test_fr03_unlock.py`, every answer |
+| DB Users (Update); LoginAttempts (Create, release recorded as an administrative event) | the release; the lockout and release rows | `test_fr03_unlock.py`; `test_fr03_lockout_record.py` |
+| DB the LoginAttempts table (Create, Read) | `accounts 0009`, with the four added columns; the Read is `GET /api/users`'s `lock` | `test_schema.py`; `test_release_account_locks_seed.py`; `test_fr03_user_list_lock.py` |
+
+**Tests and breaks.** Every new test failed under at least one deliberate break before it counted.
+Each break list is generated from its runs and is in the commit's message, as D-94 asks.
+
+- **`de57242`, H1:** 3 concurrency tests, and breaks B1 to B3. The new file passed 10 runs in a row.
+- **`e624e90`, the server:** the tests named in the table above, and 49 distinct breaks, all caught (51 entries in its list, since break U12 was also run as U12r and U12x10). The
+  final combined run passed 523. Dual-role coverage was 44/44, with
+  `POST /api/users/<uuid:pk>/unlock` from anonymous (401), Employee (403) and Administrator (200,
+  403, 404, 409).
+- **`3eee096`, the front end:** 27 new tests, and 49 breaks, every test caught by at least one.
+  `npm test` passed 612, and lint was clean.
+
+**The design's security review, 13 November 2026, before anything was built.** The
+`security-reviewer` agent read the design note against the code on `main` at `8b2844d`. It ran
+nothing, and every finding is "traced" or "inferred" in its own terms.
+
+- **It found clean:**
+  - counting in the browser, and the page's own locked state;
+  - `retry_after` on the right-password `403` only;
+  - the release route's order, CSRF and expiry handling.
+- **It confirmed that both server-side counts leak.**
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| H1 | high, pre-existing | Login decided "locked" on a read taken before the password check, without a lock. Concurrent wrong passwords erased a live lock, and a right password read as "unlocked" got a session for an account a concurrent request had just locked | **Fixed** in `de57242` (decision 6), with `test_login_concurrency.py`. D-25's dated note records it |
+| M1 | medium | The tests compared the `401`'s status and JSON, never its headers or bytes, so a `Retry-After` header or a leaked `retry_after` would have passed | **Fixed**: the `401` is compared byte for byte, headers included, across its four cases |
+| C | low | The page's own locked state must say nothing false of an unregistered address (D-26 finding 4's defect) | **Fixed**: "If this address has an account, it may be locked…" |
+| L1 | low | A release during an in-flight login | **Closed by H1's fix** |
+| L2 | low | Two locked Administrators releasing each other could deadlock on the release row's foreign-key check | **Fixed**: FOR NO KEY UPDATE, and the lock order above |
+| L3 | low | A locked Administrator's live session can defeat the self-ban: register an account, promote it, sign in as it, release from it (four requests; the design review said three). The release is also unthrottled | **Recorded** below. The dialog's "check who is asking" helps against someone asking an Administrator for a release, not against L3, whose session holder works the second account's dialog themselves |
+| L4 | low | On the loopback alpha every `source_ip` is `127.0.0.1` | **Recorded** below. The source is DRF's `get_ident()`, and the demonstration script says so |
+| L5 | low | The "latest lockout row" can belong to an earlier lock | **Fixed**: each row stores the `locked_until` it set, and the list matches on it |
+| Q5 | low | Role management replaced the row with the role change's reply, which has no `lock` | **Fixed**: the reply is merged into the row |
+| — | low | No retention rule for `LoginAttempts` | **Recorded** below |
+| — | immaterial, inferred | The lockout insert at the threshold adds to D-24's timing difference | **Recorded** below |
+
+**Residues, recorded rather than fixed.**
+
+- **A lock still does not end a session** (D-26's residue). So whoever holds a locked
+  Administrator's session can defeat FR-03's self-release ban in four requests: register an
+  account, promote it (FR-05), sign in as it (registration starts no session), and release from it.
+  The release is unthrottled too, so a stolen Administrator session can refill an account's guesses
+  five at a time. Ending sessions stays outside this work.
+  - **What the confirmation dialog does not do:** it shows when and from where the lock began, and
+    asks the Administrator to check who is asking. That helps against someone asking an
+    Administrator to release a lock. It does nothing against this, because the session holder works
+    the second account's dialog themselves.
+- **The release is not tied to the lock the dialog showed** (the pre-PR security review, finding 3).
+  - **The scenario:** an Administrator opens Unlock on a lock set from one address, and leaves the
+    dialog open past its end. Meanwhile an attacker locks the account again from another address.
+  - **What follows:** the confirm releases the new lock, which the Administrator never saw, and
+    gives the attacker five fresh guesses past L3's "check who is asking" step.
+  - **What would close it:** the client sending the `locked_until` it showed, with a `409` when the
+    lock has changed.
+- **The only Administrator cannot be released** (the pre-PR security review, finding 2). FR-03
+  forbids releasing one's own lock, so where no other Administrator exists, five requests every 15
+  minutes keep that account out, as D-26 finding 2 described.
+  - **On Role management,** the own row says so ("No other administrator can unlock your account.
+    It unlocks at <time>.") where the list holds no other Administrator.
+  - **The sign-in page's message, and the server's,** still say "ask an administrator to unlock it",
+    which FR-03's front-end clause requires and which is false for that one account. The fix is a
+    second Administrator, not code.
+  - **So does Role management's self-refusal notice** (`TEXT.unlockSelfRefused`, "…Ask another
+    administrator to unlock it."). It shows only when the screen's idea of who is signed in is out
+    of date, because the own row has no button.
+- **The lock order holds while the administrator set is stable** (the pre-PR security review,
+  finding 4). Each transaction reads the administrator set from its own snapshot. A promotion
+  committed mid-request can therefore still put a release and a role change, or two releases, in a
+  cycle, and Postgres aborts one with a `500`. It needs three Administrator actions on the same rows
+  within the same instant. Locking the administrators and the target in one statement would close
+  it.
+- **Where the row lock stops.** Login decides under the row lock, including on success. Django saves
+  the new session's signed-in keys just after the view returns, which is after the lock is
+  released. A lock committed after that decision is the residue above.
+- **No retention rule for `LoginAttempts`.** A lockout row is written once per lock, and attempts
+  during a live lock write none. So the table grows by at most one row per account per lock window,
+  plus one per release. The source address is personal data, kept with no end date.
+- **Timing.** The lockout row's insert runs only for a registered account, at its fifth failure. It
+  adds to D-24's timing difference between a registered and an unknown address. It is one sample per
+  15-minute lock, next to a bcrypt hash, and was judged immaterial by inference. It was not measured.
+- **The loopback alpha cannot show the evidence FR-03 promises.** FR-03 says the record gives
+  "evidence of whether a lockout resulted from a forgotten password or a distributed attempt against
+  many accounts". Every `source_ip` on the alpha is `127.0.0.1`, so that cannot be shown on it.
+- **A refused login `403` without `account_locked`, such as a CSRF refusal,** now shows the client's
+  fixed "You do not have permission to do that." Before, it showed the locked-account message, which
+  was false for it.
+
+**Records this overtakes, left as written.**
+
+- **D-25's "A gap that arrived with enforcement"** (no evidence trail, and waiting as the only
+  remedy) and its deferral of "FR-03's lockout interface". There is a dated note on D-25.
+- **D-26 finding 4,** which removed the release from the message, and finding 2's "there is no
+  release route". There is a dated note on D-26.
+- **`docs/api-contract.md` Stage 2's "FR-03 adds only the warning interface and stays out of the
+  gate (D-25)"** and its "Never … `locked_until`". There are dated notes there, and a new section,
+  "NIT3004 — FR-03".
+- **`docs/schema-v1.md` §2's `LoginAttempts` row.** The row is removed, with a dated note, as
+  `DocumentAnalysis` and `KnowledgeGaps` were when they left.
+- **`docs/demonstration-script.md` FR-02 step 4's expectations,** which hold only on a build
+  without D-130. That script is amended, with a new FR-03 section.
+- **The comment above `ACCOUNT_LOCKED_MESSAGE`,** which said no release existed. It is rewritten in
+  the code, which this file's rule does not cover.
+
+**The security review before the PR, 14 November 2026.** The `security-reviewer` agent read the
+build at `6ed0ef1` and ran no tests.
+
+- **It found nothing high or medium.** Nothing in login, the release route or the front end tells
+  someone without the password whether an address is registered or locked.
+- **It checked every disposition in the design review's table above against the code and the tests,
+  and found each true.**
+- **It reported five low findings:**
+
+| Finding | What | Disposition |
+|---|---|---|
+| 1 | A release reaches the server, not a sign-in page already open, which keeps its own countdown until it is reloaded. So demonstration-script step 8 failed as written | **Fixed.** Both lock states now add "If an administrator has unlocked the account, reload this page to sign in." (`TEXT.lockedReloadHint`), and step 8 says to reload first. Test S13; break R1 |
+| 2 | With a single Administrator, the own row ("Another administrator can unlock your account."), the self-refusal notice and the sign-in message promise a release nobody can make, and five requests every 15 minutes keep that account out (D-26 finding 2) | **Fixed on Role management:** the own row says "No other administrator can unlock your account. It unlocks at <time>." where the list holds no other Administrator. Test U12, and U3 now lists a second Administrator; breaks R2 to R4. **Recorded** for the sign-in and server messages, which FR-03 requires: see the residues. D-26's dated note is qualified |
+| 3 | The release is not tied to the lock the dialog showed | **Recorded** under the residues, beside L3 |
+| 4 | The lock order holds only while the administrator set is stable | **Recorded:** the claim is qualified here and in `UserUnlockView.post`'s comment |
+| 5 | This entry said the self-ban falls in "three requests"; it is four | **Fixed** in the residue |
+
+**The pre-PR fixes' tests and breaks** are in the commit whose subject begins `fix(FR-03): a
+release reaches an open sign-in page`:
+
+- **Tests:** S13 and U12 are new, and U3 is changed. `npm test` passed 614.
+- **Breaks:** R1 to R4, each caught. Each was applied alone and restored by hash, and that commit's
+  message lists them.
+- **What they replace:** break R19 in `3eee096`'s list edits the own row's single line, which these
+  fixes rewrite. R2 to R4 cover that row now.
+
+**Decision 7: the policy in `.env`, fetched by the page** (Benjamin, 14 November 2026).
+
+The requirements audit (verbatim below) found one gap. FR-03 reads "threshold and lockout duration
+are configuration values rather than literals, so the policy can be tightened without code changes".
+The first half was met; the second was not, and nothing declined it. Two options were put to him:
+
+- decline the half, recorded, which was recommended;
+- make the values `.env`-configurable.
+
+He chose `.env`.
+
+- **The server.**
+  - `config/settings.py` reads `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES`, defaulting to
+    `apps/core/constants.py`'s `LOCKOUT_THRESHOLD` (5) and `LOCKOUT_DURATION` (15 minutes). As
+    first built it refused to start on a value under 1. Since decision 8 it refuses anything looser
+    than NFR-04, a duration over 365 days, and a value that is not a whole number.
+  - `LoginView` reads `settings.LOCKOUT_THRESHOLD` and `settings.LOCKOUT_DURATION` at request time.
+    D-26's notice ceiling follows the running threshold, at `LOCKOUT_NOTICE_CEILING_FACTOR` (2)
+    times it.
+  - `.env.example` documents both variables.
+- **The route.** `GET /api/auth/lockout-policy` answers
+  `{"lockout_threshold": 5, "lockout_duration_seconds": 900}` at the defaults.
+  - It is the third route left open to an anonymous caller (D-21).
+  - It reads nothing from the request and writes nothing. It is not throttled, and it answers every
+    caller alike.
+  - It discloses nothing about any account: the warning on the page already shows the threshold,
+    and the old bundle carried both values.
+- **The page.**
+  - The sign-in page asks for the policy once, after its first failed attempt, and keeps no copy.
+    `frontend/src/constants.js` lost `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_SECONDS`, and
+    `test_front_end_constants_agreement.py` now fails if a copy comes back.
+  - Until the policy arrives, the page counts but shows no warning and no lock of its own. If the
+    request fails, it shows neither, and asks again at the next failure.
+  - The server's `403` is counted down from its `retry_after` regardless, or from the policy's
+    duration where it gave none.
+  - The page asks only after a failure, so screens that never fail a sign-in make no extra request.
+- **What it costs, stated:**
+  - **A change takes effect after a server restart,** since settings are read when the process
+    starts. No front-end rebuild is needed.
+  - **A page that cannot fetch the policy shows no warning and no countdown of its own.** The server
+    enforces the lock regardless (invariant 4).
+  - **A departure from `CLAUDE.md` §5:** "These live in `apps/core/constants.py` and nowhere else."
+    The defaults still live there, and the running values come from `.env`. `CLAUDE.md` is the
+    team's file and is not edited here; Benjamin was told.
+- **Tests and breaks,** in the commit whose subject begins `feat(FR-03): the lockout policy is .env
+  configuration`:
+  - **Server:** `test_fr03_lockout_policy.py`, 12 tests, covering:
+    - the settings: their defaults, reading `.env`, and refusing values under 1;
+    - login at a running threshold of three and a two-minute duration;
+    - the ceiling at a running threshold of two;
+    - the route: anonymous, as an Employee and as an Administrator, its values, and read-only.
+
+    Breaks P1 to P10 were each caught, and every new test failed under at least one.
+  - **Front end:** three new tests in `loginLockout.test.jsx`:
+    - the policy asked for once, and not before a failure;
+    - a policy of three failures and ten minutes warning, locking and counting down by it;
+    - a page with no policy showing no warning or lock of its own, while still counting down the
+      server's `403`.
+
+    Breaks F1 to F8 were each caught. F7 was caught only after its test checked every failure, not
+    just the fifth, and that commit's message says so. `npm test` passed 617.
+  - **Existing tests updated:**
+    - `test_rbac.py` and `test_never_cache.py`: the opt-outs now answer by route, 400 for
+      registration and login and 200 for the policy;
+    - `test_source_rows_fail_closed.py` classifies the route;
+    - `login.test.jsx` serves the policy in its two tests that fail a sign-in.
+
+**The requirements audit, verbatim.** The `requirements-auditor` agent audited `c0c2efc` on 14
+November 2026. The report below was extracted mechanically from its transcript and quoted line by
+line, unedited. Its file and line references are to `c0c2efc`.
+
+> ## Audit: FR-03 Account Lockout & Brute-Force Protection — 14 November 2026
+>
+> **Commit audited:** `c0c2efc` (`c0c2efcc802009bd7dc8d7a877d19a87431df0ad`) on `feat/FR-03-lockout-interface`, whose parent is `6ed0ef1`.
+>
+> - **FR-03's own commits:** `de57242`, `3eee096`, `e624e90`, `36ecba6` and `c0c2efc`.
+> - **Requirement text** (`proposal.txt`): FR-03, lines 338–396. Also read against it: FR-02 (302–336), UC-02 E1 and E2 (1715–1723), NFR-04 (1442) and §7.11 (3525–3598).
+> - **Paths** below are relative to the worktree `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-03-lockout-interface-b55494`.
+> - **No test was run for this audit.**
+>
+> **Verdict:** INCOMPLETE
+>
+> One half of one clause is neither met nor declined: FR-03's "so the policy can be tightened without code changes". Every other clause is either satisfied, or met within a recorded decision whose cost is stated.
+>
+> ### Clause coverage
+>
+> | # | Clause (FR-03 unless named) | Status | Evidence |
+> |---|---|---|---|
+> | F1 | "After each failed login, a subtle warning appears once 2+ attempts remain" | Satisfied, as D-130 decision 2 reads "2+": after the 3rd and 4th consecutive 401. How accurate it is depends on decision 1 (the page keeps its own count), whose cost is recorded | `frontend/src/pages/Login.jsx:162-164, 267-272`; `frontend/src/constants.js:50, 341-344`; `loginLockout.test.jsx` S1, S5–S8 |
+> | F2 | "Once locked, the login button is disabled with a countdown timer shown" | Satisfied. It locks at the page's 5th 401, or on the 403, counting down from `retry_after`. It can come late when the failures were made elsewhere (decision 1, recorded) | `Login.jsx:82-98, 188, 195-197, 251-257, 285`; `apps/api/views.py:619-627`; S2–S4, S6, S9–S12; `test_fr03_lockout_record.py::test_retry_after_*` |
+> | F3 | "An Administrator viewing a locked account can release the lock immediately, so a locked-out user has a route forward" | Satisfied. Three residues are recorded in D-130: a sign-in page already open must be reloaded (hint, finding 1); the only Administrator cannot be released (finding 2); the release is not tied to the lock the dialog showed (finding 3) | `frontend/src/pages/RoleManagement.jsx:69-88, 96-106, 137, 387-451`; `frontend/src/api/users.js:71-72`; `views.py:823-910`; `roleManagementUnlock.test.jsx` U1–U12; `accessDenied.test.jsx` E1; S13; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | F4 | "The lockout message states that an administrator can unlock the account" | Satisfied. The message is false for the only Administrator, which is a recorded residue (finding 2) | `views.py:191-194`; `constants.js:321-332`; S2, S9; `test_fr03_lockout_record.py::test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
+> | S1 | "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until to the current time plus fifteen minutes" | Satisfied | `views.py:628-656`; `test_login.py::test_a_failed_attempt_increments_failed_attempts`, `::test_the_threshold_failure_sets_locked_until`, `::test_five_consecutive_failures_then_403`; `test_login_concurrency.py::test_concurrent_wrong_passwords_leave_the_lock_in_place` |
+> | V1 | "the lock is evaluated before any session can be established" | Satisfied | The check at `views.py:594` comes before `django_login` at `:663`, and both run under the row lock taken at `:586`; `test_login.py::test_a_locked_account_issues_no_session` |
+> | V2 | "No session is issued for a locked account under any circumstance, regardless of the password submitted" | Satisfied. Two residues are recorded: the session's keys are saved after the row lock is released (D-130), and a lock does not end an existing session (D-26) | `views.py:582-627`; `test_login.py::test_a_locked_account_is_403_even_with_the_right_password`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V3 | "The submitted password is still verified while the account is locked … used solely to select the response message and can never grant access" | Satisfied. Past `LOCKOUT_NOTICE_CEILING` the result is not used at all (D-26) | `views.py:581, 611-627`; `test_login.py::test_a_locked_account_with_the_wrong_password_is_the_ordinary_401`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right` |
+> | V4 | "A successful authentication on an unlocked account resets the counter to zero" | Satisfied | `views.py:664-670`; `test_login.py::test_a_success_resets_failed_attempts_and_sets_last_login`, `::test_a_success_clears_locked_until_as_well_as_the_counter` |
+> | V5 | "the counter also resets automatically once the lockout window expires" | Satisfied, lazily. The next attempt resets it, on the row read under lock. Until then the stale value stays stored, and nothing else reads it | `views.py:631-637, 664-670`; `test_login.py::test_an_expired_lock_does_not_re_lock_on_the_next_single_failure`; `test_fr03_lockout_record.py::test_after_a_lock_expires_the_next_threshold_writes_a_second_row`; `test_fr03_unlock.py::test_an_expired_lock_is_409_and_is_left_exactly_as_it_was` |
+> | V6 | "A matching password submitted during an active lockout window neither clears the lock nor resets the counter" | Satisfied. The attempt is counted (D-26) | `views.py:594-627`; `test_login.py::test_an_attempt_during_the_lock_does_not_extend_it`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V7 | "Only a user holding the Administrator role may release a lock" | Satisfied, through `release_account_locks`, which is seeded for Administrator only | `views.py:410, 849`; `apps/accounts/migrations/0010_seed_release_account_locks.py`; `test_fr03_unlock.py::test_unlock_is_401_anonymously_and_changes_nothing`, `::test_unlock_is_403_for_an_employee_whatever_the_id` (3 cases); `test_release_account_locks_seed.py::test_release_account_locks_is_held_by_administrator_only` |
+> | V8 | "An Administrator cannot release a lock on their own account" | Satisfied in letter. Its purpose ("must not be releasable by whoever currently holds that session") can be defeated in four requests through a second account. That is residue L3, which is recorded | `views.py:886-889`; `test_fr03_unlock.py::test_an_administrator_cannot_release_their_own_account[locked]`, `[not locked]` |
+> | C1 | "threshold and lockout duration are configuration values rather than literals" | Satisfied on the server | `apps/core/constants.py:440-441`, imported at `views.py:40-42` |
+> | C2 | "so the policy can be tightened without code changes" | **Partial: not met, not declined** | Missing or partial, item 1 |
+> | C3 | "Every lockout is recorded with the attempted email, source address, and timestamp" | Satisfied | `views.py:639-654`; `apps/accounts/models.py:118-162`; `test_fr03_lockout_record.py::test_the_threshold_failure_writes_one_lockout_row_with_every_field`, `::test_no_attempt_during_a_live_lock_writes_a_row`, `::test_an_unknown_address_writes_no_row`, `::test_the_lockout_row_records_the_connecting_address` (2 cases) |
+> | C4 | "giving evidence of whether a lockout resulted from a forgotten password or a distributed attempt against many accounts" | Satisfied in code. It cannot be shown on the loopback alpha, where every `source_ip` is `127.0.0.1`. That is L4, recorded, and the demonstration script says so | `views.py:511-518`; `docs/demonstration-script.md` FR-03 step 6 |
+> | M1 | "the lockout notice is shown only where the submitted password matches the stored credential" | Satisfied | `views.py:611-627`; `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses` (4 cases) |
+> | M2 | "Where the password was also wrong, the generic 'Invalid email or password' message from FR-02 is retained" | Satisfied on the server. At its own fifth 401 the page adds a hedged notice that is the same for every address (decision 1, finding C) | `views.py:499-508`; `test_login.py::test_a_locked_account_is_indistinguishable_from_an_unknown_address`, `::test_an_unknown_address_is_never_403`; S2 |
+> | R1 | "releasing a lock clears the expiry and resets the failed-attempt count" | Satisfied | `views.py:893-896`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_a_release_gives_back_five_attempts_and_the_notice_after_the_next_lock` |
+> | R2 | "The Administrator does not see, set or reset the user's password; … restores the ability to attempt authentication and nothing more" | Satisfied | `views.py:851-910` reads no body and leaves the password, role and sessions untouched; `apps/api/serializers.py:50-100`; `constants.js:409`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock` (the password hash, role, `last_login` and the user's existing session are unchanged); U4 |
+> | R3 | "Every release is recorded with the Administrator who performed it, the account affected and the time" | Satisfied | `views.py:900-909`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_one_administrator_releases_another_administrators_lock`, `::test_a_lock_set_by_login_and_its_release_are_two_rows_naming_the_same_lock` |
+> | P1 | "200 OK on release" | Satisfied | `views.py:910`; as R1 |
+> | P2 | "403 Forbidden where the requester does not hold the Administrator role" | Satisfied, and given before any lookup | `views.py:849`; `test_fr03_unlock.py::test_unlock_is_403_for_an_employee_whatever_the_id` |
+> | P3 | "… or is the account holder" | Satisfied, whether or not the account is locked | `views.py:886-889`; as V8 |
+> | P4 | "404 Not Found for an unknown account" | Satisfied | `views.py:882-885`; `test_fr03_unlock.py::test_an_unknown_id_is_404_for_an_administrator` |
+> | P5 | "409 Conflict where the account is not currently locked" | Satisfied, including an expired lock | `views.py:891-892`; `test_fr03_unlock.py::test_an_account_that_is_not_locked_is_409_and_its_count_is_left_alone`, `::test_an_expired_lock_is_409_and_is_left_exactly_as_it_was` |
+> | D1 | "Users (Update (locked_until → null, failed_attempts → 0))" | Satisfied | as R1 |
+> | D2 | "LoginAttempts (Create — release recorded as an administrative event)" | Satisfied | as R3 |
+> | D3 | Users table: `user_id`, `failed_attempts`, `locked_until` | Satisfied (FR-02's columns) | `apps/accounts/models.py:85-98` |
+> | D4 | LoginAttempts table (Create, Read): `attempt_id`, `attempted_email`, `source_ip`, `success`, `attempted_at` | Satisfied. Four columns are added and `success` is nullable, both recorded in D-130 "The schema". The Read is `lock` on `GET /api/users`, and no route lists the table (contract). `attempted_email` is an `EmailField` (varchar 254), not text | `apps/accounts/migrations/0009_login_attempts.py`; `views.py:723-739`; `serializers.py:62-100`; `test_fr03_user_list_lock.py` (7 tests); `test_release_account_locks_seed.py::test_the_migrations_apply_and_reverse_through_the_executor`; `apps/core/tests/test_schema.py` |
+> | X1 | FR-02 Front-End "Where the account is locked and the submitted password was correct, a distinct message is shown"; UC-02 E2.02 | Satisfied within `LOCKOUT_NOTICE_CEILING`, and **declined past it by D-26**. D-26's reasons hold in the code: every attempt during a lock is counted, the window is never extended, and the password is hashed on every path | `views.py:581, 600-612`; `test_login.py::test_the_notice_survives_a_mistype_by_the_locked_out_user`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right` |
+> | X2 | UC-02 E1.03, "disclosing neither whether the email is registered nor whether the account is locked" | Satisfied, headers included | `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses` |
+> | X3 | NFR-04, "requiring either the 15-minute cooldown to expire or an Administrator to release the lock" | Satisfied | S1 and V1–V8 above; `test_fr03_unlock.py::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | X4 | §7.11 `handleLoginAttempt()` | Followed, with recorded departures. Counting during the lock and the notice ceiling are D-26. Hashing the password first and deciding on the row read under lock is D-130 (H1) | `views.py:567-671` |
+>
+> ### Missing or partial
+>
+> 1. **C2: "so the policy can be tightened without code changes" is not met, and no decision declines it.**
+>    - **Where the values live.** The threshold and duration are Python module constants at `apps/core/constants.py:440-441`. No environment variable or setting is read for them.
+>    - **The browser's copies.** Since D-130 decision 1 the browser holds its own copies at `frontend/src/constants.js:41-42`: `LOCKOUT_THRESHOLD = 5` and `LOCKOUT_DURATION_SECONDS = 15 * 60`. `test_front_end_constants_agreement.py` Y1 and Y2 hold them equal to the server's.
+>    - **What tightening the policy takes:**
+>      - an edit to both source files;
+>      - a front-end rebuild;
+>      - edits to two test files that pin today's values. `apps/core/tests/test_constants.py:107-111` (`test_lockout_values`) asserts 5 and 15 minutes. `frontend/tests/loginLockout.test.jsx` writes 5 failures, "15:00", "15 minutes" or 899 s at lines 204, 206, 212, 220, 223, 243, 257, 291, 292, 299, 388, 398, 424 and 425, which includes S13.
+>    - **The suite already shows this.** Breaks P01 and P02 in `3eee096`'s message changed only the client copy, and the front-end tests failed.
+>    - **What is met.** The first half, "configuration values rather than literals", is met on the server (C1).
+>    - **Why the record hides it.** D-130's table row at `docs/decisions.md:12198` shortens the clause to "the threshold and duration as configuration values", so the half that is not met never appears. This project's own record uses "a `.env` change and not a code change" for exactly this distinction (`docs/decisions.md:3575`).
+>
+> No other clause is partial or missing.
+>
+> **Declined or recorded with their cost, so not counted as gaps.** I checked each of these against the code:
+>
+> - D-130 decision 1, the page's own count ("The cost of decision 1").
+> - D-130 decision 2, when the warning shows.
+> - D-130 decision 5: only lockouts and releases are recorded, so `success` is false or null.
+> - D-26: counting during the lock, and the notice ceiling (X1).
+> - D-130's residues:
+>   - L3, which takes four requests;
+>   - the only Administrator cannot be released (finding 2);
+>   - the release is not tied to the lock the dialog showed (finding 3);
+>   - the lock order holds only while the administrator set is stable (finding 4);
+>   - the session's keys are saved after the row lock is released;
+>   - there is no retention rule;
+>   - the lockout insert adds a timing difference;
+>   - on the loopback alpha every `source_ip` is `127.0.0.1` (L4).
+>
+> ### Record defects
+>
+> 1. **The configuration clause is presented as met.** D-130's "SE configuration" row (`docs/decisions.md:12198`) and the comment at `apps/core/constants.py:439` ("Configuration values rather than literals, as FR-03 Business logic requires") both say so. The row cites `test_constants.py` as its evidence, yet that file's `test_lockout_values` pins both values. The clause's "without code changes" is not met (item 1).
+> 2. **One text named in pre-PR finding 2 is left uncovered.** Finding 2's "What" column (`docs/decisions.md:12313`) names the self-refusal notice, `TEXT.unlockSelfRefused` ("…Ask another administrator to unlock it.", `frontend/src/constants.js:424`). Neither the finding's disposition nor the residue at `:12255-12262` covers it, and it is false for the only Administrator. The screen shows it only when its idea of who is signed in is out of date.
+> 3. **S13 is cited for more than it tests.** D-130's FE-release row (`docs/decisions.md:12194`) cites "S13 (a release picked up by a reload)". S13 checks only that the hint appears in both lock states and not before. No test reloads the page or picks up a release.
+> 4. **The reload hint's comment leaves out the notice ceiling.**
+>    - The comment above `TEXT.lockedReloadHint` (`frontend/src/constants.js:333-336`) says that after a reload "a lock still live just answers again". It answers with the 403 only within `LOCKOUT_NOTICE_CEILING`.
+>    - Each reload and retry during a live lock is counted (`views.py:600-601`). From the eleventh attempt in all, the right password gets the generic 401 (`:611`).
+>    - So the hint can lead a user who has not been unlocked into that state. Neither the comment nor finding 1's disposition says so.
+>    - D-130 decision 1's cost bullet, "the right password during a lock still gets the server's `403`" (`docs/decisions.md:12129`), leaves out the same qualification.
+> 5. **L3 is described inconsistently.**
+>    - The design-review row (`docs/decisions.md:12233`) still lists three steps, "register an account, promote it, release from it", although finding 5 corrected the residue to four.
+>    - Both that row and the residue (`:12242`) pair L3 with the dialog's "check who is asking". The dialog does nothing against L3, because in L3 the session holder works the second account's dialog themselves.
+> 6. **The break count includes re-runs.** D-130's "51 breaks" for `e624e90` (`docs/decisions.md:12209`) includes U12r and U12x10. Both are re-runs of break U12, not separate breaks.
+> 7. **Two "only" statements are stale and carry no dated note:**
+>    - `apps/api/tests/test_login.py:221-223`: "FR-03 adds only the warning interface".
+>    - `docs/demonstration-script.md:163-164`: "FR-03 adds only the warning, the countdown and the administrator release". This leaves out `LoginAttempts`, which the script's own FR-03 section lists.
+> 8. **One clause is cited under the wrong heading.** `apps/api/views.py:186` and `apps/api/tests/test_fr03_lockout_record.py:13-14` call "The lockout message states that an administrator can unlock the account" FR-03's messaging clause. It is FR-03's Front-End clause (`proposal.txt` line 343).
+>
+> ### Smallest fix for each gap
+>
+> - **Item 1, option (a): docs only, but it needs Benjamin's decision.**
+>   - Add a dated note to D-130 that declines "without code changes". It should cite CLAUDE.md §5, which says these constants "live in `apps/core/constants.py` and nowhere else".
+>   - The note should state the cost: a policy change means editing `apps/core/constants.py:440-441` and `frontend/src/constants.js:41-42`, rebuilding the front end, and editing `apps/core/tests/test_constants.py:107-111` and `frontend/tests/loginLockout.test.jsx`.
+>   - Then correct the table row at `docs/decisions.md:12198` and the comment at `apps/core/constants.py:439`.
+> - **Item 1, option (b): code.**
+>   - Read both values from the environment in `config/settings.py`, with today's constants as the defaults.
+>   - Give the client its copy at runtime rather than building it into the bundle. The values are the same for every account, so serving them reveals nothing about any account.
+>   - Derive the front-end tests' figures from that copy.
+> - **Record defects 1–8:** text edits at the places named above. For defect 4, add one clause: "within `LOCKOUT_NOTICE_CEILING`; each retry during a live lock counts toward it".
+>
+> ### Invariant check (CLAUDE.md §6)
+>
+> - **Invariant 4, authorisation on the server (401, then 403): pass.**
+>   - The release's 401 and 403 come from `permission_classes` (`views.py:849`).
+>   - The own-account 403 is decided on the server (`:886-889`).
+>   - The hidden Unlock buttons are usability only (`RoleManagement.jsx:77-85`; `accessDenied.test.jsx` E1).
+> - **Invariant 1's non-disclosure, applied to accounts: pass.**
+>   - Login's 401 is byte-identical in four cases: an unknown address, a wrong password, a locked account with a wrong password, and a locked account past the ceiling.
+>   - The 403 goes only to the right password.
+>   - An Employee's 403 on the release comes before the lookup, so user ids cannot be probed.
+> - **Invariant 9, atomicity, applied: pass.** A lock and its lockout row commit in one transaction (`views.py:582-656`). So do a release and its release row (`:852-909`).
+> - **Invariants 2, 3, 5, 6, 7, 8 and 10:** not applicable to this slice.
+> - **Constants:**
+>   - No lockout literal appears inline on the server path.
+>   - The client copies at `frontend/src/constants.js:41-42` are flagged under item 1. Y1 and Y2 tie them to the server's values.
+>   - `LOCKOUT_WARNING_REMAINING = 2` (`:50`) is the page's own rule (decision 2) and has no server counterpart.
+> - **Implemented twice:** the attempt count lives in `failed_attempts` on the server and again in the page. This is deliberate and recorded (decision 1). The page's count is not security.
+> - **AI SDK imports:** none in FR-03's files.
+> - **Chunk writes:** not applicable.
+> - **Migrations:**
+>   - `0009` is additive and `0010` is reversible.
+>   - `test_release_account_locks_seed.py::test_the_migrations_apply_and_reverse_through_the_executor` applies both and reverses them.
+>   - `makemigrations --check` reported no changes (recorded in `e624e90`).
+>
+> ### Definition of done (CLAUDE.md §8)
+>
+> 1. **Behaviour, error paths and status codes:** met for every clause except C2.
+> 2. **Both suites:**
+>    - **pytest on `6ed0ef1`:** 4522 passed, with dual-role coverage 44/44. `POST /api/users/<uuid:pk>/unlock` was exercised anonymously (401, 5 tests), from an Employee (403, 5 tests) and from an Administrator (200, 403, 404 and 409, 14 tests). Log: `C:\Users\mozza\AppData\Local\Temp\claude\257e22242454ee47\014b10c2-3a24-461f-99d4-7d1e7098b7ed\scratchpad\full-suite-6ed0ef1.log`. I read its last lines myself.
+>    - **pytest on `c0c2efc`:** this is an inference, not a run.
+>      - Its only server change is a comment (`views.py:856-860`).
+>      - No Python test reads the docs it changed.
+>      - `test_front_end_constants_agreement.py` does read `frontend/src/constants.js`. It parses only `export const` lines and the `DOCUMENT_STATUS`, `ROLES` and `SOURCE_TYPE` objects, and `c0c2efc` changed none of those.
+>    - **npm on `c0c2efc`:** 614 passed with lint clean, according to its commit message. I did not re-run it.
+>    - **Screen clauses in the front-end suite:**
+>      - warning: S1, S5–S8;
+>      - countdown: S2–S4, S6, S9–S12;
+>      - release control: U1–U12 and E1;
+>      - message: S2, S9;
+>      - reload hint: S13.
+> 3. **Happy and failure paths:** both are tested on every route and screen above.
+> 4. **FR ID in each commit:** `de57242`, `3eee096`, `e624e90`, `36ecba6` and `c0c2efc` all carry `(FR-03)`, and each commit holds the tests for its own code.
+> 5. **This audit:** it finds one gap, C2.
+>
+> ### Gate impact
+>
+> - **No M6 impact.** FR-03 is a SHOULD for NIT3004 and not one of the twelve, and the 1 November gate has passed.
+> - **M6 code this branch touches:**
+>   - FR-02's login handler, in `de57242` (the H1 race fix);
+>   - FR-05's user list and screen: `GET /api/users` gains `lock`, and Role management gains the Account column.
+> - **Those changes passed** the full suite on `6ed0ef1`. `test_login.py`, `test_login_concurrency.py` and `test_roles.py` cover them.
+>
+> **FR-03 at c0c2efc is INCOMPLETE:** the clause "so the policy can be tightened without code changes" is neither met nor declined; every other clause is satisfied, or met within a recorded decision whose cost is stated.
+
+> **Dated note, 14 November 2026: what the audit's findings became.**
+>
+> - **Its one gap, C2:** closed by decision 7, above. It is not declined.
+> - **Its record defects:**
+>   - **Defect 1:** the configuration row is rewritten for decision 7.
+>   - **Defect 2:** the self-refusal notice is added to the residue about the only Administrator.
+>   - **Defect 3:** S13's citation now says what it tests.
+>   - **Defect 4:** the notice ceiling is added to the reload hint's comment and to decision 1's cost.
+>   - **Defect 5:** L3 now has four steps, and the dialog's check is no longer claimed against it.
+>   - **Defect 6:** `e624e90` has 49 distinct breaks.
+>   - **Defect 7:** the two "only" statements are corrected (`test_login.py` and the demonstration
+>     script).
+>   - **Defect 8:** the clause is cited under its Front-End heading.
+> - **The verdict stands as recorded:** INCOMPLETE at `c0c2efc`. A re-audit of the commit that closes
+>   the gap is recorded after it.
+
+**The final security review, 15 November 2026.** One workflow ran it at `a8c8479`, with the
+re-audit below:
+
+- a `security-reviewer` agent read decision 7's commit, `610c509`;
+- two independent skeptics then tried to refute each finding.
+
+A finding was kept unless the skeptics refuted it by a majority. Nobody ran pytest or npm during the
+review. The reviewer found the 401, the route, the page's lazy request, the request-time reads and
+the records clean, apart from the findings below.
+
+| Finding | Severity, and the skeptics' votes | What | Disposition |
+|---|---|---|---|
+| M1 | medium; both upheld | A very long `LOCKOUT_DURATION_MINUTES` passed the settings check, then made login answer 500 at the threshold failure: the lock's timestamp overflowed. Only a registered address could trigger it, so five wrong passwords told a stranger whether an address is registered (UC-02 E1.03). No lock was ever set | **Fixed** by decision 8: a 365-day maximum, compared as minutes before any timedelta is built. Breaks B3 and B7 |
+| L1 | low; one upheld, one refuted | The policy accepted any loosening, so a huge threshold silently turned the lockout off, against NFR-04 | **Fixed** by decision 8: a threshold of at most 5 and a duration of at least 15 minutes. Breaks B1, B2 and B6b |
+| L2 | low; one upheld, one refuted | Failures the page counted while it could not fetch the policy are read as current once it arrives. A typo after a long pause can lock the page for the full duration while the server has reset its count | **Recorded**, below |
+| L3 | low; both refuted | A `403` with no `retry_after`, while the policy was unavailable, said "when the timer ends" with no timer shown | **Dropped**: both skeptics refuted it |
+| L4 | low; both upheld | Tightening the policy in a developer's `.env` broke that machine's server tests, which assume the defaults | **Fixed**: `conftest.py`'s autouse `lockout_policy_defaults` pins the defaults for every test. No break covers it, because CI has no `.env` to tighten |
+| I1 | info; both upheld | A value that is not a whole number, or one past a timedelta's range, stopped startup with `ValueError` or `OverflowError` rather than `ImproperlyConfigured` | **Fixed**: both raise `ImproperlyConfigured`, naming the variable. Break B4 |
+| I2 | info; both upheld | The contract's "405 for any method but GET" was wrong. HEAD and OPTIONS answer 200, as on every DRF view, and OPTIONS quotes the view's docstring | **Fixed** in the contract. `test_the_policy_route_is_read_only` now checks POST, PUT, PATCH, DELETE, HEAD and OPTIONS (break B5). OPTIONS quoting docstrings is DRF's default on every route, and is not changed here |
+| I3 | info; both upheld | Several records still described the fixed five and 15, or the page's built-in copy | **Fixed** in the contract, `schema-v1.md`, `constants.js`'s comments and this entry |
+
+**Residue L2, recorded rather than fixed.**
+
+- **What happens:** while the page cannot fetch the policy, it keeps counting failures with no lock
+  and no time-based reset. Once the policy arrives, a count at or above the threshold locks the page
+  at once, for the full duration. The server, whose lock expired meanwhile, may have reset its count
+  to 1.
+- **The way out:** a reload. Only the page's own countdown is wrong; the server enforces the real
+  lock regardless (invariant 4).
+- **The fix the review suggested:** keep each failure's time and replay them the way the server
+  counts.
+
+**Tests and breaks for decision 8 and these fixes** are in the commit whose subject begins
+`fix(FR-03): the lockout policy may only be tightened`.
+
+- **Tests:** in `test_fr03_lockout_policy.py`:
+  - the bounds test, with each kind of refused value;
+  - a test that values at or inside the bounds start;
+  - login at a 20-minute duration, which also catches a default-duration break;
+  - the widened read-only test.
+- **Breaks:** B1 to B7, plus B6b and P5 rerun.
+  - Each new test failed under at least one.
+  - B6 made the default threshold itself invalid, so the test process stopped at settings import and
+    reported no test result. B6b broke the threshold's lower bound instead, and was caught.
+
+**The requirements re-audit, verbatim.** The `requirements-auditor` agent re-audited FR-03 at
+`a8c8479` on 15 November 2026, in the same workflow. The report below is that agent's return value,
+checked identical to its record in the workflow's journal and quoted line by line, unedited. Its
+references are to `a8c8479`.
+
+> ## Audit: FR-03 Account Lockout & Brute-Force Protection — re-audit at a8c8479, 15 November 2026
+>
+> **Commit audited:** `a8c8479` (`a8c8479d7be9ad2f6c6e99bffac45b36748f0d5f`) on `feat/FR-03-lockout-interface`. It merges `610c509` (Benjamin's decision 7, the commit under review) with `95aadd3` (main, PR #108, D-131).
+>
+> - **FR-03's own commits:** `de57242`, `3eee096`, `e624e90`, `36ecba6`, `c0c2efc` and `610c509`.
+> - **Requirement text:** `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt` (untracked, read where it is). FR-03 is lines 338–396. I also read it against FR-02 (302–336), UC-02 E1 and E2 (1715–1723), NFR-04 (1442) and the configuration table (2818–2824).
+> - **Paths** below are relative to the worktree `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-03-lockout-interface-b55494`. Line numbers are at `a8c8479`.
+> - **I ran no tests for this audit.** The full pytest run on `a8c8479` was still going: its log was at 31% when I read it at 10:47 on 15 November. **I did not have its result.**
+>
+> **Verdict:** COMPLETE
+>
+> Every FR-03 clause is either satisfied, or met within a recorded decision whose cost is stated. The previous audit's one gap, C2 ("so the policy can be tightened without code changes"), is now met. The verdict does not cover three things:
+> - `a8c8479`'s full pytest result, which I did not have;
+> - two of the eight earlier record defects (2 and 4), which are only partly fixed;
+> - new defects N1 to N7 below. N6 and N7 are consequences of decision 7 that nobody recorded, not text slips. None of them leaves a clause unmet.
+>
+> ### Clause coverage
+>
+> | # | Clause (FR-03 unless named) | Status | Evidence |
+> |---|---|---|---|
+> | F1 | "a subtle warning appears once 2+ attempts remain: '2 attempts remaining before temporary lockout'" | Satisfied, reading "2+" as decision 2 does: the warning shows at 2 remaining, then at 1. Since decision 7 it counts against the threshold the page fetches. How accurate it is depends on decision 1, whose cost is recorded | `frontend/src/pages/Login.jsx:177-182, 303-307`; `frontend/src/constants.js:45, 341-344`; `loginLockout.test.jsx` S1, S5, S7, S8 and "warns, locks and counts down by the policy the server sends, here three failures and ten minutes" |
+> | F2 | "Once locked, the login button is disabled with a countdown timer shown" | Satisfied. The server's 403 counts down its `retry_after` whether or not the policy has arrived. The page's own lock waits for the fetched policy, a cost decision 7 records | `Login.jsx:82-102, 206, 212-216, 297-298, 340`; `apps/api/views.py:620-628`; S2–S4, S6, S9–S12; "shows no warning and no lock of its own when the policy cannot be had, and still counts down the server’s 403"; `test_fr03_lockout_record.py::test_retry_after_is_whole_seconds_within_the_lock`, `::test_retry_after_is_the_time_left_on_the_accounts_lock`, `::test_retry_after_rounds_up_so_the_page_never_reopens_early` |
+> | F3 | "An Administrator viewing a locked account can release the lock immediately" | Satisfied. Three residues are recorded in D-130: a sign-in page already open must be reloaded (finding 1); the only Administrator cannot be released (finding 2); the release is not tied to the lock the dialog showed (finding 3) | `frontend/src/pages/RoleManagement.jsx:69-88, 96-106, 400-446`; `frontend/src/api/users.js:71-72`; `views.py:850-937`; `roleManagementUnlock.test.jsx` U1–U12; `accessDenied.test.jsx` E1; S13; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | F4 | "The lockout message states that an administrator can unlock the account" | Satisfied. The message is false for the only Administrator, a recorded residue (finding 2) | `views.py:190-193`; `constants.js:318-330`; S2, S9; `test_fr03_lockout_record.py::test_the_locked_notice_names_an_administrator_who_can_unlock_the_account` |
+> | S1 | "Each failed attempt increments failed_attempts; reaching the threshold of five sets locked_until to the current time plus fifteen minutes" | Satisfied at the defaults, using the running settings | `views.py:629-658` (lock at `641-642`); `config/settings.py:180-185`; `test_login.py::test_a_failed_attempt_increments_failed_attempts`, `::test_the_threshold_failure_sets_locked_until`, `::test_five_consecutive_failures_then_403`; `test_login_concurrency.py::test_concurrent_wrong_passwords_leave_the_lock_in_place`; `test_fr03_lockout_policy.py::test_login_locks_at_the_running_threshold_for_the_running_duration` |
+> | V1 | "the lock is evaluated before any session can be established" | Satisfied | The check at `views.py:593` comes before `django_login` at `:665`, and both run under the row lock taken at `:585`; `test_login.py::test_a_locked_account_issues_no_session` |
+> | V2 | "No session is issued for a locked account under any circumstance, regardless of the password submitted" | Satisfied. Two residues are recorded: the session's keys are saved after the row lock is released (D-130), and a lock does not end an existing session (D-26) | `views.py:593-628`; `test_login.py::test_a_locked_account_is_403_even_with_the_right_password`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V3 | "The submitted password is still verified while the account is locked … used solely to select the response message" | Satisfied. Past the notice ceiling, now twice the running threshold, the result is not used at all (D-26) | `views.py:580, 611-613`; `test_login.py::test_a_locked_account_with_the_wrong_password_is_the_ordinary_401`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right`; `test_fr03_lockout_policy.py::test_the_notice_ceiling_follows_the_running_threshold` |
+> | V4 | "A successful authentication on an unlocked account resets the counter to zero" | Satisfied | `views.py:666-672`; `test_login.py::test_a_success_resets_failed_attempts_and_sets_last_login`, `::test_a_success_clears_locked_until_as_well_as_the_counter` |
+> | V5 | "the counter also resets automatically once the lockout window expires" | Satisfied, lazily: the next attempt resets it, on the row read under lock | `views.py:632-638`; `test_login.py::test_an_expired_lock_does_not_re_lock_on_the_next_single_failure`; `test_fr03_lockout_record.py::test_after_a_lock_expires_the_next_threshold_writes_a_second_row` |
+> | V6 | "A matching password submitted during an active lockout window neither clears the lock nor resets the counter" | Satisfied. The attempt is counted (D-26) | `views.py:593-628`; `test_login.py::test_an_attempt_during_the_lock_does_not_extend_it`; `test_login_concurrency.py::test_a_right_password_gets_no_session_once_a_concurrent_request_has_locked_the_account` |
+> | V7 | "Only a user holding the Administrator role may release a lock" | Satisfied, through `release_account_locks`, which is seeded for Administrator only | `views.py:409, 876`; `apps/accounts/migrations/0010_seed_release_account_locks.py:22-25`; `test_fr03_unlock.py::test_unlock_is_401_anonymously_and_changes_nothing`, `::test_unlock_is_403_for_an_employee_whatever_the_id` [a locked colleague, their own locked account, an unknown id]; `test_release_account_locks_seed.py::test_release_account_locks_is_held_by_administrator_only` |
+> | V8 | "An Administrator cannot release a lock on their own account" | Satisfied in letter. Its purpose can be defeated in four requests through a second account. That is residue L3, which is recorded | `views.py:913-916`; `test_fr03_unlock.py::test_an_administrator_cannot_release_their_own_account[locked]`, `[not locked]` |
+> | C1 | "threshold and lockout duration are configuration values rather than literals" | Satisfied | `config/settings.py:180-189`, defaulting to `apps/core/constants.py:449-450`; read at `views.py:611, 641-642, 695-696` |
+> | C2 | "so the policy can be tightened without code changes" | **Satisfied.** At `c0c2efc` it was partial and not declined | See "The previous audit's gap" below |
+> | C3 | "Every lockout is recorded with the attempted email, source address, and timestamp" | Satisfied | `views.py:648-656`; `apps/accounts/models.py:118-162`; `test_fr03_lockout_record.py::test_the_threshold_failure_writes_one_lockout_row_with_every_field`, `::test_no_attempt_during_a_live_lock_writes_a_row`, `::test_an_unknown_address_writes_no_row`, `::test_the_lockout_row_records_the_connecting_address` [the connecting address is recorded, x-forwarded-for is ignored] |
+> | C4 | "giving evidence of whether a lockout resulted from a forgotten password or a distributed attempt against many accounts" | Satisfied in code. It cannot be shown on the loopback alpha, where every `source_ip` is `127.0.0.1`. That is L4, which is recorded, and the demonstration script says so | `views.py:510-517`; `apps/api/serializers.py:83-100`; `docs/demonstration-script.md:252-257` |
+> | M1 | "the lockout notice is shown only where the submitted password matches the stored credential" | Satisfied | `views.py:611-628`; `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses` [unknown address, registered wrong password, locked wrong password, locked past the ceiling right password] |
+> | M2 | "Where the password was also wrong, the generic 'Invalid email or password' message from FR-02 is retained" | Satisfied on the server. When the page's own count locks, it adds a hedged notice that reads the same for every address (decision 1, finding C) | `views.py:498-507, 612-613`; `test_login.py::test_a_locked_account_is_indistinguishable_from_an_unknown_address`, `::test_an_unknown_address_is_never_403`; S2 |
+> | R1 | "releasing a lock clears the expiry and resets the failed-attempt count" | Satisfied | `views.py:920-923`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_a_release_gives_back_five_attempts_and_the_notice_after_the_next_lock` |
+> | R2 | "The Administrator does not see, set or reset the user's password; … nothing more" | Satisfied | `views.py:878-937` reads no body and leaves the password, the role and every session alone; `serializers.py:50-100`; `constants.js:409`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`; U4 |
+> | R3 | "Every release is recorded with the Administrator who performed it, the account affected and the time" | Satisfied | `views.py:927-936`; `test_fr03_unlock.py::test_an_administrator_releases_another_users_lock`, `::test_one_administrator_releases_another_administrators_lock`, `::test_a_lock_set_by_login_and_its_release_are_two_rows_naming_the_same_lock` |
+> | P1 | "200 OK on release" | Satisfied | `views.py:937`; tests as for R1 |
+> | P2 | "403 Forbidden where the requester does not hold the Administrator role" | Satisfied, and given before any lookup | `views.py:876`; tests as for V7 |
+> | P3 | "… or is the account holder" | Satisfied, whether or not the account is locked | `views.py:913-916`; tests as for V8 |
+> | P4 | "404 Not Found for an unknown account" | Satisfied | `views.py:909-912`; `test_fr03_unlock.py::test_an_unknown_id_is_404_for_an_administrator` |
+> | P5 | "409 Conflict where the account is not currently locked" | Satisfied, including an expired lock | `views.py:917-919`; `test_fr03_unlock.py::test_an_account_that_is_not_locked_is_409_and_its_count_is_left_alone`, `::test_an_expired_lock_is_409_and_is_left_exactly_as_it_was` |
+> | D1 | "Users (Update (locked_until → null, failed_attempts → 0))" | Satisfied | as R1 |
+> | D2 | "LoginAttempts (Create — release recorded as an administrative event)" | Satisfied | as R3 |
+> | D3 | Users table: `user_id`, `failed_attempts`, `locked_until` | Satisfied (FR-02's columns) | `apps/accounts/models.py:86, 97-98` |
+> | D4 | LoginAttempts table (Create, Read): `attempt_id`, `attempted_email`, `source_ip`, `success`, `attempted_at` | Satisfied. D-130 "The schema" records the four added columns and the nullable `success`. `attempted_email` is an `EmailField` (varchar 254), not text. The Read is `lock` on `GET /api/users`, and no route lists the table | `apps/accounts/migrations/0009_login_attempts.py`; `models.py:141-159`; `views.py:740-766`; `serializers.py:62-100`; every test in `test_fr03_user_list_lock.py`; `test_release_account_locks_seed.py::test_the_migrations_apply_and_reverse_through_the_executor` |
+> | X1 | FR-02 Front-End "Where the account is locked and the submitted password was correct, a distinct message is shown"; UC-02 E2.02 | Satisfied within the notice ceiling, and **declined past it by D-26**. D-26's reasons hold in the code: every attempt during a lock is counted (`views.py:599-600`), the locked branch never writes `locked_until`, and `authenticate()` hashes the password on every path (`:580`) | `views.py:599-628`; `test_login.py::test_the_notice_survives_a_mistype_by_the_locked_out_user`, `::test_guessing_past_the_ceiling_stops_being_told_whether_it_was_right` |
+> | X2 | UC-02 E1.03, "disclosing neither whether the email is registered nor whether the account is locked" | Satisfied, headers included. The policy route's body is the same for every caller | `test_fr03_lockout_record.py::test_every_401_is_byte_identical_to_an_unknown_addresses`; `test_fr03_lockout_policy.py::test_the_policy_route_answers_every_caller_alike` |
+> | X3 | NFR-04, "lock a user account after 5 consecutive failed login attempts, requiring either the 15-minute cooldown to expire or an Administrator to release the lock" | Satisfied at the default policy. A `.env` can now set a looser policy (N6) | as S1 and V1–V8; `test_login.py::test_login_succeeds_once_the_lock_has_expired`; `test_fr03_unlock.py::test_after_a_release_the_user_signs_in_with_the_right_password` |
+> | X4 | UC-02 E1.02, "Where the counter reaches the configured threshold, the account is locked" | Satisfied. Since decision 7 the threshold really is configuration | `config/settings.py:180`; `views.py:641` |
+>
+> ### Missing or partial
+>
+> **No clause is missing or partial.**
+>
+> **Declined or recorded with their cost, so not counted as gaps.** I checked each against the code:
+> - D-26, past the ceiling (X1);
+> - D-130's decisions:
+>   - decision 1, the page's own count;
+>   - decision 2, when the warning shows;
+>   - decision 5, which records only lockouts and releases;
+>   - decision 7's costs: a change applies after a restart, a page without the policy shows no warning or lock of its own, and it departs from `CLAUDE.md` §5;
+> - D-130's residues:
+>   - L3, in four requests;
+>   - the only Administrator (finding 2);
+>   - the release not tied to the lock the dialog showed (finding 3);
+>   - the lock order, which holds only while the administrator set is stable (finding 4);
+>   - the session keys, saved after the row lock is released;
+>   - no retention rule;
+>   - the timing difference from the lockout insert;
+>   - L4, every `source_ip` being `127.0.0.1` on the loopback alpha.
+>
+> ### The previous audit's gap: C2, **fixed**
+>
+> - **The server.**
+>   - `config/settings.py:180-189` reads `LOCKOUT_THRESHOLD` and `LOCKOUT_DURATION_MINUTES` from the process environment or the repository-root `.env` (`:38-40`). Both default to `apps/core/constants.py:449-450`, and a value under 1 stops the server starting. `.env.example:20-24` documents both.
+>   - `LoginView` reads `settings.LOCKOUT_THRESHOLD` and `settings.LOCKOUT_DURATION` (`views.py:611, 641-642`).
+>   - No server path imports the lockout constants any more. The only importers are `config/settings.py:24-25` and tests.
+> - **The page.**
+>   - `GET /api/auth/lockout-policy` serves the policy (`apps/api/urls.py:19`; `views.py:676-698`), and `frontend/src/api/auth.js:49-50` asks for it.
+>   - `Login.jsx` reads it at `:60-66, 82-96, 303-310, 312-329`, and asks for it at `:360` and `:370`.
+>   - Neither `frontend/src/constants.js` (`:32-37`) nor `Login.jsx` holds a copy. There is no numeric fallback at `Login.jsx:84` or `:94`.
+>   - The page takes its message's duration from the policy (`constants.js:328-330`). The server's own message carries no number (`views.py:190-193`).
+> - **What tightening the policy takes now:** an edit to `.env` and a server restart. No source file changes and no front-end rebuild.
+> - **Tests.**
+>   - **Server**, in `test_fr03_lockout_policy.py`:
+>     - `test_the_policy_defaults_to_the_constants`;
+>     - `test_the_policy_is_read_from_the_environment`;
+>     - `test_a_policy_under_one_refuses_to_start` [LOCKOUT_THRESHOLD-0, LOCKOUT_THRESHOLD--1, LOCKOUT_DURATION_MINUTES-0];
+>     - `test_login_locks_at_the_running_threshold_for_the_running_duration`;
+>     - `test_the_notice_ceiling_follows_the_running_threshold`;
+>     - `test_the_policy_route_gives_the_running_values_to_an_anonymous_caller`;
+>     - `test_the_policy_route_defaults_to_the_constants`;
+>     - `test_the_policy_route_answers_every_caller_alike` [employee, administrator];
+>     - `test_the_policy_route_is_read_only`.
+>   - **Front end**, in `loginLockout.test.jsx`:
+>     - "asks for the policy once, after the first failed attempt, and not before";
+>     - "warns, locks and counts down by the policy the server sends, here three failures and ten minutes";
+>     - "shows no warning and no lock of its own when the policy cannot be had, and still counts down the server’s 403".
+>   - **The tie:** `test_front_end_constants_agreement.py::test_the_client_holds_no_copy_of_the_lockout_policy`.
+>   - **Breaks.** `610c509`'s message reports every server test failing under at least one of breaks P1–P10, and every front-end test failing under at least one of F1–F7. F7 was caught only after its test was made to check every failure. F8 was caught by the tie test.
+>
+> ### The previous audit's eight record defects
+>
+> 1. **Fixed.**
+>    - D-130's configuration row (`docs/decisions.md:12250`) now quotes both halves of the clause and cites the decision-7 tests.
+>    - The comment at `apps/core/constants.py:439-448` is rewritten.
+>    - `test_constants.py::test_lockout_values` (`apps/core/tests/test_constants.py:107-111`) still pins 5 and 15 minutes. These are now the defaults, so pinning them is correct, and the row no longer cites that test.
+> 2. **Partly fixed.**
+>    - The residue at `decisions.md:12318-12320` now covers `TEXT.unlockSelfRefused` (`constants.js:424`).
+>    - Finding 2's disposition cell (`decisions.md:12371`) is unchanged. It still lists only "the sign-in and server messages" as recorded, under "Fixed on Role management", which the self-refusal notice on Role management is not.
+> 3. **Fixed.** `decisions.md:12246` now reads "S13 (the reload hint, shown in both lock states; no test reloads the page)".
+> 4. **Partly fixed.**
+>    - The notice ceiling is now in the reload hint's comment (`constants.js:334-336`) and in decision 1's cost (`decisions.md:12180-12182`).
+>    - Finding 1's disposition (`decisions.md:12370`), which defect 4 also named as silent, still does not mention it.
+> 5. **Fixed in `decisions.md`.**
+>    - The L3 row (`:12285`) and the residue (`:12294-12302`) both give four requests, and neither claims the dialog's check against L3.
+>    - The same pairing survives in code comments (N5).
+> 6. **Fixed, and verified.**
+>    - `decisions.md:12261` says "49 distinct breaks, all caught (51 entries in its list, since break U12 was also run as U12r and U12x10)".
+>    - `e624e90`'s list has 51 entries, and each one says "caught". With U12r and U12x10 folded into U12, the distinct breaks are: U1–U10, U12–U17, L1–L5, L7–L18, S1–S7, K1–K3, D1–D5 and C1, which makes 49.
+> 7. **Fixed.**
+>    - `apps/api/tests/test_login.py:221-223` now reads "FR-03 adds the warning, the countdown, the release and LoginAttempts (D-130)".
+>    - `docs/demonstration-script.md:177-181` now names `LoginAttempts` and the `.env` policy.
+>    - The merge kept the branch's text over main's "adds only" line.
+> 8. **Fixed.**
+>    - `views.py:185` and `test_fr03_lockout_record.py:14` now say "FR-03's Front-End clause".
+>    - The remaining uses of "messaging clause" (`views.py:608`, `decisions.md:12156`) refer to the messaging clause correctly.
+>
+> ### New record defects
+>
+> - **N1. D-130 decision 1 contradicts decision 7.**
+>   - Decision 1 (`decisions.md:12127-12129`) still says the page "works out what remains from its copy of `LOCKOUT_THRESHOLD`".
+>   - Since decision 7 there is no copy, and `test_the_client_holds_no_copy_of_the_lockout_policy` enforces that.
+>   - The FE rows at `:12244-12245` also give failure counts at the defaults without saying that the page's own warning and lock wait for the policy.
+> - **N2. D-21 was overtaken without a dated note.**
+>   - D-21 (`decisions.md:551-553`) still says "the registration and login endpoints opt out explicitly".
+>   - `610c509` added a third opt-out (`views.py:690`) and cites D-21 for it, but D-21 has no dated note, and D-130's "Records this overtakes" (`:12343-12357`) does not list it.
+>   - `config/settings.py:192` still says "Every route is protected unless it opts out explicitly (registration and login)".
+>   - `views.py:467` and `:560` still say "one of the two opt-outs (D-21)".
+> - **N3. A stale test header.** `frontend/tests/loginLockout.test.jsx:10-12` says a 403 without `retry_after` counts down "the full fifteen minutes". Since `610c509` it counts down the fetched policy's duration (`Login.jsx:84`), which is what the test names at `:389` and `:402` say.
+> - **N4. A stale comment.**
+>   - `constants.js:311-312` says the 403 comes "only within LOCKOUT_NOTICE_CEILING (D-26)".
+>   - The running ceiling is `settings.LOCKOUT_THRESHOLD × LOCKOUT_NOTICE_CEILING_FACTOR` (`views.py:611`). `LOCKOUT_NOTICE_CEILING` is the value at the default threshold, kept "for the tests that run on the defaults" (`apps/core/constants.py:459-460`).
+>   - `610c509` changed `views.py:500` and `:597` to "the notice ceiling" for exactly this reason, but not this comment.
+> - **N5. The dialog's check is still labelled "finding L3" in code.**
+>   - The places: `constants.js:410-411`, `RoleManagement.jsx:93-94` and `roleManagementUnlock.test.jsx:13`.
+>   - D-130's corrected L3 row (`decisions.md:12285`) says the check helps against someone asking an Administrator for a release, "not against L3".
+> - **N6. Not recorded: a `.env` can loosen the policy past NFR-04.**
+>   - `config/settings.py:186-189` refuses only values under 1. A setting such as `LOCKOUT_THRESHOLD=50` or `LOCKOUT_DURATION_MINUTES=1` starts cleanly.
+>   - That puts the build outside NFR-04's "5 consecutive failed login attempts … 15-minute cooldown" (`proposal.txt:1442`; the configuration table at 2818–2824).
+>   - FR-03 says "tightened". Decision 7's costs (`decisions.md:12420-12427`) do not mention loosening.
+> - **N7. Not recorded: the server suite is not isolated from the lockout policy in `.env`.**
+>   - `config/settings.py:38-40` reads the repository-root `.env`.
+>   - `conftest.py:91-99` pins the provider and transcription settings "whatever a developer's .env says", but no lockout setting.
+>   - I inferred the following from reading the code; I did not run it. With `LOCKOUT_THRESHOLD=3` in that file, two tests fail:
+>     - `test_fr03_lockout_policy.py::test_the_policy_route_defaults_to_the_constants` (`:145-151`) compares the live settings with the constants;
+>     - `test_fr03_lockout_record.py::test_the_threshold_failure_writes_one_lockout_row_with_every_field` writes its row at the third failure but asserts none before the fifth (`:88-90`). Any change to the duration also fails its `:110`.
+>   - Nothing is affected today. CI and the FR-03 worktree have no `.env`, and the main checkout's `.env` has no line beginning `LOCKOUT`. The suite would fail in a checkout whose `.env` tightens the policy.
+>
+> **Observations, not defects.**
+> - **O1. No security review covers decision 7.** Nothing in D-130 records a security review of `610c509`, which adds an anonymous route and changes where `LoginView` reads its policy. The pre-PR review read `6ed0ef1` (`decisions.md:12359-12360`). `CLAUDE.md` §8 does not require one.
+> - **O2. `CLAUDE.md` §5 now disagrees with the code for these two values.** It still says the constants "live in `apps/core/constants.py` and nowhere else". The disagreement is recorded in decision 7's costs (`decisions.md:12425-12427`). `CLAUDE.md` at `a8c8479` is byte-identical to main's. Resolving it needs the team's own edit to that file.
+>
+> ### Regression check
+>
+> - **`610c509`, server.**
+>   - At the default policy, the running values equal `c0c2efc`'s constants: threshold 5, duration 15 minutes, notice ceiling 10.
+>   - The rbac and never-cache walks treat the new route as open, with a 200.
+>   - The dual-role matrix lists it as "open (AllowAny, not counted)".
+> - **`610c509`, front end.**
+>   - FR-02's distinct locked message does not depend on the policy: `TEXT.accountLocked` shows on the 403 regardless (`Login.jsx:302, 309`).
+>   - One fallback has narrowed. A 403 without a usable `retry_after` used to count down a built-in 15 minutes. It now counts down the fetched duration, and with no policy it shows the message without a countdown and leaves Sign in enabled.
+>   - This server always sends `retry_after` (`views.py:620-626`), so that path cannot be reached with it. Decision 7 records the general cost. Not a defect.
+> - **`a8c8479`, the merge.**
+>   - **What it changes.** It touches no file under `apps/`, `config/` or `frontend/`. It brings `corpus/objective-02/runs/2026-11-13-alpha-anthropic/` and `corpus/objective-06/runs/2026-11-13-kmp-anthropic-gap-column/`, and changes `docs/alpha-deployment.md`, `docs/decisions.md` and `docs/demonstration-script.md`.
+>   - **Docs from main.**
+>     - The corpus files and `docs/alpha-deployment.md` are byte-identical to `95aadd3`'s.
+>     - `docs/decisions.md` keeps every line of `95aadd3`'s. D-131 is identical to main's. D-130 is identical to `610c509`'s apart from one added blank line. D-130 sits before D-131, as D-131's closing note asks.
+>   - **The demonstration script.** `docs/demonstration-script.md` keeps the branch's FR-03 text and main's 14 November amendment. Its new line "None of this is on either alpha" is true: neither `8598d19` nor `6e1efd1` contains `de57242`, `3eee096` or `e624e90`.
+>   - **Leftovers.** No conflict markers remain.
+>   - **Tests that read docs.**
+>     - `test_request_body_bound.py`'s scan skips `decisions.md`, and the branch adds no Waitress command anywhere.
+>     - `test_summary_commands.py` and `test_knowledge_gap_schedule.py` read `docs/alpha-deployment.md`, which is main's file unchanged.
+>   - **So I expect `a8c8479`'s suite to match `610c509`'s.** That is an inference, not a run.
+>
+> ### Invariant check (CLAUDE.md §6)
+>
+> - **Invariant 4, authorisation on the server: pass.**
+>   - The release's 401 and 403 come from `permission_classes` (`views.py:876`).
+>   - The own-account 403 is decided on the server (`:913-916`).
+>   - Hiding the Unlock buttons is usability only (`RoleManagement.jsx:77-85`; E1).
+>   - The policy route is a deliberate opt-out, though D-21 does not record it (N2).
+> - **Invariant 1's non-disclosure, applied to accounts: pass.**
+>   - Login's 401 is byte-identical in four cases: an unknown address, a wrong password, a locked account with a wrong password, and a locked account past the ceiling.
+>   - The 403 goes only to the right password, within the ceiling.
+>   - An Employee's 403 on the release comes before the lookup, so user ids cannot be probed.
+>   - The policy route gives the same body to an anonymous caller and to both roles.
+> - **Invariant 9, atomicity, applied: pass.** A lock and its lockout row commit in one transaction (`views.py:581-658`). So do a release and its release row (`:879-936`).
+> - **Invariants 2, 3, 5, 6, 7, 8 and 10:** not applicable to this slice.
+> - **Set-level checks.**
+>   - **Constants:** the policy's departure from §5 is recorded (O2). No lockout literal appears inline on the server path. `LOCKOUT_WARNING_REMAINING = 2` (`constants.js:45`) is decision 2's rule, and `COUNTDOWN_TICK_MS = 1000` (`Login.jsx:23`) is the countdown's redraw interval.
+>   - **Implemented twice:** the attempt count lives in `failed_attempts` and again in the page, which decision 1 records. The ceiling is also defined twice: `LOCKOUT_NOTICE_CEILING` and the running value at `views.py:611` agree only at the defaults (N4, N7).
+>   - **Wrong app or layer:** none.
+>   - **UI-only enforcement:** none.
+>   - **AI SDK imports:** none in the branch's diff against main.
+>   - **Chunk writes:** not applicable.
+>   - **Migrations:** `610c509` adds none. Its message reports `makemigrations --check` clean.
+>
+> ### Definition of done (CLAUDE.md §8)
+>
+> 1. **Behaviour, error paths and status codes:** met for every clause.
+> 2. **Both suites.**
+>    - **pytest on `610c509`:** 4533 passed, exit 0, dual-role coverage 44/44. The source is the commit message and the last lines of `C:\Users\mozza\AppData\Local\Temp\claude\257e22242454ee47\014b10c2-3a24-461f-99d4-7d1e7098b7ed\scratchpad\full-suite-decision7.log`, which I read. The log does not name its commit.
+>    - **The release route in that run:** `POST /api/users/<uuid:pk>/unlock` was exercised anonymously (401, 5 tests), from an Employee (403, 5 tests) and from an Administrator (200, 403, 404 and 409, 14 tests).
+>    - **pytest on `a8c8479`:** I did not have the result. `C:\Users\mozza\AppData\Local\Temp\claude\257e22242454ee47\014b10c2-3a24-461f-99d4-7d1e7098b7ed\scratchpad\full-suite-a8c8479.log` was at 31%.
+>    - **npm on `610c509`:** 617 passed, with lint and build clean, according to its commit message. I did not re-run it. The merge changes no front-end file.
+>    - **Screen clauses in the front-end suite:**
+>      - warning: S1, S5, S7, S8 and the three-failure policy test;
+>      - countdown: S2–S4, S6, S9–S12 and the decision-7 tests;
+>      - release control: U1–U12 and E1;
+>      - message: S2 and S9;
+>      - reload hint: S13;
+>      - fetching the policy: the decision-7 tests.
+> 3. **Happy and failure paths:** both are tested on every route and screen above.
+> 4. **FR ID in each commit:** `de57242`, `3eee096`, `e624e90`, `36ecba6`, `c0c2efc` and `610c509` all carry `(FR-03)`, and `610c509` carries its own tests.
+> 5. **This audit:** it finds no clause gap.
+>
+> ### Smallest fix for each item
+>
+> - **Clause gaps:** none.
+> - **Defect 2's remainder:** at `decisions.md:12371`, add "and the self-refusal notice (`TEXT.unlockSelfRefused`)" to the "Recorded for" clause.
+> - **Defect 4's remainder:** at `decisions.md:12370`, add that every attempt after a reload counts toward D-26's ceiling.
+> - **N1:** add a dated qualifier to decision 1 at `decisions.md:12128`: "from the policy it fetches (decision 7)".
+> - **N2:**
+>   - add a dated note on D-21 naming `GET /api/auth/lockout-policy` as the third opt-out;
+>   - list D-21 in D-130's "Records this overtakes";
+>   - edit `config/settings.py:192` and `views.py:467` and `:560`.
+> - **N3:** at `loginLockout.test.jsx:10-12`, change "the full fifteen minutes" to "the policy's duration".
+> - **N4:** at `constants.js:312`, change "LOCKOUT_NOTICE_CEILING" to "D-26's notice ceiling".
+> - **N5:** replace "finding L3" at `constants.js:410`, `RoleManagement.jsx:94` and `roleManagementUnlock.test.jsx:13` with the case the check does address, someone asking an Administrator for a release.
+> - **N6:** Benjamin's decision. Either record in decision 7's costs that a `.env` can loosen the policy past NFR-04, or refuse values looser than the defaults at `config/settings.py:186-189`.
+> - **N7:** add an autouse fixture in `conftest.py` that sets `settings.LOCKOUT_THRESHOLD` and `settings.LOCKOUT_DURATION` to `apps/core/constants.py`'s values. The policy tests already override them through pytest-django's `settings` fixture.
+>
+> ### Gate impact
+>
+> - **No M6 impact.** FR-03 is a SHOULD for NIT3004, not one of the twelve, and the 1 November gate has passed.
+> - **M6 code this branch touches:**
+>   - FR-02's `LoginView`: the H1 race fix in `de57242`, and the settings reads in `610c509`, which behave identically at the defaults;
+>   - FR-05's `GET /api/users`, which gains `lock`, and Role management, which gains the Account column.
+> - **Evidence for those changes:** they passed the full suite on `610c509`. The result on `a8c8479` is still to come.
+>
+> **FR-03 at a8c8479 is COMPLETE: every clause, C2 included, is satisfied or met within a recorded decision; the a8c8479 pytest result was not available to me, and defects 2 and 4 (partly fixed) and N1–N7 remain to be corrected or recorded.**
+
+> **Dated note, 15 November 2026: what came after the re-audit.** The re-audit read `a8c8479`.
+> Decision 8 and the final security review's fixes came after it, in the commit whose subject begins
+> `fix(FR-03): the lockout policy may only be tightened`. That commit changes:
+>
+> - the startup validation of the two variables;
+> - a test fixture;
+> - the policy tests;
+> - records.
+>
+> It changes no FR-03 behaviour the clause table depends on, except that a policy looser than NFR-04
+> no longer starts. It was not re-audited, and the verdict stands as recorded for `a8c8479`.
 
 ## D-131 · The AI provider is chosen at setup and a database keeps it; the alpha runs on Anthropic, on a database built for it
 

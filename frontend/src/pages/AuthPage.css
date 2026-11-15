@@ -17,10 +17,29 @@
   color: var(--color-text-muted);
 }
 
-/* Why the submit button is disabled (FR-01). Beside the button, in ordinary
-   text, because a disabled button takes neither focus nor a description. */
+/* Why the submit button is disabled (FR-01, and FR-03's countdown on sign-in).
+   Beside the button, in ordinary text, because a disabled button takes neither
+   focus nor a description. */
 .auth-form__gate {
   margin: 0;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
+}
+
+/* FR-03's countdown: figures of one width, so the line does not shift each second. */
+.auth-form__countdown {
+  font-variant-numeric: tabular-nums;
+}
+
+/* FR-03's remaining-attempts warning, beside the sign-in banner (D-130): subtle
+   text, not a second banner. Muted text on the page surface is 7.56:1. It is a
+   live region kept in the page, so it takes no room while it is empty. */
+.auth-form__warning {
+  margin: 0 0 var(--space-4);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.auth-form__warning:empty {
+  margin: 0;
 }
