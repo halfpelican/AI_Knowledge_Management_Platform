@@ -15475,15 +15475,42 @@ rule 4d).
    keyed on `value`. `reject_proposed_tag` is unchanged.
 2. **Confirm keeps the column's 255 and its 400.** `DocumentProposedTagConfirmView` still reads
    `ProposedTagSerializer`, and `confirm_proposed_tag` keeps its own length check behind it.
-3. **The bound is 100,000 characters: the user's choice on 15 November 2026,** from these options,
-   put to them in one question:
-   - **100,000 characters,** recommended and chosen: sized for Claude's classification ceiling,
-     16,000 tokens, at 6.25 characters a token;
-   - **4,000 characters:** sized for FLM's ceiling, 400 tokens, at 10 characters a token, as the
-     session's brief reasoned. A longer proposal from Claude would have stayed stuck;
-   - **100,000 characters, and a run discards a longer Topic instead of proposing it:** every
-     proposal rejectable by construction. It changes D-129's "any length" rule and what Objective 05's
-     verifier counts, so it is the lead's decision, and it was beyond the brief.
+3. **The bound is 100,000 characters: the user's choice on 15 November 2026,** in answer to one
+   question. The question and its options, as put:
+
+   > The reject route needs a new upper bound on a proposed Topic's length. The brief sizes it from
+   > CLASSIFICATION_MAX_TOKENS (400 tokens), but that cap only applies to FLM. On Anthropic, which is
+   > the default and the alpha's provider, a classification reply can be up to CLAUDE_MAX_TOKENS
+   > (16,000 tokens), and nothing in the parser limits a tag value's length. A proposal longer than
+   > the bound would still be impossible to reject. Which bound should the constant take?
+   >
+   > - **100,000 characters (Recommended):** Sized for Anthropic's 16,000-token reply at about 6
+   >   characters a token, so any realistic proposal on either provider can be rejected. A test ties
+   >   the constant to both reply ceilings. Cheap: Waitress already accepts a 52 MB body, and what
+   >   gets stored is the proposal's own value. A longer Topic is recorded as a theoretical residual.
+   > - **4,000 characters:** Sized for FLM's 400-token reply at 10 characters a token, following the
+   >   brief's reasoning. If Claude proposed a Topic over 4,000 characters it would still be stuck.
+   >   That would be recorded as a known residual on the default provider.
+   > - **Bound, and cap proposals:** 100,000 on the route, and a classification run also discards a
+   >   longer Topic instead of proposing it, so every proposal can be rejected by construction. This
+   >   changes D-129's 'any length' rule and Objective 05's verifier count, so it is a lead's
+   >   decision and goes beyond the brief.
+
+   The user chose "100,000 characters (Recommended)".
+
+   *Corrected on 15 November 2026, after the reviews of `bc70fe6`: the options priced the two bounds at
+   different ratios, about 6 characters a token for the recommended one and 10 for the other, and
+   said nothing about why.*
+   - *6.25 is 100,000 / 16,000: the ratio at which the bound equals Claude's ceiling, worked back from
+     the bound. It was not measured.*
+   - *The 10 was this session's figure, not the brief's: the brief named only
+     `CLASSIFICATION_MAX_TOKENS`. At 10 characters a token, Claude's ceiling would be 160,000
+     characters, past the bound.*
+   - *No ratio is a ceiling anyway: a run of punctuation can be one token of many characters (the
+     security review, I1).*
+   - *So the bound sits far above anything measured, and is not a proof that every reply fits.
+     "Not covered" names the residual. The third option would close it by construction, and it is
+     the lead's to take up. The constant's comment and the test say the same since this correction.*
 
    **Why the brief's premise did not hold.** The brief sized the bound from
    `CLASSIFICATION_MAX_TOKENS`, 400 tokens. That is FLM's ceiling.
@@ -15496,10 +15523,17 @@ rule 4d).
    - Nothing in `parse_classification` bounds a tag value's length: `CLASSIFICATION_SCHEMA` gives a
      tag's `value` `{"type": "string", "minLength": 1}`.
 
-   **A test ties the constant to both ceilings.**
-   `apps/core/tests/test_constants.py::test_the_reject_bound_covers_the_longest_classification_reply_either_provider_may_return`
-   asserts the value, and that it is at least 6.25 characters a token of `CLAUDE_MAX_TOKENS` and of
-   `CLASSIFICATION_MAX_TOKENS`. Raising either ceiling past the bound fails the suite.
+   **A test holds the decided value against both ceilings.**
+   `apps/core/tests/test_constants.py::test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling`
+   asserts:
+   - the value;
+   - that neither `CLAUDE_MAX_TOKENS` nor `CLASSIFICATION_MAX_TOKENS` has grown past 16,000 tokens,
+     which would leave the bound under 6.25 characters a token of it, and the decision to revisit;
+   - that the bound is above the Tags column.
+
+   It does not show that every reply fits. Until the reviews it was named
+   `test_the_reject_bound_covers_the_longest_classification_reply_either_provider_may_return`, which
+   claimed more than it checks (the requirements audit of `bc70fe6`).
 4. **The page needed no source change.** `ProposedTagRow` (`frontend/src/components/Classification.jsx`)
    offers Confirm and Reject on every proposal, whatever its length, and `rejectProposedTag`
    (`frontend/src/api/documents.js`) sends the value as `proposed_tags` carries it. Only the client's
@@ -15570,7 +15604,7 @@ answers 400 behind the serializer. B3b removes both, and the confirm test fails.
 | Test | Fails under |
 |---|---|
 | `documentClassification.test.jsx` › "offers an enabled Reject on the 359-character proposal, sends all 359 characters, and drops the row" | FB1, FB2, FB3 |
-| `test_constants.py::test_the_reject_bound_covers_the_longest_classification_reply_either_provider_may_return` | B6 |
+| `test_constants.py::test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling` | B6 |
 | `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[long]`, Employee and Administrator | B3, B3b, B5 |
 | `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Process-confirm-over-long]`, Employee and Administrator | B3, B3b |
 | `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[Process-reject-over-long]`, Employee and Administrator | B5 |
@@ -15602,17 +15636,87 @@ Tests outside the section that a break also failed:
 
 - **B3b:** `test_classification_d128.py::test_a_topic_longer_than_the_column_is_proposed_and_confirming_it_is_refused`
 
-**The suites.** On the tree committed with this entry:
-- **`pytest`, the whole suite:** 4,871 passed in 1,662.98 s (0:27:42), with dual-role coverage 47 of
-  47 protected endpoints.
-- **The front end:** `npm test` 637 passed in 46 files; `npm run lint` and `npm run build` clean.
-  The new test passed ten runs in a row.
-- **`makemigrations --check --dry-run`:** "No changes detected". No model changed.
+**The suites.**
+- **At `bc70fe6`, before the merge of `main`:**
+  - `pytest`, the whole suite: 4,871 passed in 1,662.98 s (0:27:42), with dual-role coverage 47 of
+    47 protected endpoints.
+  - The front end: `npm test` 637 passed in 46 files; `npm run lint` and `npm run build` clean. The
+    new test passed ten runs in a row.
+  - `makemigrations --check --dry-run`: "No changes detected". No model changed.
+- **After the merge of `main` and the reviews' corrections,** on the tree committed with them:
+  - `pytest`, the whole suite: 4,949 passed in 967.80 s (0:16:07), with dual-role coverage 48 of
+    48 protected endpoints. FR-03 added one.
+  - The front end: `npm ci`, `npm run lint` and `npm run build` exit 0; `npm test` 666 passed in 48
+    files.
+  - `makemigrations --check --dry-run`: "No changes detected".
+
+**The reviews of `bc70fe6` (15 November 2026).** Each reviewed the commit read-only. Both reports
+are kept whole outside the repository, in the session group's notes folder, as
+`fr10-reject-audit-bc70fe6-verbatim.md` and `fr10-reject-security-bc70fe6-verbatim.md`. They were
+extracted mechanically from the agents' transcripts, and each verdict line below was checked by
+script against them.
+
+- **`requirements-auditor`: COMPLETE.** Its closing line:
+
+  > **COMPLETE: bc70fe6 meets all seven criteria. Before merging, correct the 6.25 reasoning, resolve the `serializers.py` conflict with origin/main, and re-run both suites on the merged tree.**
+
+  - It recomputed the break results without `gen_table.py`, re-ran `topic_lengths.py` and got the
+    same output, and checked the attempt logs, the code citations, the "What changed" list and the
+    D-129 notes.
+  - **Its one misstated record, low:** the 6.25 characters a token was worked back from the bound
+    but presented as a limit, the other option was priced at 10, and the test's name claimed that
+    the bound covers the longest reply.
+  - It noted that D-130 had reached `main` (PR 110), and that the branch needed merging.
+- **`security-reviewer`: PASS WITH NOTES.** Its verdict line:
+
+  > **VERDICT: PASS WITH NOTES.** There are no high or medium findings. The C15 fix is correct and opens no disclosure path. There are three notes: one low and two info.
+
+  - **What it confirmed, by probes on pytest's own database:**
+    - the check order is unchanged: an out-of-scope document is the same 404, byte for byte, for
+      every body, and without `contribute_content` every body is 403;
+    - `rejected_tags` stores only the matched proposal's own value, never the request's;
+    - confirm takes no value over 255 characters by any path;
+    - a NUL or a lone surrogate is still 400;
+    - neither the 400 nor the 200 echoes the value, and nothing logs it.
+  - **L1, low:** `rejected_tags` is only ever added to, and an entry can now be as long as a
+    proposal. A contributor who steers a document's classification into new long Topics, and
+    rejects them run after run, could grow that one row by up to a reply's worth a run, against
+    about 2 KB a run before. Nothing is disclosed. The cost is that document's row, which every
+    detail read loads.
+  - **I1, info:** the residual can be produced on purpose, and the test's name claimed too much.
+  - **I2, info, older than this commit:** DRF runs every validator even after the length check
+    fails, on routes with no throttle. It measured the surrogate validator at 7.6 ms on 100,000
+    characters and 1.79 s on 50 MiB, near Waitress's cap. That is the same before and after D-133.
+
+**What changed because of them:**
+- The 6.25 reasoning is corrected in point 3, in the constant's comment and in the test's
+  docstring, and the test is renamed to what it asserts.
+- `main` was merged in at `c4695c0` (PR 110, FR-03). Its one conflict, the import list of
+  `apps/api/serializers.py`, kept both names.
+- The breaks ran again on the merged tree, and the table above is regenerated from that run.
+- Both suites ran again on the merged tree (above).
+- L1, I1 and I2 are under "Not covered". Nothing else changed: L1 and I1 close only with the third
+  option, which is the lead's decision, and I2 is older than this entry.
 
 **Not covered:**
 - **A proposal longer than 100,000 characters** would still be refused 400 by reject, and stuck as
   before. Nothing bounds a tag value in a reply, so this is a residual. The longest recorded Topic is
-  21 characters. The third option in point 3 would close it.
+  21 characters. It can be produced on purpose: a reply steered into runs of punctuation could pass
+  100,000 characters within Claude's ceiling (the security review, I1). The third option in point 3
+  would close it.
+- **`rejected_tags` can grow faster** (the security review, L1, low). Nothing prunes it, and since
+  D-133 an entry is as long as the proposal it rejected, up to a reply's worth. Its fixes, none
+  built:
+  - the third option in point 3, so that no long proposal is ever made or rejected: the lead's
+    decision, since it changes D-129's rule;
+  - a cap on the entries kept: it would change what a rejection keeps, so a rejected value could be
+    proposed again;
+  - deferring the column where the detail reads the analysis (`classification_of`): it cheapens the
+    read and bounds nothing.
+- **Every validator runs past a failed length check** (the security review, I2, info). The
+  proposed-tags routes have no throttle, and a value near Waitress's cap costs about 1.8 s of
+  validation. This predates D-133. The reviewer's optional hardening, not built: refuse an over-long
+  value before the other validators run, or give these routes a throttle scope.
 - **The page still offers Confirm on a proposal over 255 characters.** Pressing it shows the
   client's fixed 400 sentence, and the row stays. Whether the page should withhold Confirm there, or
   say why, is an interface question this decision does not settle (`CLAUDE.md` §1: raise it rather

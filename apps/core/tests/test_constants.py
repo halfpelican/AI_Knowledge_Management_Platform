@@ -370,18 +370,22 @@ def test_fr10s_department_threshold_is_its_own_on_haiku():
             != constants.CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL["claude-haiku-5-5"])
 
 
-# D-133's allowance: the characters one token of a classification reply is taken to carry at most.
+# D-133's ratio: the characters a token at which the bound equals Claude's classification ceiling
+# (100,000 / 16,000). Worked back from the bound and assumed, not measured; not a ceiling on a token.
 CHARACTERS_A_TOKEN = 6.25
 
 
-def test_the_reject_bound_covers_the_longest_classification_reply_either_provider_may_return():
+def test_the_reject_bound_is_at_least_6_25_characters_a_token_of_either_classification_ceiling():
     """D-133, the lead's decision of 15 November 2026: the reject route reads a proposed value up to
     MAXIMUM_PROPOSED_TAG_LENGTH, 100,000 characters. A run proposes a Topic whatever its length
-    (D-129) and nothing bounds a tag value in the reply, so the bound is sized for the longest reply:
-    Claude's classification ceiling, CLAUDE_MAX_TOKENS, at 6.25 characters a token. FLM's,
-    CLASSIFICATION_MAX_TOKENS, is far inside it. If either ceiling is raised past the bound, this
-    fails, and the bound is revisited rather than left to strand a long proposal again. Above the
-    Tags column, which binds only confirm."""
+    (D-129) and nothing bounds a tag value in the reply, so the bound is scaled to the longest reply,
+    Claude's classification ceiling, CLAUDE_MAX_TOKENS: 100,000 is 16,000 tokens at 6.25 characters
+    a token. That ratio was worked back from the bound, not measured, so this asserts what was
+    decided, not that every reply fits: at 10 characters a token the ceiling would be 160,000, and a
+    run of punctuation can be one longer token still (D-133's "Not covered"). It asserts the value;
+    that neither ceiling, Claude's or FLM's CLASSIFICATION_MAX_TOKENS, has grown past 16,000 tokens,
+    which would leave the bound under 6.25 characters a token of it and the decision to revisit; and
+    that the bound is above the Tags column, which binds only confirm."""
     from apps.ai.anthropic import CLAUDE_MAX_TOKENS
     from apps.ai.classification import CLASSIFICATION_MAX_TOKENS
     from apps.core.models import NAME_MAX_LENGTH

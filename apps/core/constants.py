@@ -779,12 +779,16 @@ CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0
 # (D-129), and a rejection writes only JSON (``rejected_tags``), so the reject route is not held to
 # the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255 characters could be
 # neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because confirming creates a Tag.
-# Sized for the longest classification reply either provider may return: Claude's ceiling,
-# CLAUDE_MAX_TOKENS (16,000 tokens), at 6.25 characters a token. FLM's, CLASSIFICATION_MAX_TOKENS
-# (400 tokens), is far inside it. A proposal longer than this would still be refused 400: a residual,
-# since nothing bounds a tag value in the reply, but far from anything measured (the longest Topic in
-# the recorded Objective 05 runs is 21 characters). apps/core/tests/test_constants.py ties it to both
-# ceilings.
+# Scaled to the longest classification reply, Claude's ceiling, CLAUDE_MAX_TOKENS (16,000 tokens):
+# 100,000 is that ceiling at 6.25 characters a token. The ratio was worked back from the bound
+# (100,000 / 16,000), not measured, and it is a ratio for prose, not a ceiling: a run of punctuation
+# can be one token of many characters, and at 10 characters a token, the ratio D-133's 4,000 option
+# was priced at, the ceiling would be 160,000 characters. FLM's ceiling, CLASSIFICATION_MAX_TOKENS
+# (400 tokens), is far inside either. So a proposal longer than this is possible, and would still be
+# refused 400: a residual, since nothing bounds a tag value in the reply, but far from anything
+# measured (the longest Topic in the recorded Objective 05 runs is 21 characters). D-133 names it, and
+# the reviews' notes on it, under "Not covered". apps/core/tests/test_constants.py fails if either
+# ceiling is raised past 16,000 tokens, so that the bound is below 6.25 characters a token of it.
 MAXIMUM_PROPOSED_TAG_LENGTH = 100_000
 
 # How the apply layer (apps/documents/classification.py, D-105) disposed of one assignment,
