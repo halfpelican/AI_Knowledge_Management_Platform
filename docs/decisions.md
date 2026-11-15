@@ -15607,6 +15607,8 @@ D-129: #85's `ProposedTopicSerializer` capped both of its routes the same way.
 `ProposedTagSerializer`, whose `value` had `max_length=NAME_MAX_LENGTH`: 255, the `Tags.tag_name`
 column. A run proposes a Topic outside the scheme whatever its length (D-129; `apply_classification`
 rule 4d).
+*Since D-134, later on 15 November 2026, a run discards a Topic over 255 characters once normalised
+instead of proposing it.*
 - **Confirming needs the column's limit,** because it creates a Tag.
 - **Rejecting does not.** `reject_proposed_tag` writes only JSON, an entry in `rejected_tags`, and
   matches the proposal by its normalised value.
@@ -15916,14 +15918,14 @@ close, both recorded under its "Not covered":
 - **L1 (low):** `rejected_tags` is never pruned, and since D-133 an entry is as long as the proposal it
   rejected. A contributor who steers a document's classification into new long Topics and rejects
   them run after run could grow that row by up to a reply's worth a run, against about 2 KB a run
-  before D-133.
+  before D-133 (2,040 characters: eight entries of 255).
 - **I1 (info):** a proposal over 100,000 characters, past the reject route's bound, could be produced
   on purpose by a reply steered into runs of punctuation, and would be stuck again. The review called
   this suspected, not measured: inferred from how tokenisers generally work, not tested on Claude.
 
-For both, the review's smallest correct fix was D-133's third option, which the user had not taken:
-a run discards a Topic over a bound into `discarded_suggestions`, which each run replaces. Because it
-changes D-129's rule, it was the lead's decision. D-133's session proposed it as a follow-up, and this
+For L1, the review's "smallest correct fix" was D-133's third option, which the user had not taken:
+a run discards a Topic over a bound into `discarded_suggestions`, which each run replaces. Of I1 it
+said "Option 3 closes this too." Because the option changes D-129's rule, it was the lead's decision. D-133's session proposed it as a follow-up, and this
 session was started for it.
 
 **The decision: the user's, on 15 November 2026,** in answer to one question. The question and its
@@ -15942,6 +15944,10 @@ The user chose "Discard over 255 (Recommended)".
   review called that suspected, not measured (above).*
 - *"Rejected entries go back to at most 255 characters" holds for the proposals runs make from now
   on. A proposal stored before D-134 can still be rejected at its own length, once (below).*
+
+**The number.** The session that built D-135 (the page's Confirm, PR 113) claimed D-134 as well that
+evening, and moved to D-135 when the two claims met. D-135's entry records it. This entry's question
+had already named D-134.
 
 **What it does.**
 
@@ -15964,14 +15970,16 @@ The user chose "Discard over 255 (Recommended)".
 
 **Why 255 rather than 100,000.** A Topic longer than the Tags column can never be confirmed:
 confirming creates a Tag, `Tags.tag_name` is varchar(255), and `confirm_proposed_tag` refuses the
-name (D-133). Proposing it only let a person reject it. So discarding it loses nothing a person could
-have made of it, and:
+name (D-133). Since D-133, proposing it only let a person reject it; before D-133, not even that. So
+discarding it loses nothing a person could have made of it, and:
 
 - **every proposal a run makes can be confirmed or rejected;**
 - **L1:** a rejection of a proposal made since D-134 is at most 255 characters, as before D-133. A run
   proposes at most eight tag values (`MAXIMUM_TAG_SUGGESTIONS`, `apps/ai/classification.py`), so a
-  steered document's row grows by at most about 2 KB a run, the rate before D-133. Nothing prunes the
-  list still. That predates D-133, and the review raised L1 only at D-133's rate;
+  steered document's row grows by at most 2,040 characters a run, the rate before D-133. Stored as
+  UTF-8 JSON with four-byte characters that is up to about 8.6 KB: the security review of this entry
+  measured 8,624 bytes a run (its N1). Nothing prunes the list still. That predates D-133, and the
+  review of D-133 raised L1 only at D-133's rate;
 - **I1:** no proposal a run makes can come near the reject route's 100,000.
 
 At 100,000 only I1 would close. A Topic of 256 to 100,000 characters would still be proposed, rejected
@@ -16047,9 +16055,16 @@ the objective's wording, which the verifier reads strictly, rather than from FR-
     detail shows it. Its four tests are otherwise unchanged. Since D-134,
     `test_a_rejected_long_topic_is_not_proposed_again`'s empty `discarded_suggestions` shows that rule 4b
     skipped the value before rule 4d could discard it.
+- **Added after the reviews (the audit's F4), in `apps/documents/tests/test_objective05_verify.py`:**
+  `test_a_topic_longer_than_a_tag_name_is_discarded_and_reported_as_a_clause_3_violation`. One run
+  suggests a short Topic and one a character past the column. The apply layer proposes the first and
+  discards the second, and the verifier, run through `main()`, counts the proposal and reports the
+  discard as "discarded a Topic value", so clause 3 does not pass.
 
-**Deliberate breaks.** Each new or changed test failed under at least one break before it was relied
-on, and every break was reverted.
+**Deliberate breaks.** Each new test, and each changed test that gained an assertion, failed under at
+least one break before it was relied on, and every break was reverted.
+`test_a_topic_that_d128_refused_is_proposed_again` only lost its "longer than the column" case. Its
+other cases are unchanged and are not in the table (the audit of `266b533`, I2).
 - **How:** a script applied each break alone, ran the tests, restored every touched file byte for
   byte and checked it by SHA-256. It is D-133's script, adapted, and kept with the runs' JUnit XML in
   the session's scratchpad, not in the repository.
@@ -16095,24 +16110,138 @@ Tests outside the section that a break also failed:
 - **B3b:** `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[administrator-long]`, `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[employee-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Process-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Project-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Topic-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Process-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Project-confirm-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Topic-confirm-over-long]`
 - **B5:** `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[administrator-long]`, `test_document_classification.py::test_a_blank_or_over_long_value_is_400_keyed_on_value[employee-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Process-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Project-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[administrator-Topic-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Process-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Project-reject-over-long]`, `test_fr10_proposed_tags.py::test_a_missing_blank_or_over_long_value_is_400_keyed_on_value[employee-Topic-reject-over-long]`
 
-**The suites,** on the tree committed with this entry:
-- **`pytest`, the whole suite: 4,965 passed in 1,695.96 s (0:28:15),** with dual-role coverage 48 of
-  48 protected endpoints. It ran in a temporary detached worktree at `f82fb1a` with this change applied,
-  because the breaks were running in this one at the time. The code and tests were the same bytes as
-  this commit's, checked by diff before committing. Only this entry in `docs/decisions.md` was added
-  afterwards, and no test reads it.
-- **The front end:** `npm test` 666 passed in 48 files; `npm run lint` and `npm run build` exit 0. Only
-  a comment changed there.
-- **`makemigrations --check --dry-run`:** "No changes detected". No model field changed.
+**Breaks run after the reviews (the audit's F4).** The new verifier test ran under two breaks, by the
+same script, over `apps/documents/tests/test_objective05_verify.py` alone (10 tests, all
+passing at baseline). The table is generated from that run's JUnit XML.
+
+| Test | Fails under |
+|---|---|
+| `test_objective05_verify.py::test_a_topic_longer_than_a_tag_name_is_discarded_and_reported_as_a_clause_3_violation` | K1, K9 |
+
+- **K1** (server): a long Topic is proposed again: the length branch never taken (D-129 and D-133's rule).
+- **K9** (server): the verifier counts a discarded Topic as nothing: its clause 3 violation made a no-op.
+
+Neither break failed any other test in the file.
+
+**The review corrections changed no code the breaks cover.** They changed
+`apps/documents/classification.py` and `apps/api/views.py` in docstrings and comments only. A script
+parsed each file at `266b533` and as committed with the corrections, removed every docstring, and
+compared the ASTs (comments are not in them): the same for both files, and for
+`apps/api/serializers.py`, `apps/core/constants.py`, `apps/documents/models.py` and
+`scripts/objective05_verify.py`, whose bytes did not change. The same check found the changes to
+`test_classification_d128.py` and `test_fr10_discard_long_topic.py` docstring-only. So the first
+run's table stands.
+
+**The suites.**
+- **At `266b533`, the first commit:**
+  - **`pytest`, the whole suite:** 4,965 passed in 1,695.96 s (0:28:15), with dual-role coverage 48 of
+    48 protected endpoints.
+    - It ran in a temporary detached worktree at `f82fb1a` with this change applied, because the breaks
+      were running in this one.
+    - That tree was built from a diff captured while break K1 was applied. Its one changed line was
+      repaired by `sed` ten seconds later.
+    - After the repair the diff equalled the committed change, except for its `index` line, which still
+      named K1's blob. The comparison was made by diff before committing (the audit of `266b533`, I3).
+    - Only this entry in `docs/decisions.md` was added afterwards, and no test reads it.
+  - **The front end:** `npm test` 666 passed in 48 files; `npm run lint` and `npm run build` exit 0.
+  - **`makemigrations --check --dry-run`:** "No changes detected". No model field changed.
+  - **CI on `266b533`:** green, with 4,960 passed and 5 skipped, dual-role 48 of 48, and the front end's
+    666.
+- **After the merges of `main` (PRs 113 and 114) and the reviews' corrections,** on the tree committed
+  with them, in this worktree:
+  - **`pytest`, the whole suite:** 4,966 passed in 1,658.61 s (0:27:38), with dual-role coverage 48 of
+    48 protected endpoints. The one more is the verifier test.
+  - **The front end:** `npm ci`, `npm run lint` and `npm run build` exit 0; `npm test` 670 passed in
+    48 files. D-135 added four.
+  - **`makemigrations --check --dry-run`:** "No changes detected".
+
+**The reviews of `266b533` (15 November 2026).** Each reviewed the commit read-only. Both reports are
+kept whole outside the repository, in the session group's notes folder, as
+`fr10-discard-audit-266b533-verbatim.md` and `fr10-discard-security-266b533-verbatim.md`. They were
+extracted mechanically from the agents' transcripts, and each verdict line below was checked by script
+against them.
+
+- **`requirements-auditor`: INCOMPLETE.** Its closing line:
+
+  > **INCOMPLETE:** The rule, its tests, its breaks and its record of the decision are correct and CI is green on `266b533`, but four passages still describe the rule untruly (F1 to F3) and the branch must merge main's PR 113 before its own PR (F5); none of the fixes changes the rule's code.
+
+  - It found the decision recorded as made (it rebuilt the quote from the session's transcript), the
+    code as recorded, the break table as the runs produced it (recomputed from the JUnit XML), and CI
+    green on `266b533`: 4,960 passed and 5 skipped, dual-role 48 of 48.
+  - **F1 (low):** four passages said "as written" while the departures contradicted them:
+    `apps/documents/classification.py` twice, `docs/api-contract.md` and a comment in
+    `apps/api/views.py`.
+  - **F2 (low):** D-133's "The cause" still said in the present tense that a run proposes a Topic
+    whatever its length.
+  - **F3 (low):** the contract and a test docstring said that from D-129 until D-134 such a proposal
+    "could only be rejected". Until D-133 it could be neither confirmed nor rejected.
+  - **F4 (low):** no test held the verifier's "discarded a Topic value", on which this entry relies.
+  - **F5 (medium, merge readiness):** PR 113 (D-135) had merged into `main`, leaving two conflicts in
+    this file.
+  - **Information only:**
+    - I1: "smallest correct fix" was said of L1 only.
+    - I2: one changed test only lost a case.
+    - I3: the first full run's tree was built from a diff captured while K1 was applied and repaired by
+      `sed`.
+    - I4: 2 KB is 2,040 characters.
+    - I5: the number collision is recorded in D-135, not here.
+- **`security-reviewer`: PASS WITH NOTES.** Its verdict line:
+
+  > **VERDICT: PASS WITH NOTES.** D-134's code is correct, discloses nothing about any Tag, and closes L1 and I1 for every run made since it. I have three notes, all info, and none blocks the change: one is about the record's wording, one is a residual that predates D-133, and one is a check owed on databases written before D-134.
+
+  - **What it confirmed, by probes on pytest's own database:**
+    - A classify reply, the detail, `proposed_tags`, `discarded_suggestions`, `rejected_tags` and the
+      link count came out identical under five Tag states: none; grown and carried only by restricted
+      material; grown and carried by nothing; retired and carried only by restricted material; retired
+      and carried by nothing.
+    - `lower()` lengthens only U+0130, so "İ" × 128 is discarded and "İ" × 127 proposed.
+    - Every path to `apply_classification` was traced.
+    - Three rounds of eight 255-character rejections left 24 entries in `rejected_tags`, the longest
+      255.
+    - A name of 255 four-byte characters confirms into the varchar(255) column.
+  - **N1 (info):** "about 2 KB a run" is 2,040 characters, and up to 8,624 bytes as stored.
+  - **N2 (info):** `rejected_tags` still has no cap at the restored rate.
+  - **N3 (info):** rows written before D-134 were not checked. It gave a read-only query.
+
+**What changed because of them:**
+- **F1:** each "as written" now names the two recorded departures.
+- **F2:** a dated note on D-133's "The cause".
+- **F3:** the history is corrected in the contract, in the docstrings of
+  `test_classification_d128.py` and `test_fr10_discard_long_topic.py`, and in "Why 255" above.
+- **F4:** the verifier test, with its breaks (above).
+- **F5:** `main` was merged in twice, with the merge commits named here:
+  - `480fd16`, PR 113. It keeps both dated notes under D-133, puts this entry above D-135, and adds a
+    dated note on the page item under "Not covered";
+  - `666f761`, PR 114, FR-16's Objective 04, which merged with no conflict.
+- **I1, I2, I4 and N1, I5:** corrected or added in this entry. **I3:** in the suites paragraph.
+- **N2, N3:** under "Not covered".
+- **The checks:** no code the breaks cover changed (above), and both suites ran again on the final tree
+  (the suites paragraph).
 
 **Not covered:**
 - **A proposal stored before D-134 longer than 255 characters** stays on its document until a person
   rejects it (D-133's route) or a run replaces the list. Its rejection is kept at its own length, once.
   One longer than 100,000 characters would still be refused by the reject route until a run replaces
   the list. Either could come only from a run made before D-134. Nobody looked for one on the alpha's
-  database or on `kmp_anthropic`.
+  database or on `kmp_anthropic`. The security review of this entry (N3) gave a read-only check an
+  operator can run first. It was not run, because neither the session nor its reviewers touch those
+  databases:
+
+  ```sql
+  SELECT doc_id FROM document_analysis
+  WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(proposed_topics) e WHERE char_length(e->>'value') > 255)
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(rejected_tags) e WHERE char_length(e->>'value') > 255);
+  ```
+
+  A long proposal it finds goes at the document's next classification; a long rejection is kept, once.
 - **`rejected_tags` is still never pruned,** at the rate before D-133: at most eight entries a run, each
-  at most 255 characters. The review raised L1 only at D-133's rate.
+  at most 255 characters. The review of D-133 raised L1 only at D-133's rate. The security review of
+  this entry (N2) estimated, by inference and not at scale, up to 480 entries, about 0.5 MB, an hour per
+  account at the ingestion throttle's 60 runs an hour. That holds only if the model can be steered into
+  eight new values on every run of the same text. Its cheap fix, `.defer("rejected_tags",
+  "discarded_suggestions")` in `classification_of` (`apps/api/repository.py`), cheapens the detail read
+  and is not built. A cap on the entries would conflict with "a rejection sticks", so it is the lead's
+  decision.
 - **`discarded_suggestions` can hold a long discarded value,** up to a reply's worth, until the next run
   replaces it. A long Project or Process value could already do so before D-134, as could a long
   Topic in `proposed_tags` until D-134. It is not exposed. Every detail read still loads the row (the
@@ -16121,6 +16250,8 @@ Tests outside the section that a break also failed:
   stored before D-134 can be one. Another session is changing the page for those, as D-135 (PR 113,
   branch `fix/FR-10-confirm-long-proposal`). It was not merged when this was written, so nothing here
   depends on it.
+  *D-135 merged later on 15 November 2026 (PR 113, `4fc8373`), and this branch merged it in: the page
+  now offers no Confirm on a proposed value longer than a tag name, and says why in the row.*
 - **A measurement that meets this departure** would report "discarded a Topic value" as a clause 3
   violation, and it should cite D-134. None has: the longest recorded Topic is 21 characters.
 - **D-133's I2** (every validator runs past a failed length check, on routes with no throttle) is

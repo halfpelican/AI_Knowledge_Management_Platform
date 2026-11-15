@@ -2,8 +2,9 @@
 
 From D-129 until D-134 a run proposed a Topic outside the scheme whatever its length. One longer
 than the Tags column's 255 characters could never be confirmed, because confirming creates a Tag,
-so a person could only reject it. Since D-133 the reject route reads a value up to
-MAXIMUM_PROPOSED_TAG_LENGTH, and the security review of D-133 left two notes on that:
+and until D-133 it could not be rejected either. Since D-133 the reject route reads a value up to
+MAXIMUM_PROPOSED_TAG_LENGTH, so a person could only reject it, and the security review of D-133
+left two notes on that:
 - **L1:** each rejection is kept in ``rejected_tags``, which nothing prunes, as long as the proposal,
   so steered runs could grow one row by a reply's worth each;
 - **I1:** a proposal past MAXIMUM_PROPOSED_TAG_LENGTH could be produced on purpose, and would be

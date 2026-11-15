@@ -400,7 +400,8 @@ by nothing else.
   - **Since D-128 (12 November 2026),** the list is `proposed_tags`, its entries carrying a
     dimension. For one day the classifier also created values at or above the threshold. Since
     D-129 it proposes a Topic outside the scheme at any confidence and discards a Project or
-    Process value, as before.
+    Process value, as before. Since D-134 (15 November 2026) it discards a Topic longer than a tag
+    name, 255 characters, which no `Tags` row could hold.
   - **Since the audit of 13 November (D-128),** `rejected_tags` (`documents 0013`) keeps each
     proposal a person rejected, with the machine's confidence. Later runs skip that value for that
     document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,

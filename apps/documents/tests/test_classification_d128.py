@@ -212,7 +212,8 @@ def test_a_topic_longer_than_a_tag_name_is_discarded_at_any_confidence_and_nothi
 ):
     """D-134: one character past the column once normalised, so no Tag could hold it. It is
     recorded in ``discarded_suggestions`` as written, normalised, with its confidence, and not
-    proposed. Until D-134 it was proposed, and could only be rejected."""
+    proposed. From D-129 until D-134 it was proposed: until D-133 it could be neither confirmed nor
+    rejected, and from D-133 only rejected."""
     value = confidence(model, side)
 
     analysis = run(document, TOPIC_DIMENSION, f" {TOO_LONG.upper()} ", value, model=model)

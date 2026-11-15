@@ -2113,9 +2113,10 @@ class DocumentReprocessView(APIView):
 # for word. Two of the routes are throttled, classify in the "ingestion" scope and a person's apply
 # in "tagging" (D-79 and its note on tagging). DRF checks a throttle before the method runs, so past
 # the rate their 429 comes before the 404, the same for every id. A classification proposes a Topic
-# outside the scheme, at any confidence, for the proposed-tags routes, and discards a Project or
-# Process value outside it. It creates no Tag (Objective 05's clause 3 as written; D-129, which
-# reverses D-128's creation; apps/documents/classification.py ``apply_classification``).
+# outside the scheme of up to 255 characters, at any confidence, for the proposed-tags routes, and
+# discards a Project or Process value outside it. It creates no Tag (Objective 05's clause 3 as
+# written; D-129, which reverses D-128's creation; apps/documents/classification.py
+# ``apply_classification``). Since D-134 it discards a longer Topic, a recorded literal departure.
 
 
 class DocumentClassifyView(APIView):

@@ -20,15 +20,16 @@ model:
   in the scheme. A value that does not match may be proposed only in the Topic dimension and
   requires user confirmation before it is created; suggestions falling outside the scheme in the
   Department, Project or Process dimensions are discarded." Objective 05's clause 3 says the same.
-  **Both hold as written** (D-129, 13 November 2026, which reverses D-128's creation of values):
+  **Both hold as written** (D-129, 13 November 2026, which reverses D-128's creation of values),
+  apart from two recorded literal departures from the objective's wording (below):
   - a Topic value outside the scheme is proposed, at any confidence, for a person to confirm or
     reject (``confirm_proposed_tag``, ``reject_proposed_tag``);
   - a Project or Process value outside the scheme is discarded, as is a department;
   - the classifier creates, links and reactivates no Tag outside the scheme.
 
-  Two literal departures, each recorded: a value that cannot be stored is discarded (D-129), and
-  since 15 November 2026 so is a Topic longer than a tag name, which no Tag could hold (D-134).
-  Rule 4d of ``apply_classification``.
+  The two departures, each recorded: a value that cannot be stored is discarded (D-129), and since
+  15 November 2026 so is a Topic longer than a tag name, which no Tag could hold (D-134). Rule 4d
+  of ``apply_classification``.
 
   From 12 to 13 November 2026 D-128 created and applied such a value at or above the threshold.
   Rules 3 and 4 of ``apply_classification``.
@@ -486,7 +487,7 @@ def apply_classification(
        which a person gave; null for a blank one.
     4. **Tags**, each suggestion by its dimension and normalised name, in this order. Objective 05's
        clause 3 holds as written (D-129, 13 November 2026, which reverses D-128's creation of
-       values):
+       values), except the two literal departures in 4d:
 
        a. **Ignored**, and logged: a dimension outside REPOSITORY_TAG_DIMENSIONS, or an empty name.
        b. **A person removed or rejected it.** This document holds a REMOVED link to the tag of
@@ -514,8 +515,8 @@ def apply_classification(
           - **a Topic longer than a tag name,** over NAME_MAX_LENGTH (255) characters once
             normalised, is discarded into ``discarded_suggestions``, at any confidence (D-134, the
             lead's decision of 15 November 2026). No Tag can hold it, so confirming it could only
-            fail, and proposing it let a person do no more than reject it. So every proposal a run
-            makes can be confirmed. From D-129 until D-134 such a Topic was proposed, and since
+            fail, and since D-133 proposing it let a person do no more than reject it (until D-133,
+            not even that). So every proposal a run makes can be confirmed. From D-129 until D-134 such a Topic was proposed, and since
             D-133 the reject route reads a value up to MAXIMUM_PROPOSED_TAG_LENGTH characters, so
             a proposal stored before D-134 can still be rejected;
           - **a Project or Process value** is discarded into ``discarded_suggestions`` as

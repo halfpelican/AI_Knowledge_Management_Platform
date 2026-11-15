@@ -1142,15 +1142,18 @@ for the department (0.30 on Haiku, D-129; a model it does not list uses its shar
 - **The department:** likewise, against its own threshold, and **discarded** outside the established
   scheme, which since D-129 is the department list an Administrator keeps on the Tags page.
 - **A tag in the scheme:** linked `applied_by: "ai"`, provisional below the threshold.
-- **A value outside the scheme,** Objective 05's clause 3 as written:
+- **A value outside the scheme,** Objective 05's clause 3 as written, with two recorded literal
+  departures (the long Topic and the value that cannot be stored, below):
   - **a Topic** is **proposed** in `proposed_tags`, at any confidence, for a person to confirm (which
     creates it) or reject. The classifier never creates, links or reactivates one. **A Topic longer
     than a tag name's 255 characters** (once normalised) is **discarded** instead, at any confidence,
-    because no tag can hold it (D-134, 15 November 2026). So every proposal a run makes can be
-    confirmed. From D-129 until D-134 such a Topic was proposed and could only be rejected (D-133);
+    because no tag can hold it: a literal departure from clause 3's wording, recorded in D-134
+    (15 November 2026). So every proposal a run makes can be confirmed. From D-129 until D-134 such a
+    Topic was proposed: until D-133 it could be neither confirmed nor rejected, and from D-133 it
+    could only be rejected;
   - **a Project or Process value** is **discarded**;
   - **a value that cannot be stored,** one holding U+0000 or a lone surrogate, is discarded too, with
-    U+FFFD in its place. No discard is exposed;
+    U+FFFD in its place (for a Topic, the other literal departure, D-129). No discard is exposed;
   - **a value this document's readers removed or rejected** is neither linked nor proposed again.
 
   For one day (12 November, D-128) the classifier created values at or above the threshold. D-129
