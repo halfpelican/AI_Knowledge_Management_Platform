@@ -20,8 +20,10 @@ both halves, and it makes the fresh database they start from.
         before a restore, and restart it after (D-82 rule 7).
 
     restore --database NAME --into COPY --media-root DIR --from-dir DIR
-        A copy of NAME's snapshot as a NEW database, for a provider switch that must not
-        touch the measurement database it starts from (D-113, D-117). NAME is only checked
+        A copy of NAME's snapshot as a NEW database, under its own provider, that must not
+        touch the measurement database it starts from. A copy then moved to another provider,
+        as the Voyage copy of 10 November was (D-113, D-117), is refused since D-131: a
+        database keeps the provider it was set up with. NAME is only checked
         against snapshot.json: nothing is run against it. The dump is restored into COPY,
         which createdb refuses if it already exists. The media go into a MEDIA_ROOT that
         must be new or empty. Nothing is dropped or replaced, except a COPY this run

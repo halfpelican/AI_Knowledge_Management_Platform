@@ -55,6 +55,15 @@ def _configured_embedding_model() -> str:
     return settings.FLM_EMBED_MODEL
 
 
+def configured_embedding_model() -> str:
+    """The embedding model name the provider in use records on each row it embeds.
+
+    Public for the startup check (``apps/ai/checks.py``), which compares it with the names the
+    database's rows carry (D-131). The recorded name is this configured one, not a server's echo.
+    """
+    return _configured_embedding_model()
+
+
 def _wants_task_prefixes() -> bool:
     """Whether the configured embedding model is an EmbeddingGemma."""
     name = (_configured_embedding_model() or "").strip().lower()
