@@ -2,7 +2,7 @@
 
 A Ready summary is indexed as passages of the meeting itself, marked ``ai_generated``. ``reindex``
 rebuilds a meeting by deleting every chunk of it and re-embedding from stored text, so without
-this the first provider switch would silently drop every summary from search: the transcript's
+this the first change of embedding model would silently drop every summary from search: the transcript's
 chunks would come back and the summary's would not. These tests hold the rebuild to the summary
 too, from its stored text and with no model asked to summarise anything.
 """
@@ -37,7 +37,7 @@ def reindex(*args):
 @pytest.fixture
 def summarised(stub_ai_service, django_capture_on_commit_callbacks):
     """A meeting with a Ready summary, every chunk of it recorded against an OLD model: the
-    state a provider switch leaves behind."""
+    state a change of embedding model leaves behind."""
     stub_ai_service.summary = draft(narrative=[element(SENTENCE)], decisions=[element(DECISION)])
     with django_capture_on_commit_callbacks(execute=True):
         meeting = ingest(visible_to_roles=[ADMINISTRATOR_ROLE_NAME])

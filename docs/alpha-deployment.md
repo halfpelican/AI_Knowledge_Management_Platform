@@ -116,10 +116,11 @@ ANTHROPIC_MODEL=claude-haiku-5-5
 VOYAGE_API_KEY=<the key>
 VOYAGE_MODEL=voyage-4
 VOYAGE_BASE_URL=https://api.voyageai.com/v1
-EMBEDDING_DIMENSION=1024
 ```
 
-The keys are the ones in the main checkout's `.env`. Never print them, and never commit either
+The width follows `AI_PROVIDER` (D-131), so the template names no `EMBEDDING_DIMENSION`. The
+alpha's `.env` of 13 November also has `EMBEDDING_DIMENSION=1024`, which agrees with the provider
+and so is accepted. The keys are the ones in the main checkout's `.env`. Never print them, and never commit either
 file. On 13 November 2026 the alpha's `.env` kept its four `FLM_*` lines from the FLM alpha. They
 are read only for recording transcription, which is off.
 
@@ -195,11 +196,22 @@ $env:SESSION_COOKIE_SECURE = 'False'      # plain HTTP on loopback (D-64)
 $env:CSRF_COOKIE_SECURE    = 'False'
 $env:SPA_DIST_DIR          = "$root\frontend\dist"
 $env:WAITRESS_LOG_PATH     = 'C:\kmp-demo\2026-11-13\logs\waitress.log'
-$name = & $py manage.py shell --no-imports -c "from django.db import connection; print(connection.settings_dict['NAME'])"
+$name = & $py manage.py shell --no-imports -c "from django.db import connection; connection.ensure_connection(); print(connection.settings_dict['NAME'])"
+if ($LASTEXITCODE -ne 0) { throw "Not starting: the database did not answer." }
 "Django will connect to: $name"
 if ($name -ne 'kmp_alpha_20261113') { throw "Not starting: the database is '$name', not kmp_alpha_20261113." }
+& $py manage.py check
+if ($LASTEXITCODE -ne 0) { throw "Not starting: manage.py check reported an error." }
 & "$root\.venv\Scripts\waitress-serve.exe" --listen=127.0.0.1:8000 --threads=24 --max-request-body-size=54525952 config.wsgi:application
 ```
+
+- **`manage.py check` runs first, because Waitress runs no system checks.** It refuses a database
+  set up for another provider (ai.E005) and an `EMBEDDING_DIMENSION` that disagrees with the
+  provider (ai.E004), and probes the provider once (D-131).
+- **The line that names the database connects to it first.** A database that is not up yet, as
+  after a restart before Docker Desktop is started, stops the start there. The check would only
+  warn that it could not read it (ai.W004), and Waitress would then serve a database nobody
+  checked.
 
 - **`--no-imports` matters.** Without it, Django 5.2's `shell` first prints "N objects imported
   automatically", so `$name` holds two lines, never equals `kmp_alpha_20261113`, and the check

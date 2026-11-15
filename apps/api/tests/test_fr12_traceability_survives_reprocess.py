@@ -267,8 +267,8 @@ def test_a_reprocess_keeps_the_citations_of_every_answer_drawn_from_the_document
 def test_a_re_index_keeps_them_too_and_it_is_the_documented_happy_path(
     employee_client, monkeypatch
 ):
-    """``manage.py reindex`` — CLAUDE.md section 4: switching provider or embedding model is
-    a full re-index event, and this command is how that switch is a supported operation.
+    """``manage.py reindex`` — CLAUDE.md section 4: it rebuilds chunks with the database's own
+    provider (D-131), after a change of chunking or of the model at one width.
 
     An entirely healthy ``Indexed`` document, re-indexed exactly as the documentation
     instructs, used to lose the provenance of every answer ever drawn from it. The reprocess

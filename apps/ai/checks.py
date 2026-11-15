@@ -13,6 +13,29 @@ command, a Warning is printed and the command continues.
 - An unknown TRANSCRIPTION_PROVIDER is an Error (ai.E003), and transcription switched on with
   FLM not answering is a Warning (ai.W002): the recording option reports it unavailable until
   FLM returns, and nothing else is affected (D-123).
+- An EMBEDDING_DIMENSION in .env that disagrees with AI_PROVIDER's width is an Error (ai.E004).
+  The width follows the provider (D-131), so the line is only ever a way to get it wrong.
+
+**The database the provider is used with** (``check_database_provider``, under its own
+``embedding`` tag, D-131). A database keeps the provider it was set up with, and its vector columns
+keep the width the first ``migrate`` gave them:
+
+- A vector column of another width than EMBEDDING_DIMENSION is an Error (ai.E005): the database
+  was set up for another provider, so the process refuses to use it with this one. It names each
+  column that differs, the chunks' and FR-19's gap entries'.
+- Rows embedded by another model than the configured one are a Warning (ai.W003). Retrieval
+  leaves such chunks out (risk R10), and within one provider and one width ``reindex`` rebuilds
+  them. Nothing rebuilds a gap entry of another model, and no new question joins one (FR-19 groups
+  within one model).
+- A table not created yet is passed over: a database before its first ``migrate``, or one from
+  before FR-19, holds nothing of another provider in that table. The other table is still checked.
+- A database that cannot be read is a Warning (ai.W004): whether it was set up for this provider
+  is not known. The alpha's serve steps connect to the database before they run this check, so
+  Waitress does not start there until it can be read (``docs/alpha-deployment.md``).
+
+It has a tag of its own so that ``check --tag ai``, which the suite runs without a database, does
+not query one. Waitress runs no checks, so the serve steps run ``manage.py check`` first
+(``docs/alpha-deployment.md``).
 
 pytest never runs this check: the stub in conftest.py stands in for the provider
 and test database creation skips system checks.
@@ -21,12 +44,19 @@ and test database creation skips system checks.
 from django.conf import settings
 from django.core import checks
 from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError
 
 from apps.ai.base import ProviderUnavailable
+from apps.core.constants import EMBEDDING_DIMENSION_BY_PROVIDER
+from apps.core.vector_columns import NoSuchColumn, describe_width, stored_width
 
 PROBE_TEXT = "embedding dimension probe"
 UNREACHABLE = "AI provider unreachable; the API will answer 503 until it is."
-REINDEX_COMMAND = "python manage.py reindex --provider <name>"
+NEW_DATABASE_HINT = (
+    "A database keeps the provider it was set up with (D-131). Point DATABASE_URL at a database "
+    "set up for this provider, or set up a new one: create it, set AI_PROVIDER in .env, run "
+    "migrate, and ingest the content again."
+)
 TRANSCRIPTION_UNREACHABLE = (
     "Recording transcription is on (TRANSCRIPTION_PROVIDER=flm) but FLM does not answer; the "
     "recording option will report it unavailable until it does."
@@ -88,10 +118,97 @@ def check_ai_provider(app_configs, **kwargs):
                 f"vectors but EMBEDDING_DIMENSION is {expected}. Vectors of different lengths "
                 f"are not comparable, so the process will not start (risk R10).",
                 hint=(
-                    f"Set EMBEDDING_DIMENSION to {result.dimension} and re-index every chunk: "
-                    f"{REINDEX_COMMAND}"
+                    "EMBEDDING_DIMENSION follows AI_PROVIDER (D-131), so the embedding model "
+                    "setting names a model of another width. Set it back to the provider's own "
+                    f"model. {NEW_DATABASE_HINT}"
                 ),
                 id="ai.E001",
             )
         ]
     return []
+
+
+@checks.register("ai")
+def check_embedding_dimension_setting(app_configs, **kwargs):
+    """ai.E004: an EMBEDDING_DIMENSION in .env that disagrees with AI_PROVIDER (D-131).
+
+    An unknown provider is left to ai.E002, which check_ai_provider reports.
+    """
+    expected = EMBEDDING_DIMENSION_BY_PROVIDER.get(settings.AI_PROVIDER)
+    if expected is None or settings.EMBEDDING_DIMENSION == expected:
+        return []
+    return [
+        checks.Error(
+            f"EMBEDDING_DIMENSION is {settings.EMBEDDING_DIMENSION}, but AI_PROVIDER="
+            f"{settings.AI_PROVIDER!r} embeds at {expected}. The width follows the provider "
+            f"(D-131).",
+            hint="Remove EMBEDDING_DIMENSION from .env.",
+            id="ai.E004",
+        )
+    ]
+
+
+@checks.register("embedding")
+def check_database_provider(app_configs, **kwargs):
+    """ai.E005 and ai.W003: the connected database was set up for this provider (D-131)."""
+    from apps.ai.prefixes import configured_embedding_model
+    from apps.documents.models import ContentChunk
+    from apps.retrieval.models import KnowledgeGap
+
+    expected = settings.EMBEDDING_DIMENSION
+    wrong_width = []
+    present = []
+    try:
+        for model in (ContentChunk, KnowledgeGap):
+            try:
+                width = stored_width(model)
+            except NoSuchColumn:
+                continue  # not migrated yet: nothing of another provider can be in it
+            present.append(model)
+            if width != expected:
+                wrong_width.append(f"{model._meta.db_table}.embedding is {describe_width(width)}")
+        if wrong_width:
+            return [
+                checks.Error(
+                    f"This database was set up for another provider: {'; '.join(wrong_width)}, "
+                    f"but AI_PROVIDER={settings.AI_PROVIDER!r} embeds at {expected}. The process "
+                    f"will not use it with this provider.",
+                    hint=NEW_DATABASE_HINT,
+                    id="ai.E005",
+                )
+            ]
+        configured = configured_embedding_model()
+        others = {}
+        labels = {ContentChunk: "chunk(s)", KnowledgeGap: "gap entr(ies)"}
+        for model in present:
+            label = labels[model]
+            rows = model.objects.exclude(embedding_model="").exclude(embedding_model=configured)
+            count = rows.count()
+            if count:
+                names = sorted(set(rows.values_list("embedding_model", flat=True)))
+                others[label] = (count, names)
+    except DatabaseError as exc:
+        return [
+            checks.Warning(
+                "The database could not be read, so whether it was set up for this provider is not "
+                f"known (D-131): {type(exc).__name__}.",
+                hint="Start the database, then run `manage.py check` again before serving it.",
+                id="ai.W004",
+            )
+        ]
+    if not others:
+        return []
+    described = "; ".join(f"{count} {label} by {', '.join(names)}" for label, (count, names) in others.items())
+    return [
+        checks.Warning(
+            f"Rows embedded by another model than the configured {configured!r}: {described}. "
+            f"Retrieval leaves them out (risk R10).",
+            hint=(
+                "Chunks: within this provider, at the same width, `manage.py reindex` rebuilds them "
+                "with the configured model. Gap entries: nothing re-embeds them, and no new question "
+                "joins one of another model (FR-19 groups within one model). A change of provider is "
+                "not a re-index: a database keeps the provider it was set up with (D-131)."
+            ),
+            id="ai.W003",
+        )
+    ]

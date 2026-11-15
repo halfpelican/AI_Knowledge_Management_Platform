@@ -35,7 +35,6 @@ jobs:
       # a warning ("ANTHROPIC_API_KEY is not set"), never an error, and calls nothing; the
       # test suite uses the stub AIService fixture, so nothing here reaches a live model.
       AI_PROVIDER: anthropic
-      EMBEDDING_DIMENSION: "1024"
       # The workspace is discarded after the job, so this only has to be writable, not durable
       MEDIA_ROOT: ${{ github.workspace }}/media
 

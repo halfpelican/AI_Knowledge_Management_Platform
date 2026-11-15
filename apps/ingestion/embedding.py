@@ -140,8 +140,8 @@ def _is_usable(result) -> bool:
     enforceable point. pgvector would refuse a vector of the wrong width anyway, but
     as an opaque database error part-way through a transaction that also holds the
     document row; failing the chunk deliberately keeps the reason legible and lets
-    the rest of the document index. Switching providers is a full re-index event
-    (``manage.py reindex``), never a mixed table.
+    the rest of the document index. A database keeps the provider it was set up with
+    (D-131), so its table never mixes widths.
     """
     if not result.vectors or len(result.vectors) != 1:
         return False

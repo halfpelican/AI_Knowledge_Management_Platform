@@ -41,6 +41,15 @@ CHUNK_OVERLAP = 50
 # availability measure second.
 MAXIMUM_CHUNKS_PER_SOURCE = 1000
 
+# --- Embedding width (FR-08, risk R10; docs/decisions.md D-131) ------------------------
+# The length of the vectors each provider's embedding model returns. The provider is chosen once,
+# at setup: AI_PROVIDER in .env, before the first migrate. settings.EMBEDDING_DIMENSION follows
+# from it, the vector columns are created at that width, and a database keeps it. A database keeps
+# the provider it was set up with, and a change of provider means a new database (the user's
+# decision of 13 November 2026, D-131). voyage-4 returns 1024, because no output_dimension is sent
+# (apps/ai/anthropic.py), and FLM's embed-gemma returns 768.
+EMBEDDING_DIMENSION_BY_PROVIDER = {"anthropic": 1024, "flm": 768}
+
 # --- PDF extraction bounds (FR-08, FR-09; docs/decisions.md D-81) ---------------------
 # Four bounds on the work pypdf may do for one PDF (two per-stream caps, the page cap and
 # the operator budget), plus the text ceiling, which is MAXIMUM_CHUNKS_PER_SOURCE above

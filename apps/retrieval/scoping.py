@@ -56,8 +56,8 @@ wrong answer rather than as an error. Nothing further down the pipeline can dete
 it. Exclusion at the candidate set is what makes the corruption visible: a re-index
 that has not run yet shows up as an empty result and an honest no-answer, which is
 recoverable, instead of as an answer drawn from vectors that mean nothing
-(``manage.py reindex`` is the intended remedy, and switching providers is a full
-re-index event).
+(``manage.py reindex`` is the remedy within one provider; a database keeps the provider it
+was set up with, D-131).
 """
 
 from django.contrib.auth import get_user_model
