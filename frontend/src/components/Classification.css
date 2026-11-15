@@ -167,6 +167,14 @@
   font-size: var(--text-sm);
 }
 
+/* Why a proposal offers no Confirm (D-135): a sentence in words on a line of its
+   own under the provenance, muted as the provenance is (7.56:1 on the surface). */
+.tag__note {
+  flex: 1 1 100%;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
 .tag__actions {
   display: flex;
   flex-wrap: wrap;

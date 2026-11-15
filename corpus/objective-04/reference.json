@@ -1,0 +1,774 @@
+{
+  "name": "Objective 04 reference: summaries, decisions and action items, prepared by people",
+  "status": "FROZEN",
+  "prepared_by": [
+    "Benjamin"
+  ],
+  "checked_by": [
+    "Sagarika"
+  ],
+  "frozen_on": "2026-11-15",
+  "transcripts": [
+    {
+      "id": "O01",
+      "title": "Finance Quarterly Budget Review",
+      "meeting_date": "2026-10-14",
+      "attendees": [
+        "Ravi Sharma",
+        "Hannah Lee",
+        "Alex Morgan",
+        "Priya Raman"
+      ],
+      "summary": "Q1 FY27 operating spend was $4.2M against a $4.1M budget, approximately 2.5% over budget, driven primarily by travel and accommodation costs. The team reviewed the variance, agreed to freeze discretionary travel through the end of January, discussed forecasting updates, unresolved corporate card reconciliations, and decided to retain the existing contingency reserve.",
+      "decisions": [
+        "Discretionary travel is frozen until 31 January.",
+        "Client-facing travel already booked may proceed during the freeze.",
+        "Any non-exempt travel during the freeze requires Ravi's approval.",
+        "Mandatory certification-related travel remains exempt from the freeze.",
+        "Implementation of an automated expense-management tool is deferred until at least next year's budget cycle.",
+        "Contingency reserve remains at 5% and no funds will be released at this time."
+      ],
+      "highlights": [
+        "Operating spend of $4.2M exceeded the $4.1M budget by about 2.5%.",
+        "Travel spend reached $180K against a $90K budget.",
+        "Brisbane client workshops accounted for roughly half of the travel overspend.",
+        "Software subscription costs were under budget because two renewals shifted into October.",
+        "Approximately 40 September corporate card transactions were still missing receipts.",
+        "The forecast may require contingency funding for the Atlas contractor."
+      ],
+      "action_items": [
+        {
+          "ref": "O01-A1",
+          "description": "Prepare and send a communication to managers explaining the discretionary travel freeze.",
+          "owner_as_said": "Priya",
+          "expected_owner": "Priya Raman",
+          "due_as_said": "by Friday",
+          "expected_due_date": null,
+          "evidence": "Ravi: Agreed. So the decision is that discretionary travel is frozen until the thirty-first of January, and client-facing trips that are already booked can go ahead. Priya, can you send a short notice to all managers explaining the freeze? I'd like that out by the end of the week. Priya: Yes. I'll draft it today and send it by Friday."
+        },
+        {
+          "ref": "O01-A2",
+          "description": "Brief the executive team about the travel freeze.",
+          "owner_as_said": "I'll",
+          "expected_owner": "Ravi Sharma",
+          "due_as_said": "tomorrow morning",
+          "expected_due_date": null,
+          "evidence": "And I'll brief the executive team on it tomorrow morning, so they aren't surprised either."
+        },
+        {
+          "ref": "O01-A3",
+          "description": "Rebuild and distribute the revised full-year forecast reflecting the travel freeze and delayed software renewals.",
+          "owner_as_said": "Hannah",
+          "expected_owner": "Hannah Lee",
+          "due_as_said": "Wednesday the twenty-eighth",
+          "expected_due_date": null,
+          "evidence": "Hannah: On the forecast, I need to rebuild the full-year numbers with the travel freeze in them, and with the two software renewals that slipped. I can have a revised forecast ready by Wednesday the twenty-eighth. Ravi: That works. Please send it to me and Priya when it's done."
+        },
+        {
+          "ref": "O01-A4",
+          "description": "Collect missing receipts and reconcile September corporate card statements.",
+          "owner_as_said": "Alex",
+          "expected_owner": "unassigned",
+          "due_as_said": "by next Friday",
+          "expected_due_date": null,
+          "evidence": "Alex, can you chase the receipts and reconcile September? Alex: Yes. I'll aim to have September reconciled by next Friday."
+        }
+      ],
+      "notes": "The travel overspend was identified as the primary cause of the budget variance. Brisbane client workshops were previously approved and accounted for roughly half of the excess spend. The group agreed that an automated expense tool could provide future benefits but deliberately deferred consideration to avoid additional work this financial year. Concern remains regarding potentially higher contractor costs associated with the Atlas project, which influenced the decision to retain the full contingency reserve."
+    },
+    {
+      "id": "O02",
+      "title": "Service Desk Improvement Meeting",
+      "meeting_date": "2026-10-12",
+      "attendees": [
+        "Lena Kowalski",
+        "Marcus Chen",
+        "Alex Petrov",
+        "Alex Morgan"
+      ],
+      "summary": "The service desk team reviewed a growing ticket backlog after opening more than 800 tickets while closing only 740 in the previous month. The discussion focused on reducing password reset requests through updated self-service documentation, correcting mailbox routing issues, creating a laptop loan pool to reduce downtime during repairs, introducing a formal morning triage process, and reviewing remote support tool licensing.",
+      "decisions": [
+        "The password reset knowledge base article will be updated to promote self-service and reflect the current login experience.",
+        "Shared mailbox rules will be cleaned up to ensure access requests are routed to the correct queue.",
+        "A formal ticket triage rota will be introduced, with one person assigned each morning to prioritize incoming work.",
+        "Loan laptops will be purchased once finance approval is obtained.",
+        "No further action is required regarding the email gateway outage service credit because the vendor has already agreed to provide one."
+      ],
+      "highlights": [
+        "The backlog is increasing because the team opened more than 800 tickets but closed only 740 last month.",
+        "Password resets account for approximately 25% of all service desk tickets.",
+        "The existing self-service password reset article is two years old and still references the previous login screen.",
+        "Laptop repair turnaround leaves employees without a device for three to four days.",
+        "Marcus estimated that approximately 10 loan laptops are required.",
+        "Licence capacity for the remote support tool may be insufficient following recent hiring."
+      ],
+      "action_items": [
+        {
+          "ref": "O02-A1",
+          "description": "Rewrite and publish the password reset knowledge base article.",
+          "owner_as_said": "I",
+          "expected_owner": "Alex Petrov",
+          "due_as_said": "by Friday",
+          "expected_due_date": null,
+          "evidence": "I will. I wrote the original. I'll have the new version up by Friday."
+        },
+        {
+          "ref": "O02-A2",
+          "description": "Tidy up the shared mailbox rules.",
+          "owner_as_said": "Alex",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "And Alex will tidy up the shared mailbox rules as well, because half the access requests are landing in the wrong queue."
+        },
+        {
+          "ref": "O02-A3",
+          "description": "Take the loan-laptop approval request to Ravi.",
+          "owner_as_said": "I'll",
+          "expected_owner": "Alex Morgan",
+          "due_as_said": "this week",
+          "expected_due_date": null,
+          "evidence": "I'll take the approval request to Ravi this week, and let you know as soon as it's signed."
+        },
+        {
+          "ref": "O02-A4",
+          "description": "Order the loan laptops after finance approval is received.",
+          "owner_as_said": "I",
+          "expected_owner": "Marcus Chen",
+          "due_as_said": "once the approval comes through",
+          "expected_due_date": null,
+          "evidence": "I can, but I need finance approval first. I'll order them once the approval comes through."
+        },
+        {
+          "ref": "O02-A5",
+          "description": "Draft and distribute the triage rota.",
+          "owner_as_said": "I'll",
+          "expected_owner": "Lena Kowalski",
+          "due_as_said": "so it can start next Monday",
+          "expected_due_date": null,
+          "evidence": "It will be. I'll draft the rota and send it round so it can start next Monday."
+        },
+        {
+          "ref": "O02-A6",
+          "description": "Check the licence count for the remote support tool.",
+          "owner_as_said": "I'll",
+          "expected_owner": "Alex Petrov",
+          "due_as_said": "by Thursday",
+          "expected_due_date": null,
+          "evidence": "On licences, I'm not sure we have enough seats for the remote support tool now that the new starters have joined. I'll check the licence count by Thursday."
+        }
+      ],
+      "notes": "The group agreed that reducing avoidable password reset requests represents the fastest and lowest-cost way to reduce the backlog. The triage rota is intended to improve prioritisation by ensuring urgent tickets are reviewed before general queue work begins. The email gateway service-credit issue has already been resolved with the vendor and requires no further work."
+    },
+    {
+      "id": "O03",
+      "title": "Level Four Fit-out Check-in",
+      "meeting_date": "2026-10-22",
+      "attendees": [
+        "Owen Fletcher",
+        "Priya Raman",
+        "Grace Nguyen"
+      ],
+      "summary": "The team reviewed progress on the level four fit-out, confirming that demolition is complete, the ceiling grid has been installed, and electrical work is scheduled to begin Monday. Discussion focused on increasing power points at desk banks, managing construction noise impacts, coordinating furniture delivery logistics, and preparing staff for the office move. The project remains on track for handover in the third week of November.",
+      "decisions": [
+        "The desk layout will be updated to provide six power points per desk bank instead of four, subject to a formal variation.",
+        "Priya will approve the power-point variation after reviewing the revised drawings.",
+        "Noisy construction activities will be moved to after-hours work (after 6 p.m.) to reduce disruption to staff on level three.",
+        "The quiet room on level three will remain available during the fit-out.",
+        "The facilities team will provide and label moving crates by team before relocation.",
+        "Plants for the new floor will be deferred until the new year."
+      ],
+      "highlights": [
+        "Demolition has been completed and the ceiling grid has been installed.",
+        "Electricians are scheduled to commence work on Monday.",
+        "The fit-out remains on schedule for handover during the third week of November.",
+        "Increasing power points from four to six per desk bank will add approximately $4,000 to the project cost.",
+        "New desks are scheduled for delivery on 5 November.",
+        "Level three staff have raised concerns about afternoon drilling noise."
+      ],
+      "action_items": [
+        {
+          "ref": "O03-A1",
+          "description": "Provide revised drawings reflecting the additional power points.",
+          "owner_as_said": "Brendan",
+          "expected_owner": "unassigned",
+          "due_as_said": "by Monday",
+          "expected_due_date": null,
+          "evidence": "I'll send revised drawings with the extra power points by Monday."
+        },
+        {
+          "ref": "O03-A2",
+          "description": "Review the revised drawings and approve the power-point variation.",
+          "owner_as_said": "Priya",
+          "expected_owner": "Priya Raman",
+          "due_as_said": "by the end of next week",
+          "expected_due_date": null,
+          "evidence": "Then I'll sign off the variation by the end of next week, once I've seen them."
+        },
+        {
+          "ref": "O03-A3",
+          "description": "Book the goods lift with building management for the furniture delivery.",
+          "owner_as_said": "I'll",
+          "expected_owner": "Owen Fletcher",
+          "due_as_said": "the fifth",
+          "expected_due_date": null,
+          "evidence": "I'll book the lift with building management for the fifth."
+        },
+        {
+          "ref": "O03-A4",
+          "description": "Inform level three staff that noisy work will be moved to after-hours periods.",
+          "owner_as_said": "Grace",
+          "expected_owner": "Grace Nguyen",
+          "due_as_said": "tomorrow",
+          "expected_due_date": null,
+          "evidence": "Then I'll let the level three staff know tomorrow, so they know it's being dealt with."
+        },
+        {
+          "ref": "O03-A5",
+          "description": "Deliver and label moving crates by team before the office move.",
+          "owner_as_said": "The facilities team",
+          "expected_owner": "unassigned",
+          "due_as_said": "before the move",
+          "expected_due_date": null,
+          "evidence": "The facilities team will deliver crates and label them by team before the move."
+        }
+      ],
+      "notes": "The requested increase in power points is considered a formal variation and must be approved before the electricians reach the affected sections. To address staff complaints about construction noise, the contractor will shift the loudest work to evenings using an overtime provision already included in the quote. Furniture delivery on 5 November requires exclusive access to the goods lift for most of the morning. The idea of adding plants to the new floor was discussed but intentionally deferred until after the relocation is complete."
+    },
+    {
+      "id": "O04",
+      "title": "Graduate Recruitment Planning",
+      "meeting_date": "2026-10-20",
+      "attendees": [
+        "Grace Nguyen",
+        "Nadia Haddad",
+        "Jamal Haddad",
+        "Sofia Marchetti"
+      ],
+      "summary": "The team met to plan next year's graduate intake following the close of applications, which exceeded 300 submissions. They confirmed that six graduate positions will be offered, agreed on the candidate selection process, discussed interview and assessment logistics, assigned ownership of shortlist screening and technical exercise development, and deferred consideration of a paid internship program due to budget constraints.",
+      "decisions": [
+        "The graduate intake will consist of six positions, consistent with the approved workforce plan and budget.",
+        "Candidates will be shortlisted through an initial review of written application responses before progressing to an online exercise.",
+        "A new engineering technical exercise will replace last year's assessment because the previous version was leaked online.",
+        "The new technical exercise should be designed to be completed within one hour.",
+        "Rooms three and four will be used for the assessment day on 12 November.",
+        "The proposal for a paid internship program for near-miss candidates is deferred due to budget limitations."
+      ],
+      "highlights": [
+        "More than 300 graduate applications were received, significantly more than the previous year.",
+        "Only six graduate positions are available under the approved budget.",
+        "The initial application screening is expected to reduce the candidate pool to approximately 40.",
+        "The previous engineering technical exercise was leaked online and requires replacement.",
+        "Interview panel membership is still awaiting confirmation from two managers.",
+        "Assessment-day venues have already been secured."
+      ],
+      "action_items": [
+        {
+          "ref": "O04-A1",
+          "description": "Conduct the first-pass review of written application responses and reduce the applicant pool to approximately 40 candidates.",
+          "owner_as_said": "Nadia",
+          "expected_owner": "Nadia Haddad",
+          "due_as_said": "by Friday",
+          "expected_due_date": null,
+          "evidence": "I can do the first pass and get it down to about forty by Friday."
+        },
+        {
+          "ref": "O04-A2",
+          "description": "Create a new engineering technical assessment that can be completed within one hour.",
+          "owner_as_said": "Jamal",
+          "expected_owner": "Jamal Haddad",
+          "due_as_said": "by next Wednesday",
+          "expected_due_date": null,
+          "evidence": "I'll write a new one. I can have it ready by next Wednesday. Sofia: Make sure it can be done in an hour. Last year's took most people three. Jamal: Understood, one hour."
+        },
+        {
+          "ref": "O04-A3",
+          "description": "Confirm the membership of the interview panels.",
+          "owner_as_said": "Sofia",
+          "expected_owner": "Sofia Marchetti",
+          "due_as_said": "within two weeks",
+          "expected_due_date": null,
+          "evidence": "I'll confirm the panel members within two weeks. I'm still waiting to hear from two of the managers."
+        },
+        {
+          "ref": "O04-A4",
+          "description": "Coordinate catering arrangements for the graduate assessment day.",
+          "owner_as_said": "Ms Haddad",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Ms Haddad will coordinate the catering, as she did last year."
+        },
+        {
+          "ref": "O04-A5",
+          "description": "Prepare and distribute a one-page interviewing guide for panel members.",
+          "owner_as_said": "Grace",
+          "expected_owner": "Grace Nguyen",
+          "due_as_said": "by the sixth of November",
+          "expected_due_date": null,
+          "evidence": "I'll put together a one-page interviewing guide and send it to the panel. Sofia: When? Grace: Before the interviews start, so by the sixth of November."
+        }
+      ],
+      "notes": "The recruitment process will consist of an initial written-response screening, followed by an online exercise, interviews during the week of 9 November, and an assessment day on 12 November. Sofia has already reserved rooms three and four for the assessment day. A paid internship program for candidates who narrowly miss selection was discussed but formally deferred due to budget constraints."
+    },
+    {
+      "id": "O05",
+      "title": "Customer Complaint Escalation Review",
+      "meeting_date": "2026-10-29",
+      "attendees": [
+        "Chloe Martin",
+        "Ben Carter",
+        "Priya Raman"
+      ],
+      "summary": "The team reviewed three escalated customer complaints, focusing primarily on a serious case involving a duplicate subscription charge that remained unresolved for five weeks. Actions were agreed to communicate with the customer and issue a formal apology. The group also addressed a brochure printing error affecting approximately 2,000 customers, updated refund approval processes to reduce delays, and identified the need to clean up the complaints register ahead of a quarterly audit.",
+      "decisions": [
+        "Mrs Delaney should receive a phone call and formal apology regarding the delayed resolution of her duplicate charge refund.",
+        "A correction to the incorrect brochure phone number will be posted on the website immediately.",
+        "Coastal Print will reprint the affected brochures at their own expense.",
+        "Refunds up to $500 can now be approved by a team leader.",
+        "Only refunds over $500 require manager approval.",
+        "The escalation threshold review will be discussed at the next monthly meeting."
+      ],
+      "highlights": [
+        "Mrs Delaney was charged twice for an annual subscription and waited five weeks for resolution.",
+        "The refund for Mrs Delaney was processed the day before the meeting, but she had not yet been informed.",
+        "Approximately 2,000 brochures were distributed with an incorrect phone number.",
+        "The brochure error involved the last two digits of the contact number being transposed, causing customers to call the wrong person.",
+        "Coastal Print accepted responsibility and offered to reprint the brochures at no cost.",
+        "A customer complaint regarding a 40-minute hold time had already been resolved."
+      ],
+      "action_items": [
+        {
+          "ref": "O05-A1",
+          "description": "Call Mrs Delaney, inform her of the completed refund, and provide an apology.",
+          "owner_as_said": "Ben",
+          "expected_owner": "Ben Carter",
+          "due_as_said": "today",
+          "expected_due_date": null,
+          "evidence": "Priya: Then she needs a phone call today, and a proper apology. Ben: I'll call her back today. I've spoken to her before, so she knows my name."
+        },
+        {
+          "ref": "O05-A2",
+          "description": "Draft a formal apology letter for Mrs Delaney and provide it for signature.",
+          "owner_as_said": "Chloe",
+          "expected_owner": "Chloe Martin",
+          "due_as_said": "by tomorrow",
+          "expected_due_date": null,
+          "evidence": "I'll draft an apology letter tonight and get it to you by tomorrow, Priya, so you can sign it."
+        },
+        {
+          "ref": "O05-A3",
+          "description": "Reprint the affected brochures with the corrected phone number.",
+          "owner_as_said": "Mei from Coastal Print",
+          "expected_owner": "unassigned",
+          "due_as_said": "by the sixth of November",
+          "expected_due_date": null,
+          "evidence": "Mei from Coastal Print said she will reprint them at their cost, with the corrected number, by the sixth of November."
+        },
+        {
+          "ref": "O05-A4",
+          "description": "Publish a correction on the website for the incorrect brochure phone number.",
+          "owner_as_said": "",
+          "expected_owner": "unassigned",
+          "due_as_said": "today",
+          "expected_due_date": null,
+          "evidence": "Ben: In the meantime we should put a correction on the website. Priya: Yes, let's get that done today. It's a two-line change."
+        },
+        {
+          "ref": "O05-A5",
+          "description": "Add all three complaint cases to the complaints register before the quarterly audit.",
+          "owner_as_said": "",
+          "expected_owner": "unassigned",
+          "due_as_said": "before the quarterly audit",
+          "expected_due_date": null,
+          "evidence": "The complaints register also needs all three cases added before the quarterly audit."
+        },
+        {
+          "ref": "O05-A6",
+          "description": "Review whether the current escalation threshold of three customer calls remains appropriate.",
+          "owner_as_said": "Priya",
+          "expected_owner": "Priya Raman",
+          "due_as_said": "next monthly meeting",
+          "expected_due_date": null,
+          "evidence": "I'd also like us to look again at the escalation threshold itself, whether three calls is the right trigger. I'll put it on the agenda for the next monthly meeting."
+        }
+      ],
+      "notes": "The discussion identified the refund approval workflow as a root cause of delays in customer issue resolution. The team agreed that empowering team leaders to approve refunds up to $500 should reduce bottlenecks and prevent similar incidents. Responsibility for updating the website correction and maintaining the complaints register was discussed but not explicitly assigned to a named individual during the meeting. The complaint relating to excessive hold time was confirmed as already resolved and requires no further action."
+    },
+    {
+      "id": "O06",
+      "title": "Quarterly All-Staff Briefing",
+      "meeting_date": "2026-11-02",
+      "attendees": [
+        "Priya Raman",
+        "Ravi Sharma",
+        "Sofia Marchetti",
+        "Daniel Brooks"
+      ],
+      "summary": "The quarterly staff briefing provided updates on the Collins Street office move, first-quarter business results, and Project Atlas. Leadership confirmed that the office relocation remains on schedule, Q1 revenue exceeded plan despite higher travel spending, and Project Atlas has been delayed by two weeks to allow additional testing. The session was informational only, with no actions required from staff.",
+      "decisions": [
+        "Project Atlas go-live has been moved from 30 November to 14 December to allow more testing time.",
+        "The mobile app will not be included in the first Atlas release and will instead be delivered in the new year.",
+        "Staff briefings will be held every two months rather than quarterly, based on employee feedback from the staff survey.",
+        "Previously approved travel remains exempt from the current travel freeze.",
+        "The next staff briefing will be held in January at the new Collins Street office."
+      ],
+      "highlights": [
+        "The Collins Street office fit-out remains on schedule, with level four expected to be completed in the third week of November.",
+        "The office move is planned for the weekend of 28 November.",
+        "First-quarter revenue reached $11.6 million, approximately 3% ahead of plan.",
+        "Travel spending exceeded budget, resulting in a travel freeze through the end of January.",
+        "October travel spending was less than half of September's spend.",
+        "Customer retention reached 91%, the strongest quarterly result in two years.",
+        "Project Atlas go-live was delayed by two weeks, to 14 December.",
+        "The Atlas customer launch event remains scheduled for February and is unaffected by the delay."
+      ],
+      "action_items": [],
+      "notes": "Priya explicitly stated at the beginning and end of the session that this was an information briefing and that no actions were required from attendees. Team move coordinators had already distributed packing instructions prior to the meeting. Staff were advised that the new Collins Street office will not provide employee parking but will offer bicycle storage, showers, and convenient access to public transport. The Project Atlas timeline has already been updated on the intranet."
+    },
+    {
+      "id": "O07",
+      "title": "Project Atlas Steering Committee",
+      "meeting_date": "2026-10-28",
+      "attendees": [
+        "Sofia Marchetti",
+        "Jamal Haddad",
+        "Wei Zhang",
+        "Ravi Sharma",
+        "Aisha Rahman"
+      ],
+      "summary": "The Project Atlas steering committee reviewed readiness for the planned 30 November go-live and concluded that insufficient testing time remained due to delays in data migration. The committee approved a two-week postponement of go-live to 14 December and agreed to remove the mobile application from the first release to reduce delivery risk. The meeting also covered migration, testing, contractor extensions, performance issues, release documentation, and user acceptance testing preparations.",
+      "decisions": [
+        "Project Atlas go-live is postponed from 30 November to 14 December.",
+        "The organization will absorb the approximately $20,000 contractor extension cost associated with the delay.",
+        "The mobile application is removed from the first release and deferred to a second release in the new year.",
+        "The first release will proceed without the mobile application.",
+        "Customer-data regression testing can begin immediately because the customer records migration data is ready."
+      ],
+      "highlights": [
+        "Development is approximately 85% complete.",
+        "Historical invoice migration remains the primary project blocker.",
+        "Testing would be limited to roughly one and a half weeks if the original go-live date were maintained.",
+        "Previous projects required about four weeks of testing.",
+        "The contractor extension required by the delay is estimated to cost approximately $20,000.",
+        "The payments-system integration adapter is expected from contractor Sam the following Tuesday.",
+        "A performance issue has been identified on the search page when more than 1,000 records are present."
+      ],
+      "action_items": [
+        {
+          "ref": "O07-A1",
+          "description": "Complete the historical invoice data migration scripts.",
+          "owner_as_said": "Jamal",
+          "expected_owner": "Jamal Haddad",
+          "due_as_said": "by the thirteenth",
+          "expected_due_date": null,
+          "evidence": "I'll finish the invoice migration scripts by the thirteenth."
+        },
+        {
+          "ref": "O07-A2",
+          "description": "Run the full regression test suite against the migrated customer records.",
+          "owner_as_said": "Wei",
+          "expected_owner": "Wei Zhang",
+          "due_as_said": "by the end of next week",
+          "expected_due_date": null,
+          "evidence": "Then I'll run the full regression suite on the customer records by the end of next week."
+        },
+        {
+          "ref": "O07-A3",
+          "description": "Approve and sign off the contractor extension agreement.",
+          "owner_as_said": "Ravi",
+          "expected_owner": "Ravi Sharma",
+          "due_as_said": "this Friday",
+          "expected_due_date": null,
+          "evidence": "I need to approve the contractor extension. I'll sign it off this Friday, so there's no gap in their contract."
+        },
+        {
+          "ref": "O07-A4",
+          "description": "Update the release notes to reflect removal of the mobile application from the first release.",
+          "owner_as_said": "Aisha",
+          "expected_owner": "Aisha Rahman",
+          "due_as_said": "by Monday",
+          "expected_due_date": null,
+          "evidence": "The release notes need rewriting now that the mobile app is out. I'll update them by Monday."
+        },
+        {
+          "ref": "O07-A5",
+          "description": "Present the revised project timeline to the board.",
+          "owner_as_said": "Sofia",
+          "expected_owner": "Sofia Marchetti",
+          "due_as_said": "on the nineteenth of November",
+          "expected_due_date": null,
+          "evidence": "I'll present the revised timeline to the board on the nineteenth of November."
+        },
+        {
+          "ref": "O07-A6",
+          "description": "Attend the board presentation to support discussion of the project budget implications.",
+          "owner_as_said": "Ravi",
+          "expected_owner": "Ravi Sharma",
+          "due_as_said": "on the nineteenth of November",
+          "expected_due_date": null,
+          "evidence": "Sofia: I'll present the revised timeline to the board on the nineteenth of November. Ravi, can you join me for the budget part? Ravi: Yes, I'll be there."
+        },
+        {
+          "ref": "O07-A7",
+          "description": "Complete the payments-system integration adapter.",
+          "owner_as_said": "Sam",
+          "expected_owner": "unassigned",
+          "due_as_said": "next Tuesday",
+          "expected_due_date": null,
+          "evidence": "The integration adapter for the payments system is being built by Sam, the contractor. He's told me he'll have it finished next Tuesday."
+        },
+        {
+          "ref": "O07-A8",
+          "description": "Investigate and resolve the search-page performance issue affecting datasets larger than 1,000 records.",
+          "owner_as_said": "Wei and I",
+          "expected_owner": "unassigned",
+          "due_as_said": "",
+          "expected_due_date": null,
+          "evidence": "Wei and I will pair on the performance fix. It's probably a missing index."
+        },
+        {
+          "ref": "O07-A9",
+          "description": "Schedule user acceptance testing sessions with business users.",
+          "owner_as_said": "Aisha",
+          "expected_owner": "Aisha Rahman",
+          "due_as_said": "in the week after next",
+          "expected_due_date": null,
+          "evidence": "For user acceptance testing, I'll set up the sessions with the business users. They'll need to be in the week after next."
+        }
+      ],
+      "notes": "The committee's primary concern was the risk associated with insufficient testing time if the original go-live date were maintained. Historical invoice migration was identified as the main blocker because testing depends on complete migrated data. The delay was approved because the estimated $20,000 extension cost was considered preferable to the risk of deploying untested data. Separately, the mobile application was deliberately removed from the first release due to its lower testing maturity and will be delivered in a later release."
+    },
+    {
+      "id": "O08",
+      "title": "Health and Safety Committee",
+      "meeting_date": "2026-11-05",
+      "attendees": [
+        "Grace Nguyen",
+        "Owen Fletcher",
+        "Tomas Okafor",
+        "Hannah Lee"
+      ],
+      "summary": "The Health and Safety Committee reviewed two October incidents, discussed fire drill planning, first-aid readiness, facilities issues, and meeting frequency. The committee agreed that the failed emergency exit sign required urgent remediation, scheduled a fire drill, approved actions to replenish first-aid supplies, and decided to meet monthly until the office move is complete.",
+      "decisions": [
+        "The non-functioning emergency exit sign is a compliance issue and must be repaired immediately.",
+        "A fire drill will be conducted on the twentieth.",
+        "Replacement first-aid kits and defibrillator pads will be ordered.",
+        "Two new first-aid officers will be recruited to replace departing officers.",
+        "The flickering stairwell lights will be reported to the building manager because they are the landlord's responsibility.",
+        "Health and Safety Committee meetings will be held monthly rather than quarterly until the office move is complete.",
+        "The next committee meeting will be held on the third of December.",
+        "Workstation assessments for the new office will be considered after the move rather than immediately."
+      ],
+      "highlights": [
+        "Two incidents occurred in October: a trip on a loose carpet tile near the level two kitchen and a failed emergency exit sign on level two.",
+        "The carpet tile hazard was fixed on the same day it was reported.",
+        "The emergency exit sign failure was identified as a compliance issue.",
+        "The organization is overdue for a fire drill.",
+        "Two first-aid kits on level three are missing supplies.",
+        "Defibrillator pads are due to expire the following month.",
+        "Two first-aid officers have left the organization and need to be replaced.",
+        "Stairwell lights between levels three and four are flickering."
+      ],
+      "action_items": [
+        {
+          "ref": "O08-A1",
+          "description": "Replace the faulty emergency exit sign on level two.",
+          "owner_as_said": "Owen Fletcher",
+          "expected_owner": "Owen Fletcher",
+          "due_as_said": "by tomorrow",
+          "expected_due_date": null,
+          "evidence": "I've already ordered the part. I'll have the sign replaced by tomorrow."
+        },
+        {
+          "ref": "O08-A2",
+          "description": "Record both October incidents in the incident register.",
+          "owner_as_said": "Hannah Lee",
+          "expected_owner": "Hannah Lee",
+          "due_as_said": "by Monday",
+          "expected_due_date": null,
+          "evidence": "[00:01:41] Grace Nguyen: Not yet. Hannah, can you make sure both are in the register by Monday? [00:01:47] Hannah Lee: Yes, I'll enter them by Monday."
+        },
+        {
+          "ref": "O08-A3",
+          "description": "Conduct the fire drill and notify floor wardens in advance.",
+          "owner_as_said": "Tomas Okafor",
+          "expected_owner": "Tomas Okafor",
+          "due_as_said": "the twentieth",
+          "expected_due_date": null,
+          "evidence": "[00:02:10] Grace Nguyen: Next, the fire drill. We're overdue. Tom, can you run the drill on the twentieth? [00:02:18] Tomas Okafor: Yes, the twentieth works. I'll let the floor wardens know a week in advance."
+        },
+        {
+          "ref": "O08-A4",
+          "description": "Order replacement first-aid kits and new defibrillator pads.",
+          "owner_as_said": "Hannah Lee",
+          "expected_owner": "Hannah Lee",
+          "due_as_said": "this week",
+          "expected_due_date": null,
+          "evidence": "[00:02:55] Grace Nguyen: Hannah, can you order replacement kits and pads? [00:03:01] Hannah Lee: Yes, I'll put the order in this week."
+        },
+        {
+          "ref": "O08-A5",
+          "description": "Request volunteers for two new first-aid officer positions through the staff newsletter.",
+          "owner_as_said": "Grace Nguyen",
+          "expected_owner": "Grace Nguyen",
+          "due_as_said": "on the sixteenth",
+          "expected_due_date": null,
+          "evidence": "Then we need two new first-aid officers. I'll ask for volunteers in the staff newsletter on the sixteenth."
+        },
+        {
+          "ref": "O08-A6",
+          "description": "Report the flickering stairwell lights to the building manager so repairs can be arranged.",
+          "owner_as_said": "Owen Fletcher",
+          "expected_owner": "Owen Fletcher",
+          "due_as_said": "today",
+          "expected_due_date": null,
+          "evidence": "The stairwell is a common area, so the building manager has to arrange the electrician. I'll report it to them today."
+        }
+      ],
+      "notes": "The committee determined that the emergency exit sign issue carried regulatory and safety implications and therefore required immediate action. The loose carpet tile incident had already been resolved by the time of the meeting. Concerns regarding first-aid preparedness included both depleted supplies and staffing gaps among trained first-aid officers. Due to the ongoing office move and associated safety considerations, members agreed to temporarily increase meeting frequency from quarterly to monthly. A possible workstation assessment program for staff in the new office was discussed but intentionally deferred until after relocation."
+    },
+    {
+      "id": "O09",
+      "title": "Newsletter Content Planning",
+      "meeting_date": "2026-11-09",
+      "attendees": [
+        "Daniel Brooks",
+        "Aisha Rahman",
+        "Chloe Martin"
+      ],
+      "summary": "The team discussed improving the consistency of the customer newsletter and agreed to move from an ad hoc distribution model to a regular monthly schedule. The first newsletter will be issued on 1 December, featuring onboarding webinars as the lead story. Responsibilities were assigned for gathering customer quotes, drafting content, scheduling supporting social media posts, and approving the final layout. The idea of launching a podcast was discussed but rejected.",
+      "decisions": [
+        "The customer newsletter will be published monthly rather than on an ad hoc basis.",
+        "The newsletter will be sent during the same week each month to create consistency for customers.",
+        "The first monthly newsletter will be published on 1 December.",
+        "The lead story for the first issue will focus on the new onboarding webinars.",
+        "A single approver model will be used for newsletter layout approval to avoid delays and repeated revisions.",
+        "Aisha will be the final approver of newsletter layouts.",
+        "The previously discussed podcast initiative will not proceed."
+      ],
+      "highlights": [
+        "Customer feedback indicated that recipients did not know when to expect newsletters.",
+        "A regular publication cadence was selected to improve engagement and predictability.",
+        "Customer survey responses will be used as testimonial content in the first issue.",
+        "The first newsletter is scheduled before the holiday period.",
+        "Previous newsletter layouts experienced delays due to multiple rounds of approval."
+      ],
+      "action_items": [
+        {
+          "ref": "O09-A1",
+          "description": "Collect three customer quotes from the recent survey for inclusion in the newsletter.",
+          "owner_as_said": "Chloe",
+          "expected_owner": "Chloe Martin",
+          "due_as_said": "by Thursday",
+          "expected_due_date": null,
+          "evidence": "Chloe, can you pull three customer quotes from the recent survey? Yes, I can have those by Thursday."
+        },
+        {
+          "ref": "O09-A2",
+          "description": "Draft the lead article about the new onboarding webinars.",
+          "owner_as_said": "I",
+          "expected_owner": "unassigned",
+          "due_as_said": "over the weekend",
+          "expected_due_date": null,
+          "evidence": "I can write the lead article about the webinars. I'll get a draft done over the weekend."
+        },
+        {
+          "ref": "O09-A3",
+          "description": "Schedule social media posts supporting the newsletter launch.",
+          "owner_as_said": "Daniel",
+          "expected_owner": "Daniel Brooks",
+          "due_as_said": "next week",
+          "expected_due_date": null,
+          "evidence": "Daniel, you'll schedule those for next week? Sure. I'll schedule them for next week, once the article is done."
+        },
+        {
+          "ref": "O09-A4",
+          "description": "Review and approve the final newsletter layout.",
+          "owner_as_said": "Aisha",
+          "expected_owner": "Aisha Rahman",
+          "due_as_said": "by the sixteenth",
+          "expected_due_date": null,
+          "evidence": "Yes, that's fine. Send it to me and I'll approve the final layout by the sixteenth."
+        }
+      ],
+      "notes": "The meeting focused on establishing a predictable communication cadence for customers. A monthly newsletter schedule beginning on 1 December was unanimously supported. The team intentionally chose onboarding webinars as the feature story for the first issue and agreed that customer testimonials would strengthen the content. A proposal to create a podcast was considered but dismissed because participants were unconvinced of likely audience engagement."
+    },
+    {
+      "id": "O10",
+      "title": "Customer Success Retrospective Q3",
+      "meeting_date": "2026-11-03",
+      "attendees": [
+        "Ben Carter",
+        "Chloe Martin",
+        "Marcus Chen",
+        "Alex Morgan",
+        "Alex Petrov"
+      ],
+      "summary": "The team held a Q3 retrospective covering successes, challenges, and process improvements. Key successes included a 91% renewal rate and faster customer onboarding driven by a new onboarding checklist. The team identified issues with CRM-to-billing synchronization, delayed churn visibility, and late renewal notifications. Several corrective actions were agreed, including fixing the CRM sync, building a churn dashboard, introducing regular onboarding webinars, and moving NPS surveys from monthly to quarterly.",
+      "decisions": [
+        "The NPS survey cadence will change from monthly to quarterly.",
+        "Renewal lists will be distributed eight weeks before renewal dates instead of two weeks.",
+        "Onboarding webinars will become a recurring fortnightly program.",
+        "A proposed customer advisory board will not be pursued at this time.",
+        "A churn dashboard combining usage, support ticket, and survey data will be created to improve account health visibility."
+      ],
+      "highlights": [
+        "The team achieved a 91% account renewal rate during the quarter.",
+        "The new onboarding checklist reduced time to first value by approximately one week.",
+        "A CRM synchronization issue caused invoices to be sent to outdated contacts for around 20 customer accounts.",
+        "Two major customer accounts churned without warning signs being detected early enough.",
+        "September onboarding webinars received strong customer engagement and positive feedback.",
+        "The existing renewal notification process gave account managers only two weeks' notice before renewals."
+      ],
+      "action_items": [
+        {
+          "ref": "O10-A1",
+          "description": "Fix the CRM-to-billing system synchronization bug affecting contact updates.",
+          "owner_as_said": "Marcus",
+          "expected_owner": "Marcus Chen",
+          "due_as_said": "by the end of the month",
+          "expected_due_date": null,
+          "evidence": "I know what the bug is. I'll fix the sync by the end of the month."
+        },
+        {
+          "ref": "O10-A2",
+          "description": "Build an account-health churn dashboard combining usage, support ticket, and survey data.",
+          "owner_as_said": "Ben",
+          "expected_owner": "Ben Carter",
+          "due_as_said": "by next Monday",
+          "expected_due_date": null,
+          "evidence": "I'll build a churn dashboard, with usage, tickets and survey scores in one place. I'll have a first version by next Monday."
+        },
+        {
+          "ref": "O10-A3",
+          "description": "Launch and run onboarding webinars on a fortnightly basis.",
+          "owner_as_said": "Chloe",
+          "expected_owner": "Chloe Martin",
+          "due_as_said": "the seventeenth",
+          "expected_due_date": null,
+          "evidence": "I'd like to run them every fortnight. I'll start them on the seventeenth."
+        },
+        {
+          "ref": "O10-A4",
+          "description": "Send the renewal list to account managers and implement the new eight-week notification process.",
+          "owner_as_said": "Alex",
+          "expected_owner": "Alex Morgan",
+          "due_as_said": "tomorrow",
+          "expected_due_date": null,
+          "evidence": "Alex will send the renewal list to the account managers tomorrow, and from now on it goes out eight weeks ahead."
+        },
+        {
+          "ref": "O10-A5",
+          "description": "Update the survey schedule so NPS surveys are sent quarterly instead of monthly.",
+          "owner_as_said": "Alex Petrov",
+          "expected_owner": "Alex Petrov",
+          "due_as_said": "by Friday",
+          "expected_due_date": null,
+          "evidence": "I can update the survey schedule in the system. It's a small change. I'll do it by Friday."
+        }
+      ],
+      "notes": "The retrospective identified customer retention and onboarding improvements as major successes. The highest-priority operational issue was the CRM synchronization defect, which impacted billing communications for approximately 20 customer accounts. The group also acknowledged shortcomings in churn detection and agreed that a centralized account-health dashboard should provide earlier warning signals. While a customer advisory board was proposed as a future feedback mechanism, the team chose not to commit resources to it at this time."
+    }
+  ]
+}

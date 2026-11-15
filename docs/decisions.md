@@ -11810,6 +11810,55 @@ fixed the same way: D-107's note of the same day. Started by hand on the alpha's
 that day, it was still `Queued` on battery when found at 14:38. Its last run time stayed at that start, so its
 hourly runs in that time did not start either.
 
+**Dated note, 15 November 2026: Objective 04 measured on the frozen set. NOT MET, on attribution.**
+
+- **The reference.** Benjamin Morovan and Sagarika Dey wrote and checked it. Claude checked its
+  format only, never its answers (choice 4): each owner a roster name or `unassigned`, each quote
+  word for word, refs and dates well formed. The writers fixed every problem themselves over five
+  checks. It was frozen as `corpus/objective-04/reference.json` (`06bfe73`), and Benjamin approved
+  the README's measurement method the same day.
+- **The run** (`caa0b99`). The ten transcripts were ingested through FR-09 into a database made
+  empty for it, and each was summarised once on `anthropic` (Haiku 5.5, voyage-4).
+  - Ten of ten summaries were ready on the first attempt; 51 items were extracted; $0.0068.
+  - A person completed the adjudication sheet, and 7 of its 51 decisions differ from the script's
+    proposals.
+
+| Criterion | Bar | Result | |
+|---|---|---|---|
+| Reference action items extracted | at least 80% | 48 of 50 (96.0%) | met |
+| Extracted items absent from the reference | at most 10% | 3 of 51 (5.9%) | met |
+| Named owners given to the wrong person | none | 2 of 47 | **NOT met** |
+
+- **The two wrong owners.**
+  - **`O01-A4`: two rules Claude wrote disagree. It is not a model error.**
+    - The model's owner phrase is the reference's own: a lone first name that two roster users
+      share and one attendee has.
+    - This decision's owner rule, as the security review left it, gives such a name to that
+      attendee.
+    - The README's instructions for writing the reference, which Claude wrote on 11 November, say a
+      name that fits more than one roster user is `unassigned`, and the writers followed them.
+    - Claude's own development reference had resolved such a name to the attendee (`X02-A3`), so
+      the development draws could not show the disagreement.
+    - It is the only extracted item stored for a first name that two roster users share.
+  - **`O07-A8`: a model error.** The reference records two people jointly, so `unassigned`. The
+    model named one person who is neither of them, and the owner rule resolved that name to an
+    attendee.
+- **Reported, not scored.**
+  - 28 decisions were extracted, against 59 in the reference.
+  - No matched reference item sets an expected due date, so no date was compared.
+  - The misses are `O03-A5` and `O07-A7`. The extras are one in `O07` and two in `O08`.
+  - All are quoted in `corpus/objective-04/runs/2026-11-15/frozen/results.md`.
+- **Nothing was changed in response, and nothing may be (D-93).** The result stands as measured.
+  - Changing `O01-A4`'s expected owner would be a correction made to fit a result, which the
+    reference's README forbids.
+  - Changing the owner rule and re-running these ten transcripts would tune against the frozen
+    set.
+  - **For the team to decide:**
+    - which of the two rules the system should follow for a first name that two roster users share;
+    - whether any re-measurement uses a new frozen set.
+
+    Either is judged on the development set first, with a reference that follows the chosen rule.
+
 ## D-126 · FR-19's permission exclusion is per embedding model: voyage-4 is threshold-first, D-108's rule as first written, and EmbeddingGemma keeps rank-one
 
 **Status:** Settled by the user · **Date:** 2026-11-11 · **Concerns:** FR-19, Objective 06, D-108,
@@ -15929,6 +15978,10 @@ rule 4d).
    (`frontend/src/api/documents.js`) sends the value as `proposed_tags` carries it. Only the client's
    comment changed. A front-end test now holds both (below).
 
+   *Changed on 15 November 2026 by D-135, the user's decision: the page offers Reject alone on a
+   proposal longer than a tag name, and a sentence in the row says why. `rejectProposedTag` is
+   unchanged, and the front-end test named below still holds Reject.*
+
 **What was measured, for the residual:**
 `corpus/objective-05/runs/2026-11-15-topic-lengths/topic_lengths.py` reads the records already
 committed under `corpus/objective-05/runs/`, and its output is `topic-lengths.txt` beside it.
@@ -16111,6 +16164,9 @@ script against them.
   client's fixed 400 sentence, and the row stays. Whether the page should withhold Confirm there, or
   say why, is an interface question this decision does not settle (`CLAUDE.md` §1: raise it rather
   than build it).
+
+  *Fixed on 15 November 2026 by D-135, the user's decision: the page withholds Confirm on such a
+  proposal, and a sentence in the row says why and that it can be rejected.*
 - **The 200 path for a long value is tested in Topic only.** The serializer and
   `reject_proposed_tag` are dimension-generic, and the 400 past the bound is tested in Project,
   Process and Topic. Since D-129 a run proposes no Project or Process value.
@@ -16124,3 +16180,271 @@ script against them.
   code. Nobody looked for one.
 - **`CLAUDE.md` §5's table is not changed.** Of FR-10's values it lists only
   `MAXIMUM_CLASSIFY_ATTEMPTS`.
+
+## D-135 · The document page offers no Confirm on a proposed value longer than a tag name, and says why in the row
+
+**Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (a Topic outside the
+scheme "requires user confirmation before it is created"), D-128, D-129, D-133, D-134, `frontend/` ·
+**Supersedes:** nothing. It closes D-133's "Not covered" item "The page still offers Confirm on a
+proposal over 255 characters".
+
+**What prompted it:** D-133 (PR 112) let the reject route read a proposed value up to 100,000
+characters, and kept confirm's 255. Confirming creates a Tag, whose name the `Tags.tag_name` column
+limits. On `main` at `f82fb1a` a run proposes a Topic whatever its length (D-129). So, on a proposal
+over 255 characters:
+
+- the page offered an enabled Confirm (`ProposedTagRow`, `frontend/src/components/Classification.jsx`);
+- the server refused it with 400 every time;
+- the page then showed the API client's fixed 400 sentence, "Some of the information provided is
+  not valid. Please check it and try again." (`frontend/src/api/client.js`, through the 400 branch
+  of `fail` in `Classification.jsx`). A person cannot act on it, and the row stayed.
+
+D-133's requirements audit and its "Not covered" list both named it, as an interface question for
+the lead.
+
+**Beside D-134.** D-134 is the sibling session's decision of the same day, on its branch
+`fix/FR-10-discard-long-topic`. It was not merged when this was written. Under it, a run discards a
+Topic outside the scheme longer than 255 characters once normalised, instead of proposing it; the user
+chose "Discard over 255". Once both are on `main`, no new proposal over 255 characters is made. This
+page change still covers a proposal stored before D-134, which stays until the document is classified
+again. Where the two branches meet, as the sibling session described its own branch in its messages
+to this session (received at 21:10 on 15 November 2026; its D-134 entry was not yet written in its tree
+when the requirements audit looked):
+- `docs/decisions.md`: both add a dated note right after "than build it)." under D-133's "Not
+  covered" item on the page's Confirm. The sibling's message says its D-134 entry goes at the end of
+  the file, with D-135 after it. Whichever merges second keeps both notes and puts D-134 above D-135.
+- `frontend/tests/documentClassification.test.jsx`: the sibling changes only the first lines of the
+  D-133 block's doc comment, which this branch leaves alone.
+
+**The number.**
+- **The collision.** This session claimed D-134 at 20:25 on 15 November 2026, in the session
+  group's notes folder and by a message. The sibling session claimed D-134 for its decision too: its
+  claim note there was created at 20:50, with the user's decision tied to it. When this session
+  checked, about 20:55, the sibling's worktree already used D-134 throughout its uncommitted change.
+- **Where the times come from.** This session read both notes' creation times with `stat` at 20:56,
+  before either note was rewritten. Rewriting them reset those times, so they cannot be read from
+  the files now. That output is in this session's transcript, beside its claim note's first write
+  (20:25:24) and its message to the sibling (20:25:28).
+- **This branch moved.** It cited D-134 only in comments and in the test block's title, in
+  `Classification.jsx`, `Classification.css`, `constants.js` and `documentClassification.test.jsx`,
+  none of it pushed. It moved to D-135 at `a517be3`, and the sibling session was told.
+- **The subjects of `d64b849` and `28c5459` still say D-134.** They are kept, not rewritten.
+
+**The decision.** The user's choice on 15 November 2026, in answer to one question. Each option came
+with a text preview of the row. The question and its options, as put:
+
+> On the document page, any proposed Topic longer than 255 characters (the most a tag name can
+> hold) still shows an enabled Confirm. The server always refuses it with 400. The page then shows
+> its generic "Some of the information provided is not valid…", which nobody can act on. Reject has
+> worked on these proposals since D-133. What should the page do with Confirm on such a proposal?
+> (The row text in the previews is a draft. Change it in the notes if you like.)
+>
+> - **Withhold Confirm (Recommended):** No Confirm button on a proposal over 255 characters. A
+>   sentence in the row says it is too long to become a tag and can be rejected. This is how the
+>   section already handles an action that can't apply: a tag row shows Confirm only on an
+>   unconfirmed AI tag, and a 403 removes the controls and says why. No button that never works,
+>   nothing for Tab to skip.
+> - **Disable Confirm:** Keep Confirm, but disabled (greyed to 0.55 opacity), with the same sentence
+>   beside it. Tab skips a disabled button, so a keyboard user only meets the sentence. Everywhere
+>   else, the section disables a button only while another request is running.
+> - **Explain after the 400:** Keep Confirm enabled. When the server refuses, replace the generic
+>   sentence with one saying the topic is too long to become a tag and can be rejected. The page
+>   knows the press will fail before it is made.
+
+The previews drafted the row's sentence as "This topic has 359 characters, more than the 255 a tag
+name can have, so it cannot be confirmed as a tag. You can reject it." The user chose "Withhold
+Confirm (Recommended)" and left the sentence as drafted.
+
+1. **`ProposedTagRow` offers Reject alone on a proposal longer than `TAG_NAME_MAXIMUM_LENGTH`.**
+   That constant is 255 (`frontend/src/constants.js`), and
+   `apps/api/tests/test_front_end_constants_agreement.py` holds it to the server's
+   `NAME_MAX_LENGTH`. Confirm is not rendered at all: it is not disabled, and not hidden. It is the
+   one row this needs: in `frontend/src`, only `Classification.jsx` reads `proposed_tags` or calls
+   `confirmProposedTag`.
+2. **The length is counted as the server counts it,** in code points, as Python's `len()` counts
+   them, not in UTF-16 units. A run stores a proposal normalised (`normalise_tag_name`,
+   `apply_classification` rule 4d), so the proposal's own length is the one `ProposedTagSerializer`
+   and `confirm_proposed_tag` check. A proposal of exactly 255 characters is still offered Confirm.
+3. **A sentence in the row says why, and that Reject still works:** `TEXT.proposedTagTooLong`. It
+   names the proposal's own dimension and its length. The length has its thousands grouped
+   (`Intl.NumberFormat('en-AU')`), since nothing on the page bounds it. It is in words, beside the
+   value, as every state in the section is.
+4. **The sentence goes with the controls.** When a 403 withdraws the section's controls, the
+   sentence goes too, because "You can reject it" would be untrue for a role that may not change
+   classifications. The proposal stays listed with its provenance, as before.
+5. **`.tag__note`** (`frontend/src/components/Classification.css`) sets the sentence on a line of its
+   own under the provenance. It is muted as the provenance is: `--color-text-muted` on
+   `--color-surface`, 7.56:1, a pair `frontend/tests/contrast.test.js` already lists.
+6. **No server file changed.** The server refuses that confirm whatever the page offers
+   (`CLAUDE.md` §6, invariant 4), so this is usability, not security.
+
+**Against `docs/accessibility.md`.** Its rules on hidden and disabled controls concern keyboard
+stops:
+- the tab-order walk skips disabled controls;
+- nothing reachable may be invisible while it holds focus;
+- no `aria-hidden` subtree may hold a focusable element.
+
+A withheld Confirm is not in the DOM, so it can break none of them, and the row's only keyboard stop
+is Reject. The tests read the row's buttons from the DOM, not by role, so a Confirm left in the
+markup but hidden fails them (FB3 below). They check the sentence against the stylesheets with
+`hidingCauses` (FB8). `docs/accessibility.md` itself needed no change.
+
+**What changed:**
+- `frontend/src/components/Classification.jsx`: `lengthOf`; `ProposedTagRow` withholds Confirm and
+  shows the sentence; the section's and the row's doc comments.
+- `frontend/src/constants.js`: `TEXT.proposedTagTooLong`; `COUNT_FORMAT`; a sentence on
+  `TAG_NAME_MAXIMUM_LENGTH`'s comment.
+- `frontend/src/components/Classification.css`: `.tag__note`.
+- `frontend/tests/documentClassification.test.jsx`: the tests below, and `buttonsIn`.
+  `proposalRow` now finds a row by its Reject, which every proposal has, not its Confirm.
+- D-133: dated notes on its point 4 and on its "Not covered" item.
+
+**The tests,** in `frontend/tests/documentClassification.test.jsx`, the block "D-135: a proposal
+longer than a tag name can be is offered Reject alone, and the row says why in words":
+- "withholds Confirm on a 256-character proposal, …": the row's buttons, read from the DOM, are
+  Reject alone; the sentence is in the row, word for word, with 256, and no stylesheet or attribute
+  hides it; Reject is enabled; a short proposal beside it keeps an enabled Confirm and no sentence.
+- "offers an enabled Confirm on a proposal exactly as long as a tag name can be, …": 255 characters,
+  and 255 ship emoji (510 UTF-16 units), each keep an enabled Confirm and no sentence; 256 ships get
+  Reject alone, and the sentence counts 256. Confirm on the 255-character one sends one request
+  with the value whole.
+- "writes the length with its thousands grouped, in the proposal's own dimension": 100,000 in Topic
+  and 1,024 in Project.
+- "a 403 on Reject withdraws the controls and the sentence with them, and the proposal stays
+  listed": the failure path.
+
+`disabled` is asserted directly, because `fireEvent` clicks a disabled button too. After the one
+press that changes the page, the test waits on the announcement with `waitFor` rather than racing
+`findBy`. The block passed ten runs in a row on `a517be3`, and each run passed all its tests.
+
+**Deliberate breaks.** Each new test failed under at least one break before it was relied on, and
+every break was reverted.
+- **How:** a script applied each break alone to the committed tree, ran
+  `documentClassification.test.jsx` with vitest's JSON reporter, restored every touched file byte for
+  byte, and checked it by SHA-256. It required the tree clean before the first break and after the
+  last.
+- **Where it ran:** on `d64b849`; on `28c5459`, which changed comments only; and on `a517be3`, the
+  renumbering, which changed comments and the block's title. Each break failed the same tests each
+  time, compared by test title. The table is the last run's.
+- **The table** is generated from the runs' JSON reports, not typed. The script and the reports are in
+  the session's scratchpad, not in the repository.
+- The tests of the D-133 and D-128 blocks are listed too, because their `proposalRow` changed.
+
+| Test | Fails under |
+|---|---|
+| `documentClassification.test.jsx` › D-135 › "withholds Confirm on a 256-character proposal, says in its row why and that it can be rejected, and leaves Reject enabled, while a short proposal keeps both" | FB1, FB2, FB3, FB6, FB8, FB9, FB10, FB11, FB14 |
+| `documentClassification.test.jsx` › D-135 › "offers an enabled Confirm on a proposal exactly as long as a tag name can be, counted in code points as the server counts, and Confirm sends it whole" | FB1, FB2, FB3, FB4, FB5, FB6, FB9, FB11, FB14 |
+| `documentClassification.test.jsx` › D-135 › "writes the length with its thousands grouped, in the proposal’s own dimension" | FB12, FB13 |
+| `documentClassification.test.jsx` › D-135 › "a 403 on Reject withdraws the controls and the sentence with them, and the proposal stays listed" | FB1, FB6, FB7, FB9, FB10, FB14 |
+| `documentClassification.test.jsx` › D-128 › "lists one proposal per dimension under the suggestions, each naming its dimension in its row and in its controls, and none among the document’s tags" | FB11 |
+| `documentClassification.test.jsx` › D-128 › "Confirm on the Project proposal sends its dimension with the value and makes it a tag there, and Reject on the Process one sends its own" | FB11 |
+| `documentClassification.test.jsx` › D-128 › "Confirm on the Process proposal sends its dimension with the value and makes it a tag there, and Reject on the Topic one sends its own" | FB11 |
+| `documentClassification.test.jsx` › D-128 › "Confirm on the Topic proposal sends its dimension with the value and makes it a tag there, and Reject on the Project one sends its own" | FB11 |
+| `documentClassification.test.jsx` › D-133 › "offers an enabled Reject on the 359-character proposal, sends all 359 characters, and drops the row" | FB10, FB14 |
+
+The breaks, each applied alone, run, and reverted, with every touched file checked by SHA-256:
+
+- **FB1** (`Classification.jsx`): the defect restored: Confirm is offered on every proposal, whatever its length.
+- **FB2** (`Classification.jsx`): Confirm is disabled on a proposal over the length rather than withheld (option b).
+- **FB3** (`Classification.jsx`): Confirm is left in the markup with the `hidden` attribute rather than withheld.
+- **FB4** (`Classification.jsx`): the length is counted in UTF-16 units, not code points.
+- **FB5** (`Classification.jsx`): off by one: Confirm is withheld on a proposal exactly as long as a tag name can be.
+- **FB6** (`Classification.jsx`): Confirm is withheld but no sentence says why.
+- **FB7** (`Classification.jsx`): the sentence stays when a 403 has withdrawn the controls.
+- **FB8** (`Classification.css`): the stylesheet hides the sentence (`display: none` on .tag__note).
+- **FB9** (`Classification.jsx`): the sentence gives the tag name's limit as the proposal's length.
+- **FB10** (`Classification.jsx`): Reject is disabled on a proposal over the length.
+- **FB11** (`Classification.jsx`): Confirm is withheld on every proposal.
+- **FB12** (`constants.js`): the length is written without its thousands grouped.
+- **FB13** (`constants.js`): the sentence always says "topic", whatever the dimension.
+- **FB14** (`Classification.jsx`): a proposal over the length is offered no controls at all.
+
+Tests outside these blocks that a break also failed:
+
+- **FB11:** "FR-10: a 403 and a 404 on an action" › "a 403 withdraws every control and says the role may not change classifications"
+
+**The suites,** on `a517be3`, the head the breaks last ran on, with the tree clean before and after:
+- **`npm ci`:** exit 0; "found 0 vulnerabilities".
+- **`npm run lint`** (oxlint): exit 0.
+- **`npm run build`:** exit 0. Vite warns that the main chunk is larger than 500 kB after
+  minification. It was already, before this change: CI's build of `main` at `f82fb1a` made it
+  506.65 kB, and this branch makes it 507.04 kB.
+- **`npm test`:** 670 passed in 48 files, exit 0. CI's run of `main` at `f82fb1a` passed 666 in 48
+  files; the difference is the D-135 block.
+- **The D-135 block alone,** ten runs in a row: see "The tests".
+  - A first loop on `a517be3` matched no test, because its filter still named D-134. It is not
+    counted, and the loop now counts a run that passes nothing as a failure.
+  - On `28c5459`, before the renumbering, the block had passed ten runs in a row too.
+- **The whole of `documentClassification.test.jsx`,** 40 runs in a row on `cc01e09`: each passed 55
+  of 55.
+- **`pytest`:** no server file changed, so the whole suite was not run here. CI runs it on the pull
+  request. One server test reads a file this change touches:
+  `apps/api/tests/test_front_end_constants_agreement.py`, which reads `frontend/src/constants.js`.
+  It passed: 16 passed. It opens no database, so it ran with a placeholder `DATABASE_URL`.
+
+**The requirements audit of `cc01e09` (15 November 2026).** `requirements-auditor` reviewed the
+branch read-only. Its report is kept whole outside the repository, in the session group's notes
+folder, as `fr10-confirm-audit-cc01e09-verbatim.md`, saved by script straight from the agent's
+transcript. Its line numbers are at `cc01e09`. Its closing line:
+
+> **COMPLETE WITH NOTES.** The page withholds Confirm exactly where the server would refuse it and offers it at 255. The sentence and the 403 path are right and defended by tests that each fail under a recorded, reverted break. The table, the suites and the D-135 number all check out against git, the records and CI. D-135 still has to name the over-100,000-character path in its "Not covered" list (N1), with N2 optional. That is one documentation edit, and §8 condition 5 is met once it is made.
+
+- **What it recomputed:** the break table, from the run's record and without the generator; each
+  restored file's SHA-256, against the committed blobs; the suite figures, against the logs and CI.
+- **N1:** "Not covered" left out the one path where the row's sentence is false, a proposal over
+  100,000 characters. It is added below.
+- **N2, minor:** a count of the sibling's references would go stale. It is replaced with a
+  description that needs no count.
+- **Observations:**
+  - O1: no test confirms a proposal of exactly 255 characters through the confirm route, though
+    `POST /api/tags` is tested at 255. It is older than this branch, and under "Not covered".
+  - O2, the code-point count not shared between files: under "Not covered".
+  - O3: the header cited UC-09 A3, which is a person correcting a classification. It now cites
+    FR-10's own words.
+  - O4, the merge with D-134: recorded above, with where the two branches meet.
+  - O5: `suites\loop40-file.txt` held 15 runs when it looked, and nothing cited it. The finished
+    loop, 40 runs, is now under the suites.
+- **What it could not check,** and where each stands:
+  - **The question as put, and the answer.** This session checked both by script against its own
+    transcript. The question and its options are identical to the quote above, with whitespace
+    collapsed. The answer selected "Withhold Confirm (Recommended)", with no notes. The drafted
+    sentence is in the chosen option's preview.
+  - **The claim times, 20:25 and 20:50.** Both notes had been rewritten by then. "The number" says
+    where the times come from.
+  - **The CI jobs of PR 113,** still pending when it looked. CI on `cc01e09` has since passed both
+    jobs: Django on Postgres with pgvector, and React. Every later commit of this branch changes only
+    this file, so the code is the same. The run on the commit that adds this note had not finished
+    when it was written.
+  - **The sentence's layout on screen:** under "Not covered".
+
+**Not covered:**
+- **A proposal longer than `MAXIMUM_PROPOSED_TAG_LENGTH`** (100,000 characters,
+  `apps/core/constants.py`) still reads "You can reject it", but the reject route refuses it with 400
+  (`ProposedTagRejectSerializer`), and the page shows the client's fixed 400 sentence. D-133 records
+  that such a proposal can exist (its first "Not covered" item). After D-134 it can only be one stored
+  before D-134, and none appears in measured data. Saying so on the row would need a client copy of
+  the bound and a row in the agreement test: the lead's call, not built (the requirements audit, N1).
+- **No route test confirms a proposal of exactly 255 characters.** Pytest refuses 256
+  (`apps/api/tests/test_fr10_proposed_tags.py`), and only `POST /api/tags` is tested at 255. The page
+  now offers Confirm at 255, and by reading the server accepts it: `max_length`, then a strict `>`.
+  This predates the branch (the requirements audit, O1).
+- **The code-point count is not shared:** `lengthOf` here, and `tagNameError` and
+  `departmentNameError` in `frontend/src/utils/validation.js`, each count for themselves. They agree.
+  No shared helper was made (the requirements audit, O2, low).
+- **The sentence's layout on screen,** a line of its own under the provenance, is not tested. jsdom
+  draws nothing, so the `.tag__note` rule is the only evidence. `hidingCauses` shows only that nothing
+  hides the sentence.
+- **Any other 400 on confirm** still shows the client's fixed sentence: a dimension the server
+  refuses, say. The page no longer sends a confirm that the server refuses for its length.
+- **A Project or Process proposal** over 255 characters is treated as a Topic is: the rule is
+  dimension-generic, as the server's check is. It is tested in Topic only, and the sentence's words in
+  Project. Since D-129 a run proposes neither.
+- **The server's own 400** on a long confirm is unchanged (D-133). A client other than this page
+  still meets it.
+- **`docs/api-contract.md` is unchanged.** It describes the routes, and they did not change. Its
+  line "can only be rejected (D-133)" stays true.
+- **The tab-order walk** (`frontend/tests/tabOrder.test.jsx`) visits no document detail page, so the
+  classification section's keyboard stops are not walked. The long row's stops are asserted through
+  its buttons in the DOM instead.
+- **No database the user works with was read or written,** and no server was started. The alpha shows
+  the change once it runs this code.
