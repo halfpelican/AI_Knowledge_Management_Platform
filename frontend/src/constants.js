@@ -195,7 +195,7 @@ export const QUESTION_MAXIMUM_LENGTH = 500
  * the server answers 400 `{"tag_name": [...]}` above it whatever the browser allowed
  * (CLAUDE.md §6, invariant 4). apps/api/tests/test_front_end_constants_agreement.py
  * fails when the two drift. The document page also offers no Confirm on a proposed
- * value longer than this, since confirming one creates a tag (D-134).
+ * value longer than this, since confirming one creates a tag (D-135).
  */
 export const TAG_NAME_MAXIMUM_LENGTH = 255
 
@@ -337,8 +337,8 @@ function dimensionWords(dimension) {
 
 /**
  * A whole number as a sentence writes it, thousands grouped: 1,024. Read by the
- * sentence about a proposal too long to become a tag (D-134), whose length a run does
- * not bound (D-129).
+ * sentence about a proposal too long to become a tag (D-135), whose length nothing on
+ * the page bounds.
  */
 const COUNT_FORMAT = new Intl.NumberFormat('en-AU')
 
@@ -875,7 +875,7 @@ export const TEXT = {
   proposedTagRejectLabel: (dimension, value) => `Reject new ${dimensionWords(dimension).one} ${value}`,
   proposedTagConfirmed: (dimension, value) => `“${value}” was added as a ${dimensionWords(dimension).one} tag.`,
   proposedTagRejected: (dimension, value) => `The proposed ${dimensionWords(dimension).one} “${value}” was rejected.`,
-  // D-134: a proposal longer than a tag name can be. Confirming creates a tag, whose
+  // D-135: a proposal longer than a tag name can be. Confirming creates a tag, whose
   // name the column limits, so the server refuses it every time (D-133). The page offers
   // no Confirm on it, and this sentence in the row says why in words, and that Reject
   // still works. The length is in characters (code points), as the server counts it.

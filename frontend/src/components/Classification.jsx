@@ -301,7 +301,7 @@ function lengthOf(value) {
  * proposal is worded alike whatever the server holds under that name (the sentence's
  * comment in src/constants.js says why).
  *
- * **A proposal longer than a tag name can be offers Reject alone** (D-134). Confirming
+ * **A proposal longer than a tag name can be offers Reject alone** (D-135). Confirming
  * creates a tag, whose name the column limits, so the server refuses it every time
  * (D-133). The Confirm is withheld rather than disabled, as TagRow offers Confirm only
  * on an AI tag not yet confirmed. A sentence in the row says why, in words, and that
@@ -369,7 +369,7 @@ function ProposedTagRow({ proposal, controls, pending, onConfirm, onReject }) {
  * awaiting confirmation" and nowhere else; so is a value the AI proposed in Project,
  * Process or Topic (`proposed_tags`, D-128), each row naming its dimension, and each
  * confirmed or rejected by its dimension and value. One longer than a tag name can be
- * is offered Reject alone, with a sentence saying why (D-134). A discarded department
+ * is offered Reject alone, with a sentence saying why (D-135). A discarded department
  * is named in a sentence saying it was not applied, and the department shown is the
  * document's own.
  *

@@ -1291,7 +1291,7 @@ const DIMENSION = {
 /**
  * The held row of one proposal, found by its Reject, whose name carries the dimension.
  * Every proposal is offered Reject, and one longer than a tag name can be is offered
- * nothing else (D-134), so its Confirm cannot be used to find it.
+ * nothing else (D-135), so its Confirm cannot be used to find it.
  */
 function proposalRow({ dimension, value }) {
   return within(heldGroup()).getByRole('button', { name: TEXT.proposedTagRejectLabel(dimension, value) }).closest('li')
@@ -1458,10 +1458,10 @@ describe('D-133: a proposed topic longer than a tag name can be is still offered
   })
 })
 
-/* ---- D-134: no Confirm on a proposal too long to become a tag ------------- */
+/* ---- D-135: no Confirm on a proposal too long to become a tag ------------- */
 
 /**
- * D-134: confirming a proposal creates a tag, and a tag name holds at most
+ * D-135: confirming a proposal creates a tag, and a tag name holds at most
  * TAG_NAME_MAXIMUM_LENGTH characters, so the server refuses to confirm a longer one
  * every time (D-133). The lead's choice, of three put on 15 November 2026: the page
  * withholds Confirm on such a proposal, rather than disabling it or explaining the 400
@@ -1490,7 +1490,7 @@ function buttonsIn(row) {
   return Array.from(row.querySelectorAll('button'), (button) => button.textContent)
 }
 
-describe('D-134: a proposal longer than a tag name can be is offered Reject alone, and the row says why in words', () => {
+describe('D-135: a proposal longer than a tag name can be is offered Reject alone, and the row says why in words', () => {
   it('withholds Confirm on a 256-character proposal, says in its row why and that it can be rejected, and leaves Reject enabled, while a short proposal keeps both', async () => {
     // The premise: one character past what a tag name can hold.
     expect(ONE_OVER.value).toHaveLength(TAG_NAME_MAXIMUM_LENGTH + 1)
