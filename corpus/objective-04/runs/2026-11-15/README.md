@@ -1,7 +1,23 @@
 # Objective 04, the frozen set, run of 15 November 2026
 
-**This is the objective's measurement run. It is not scored yet**, because the sheet has to be
-completed by a person first.
+**This is the objective's measurement. Objective 04 is NOT MET, on attribution:** two owners were
+given to the wrong person, where the bar is none. Recall and extras were both met. A person
+completed the adjudication sheet on 15 November, and it was scored the same day. D-125's dated
+note of 15 November records the result and its causes.
+
+| Criterion | Bar | Result | |
+|---|---|---|---|
+| Reference action items extracted | at least 80% | 48 of 50 (96.0%) | met |
+| Extracted items absent from the reference | at most 10% | 3 of 51 (5.9%) | met |
+| Named owners given to the wrong person | none | 2 of 47 | **NOT met** |
+
+- **`O01-A4`: two rules Claude wrote disagree.** The application gives a lone first name to the one
+  attendee who has it, and the reference's writing instructions say a first name two roster users
+  share is `unassigned`. It is not a model error.
+- **`O07-A8`: a model error.** The model named one person where the reference records two people
+  jointly.
+- **Details:** `frozen/results.md` quotes the misses, the extras and the owners, and
+  `frozen/results.json` holds the numbers. Nothing was changed in response (D-93).
 
 ## What was run
 
@@ -25,7 +41,9 @@ completed by a person first.
 - The prompt and the code were not changed for this run, and nothing will be changed in response to
   it (D-93).
 
-## What a person does next
+## How the sheet was completed
+
+(What the person was asked to do, kept as the record of the method.)
 
 `frozen/adjudication.csv` has one row per extracted item.
 
