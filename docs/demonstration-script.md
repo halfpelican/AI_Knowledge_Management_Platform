@@ -51,6 +51,14 @@
 > - D-33 §1's, D-56's and D-69's entries now say what holds on the alpha's build and what holds
 >   on `main`. On `main`, FR-10 and FR-19 are built and `voyage-4` has a partial-match floor
 >   (D-104, D-105, D-107, D-120). Their 2 November text is true of the alpha only.
+>
+> **Amended 14 November 2026,** for FR-20 (D-132). The changes:
+>
+> - a walk of the knowledge map is added after FR-15's. FR-20 is a COULD requirement and is not one
+>   of the twelve;
+> - **that walk was written from the build's tests and its contract and has not been walked on the
+>   alpha.** The alpha must first be redeployed and migrated, and `GET /api/roles` checked
+>   (`docs/alpha-deployment.md`, step 11).
 
 Stage 5 item 9. This walks all twelve MUST-HAVE requirements, in the gate's order, on the
 deployed alpha (`docs/alpha-deployment.md`, D-64, D-88). It is also item 8's live end-to-end
@@ -372,6 +380,67 @@ same routes. Every question below was screened with them in place.
    - **Expected:** it is gone from both windows' lists.
    - This is the walk's only delete, and nothing is asked after it.
 
+### FR-20 · Knowledge map (NIT3004, both windows)
+
+Not one of the twelve. Written from the build's tests and contract (D-132), and **not yet walked on
+the alpha**: the alpha needs the build that holds FR-20, `migrate`, and step 11 of
+`docs/alpha-deployment.md`. The names below are the Objective 02 corpus's.
+
+1. **Window B, `Knowledge map`** (the link after `Ask`).
+   - **Expected:** a line counting what is shown ("… documents · … meetings · … tags · …
+     contributors shown"), a legend, the map in three columns (Contributors, Documents and
+     meetings, Tags), a "Selected" panel that says nothing is selected, and under them the table
+     view: **Items** and **Relationships**.
+   - The legend gives each type its shape and colour beside its word: a document is a square, a
+     meeting a circle, a tag a diamond, a contributor a triangle.
+   - **Whether a notice says the view is partial depends on the database.** The corpus's manifest
+     alone gives a whole map of 34 items for an Employee and 41 for an Administrator, under the
+     cap of 50. The demonstration's own uploads, their tags and the stored upload refusals add to
+     that. If the map is over 50, the notice reads "The map holds at most 50 items at a time.
+     Select an item to see what is connected to it.", which is the cap doing its work.
+2. **Select a document,** for example `Employee Leave Policy 2026`.
+   - **Expected:** the address gains `focus_type=document` and its `focus_id`. The panel lists its
+     **Tags** (`Project: policy refresh`, `Topic: people`) and **Uploaded by**. The map now holds
+     the document, those, and the documents that share them.
+   - **Expected:** the notice "This view stops 2 steps from the selected item." It shows because
+     the items on the edge of the view have connections of their own beyond it.
+3. **Select it again:** the node now marked "Selected", or "Open the document" in the panel.
+   - **Expected:** the document's own page. The browser's Back returns to the map with the
+     selection still made, because the selection is in the address.
+4. **Select a tag,** `Topic: people`.
+   - **Expected:** the panel lists the documents **carrying this tag**.
+   - "Open documents tagged people" opens the repository filtered by that topic: FR-15 step 2's
+     list.
+5. **Select a contributor,** for example `Demo Employee`.
+   - **Expected:** the documents they **uploaded**, and any meeting they **attended**: the
+     sustainability group's, if FR-09 step 1 picked them as an attendee.
+   - **Expected:** "A contributor has no page of their own, so there is nothing to open." A
+     contributor is shown by name only: no address and no role (D-132).
+6. **The table view,** by keyboard: "Skip to the table view", then Tab.
+   - **Expected:** every column heading is a button. Sort **Items** by "Connections shown", then
+     again for the other direction. **Relationships** reads as sentences: "Demo Employee uploaded
+     …", "… is tagged Topic: people".
+   - The two tables hold the same items and lines as the map above them (NFR-17).
+7. **Scope, in both windows** (invariant 1): "Show the whole map" in each.
+   - **Expected:** window A's map holds the Administrator-only documents and the tag
+     `Project: atlas`, which only D09 and D15 carry. Window B's holds neither, and its counts are
+     smaller.
+   - Nothing in window B says that anything is left out, and a tag or a person known only through
+     an Administrator-only item is not there at all.
+
+**What this walk cannot show, and what does.**
+
+- **The node cap, reliably.** Whether the alpha's map passes 50 items depends on what has been
+  uploaded to it (step 1). `apps/api/tests/test_knowledge_map.py` shows the cut and the reason
+  the reply gives for it, whatever the database holds.
+- **The 403.** Both roles hold `view_knowledge_map`. The same file takes it away from each role
+  and asserts the 403.
+- **Attendance is not access.** The demonstration's one ingested meeting is visible to both roles.
+  The same file records an Employee on an Administrator-only meeting and asserts that their map
+  holds neither the meeting nor the line.
+- **A screen reader, and a narrow window.** NFR-17's NVDA or VoiceOver run and the 320 px reflow
+  are owed in a browser by a person (`docs/accessibility.md`, section 8).
+
 ## The D-40 screen
 
 The screen ran on `kmp_demo_screen`, a scratch database restored from the same snapshot, with the
@@ -536,7 +605,8 @@ within 0.005 above the threshold. It was "about 6%" on the six-chunk corpus.
       partial matches;
     - **the dashboard**, and **the repository** with its detail view;
     - **NIT3004's screens:** FR-10's classification and tag administration, FR-19's
-      knowledge-gap log, and recording transcription (D-123);
+      knowledge-gap log, recording transcription (D-123), and FR-20's knowledge map with its
+      table view (D-132);
     - **across screens:** the 429 and 503 messages, the tab order, the text equivalents, the
       focus ring and colour contrast, the production build and the same-origin client.
 - **Where does the build fall short of a clause on purpose?** Each is a deviation with a reason,
