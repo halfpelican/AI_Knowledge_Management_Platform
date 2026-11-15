@@ -1,4 +1,4 @@
-# Objective 04 reference set: DRAFT, not frozen
+# Objective 04 reference set: FROZEN on 15 November 2026
 
 Objective 04 (proposal section 2, due **13 November 2026**):
 
@@ -23,7 +23,7 @@ the development set only.
 | `dev/X01`, `dev/X02` | The development set, with `T01`–`T05` (`corpus/objective-02/transcripts`) and `T06` (`corpus/demo`). Used for tuning; never measured as the objective |
 | `manifest.json` | Each transcript's title, meeting date, attendees and visibility, as FR-09 will ingest them |
 | `roster.json` | The 18 users the measurement database holds. "Resolves to a user on the system" means one of these |
-| `reference-template.json` | One blank block per frozen transcript, for you to fill in |
+| `reference.json` | **The reference, frozen on 15 November 2026.** Written and checked by Benjamin Morovan and Sagarika Dey in `reference-template.json`, which it replaced; Claude checked its format only (each owner a roster name or `unassigned`, each quote word for word, refs and dates well formed) and changed nothing but `status` and `frozen_on`. A test set, never a tuning set (D-93) |
 
 ## How to write a reference
 
@@ -70,7 +70,7 @@ an answer and say so in `notes`. Fill in `prepared_by` and `checked_by`.
 From then on it changes only by a dated correction recorded in `docs/decisions.md`, never to fit a
 result.
 
-## How it will be measured (proposed; please approve or amend before the run)
+## How it is measured (approved by Benjamin Morovan on 15 November 2026)
 
 1. A fresh database holds the roster's users. The script ingests the ten transcripts through FR-09
    with their attendees, and summarises each once on the default `anthropic` provider (Claude
