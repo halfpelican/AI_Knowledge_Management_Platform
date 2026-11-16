@@ -15526,6 +15526,25 @@ on this entry's branch. Corrected the same day after the requirements audit of `
 - **The front-end suite.** No front-end file changed. The full backend suite passed at `747cbfb`:
   4,486 tests in 28 min 23 s, with dual-role coverage 43 of 43.
 
+**Dated note, 15 November 2026: D-40's screening on the new database is done, on a copy of it.**
+The "Not done" list above names it. At Benjamin's request, the walk's questions were screened on
+`kmp_alpha_screen_20261115`. That is a `pg_dump` of `kmp_alpha_20261113`, checked to hold the same
+chunks, embeddings, accounts and migrations, and the screen ran the alpha's own code, `6e1efd1`. The
+record is `corpus/demo/screening-2026-11-15-anthropic/`.
+
+- **D-40's rule was applied with its margins measured from `voyage-4`'s threshold,** 0.2687
+  (D-120). An answer needs a top score of at least 0.3187 and no candidate within 0.005 of the
+  threshold. Path A needs a top score of at most 0.2487.
+- **Every question had its expected outcome and source on every run.** The band clause fails for
+  FR-12.2, FR-12.5 and FR-13.3's first turn. Whether to accept them or to replace those questions
+  is open, and it is the user's call.
+- **`docs/demonstration-script.md` now describes this alpha** (its amendment of 15 November).
+- **Not covered:**
+  - a walk on the alpha itself;
+  - the threads the walk does not ask;
+  - the alpha after a redeploy from `main`. That changes the generation parser (#106, #107) and not
+    retrieval, and it does not touch the database.
+
 ## D-133 · A proposed Topic longer than a tag name can be rejected: the reject route reads a value up to 100,000 characters, and confirm keeps its 255
 
 **Status:** Settled by the user · **Date:** 2026-11-15 · **Concerns:** FR-10 (controlled taxonomy
