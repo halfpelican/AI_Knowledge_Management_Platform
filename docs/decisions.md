@@ -18572,3 +18572,119 @@ Their verdicts:
   that they catch a misreading of it.
 - **A string is recognised only by a double quote.** Single-quoted pseudo-JSON is not JSON, and is
   still refused.
+
+## D-138 · The knowledge map gains a second view, claims joined to the passages they cite, beside the first
+
+**Status:** Settled by the user (16 November 2026) · **Date:** 2026-11-16 · **Concerns:** FR-20,
+NFR-15, NFR-17, FR-11, FR-12, FR-13, invariants 1, 4, 5 and 6, D-65, D-67, D-132,
+`apps/api/evidence_map.py`, `apps/api/knowledge_map.py`, `apps/api/views.py`,
+`apps/api/serializers.py`, `apps/api/urls.py`, `apps/core/constants.py`,
+`frontend/src/pages/KnowledgeMap.jsx`, `docs/api-contract.md` · **Stage:** NIT3004, after M7's
+freeze, at the user's instruction · **Area:** presentation and retrieval scoping, Benjamin
+Morovan's (CLAUDE.md §1)
+
+**What happened.** D-132's map was merged on 16 November 2026 (#118). The user then said it was
+not what he had asked for: "Why is there a column for Contributors and Documents, these should not
+be in the Knowledge Map.. The UI-mockup has Claims leading to passages." He meant the proposal's
+Evidence mock-up, Figure 8.7, which he had supplied on 14 November.
+
+**How the first build came to differ.** FR-20's clause names "documents, meetings, tags, and
+contributors", and D-132 built that. The session read his screenshot as the layout to follow and
+kept the clause's node types. It did not ask him which of the two the map should be. That question
+was put to him on 16 November, and this entry records his answers.
+
+**What the proposal holds for the mock-up.** Figure 8.7 has one caption: "Claims to passages,
+unsupported claims beneath, selected claim at the right." No requirement, use case, table or
+pseudocode describes it, and the word "claim" is used in that sense nowhere else in the proposal.
+
+### The user's choices (16 November 2026, each put as a tabbed question with a recommendation)
+
+| Question | Choice |
+|---|---|
+| What the knowledge map shows | **Both, as two views.** His words: "Option Two, but make the view interchangeable by clicking a button, next to 'Skip to the Table View'". The first view stays as FR-20's text has it. Recommended and not chosen: replace it with the claims view. Also not chosen: leave it as merged |
+| Whose claims a viewer sees | **Everyone's, scoped:** claims from all users' answers, shown only where the viewer's role can read the cited passage. The question and who asked it are never shown. Not chosen: only the viewer's own |
+| Contributors in the second view | **None.** His words: "Option 3. But add the Claim review, it doesn't mention contributors either, it is a summary of things such as the amount of times a claim is admitted in an answer". The right-hand pane for a selected claim is that summary. No review action, record or permission is built |
+
+### What is built
+
+- **A claim** is a verified statement of an answered question: `AnswerCitations.statement_text`,
+  with runs of whitespace made one space. Two rows with the same text are one claim. A reworded
+  statement is another claim; nothing cleverer is attempted.
+- **A passage** is the chunk a statement cites, shown as its source's title and its place in the
+  source. A passage is on the map only through a claim.
+- **A line** joins a claim to a passage it cites. Its weight is how often that pairing was
+  admitted, the mock-up's "Line weight is how often the pairing has been admitted".
+- **The Claim review pane:** the claim's text; "Single source" when one passage supports it; how
+  many answers admitted it; what it is supported by; when it was first and last admitted.
+- **The route** is `GET /api/knowledge-map/evidence`, behind the first view's permission. The
+  walk, the two caps and the truncation rule are the first view's, with a claim in a source's
+  place and a passage in a tag's. `docs/api-contract.md` holds the shape.
+- **The screen** is `/knowledge-map?view=evidence`. A link styled as a button, straight after
+  "Skip to the table view", switches views. The table equivalent has the same two tables, with a
+  "Times admitted" column for the line's weight.
+
+### Which rows a role sees, and why the second rule exists
+
+A citation row is read only when all three hold (`apps/api/evidence_map.py`):
+
+1. its cited chunk exists and is in the role's scope;
+2. **every passage its answer was generated from is in the role's scope;**
+3. the cited chunk's own source is in the role's scope.
+
+**Rule 2 narrows "everyone's claims", and invariant 1 requires it.** A statement cites one
+passage, but the model wrote it with every supplied passage in front of it. Citation verification
+checks the identifier and never the content (invariant 5, which says so). So a statement from an
+Administrator's answer can carry what an Administrator-only passage said while citing a passage
+every role reads. Shown to an Employee because its citation is in scope, it would be restricted
+material reaching a role that may not read it. `QueryLog.retrieved_chunk_ids` holds the
+identifiers supplied to the model, and the row is read only when each names a chunk in scope. A
+supplied chunk that was deleted is not in scope, so that answer's claims are left out.
+
+**What follows from the three rules.**
+
+- An Employee sees claims from answers generated wholly from passages an Employee may read,
+  whoever asked. An Administrator's answer that drew on one restricted passage shows an Employee
+  none of its claims.
+- A reprocess or a re-index replaces a source's chunks. Every claim that cited or was generated
+  from the old ones leaves the map for every reader (D-67's rule for a deleted chunk). The map
+  refills as questions are asked again.
+- Counts and dates are of the role's own rows. A claim also admitted in answers the role may not
+  see counts only the ones it may.
+
+### In the mock-up and not built, each for a stated reason
+
+- **"Claim, unsupported — withheld from answers", the dashed line for "a citation the verifier
+  rejected", and the "Unsupported claims" panel.** A statement that fails verification is removed
+  before the answer is returned and is never stored (invariant 6). `QueryLog.rejected_count` keeps
+  a count and no text.
+- **"Open the 96 answers".** It would show other people's questions, which the user chose not to
+  show.
+- **"Add a source", "Add a source to a claim", and the review queue.** Nothing records a source
+  attached to a claim or a review of one. The proposal lists "Formal knowledge-record lifecycle
+  management (curation workflow, review cycles, promotion of AI outputs to verified records)" as
+  out of scope.
+- **"Owner".** No table gives a claim or a passage an owner.
+- **The two filters,** "Subject" and "Filter". D-132's item 4 stands: no filters.
+- **"N documents" in the count line.** The line counts claims and passages.
+- **"Last verified".** A claim is verified when its answer is given, so the pane says "Last
+  admitted".
+
+### Departures from the proposal, and readings of it
+
+1. **The second view is not in FR-20's text.** It is built at the user's instruction from Figure
+   8.7. The first view, which is what FR-20's clauses describe, is unchanged.
+2. **A claim has no underlying item.** Selecting one again opens nothing, and the pane says so. A
+   passage's underlying item is read as its source's page.
+3. **Other users' answer statements are shown,** the user's choice. A statement is model text
+   written in reply to somebody's question. It is shown without the question or the asker, to
+   roles that may read everything it was generated from. What a question's own wording led the
+   model to put in a statement is still in the statement.
+4. **Tables read beyond FR-20's Database line:** `AnswerCitations`, `QueryLog` and
+   `ContentChunks`, with `Documents` and `Meetings` for titles.
+5. **One claim per distinct text.** Two statements that say the same thing in different words are
+   two claims.
+6. **`walk` in `apps/api/knowledge_map.py` gained two entries in its table of kinds,** so that it
+   serves both views. Nothing else in the first view's module changed.
+
+**Not covered by this entry, as first written:** the build's tests and deliberate breaks, the
+security review and the requirements audit of the built code. Each gets a dated note below.

@@ -1909,3 +1909,80 @@ expiry. It reads `documents`, `meetings`, `content_tags`, `tags`, `users` and `m
 and through FR-06 `roles`, `permissions` and `role_permissions`. The scope is the role re-read
 from the users table on each request, and nothing is cached between requests, so a change of role
 takes effect on the next one.
+
+### FR-20 — knowledge map, the second view: claims and passages (D-138)
+
+The same screen's second view, after the proposal's Evidence mock-up (Figure 8.7). A **claim** is
+a verified statement of an answered question; the same statement admitted in several answers is
+one claim. A **passage** is the chunk a statement cites. Behind the first view's permission, and
+not throttled, as the first view is not.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-map/evidence` | session + `view_knowledge_map` | `200` the map object (below): the overview. Always `200` from a permitted session, the empty map included | `401`; `403` |
+| GET | `/api/knowledge-map/evidence?focus_type=<type>&focus_id=<id>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `400 {"<parameter>": [...]}` |
+
+`focus_type` is `claim` or `passage`, matched exactly. A passage's `focus_id` is its chunk's UUID,
+in any spelling a UUID has. A claim has no row of its own: its `focus_id` is the SHA-256 of its
+text, 64 hexadecimal digits in either case. **Both or neither**, and an empty value is an absent
+one, as in the first view. Both are validated for shape only, so an identifier that names nothing
+and one that names something the caller cannot read get the same answer.
+
+```json
+{
+  "focus": {"type": "claim", "id": "5f2c..."},
+  "nodes": [
+    {"id": "claim:5f2c...", "type": "claim", "item_id": "5f2c...", "label": "Annual leave is twenty days.", "dimension": null, "connection_count": 1,
+     "detail": {"answer_count": 3, "passage_count": 1, "first_admitted_at": "2026-10-01T09:10:00Z", "last_admitted_at": "2026-10-01T09:30:00Z"}},
+    {"id": "passage:0b7c...", "type": "passage", "item_id": "0b7c...", "label": "Staff Handbook · passage 2", "dimension": null, "connection_count": 1,
+     "detail": {"source_type": "document", "source_id": "91d0...", "source_title": "Staff Handbook", "position": 2, "ai_generated": false}}
+  ],
+  "edges": [
+    {"source": "claim:5f2c...", "target": "passage:0b7c...", "relationship": "cites", "weight": 3}
+  ],
+  "truncated": false,
+  "truncated_by": null,
+  "maximum_node_count": 50,
+  "maximum_traversal_depth": 2
+}
+```
+
+The seven keys, `focus`, `connection_count`, `truncated`, `truncated_by` and the two maximums mean
+what they mean in the first view, and the empty map object is the same one. What differs:
+
+- **A claim node.** `label` is the statement, with runs of whitespace made one space. `detail`:
+  - `answer_count`: how many answers admitted this claim;
+  - `passage_count`: how many passages it cites. It is of every row the caller may see, so on a
+    capped view it can be more than the passages returned;
+  - `first_admitted_at` and `last_admitted_at`: when the first and the last of those answers
+    were given.
+- **A passage node.** `label` is its source's title and its place in the source, counted from 1.
+  `detail`: `source_type` (`document` or `meeting`), `source_id`, `source_title`, `position`, and
+  `ai_generated`, true for a passage of a meeting's AI-written summary (NFR-15).
+- **An edge** reads "claim, cites, passage". `weight` is how often that pairing was admitted: the
+  number of citation rows that join the two.
+- **`dimension`** is always null.
+
+**Which rows a caller sees.** A citation row is read only when all three hold, and a claim, a
+passage, an edge, a count and a date are made from those rows and nothing else:
+
+1. its cited chunk exists and is in the caller's scope;
+2. every passage its answer was generated from is in the caller's scope. A statement cites one
+   passage, but the model wrote it with every supplied passage in front of it, so a statement
+   from an answer that drew on a restricted passage is not shown to a role that cannot read that
+   passage, whatever it cites. A supplied passage that no longer exists is not in scope;
+3. the cited chunk's own source is in the caller's scope.
+
+**The walk** is the first view's, with a claim in a source's place and a passage in a tag's.
+Without a focus: each claim, newest first by when it was last admitted, with its passages. With a
+focus on a claim: its passages, then the other claims that cite one of them. On a passage: the
+claims that cite it, then their other passages. Passages are ordered by source title and then
+position.
+
+**What is never returned.** The question, who asked it, the whole answer, a query's identifier,
+and a passage's text. A statement that failed citation verification is never stored, so it is
+never a claim (invariant 6). The caller's bytes are the same whether or not rows outside those
+three rules exist.
+
+**Read only.** Three SELECT statements of the route's own, whatever the log and the corpus hold.
+It reads `answer_citations`, `query_log`, `content_chunks`, `documents` and `meetings`.
