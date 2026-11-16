@@ -37,6 +37,7 @@ from apps.core.constants import (
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
     ROLE_NAMES,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 from conftest import PASSWORD
 
@@ -81,11 +82,15 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
     assert all(set(role) == {"role_id", "name", "description", "permissions"} for role in body)
     assert all(role["description"] for role in body)
     by_name = {role["name"]: role for role in body}
-    # Both roles contribute content (D-30); manage_roles, manage_documents (accounts 0005,
-    # D-73), manage_meetings (accounts 0006, D-99), review_knowledge_gaps (accounts 0007,
-    # D-107), manage_tags (accounts 0008, D-119 finding 5) and release_account_locks (accounts
-    # 0010, FR-03, D-130) are Administrator's alone. Listed by name.
-    assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == [CONTRIBUTE_CONTENT_PERMISSION]
+    # Both roles contribute content (D-30) and view the knowledge map (accounts 0011, D-132);
+    # manage_roles, manage_documents (accounts 0005, D-73), manage_meetings (accounts 0006,
+    # D-99), review_knowledge_gaps (accounts 0007, D-107), manage_tags (accounts 0008, D-119
+    # finding 5) and release_account_locks (accounts 0010, FR-03, D-130) are Administrator's
+    # alone. Listed by name.
+    assert by_name[EMPLOYEE_ROLE_NAME]["permissions"] == [
+        CONTRIBUTE_CONTENT_PERMISSION,
+        VIEW_KNOWLEDGE_MAP_PERMISSION,
+    ]
     assert by_name[ADMINISTRATOR_ROLE_NAME]["permissions"] == [
         CONTRIBUTE_CONTENT_PERMISSION,
         MANAGE_DOCUMENTS_PERMISSION,
@@ -94,6 +99,7 @@ def test_roles_lists_both_roles_with_their_permissions(session_client):
         MANAGE_TAGS_PERMISSION,
         RELEASE_ACCOUNT_LOCKS_PERMISSION,
         REVIEW_KNOWLEDGE_GAPS_PERMISSION,
+        VIEW_KNOWLEDGE_MAP_PERMISSION,
     ]
 
 

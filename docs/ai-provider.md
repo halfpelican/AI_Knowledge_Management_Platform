@@ -428,6 +428,15 @@ When either happened, the ask and classify routes answered 500 instead of NFR-19
 meeting summary's run ended as "error" in the background runner, or stopped
 `retry_meeting_summaries` or `summarise_meetings` outright.
 
+**What the repairs leave alone (16 November 2026, D-136).** No repair touches text inside a JSON
+string. Three backticks inside a string are not a code fence, and a comma before a closing bracket
+or brace inside a string is not a trailing comma. A string is read as the object extraction reads
+one: from a double quote inside braces to the next double quote that no backslash escapes. Before
+that date, a reply that quoted a code block in a string was refused. A reply that needed the comma
+repair had any "a, ]" in a string decoded as "a]". The trailing-comma repair is
+`remove_trailing_commas` in `apps/ai/schema.py`; the regex it replaced, `TRAILING_COMMA_PATTERN`, is
+gone.
+
 **The statement cap (step 7 phase 2a, 7 November 2026).** The schema's `statements` array
 has `maxItems` = `MAXIMUM_STATEMENTS`, a tuned constant in `apps/core/constants.py`. Each
 attempt's user prompt says how many statements it may give, and rule 8 of the system

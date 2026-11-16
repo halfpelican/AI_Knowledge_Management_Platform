@@ -57,6 +57,7 @@ from apps.core.constants import (
     ROLE_NAMES,
     TRANSCRIPTION_BUSY_RETRY_SECONDS,
     TRANSCRIPTION_SEGMENT_SECONDS,
+    VIEW_KNOWLEDGE_MAP_PERMISSION,
 )
 from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import (
@@ -128,6 +129,7 @@ from apps.retrieval.search import (
 from .answers import reply_for
 from .ask_slot import release_ask_slot, take_ask_slot
 from .ingestion_slot import release_ingestion_slot, take_ingestion_slot
+from .knowledge_map import knowledge_map
 from .negotiation import IgnoreClientContentNegotiation
 from .transcription_slot import (
     release_server_slot,
@@ -155,6 +157,7 @@ from .serializers import (
     KnowledgeGapCycleSerializer,
     KnowledgeGapSerializer,
     KnowledgeGapStatusSerializer,
+    KnowledgeMapQuerySerializer,
     LoginSerializer,
     MeetingDetailSerializer,
     MeetingIngestSerializer,
@@ -2906,6 +2909,50 @@ class DashboardView(APIView):
                 "top": KnowledgeGapSerializer(open_gaps[:DASHBOARD_GAP_ITEMS], many=True).data,
             }
         return Response(payload)
+
+
+# --- FR-20 knowledge map (docs/decisions.md D-132) ------------------------------------------
+
+# FR-20's permission (D-132): a permission_classes entry, so the 403 comes before anything else
+# on the request, the arrangement FR-19's and the tag routes use. Nothing on the route is a
+# single scoped object, so there is no 404 for the 403 to precede and nothing for it to disclose.
+# Both seeded roles hold the code (accounts 0011), so it refuses a role only once it is revoked.
+CanViewKnowledgeMap = HasRolePermission.for_code(VIEW_KNOWLEDGE_MAP_PERMISSION)
+
+
+class KnowledgeMapView(APIView):
+    """``GET /api/knowledge-map`` — FR-20: the nodes and edges the caller may see, capped, with
+    a truncation indicator. docs/api-contract.md (FR-20) is its shape.
+
+    ``IsAuthenticated`` and ``view_knowledge_map`` (D-132): 401 without a session, 403 for a
+    role that lacks the code (invariant 4). Not throttled, as the dashboard, the repository and
+    the meetings list are not.
+
+    **The request.** No parameters is the overview. ``focus_type`` and ``focus_id`` together are
+    a selection: the walk starts from that node. ``KnowledgeMapQuerySerializer`` checks their
+    shape and nothing else (D-65); a malformed query is a 400 keyed on the parameter.
+
+    **The role is re-read on this request** by ``permission_scope``, never taken from the
+    session, so a role changed since sign-in is the role this map is built for. Everything
+    after that is ``apps/api/knowledge_map.py``: it assembles the graph from that role's scoped
+    documents and meetings, and only then walks and caps it (invariant 1). Meetings are scoped
+    by role, and attendance is read only for a meeting already in scope (invariant 3).
+
+    **Always 200 for a well-formed request,** the empty graph included. A focus that is not in
+    the caller's own graph, whether it names nothing or something the caller may not read, gets
+    the body an empty map gets (UC-11 E1: "an empty map or table rather than an error").
+
+    **Read only.** The route's own code runs SELECT statements and nothing else. The session
+    row is still saved on every request by FR-04's sliding expiry.
+    """
+
+    permission_classes = [IsAuthenticated, CanViewKnowledgeMap]
+
+    def get(self, request):
+        query = KnowledgeMapQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)  # 400 in DRF's shape (D-65, a convention)
+        role_name = permission_scope(request.user)
+        return Response(knowledge_map(role_name=role_name, focus=query.focus))
 
 
 # --- FR-19 knowledge-gap log (docs/decisions.md D-107 to D-109) -----------------------------
