@@ -183,12 +183,14 @@ def _strip_code_fences(raw: str) -> str:
     string, either the opening one or the closing one. It parsed a block that this does not. The
     reply is now read whole, or between the fences that lie outside strings, so it can be answered
     differently. Some examples follow; it is not a complete list, and D-136 has more:
-    - refused, when prose leaves a brace open before the fence and a double quote then opens a
-      string that hides a fence, the opening one or the closing one;
-    - refused, when a fenced block sits in another object's string with its quotes unescaped;
-    - refused for its shape, when an object of the wrong shape quotes fences around a statement list,
-      which the old search turned into an answer;
-    - answered from another object, when a fenced block outside strings comes after.
+    - refused, for example when prose leaves a brace open before the fence, a double quote then
+      opens a string that hides a fence, the opening one or the closing one, and no fenced block
+      lies outside strings after it;
+    - refused, for example when a fenced block sits in another object's string with its quotes
+      unescaped;
+    - refused for its shape, for example when an object of the wrong shape quotes fences around a
+      statement list, which the old search turned into an answer;
+    - answered from another object, for example when a fenced block outside strings comes after.
 
     The block is found by a scan since 13 November 2026, not by
     ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no

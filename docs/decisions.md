@@ -16234,19 +16234,37 @@ string do not count.
 3. **`TRAILING_COMMA_PATTERN` is gone,** and not kept as an alias, because a caller still using it
    would edit strings again. The classification and summary parsers import `remove_trailing_commas`.
 
-**What it changes about what the parser accepts.** Each kind of change below has an example pinned
-by a test.
-- **Refused before, accepted now:**
+**What it changes about what the parser accepts.** The rule above decides every case: the old search
+could use a fence inside a string, and the scan never does. What follows for a given reply depends on
+what lies outside its strings.
+- **These lists are examples.** None of the lists below is complete.
+- **Each kind is pinned.** An example of each kind is pinned by a test.
+- **The rule as a whole is tested.** The tests that compare the scan with the frozen regex, run with
+  the fences inside strings masked, cover the rule over every short string and 100,000 generated
+  replies.
+
+The kinds:
+- **Refused before, accepted now,** for example:
   - a reply quoting a code block in a string, fenced or not;
   - an unfenced object with a fenced block after it, where the object's string quotes a fence alone
     (the security review, I1), or quotes a fenced block with its quotes escaped (its re-check). The
     first fence outside a string opens the later block, so its object is taken, as the first fenced
-    block always was. Before, the fence in the string was taken, its block held nothing the parser
-    could use, and the reply was refused.
-- **Accepted before and now, with a different object:** an object whose string quotes a fenced block
-  with its quotes unescaped, with a fenced block after the object. The old search took the fence in
-  the string, so the object quoted there was the answer. Now the first fence outside a string opens
-  the later block, and its object is taken (the requirements audit, item 1(a)).
+    block always was. In I1's reply and its escaped variant, the old search took the fence in the
+    string, and its block held nothing the parser could use, so the reply was refused. Where that
+    block held an object the parser could use, the old search answered from it, so the case is one
+    of a different object. An example is an object that quotes a fence and nests a statement list
+    after it (the requirements audit's final check);
+  - the preamble case in the next item, when the first block's object is not valid JSON. The old
+    search refused it. Now the later block's object is taken (the requirements audit's check of
+    `74f138d`).
+- **Accepted before and now, with a different object,** for example:
+  - an object whose string quotes a fenced block with its quotes unescaped, with a fenced block after
+    the object (the requirements audit, item 1(a));
+  - prose that leaves a brace open and opens a string that hides the first block's opening fence,
+    where the string closes before a second fenced block (the security review's confirmation of
+    `74f138d`).
+
+  The old search answered from the first block. Now the block that lies outside strings is taken.
 - **Both objects are model output.** In either case above, verification applies to whichever object
   is taken.
 - **Accepted before with its text changed, accepted now as written:** a reply that needs the comma
@@ -16260,13 +16278,22 @@ by a test.
 
   There are two kinds:
   - **The old search used a fence that the scan reads as inside a string,** the opening fence or the
-    closing one. It parsed the block between them. Now the reply is read whole, or between the fences
-    that lie outside strings, as in the different-object case above. These shapes are refused this
-    way, as examples, not a complete list:
+    closing one. It parsed the block between them, and that block is no longer taken. What is answered
+    instead depends on what lies outside strings after it.
+    - After a hidden opening fence, a later fenced block's object can be taken, as in the cases
+      above.
+    - After a hidden closing fence, a later block's opening fence can close the first block instead,
+      and then the same object as before is taken, if the first block held one (the security
+      review's final check).
+
+    These are refused, for example:
     - prose leaves a brace open before the fence, and a double quote then opens a string that hides a
-      fence. The quote may come before the opening fence, unescaped, or with its closing quote
-      escaped, so the number of quotes can be even. Or it may be in the block's own prose, hiding the
-      closing fence. Either way, what is left never closes;
+      fence.
+      - The quote may come before the opening fence: unescaped, or with its closing quote escaped,
+        so the number of quotes can be even. Or it may be in the block's own prose, hiding the
+        closing fence.
+      - With nothing after it, what is left never closes. If later prose closes the quote and the
+        brace, what is left is not valid JSON;
     - a fenced block sits inside another object's string with its quotes unescaped. The old search
       made the object in that block the answer. What is left is not valid JSON;
     - an object of the wrong shape quotes fences in two of its strings, around a statement list
@@ -16366,7 +16393,8 @@ by a test.
     the frozen regex runs on the reply with the backticks inside its strings masked, and the mask is
     undone;
   - new: fourteen named cases of fences inside strings, each pinning what the regex gave. Seven of
-    them are shapes the reviews found:
+    them are replies the parser now answers differently. The reviews found six of those; the
+    seventh, the preamble with an unescaped quote, was in the first draft:
     - two preambles;
     - a closing fence hidden by a quote in the block;
     - a block in another object's string;
@@ -16400,8 +16428,8 @@ relied on, and every break was reverted.
   - **The first,** 09:57 to 10:10, was on a state that was never committed, before the preamble
     refusal was pinned. It is superseded.
   - **Then one on the code and tests of each commit, before it was made:** `389ec9e`'s, 10:13 to
-    10:21; `6f8a2cb`'s, 11:27 to 11:34; `76f8b65`'s, 14:33 to 14:43; and this commit's, 15:40 to
-    15:50.
+    10:21; `6f8a2cb`'s, 11:27 to 11:34; `76f8b65`'s, 14:33 to 14:43; and `74f138d`'s, 15:40
+    to 15:50.
   - **Between consecutive runs of those four,** every test both share failed under exactly the
     same breaks: 440 tests, then 452, then 456.
   - **The first of the four had one test the second lacked:** the comma repair's single raw
@@ -16517,14 +16545,14 @@ The baseline run, with no break, passed 460 of 460. New or changed tests: 69, of
 The worktree has no `.env`, so for `pytest` the main checkout's was loaded into the test process,
 with a database name of its own.
 - **`pytest`, the whole suite,** once on each commit's code and tests, before the commit:
-  - on this commit's: 5,019 passed in 24 min 43 s, exit 0, with dual-role coverage of 48 of 48
+  - on `74f138d`'s: 5,019 passed in 24 min 43 s, exit 0, with dual-role coverage of 48 of 48
     protected endpoints (100%);
   - on `76f8b65`'s: 5,015 passed in 29 min 8 s;
   - on `6f8a2cb`'s: 5,011 passed in 21 min 52 s;
   - on `389ec9e`'s: 5,000 passed in 21 min 43 s.
 
   Each difference is the cases that a review's corrections added: 11, then 4, then 4.
-- **The five parser and repair files alone,** on this commit's code: 460 passed.
+- **The five parser and repair files alone:** 460 passed, on `74f138d`'s code and again on this commit's.
 - **The timing cases:** all 14 at 200,000 characters, PR #107's five and this change's nine. Each took
   0.02 to 0.05 s, against the 2 s bound. They were measured on `389ec9e`, whose code the corrections
   since change only in docstrings. The requirements audit measured 0.02 to 0.06 s on `6f8a2cb`.
@@ -16712,8 +16740,108 @@ The requirements audit's re-check, `string-aware-repairs-audit-recheck-76f8b65-v
     end of `decisions.md`, so whichever merges second will meet a small conflict there.
   - `origin/main` was then `336b27d` (PR #117), with `schema.py` unchanged.
 
-**After these corrections,** made in the commit after `76f8b65`, the requirements audit is asked to
-check that commit. Its answer is to be recorded here before the branch is merged.
+**Checks of `74f138d` (16 November 2026).** Both reviews checked the commit with those corrections.
+Both reports are saved verbatim in the notes folder.
+
+The security review's confirmation, `string-aware-repairs-security-confirmation-74f138d-verbatim.md`:
+
+> **Verdict: CAN MERGE WITH NOTES.** My four notes from the `76f8b65` re-check are closed as D-136 records them. The production code is still the code I reviewed. The new shape is a refusal and nothing else, so it raises no security concern. The one note is a small documentation point: a neighbouring shape is answered from a different object, and D-136 doesn't describe it. It doesn't block the merge.
+
+- **What it confirmed.**
+  - The production code is still the code it reviewed: the syntax trees without docstrings are
+    unchanged from `389ec9e` and from `76f8b65`.
+  - Its four notes are closed as recorded.
+  - It probed 15,000 replies of the hidden-closing-fence shape, none with a fenced block after it.
+    The old parser answered every one, and the new one refused every one. No refusal message quoted a
+    reply. With a quote and a fenced block after the shape, a reply can still be answered, from the
+    same object as before. Its "a refusal and nothing else" overstated that, as its final check says.
+- **Its note, now fixed.** A neighbouring shape is answered from a different object, which this entry
+  did not describe. Prose leaves a brace open and opens a string that hides the first block's
+  opening fence, and the string closes before a second fenced block. Its wider probe found 1,754 of
+  15,000 replies answered from a different object, each a value the old parser could already reach.
+  It is now an example under "Accepted before and now, with a different object", and every list of
+  shapes in this entry is called an example.
+
+The requirements audit's check, `string-aware-repairs-audit-recheck-74f138d-verbatim.md`:
+
+> **Verdict: INCOMPLETE.** Narrowly this time. All five of my items (A to E) are fixed, and so is the clause-table count. The two new tests pin A's shape and I1 and fail under B1; I reproduced that myself. The tables, the run comparisons and the suite figures all check out. What is still open is one sentence in D-136, one docstring line and the way two lists are labelled. They claim more than the parser does, and the security review's confirmation of `74f138d` raised the same point. No code or test change is needed.
+
+- **What it confirmed.**
+  - Its items A to E and the clause-table count are fixed.
+  - It recomputed the fifth run's tables and comparisons.
+  - It re-ran B1, B8 and B19 on an export of `74f138d`, and saw the four new tests fail under B1.
+  - It confirmed this entry's count of 12 failed attempts on the 503 question in the 7 November
+    file. 15 is the whole file's: all 15 used 800 tokens, and both parsers refuse all 15 the same
+    way.
+- **Its items, each now fixed.**
+  1. "Either way, what is left never closes" held only when nothing outside strings follows. Two
+     variants show why, both reproduced here. An invalid first block followed by a second block was
+     refused before and is answered from the second block now. Trailing prose that closes the quote
+     and the brace leaves "not valid JSON" rather than "never closes". The sentence is now
+     qualified, and the first variant is an example under "Refused before, accepted now".
+  2. Only the refused list was called a set of examples. Every list is now.
+  3. The `_strip_code_fences` docstring had item 1's overstatement. It now says "for example", with
+     the same qualifier.
+  4. "Seven of them are shapes the reviews found": six were. The seventh, the preamble with an
+     unescaped quote, was in the first draft. Corrected.
+  5. The security review's confirmation of `74f138d` is recorded above.
+
+**This commit** changes a docstring in `schema.py` and this entry, nothing else. Without
+docstrings, the syntax trees of `schema.py`, `classification.py` and `summarisation.py` are
+unchanged from `74f138d`. So the breaks and the suites above, run on `74f138d`'s code and tests,
+hold for it.
+
+**Before this commit, both reviews checked its working tree.** Their reports are saved verbatim as
+`string-aware-repairs-security-final-worktree-verbatim.md` and
+`string-aware-repairs-audit-final-worktree-verbatim.md`. Their verdicts:
+
+> **Verdict: CAN MERGE WITH NOTES.** The code is unchanged apart from docstrings, my note from `74f138d` is fixed, and nothing in D-136 raises a security concern. Two sentences overstate a refusal: when a fenced block outside strings follows a closing fence hidden by a quote, both parsers answer from the same object. One of them records my own confirmation, which overstated it first.
+
+> **Verdict: INCOMPLETE.** Items 1 to 5 are fixed as D-136 says, and the "This commit" paragraph is sound. Two sentences in D-136 still claim more than the parser does:
+> - "The hidden-closing-fence shape is only ever a refusal": with a quote and a second fenced block after it, the new parser answers the same object as the old one.
+> - I1's "its block held nothing the parser could use, and the reply was refused": an object that quotes a fence alone and also nests a statement list was answered by the old parser.
+
+- **Both found the same sentence.** "The hidden-closing-fence shape is only ever a refusal" was too
+  broad: with a quote and a fenced block after it, the reply is answered from the same object as
+  before. It now says what the probe found and what a later block changes.
+- **The security review found one more.** The refused kind said a later fenced block's object "can
+  be taken instead". That holds after a hidden opening fence. After a hidden closing fence, the
+  later block's fence can close the first block, and the same object is taken. It now says both.
+- **The audit found one more.** I1's "the reply was refused" held for I1's reply, but not for every
+  reply of that kind. Where the quoted fence's block held an object, the old search answered from
+  it, which is a different-object case. It now says so, with the audit's example.
+- **Two nits the audit did not count as open:**
+  - the docstring's second and third examples lack the first's qualifier, which its fourth line
+    covers;
+  - "None of the lists below is complete" sits above the nine control characters, a complete list,
+    so it claims less, not more.
+- **Nothing else changed.** Each case was reproduced here before its sentence was changed. Both
+  reviews said the three sentences needed no re-run of the tests or the breaks.
+
+**Both reviews then re-read the three corrected sentences.** Their reports are saved verbatim as
+`string-aware-repairs-security-reread-verbatim.md` and `string-aware-repairs-audit-reread-verbatim.md`.
+Their verdicts:
+
+> **Verdict: CAN MERGE WITH NOTES.** All three sentences now match the parser, and nothing in them raises a security concern. Two of them would be exact with a short qualifier each; neither blocks the merge.
+
+> **Verdict: INCOMPLETE.** Two of the three sentences now match the parser: the refused kind's lead-in and the record of the security confirmation. I1's example still has one clause that is too broad. "Where that block did hold an object, the old search answered from it" fails for a two-statement I1 reply. There the quoted fence's block holds `{"text": "t2", "chunk_id": "c2"}`, and the old parser refused it for having no `statements` key rather than answering from it. Saying "an object the parser could use" fixes it. Nothing else in the three is open.
+
+- **The audit found one clause still too broad.** I1's "where that block did hold an object, the old
+  search answered from it" fails when that object is not one the parser can use. A reply whose
+  quoted-fence block holds `{"text": "t2", "chunk_id": "c2"}` was refused by the old parser, for
+  having no `statements` key, so it belongs to I1's own kind. The clause now says "an object the
+  parser could use".
+- **The security review suggested two qualifiers,** both optional, and both are in:
+  - "if the first block held one", on the hidden closing fence;
+  - the nested list coming after the quoted fence, in the I1 example.
+- **Each wording is the reviewer's own,** applied word for word, and each case was reproduced here
+  first.
+
+**Both reviews then confirmed the final wording of those two clauses:**
+
+> **Verdict: CAN MERGE.** Both clauses now match the parser. After a hidden closing fence and a later block, a first block holding an object gives the same answer as before, or the same refusal when that object is unusable. An I1 reply was answered from a nested statement list only when the list came after the quoted fence. A statement object without a `statements` key there was refused.
+
+> **Verdict: COMPLETE.** `:16254` now matches the parser, and `:16286` still does. I probed both, with the old parser at 48cb537 and the new one as the working tree's `schema.py`.
 
 **Not covered:**
 - **FR-10's and FR-16's raw replies** are not kept in any committed run, so only FR-12 was replayed.
