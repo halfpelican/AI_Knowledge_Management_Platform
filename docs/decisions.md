@@ -16618,3 +16618,81 @@ transcript. Its line numbers are at `cc01e09`. Its closing line:
   its buttons in the DOM instead.
 - **No database the user works with was read or written,** and no server was started. The alpha shows
   the change once it runs this code.
+
+## D-137 · PR #119's account screens get a server: a password change, profile pictures every signed-in user sees, a self-service password reset, and a seven-day "Remember me"
+
+**Status:** Settled by the user (Benjamin Morovan, lead) · **Date:** 2026-11-16 · **Concerns:**
+PR #119 (`feat/UI`, Sagarika Dey's "Modified User Interface"), FR-01, FR-02, FR-04, FR-03 (left as
+written), FR-05's role management screen and the meeting attendee lists (where pictures appear),
+the proposal's §1.9, D-10, D-21, D-25 · **Supersedes:**
+- FR-04's "Sessions also expire automatically after 60 minutes of inactivity", for a session
+  started with "Remember me" ticked, and for no other session;
+- the proposal's §1.9 item "Self-service password reset flow", which this entry takes out of the
+  out-of-scope list.
+
+It supersedes no D-number.
+
+**What prompted it.** PR #119 at `dd452ac` added behaviour with no server behind it:
+
+- `frontend/src/pages/Profile.jsx` posted to `/api/auth/change-password` and uploaded to
+  `/api/users/me/picture` (`frontend/src/api/profile.js`). Neither route was in
+  `apps/api/urls.py` on `main` at `336b27d`, so both forms failed whenever they were used.
+- `frontend/src/pages/ForgotPassword.jsx` sent nothing (its own comment says it simulates
+  success), then told the user that reset instructions would arrive.
+- `frontend/src/pages/Login.jsx` gained a "Remember me on this device" checkbox that nothing read.
+
+None of these is in the proposal's FR list, and §1.9 names "Self-service password reset flow" as
+out of scope. CLAUDE.md §1 says a behaviour that is not in the proposal is raised, not built. The
+PR #119 session raised each one on 16 November 2026 with a recommended option. Benjamin's answers
+are below, with the option recommended to him beside each, so the record shows what was weighed.
+
+**The decision.** Benjamin's answers, 16 November 2026:
+
+| Question | Recommended to him | Chosen |
+|---|---|---|
+| The Profile page's change-password and picture routes | A read-only profile, with both forms taken out of #119 | **Build the routes first.** Keep both forms, and hold #119 until both server routes exist on their own branch |
+| Forgot password | Take the page and the Login link out, matching §1.9 | **Change scope and build it.** Overrule §1.9 and build a reset flow |
+| "Remember me" | Take the checkbox out | **Keep it and wire it.** It lengthens the session, overruling FR-04's 60 minutes for those sessions |
+| How long a remembered session lasts, and for whom | 14 days, both roles | **7 days without use, both roles** |
+| How the reset email is delivered | A file outbox, SMTP optional | **A file outbox, SMTP optional** |
+| Who sees a profile picture | The owner only, PNG or JPEG up to 2 MB, no new package | **Every signed-in user**, wherever users are listed: role management, attendees, the header. Pillow is added to re-encode uploads |
+| How the server work is split | One server branch | **One server branch**, `feat/FR-04-account-self-service`, with one security review and one PR merged before #119 |
+| How long a reset link works | 1 hour | **1 hour** |
+| Whether a completed reset releases an FR-03 lock | No, the lock stays | **No, the lock stays.** FR-03 is unchanged |
+| What may be uploaded as a picture | PNG, JPEG or WebP up to 2 MB | **PNG, JPEG or WebP, up to 5 MB**, re-encoded as PNG at no more than 512 × 512 pixels. No GIF, no SVG |
+
+The option offered for the reset flow said that changing the proposal's scope needs the team's
+agreement first. Benjamin chose it as lead. This entry records his decision. It does not record a
+separate agreement by the team.
+
+**Rules this session set without asking.** Each follows a rule the project already has, and
+Benjamin can change any of them:
+
+- **Password rules.** A changed or reset password passes the same `AUTH_PASSWORD_VALIDATORS` that
+  registration uses (FR-01).
+- **A wrong current password is a 400 with a field error, never a 401.** The front end treats
+  every 401 as an expired session and signs the user out (`frontend/src/api/client.js`,
+  `notifyUnauthorized`).
+- **What ends which sessions.**
+  - A password change keeps the session that made it, and ends every other session of that user.
+  - A completed reset ends every session of that user, remembered ones included.
+  - Both follow from Django's session hash, which covers the password hash.
+- **No account enumeration (D-25).** The reset request answers the same 200, with the same body,
+  whether or not the address has an account.
+- **The reset link's address comes from configuration, never from the request.** A link built
+  from the `Host` header is the classic way to have a valid reset link mailed to a victim pointing
+  at someone else's site.
+- **Nothing serves `MEDIA_ROOT`, still.** A picture leaves only through its own route for signed-in
+  sessions, as a stored original leaves only through FR-15's scoped download.
+
+**How it is built.** A dated note below lists the routes, the constants and the tests once the
+server branch is built, from git rather than from this plan.
+
+**Not covered by this entry:**
+- **The front end.** #119's screens are wired, tested and reviewed on `feat/UI` after the server
+  branch merges, and that work adds its own dated note here.
+- **Real email on the alpha.** It needs SMTP settings in `.env`, which Benjamin sets up himself if
+  he wants it. Until then the reset email is a file in the outbox folder.
+- **A person changing their own name or email address.** Nobody asked for it, and it is not built.
+- **An Administrator setting or resetting someone else's password.** FR-03 says an Administrator
+  never does, and that is unchanged.
