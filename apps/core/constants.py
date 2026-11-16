@@ -826,10 +826,16 @@ CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
 CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.30}
 
 # The longest value POST /api/documents/{id}/proposed-tags/reject reads, in characters (D-133, the
-# lead's decision of 15 November 2026). A run proposes a Topic outside the scheme whatever its length
-# (D-129), and a rejection writes only JSON (``rejected_tags``), so the reject route is not held to
-# the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255 characters could be
-# neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because confirming creates a Tag.
+# lead's decision of 15 November 2026). From D-129 until D-134 a run proposed a Topic outside the
+# scheme whatever its length, and a rejection writes only JSON (``rejected_tags``), so the reject
+# route is not held to the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255
+# characters could be neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because
+# confirming creates a Tag.
+#
+# Since D-134 (the lead's decision of 15 November 2026) a run discards a Topic longer than
+# NAME_MAX_LENGTH instead of proposing it, so no proposal a run makes is longer than the column, and
+# this bound serves only proposals stored before D-134. The residual below, a proposal longer than
+# this bound, can then come only from a run made before D-134. What follows is D-133's reasoning.
 # Scaled to the longest classification reply, Claude's ceiling, CLAUDE_MAX_TOKENS (16,000 tokens):
 # 100,000 is that ceiling at 6.25 characters a token. The ratio was worked back from the bound
 # (100,000 / 16,000), not measured, and it is a ratio for prose, not a ceiling: a run of punctuation

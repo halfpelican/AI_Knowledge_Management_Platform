@@ -12,7 +12,10 @@ departure strictly:
 - a Topic entry of ``proposed_tags`` as ``topic_proposed``, which the clause asks for;
 - a Project or Process entry as ``project_process_proposed``, a clause 3 violation;
 - an AI link whose Tag is grown as ``created_by_classifier``, a clause 3 violation: on a measurement
-  database the scheme is seeded ``--scheme-only``, never grown, and no person acts.
+  database the scheme is seeded ``--scheme-only``, never grown, and no person acts;
+- a Topic entry of ``discarded_suggestions`` as a clause 3 violation, "discarded a Topic value". Since
+  D-134 (15 November 2026) the shipped build makes one: a run discards a Topic longer than a tag name,
+  a recorded literal departure from the clause, which the script must show rather than hide.
 
 The script runs here as an operator runs it, through ``main()`` with its arguments, against this
 test's database, for documents titled as the frozen reference set titles them, on rows the apply
@@ -39,6 +42,7 @@ from apps.core.constants import (
     SOURCE_TYPES,
     TOPIC_DIMENSION,
 )
+from apps.core.models import NAME_MAX_LENGTH
 from apps.documents.classification import apply_classification, confidence_threshold
 from apps.documents.models import ContentTag, Document, DocumentAnalysis, Tag
 
@@ -180,6 +184,28 @@ def test_an_ai_link_to_a_value_the_classifier_created_is_a_clause_3_violation(ti
     assert (result["topic_proposed"], result["project_process_proposed"], result["created_by_classifier"]) == (0, 0, 1)
     [violation] = result["violations"]
     assert violation.startswith(f"{reference_id} {PROJECT_DIMENSION} value 'harbour upgrade' created")
+    assert result["passes"] is False
+
+
+def test_a_topic_longer_than_a_tag_name_is_discarded_and_reported_as_a_clause_3_violation(
+    titled, monkeypatch, tmp_path
+):
+    """D-134: one run suggests a short Topic and one a character past the Tags column. The apply layer
+    itself proposes the short one and discards the long one, which no Tag could hold. The script
+    counts the proposal as clause 3 asks, and reports the discard as a violation: the departure is
+    recorded, so a measurement shows it rather than hiding it."""
+    too_long = "x" * (NAME_MAX_LENGTH + 1)
+    reference_id, document = titled()
+    classified(document, (TOPIC_DIMENSION, "budget planning", BELOW), (TOPIC_DIMENSION, too_long, BELOW))
+    analysis = DocumentAnalysis.objects.get(document=document)
+    assert analysis.discarded_suggestions == [  # the premise: rule 4d discarded it
+        {"dimension": TOPIC_DIMENSION, "value": too_long, "confidence": BELOW}
+    ]
+
+    result = clause_3(monkeypatch, tmp_path)
+
+    assert (result["topic_proposed"], result["project_process_discarded"]) == (1, 0)
+    assert result["violations"] == [f"{reference_id} discarded a {TOPIC_DIMENSION} value"]
     assert result["passes"] is False
 
 
