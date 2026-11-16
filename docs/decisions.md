@@ -15809,7 +15809,9 @@ without the row answers 403 to everybody.
 18. **The overview skips a source that does not fit.** A source with as many connections as the cap
     never appears in the overview and is reached by selecting one of its connections. A person's or
     a tag's full list is not reachable through the map when it exceeds the cap: a tag has the
-    repository filter, a person has nothing.
+    repository filter, a person has nothing. **Added 16 November 2026:** "is reached by
+    selecting one of its connections" holds only where the overview shows one of them; item 9
+    of the dated note on the build, below, says what follows when it shows none.
 19. **Two people with one name, or two documents with one title, read alike on the map,** since the
     email is not shown. A display name is free text at registration. Each connected document's and
     meeting's own page shows the address.
@@ -15900,8 +15902,8 @@ This note covers the first of the three things the entry left for later: the bui
 its deliberate breaks. The two reviews of the built code have notes of their own below it.
 
 It was written on 15 November 2026 and finished on 16 November 2026, when `main` was merged a
-third time and the last runs were made. The records that cite "D-132's dated note of 15 November
-2026" mean this note.
+third, a fourth and a fifth time and the last runs were made. The records that cite "D-132's
+dated note of 15 November 2026" mean this note.
 
 **The commits,** on `feat/FR-20-relationship-visualisation`:
 
@@ -15913,11 +15915,12 @@ third time and the last runs were made. The records that cite "D-132's dated not
   its API module, the route and the navigation link, and the front-end tests.
 - `42dc7f5`: the screen's remaining tests, with the break list of that day in its message.
 - `030bb75`: the demonstration script's walk.
-- `5c3b941`, `e0f1acd` and `377eff0`: the three merges of `main`, below.
+- `5c3b941`, `e0f1acd`, `377eff0`, `b44b75b` and `3d94e40`: the five merges of `main`, below.
 - `28136c2`: one test title shortened so Vitest prints it whole.
 - `89fc063`: the corrections the requirements audit asked for (its note is below).
 - `8122258`: one test, for the Name column's tie-break by type (item 5).
-- The commit that adds these notes.
+- `ba2893d`: three comments corrected (the follow-up audit's R5, at the end of this entry).
+- `c97745c` and the commits after `3d94e40`: these notes.
 
 **`CLAUDE.md` section 5 gained two rows,** `MAXIMUM_TRAVERSAL_DEPTH` and `MAXIMUM_NODE_COUNT`, in
 `afe95e7`. That file changes only with the user's approval. He was asked on 14 November 2026
@@ -15932,7 +15935,8 @@ whether to add them, and answered: "Yes, add the two rows (Recommended)".
    - **What was done.** FR-03 (#110) reached `main` first, with `accounts 0009` and `0010`. In the
      merge of 15 November 2026 (`5c3b941`), the dependency of
      `accounts 0011_seed_view_knowledge_map` was changed from `0008_seed_manage_tags` to
-     `0010_seed_release_account_locks`, and nothing else in it.
+     `0010_seed_release_account_locks`. The same merge rewrote two passages of the migration's
+     docstring to say so. Its operations and both of its functions are unchanged.
    - **Why this is allowed.** CLAUDE.md section 7 forbids editing a pushed migration's operations,
      and lets a dependency be corrected in place while no other environment has applied the
      migration. This one had never been pushed: no remote branch held `6d00576`, the commit that
@@ -15970,7 +15974,9 @@ whether to add them, and answered: "Yes, add the two rows (Recommended)".
    sorts by what the node is called, so the tag "Topic: people" sorts under T. The Relationships
    table's From and To columns sort by the cell's text, which opens with the type, so every
    "Contributor: …" row comes before every "Document: …" row. Rows that are still equal keep the
-   reply's order. As first built, all three sorted by the bare label; `89fc063` changed that.
+   reply's order when the sort is ascending. Descending is the ascending order reversed, so
+   equal rows then come out in the reverse of the reply's order. As first built, all three
+   sorted by the bare label; `89fc063` changed that.
    - **Two items that show the same name sort by their type:** a document before a meeting of
      the same title. That rule was in the code from the start.
    - **The change left it without a test.** The fixture's two tags named "people" had been the
@@ -16013,27 +16019,44 @@ whether to add them, and answered: "Yes, add the two rows (Recommended)".
   (Objective 04's run). Nothing conflicted. `main` touched no file under `apps/`. It added a
   comment, a number format and one sentence for FR-10 to `frontend/src/constants.js`, which also
   holds the map's vocabularies and text, and changed no line the map reads.
+- **`b44b75b`, 16 November 2026:** #115 (FR-10 discards a Topic longer than a tag name, D-134).
+  Nothing conflicted, and it brought no migration.
+  - Under `apps/` it changed `apps/api/serializers.py`, `apps/api/views.py`,
+    `apps/core/constants.py`, `apps/documents/classification.py` and
+    `apps/documents/models.py`, and FR-10's tests.
+  - The first three also hold the map's serializer, view and caps. No changed line is inside
+    any of those, and `apps/api/knowledge_map.py`, `apps/api/repository.py`,
+    `apps/api/urls.py` and `apps/accounts` are untouched.
+  - Under `frontend/` it changed one test file, which is not among the map's.
+- **`3d94e40`, 16 November 2026:** #116 (FR-10's route test for Confirm at the column's width).
+  Nothing conflicted. It added cases to one FR-10 test file and a note to D-135, and changed
+  no code.
 - **What `main` put under the map.** D-128 and D-129 added proposed and rejected tags, grown tags
   and the department list. `apps/api/repository.py` did not change on `main`, so `live_tag_links`
   is still FR-15's rule as this entry describes it, and the map still reads tags through it alone.
 
-**The suites, on `377eff0`.**
+**The suites, on `ba2893d`.**
 
-- **`pytest`, the whole suite:** 5,083 passed in 28 minutes 19 seconds, on a test database of
-  its own. The dual-role matrix printed "49/49 protected endpoints exercised from both Employee
-  and Administrator sessions (100.0%)". `GET /api/knowledge-map` is one of the 49.
+- **`pytest`, the whole suite:** 5,096 passed in 28 minutes, on a test database of its own. The
+  dual-role matrix printed "49/49 protected endpoints exercised from both Employee and
+  Administrator sessions (100.0%)". `GET /api/knowledge-map` is one of the 49.
 - **`npm test` in `frontend/`:** 49 files, 842 tests passed.
 - **`npm run lint`:** clean.
 - **`npm run build`:** succeeds.
-- **`manage.py makemigrations --check --dry-run`:** "No changes detected".
+- **`manage.py makemigrations --check --dry-run`:** "No changes detected", run on `b44b75b`. No
+  file under `apps/` differs between `b44b75b` and `ba2893d`.
+- **After the fifth merge, `3d94e40`:** it changed one server test file,
+  `apps/api/tests/test_fr10_proposed_tags.py`, and no code. That file was run on `3d94e40`: 104
+  passed. The whole server suite was not run again after it, and nothing under `frontend/`
+  changed. The pull request's CI runs both suites on the merged result.
 - **Earlier heads.** At `28136c2`, the head both reviews read, the whole server suite was 5,066
-  passed and the front-end suite 835. The difference is the audit's corrections, the tie-break
-  test and what `main` brought in #112, #113 and #114.
+  passed and the front-end suite 835. At `377eff0` they were 5,083 and 842. The differences are
+  the audit's corrections, the tie-break test and what `main` brought in #112 to #116.
 
 **The build's one JavaScript chunk is over Vite's 500 kB advisory, and was before FR-20.** `main`
 at `f82fb1a` built to 506.65 kB and printed the same advisory. This branch built to 530.14 kB at
-`89fc063`, 23.49 kB more, and builds to 530.53 kB at `377eff0`, after the merge of #113. `main`
-was not built again after that merge. The build passes; the advisory is not an error. Splitting
+`89fc063`, 23.49 kB more, and builds to 530.53 kB at `377eff0`, after the merge of #113, and at
+`ba2893d`. `main` was not built again after that merge. The build passes; the advisory is not an error. Splitting
 the chunk is not part of FR-20.
 
 **Three agent runs were cut off by the account's usage limit, and one left a break applied.**
@@ -16053,9 +16076,18 @@ before and after, and restored. Both tables are generated from the runs' own out
 reviews' corrections:
 
 - **The server table** is from a run on `89fc063`. No file under `apps/` differs between
-  `89fc063` and `377eff0`.
+  `89fc063` and `377eff0`. The fourth merge then changed files under `apps/`, so the server
+  breaks are being run again after the fifth, with break S41 added (the follow-up audit's R6).
+  Until that run is recorded here, the table below is the run on `89fc063`.
 - **The front-end table** is from a run on `377eff0`. An earlier run on `89fc063` is the one
   that found break F094 failing no test (item 5).
+  - No file under `frontend/src`, and none of the eight test files run, differs between
+    `377eff0` and `b44b75b`.
+  - `ba2893d` then changed comments in two of those source files and one of those test
+    files. The built JavaScript and stylesheet are byte for byte the same before and after
+    it, and each break's text still occurs exactly once. The front-end breaks were not run
+    again after it.
+  - `3d94e40` changed nothing under `frontend/`.
 
 **The server side.**
 
@@ -16659,9 +16691,11 @@ it. Its full report is in this session's shared notes, `fr20-built-review-securi
 >
 > **COMPLETE WITH RECORDED DEVIATIONS:** no FR-20 clause is missed and the scoping holds from both roles. The deviations are recorded in D-132: UC-11 E2 met in part, NFR-17's screen-reader test and the browser measurements owed, reviewers deferred. A1 must be closed by the merge note before "recorded" is true of the migration.
 
-**What was done with each finding.** The audit read `28136c2`. `main` was merged twice more after
-it: `e0f1acd` (#112), which touches no file of the map, and `377eff0` (#113 and #114), which
-changes no line the map reads. The corrections are in `89fc063`, `8122258` and these notes.
+**What was done with each finding.** The audit read `28136c2`. `main` was merged four times more
+after it: `e0f1acd` (#112), `377eff0` (#113 and #114), `b44b75b` (#115) and `3d94e40` (#116).
+Each of the first three changed files that also hold the map's code or record, and none
+changed a line of the map. The fourth changed one FR-10 test file and this file. The
+corrections are in `89fc063`, `8122258`, `ba2893d` and these notes.
 
 | Finding | Severity | What | Disposition |
 |---|---|---|---|
@@ -16673,12 +16707,84 @@ changes no line the map reads. The corrections are in `89fc063`, `8122258` and t
 | A6 | low, record | Readings and additions outside the numbered list | **Fixed**: items 3 and 4 of the build's note |
 | A7 | low, test | At a binding cap the denied role was always the Employee | **Fixed** in `89fc063`: items 5 to 8 also run as each role, with the added rows stamped for no role the viewer's scope reaches. Eight cases, in the server break table above |
 | A8 | low, record | "Is reached by selecting one of its connections" is false where none of them is shown | **Fixed**: `docs/api-contract.md` in `89fc063`, and item 9 of the build's note for item 18 |
-| A9 | low, record | The demonstration script misquoted the Relationships rows | **Fixed** in `89fc063`. The walk is still not walked |
+| A9 | low, record | The demonstration script misquoted the Relationships rows | **Fixed in part.** The misquote is corrected in `89fc063`. The audit said this closes when the script is walked, and it has not been walked: that is owed by a person, on the alpha ("Owed in a browser", above) |
 
 **The auditor's note on the follow-up** is kept for whoever builds it: reviewers as contributors
 needs a record of who reviewed a document, and the proposal lists "Formal knowledge-record
 lifecycle management (curation workflow, review cycles, …)" as out of scope. That follow-up is to
 be checked against the proposal before it is built.
+
+**The follow-up audit of `b44b75b` (16 November 2026), verbatim.** A new run of the `requirements-auditor` agent was asked whether A1 to A9 are closed and whether the corrections introduced anything wrong. It read only: it ran no suite and no break. Its report is quoted whole and unedited, extracted mechanically from the agent's transcript. What changed because of it follows the quotation.
+
+> **Verdict: the closure is INCOMPLETE.** A1 to A8 are closed. A9 is closed in part: the misquote is corrected, and the walk the audit named as its closing step is still owed. The corrections introduced nothing that is wrong against FR-20, NFR-17 or UC-11, and I found no defect in the code or tests they changed. Six low findings are open (R1 to R6), in the records, three comments and the break evidence. R1 means D-132 does not yet describe the head.
+>
+> **Read:** branch `feat/FR-20-relationship-visualisation`, head `b44b75b`, clean. Root: `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\.claude\worktrees\fr-20-relationship-visualisation-136f6b`; every path below is under it. Requirement text read in place at `C:\Users\mozza\Documents\IT_Captone_Project_KMP\KMP_Prototype\KMP_Prototype\proposal.txt`. I ran no suite and no break. `DEC` is `docs/decisions.md`, `TKM` is `apps/api/tests/test_knowledge_map.py`, `KMT` is `frontend/tests/knowledgeMap.test.jsx`, `UKM` is `frontend/src/utils/knowledgeMap.js`.
+>
+> | Finding | Closed? | Evidence |
+> |---|---|---|
+> | A1 | Closed | DEC:15768-15770 is the pointer under "The migration". Item 1 of the build note (DEC:15928-15955) supersedes that paragraph and the dispositions of F3 and F-10 by name, and carries both pieces of evidence. The code agrees: `apps/accounts/migrations/0011_seed_view_knowledge_map.py:58-60` depends on 0010 alone, `accounts` ends at 0011 with no merge migration, and no local remote-tracking branch holds `6d00576`. The four records that cited the note resolve to it (DEC:15903-15904). One sentence of item 1 is inexact (R3). The database check is the session's; I could not repeat it |
+> | A2 | Closed | `89fc063`. `apps/api/knowledge_map.py:49`, TKM:968, `frontend/src/constants.js:1580`, `frontend/src/pages/KnowledgeMap.jsx:148` and `:357`, and UKM:96 each name a row of the choices table (DEC:15675, 15677). UKM:407 cites the build note, whose item 5 (DEC:15969-15979) holds the sort rule. Two citations of the same kind that the first audit did not list are in R5 |
+> | A3 | Closed | `89fc063`. Name sorts by `displayLabel`, then type (UKM:409-411). From and To sort by `typedLabel`, the function the cell itself renders (UKM:266-268, 414-416, 429-438; `KnowledgeMap.jsx:217`). I worked the new expected orders by hand from the fixture and they are right: KMT:1040, 1120, 1123. The old rule gives a different order in all three, so F193 and F194 can fail them. The tie-break test is KMT:1087 (`8122258`), inside the both-roles block |
+> | A4 | Closed | `docs/api-contract.md:1803` reads 2, and two of the example's three edges touch the document. The other three counts agree with the edges too |
+> | A5 | Closed | `frontend/src/components/ComponentSheet.jsx:93-144`: both keys are gone. Neither key name occurs in `frontend/src` except where the reply is read (UKM:225) and described (`frontend/src/api/knowledgeMap.js:23-24`) |
+> | A6 | Closed | Items 3 and 4 of the build note, DEC:15960-15968 |
+> | A7 | Closed | `89fc063`. TKM:572, 605, 631 and 651 take `session_client` and stamp the added rows with `unreadable_scope`, which is `[]` for the Administrator. Eight cases. I traced each premise through `walk` and each holds for both roles. The file has 49 functions and 108 cases, as the break table says. R6 is about what the breaks show |
+> | A8 | Closed | `docs/api-contract.md:1883-1887` (`89fc063`) and item 9 of the build note, DEC:15988-15995. Item 18 itself is unmarked (R4) |
+> | A9 | In part | `docs/demonstration-script.md:520-522` now reads as the screen does: "Contributor: Demo Employee", "uploaded", "is tagged", "Tag: Topic: people". The audit said it "closes when the script is walked". It is not walked, and the record says so (DEC:16676, 16459-16460) |
+>
+> **What I checked beyond the nine, and found right.**
+> - **The sort change.** FR-20 and NFR-17 ask for "sortable" rows and state no order, so the new rule departs from nothing. No other record states the old rule.
+> - **The eight cases.** Sound, as in the A7 row.
+> - **The commit list.** The eleven commits named exist and each holds what the note says of it.
+> - **The merges,** by `git show --remerge-diff` on each. `5c3b941` brought #102, #108, #109, #110 and #111, with exactly the fifteen conflicted files the note names. `e0f1acd` brought #112, with one conflict, `docs/decisions.md`. `377eff0` brought #113 and #114, with no conflict and no file under `apps/`. No file under `apps/` differs between `89fc063` and `377eff0`. `apps/api/repository.py` has not changed since `6d00576`.
+> - **The break tables' own counts.** 59 rows, 118 cases and 40 breaks; 90 rows and 151 breaks, with F141 and F142 the only two in no row.
+> - **The quotations.** The quoted audit (DEC:16512-16660) is identical, line for line, to the saved report: 149 lines. The security review's quoted sentences are in its report.
+>
+> ### New findings
+>
+> **R1 — low, record, stale. D-132 does not hold the fourth merge, `b44b75b` (#115, D-134).** This is beyond the suite and break figures already known to be owed.
+> - The commit list names three merges (DEC:15916). "The merges of `main`" ends at `377eff0` (DEC:15997-16018). The note says it was finished "when `main` was merged a third time" (DEC:15902-15903). The disposition preface says `main` "was merged twice more" (DEC:16662-16664).
+> - What `b44b75b` brought, as I read it: no conflict, no migration, and one comment in one test under `frontend/`. Under `apps/` it brought FR-10 changes to `apps/api/serializers.py`, `apps/api/views.py`, `apps/core/constants.py` and `apps/documents/classification.py`, comments in `apps/documents/models.py`, and tests. No changed line mentions the map. None is inside `KnowledgeMapView` (`apps/api/views.py:2923`), `KnowledgeMapQuerySerializer` (`apps/api/serializers.py:1701`) or the map's constants (`apps/core/constants.py:325-338`, `696-707`).
+> - So "No file under `apps/` differs between `89fc063` and `377eff0`" (DEC:16055-16056) is true and no longer reaches the head.
+> - Closes by adding the merge in those four places, with the re-run figures.
+>
+> **R2 — low, record.** DEC:16663 says `e0f1acd` (#112) "touches no file of the map". It touched five files that hold the map's code or record: `apps/api/views.py`, `apps/api/serializers.py`, `apps/core/constants.py`, `apps/core/tests/test_constants.py` and `docs/api-contract.md`. It changed no line of the map in any of them. Closes by saying that, as the same sentence says of `377eff0`.
+>
+> **R3 — low, record. Two sentences of the build note are inexact.**
+> - Item 1 (DEC:15932-15935) says the merge changed the dependency "and nothing else in it". The same merge rewrote two passages of the migration's docstring (`git diff 5c3b941^1 5c3b941` on the file). The operations and both functions are unchanged, as the next bullet says.
+> - Item 5 (DEC:15972-15973) says "Rows that are still equal keep the reply's order". That holds ascending. Descending is the ascending order reversed (UKM:445-451), so equal rows come out in the reverse of the reply's order.
+>
+> **R4 — low, record.** Item 18 (DEC:15809-15812) still reads "is reached by selecting one of its connections", with no pointer to item 9 of the build note. "The migration" paragraph was given one. Closes with a pointer of the same kind.
+>
+> **R5 — low, comments. Three comments of the kinds A2 and A9 named remain.** All three are older than the corrections.
+> - UKM:39 quotes D-132 as saying "the selection lives in the address". D-132's words are "with the selection in it" (DEC:15751).
+> - KMT:932 gives the relationship "in the words D-132 gives it". D-132 gives no words for a relationship: "is tagged" occurs there only inside the quoted audit.
+> - `frontend/src/constants.js:1600` gives the rows as "Jane Doe uploaded Leave policy" and "Leave policy is tagged Topic: people", the wording A9 corrected in the script.
+>
+> **R6 — low, test evidence, inferred from the break descriptions. The break table does not show that A7's four Administrator cases can fail for the reason they were added.**
+> - The four tests use documents only. No listed break lets a document stamped `[]` reach an Administrator: S01 and S04 read "in the Administrator's scope", and that scope excludes `[]` (`apps/retrieval/scoping.py:127-139`). Under them only the Employee case can fail.
+> - The Administrator cases can then fail only under breaks that are not about scope: S12, S13, S30, S38, S39, and the order and cap breaks. The table gives one row for both cases, so this is inference and not something I saw.
+> - The server list had 40 breaks when the first audit was told of it and has 40 now. The eight cases got no break of their own, where A3's change got two (F193, F194).
+> - "Every case fails under at least one break" (DEC:16065) is still true as worded.
+> - Closes with one break in the re-run that gives the Administrator an unscoped read in `assemble` (`apps/api/knowledge_map.py:178-179`), and its row.
+>
+> **What I did not check.** I ran neither suite, no break, no lint, no build and no `manage.py` command, so every figure in the notes and every "fails under" cell is as reported. I checked no database, so the 21-database evidence in item 1 is the session's. I made no network call: "never pushed" is from local remote-tracking refs. I did not check the chunk sizes, the account of the cut-off agent runs, or anything a browser shows. The 172 front-end cases I checked only as arithmetic over the table's rows. I did not read how each of the fifteen conflicts was resolved. I did not re-audit the first audit's clause table, and I read `docs/decisions.md` only inside D-132.
+>
+> **INCOMPLETE:** A1 to A8 closed, A9 in part, R1 to R6 open and all low; no defect found in the code or tests against FR-20, NFR-17 or UC-11.
+
+**What was done with each of its findings.**
+
+| Finding | Severity | What | Disposition |
+|---|---|---|---|
+| A9 | low, record | Closed in part: the walk the first audit named as its closing step is not walked | **Open, and owed by a person.** The alpha must be redeployed and migrated first, which is the user's to do. It is listed under "Owed in a browser" |
+| R1 | low, record | This entry did not hold the fourth merge, `b44b75b` | **Fixed**: the commit list, "The merges of `main`", the sentence on when the build's note was finished and the preface to the first audit's table name it. The suites' figures are from `ba2893d` |
+| R2 | low, record | "Touches no file of the map" was wrong of `e0f1acd` | **Fixed**: the preface says that `e0f1acd`, `377eff0` and `b44b75b` each changed files that also hold the map's code or record, and that none changed a line of the map |
+| R3 | low, record | Two inexact sentences in the build's note | **Fixed**: item 1 says the merge also rewrote two passages of the migration's docstring. Item 5 says equal rows come out reversed when the sort is descending |
+| R4 | low, record | Item 18 had no pointer to item 9 of the build's note | **Fixed**: a dated sentence at the end of item 18 |
+| R5 | low, comments | Three comments misquoted D-132 or the screen | **Fixed** in `ba2893d`. Comments only: the built JavaScript and stylesheet are byte for byte the same before and after it |
+| R6 | low, test evidence | No listed break showed that A7's four cases run as the Administrator can fail for the reason they were added | **Break S41 is added:** documents are read with no scope at all, so a document stamped for no role reaches every caller. The server breaks are being run again after the fifth merge with it, and its result is recorded here from that run |
+
+**The corrections above were not read by an auditor again.** A9's walk cannot be closed from here, so a third run would not return a clean verdict either. The line numbers in the quotation are the auditor's, read at `b44b75b`; the corrections moved some of them.
 
 ## D-133 · A proposed Topic longer than a tag name can be rejected: the reject route reads a value up to 100,000 characters, and confirm keeps its 255
 
