@@ -153,6 +153,31 @@ def test_a_fenced_block_after_an_object_quoting_one_is_the_block_taken():
     assert [(s.text, s.chunk_id) for s in parsed.statements] == [("Twenty days of leave.", CHUNK_ID)]
 
 
+def test_an_object_quoting_a_fence_before_a_fenced_block_is_answered_from_the_block():
+    """A reply refused before and accepted now (the security review, I1). An object's string quotes
+    three backticks, and a fenced block follows the object. Until 16 November 2026 the fence in the
+    string opened a block that held no JSON object, and the reply was refused. Now the first fence
+    outside a string opens the block after the object, so that block's object is taken, as the first
+    fenced block always was."""
+    raw = '{"statements": [{"text": "see ```", "chunk_id": "c1"}]} trailing ```json\n' + VALID + "\n```"
+
+    parsed = parse_statement_list(raw)
+
+    assert [(s.text, s.chunk_id) for s in parsed.statements] == [("Twenty days of leave.", CHUNK_ID)]
+
+
+def test_a_quote_in_a_fenced_block_s_prose_hides_its_closing_fence_after_an_open_brace():
+    """A reply accepted before and refused now, and it is malformed (the requirements audit's
+    re-check of 76f8b65). Prose before the fence leaves a brace open, and the block's own prose then
+    has a stray double quote. The opening fence is outside any string, but that quote opens one that
+    hides the closing fence. Until 16 November 2026 the block was taken and parsed. Now no closing
+    fence is found, and the object read from the prose's brace never closes."""
+    raw = 'Note {see ```json\nHere "x ' + VALID + "\n```"
+
+    with pytest.raises(SchemaViolation, match="unbalanced"):
+        parse_statement_list(raw)
+
+
 def test_an_object_quoting_fences_around_a_statement_list_is_refused_for_its_shape():
     """A reply that does not conform, which the old search turned into an answer, against invariant
     10. It is valid JSON with three keys, and two of its strings are fences around a statement list

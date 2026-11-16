@@ -228,16 +228,21 @@ def regex_outside_strings(raw: str) -> str:
                      id="a fenced block after an object whose string quotes one"),
         pytest.param('{"k": "```", "v": {"a": 1}, "z": "```"}', '{"k": "```", "v": {"a": 1}, "z": "```"}',
                      '", "v": {"a": 1}, "z": "', id="fences quoted in two strings around an object"),
+        pytest.param('{"a": "see ```"} x ```json\n{"b": 2}\n```', '{"b": 2}', '"} x',
+                     id="an object quoting a fence, then a fenced block"),
+        pytest.param('Note {see ```json\nHere "x {"a": 1}\n```', 'Note {see ```json\nHere "x {"a": 1}\n```',
+                     'Here "x {"a": 1}', id="a quote in a block's prose hides its closing fence after an open brace"),
     ],
 )
 def test_a_fence_inside_a_json_string_is_not_a_fence(raw, expected, regex_gave):
-    """Each case pins what the frozen function gave as well, so it records a change. The last five
-    are replies that the old function let through and that the parser no longer answers the same way.
-    - Two preambles leave a string open, and a block's quotes go unescaped inside another string:
-      the parser refuses them.
-    - An object quotes fences around another object: the parser refuses it for its shape.
-    - A fenced block follows an object that quotes one: the parser answers from the later block.
-    test_schema.py follows each of these through the parser."""
+    """Each case pins what the frozen function gave as well, so it records a change. After the first
+    seven come replies that the parser now answers differently from the old function:
+    - refused: two preambles that leave a string open; a quote in a block's prose that hides its
+      closing fence after an open brace; a block whose quotes go unescaped inside another string;
+    - refused for its shape: an object quoting fences around another object;
+    - answered from the later block: an object quoting a fenced block, or a fence alone, with a
+      fenced block after it.
+    test_schema.py follows an example of each kind through the parser."""
     assert regex_strip_code_fences(raw) == regex_gave
     assert schema.strip_code_fences(raw) == expected
     assert regex_outside_strings(raw) == expected

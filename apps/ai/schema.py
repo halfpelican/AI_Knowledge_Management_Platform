@@ -179,15 +179,16 @@ def _strip_code_fences(raw: str) -> str:
     in a string closed there. Both were refused, as no JSON object or an unbalanced one, and each
     cost an attempt. The security review of PR #107 found it.
 
-    The other way round, where the first fence the old search found lies inside a string as the
-    scan reads one, the old search parsed the block after it, and this does not. The reply is read
-    whole, or from its first fence outside a string. So such a reply can now be refused, or answered
-    from a different object (D-136 lists the shapes):
-    - refused, when prose before the fence leaves a string open;
+    The other way round, the old search sometimes used a fence that the scan reads as inside a
+    string, either the opening one or the closing one. It parsed a block that this does not. The
+    reply is now read whole, or between the fences that lie outside strings, so it can be answered
+    differently. Some examples follow; it is not a complete list, and D-136 has more:
+    - refused, when prose leaves a brace open before the fence and a double quote then opens a
+      string that hides a fence, the opening one or the closing one;
     - refused, when a fenced block sits in another object's string with its quotes unescaped;
-    - refused for its shape, when the reply is an object of the wrong shape quoting fences around a
-      statement list, which the old search turned into an answer;
-    - answered from a different object, when a fenced block outside strings follows.
+    - refused for its shape, when an object of the wrong shape quotes fences around a statement list,
+      which the old search turned into an answer;
+    - answered from another object, when a fenced block outside strings comes after.
 
     The block is found by a scan since 13 November 2026, not by
     ``re.search(r"```[a-zA-Z0-9_-]*\\s*(.*?)```", text, re.DOTALL)``. With an opening fence and no

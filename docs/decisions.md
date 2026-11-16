@@ -16234,29 +16234,39 @@ string do not count.
 3. **`TRAILING_COMMA_PATTERN` is gone,** and not kept as an alias, because a caller still using it
    would edit strings again. The classification and summary parsers import `remove_trailing_commas`.
 
-**What it changes about what the parser accepts.** Each change below is pinned by a test.
+**What it changes about what the parser accepts.** Each kind of change below has an example pinned
+by a test.
 - **Refused before, accepted now:**
   - a reply quoting a code block in a string, fenced or not;
-  - an unfenced object that quotes a fence, with a fenced block after it. The first fence outside a
-    string opens that block, so its object is taken, as the first fenced block always was. Before,
-    the fence in the string was taken and the reply was refused (the security review, I1).
-- **Accepted before and now, with a different object:** an object whose string quotes a fenced block,
-  with a fenced block after the object. The old search took the fence in the string, so the object
-  quoted there was the answer. Now the first fence outside a string opens the later block, and its
-  object is taken (the requirements audit, item 1(a)).
+  - an unfenced object with a fenced block after it, where the object's string quotes a fence alone
+    (the security review, I1), or quotes a fenced block with its quotes escaped (its re-check). The
+    first fence outside a string opens the later block, so its object is taken, as the first fenced
+    block always was. Before, the fence in the string was taken, its block held nothing the parser
+    could use, and the reply was refused.
+- **Accepted before and now, with a different object:** an object whose string quotes a fenced block
+  with its quotes unescaped, with a fenced block after the object. The old search took the fence in
+  the string, so the object quoted there was the answer. Now the first fence outside a string opens
+  the later block, and its object is taken (the requirements audit, item 1(a)).
 - **Both objects are model output.** In either case above, verification applies to whichever object
   is taken.
 - **Accepted before with its text changed, accepted now as written:** a reply that needs the comma
   repair and holds a comma before a bracket inside a string.
-- **Accepted before, refused now.** None of these replies conforms to the schema as sent. The first
-  draft of this entry named two shapes. The security review of `389ec9e` found the general rule and
-  a third shape (N1, N2), and the requirements audit of `6f8a2cb` found a fourth (its item 1(b)).
-  - **The first fence the old search found lies inside a string, as the scan reads one.** The old
-    search parsed the block after it. Now the reply is read whole, or from its first fence outside a
-    string, as in the different-object case above. Three shapes are refused this way:
-    - prose before the fence opens a brace and then a string it never closes. That is an unescaped
-      double quote, or a quote whose closing quote is escaped, so the number of quotes can be even.
-      What is left never closes;
+- **Accepted before, refused now.** None of these replies conforms to the schema as sent. Each
+  review found more of them:
+  - the first draft of this entry named two shapes;
+  - the security review of `389ec9e` found a third, and a rule (N1, N2);
+  - the requirements audit of `6f8a2cb` found a fourth (its item 1(b));
+  - its re-check of `76f8b65` found that the rule must cover the closing fence too (its item A).
+
+  There are two kinds:
+  - **The old search used a fence that the scan reads as inside a string,** the opening fence or the
+    closing one. It parsed the block between them. Now the reply is read whole, or between the fences
+    that lie outside strings, as in the different-object case above. These shapes are refused this
+    way, as examples, not a complete list:
+    - prose leaves a brace open before the fence, and a double quote then opens a string that hides a
+      fence. The quote may come before the opening fence, unescaped, or with its closing quote
+      escaped, so the number of quotes can be even. Or it may be in the block's own prose, hiding the
+      closing fence. Either way, what is left never closes;
     - a fenced block sits inside another object's string with its quotes unescaped. The old search
       made the object in that block the answer. What is left is not valid JSON;
     - an object of the wrong shape quotes fences in two of its strings, around a statement list
@@ -16268,9 +16278,13 @@ string do not count.
     do this: the ones `str.isspace` matches below U+0020. They are tab, newline, vertical tab, form
     feed, carriage return and U+001C to U+001F.
 - **Unchanged:**
-  - a reply that decodes as sent, because the comma repair never runs on it;
-  - one run of three backticks in an unfenced reply, which was harmless before too;
-  - everything outside strings.
+  - the comma repair, for a reply whose object decodes without it, because the repair never runs
+    then;
+  - what the comma repair removes outside strings;
+  - what the fence repair returns for a reply with no backtick inside a string, as the scan reads
+    one. The tests hold this to the frozen regex exactly, over every short string and 49,226
+    generated replies;
+  - one run of three backticks inside a string in an unfenced reply, which was harmless before too.
 
 **Committed measurements: none that can be replayed scores differently.**
 - **FR-12, replayed.** The replay took every raw reply committed under `corpus/` on any branch, at a
@@ -16302,10 +16316,18 @@ string do not count.
     - the run's notes read each failure as a reply that stopped before its JSON closed, which cannot
       be checked without the replies;
     - its verdict, FAIL with an answered-only p90 of 276,689 ms against 4 s, cannot flip. Its 503
-      count and p90 cannot be shown unchanged.
+      count and p90 cannot be shown unchanged;
+    - **support for the notes' reading.** In runs 2 and 3 the 503s were one question, "How are
+      records managed and retained?". Run 2's two 503s are recorded as that question, and run 3's
+      three match, by count, the three times it was asked. On 7 November it was asked again with raw replies kept
+      (`corpus/objective-02/runs/2026-11-07/generation_attempts.jsonl`). It failed 12 times with
+      "unbalanced", each reply using all 800 of its tokens, and both parsers refuse all 12 the same
+      way. That supports truncation as the reading for 1 November, but does not prove it.
 
-    Runs 1 and 2 of that day had two 503s each, with no raw replies kept either. Both are recorded
-    INVALID, so they score nothing.
+    Runs 1 and 2 of that day had two 503s each, and their raw replies were not kept either. Both runs
+    are recorded INVALID. Run 2's answered-only p90, 51,206 ms, is still the one-user baseline that the
+    NFR-09 decision rests on (`nfr08-runs.md`). Run 3 is about 440% over it, where NFR-09 allows 25%,
+    so that decision cannot flip either (the requirements audit's re-check, item E).
   - **The FR-10 classification of Objective 02's re-time, 10 November, on FLM**
     (`corpus/objective-02/runs/2026-11-10/ingestion-classify-flm/errors.log`). One failed attempt,
     "not valid JSON", on a complete reply of 87 tokens. Its result, met, cannot flip.
@@ -16330,8 +16352,10 @@ string do not count.
   - **written first, as pins.** Strict expected-failure markers pinned how the old code failed:
     `raises=SchemaViolation` for the fences, `raises=AssertionError` for the comma. On `48cb537`, whose
     parser is `f82fb1a`'s, the run was 9 xfailed and 367 passed. The markers came off with the fix;
-  - `test_schema.py` also follows through the parser every shape the reviews found: the three
-    fence refusals and the different object;
+  - `test_schema.py` also follows an example of each kind the reviews found through the parser: I1,
+    the different object, and four refused shapes. Those are a preamble left open, a closing fence
+    hidden by a quote in the block, a block in another object's string, and fences around an object.
+    The escaped-quote preamble is a named case only;
   - the identity tests ("the repairs are the statement parser's own code") now name
     `remove_trailing_commas`, and assert that the old name is gone.
 - **`test_code_fence_scan.py`** (PR #107's):
@@ -16341,9 +16365,14 @@ string do not count.
     string, 49,226 replies, it is exact. Where one is, 774 replies, 540 of them with a fence there,
     the frozen regex runs on the reply with the backticks inside its strings masked, and the mask is
     undone;
-  - new: twelve named cases of fences inside strings, each pinning what the regex gave. Five of them
-    are the shapes the reviews found: two preambles, a block in another object's string, fences
-    around an object, and a block after an object quoting one;
+  - new: fourteen named cases of fences inside strings, each pinning what the regex gave. Seven of
+    them are shapes the reviews found:
+    - two preambles;
+    - a closing fence hidden by a quote in the block;
+    - a block in another object's string;
+    - fences around an object;
+    - a block after an object quoting a fenced block;
+    - a block after an object quoting a fence alone;
   - new: three named cases of what is outside a string;
   - new: every string of up to seven characters over a backtick, both braces, a quote, a backslash and
     a letter (335,923);
@@ -16367,7 +16396,19 @@ relied on, and every break was reverted.
   and after the last, and they matched.
 - **The tables** are generated from those reports, not typed. The script and its reports are in the
   session's scratchpad, not in the repository.
-- **Where it ran:** three runs, each on the code and tests of a commit before it was made: `389ec9e`'s, 10:13 to 10:21; `6f8a2cb`'s, 11:27 to 11:34; and this commit's, 14:33 to 14:43. Every test that two runs in a row share failed under exactly the same breaks: 440 tests between the first and second, and 452 between the second and third. The first run's one test that the second lacked was the comma repair's single raw newline, which the nine control characters replaced. The 12 tests new in the second run and the 4 new in the third are the cases the reviews' corrections added. The tables are the third run's.
+- **Where it ran:** five runs.
+  - **The first,** 09:57 to 10:10, was on a state that was never committed, before the preamble
+    refusal was pinned. It is superseded.
+  - **Then one on the code and tests of each commit, before it was made:** `389ec9e`'s, 10:13 to
+    10:21; `6f8a2cb`'s, 11:27 to 11:34; `76f8b65`'s, 14:33 to 14:43; and this commit's, 15:40 to
+    15:50.
+  - **Between consecutive runs of those four,** every test both share failed under exactly the
+    same breaks: 440 tests, then 452, then 456.
+  - **The first of the four had one test the second lacked:** the comma repair's single raw
+    newline, which the nine control characters replaced.
+  - **The tests new in each later run,** 12, then 4, then 4, are the cases the reviews'
+    corrections added.
+  - **The tables** are the last run's.
 
 | Test | Fails under |
 |---|---|
@@ -16383,9 +16424,11 @@ relied on, and every break was reverted.
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a fenced block after an object whose string quotes one]` | B1, B19 |
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a fenced block inside another object's string, its quotes unescaped]` | B1 |
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a preamble that opens a brace and then a quote hides the fence after it]` | B1 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a quote in a block's prose hides its closing fence after an open brace]` | B1, B8, B19 |
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[a stray closing brace in prose does not hide the next object's strings]` | B1, B6 |
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[an escaped quote does not close the string]` | B1, B3 |
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[an escaped quote in a preamble leaves its string open]` | B1, B3 |
+| `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[an object quoting a fence, then a fenced block]` | B1, B19 |
 | `test_code_fence_scan::test_a_fence_inside_a_json_string_is_not_a_fence[fences quoted in two strings around an object]` | B1 |
 | `test_code_fence_scan::test_every_short_string_over_quotes_and_braces_strips_as_the_regex_did_outside_strings` | B1, B3, B5, B6, B19 |
 | `test_code_fence_scan::test_generated_replies_full_of_strings_strip_as_the_regex_did_outside_strings` | B1, B3, B4, B5, B6, B7, B8, B19 |
@@ -16403,6 +16446,8 @@ relied on, and every break was reverted.
 | `test_schema::test_a_fenced_block_after_an_object_quoting_one_is_the_block_taken` | B1, B19 |
 | `test_schema::test_a_fenced_block_inside_another_object_s_string_is_not_taken` | B1 |
 | `test_schema::test_a_preamble_that_opens_a_brace_and_a_quote_hides_the_fence_after_it` | B1 |
+| `test_schema::test_a_quote_in_a_fenced_block_s_prose_hides_its_closing_fence_after_an_open_brace` | B1, B19 |
+| `test_schema::test_an_object_quoting_a_fence_before_a_fenced_block_is_answered_from_the_block` | B1, B19 |
 | `test_schema::test_an_object_quoting_fences_around_a_statement_list_is_refused_for_its_shape` | B1 |
 | `test_schema::test_the_trailing_comma_repair_leaves_a_statement_s_text_alone` | B2, B11, B18 |
 | `test_summarisation_schema::test_a_code_block_quoted_in_an_element_is_not_a_fence` | B1 |
@@ -16439,14 +16484,14 @@ relied on, and every break was reverted.
 
 The breaks, each applied alone, run and reverted:
 
-- **B1** (`apps/ai/schema.py`): the fence fix reverted: fences found with str.find, as on 13 November. 28 failed.
+- **B1** (`apps/ai/schema.py`): the fence fix reverted: fences found with str.find, as on 13 November. 32 failed.
 - **B2** (`apps/ai/schema.py`): the comma fix reverted: the regex over the whole object. 19 failed.
 - **B3** (`apps/ai/schema.py`): fence scan: no escapes, every quote closes a string. 4 failed.
 - **B4** (`apps/ai/schema.py`): fence scan: a quote after any backslash is escaped, even after an escaped backslash. 3 failed.
 - **B5** (`apps/ai/schema.py`): fence scan: a quote outside braces opens a string. 5 failed.
 - **B6** (`apps/ai/schema.py`): fence scan: no floor, a stray closing brace makes depth negative. 4 failed.
 - **B7** (`apps/ai/schema.py`): fence scan: a closing brace inside a string counts. 3 failed.
-- **B8** (`apps/ai/schema.py`): fence fallback: a fence ending the reply inside a string is stripped. 3 failed.
+- **B8** (`apps/ai/schema.py`): fence fallback: a fence ending the reply inside a string is stripped. 4 failed.
 - **B9** (`apps/ai/schema.py`): comma scan: no escapes, every quote closes a string. 3 failed.
 - **B10** (`apps/ai/schema.py`): comma scan: a quote after any backslash is escaped, even after an escaped backslash. 4 failed.
 - **B11** (`apps/ai/schema.py`): parser: the old regex repair applied before the first decode. 11 failed.
@@ -16457,7 +16502,7 @@ The breaks, each applied alone, run and reverted:
 - **B16** (`apps/ai/schema.py`): comma scan: only JSON's four whitespace characters, not str.isspace. 3 failed.
 - **B17** (`apps/ai/schema.py`): comma scan: a run of commas before a closer goes together. 6 failed.
 - **B18** (`apps/ai/schema.py`): comma scan: every comma goes, whatever follows it. 28 failed.
-- **B19** (`apps/ai/schema.py`): fence scan: a fence before start is returned, so the opening fence closes itself. 42 failed.
+- **B19** (`apps/ai/schema.py`): fence scan: a fence before start is returned, so the opening fence closes itself. 46 failed.
 - **B20** (`apps/ai/schema.py`): fence scan made quadratic: a count over the reply at each in-string backtick and backslash, brace and outside quote. 5 failed.
 - **B21** (`apps/ai/schema.py`): comma scan made quadratic: a count over the rest at each in-string character, comma and looked-at space. 4 failed.
 
@@ -16466,24 +16511,25 @@ Tests older than D-136 that a break also failed, counted by file:
 - **B18:** 10, in `test_classification_schema.py` (3), `test_schema.py` (4), `test_summarisation_schema.py` (3).
 - **B19:** 25, in `test_classification_schema.py` (1), `test_code_fence_scan.py` (22), `test_schema.py` (1), `test_summarisation_schema.py` (1).
 
-The baseline run, with no break, passed 456 of 456. New or changed tests: 65, of which 63 are new and 2 are the identity tests, changed. Caught by no break: none.
+The baseline run, with no break, passed 460 of 460. New or changed tests: 69, of which 67 are new and 2 are the identity tests, changed. Caught by no break: none.
 
 **The suites.**
 The worktree has no `.env`, so for `pytest` the main checkout's was loaded into the test process,
 with a database name of its own.
 - **`pytest`, the whole suite,** once on each commit's code and tests, before the commit:
-  - on this commit's: 5,015 passed in 29 min 8 s, exit 0, with dual-role coverage of 48 of 48
+  - on this commit's: 5,019 passed in 24 min 43 s, exit 0, with dual-role coverage of 48 of 48
     protected endpoints (100%);
+  - on `76f8b65`'s: 5,015 passed in 29 min 8 s;
   - on `6f8a2cb`'s: 5,011 passed in 21 min 52 s;
   - on `389ec9e`'s: 5,000 passed in 21 min 43 s.
 
-  Each difference is the cases that a review's corrections added: 11, then 4.
-- **The five parser and repair files alone,** on this commit's code: 456 passed.
+  Each difference is the cases that a review's corrections added: 11, then 4, then 4.
+- **The five parser and repair files alone,** on this commit's code: 460 passed.
 - **The timing cases:** all 14 at 200,000 characters, PR #107's five and this change's nine. Each took
   0.02 to 0.05 s, against the 2 s bound. They were measured on `389ec9e`, whose code the corrections
   since change only in docstrings. The requirements audit measured 0.02 to 0.06 s on `6f8a2cb`.
-- **`npm ci` and `npm test`** ran at 09:59 on 16 November, on the uncommitted change, before either
-  commit. `npm ci` found 0 vulnerabilities, and `npm test` passed 670 in 48 files, exit 0. No
+- **`npm ci` and `npm test`** ran at 09:59 on 16 November, on the uncommitted change, before any of
+  this branch's commits. `npm ci` found 0 vulnerabilities, and `npm test` passed 670 in 48 files, exit 0. No
   front-end file has changed since.
 - **Migrations:** no model changed, so there is no migration.
 
@@ -16501,8 +16547,8 @@ its highest heading and `schema.py` unchanged.
 **Reviews.**
 **The security review of `389ec9e` (16 November 2026).**
 - **How it ran:** `security-reviewer` reviewed the change read-only. It began on the uncommitted
-  working tree while the suite ran, and checked that the `apps/ai` diff it probed is byte-identical
-  to `389ec9e`'s.
+  working tree while the suite ran, and checked that the diffs of the three parser modules it probed are
+  byte-identical to `389ec9e`'s.
 - **Where the report is:** kept whole outside the repository, in the session group's notes folder, as
   `string-aware-repairs-security-review-389ec9e-verbatim.md`, saved by script from the agent's
   transcript.
@@ -16538,7 +16584,8 @@ Its verdict line:
     1,848 classification replies, out of 60,000 each.
   - Leaks and refusals: violation messages quote no reply content. The existing refusals (NUL,
     unpaired surrogate, depth, digits) hold in 72 of 72 checks.
-  - The removed name: nothing imports it, on any branch or in any worktree.
+  - The removed name: nothing imports it, apart from other branches' older copies of the files
+    this change edits, which a merge replaces.
   - Verification: untouched. Every parsed statement still passes through `verify_citations`
     (`apps/retrieval/pipeline.py`, `apps/retrieval/verification.py`), and the front end renders the
     text as plain text.
@@ -16594,19 +16641,79 @@ Its verdict line on `6f8a2cb`:
   11. "From 169 files": the replies came from 43 of them. **Fixed.**
   12. The module docstring cited the prototype replay of 15 November. **Fixed:** it cites the replay
       of this code on 16 November.
-- **Its clause table** also marked two things as partial:
+- **Its clause table** also marked three things as partial:
   - the pins coming after the account, now recorded under "The question, as put";
   - the security review not being re-run on `6f8a2cb`. The production code the review probed has
     changed only in docstrings since. `git diff 389ec9e` of `schema.py`, `classification.py` and
-    `summarisation.py` touches nothing else.
+    `summarisation.py` touches nothing else, and the review was then re-run (below);
+  - the measurement claim, which is its items 3 and 4.
 - **What it could not check:**
   - where the follow-ups were tracked before, which is app state;
   - whether the logs ran on exactly the committed bytes, where the evidence is strong but indirect;
   - the raw replies behind items 3 and 4;
   - the full suites, `npm` and the security probes, which it did not re-run.
 
-**After these corrections,** both reviews were asked to check the commit that makes them. Their
-answers are in a dated note below.
+**Re-checks of `76f8b65` (16 November 2026).** Both reviews checked the commit with the audit's
+corrections. Both reports are saved verbatim beside the others in the notes folder, by script from
+the agents' transcripts.
+
+The security review's re-check, `string-aware-repairs-security-recheck-76f8b65-verbatim.md`:
+
+> **Verdict: CAN MERGE WITH NOTES.** Neither of the audit's two shapes raises a security concern. The production code is the code I reviewed: since `389ec9e` it has changed only in docstrings. N1 and N2 are fixed as D-136 records. The notes below are small precision points in D-136 and in my own first report; none blocks the merge.
+
+- **What it confirmed.**
+  - The three parser modules' syntax trees, without docstrings, are unchanged since `389ec9e`.
+  - Its probes, re-run on `76f8b65`, gave the same results.
+  - Neither of the audit's shapes raises a security concern. Over 15,000 replies of each shape,
+    every answer is a value the old parser could already reach, and the same checks and
+    verification apply.
+  - N1 and N2 are fixed as recorded.
+- **Its notes, each now fixed.**
+  - The different-object case needed "with its quotes unescaped". With the quotes escaped, the old
+    parser refused the reply, so that variant belongs to I1's kind, and is now listed there.
+  - "The `apps/ai` diff it probed" meant the diffs of the three parser modules. It is narrowed.
+  - "Nothing imports the removed name, on any branch" is too broad. Other branches' older copies of
+    the files this change edits still import it, and a merge replaces those files. It is narrowed.
+  - Its first report holds two more count slips, which its saved copy keeps:
+    - "80 named edge cases" counts the same 40 twice, once per seed;
+    - "about 540,000 more parses" was about 1.44 million parses, of 180,000 distinct replies plus 19
+      named ones.
+- **What it disclosed.** No tracked file, ref or index changed in either case:
+  - its first probes ran without Python's `-B` flag, and refreshed three ignored bytecode files in
+    the worktree, `apps/ai/__pycache__/{base,classification,summarisation}.cpython-312.pyc`, at
+    10:42:37;
+  - `git merge-tree --write-tree` added unreferenced objects to the repository's object store.
+
+The requirements audit's re-check, `string-aware-repairs-audit-recheck-76f8b65-verbatim.md`:
+
+> **Verdict: INCOMPLETE.** All twelve items are fixed as D-136 says, and so are both partials, apart from one sentence in "Reviews". The new tests pin 1(a) and 1(b), and both fail under B1; I re-ran B1 myself. The suite figures are right. But the corrected D-136 still states its fence rule wrongly, and that leaves one more "accepted before, refused now" shape unlisted and untested. Two other claims in it are also untrue. No code change is needed.
+
+- **What it confirmed.**
+  - All twelve items are fixed.
+  - It re-ran B1 and B19 on an export of `76f8b65`.
+  - It recomputed the third run's tables and comparisons, which match.
+- **Its items, each now fixed.**
+  - **A.** The rule said "the first fence". The fence the old search used can be the closing one: in
+    `Note {see ```json\nHere "x {...}\n````, a quote in the block's prose hides the closing fence
+    after the preamble's open brace. The old parser accepted that reply, and the new one refuses it.
+    The rule now covers either fence, the shapes are given as examples, and the case is pinned.
+  - **B.** "Each change is pinned by a test" was untrue for I1. It is now pinned, through the parser
+    and as a named case.
+  - **C.** The note promised at `76f8b65` did not exist. This is it.
+  - **D.** "Where it ran" left out a superseded first break run, at 09:57 to 10:10, on a state that
+    was never committed. It is added.
+  - **E.** "Score nothing" was wrong for run 2. Its p90 is the baseline of the NFR-09 decision, which
+    cannot flip. It is corrected.
+  - Its clause table had three partial rows, not two. Corrected above.
+  - Its suggestion, the 7 November re-ask of the 503 question, is under "Committed measurements".
+    This entry counts 12 failed attempts on that question; the audit's 15 was the whole file's.
+- **What it noted.**
+  - Another session's FR-04 work claims D-137, so there is no collision. Both branches add to the
+    end of `decisions.md`, so whichever merges second will meet a small conflict there.
+  - `origin/main` was then `336b27d` (PR #117), with `schema.py` unchanged.
+
+**After these corrections,** made in the commit after `76f8b65`, the requirements audit is asked to
+check that commit. Its answer is to be recorded here before the branch is merged.
 
 **Not covered:**
 - **FR-10's and FR-16's raw replies** are not kept in any committed run, so only FR-12 was replayed.
@@ -16615,8 +16722,11 @@ answers are in a dated note below.
   not kept.
 - **`docs/flm-baseline.md`'s 50 replies** are not committed, so the baseline cannot be replayed. The
   module docstring already says that the parser has changed since it was measured.
-- **The refusals and the different object** are tested through the statement parser only. The
+- **The changes the reviews found** are tested through the statement parser only. The
   classification and summary parsers call the same functions, which the identity tests assert.
+- **The listed shapes are examples.** The tests that compare the scan with the masked regex cover
+  the rule as a whole, over every short string and over generated replies, rather than shape by
+  shape.
 - **The masked-regex reference** in `test_code_fence_scan.py` restates the definition of a JSON string
   in the test file. The named cases pin that definition on their own, and the breaks B3 to B8 show
   that they catch a misreading of it.
