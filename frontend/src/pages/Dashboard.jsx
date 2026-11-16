@@ -12,7 +12,9 @@ import useDocumentTitle from '../hooks/useDocumentTitle.js'
 import { formatDate } from '../utils/dates.js'
 import { extractFieldErrors } from '../utils/fieldErrors.js'
 import { addressForThread } from '../utils/threadAddress.js'
+import useAuth from '../auth/useAuth.js'
 import './Dashboard.css'
+
 
 /* ---- Filters and the URL ------------------------------------------------- */
 
@@ -472,10 +474,16 @@ export default function Dashboard() {
   const meetings = payload?.recent_meetings ?? []
   const questions = payload?.recent_questions ?? []
   const panelState = { loading, failed }
+  const { user } = useAuth()
 
   return (
     <div className="dashboard">
       <h1>{TEXT.dashboardHeading}</h1>
+      {user && (
+        <p className="dashboard__user">
+          Signed in as <strong>{user.name}</strong> ({user.role})
+        </p>
+      )}
       <p className="dashboard__intro">{TEXT.dashboardIntro}</p>
       <DashboardFilters
         key={query}
@@ -492,7 +500,7 @@ export default function Dashboard() {
       <div className="dashboard__panels">
         <DashboardPanel
           headingId="dashboard-documents-heading"
-          heading={TEXT.dashboardDocumentsHeading}
+          heading="Recent documents"
           to="/documents"
           loadingText={TEXT.dashboardLoadingDocuments}
           empty={documents.length === 0}
@@ -503,7 +511,7 @@ export default function Dashboard() {
         </DashboardPanel>
         <DashboardPanel
           headingId="dashboard-meetings-heading"
-          heading={TEXT.dashboardMeetingsHeading}
+          heading="Recent meetings"
           to="/meetings"
           loadingText={TEXT.dashboardLoadingMeetings}
           empty={meetings.length === 0}
@@ -514,7 +522,7 @@ export default function Dashboard() {
         </DashboardPanel>
         <DashboardPanel
           headingId="dashboard-totals-heading"
-          heading={TEXT.dashboardTotalsHeading}
+          heading="Indexed items"
           loadingText={TEXT.dashboardLoadingTotals}
           {...panelState}
         >
@@ -522,7 +530,7 @@ export default function Dashboard() {
         </DashboardPanel>
         <DashboardPanel
           headingId="dashboard-questions-heading"
-          heading={TEXT.dashboardQuestionsHeading}
+          heading="Your recent questions"
           to="/ask"
           loadingText={TEXT.dashboardLoadingQuestions}
           empty={questions.length === 0}

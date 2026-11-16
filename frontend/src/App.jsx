@@ -16,10 +16,12 @@ import DocumentDetail from './pages/DocumentDetail.jsx'
 import DocumentRepository from './pages/DocumentRepository.jsx'
 import Home from './pages/Home.jsx'
 import Login from './pages/Login.jsx'
+import ForgotPassword from './pages/ForgotPassword.jsx'
 import MeetingDetail from './pages/MeetingDetail.jsx'
 import Meetings from './pages/Meetings.jsx'
 import Register from './pages/Register.jsx'
 import RoleManagement from './pages/RoleManagement.jsx'
+import Profile from './pages/Profile.jsx'
 import Search from './pages/Search.jsx'
 import Upload from './pages/Upload.jsx'
 import './App.css'
@@ -68,6 +70,7 @@ function PrimaryNav({ onLogoutError }) {
               are one endpoint. FR-13 asks for it to be "reachable from any page",
               which is what this link is. */}
           <NavLink to="/ask">{TEXT.askNavLabel}</NavLink>
+          <NavLink to="/profile">Profile</NavLink>
         </>
       ) : null}
       {/* FR-05: the role management screen "is entirely hidden and inaccessible
@@ -155,12 +158,14 @@ export default function App() {
           <Route index element={<Home />} />
           <Route path="login" element={<Login />} />
           <Route path="register" element={<Register />} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
           <Route path="components" element={<ComponentSheet />} />
           {/* FR-02 redirects to a role-specific dashboard, and both destinations
               render FR-14's (D-70): whichever role signs in first lands on it. */}
           <Route element={<RequireAuth />}>
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="admin" element={<Dashboard />} />
+            <Route path="profile" element={<Profile />} />
             {/* FR-08 upload; FR-15's repository, with its filters and sort in
                 the query string; FR-09 transcript ingestion and the full stored
                 transcript. */}

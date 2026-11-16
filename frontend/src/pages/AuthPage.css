@@ -24,3 +24,66 @@
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
+
+/* Login card wrapper */
+.auth-card {
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-background);
+}
+
+.auth-card h1 {
+  margin-top: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--text-2xl);
+}
+
+.auth-card__intro {
+  margin: 0 0 var(--space-5);
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+/* Remember me row */
+.auth-form__options {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.remember-me {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.remember-me input {
+  margin: 0;
+  width: var(--size-5);
+  height: var(--size-5);
+}
+
+/* Forgot password link under the sign in button */
+.auth-form__forgot {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: right;
+}
+
+.auth-form__forgot a {
+  color: var(--color-link);
+  text-decoration: underline;
+}
+
+.auth-form__forgot a:hover {
+  text-decoration: none;
+}

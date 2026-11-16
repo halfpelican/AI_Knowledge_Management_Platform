@@ -47,6 +47,7 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
         name="email"
         type="email"
         autoComplete="email"
+        hint="We'll use this to sign you in."
         required
         value={values.email}
         error={fieldErrors.email}
@@ -61,6 +62,12 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
         error={fieldErrors.password}
         onChange={onChange}
       />
+      <div className="auth-form__options">
+        <label className="remember-me">
+          <input type="checkbox" name="remember" defaultChecked={false} />
+          Remember me on this device
+        </label>
+      </div>
       <div className="auth-form__actions">
         {/* FR-02: "On submit, 'Login' button disables and shows a loading
             indicator, preventing a second submission." */}
@@ -68,6 +75,9 @@ export function LoginForm({ values, fieldErrors, formError, arrival, submitting,
           {submitting ? 'Signing in…' : 'Sign in'}
         </Button>
       </div>
+      <p className="auth-form__forgot">
+        <Link to="/forgot-password">Forgot password?</Link>
+      </p>
     </form>
   )
 }

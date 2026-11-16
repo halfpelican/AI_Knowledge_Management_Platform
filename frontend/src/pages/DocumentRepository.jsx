@@ -263,7 +263,9 @@ export function DocumentTable({ documents, sort, onSort, linkState, retryingId, 
                       a retry that can work, one that cannot, and one that is not
                       offered at all is on the screen rather than discovered by
                       pressing the button. */}
-                  {record.status}
+                  <span className={`status-badge status--${String(record.status).toLowerCase().replace(/\s+/g, '-')}`}>
+                    {record.status}
+                  </span>
                   {message ? <span className="data-table__message">{message}</span> : null}
                   {retryable ? (
                     <span className="data-table__action">
