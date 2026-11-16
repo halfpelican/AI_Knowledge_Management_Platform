@@ -1,0 +1,2973 @@
+{
+  "database": "kmp_alpha_screen_20261115",
+  "copied_from": "kmp_alpha_20261113 (pg_dump, chunk ids and embeddings checked identical)",
+  "code": "6e1efd1 (the alpha's commit, from git archive)",
+  "provider": "anthropic",
+  "chat_model": "claude-haiku-5-5",
+  "embedding_model_configured": "voyage-4",
+  "summary_runner": "inline",
+  "answer_margin": 0.05,
+  "no_answer_margin": 0.02,
+  "band": 0.005,
+  "trials_per_question": 3,
+  "started": "2026-11-15T22:05:40+11:00",
+  "pass_1_before_uploads": {
+    "at": "2026-11-15T22:05:55+11:00",
+    "rows": [
+      {
+        "label": "s01 as Employee",
+        "step": "FR-11.1",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [],
+            "composed_for_retrieval": "Who is the sponsor of Project Atlas?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.1516,
+            "top_source": "Weekly Operations Standup",
+            "top_five": [
+              [
+                "Weekly Operations Standup",
+                0.1516,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.1423,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.139,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1385,
+                false
+              ],
+              [
+                "Product Planning Workshop",
+                0.1383,
+                false
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.1516,
+            "distance_from_threshold": 0.1171,
+            "within_band": [],
+            "partial_matches": [],
+            "verdict": "ok (path A)"
+          }
+        ]
+      },
+      {
+        "label": "s01 as Administrator",
+        "step": "FR-11.2",
+        "role": "Administrator",
+        "turns": [
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [],
+            "composed_for_retrieval": "Who is the sponsor of Project Atlas?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.427,
+            "top_source": "Project Atlas Kickoff Brief",
+            "top_five": [
+              [
+                "Project Atlas Kickoff Brief",
+                0.427,
+                false
+              ],
+              [
+                "Project Budget Tracker FY27",
+                0.3152,
+                false
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.1913,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.1517,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.142,
+                false
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.3152,
+            "distance_from_threshold": 0.0465,
+            "within_band": [],
+            "partial_matches": [
+              "Project Atlas Kickoff Brief",
+              "Project Budget Tracker FY27"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "q07",
+        "step": "FR-12.2",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How quickly do we have to acknowledge a customer complaint?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How quickly do we have to acknowledge a customer complaint?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5857,
+            "top_source": "Customer Complaints Procedure",
+            "top_five": [
+              [
+                "Customer Complaints Procedure",
+                0.5857,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3433,
+                false
+              ],
+              [
+                "IT Helpdesk Frequently Asked Questions",
+                0.3412,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3393,
+                true
+              ],
+              [
+                "Records Management Handbook",
+                0.3151,
+                false
+              ]
+            ],
+            "admitted": 14,
+            "nearest_to_threshold": 0.2675,
+            "distance_from_threshold": 0.0012,
+            "within_band": [
+              [
+                "Records Management Handbook",
+                0.2733
+              ],
+              [
+                "Records Management Handbook",
+                0.2725
+              ],
+              [
+                "Records Management Handbook",
+                0.2675
+              ]
+            ],
+            "partial_matches": [
+              "Customer Complaints Procedure",
+              "Customer Success Retrospective",
+              "IT Helpdesk Frequently Asked Questions",
+              "Records Management Handbook",
+              "Data Privacy Notice"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          }
+        ]
+      },
+      {
+        "label": "n02 as Employee",
+        "step": "FR-12.3",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How much did the latest penetration test cost?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How much did the latest penetration test cost?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.2305,
+            "top_source": "Weekly Operations Standup",
+            "top_five": [
+              [
+                "Weekly Operations Standup",
+                0.2305,
+                true
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2085,
+                false
+              ],
+              [
+                "Training Schedule Q4",
+                0.1812,
+                false
+              ],
+              [
+                "Expense Claims Guide",
+                0.181,
+                false
+              ],
+              [
+                "Product Planning Workshop",
+                0.1746,
+                true
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.2305,
+            "distance_from_threshold": 0.0382,
+            "within_band": [],
+            "partial_matches": [],
+            "verdict": "ok (path A)"
+          }
+        ]
+      },
+      {
+        "label": "D21 bike cage",
+        "step": "FR-12.4",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How many bicycles can the secure bike cage hold?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How many bicycles can the secure bike cage hold?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.261,
+            "top_source": "Fleet Vehicle Usage Notes",
+            "top_five": [
+              [
+                "Fleet Vehicle Usage Notes",
+                0.261,
+                false
+              ],
+              [
+                "IT Acceptable Use Policy",
+                0.2212,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1946,
+                false
+              ],
+              [
+                "Meeting Room Booking Rules",
+                0.1872,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.1856,
+                false
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.261,
+            "distance_from_threshold": 0.0077,
+            "within_band": [],
+            "partial_matches": [
+              "Fleet Vehicle Usage Notes"
+            ],
+            "verdict": "fails the rule: top below T + 0.05"
+          }
+        ]
+      },
+      {
+        "label": "T06 single-use cups",
+        "step": "FR-12.5",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "When will single-use cups be removed from the office kitchens?",
+            "prior_questions": [],
+            "composed_for_retrieval": "When will single-use cups be removed from the office kitchens?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.2738,
+            "top_source": "Health and Safety Induction Guide",
+            "top_five": [
+              [
+                "Health and Safety Induction Guide",
+                0.2738,
+                false
+              ],
+              [
+                "Office Relocation Announcement",
+                0.2726,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.2661,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2441,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2426,
+                true
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.2661,
+            "distance_from_threshold": 0.0026,
+            "within_band": [
+              [
+                "Office Relocation Announcement",
+                0.2726
+              ],
+              [
+                "Vendor Register 2026",
+                0.2661
+              ]
+            ],
+            "partial_matches": [
+              "Health and Safety Induction Guide",
+              "Office Relocation Announcement",
+              "Vendor Register 2026"
+            ],
+            "verdict": "fails the rule: top below T + 0.05"
+          }
+        ]
+      },
+      {
+        "label": "t08 as Employee",
+        "step": "FR-13.1",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.209,
+                true
+              ],
+              [
+                "Training Schedule Q4",
+                0.2065,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.3077,
+            "distance_from_threshold": 0.039,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure"
+            ],
+            "verdict": "ok"
+          },
+          {
+            "question": "Where are the first aid kits kept?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Where are the first aid kits kept?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3683,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.3683,
+                false
+              ],
+              [
+                "Health and Safety Induction Guide",
+                0.3548,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3253,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.2838,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.2607,
+                false
+              ]
+            ],
+            "admitted": 4,
+            "nearest_to_threshold": 0.2607,
+            "distance_from_threshold": 0.008,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Health and Safety Induction Guide",
+              "Customer Complaints Procedure",
+              "Records Management Handbook"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "t08 turn 1, then s01, as Employee",
+        "step": "FR-13.2",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.209,
+                true
+              ],
+              [
+                "Training Schedule Q4",
+                0.2065,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.3077,
+            "distance_from_threshold": 0.039,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure"
+            ],
+            "verdict": "ok"
+          },
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Who is the sponsor of Project Atlas?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3771,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.3771,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.338,
+                true
+              ],
+              [
+                "Weekly Operations Standup",
+                0.211,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2079,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.2056,
+                false
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.211,
+            "distance_from_threshold": 0.0577,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective"
+            ],
+            "verdict": "passages admitted: passes only if every run is a no-answer"
+          }
+        ]
+      },
+      {
+        "label": "t08 turn 1, then s01, as Administrator",
+        "step": "FR-13.3",
+        "role": "Administrator",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Security Incident Debrief",
+                0.2658,
+                true
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.2331,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.2658,
+            "distance_from_threshold": 0.0029,
+            "within_band": [
+              [
+                "Security Incident Debrief",
+                0.2658
+              ]
+            ],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure",
+              "Security Incident Debrief"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          },
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Who is the sponsor of Project Atlas?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3797,
+            "top_source": "Project Atlas Kickoff Brief",
+            "top_five": [
+              [
+                "Project Atlas Kickoff Brief",
+                0.3797,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3771,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.338,
+                true
+              ],
+              [
+                "Project Budget Tracker FY27",
+                0.3041,
+                false
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.2789,
+                false
+              ]
+            ],
+            "admitted": 5,
+            "nearest_to_threshold": 0.2789,
+            "distance_from_threshold": 0.0102,
+            "within_band": [],
+            "partial_matches": [
+              "Project Atlas Kickoff Brief",
+              "Customer Success Retrospective",
+              "Project Budget Tracker FY27",
+              "Team Roster and Skills Matrix"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      }
+    ]
+  },
+  "uploads": {
+    "d21": {
+      "status": 201,
+      "body": {
+        "doc_id": "8d14f6f3-9bf1-4fe2-8d39-51e44deeaa7e",
+        "title": "D21_bicycle_end_of_trip_facilities",
+        "status": "Indexed",
+        "department": "Operations",
+        "visible_to_roles": [
+          "Employee",
+          "Administrator"
+        ]
+      },
+      "classification": {
+        "doc_type": "Procedure",
+        "doc_type_outcome": "applied",
+        "department_outcome": "provisional",
+        "department_applied_by": "user",
+        "machine_doc_type": "Procedure",
+        "machine_doc_type_confidence": 0.8,
+        "machine_department": "Operations",
+        "machine_department_confidence": 0.7,
+        "user_edited": false,
+        "proposed_topics": [],
+        "classified_at": "2026-11-15T22:05:59.944482+11:00",
+        "model": "claude-haiku-5-5",
+        "input_truncated": false
+      }
+    },
+    "t06": {
+      "status": 201,
+      "body": {
+        "meeting_id": "2134c206-3d0a-4006-a581-99279f63062f",
+        "title": "Sustainability Working Group",
+        "status": "Indexed",
+        "visible_to_roles": [
+          "Employee",
+          "Administrator"
+        ],
+        "attendees": []
+      }
+    },
+    "chunks_after": 51,
+    "ai_generated_chunks_after": 6
+  },
+  "search_asset_tag": {
+    "status": 200,
+    "documents": [
+      [
+        "Asset Inventory Melbourne Office",
+        "...at the Melbourne office. The Tin Sparrow laptop batch was purchased in March and is due for review in three years. Asset tags must be attached to every item over five hundred dollars. New starters are introduced to asset inventory melbourne..."
+      ]
+    ],
+    "meetings": [],
+    "total_count": 1
+  },
+  "pass_2_after_uploads": {
+    "at": "2026-11-15T22:06:12+11:00",
+    "rows": [
+      {
+        "label": "s01 as Employee",
+        "step": "FR-11.1",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [],
+            "composed_for_retrieval": "Who is the sponsor of Project Atlas?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.1517,
+            "top_source": "Weekly Operations Standup",
+            "top_five": [
+              [
+                "Weekly Operations Standup",
+                0.1517,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.142,
+                false
+              ],
+              [
+                "Product Planning Workshop",
+                0.1383,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1382,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1378,
+                false
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.1517,
+            "distance_from_threshold": 0.117,
+            "within_band": [],
+            "partial_matches": [],
+            "verdict": "ok (path A)"
+          }
+        ]
+      },
+      {
+        "label": "s01 as Administrator",
+        "step": "FR-11.2",
+        "role": "Administrator",
+        "turns": [
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [],
+            "composed_for_retrieval": "Who is the sponsor of Project Atlas?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.427,
+            "top_source": "Project Atlas Kickoff Brief",
+            "top_five": [
+              [
+                "Project Atlas Kickoff Brief",
+                0.427,
+                false
+              ],
+              [
+                "Project Budget Tracker FY27",
+                0.3152,
+                false
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.1913,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.1517,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.142,
+                false
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.3152,
+            "distance_from_threshold": 0.0465,
+            "within_band": [],
+            "partial_matches": [
+              "Project Atlas Kickoff Brief",
+              "Project Budget Tracker FY27"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "q07",
+        "step": "FR-12.2",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How quickly do we have to acknowledge a customer complaint?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How quickly do we have to acknowledge a customer complaint?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5857,
+            "top_source": "Customer Complaints Procedure",
+            "top_five": [
+              [
+                "Customer Complaints Procedure",
+                0.5857,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3433,
+                false
+              ],
+              [
+                "IT Helpdesk Frequently Asked Questions",
+                0.3412,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3393,
+                true
+              ],
+              [
+                "Records Management Handbook",
+                0.3151,
+                false
+              ]
+            ],
+            "admitted": 14,
+            "nearest_to_threshold": 0.2675,
+            "distance_from_threshold": 0.0012,
+            "within_band": [
+              [
+                "Records Management Handbook",
+                0.2733
+              ],
+              [
+                "Records Management Handbook",
+                0.2725
+              ],
+              [
+                "Records Management Handbook",
+                0.2675
+              ]
+            ],
+            "partial_matches": [
+              "Customer Complaints Procedure",
+              "Customer Success Retrospective",
+              "IT Helpdesk Frequently Asked Questions",
+              "Records Management Handbook",
+              "Data Privacy Notice"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          }
+        ]
+      },
+      {
+        "label": "n02 as Employee",
+        "step": "FR-12.3",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How much did the latest penetration test cost?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How much did the latest penetration test cost?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.2305,
+            "top_source": "Weekly Operations Standup",
+            "top_five": [
+              [
+                "Weekly Operations Standup",
+                0.2305,
+                true
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2085,
+                false
+              ],
+              [
+                "Training Schedule Q4",
+                0.1812,
+                false
+              ],
+              [
+                "Expense Claims Guide",
+                0.181,
+                false
+              ],
+              [
+                "Product Planning Workshop",
+                0.1746,
+                true
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.2305,
+            "distance_from_threshold": 0.0382,
+            "within_band": [],
+            "partial_matches": [],
+            "verdict": "ok (path A)"
+          }
+        ]
+      },
+      {
+        "label": "D21 bike cage",
+        "step": "FR-12.4",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How many bicycles can the secure bike cage hold?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How many bicycles can the secure bike cage hold?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5193,
+            "top_source": "D21_bicycle_end_of_trip_facilities",
+            "top_five": [
+              [
+                "D21_bicycle_end_of_trip_facilities",
+                0.5193,
+                false
+              ],
+              [
+                "Fleet Vehicle Usage Notes",
+                0.261,
+                false
+              ],
+              [
+                "IT Acceptable Use Policy",
+                0.2212,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1946,
+                false
+              ],
+              [
+                "Meeting Room Booking Rules",
+                0.1872,
+                false
+              ]
+            ],
+            "admitted": 1,
+            "nearest_to_threshold": 0.261,
+            "distance_from_threshold": 0.0077,
+            "within_band": [],
+            "partial_matches": [
+              "D21_bicycle_end_of_trip_facilities",
+              "Fleet Vehicle Usage Notes"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "T06 single-use cups",
+        "step": "FR-12.5",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "When will single-use cups be removed from the office kitchens?",
+            "prior_questions": [],
+            "composed_for_retrieval": "When will single-use cups be removed from the office kitchens?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.638,
+            "top_source": "Sustainability Working Group",
+            "top_five": [
+              [
+                "Sustainability Working Group",
+                0.638,
+                true
+              ],
+              [
+                "Sustainability Working Group",
+                0.5895,
+                false
+              ],
+              [
+                "Health and Safety Induction Guide",
+                0.2738,
+                false
+              ],
+              [
+                "Office Relocation Announcement",
+                0.2726,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.2661,
+                false
+              ]
+            ],
+            "admitted": 4,
+            "nearest_to_threshold": 0.2661,
+            "distance_from_threshold": 0.0026,
+            "within_band": [
+              [
+                "Office Relocation Announcement",
+                0.2726
+              ],
+              [
+                "Vendor Register 2026",
+                0.2661
+              ]
+            ],
+            "partial_matches": [
+              "Sustainability Working Group",
+              "Health and Safety Induction Guide",
+              "Office Relocation Announcement",
+              "Vendor Register 2026"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          }
+        ]
+      },
+      {
+        "label": "t08 as Employee",
+        "step": "FR-13.1",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.209,
+                true
+              ],
+              [
+                "Training Schedule Q4",
+                0.2065,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.3077,
+            "distance_from_threshold": 0.039,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure"
+            ],
+            "verdict": "ok"
+          },
+          {
+            "question": "Where are the first aid kits kept?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Where are the first aid kits kept?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3683,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.3683,
+                false
+              ],
+              [
+                "Health and Safety Induction Guide",
+                0.3548,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3253,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.2838,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.2607,
+                false
+              ]
+            ],
+            "admitted": 4,
+            "nearest_to_threshold": 0.2607,
+            "distance_from_threshold": 0.008,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Health and Safety Induction Guide",
+              "Customer Complaints Procedure",
+              "Records Management Handbook"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "t08 turn 1, then s01, as Employee",
+        "step": "FR-13.2",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5058,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5058,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4592,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.209,
+                true
+              ],
+              [
+                "Training Schedule Q4",
+                0.2066,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.3077,
+            "distance_from_threshold": 0.039,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure"
+            ],
+            "verdict": "ok"
+          },
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Who is the sponsor of Project Atlas?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3771,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.3771,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.338,
+                true
+              ],
+              [
+                "Weekly Operations Standup",
+                0.211,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2079,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.2056,
+                false
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.211,
+            "distance_from_threshold": 0.0577,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective"
+            ],
+            "verdict": "passages admitted: passes only if every run is a no-answer"
+          }
+        ]
+      },
+      {
+        "label": "t08 turn 1, then s01, as Administrator",
+        "step": "FR-13.3",
+        "role": "Administrator",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Security Incident Debrief",
+                0.2658,
+                true
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.2331,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.2658,
+            "distance_from_threshold": 0.0029,
+            "within_band": [
+              [
+                "Security Incident Debrief",
+                0.2658
+              ]
+            ],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure",
+              "Security Incident Debrief"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          },
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Who is the sponsor of Project Atlas?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3797,
+            "top_source": "Project Atlas Kickoff Brief",
+            "top_five": [
+              [
+                "Project Atlas Kickoff Brief",
+                0.3797,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3771,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.338,
+                true
+              ],
+              [
+                "Project Budget Tracker FY27",
+                0.3041,
+                false
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.2789,
+                false
+              ]
+            ],
+            "admitted": 5,
+            "nearest_to_threshold": 0.2789,
+            "distance_from_threshold": 0.0102,
+            "within_band": [],
+            "partial_matches": [
+              "Project Atlas Kickoff Brief",
+              "Customer Success Retrospective",
+              "Project Budget Tracker FY27",
+              "Team Roster and Skills Matrix"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      }
+    ]
+  },
+  "trials": [
+    {
+      "label": "s01 as Employee",
+      "step": "FR-11.1",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "ab3f5b4d-7ae1-4742-91e6-a1b4c4671ec2",
+          "turns": [
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_relevant_passage",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "8855f6d5-dcba-4af7-a450-90bdfd29dac8",
+          "turns": [
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_relevant_passage",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "78767084-6213-4c93-9f0e-805d7cf81e7c",
+          "turns": [
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_relevant_passage",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "s01 as Administrator",
+      "step": "FR-11.2",
+      "role": "Administrator",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "354f4d45-f665-4d88-81b1-ae43e1d57929",
+          "turns": [
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "answer",
+              "expected_source": "Project Atlas Kickoff Brief",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The sponsor is the chief operating officer and the project manager is the head of digital services.",
+                  "source": "Project Atlas Kickoff Brief"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 2,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "cc4e1a6f-0f48-4754-86b4-20aca1fe082c",
+          "turns": [
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "answer",
+              "expected_source": "Project Atlas Kickoff Brief",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The sponsor of Project Atlas is the chief operating officer.",
+                  "source": "Project Atlas Kickoff Brief"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 2,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "9bd41ea0-d491-4b83-a3c3-dc8f74ce4f96",
+          "turns": [
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "answer",
+              "expected_source": "Project Atlas Kickoff Brief",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The sponsor of Project Atlas is the chief operating officer.",
+                  "source": "Project Atlas Kickoff Brief"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 2,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "q07",
+      "step": "FR-12.2",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "2d3053e6-8665-4e6f-b117-bdfce34a178f",
+          "turns": [
+            {
+              "question": "How quickly do we have to acknowledge a customer complaint?",
+              "expectation": "answer",
+              "expected_source": "Customer Complaints Procedure",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                  "source": "Customer Complaints Procedure"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 10,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "608cc451-1d6e-402d-96a6-ac3710f36cdb",
+          "turns": [
+            {
+              "question": "How quickly do we have to acknowledge a customer complaint?",
+              "expectation": "answer",
+              "expected_source": "Customer Complaints Procedure",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                  "source": "Customer Complaints Procedure"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 10,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "7caaaa3f-7e74-4e71-92a2-050e6496cf35",
+          "turns": [
+            {
+              "question": "How quickly do we have to acknowledge a customer complaint?",
+              "expectation": "answer",
+              "expected_source": "Customer Complaints Procedure",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Every complaint is logged, acknowledged within one working day and investigated fairly.",
+                  "source": "Customer Complaints Procedure"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 10,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "n02 as Employee",
+      "step": "FR-12.3",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "35454956-432e-4d24-9ba8-07d631f2eb24",
+          "turns": [
+            {
+              "question": "How much did the latest penetration test cost?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_relevant_passage",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "c81973bf-f51b-465f-864a-2ce7a6ecc3ee",
+          "turns": [
+            {
+              "question": "How much did the latest penetration test cost?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_relevant_passage",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "5226b22c-1ef7-49f3-8d65-5bc8045e90e6",
+          "turns": [
+            {
+              "question": "How much did the latest penetration test cost?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_relevant_passage",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "D21 bike cage",
+      "step": "FR-12.4",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "735aee15-1315-426a-a43d-38e41b148b41",
+          "turns": [
+            {
+              "question": "How many bicycles can the secure bike cage hold?",
+              "expectation": "answer",
+              "expected_source": "D21_bicycle_end_of_trip_facilities",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The secure bike cage is on basement level B2, next to the goods lift, and it holds 40 bicycles on two-tier racks.",
+                  "source": "D21_bicycle_end_of_trip_facilities"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 1,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "62485260-5cac-47ee-b814-adfbd389d755",
+          "turns": [
+            {
+              "question": "How many bicycles can the secure bike cage hold?",
+              "expectation": "answer",
+              "expected_source": "D21_bicycle_end_of_trip_facilities",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The secure bike cage is on basement level B2, next to the goods lift, and holds 40 bicycles on two-tier racks.",
+                  "source": "D21_bicycle_end_of_trip_facilities"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 1,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "e9943a60-9ca3-4f85-af81-84b18a15dce8",
+          "turns": [
+            {
+              "question": "How many bicycles can the secure bike cage hold?",
+              "expectation": "answer",
+              "expected_source": "D21_bicycle_end_of_trip_facilities",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The secure bike cage holds 40 bicycles on two-tier racks.",
+                  "source": "D21_bicycle_end_of_trip_facilities"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 1,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "T06 single-use cups",
+      "step": "FR-12.5",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "d929f357-99ee-4b02-b430-fdf17983712d",
+          "turns": [
+            {
+              "question": "When will single-use cups be removed from the office kitchens?",
+              "expectation": "answer",
+              "expected_source": "Sustainability Working Group",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Single-use cups will be removed from all office kitchens on 1 March 2027.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "It agreed to remove single-use cups from all office kitchens on 1 March 2027, with reception keeping reusable cups for visitors.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "Aisha proposed removing single-use cups from all office kitchens from 1 March 2027, and the group agreed to this date.",
+                  "source": "Sustainability Working Group"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 4,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "bb599d5b-8094-405a-ab86-7b7b1198fd87",
+          "turns": [
+            {
+              "question": "When will single-use cups be removed from the office kitchens?",
+              "expectation": "answer",
+              "expected_source": "Sustainability Working Group",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Single-use cups will be removed from all office kitchens on 1 March 2027.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "It agreed to remove single-use cups from all office kitchens on 1 March 2027, with reception keeping reusable cups for visitors.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "Aisha proposed removing single-use cups from all office kitchens from 1 March 2027, and the group agreed.",
+                  "source": "Sustainability Working Group"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 4,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "35e1f3cd-594a-4de2-9a97-99bcf887f498",
+          "turns": [
+            {
+              "question": "When will single-use cups be removed from the office kitchens?",
+              "expectation": "answer",
+              "expected_source": "Sustainability Working Group",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Single-use cups will be removed from all office kitchens on 1 March 2027.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "It agreed to remove single-use cups from all office kitchens on 1 March 2027, with reception keeping reusable cups for visitors.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "Aisha proposed removing single-use cups from all office kitchens from 1 March 2027.",
+                  "source": "Sustainability Working Group"
+                },
+                {
+                  "text": "Aisha agreed that single-use cups go from every kitchen on 1 March 2027.",
+                  "source": "Sustainability Working Group"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 4,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "t08 as Employee",
+      "step": "FR-13.1",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "dd95eaff-d506-4572-9e6f-3dfc5bdf5498",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Where are the first aid kits kept?",
+              "expectation": "answer",
+              "expected_source": "Health and Safety Induction Guide",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "First aid kits are kept at reception and on every floor.",
+                  "source": "Health and Safety Induction Guide"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 4,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "1afe9eb1-cb74-4ebd-ac5c-2145e853f02b",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Where are the first aid kits kept?",
+              "expectation": "answer",
+              "expected_source": "Health and Safety Induction Guide",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "First aid kits are kept at reception and on every floor.",
+                  "source": "Health and Safety Induction Guide"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 4,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "4cfd502b-2947-4f97-8deb-4345a5c95069",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Where are the first aid kits kept?",
+              "expectation": "answer",
+              "expected_source": "Health and Safety Induction Guide",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "First aid kits are kept at reception and on every floor.",
+                  "source": "Health and Safety Induction Guide"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 4,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "t08 turn 1, then s01, as Employee",
+      "step": "FR-13.2",
+      "role": "Employee",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "4b3c77ca-26cb-406c-a6f4-fa3b46a592b4",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_statement_verified",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [
+                "Customer Success Retrospective"
+              ],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "7c999492-5a28-4365-93ff-c04e3d20e7a9",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_statement_verified",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [
+                "Customer Success Retrospective"
+              ],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "2bc083f7-7bad-46ca-aeb0-a2a9e1f0b95c",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "no-answer",
+              "expected_source": null,
+              "answered": false,
+              "statements": [],
+              "no_answer_reason": "no_statement_verified",
+              "rejected_count": 0,
+              "supplied": 0,
+              "partial_matches": [
+                "Customer Success Retrospective"
+              ],
+              "as_expected": true,
+              "cites_expected_source": null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "t08 turn 1, then s01, as Administrator",
+      "step": "FR-13.3",
+      "role": "Administrator",
+      "runs": [
+        {
+          "run": 1,
+          "conversation": "b6cef719-21e9-4fbc-82ed-776dae4d3e98",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "answer",
+              "expected_source": "Project Atlas Kickoff Brief",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The sponsor of Project Atlas is the chief operating officer.",
+                  "source": "Project Atlas Kickoff Brief"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 5,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 2,
+          "conversation": "6edd9079-fc40-4ee6-a769-578968edd08e",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "answer",
+              "expected_source": "Project Atlas Kickoff Brief",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The sponsor of Project Atlas is the chief operating officer.",
+                  "source": "Project Atlas Kickoff Brief"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 5,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        },
+        {
+          "run": 3,
+          "conversation": "1aa102b1-6818-44e8-8fb4-5e8f3536d6cc",
+          "turns": [
+            {
+              "question": "What was the customer satisfaction score last quarter?",
+              "expectation": "answer",
+              "expected_source": "Customer Success Retrospective",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "Ollie reported that the satisfaction score rose to eighty-six percent last quarter.",
+                  "source": "Customer Success Retrospective"
+                },
+                {
+                  "text": "The Customer Success retrospective noted an eighty-six percent satisfaction score for the last quarter.",
+                  "source": "Customer Success Retrospective"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 3,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            },
+            {
+              "question": "Who is the sponsor of Project Atlas?",
+              "expectation": "answer",
+              "expected_source": "Project Atlas Kickoff Brief",
+              "answered": true,
+              "statements": [
+                {
+                  "text": "The sponsor of Project Atlas is the chief operating officer.",
+                  "source": "Project Atlas Kickoff Brief"
+                }
+              ],
+              "no_answer_reason": null,
+              "rejected_count": 0,
+              "supplied": 5,
+              "partial_matches": [],
+              "as_expected": true,
+              "cites_expected_source": true
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "pass_3_after_trials": {
+    "at": "2026-11-15T22:07:12+11:00",
+    "rows": [
+      {
+        "label": "s01 as Employee",
+        "step": "FR-11.1",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [],
+            "composed_for_retrieval": "Who is the sponsor of Project Atlas?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.1517,
+            "top_source": "Weekly Operations Standup",
+            "top_five": [
+              [
+                "Weekly Operations Standup",
+                0.1517,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.142,
+                false
+              ],
+              [
+                "Product Planning Workshop",
+                0.1383,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1382,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1378,
+                false
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.1517,
+            "distance_from_threshold": 0.117,
+            "within_band": [],
+            "partial_matches": [],
+            "verdict": "ok (path A)"
+          }
+        ]
+      },
+      {
+        "label": "s01 as Administrator",
+        "step": "FR-11.2",
+        "role": "Administrator",
+        "turns": [
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [],
+            "composed_for_retrieval": "Who is the sponsor of Project Atlas?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.427,
+            "top_source": "Project Atlas Kickoff Brief",
+            "top_five": [
+              [
+                "Project Atlas Kickoff Brief",
+                0.427,
+                false
+              ],
+              [
+                "Project Budget Tracker FY27",
+                0.3152,
+                false
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.1913,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.1517,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.142,
+                false
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.3152,
+            "distance_from_threshold": 0.0465,
+            "within_band": [],
+            "partial_matches": [
+              "Project Atlas Kickoff Brief",
+              "Project Budget Tracker FY27"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "q07",
+        "step": "FR-12.2",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How quickly do we have to acknowledge a customer complaint?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How quickly do we have to acknowledge a customer complaint?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5857,
+            "top_source": "Customer Complaints Procedure",
+            "top_five": [
+              [
+                "Customer Complaints Procedure",
+                0.5857,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3433,
+                false
+              ],
+              [
+                "IT Helpdesk Frequently Asked Questions",
+                0.3412,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3393,
+                true
+              ],
+              [
+                "Records Management Handbook",
+                0.3151,
+                false
+              ]
+            ],
+            "admitted": 14,
+            "nearest_to_threshold": 0.2675,
+            "distance_from_threshold": 0.0012,
+            "within_band": [
+              [
+                "Records Management Handbook",
+                0.2733
+              ],
+              [
+                "Records Management Handbook",
+                0.2725
+              ],
+              [
+                "Records Management Handbook",
+                0.2675
+              ]
+            ],
+            "partial_matches": [
+              "Customer Complaints Procedure",
+              "Customer Success Retrospective",
+              "IT Helpdesk Frequently Asked Questions",
+              "Records Management Handbook",
+              "Data Privacy Notice"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          }
+        ]
+      },
+      {
+        "label": "n02 as Employee",
+        "step": "FR-12.3",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How much did the latest penetration test cost?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How much did the latest penetration test cost?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.2305,
+            "top_source": "Weekly Operations Standup",
+            "top_five": [
+              [
+                "Weekly Operations Standup",
+                0.2305,
+                true
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2085,
+                false
+              ],
+              [
+                "Training Schedule Q4",
+                0.1812,
+                false
+              ],
+              [
+                "Expense Claims Guide",
+                0.181,
+                false
+              ],
+              [
+                "Product Planning Workshop",
+                0.1746,
+                true
+              ]
+            ],
+            "admitted": 0,
+            "nearest_to_threshold": 0.2305,
+            "distance_from_threshold": 0.0382,
+            "within_band": [],
+            "partial_matches": [],
+            "verdict": "ok (path A)"
+          }
+        ]
+      },
+      {
+        "label": "D21 bike cage",
+        "step": "FR-12.4",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "How many bicycles can the secure bike cage hold?",
+            "prior_questions": [],
+            "composed_for_retrieval": "How many bicycles can the secure bike cage hold?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5193,
+            "top_source": "D21_bicycle_end_of_trip_facilities",
+            "top_five": [
+              [
+                "D21_bicycle_end_of_trip_facilities",
+                0.5193,
+                false
+              ],
+              [
+                "Fleet Vehicle Usage Notes",
+                0.261,
+                false
+              ],
+              [
+                "IT Acceptable Use Policy",
+                0.2212,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.1946,
+                false
+              ],
+              [
+                "Meeting Room Booking Rules",
+                0.1872,
+                false
+              ]
+            ],
+            "admitted": 1,
+            "nearest_to_threshold": 0.261,
+            "distance_from_threshold": 0.0077,
+            "within_band": [],
+            "partial_matches": [
+              "D21_bicycle_end_of_trip_facilities",
+              "Fleet Vehicle Usage Notes"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "T06 single-use cups",
+        "step": "FR-12.5",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "When will single-use cups be removed from the office kitchens?",
+            "prior_questions": [],
+            "composed_for_retrieval": "When will single-use cups be removed from the office kitchens?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.638,
+            "top_source": "Sustainability Working Group",
+            "top_five": [
+              [
+                "Sustainability Working Group",
+                0.638,
+                true
+              ],
+              [
+                "Sustainability Working Group",
+                0.5895,
+                false
+              ],
+              [
+                "Health and Safety Induction Guide",
+                0.2738,
+                false
+              ],
+              [
+                "Office Relocation Announcement",
+                0.2726,
+                false
+              ],
+              [
+                "Vendor Register 2026",
+                0.2661,
+                false
+              ]
+            ],
+            "admitted": 4,
+            "nearest_to_threshold": 0.2661,
+            "distance_from_threshold": 0.0026,
+            "within_band": [
+              [
+                "Office Relocation Announcement",
+                0.2726
+              ],
+              [
+                "Vendor Register 2026",
+                0.2661
+              ]
+            ],
+            "partial_matches": [
+              "Sustainability Working Group",
+              "Health and Safety Induction Guide",
+              "Office Relocation Announcement",
+              "Vendor Register 2026"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          }
+        ]
+      },
+      {
+        "label": "t08 as Employee",
+        "step": "FR-13.1",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.209,
+                true
+              ],
+              [
+                "Training Schedule Q4",
+                0.2065,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.3077,
+            "distance_from_threshold": 0.039,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure"
+            ],
+            "verdict": "ok"
+          },
+          {
+            "question": "Where are the first aid kits kept?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Where are the first aid kits kept?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3683,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.3683,
+                false
+              ],
+              [
+                "Health and Safety Induction Guide",
+                0.3548,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3253,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.2838,
+                false
+              ],
+              [
+                "Records Management Handbook",
+                0.2607,
+                false
+              ]
+            ],
+            "admitted": 4,
+            "nearest_to_threshold": 0.2607,
+            "distance_from_threshold": 0.008,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Health and Safety Induction Guide",
+              "Customer Complaints Procedure",
+              "Records Management Handbook"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      },
+      {
+        "label": "t08 turn 1, then s01, as Employee",
+        "step": "FR-13.2",
+        "role": "Employee",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.209,
+                true
+              ],
+              [
+                "Training Schedule Q4",
+                0.2065,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.3077,
+            "distance_from_threshold": 0.039,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure"
+            ],
+            "verdict": "ok"
+          },
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Who is the sponsor of Project Atlas?",
+            "expectation": "no-answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3771,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.3771,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.338,
+                true
+              ],
+              [
+                "Weekly Operations Standup",
+                0.211,
+                false
+              ],
+              [
+                "Weekly Operations Standup",
+                0.2079,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.2056,
+                false
+              ]
+            ],
+            "admitted": 2,
+            "nearest_to_threshold": 0.211,
+            "distance_from_threshold": 0.0577,
+            "within_band": [],
+            "partial_matches": [
+              "Customer Success Retrospective"
+            ],
+            "verdict": "passages admitted: passes only if every run is a no-answer"
+          }
+        ]
+      },
+      {
+        "label": "t08 turn 1, then s01, as Administrator",
+        "step": "FR-13.3",
+        "role": "Administrator",
+        "turns": [
+          {
+            "question": "What was the customer satisfaction score last quarter?",
+            "prior_questions": [],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.5061,
+            "top_source": "Customer Success Retrospective",
+            "top_five": [
+              [
+                "Customer Success Retrospective",
+                0.5061,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.4594,
+                true
+              ],
+              [
+                "Customer Complaints Procedure",
+                0.3077,
+                false
+              ],
+              [
+                "Security Incident Debrief",
+                0.2658,
+                true
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.2331,
+                false
+              ]
+            ],
+            "admitted": 3,
+            "nearest_to_threshold": 0.2658,
+            "distance_from_threshold": 0.0029,
+            "within_band": [
+              [
+                "Security Incident Debrief",
+                0.2658
+              ]
+            ],
+            "partial_matches": [
+              "Customer Success Retrospective",
+              "Customer Complaints Procedure",
+              "Security Incident Debrief"
+            ],
+            "verdict": "fails the rule: a candidate within 0.005 of T"
+          },
+          {
+            "question": "Who is the sponsor of Project Atlas?",
+            "prior_questions": [
+              "What was the customer satisfaction score last quarter?"
+            ],
+            "composed_for_retrieval": "What was the customer satisfaction score last quarter? Who is the sponsor of Project Atlas?",
+            "expectation": "answer",
+            "embedding_model": "voyage-4",
+            "threshold": 0.2687,
+            "candidates": 25,
+            "top_score": 0.3793,
+            "top_source": "Project Atlas Kickoff Brief",
+            "top_five": [
+              [
+                "Project Atlas Kickoff Brief",
+                0.3793,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3778,
+                false
+              ],
+              [
+                "Customer Success Retrospective",
+                0.3386,
+                true
+              ],
+              [
+                "Project Budget Tracker FY27",
+                0.3042,
+                false
+              ],
+              [
+                "Team Roster and Skills Matrix",
+                0.2792,
+                false
+              ]
+            ],
+            "admitted": 5,
+            "nearest_to_threshold": 0.2792,
+            "distance_from_threshold": 0.0105,
+            "within_band": [],
+            "partial_matches": [
+              "Project Atlas Kickoff Brief",
+              "Customer Success Retrospective",
+              "Project Budget Tracker FY27",
+              "Team Roster and Skills Matrix"
+            ],
+            "verdict": "ok"
+          }
+        ]
+      }
+    ]
+  },
+  "finished": "2026-11-15T22:07:12+11:00"
+}
