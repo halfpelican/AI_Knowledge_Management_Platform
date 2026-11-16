@@ -15921,7 +15921,7 @@ This note covers the first of the three things the entry left for later: the bui
 its deliberate breaks. The two reviews of the built code have notes of their own below it.
 
 It was written on 15 November 2026 and finished on 16 November 2026, when `main` was merged a
-third, a fourth and a fifth time and the last runs were made. The records that cite "D-132's
+third, a fourth, a fifth and a sixth time and the last runs were made. The records that cite "D-132's
 dated note of 15 November 2026" mean this note.
 
 **The commits,** on `feat/FR-20-relationship-visualisation`:
@@ -15934,12 +15934,13 @@ dated note of 15 November 2026" mean this note.
   its API module, the route and the navigation link, and the front-end tests.
 - `42dc7f5`: the screen's remaining tests, with the break list of that day in its message.
 - `030bb75`: the demonstration script's walk.
-- `5c3b941`, `e0f1acd`, `377eff0`, `b44b75b` and `3d94e40`: the five merges of `main`, below.
+- `5c3b941`, `e0f1acd`, `377eff0`, `b44b75b`, `3d94e40` and `71d2391`: the six merges of `main`,
+  below.
 - `28136c2`: one test title shortened so Vitest prints it whole.
 - `89fc063`: the corrections the requirements audit asked for (its note is below).
 - `8122258`: one test, for the Name column's tie-break by type (item 5).
 - `ba2893d`: three comments corrected (the follow-up audit's R5, at the end of this entry).
-- `c97745c` and the commits after `3d94e40`: these notes.
+- `c97745c`, `ea0d336` and the commits after `71d2391`: these notes.
 
 **`CLAUDE.md` section 5 gained two rows,** `MAXIMUM_TRAVERSAL_DEPTH` and `MAXIMUM_NODE_COUNT`, in
 `afe95e7`. That file changes only with the user's approval. He was asked on 14 November 2026
@@ -16050,6 +16051,18 @@ whether to add them, and answered: "Yes, add the two rows (Recommended)".
 - **`3d94e40`, 16 November 2026:** #116 (FR-10's route test for Confirm at the column's width).
   Nothing conflicted. It added cases to one FR-10 test file and a note to D-135, and changed
   no code.
+- **`71d2391`, 16 November 2026:** #117 (the demonstration script describes the Anthropic alpha).
+  It was merged after the pull request was opened, and changed documents and files under
+  `corpus/` only. Two files conflicted, each because both sides had added text at one place, and
+  both sides are kept whole in each:
+  - **this file:** `main` added a dated note at the end of D-131 where this branch added D-132.
+    `main`'s note is first, then D-132;
+  - **`docs/demonstration-script.md`:** both sides added an "Amended" note at its head. `main`'s is
+    first, because it refers to the note directly above it. This branch's follows, and its
+    heading now says it was written on 14 November and merged after. FR-20's walk, after
+    FR-15's, merged without conflict;
+  - every line either side added to the script since the merge base is in the merged file, but
+    for that one reworded heading.
 - **What `main` put under the map.** D-128 and D-129 added proposed and rejected tags, grown tags
   and the department list. `apps/api/repository.py` did not change on `main`, so `live_tag_links`
   is still FR-15's rule as this entry describes it, and the map still reads tags through it alone.
@@ -16068,6 +16081,8 @@ whether to add them, and answered: "Yes, add the two rows (Recommended)".
   `apps/api/tests/test_fr10_proposed_tags.py`, and no code. That file was run on `3d94e40`: 104
   passed. The whole server suite was not run again after it, and nothing under `frontend/`
   changed. The pull request's CI runs both suites on the merged result.
+- **After the sixth merge, `71d2391`:** it changed documents and files under `corpus/`, and no
+  file under `apps/` or `frontend/`. Neither suite was run again here after it.
 - **Earlier heads.** At `28136c2`, the head both reviews read, the whole server suite was 5,066
   passed and the front-end suite 835. At `377eff0` they were 5,083 and 842. The differences are
   the audit's corrections, the tie-break test and what `main` brought in #112 to #116.
@@ -16710,11 +16725,13 @@ it. Its full report is in this session's shared notes, `fr20-built-review-securi
 >
 > **COMPLETE WITH RECORDED DEVIATIONS:** no FR-20 clause is missed and the scoping holds from both roles. The deviations are recorded in D-132: UC-11 E2 met in part, NFR-17's screen-reader test and the browser measurements owed, reviewers deferred. A1 must be closed by the merge note before "recorded" is true of the migration.
 
-**What was done with each finding.** The audit read `28136c2`. `main` was merged four times more
-after it: `e0f1acd` (#112), `377eff0` (#113 and #114), `b44b75b` (#115) and `3d94e40` (#116).
-Each of the first three changed files that also hold the map's code or record, and none
-changed a line of the map. The fourth changed one FR-10 test file and this file. The
-corrections are in `89fc063`, `8122258`, `ba2893d` and these notes.
+**What was done with each finding.** The audit read `28136c2`. `main` was merged five times more
+after it: `e0f1acd` (#112), `377eff0` (#113 and #114), `b44b75b` (#115), `3d94e40` (#116) and
+`71d2391` (#117). Each of the first three changed files that also hold the map's code or record,
+and none changed a line of the map. The fourth changed one FR-10 test file and this file. The
+fifth changed documents and files under `corpus/`; in `docs/demonstration-script.md` it
+conflicted with this branch's note at the head, and both are kept. The corrections are in
+`89fc063`, `8122258`, `ba2893d` and these notes.
 
 | Finding | Severity | What | Disposition |
 |---|---|---|---|
