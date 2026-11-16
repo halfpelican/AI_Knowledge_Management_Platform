@@ -13,8 +13,10 @@ The order on both routes is the session, then the scoped 404 (D-46), then ``cont
 403, then the body: 400 keyed on ``dimension`` for a missing one or any other (Department included),
 and 400 keyed on ``value`` for a missing, blank or over-long one, over-long being each route's own
 bound: the Tags column's 255 to confirm, MAXIMUM_PROPOSED_TAG_LENGTH to reject (D-133;
-apps/api/tests/test_fr10_reject_long_proposal.py holds the long proposal itself). Both roles hold
-``contribute_content`` (accounts 0004), so the 403 is shown by taking it from the caller's role, as
+apps/api/tests/test_fr10_reject_long_proposal.py holds the long proposal itself). A value of exactly
+255 characters is confirmed whole, in ASCII and in 255 astral characters, which are 510 UTF-16
+units: the document page offers Confirm at 255 (D-135). Both roles hold ``contribute_content``
+(accounts 0004), so the 403 is shown by taking it from the caller's role, as
 apps/api/tests/test_document_classification.py does.
 
 apps/api/tests/test_document_classification.py already holds the Topic path (confirm, reject, a value
@@ -250,6 +252,52 @@ def test_a_missing_blank_or_over_long_value_is_400_keyed_on_value(
     assert set(response.json()) == {"value"}
     assert held(document) == [{"dimension": dimension, "value": VALUE, "confidence": BELOW}]
     assert not Tag.objects.exists()
+
+
+# --- At the column's width: a value of exactly 255 characters is confirmed whole ------------------------
+
+# The document page offers Confirm on a proposal of exactly NAME_MAX_LENGTH characters, counted in
+# code points as Python's len() counts them, and sends the value whole (D-135); one character more is
+# refused above. Each value is normalised as a run holds a proposal, lower case with single spaces, so
+# the value sent back is the value held. 255 ships (U+1F6A2) are 510 UTF-16 units and 1,020 UTF-8
+# bytes, so a check that counted either would refuse them.
+AT_THE_COLUMN = {
+    "ascii": ("harbour upgrade " * 16)[:NAME_MAX_LENGTH],
+    "astral": "\N{SHIP}" * NAME_MAX_LENGTH,
+}
+assert all(len(value) == NAME_MAX_LENGTH for value in AT_THE_COLUMN.values())
+assert all(normalise_tag_name(value) == value for value in AT_THE_COLUMN.values())
+assert len(AT_THE_COLUMN["astral"].encode("utf-16-le")) // 2 == 2 * NAME_MAX_LENGTH
+
+
+@pytest.mark.parametrize("kind", sorted(AT_THE_COLUMN))
+@pytest.mark.parametrize("dimension", REPOSITORY_TAG_DIMENSIONS)
+def test_a_value_exactly_as_long_as_the_column_is_confirmed_whole(
+    session_client, stub_ai_service, dimension, kind
+):
+    """Both of the confirm route's length checks admit it: ``ProposedTagSerializer``'s
+    ``max_length`` on the trimmed value, then ``confirm_proposed_tag``'s strict ``>`` on the
+    normalised one. The proposal leaves ``proposed_tags``, and the Tag created holds all of it."""
+    client = session_client.client
+    document = make_document(session_client.user)
+    value = AT_THE_COLUMN[kind]
+    proposal = {"dimension": dimension, "value": value, "confidence": BELOW}
+    assert propose(client, stub_ai_service, document, (dimension, value.upper())) == [proposal]
+
+    response = act(client, "confirm", document, {"dimension": dimension, "value": value})
+
+    assert response.status_code == 200, response.content
+    body = response.json()
+    assert body["classification"]["proposed_tags"] == []
+    [entry] = body["tag_details"]
+    assert {key: entry[key] for key in entry if key != "content_tag_id"} == {
+        "dimension": dimension, "name": value, "applied_by": AI_APPLIED, "confirmed": True,
+        "provisional": False, "confidence": BELOW,
+    }
+    tag = Tag.objects.get()
+    assert (tag.dimension, tag.tag_name) == (dimension, value)  # read back from the column, whole
+    assert links_of(document).get().tag_id == tag.pk
+    assert held(document) == []
 
 
 # --- 403: contribute_content, after the scoped lookup and before the body -------------------------------

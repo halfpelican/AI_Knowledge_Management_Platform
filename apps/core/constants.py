@@ -305,6 +305,38 @@ DOCUMENT_SORT_VALUES = DOCUMENT_SORT_KEYS + tuple(
 # default and the plain list agree (D-72).
 DEFAULT_DOCUMENT_SORT = f"{DESCENDING_SORT_PREFIX}uploaded_at"
 
+# --- Knowledge map (FR-20; docs/decisions.md D-132) -------------------------------------
+# FR-20 Validation: "traversal depth and returned node count are capped, and truncation is
+# reported to the interface so that a partial view is not presented as complete". The proposal's
+# section 7.0 names both settings and marks each "To be tuned". Both are applied by the walk in
+# apps/api/knowledge_map.py AFTER the permission scope, never before it, so neither which nodes
+# survive nor the truncation flag can turn on material the caller cannot read (invariant 1).
+# Each value was chosen by a rule, measured on corpus/objective-02/manifest.json's documents and
+# transcripts with scripts/knowledge_map_reach.py (14 November 2026): the whole map is 34 nodes
+# for an Employee and 41 for an Administrator. The three vocabularies the route returns are
+# under "Fixed vocabularies" below, because the first is built from SOURCE_TYPES.
+#
+# "Maximum number of relationship hops explored from any single node": how far a focused
+# request walks from the selected node. The rule: the shortest walk that joins one item to
+# another through a tag or a person they share. One hop reaches a median of 4 nodes, which is
+# what the item's own page already lists. Two hops reach a median of 20 (Employee) and 11
+# (Administrator). Three reach a median of 31 of 34 and 26 of 41, which is most of the connected
+# map again. The overview takes one hop from each source, so this binds only on a focused request.
+MAXIMUM_TRAVERSAL_DEPTH = 2
+# "Ceiling on nodes returned in one request before truncation is reported". The rule: the
+# smallest multiple of 50 that holds that corpus's whole map (41 nodes), so a demonstration on
+# it is not cut by the cap. On that corpus the cap therefore never binds; node-count truncation
+# is shown by tests. *tune* on any larger corpus.
+MAXIMUM_NODE_COUNT = 50
+# FR-20's permission code (D-132), checked by GET /api/knowledge-map before anything else on the
+# request. NOT in the proposal, which names no permission for FR-20: added at the lead's decision
+# of 14 November 2026. Held by BOTH roles, seeded by accounts migration 0011, the pattern of
+# contribute_content (0004), so in the shipped seed it refuses nobody: it is the enforcement
+# point, and the test that proves it takes the code away from a role and asserts the 403. What a
+# holder is shown is still only their own scope, so unlike manage_tags and review_knowledge_gaps
+# this code is safe for a role that does not read every source.
+VIEW_KNOWLEDGE_MAP_PERMISSION = "view_knowledge_map"
+
 # --- Ingestion (FR-08, FR-09) -------------------------------------------------------
 # Extracted text shorter than this is marked "Insufficient content" and is not
 # embedded: a fragment produces an unreliable vector that matches unpredictably and
@@ -657,6 +689,24 @@ NO_ANSWER_REASONS = ("no_relevant_passage",     # nothing above RELEVANCE_THRESH
 # CLAUDE.md invariant 7 turns on these two staying distinguishable, and a reason
 # misspelt as a literal would collapse the two paths into one unreadable signal.
 (NO_RELEVANT_PASSAGE, NO_STATEMENT_VERIFIED) = NO_ANSWER_REASONS
+# FR-20's knowledge map (D-132; the caps and the permission code are under "Knowledge map"
+# above). What GET /api/knowledge-map calls each kind of node: the two source types, then the
+# two kinds that have no visibility column of their own and are nodes only through a link to a
+# source the caller reads. Built from SOURCE_TYPES so a document or a meeting has one name.
+KNOWLEDGE_MAP_NODE_TYPES = (*SOURCE_TYPES, "tag", "contributor")
+(KNOWLEDGE_MAP_DOCUMENT, KNOWLEDGE_MAP_MEETING, KNOWLEDGE_MAP_TAG,
+ KNOWLEDGE_MAP_CONTRIBUTOR) = KNOWLEDGE_MAP_NODE_TYPES
+# The three relationships FR-20's Server-End clause names, each read "source, relationship,
+# target": a document or meeting is tagged with a tag (ContentTags), a contributor uploaded a
+# document (Documents.uploaded_by), a contributor attended a meeting (MeetingAttendees).
+KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
+(KNOWLEDGE_MAP_TAGGED, KNOWLEDGE_MAP_UPLOADED,
+ KNOWLEDGE_MAP_ATTENDED) = KNOWLEDGE_MAP_RELATIONSHIPS
+# Which cap cut a view short, the response's ``truncated_by``: MAXIMUM_NODE_COUNT or
+# MAXIMUM_TRAVERSAL_DEPTH. "node_count" is reported when both apply.
+KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
+(KNOWLEDGE_MAP_TRUNCATED_BY_NODE_COUNT,
+ KNOWLEDGE_MAP_TRUNCATED_BY_DEPTH) = KNOWLEDGE_MAP_TRUNCATION_REASONS
 
 # A new record starts in the first value of its vocabulary.
 DEFAULT_DOCUMENT_STATUS = DOCUMENT_STATUS_VALUES[0]
@@ -683,8 +733,9 @@ EFFECTIVE_ROLES = {
 # Permission codes (FR-05, FR-06; docs/decisions.md D-14). Held against roles in
 # role_permissions, seeded by accounts migrations 0003, 0004, 0005 and 0006, 0007 for
 # REVIEW_KNOWLEDGE_GAPS_PERMISSION (under "Knowledge gaps" below), 0008 for
-# MANAGE_TAGS_PERMISSION and 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION; a test asserts the
-# constants and the seed agree.
+# MANAGE_TAGS_PERMISSION, 0010 for RELEASE_ACCOUNT_LOCKS_PERMISSION and 0011 for
+# VIEW_KNOWLEDGE_MAP_PERMISSION (under "Knowledge map" above); a test asserts the constants and
+# the seed agree.
 MANAGE_ROLES_PERMISSION = "manage_roles"
 # FR-08's section 7.2 validateUpload() opens with hasContributePermission(), before
 # the signature, size and title checks, because it is the cheapest rejection and the
@@ -775,10 +826,16 @@ CLASSIFICATION_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.72}
 CLASSIFICATION_DEPARTMENT_CONFIDENCE_THRESHOLD_BY_MODEL = {"claude-haiku-5-5": 0.30}
 
 # The longest value POST /api/documents/{id}/proposed-tags/reject reads, in characters (D-133, the
-# lead's decision of 15 November 2026). A run proposes a Topic outside the scheme whatever its length
-# (D-129), and a rejection writes only JSON (``rejected_tags``), so the reject route is not held to
-# the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255 characters could be
-# neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because confirming creates a Tag.
+# lead's decision of 15 November 2026). From D-129 until D-134 a run proposed a Topic outside the
+# scheme whatever its length, and a rejection writes only JSON (``rejected_tags``), so the reject
+# route is not held to the Tags column. Until D-133 it was, at NAME_MAX_LENGTH, and a Topic over 255
+# characters could be neither confirmed nor rejected. Confirm keeps NAME_MAX_LENGTH, because
+# confirming creates a Tag.
+#
+# Since D-134 (the lead's decision of 15 November 2026) a run discards a Topic longer than
+# NAME_MAX_LENGTH instead of proposing it, so no proposal a run makes is longer than the column, and
+# this bound serves only proposals stored before D-134. The residual below, a proposal longer than
+# this bound, can then come only from a run made before D-134. What follows is D-133's reasoning.
 # Scaled to the longest classification reply, Claude's ceiling, CLAUDE_MAX_TOKENS (16,000 tokens):
 # 100,000 is that ceiling at 6.25 characters a token. The ratio was worked back from the bound
 # (100,000 / 16,000), not measured, and it is a ratio for prose, not a ceiling: a run of punctuation

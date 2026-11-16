@@ -137,8 +137,12 @@ meeting; nothing relies on it being so.
 
 A participation record, never an access rule (D-16). Since FR-16 it is also read to decide
 whose name an action item's owner means: an extracted item's owner is always one of the meeting's
-attendees, and one whose role can read the meeting (D-125, its third note). Nothing about who may
-see a meeting consults it.
+attendees, and one whose role can read the meeting (D-125, its third note). Since FR-20 it is read
+for the knowledge map's "attended" relationship (D-132): the attendees of a meeting the caller's
+role already reads are contributor nodes of that caller's map. The rows are read through the
+scoped meetings and never the other way round, so an attendee of a meeting their role cannot read
+is not shown it. Neither link table is unique on its pair, so a person recorded twice on one
+meeting is one edge. Nothing about who may see a meeting consults it.
 
 ### MeetingSummaries — FR-16
 
@@ -371,8 +375,8 @@ by nothing else.
 | `department_outcome` | text, nullable | `ASSIGNMENT_OUTCOMES` |
 | `department_applied_by` | text, nullable | **`documents 0009`** — whose value `Documents.department` holds, in `TAG_APPLIED_BY_VALUES`: `user` a person gave it (typed at upload, or written through the confirm route); `ai` a run wrote its suggestion into a blank department and no person has written it since; null for no department, or a row classified before 0009 and not set since (D-119 finding 10) |
 | `user_edited` | boolean | true once a person confirmed or edited the type or department; a re-run then updates only the `machine_*` columns, `model`, `input_truncated` and `classified_at` |
-| `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012_proposed_tags`, D-128:** out-of-scheme Topic suggestions held for a person, at any confidence, `[{"dimension", "value", "confidence"}]` with `dimension` "Topic", deduplicated by normalised value; replaced by each run. The column keeps its first name (`db_column`) so that 0012 changes no column. 0012 stamped the earlier entries `"dimension": "Topic"`. For one day (D-128) it also held Project and Process values below the threshold; D-129 reversed that |
-| `discarded_suggestions` | jsonb | suggestions that do not become a tag or a proposal, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. The out-of-scheme Project and Process suggestions (Objective 05's clause 3), and since D-128 a value that cannot be stored (U+0000 or a lone surrogate), recorded with U+FFFD so that the column accepts it (D-129) |
+| `proposed_topics` (model field `proposed_tags`) | jsonb | **`documents 0012_proposed_tags`, D-128:** out-of-scheme Topic suggestions held for a person, at any confidence, `[{"dimension", "value", "confidence"}]` with `dimension` "Topic", deduplicated by normalised value; replaced by each run. Since D-134 none is longer than a tag name (255 characters); a longer entry was stored before D-134. The column keeps its first name (`db_column`) so that 0012 changes no column. 0012 stamped the earlier entries `"dimension": "Topic"`. For one day (D-128) it also held Project and Process values below the threshold; D-129 reversed that |
+| `discarded_suggestions` | jsonb | suggestions that do not become a tag or a proposal, `[{"dimension", "value", "confidence"}]`; never shown; replaced by each run. The out-of-scheme Project and Process suggestions (Objective 05's clause 3), since D-128 a value that cannot be stored (U+0000 or a lone surrogate), recorded with U+FFFD so that the column accepts it (D-129), and since D-134 an out-of-scheme Topic longer than a tag name (255 characters once normalised), recorded as written |
 | `rejected_tags` | jsonb | **`documents 0013_rejected_tags`, D-128 (the audit of 13 November):** proposals a person rejected on this document, `[{"dimension", "value", "confidence"}]`, one entry per dimension and value. The confidence is the machine's, kept beside the person's decision. Later runs neither propose, create nor link that value for this document, in any dimension, even after it enters the scheme. A person may still apply it. Never shown; never replaced by a run. A rejection made before 0013 was never recorded, so it is not honoured: existing rows start at `[]`, and none is guessed |
 | `model` | text | the chat model that produced the run |
 | `input_truncated` | boolean | the text was cut at `CLASSIFICATION_INPUT_TOKENS` before it was sent |
@@ -400,7 +404,8 @@ by nothing else.
   - **Since D-128 (12 November 2026),** the list is `proposed_tags`, its entries carrying a
     dimension. For one day the classifier also created values at or above the threshold. Since
     D-129 it proposes a Topic outside the scheme at any confidence and discards a Project or
-    Process value, as before.
+    Process value, as before. Since D-134 (15 November 2026) it discards a Topic longer than a tag
+    name, 255 characters, which no `Tags` row could hold.
   - **Since the audit of 13 November (D-128),** `rejected_tags` (`documents 0013`) keeps each
     proposal a person rejected, with the machine's confidence. Later runs skip that value for that
     document: FR-10's correction clause, "retained and is not overwritten by later reprocessing,
@@ -571,6 +576,10 @@ SUMMARY_FAILURE_REASONS = ("provider_unavailable", "provider_refused", "malforme
 ACTION_ITEM_ORIGINS = ("ai", "user")
 # FR-03 (D-130), 13 November 2026:
 LOGIN_ATTEMPT_EVENTS = ("lockout", "release")
+# FR-20 (D-132), 14 November 2026:
+KNOWLEDGE_MAP_NODE_TYPES = (*SOURCE_TYPES, "tag", "contributor")
+KNOWLEDGE_MAP_RELATIONSHIPS = ("tagged", "uploaded", "attended")
+KNOWLEDGE_MAP_TRUNCATION_REASONS = ("node_count", "depth")
 ```
 
 These live in `apps/core/constants.py`. Status values are fixed rather than free text
@@ -601,6 +610,16 @@ kept apart as invariant 7 keeps the two no-answer paths apart), the summary coul
 embedded, the server stopped mid-run, or something unexpected was raised. `ACTION_ITEM_ORIGINS`
 is where an item came from: extracted by the model, or added by a person. `SOURCE_TYPES` did not
 gain a value for a summary: its passages are the meeting's (D-125, choice 1).
+
+The three `KNOWLEDGE_MAP_` vocabularies are FR-20's, and are values of a response, not of a
+column: FR-20 stores nothing. `KNOWLEDGE_MAP_NODE_TYPES` is what `GET /api/knowledge-map` calls
+each kind of node, the two source types and then the two kinds with no visibility column of their
+own, a tag and a contributor, which are nodes only through a link to a source the caller reads.
+`KNOWLEDGE_MAP_RELATIONSHIPS` are the three links FR-20's Server-End clause names: a source is
+**tagged** with a tag (`ContentTags`), a contributor **uploaded** a document
+(`Documents.uploaded_by`), a contributor **attended** a meeting (`MeetingAttendees`).
+`KNOWLEDGE_MAP_TRUNCATION_REASONS` says which cap cut a view short, `MAXIMUM_NODE_COUNT` or
+`MAXIMUM_TRAVERSAL_DEPTH`; `node_count` is reported when both apply (D-132).
 
 `DOCUMENT_STATUS_VALUES` is the proposal's own §7.0 set. It **supersedes** the five
 values this section carried until 2026-09-21 — `Uploaded`, `Extracting`, `Indexed`,
@@ -722,6 +741,11 @@ QueryLog and SearchLogs; the executor plans them immediately after `retrieval 00
 `LoginAttempts` (v2, `accounts 0009`, FR-03) follows Users. The executor plans it immediately after
 `accounts 0008`, and `accounts 0010` (the `release_account_locks` seed) immediately after 0009,
 both before `documents 0001` (D-130).
+`accounts 0011` (the `view_knowledge_map` seed, held by both roles, FR-20, D-132) depends on
+`accounts 0010` and is planned immediately after it. It adds no table: FR-20 reads existing ones.
+It was written against `accounts 0008` while FR-03's branch held 0009 and 0010, and was re-pointed
+to 0010 in the merge of 15 November 2026, before it had been pushed or applied to any database
+(D-132's dated note of that day).
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

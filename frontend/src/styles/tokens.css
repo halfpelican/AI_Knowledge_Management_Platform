@@ -103,6 +103,11 @@
      and the narrowest one of the indexed-total figures gets before they stack. */
   --layout-panel-min-width: 20rem;
   --layout-figure-min-width: 7rem;
+  /* FR-20's knowledge map (D-132): the narrowest the three-column diagram gets
+     before its region scrolls sideways instead, and the Selected panel's column
+     where the legend, the diagram and the panel sit side by side. */
+  --layout-map-min-width: 32rem;
+  --layout-map-panel-width: 16rem;
   --layout-field-max-width: 28rem;
   /* FR-08's drop zone: tall enough to be a target rather than a strip
      (usability finding 3). */

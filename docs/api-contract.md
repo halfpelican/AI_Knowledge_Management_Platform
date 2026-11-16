@@ -1142,13 +1142,18 @@ for the department (0.30 on Haiku, D-129; a model it does not list uses its shar
 - **The department:** likewise, against its own threshold, and **discarded** outside the established
   scheme, which since D-129 is the department list an Administrator keeps on the Tags page.
 - **A tag in the scheme:** linked `applied_by: "ai"`, provisional below the threshold.
-- **A value outside the scheme,** Objective 05's clause 3 as written:
+- **A value outside the scheme,** Objective 05's clause 3 as written, with two recorded literal
+  departures (the long Topic and the value that cannot be stored, below):
   - **a Topic** is **proposed** in `proposed_tags`, at any confidence, for a person to confirm (which
-    creates it) or reject. The classifier never creates, links or reactivates one. A Topic longer than
-    a tag name's 255 characters is proposed too, and can only be rejected (D-133);
+    creates it) or reject. The classifier never creates, links or reactivates one. **A Topic longer
+    than a tag name's 255 characters** (once normalised) is **discarded** instead, at any confidence,
+    because no tag can hold it: a literal departure from clause 3's wording, recorded in D-134
+    (15 November 2026). So every proposal a run makes can be confirmed. From D-129 until D-134 such a
+    Topic was proposed: until D-133 it could be neither confirmed nor rejected, and from D-133 it
+    could only be rejected;
   - **a Project or Process value** is **discarded**;
   - **a value that cannot be stored,** one holding U+0000 or a lone surrogate, is discarded too, with
-    U+FFFD in its place. Neither discard is exposed;
+    U+FFFD in its place (for a Topic, the other literal departure, D-129). No discard is exposed;
   - **a value this document's readers removed or rejected** is neither linked nor proposed again.
 
   For one day (12 November, D-128) the classifier created values at or above the threshold. D-129
@@ -1178,8 +1183,8 @@ for every id.
 | POST | `/api/documents/{id}/tags/{content_tag_id}/confirm` | session + `contribute_content` | `200` the `tag_details` entry, now `confirmed: true, provisional: false`, `applied_by` unchanged | `401`; `404`, also when the link is not this document's or has been removed; `403` |
 | DELETE | `/api/documents/{id}/tags/{content_tag_id}` | session + `contribute_content` | `204` no body: the tag is removed (FR-10: "accepted or removed in a single action"). The link is **kept, marked removed**, a person's (`applied_by: "user"`) as well as an AI link (`applied_by: "ai"`, held or applied, confirmed or not, with the confidence the machine gave it), and no read lists it again; a later classify, reprocess or `classify_documents` run neither links it again nor alters it, and a removed value is neither proposed, created nor reactivated again on this document, in any dimension (D-128; a removed Topic until then). Applying the tag again restores it (`200` on the POST below). A person's link was deleted until the requirements re-audit of 10 November 2026 (D-105). The `Tags` row stays | `401`; `404`, also when the link is not this document's or has already been removed; `403` |
 | POST | `/api/documents/{id}/tags` | session + `contribute_content` | A person applies a tag (D-105's dated note of 10 November 2026, night). Body, exactly one of: `{"tag_id": "uuid"}`, an existing tag from the detail's `tag_options`; or `{"dimension": "Topic", "tag_name": string}`, a new Topic, matched after normalisation (trimmed, single spaces, lower case). `201 {"tag_details": [...]}` when a new link was made: `applied_by: "user"`, `confirmed: true`, `provisional: false`, `confidence: null`. `200` with the same shape when the tag was already on the document: a held AI link is confirmed, a removed one is restored and confirmed (its `applied_by` and confidence kept), and an applied or confirmed one is left as it is. `tag_details` is the document's whole current list | `401`; `404`; `403`; `400 {"tag_id": ["Choose a tag from this document's tag options."]}` for a `tag_id` that is unknown, inactive, a Department tag or not offered for this document, **one body for all of them**; `400 {"dimension": ["..."]}` a dimension other than `Topic` in the name form, or none given with `tag_name`; `400 {"tag_name": ["..."]}` blank, over 255 characters or missing; `400 {"tag_id": ["..."]}` not a UUID; `400 {"non_field_errors": ["..."]}` neither form, or both; `409 {"detail": "A Topic with this name is already offered for this document. Choose it from the tag options.", "tag_id": "uuid"}` the name is a Topic already in `tag_options`, whose id this is; `429` past `TAGGING_THROTTLE_RATE` (30 a minute per user), with DRF's body and `Retry-After`, nothing written, and answered before the document is looked up, so the same for every id (D-79's note on tagging) |
-| POST | `/api/documents/{id}/proposed-tags/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"dimension": "Project"\|"Process"\|"Topic", "value": string}`, both required; the value is matched after normalisation (lower case, single spaces) within that dimension. The tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`. A tag it creates or reactivates is grown, and an active one it reuses keeps its state, so a vocabulary value stays vocabulary (D-105). The proposal leaves `proposed_tags`. Replaces `/proposed-topics/confirm`, which took Topics only (D-128) | `401`; `404`, also when that value is not proposed under that dimension on this document; `403`; `400 {"dimension": ["..."]}` missing or not one of the three; `400 {"value": ["..."]}` blank or over 255 characters: confirming creates a tag, whose name the column limits, so a proposal longer than that can only be rejected (D-133) |
-| POST | `/api/documents/{id}/proposed-tags/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created. **The rejection is kept** on the document (`rejected_tags`, not exposed, with the machine's confidence; the requirements audit of 13 November, D-128). A later classify, reprocess or `classify_documents` run then neither proposes, creates nor links that value for this document, in any dimension, even after the value has entered the scheme (FR-10's correction clause). A person may still apply it themselves. Same body, except that `value` may be longer than a tag name: up to `MAXIMUM_PROPOSED_TAG_LENGTH`, 100,000 characters, since a rejection writes no tag and a run proposes a Topic whatever its length (D-133). Replaces `/proposed-topics/reject` (D-128) | `401`; `404`, also when that value is not proposed under that dimension on this document; `403`; `400 {"dimension": ["..."]}` missing or not one of the three; `400 {"value": ["..."]}` blank or over 100,000 characters. **Not** over 255: until D-133 (15 November 2026) this route refused a value over 255 characters as confirm does, so a longer Topic proposal could be neither confirmed nor rejected |
+| POST | `/api/documents/{id}/proposed-tags/confirm` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`. Body `{"dimension": "Project"\|"Process"\|"Topic", "value": string}`, both required; the value is matched after normalisation (lower case, single spaces) within that dimension. The tag is created, or reused and reactivated, and linked `applied_by: "ai", confirmed: true`. A tag it creates or reactivates is grown, and an active one it reuses keeps its state, so a vocabulary value stays vocabulary (D-105). The proposal leaves `proposed_tags`. Replaces `/proposed-topics/confirm`, which took Topics only (D-128) | `401`; `404`, also when that value is not proposed under that dimension on this document; `403`; `400 {"dimension": ["..."]}` missing or not one of the three; `400 {"value": ["..."]}` blank or over 255 characters: confirming creates a tag, whose name the column limits, so a proposal longer than that can only be rejected (D-133). Since D-134 no run proposes one, so only a proposal stored before D-134 can be that long |
+| POST | `/api/documents/{id}/proposed-tags/reject` | session + `contribute_content` | `200 {"classification": ..., "tag_details": [...]}`: the proposal is dropped and no tag is created. **The rejection is kept** on the document (`rejected_tags`, not exposed, with the machine's confidence; the requirements audit of 13 November, D-128). A later classify, reprocess or `classify_documents` run then neither proposes, creates nor links that value for this document, in any dimension, even after the value has entered the scheme (FR-10's correction clause). A person may still apply it themselves. Same body, except that `value` may be longer than a tag name: up to `MAXIMUM_PROPOSED_TAG_LENGTH`, 100,000 characters, since a rejection writes no tag, and from D-129 until D-134 a run proposed a Topic whatever its length (D-133). Since D-134 a run proposes none longer than 255 characters, so the longer bound serves proposals stored before D-134. Replaces `/proposed-topics/reject` (D-128) | `401`; `404`, also when that value is not proposed under that dimension on this document; `403`; `400 {"dimension": ["..."]}` missing or not one of the three; `400 {"value": ["..."]}` blank or over 100,000 characters. **Not** over 255: until D-133 (15 November 2026) this route refused a value over 255 characters as confirm does, so a longer Topic proposal could be neither confirmed nor rejected |
 
 The classification object (`null` for a document never classified):
 
@@ -1199,12 +1204,13 @@ The classification object (`null` for a document never classified):
   provisional. The outcomes are `applied`, `provisional`, `discarded` and `confirmed`
   (`docs/schema-v1.md` §3). Confidences are numbers to three places. `discarded_suggestions` is not
   exposed: it is a record for the Objective 05 measurement (D-106). It holds the out-of-scheme
-  Project and Process suggestions, and a value that cannot be stored (U+0000 or a lone surrogate)
-  with U+FFFD in its place (D-129). `rejected_tags`, the proposals a person rejected, is not
-  exposed either.
+  Project and Process suggestions, a value that cannot be stored (U+0000 or a lone surrogate)
+  with U+FFFD in its place (D-129), and an out-of-scheme Topic longer than 255 characters (D-134).
+  `rejected_tags`, the proposals a person rejected, is not exposed either.
 - **`proposed_tags`** (D-128, replacing `proposed_topics`) lists the out-of-scheme Topic values held
   for a person, at any confidence, each `{dimension, value, confidence}` with `dimension` "Topic". It
-  is deduplicated by value and replaced by each run.
+  is deduplicated by value and replaced by each run. Since D-134 no value a run proposes is longer
+  than 255 characters. A longer one was stored before D-134, and can be rejected but not confirmed.
   - **D-129:** the shape carries a dimension because, for one day (D-128), Project and Process values
     below the threshold were proposed too.
 - **`department_applied_by`** says whose value the document's department is, in the tags'
@@ -1765,3 +1771,141 @@ Administrators hold it. A requester without it gets the plain user object.
 **`LoginAttempts`** (`login_attempts`, `docs/schema-v1.md` §1) gets one row for each lockout and one
 for each release, and nothing for an ordinary attempt (D-130 decision 5). No route lists it. Its Read
 is the `lock` object above.
+
+## NIT3004 — FR-20 knowledge map (D-132)
+
+### FR-20 — knowledge map
+
+The documents, meetings, tags and contributors the caller's role may see, and how they relate:
+"Assembles nodes and edges from existing tables (ContentTags for classification links,
+Documents.uploaded_by for authorship, MeetingAttendees for participation) rather than maintaining
+a separate relationship store." Decision: D-132. The route needs a session **and**
+`view_knowledge_map`, which accounts 0011 gives **both** roles: `401` without a session, `403` for a
+role that lacks the code (invariant 4), checked before anything else on the request. Nothing on
+the route is a single scoped object, so the `403` has no `404` to precede. It is not throttled,
+as the dashboard, the repository and the meetings list are not.
+
+| Method | Path | Auth | Success | Errors |
+|---|---|---|---|---|
+| GET | `/api/knowledge-map` | session + `view_knowledge_map` | `200` the map object (below): the overview. Always `200` from a permitted session, the empty map included | `401`; `403` |
+| GET | `/api/knowledge-map?focus_type=<type>&focus_id=<uuid>` | session + `view_knowledge_map` | `200` the map object: the walk from that node. A focus that is not in the caller's own map gets the empty map object, whatever the reason | `401`; `403`; `400 {"<parameter>": ["..."]}` a `focus_type` outside the vocabulary, a `focus_id` that is not a UUID, or one given without the other, keyed on the missing one (*convention*: FR-20 lists only `200`; D-65) |
+
+`focus_type` is one of `document`, `meeting`, `tag`, `contributor`, matched exactly. `focus_id` is
+a UUID in any spelling a UUID has. **Both or neither**: with neither the request is the overview,
+and an empty value for either is the same as leaving it out. Both are validated for shape only.
+No value is looked up to decide a status code, so an identifier that names nothing and one that
+names something the caller cannot read get the same answer.
+
+```json
+{
+  "focus": {"type": "document", "id": "0b7c..."},
+  "nodes": [
+    {"id": "document:0b7c...", "type": "document", "item_id": "0b7c...", "label": "Employee Leave Policy 2026", "dimension": null, "connection_count": 2},
+    {"id": "tag:9e01...", "type": "tag", "item_id": "9e01...", "label": "people", "dimension": "Topic", "connection_count": 1},
+    {"id": "contributor:77f2...", "type": "contributor", "item_id": "77f2...", "label": "Jane Doe", "dimension": null, "connection_count": 2},
+    {"id": "meeting:51aa...", "type": "meeting", "item_id": "51aa...", "label": "Q3 Planning Sync", "dimension": null, "connection_count": 1}
+  ],
+  "edges": [
+    {"source": "document:0b7c...", "target": "tag:9e01...", "relationship": "tagged"},
+    {"source": "contributor:77f2...", "target": "document:0b7c...", "relationship": "uploaded"},
+    {"source": "contributor:77f2...", "target": "meeting:51aa...", "relationship": "attended"}
+  ],
+  "truncated": true,
+  "truncated_by": "depth",
+  "maximum_node_count": 50,
+  "maximum_traversal_depth": 2
+}
+```
+
+The empty map object, for an empty database, a role with nothing in scope, and a focus that is not
+in the caller's map (UC-11 E1: "an empty map or table rather than an error"):
+
+```json
+{"focus": null, "nodes": [], "edges": [], "truncated": false, "truncated_by": null,
+ "maximum_node_count": 50, "maximum_traversal_depth": 2}
+```
+
+- **The body has exactly these seven keys,** every node the same six and every edge the same
+  three. The same request gives the same bytes.
+- **`focus`** is `null` for the overview and for a focus that is not one of the returned nodes.
+  Otherwise it is that node's `type` and its identifier in canonical form, never the caller's
+  spelling. The page marks the selected node from this, not from its own address. A focus that is
+  unknown, outside the caller's scope, a tag with no applied link on a source in scope, a person
+  with no contribution in scope, or a type that does not match its identifier: each gets the empty
+  map object, which holds nothing the caller sent.
+- **A node's `id`** is its `type`, a colon and its `item_id`, and is what an edge refers to.
+  **`item_id`** is the row's own identifier: a `doc_id`, a `meeting_id`, a `tag_id` or a user's
+  `id`. **`label`** is the document's or meeting's title, the tag's name, or the person's name.
+  **`dimension`** is a tag's dimension (`Project`, `Process` or `Topic`) and `null` for the other
+  three types. A tag's name is unique only within its dimension, so the page shows both.
+- **`type`** is one of `KNOWLEDGE_MAP_NODE_TYPES`. A document or a meeting is a node in every
+  status, as the repository and the meetings list show them. **A tag or a contributor is a node
+  only when a link reaches it from a source in the caller's scope**: a tag through an applied
+  link, a contributor as the uploader of a document or an attendee of a meeting. One known only
+  through material outside the scope is absent, with no placeholder and no zero-count node.
+- **An edge** reads "source, relationship, target", and `relationship` is one of
+  `KNOWLEDGE_MAP_RELATIONSHIPS`:
+
+  | `relationship` | `source` | `target` | From |
+  |---|---|---|---|
+  | `uploaded` | contributor | document | `Documents.uploaded_by` |
+  | `attended` | contributor | meeting | `MeetingAttendees` |
+  | `tagged` | document or meeting | tag | `ContentTags` |
+
+  A `tagged` edge is an applied link, by FR-15's rule: not provisional, not removed, in Project,
+  Process or Topic, matched on the source's type and identifier together. A retired tag still
+  linked is a node. Department is a column, not a tag (D-72), and is neither a node nor an edge.
+  Duplicate link rows are one edge. Both ends of every edge are in `nodes`.
+- **`connection_count`** is the number of returned edges touching the node: the connections shown
+  in this view. It is taken last, so the same node can show a different count in another view. An
+  unconnected meeting is returned with `0`.
+- **`truncated`** is `true` when a returned node has a connection in the caller's scope that was
+  not returned, or, in the overview, when a source in scope was not returned. **`truncated_by`**
+  is one of `KNOWLEDGE_MAP_TRUNCATION_REASONS`: `"node_count"` if and only if a node within reach
+  was left out because `maximum_node_count` was reached, otherwise `"depth"`; `"node_count"` when
+  both apply; `null` when `truncated` is `false`. Within reach means within
+  `maximum_traversal_depth` hops of the focus. In the overview every node is one hop from a
+  source, so every node is within reach and a truncated overview always reports `"node_count"`.
+- **`maximum_node_count`** and **`maximum_traversal_depth`** are `MAXIMUM_NODE_COUNT` (50) and
+  `MAXIMUM_TRAVERSAL_DEPTH` (2), so the page words its notice from the response and holds no copy
+  of either.
+
+**Which nodes a view holds, and in what order** (D-132). Every step below runs over the caller's
+own scoped map and nothing wider, so the caps come after the scope and never before it
+(invariant 1).
+
+1. **The stable orders.** Documents and meetings are one list, newest first by when they were
+   added (`uploaded_at`, `created_at`), then by identifier. Tags by dimension, name, identifier.
+   Contributors by name without regard to case, then identifier.
+2. **The overview** takes each source in turn, newest first, with one hop: the source, then its
+   tags, then its contributors, those not yet included. A source is included only when it and all
+   of those fit under `maximum_node_count`. One that does not fit is skipped and the walk carries
+   on with the next, so a source with as many connections as the cap is never in the overview. A
+   source left out is reached by selecting one of its connections, where the overview shows one.
+   Where it shows none (an older source with no tag and no contributor, or none among those
+   shown) the map gives no way to it: `truncated` says the view is partial, and the source is
+   still in the repository or the meetings list. If no source fits at all, the newest is
+   returned with as many of its neighbours as fit, tags before contributors. The depth cap does
+   not limit the overview: every node is one hop from a source.
+3. **A selection** starts from the focus and takes up to `maximum_traversal_depth` hops, ring by
+   ring. Each ring is the not-yet-included neighbours of the ring before it, ordered as a whole:
+   sources, then tags, then contributors. Nodes are added in that order until
+   `maximum_node_count` is reached. The walk passes only through nodes that are in the caller's
+   scope.
+4. **`nodes` is in walk order.** `edges` holds every edge whose two ends are both returned, in the
+   order of its source's place in `nodes`, then its target's.
+
+**What is never returned.** A source outside the caller's scope; a tag or a person known only
+through one; an email, a role or any other field of a user; `Tag.active` and `Tag.grown`; a link's
+provenance (`applied_by`, `confidence`, `confirmed`); a transcript or extracted text; any total,
+"N of M" or count of what was left out, and any count taken before the scope. Attendance never
+admits a meeting: an attendee of a meeting the caller's role cannot read does not see it, and
+their own node does not count it (invariant 3). The Employee's bytes are the same whether or not
+restricted material exists.
+
+**Read only.** The route's own code runs SELECT statements and nothing else, the same number
+whatever the corpus holds. The session row is still saved on every request by FR-04's sliding
+expiry. It reads `documents`, `meetings`, `content_tags`, `tags`, `users` and `meeting_attendees`,
+and through FR-06 `roles`, `permissions` and `role_permissions`. The scope is the role re-read
+from the users table on each request, and nothing is cached between requests, so a change of role
+takes effect on the next one.

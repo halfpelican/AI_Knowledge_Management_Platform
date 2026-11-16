@@ -27,4 +27,13 @@ export const CONTRAST_PAIRS = [
   // FR-15's browse values sit in a panel on the alt surface.
   { label: 'Control border on alt surface (non-text)', fg: '--color-border-strong', bg: '--color-surface-alt', minimum: 3 },
   { label: 'Focus ring on surface (non-text)', fg: '--color-focus', bg: '--color-surface', minimum: 3 },
+  // FR-20's knowledge map (D-132): the four node types' fills, and the lines, all
+  // on the surface the diagram and its legend sit on. Non-text, so 3:1 (SC 1.4.11).
+  // tests/contrast.test.js holds that these are the fills the stylesheet declares
+  // and that the four differ.
+  { label: 'Map: document node on surface (non-text)', fg: '--color-primary', bg: '--color-surface', minimum: 3 },
+  { label: 'Map: meeting node on surface (non-text)', fg: '--color-success', bg: '--color-surface', minimum: 3 },
+  { label: 'Map: tag node on surface (non-text)', fg: '--color-warning', bg: '--color-surface', minimum: 3 },
+  { label: 'Map: contributor node on surface (non-text)', fg: '--color-text-muted', bg: '--color-surface', minimum: 3 },
+  { label: 'Map: selected node outline and lines on surface (non-text)', fg: '--color-text', bg: '--color-surface', minimum: 3 },
 ]
