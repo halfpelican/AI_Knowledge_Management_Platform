@@ -44,7 +44,8 @@ pytestmark = pytest.mark.django_db
 LOGIN = reverse("auth-login")
 LOGOUT = reverse("auth-logout")
 ME = reverse("auth-me")
-USER_OBJECT_KEYS = {"id", "name", "email", "role", "created_at"}
+# "picture" since D-137: the profile picture's address, or null.
+USER_OBJECT_KEYS = {"id", "name", "email", "role", "created_at", "picture"}
 
 REMEMBERED_SECONDS = REMEMBERED_SESSION_DAYS * 24 * 60 * 60
 UNREMEMBERED_SECONDS = SESSION_INACTIVITY_MINUTES * 60

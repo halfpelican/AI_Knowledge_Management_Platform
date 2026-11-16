@@ -62,9 +62,16 @@ SESSION_NAMES = [
 
 
 # D-137's account self-service (16 November 2026), beyond its session length above: the password
-# change's throttle rate, which apps/api/tests/test_throttles.py pins with the other rates.
+# change's throttle rate, which apps/api/tests/test_throttles.py pins with the other rates, and the
+# profile picture's limits, pinned below, with its rate pinned there too.
 ACCOUNT_SELF_SERVICE_NAMES = [
     "PASSWORD_CHANGE_THROTTLE_RATE",
+    "PICTURE_THROTTLE_RATE",
+    "PICTURE_FORMATS",
+    "MAX_PICTURE_BYTES",
+    "PICTURE_UPLOAD_ALLOWANCE_BYTES",
+    "MAX_PICTURE_PIXELS",
+    "PICTURE_MAX_DIMENSION",
 ]
 
 
@@ -359,6 +366,25 @@ def test_a_remembered_session_is_seven_days_in_whole_days():
     slides with use. A float would still slide, but would no longer be whole seconds."""
     assert constants.REMEMBERED_SESSION_DAYS == 7
     assert type(constants.REMEMBERED_SESSION_DAYS) is int
+
+
+def test_the_picture_limits_are_d137s():
+    """D-137, Benjamin's decision of 16 November 2026: PNG, JPEG or WebP up to 5 MB, re-encoded as a
+    PNG of at most 512 x 512, and no GIF or SVG. The 64 KiB multipart allowance and the 25-megapixel
+    cap are the values the build was given. Pinned exactly, so that a change is a decision."""
+    from PIL import Image
+
+    assert constants.PICTURE_FORMATS == ("PNG", "JPEG", "WEBP")
+    assert constants.MAX_PICTURE_BYTES == 5 * 1024 * 1024
+    assert constants.PICTURE_UPLOAD_ALLOWANCE_BYTES == 64 * 1024
+    assert constants.MAX_PICTURE_PIXELS == 25_000_000
+    # Below Pillow's DecompressionBombWarning threshold, so the cap refuses every picture Pillow would
+    # warn about, without a warnings filter, which is not thread-safe under Waitress.
+    assert constants.MAX_PICTURE_PIXELS < Image.MAX_IMAGE_PIXELS
+    assert constants.PICTURE_MAX_DIMENSION == 512
+    for name in ("MAX_PICTURE_BYTES", "PICTURE_UPLOAD_ALLOWANCE_BYTES", "MAX_PICTURE_PIXELS",
+                 "PICTURE_MAX_DIMENSION"):
+        assert type(getattr(constants, name)) is int, name
 
 
 def test_effective_roles_are_closed_under_generalisation():

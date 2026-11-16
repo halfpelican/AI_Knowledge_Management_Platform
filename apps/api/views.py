@@ -15,10 +15,11 @@ from django.contrib.auth import logout as django_logout
 from django.core.exceptions import SuspiciousFileOperation
 from django.db import IntegrityError, transaction
 from django.db.models import Exists, OuterRef, Prefetch
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.utils.text import Truncator
 from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser
@@ -30,6 +31,13 @@ from rest_framework.views import APIView
 import apps.ai
 from apps.accounts.audit import log_role_change
 from apps.accounts.models import LoginAttempt, Permission, Role
+from apps.accounts.pictures import (
+    PictureTooLarge,
+    UnreadablePicture,
+    reencode_picture,
+    remove_picture,
+    replace_picture,
+)
 from apps.ai import attempt_log
 from apps.ai.base import ProviderUnavailable, TranscriptionDisabled
 from apps.core.constants import (
@@ -48,10 +56,13 @@ from apps.core.constants import (
     MANAGE_MEETINGS_PERMISSION,
     MANAGE_ROLES_PERMISSION,
     MANAGE_TAGS_PERMISSION,
+    MAX_PICTURE_BYTES,
+    MAX_PICTURE_PIXELS,
     MAX_UPLOAD_BYTES,
     MAXIMUM_TRANSCRIPTION_SEGMENT_SECONDS,
     MEETING_INDEXED,
     MINIMUM_CONTENT_LENGTH,
+    PICTURE_UPLOAD_ALLOWANCE_BYTES,
     RELEASE_ACCOUNT_LOCKS_PERMISSION,
     REMEMBERED_SESSION_DAYS,
     REVIEW_KNOWLEDGE_GAPS_PERMISSION,
@@ -211,6 +222,27 @@ ACCOUNT_LOCKED_CODE = "account_locked"
 LOGGED_OUT_MESSAGE = "You have been logged out."
 # POST /api/auth/change-password's 200 (D-137). The refusals are PasswordChangeSerializer's.
 PASSWORD_CHANGED_MESSAGE = "Your password has been changed."
+# POST /api/users/me/picture (D-137). Two 413s with different text under the one code, as FR-08's
+# two size refusals have: the file's bytes, and the pixels its header declares.
+PICTURE_TOO_LARGE_MESSAGE = (
+    f"Picture exceeds the maximum permitted size of {MAX_PICTURE_BYTES // (1024 * 1024)} MB."
+)
+PICTURE_TOO_MANY_PIXELS_MESSAGE = (
+    "This picture's dimensions are too large. Choose a picture of at most "
+    f"{MAX_PICTURE_PIXELS // 1_000_000} megapixels."
+)
+# One 415 for a file that is not a PNG, JPEG or WebP and for one that is but cannot be read,
+# corrupt or cut short (D-137): the person's next step is the same, another file.
+UNSUPPORTED_PICTURE_MESSAGE = (
+    "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."
+)
+NO_PICTURE_SUBMITTED_MESSAGE = "No picture was submitted."
+# GET /api/users/{id}/picture's one 404 (D-137): get_object_or_404's own wording, restated as
+# DOCUMENT_NOT_FOUND_MESSAGE restates it, for an unknown id, a user with no picture, and a stored
+# file gone from disk alike.
+USER_NOT_FOUND_MESSAGE = "No %s matches the given query." % User._meta.object_name
+# What the picture route's Content-Disposition names the file, inline (D-137).
+PICTURE_FILENAME = "picture.png"
 # FR-05 Validation: "a user cannot remove their own administrator role, preventing
 # accidental lockout of the last administrator."
 SELF_DEMOTION_MESSAGE = "You cannot remove your own Administrator role."
@@ -468,6 +500,19 @@ def ingestion_in_flight():
     )
 
 
+def declared_body_length(request) -> int:
+    """The body length ``CONTENT_LENGTH`` declares, read without reading the body (D-124).
+
+    0 when the header is absent, blank or malformed, which is what Django reads then: no body.
+    ``declares_a_body_over_the_upload_ceiling`` below says why the declared length can be trusted.
+    The picture upload compares it with its own, smaller ceiling (D-137).
+    """
+    try:
+        return int(request.META.get("CONTENT_LENGTH") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def declares_a_body_over_the_upload_ceiling(request) -> bool:
     """Whether the request declares a body longer than ``MAX_UPLOAD_BYTES`` (D-124).
 
@@ -485,11 +530,7 @@ def declares_a_body_over_the_upload_ceiling(request) -> bool:
     sees the request. Waitress's own ``--max-request-body-size`` bounds that
     (``MAX_REQUEST_BODY_BYTES``, D-124).
     """
-    try:
-        declared_length = int(request.META.get("CONTENT_LENGTH") or 0)
-    except (TypeError, ValueError):
-        declared_length = 0
-    return declared_length > MAX_UPLOAD_BYTES
+    return declared_body_length(request) > MAX_UPLOAD_BYTES
 
 
 # --- FR-01 registration --------------------------------------------------------------
@@ -821,6 +862,145 @@ class PasswordChangeView(APIView):
             # new password's hash in it, in the transaction that changes the password.
             update_session_auth_hash(request, user)
         return Response({"detail": PASSWORD_CHANGED_MESSAGE}, status=status.HTTP_200_OK)
+
+
+# --- Profile pictures (D-137) --------------------------------------------------------------
+
+
+class OwnPictureView(ThrottlePostOnlyMixin, APIView):
+    """``POST`` and ``DELETE /api/users/me/picture`` (D-137): a signed-in user sets or removes their
+    own profile picture, which every signed-in user then sees.
+
+    **Who:** any session, both roles, under the global ``IsAuthenticated``, with no permission code:
+    a picture is its holder's own, as a password is. No session is a 401. CSRF is checked on both
+    methods, from the ``X-CSRFToken`` header alone, before anything else reads the body
+    (``apps/api/authentication.py``, D-124).
+
+    **POST**, multipart with one file part, ``picture``. The refusals, in order:
+
+    1. 429 past ``PICTURE_THROTTLE_RATE``, scope ``picture``, per user (``ThrottlePostOnlyMixin``:
+       DELETE is not throttled). Checked in ``initial()``, before the body is read, so a refused
+       upload counts too.
+    2. 413 for a body declaring more than MAX_PICTURE_BYTES plus PICTURE_UPLOAD_ALLOWANCE_BYTES,
+       decided from ``CONTENT_LENGTH`` alone, so the body is never parsed (D-124), as the document
+       upload decides it.
+    3. 400 ``{"picture": [...]}`` when no file part named ``picture`` came.
+    4. 413 for a file over MAX_PICTURE_BYTES, against the bytes that arrived.
+    5. 415 when Pillow cannot open the content as a PNG, JPEG or WebP: a wrong format, under any
+       name or declared type (``apps/accounts/pictures.py``).
+    6. 413 for a header declaring more than MAX_PICTURE_PIXELS, before a pixel is decoded.
+    7. 415, the same message as 5, when the picture cannot be decoded: corrupt or truncated.
+
+    Then the picture is re-encoded, stored under a new random name, and ``picture_updated_at`` set,
+    in one transaction that locks the user's row, and the previous file is deleted once that
+    commits (``replace_picture``). The 200 is the user object as it now stands.
+
+    **DELETE** reads no body. It clears both fields and deletes the stored file once that commits
+    (``remove_picture``). It is idempotent: a user with no picture gets the same 200. The 200 is the
+    user object, its ``picture`` null.
+    """
+
+    # Multipart only, as the document upload is. A session is required, and CSRF with it, so a
+    # cross-site multipart POST is refused for want of the token, as on DocumentsView.
+    parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]  # POST only, through ThrottlePostOnlyMixin
+    throttle_scope = "picture"
+
+    def post(self, request):
+        # The declared length, before request.data is touched: a body refused here is never parsed.
+        if declared_body_length(request) > MAX_PICTURE_BYTES + PICTURE_UPLOAD_ALLOWANCE_BYTES:
+            return Response(
+                {"detail": PICTURE_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        uploaded = request.data.get("picture")
+        if not hasattr(uploaded, "read"):
+            return Response(
+                {"picture": [NO_PICTURE_SUBMITTED_MESSAGE]}, status=status.HTTP_400_BAD_REQUEST
+            )
+        # Again against what arrived, the file alone: the allowance above was for the multipart
+        # framing, not for a larger picture.
+        if uploaded.size > MAX_PICTURE_BYTES:
+            return Response(
+                {"detail": PICTURE_TOO_LARGE_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        try:
+            png = reencode_picture(uploaded)
+        except PictureTooLarge:
+            return Response(
+                {"detail": PICTURE_TOO_MANY_PIXELS_MESSAGE},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        except UnreadablePicture:
+            return Response(
+                {"detail": UNSUPPORTED_PICTURE_MESSAGE},
+                status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            )
+        # The re-encoding is done before the row is locked, so the lock is held for one small
+        # write and one UPDATE, never for a decode.
+        account = replace_picture(request.user, png)
+        return Response(UserSerializer(account).data, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        account = remove_picture(request.user)
+        return Response(UserSerializer(account).data, status=status.HTTP_200_OK)
+
+
+class UserPictureView(APIView):
+    """``GET /api/users/{id}/picture`` (D-137): a user's profile picture, for any signed-in session.
+
+    **Who:** any session, both roles. D-137 has every signed-in user see every picture, wherever
+    users are listed, and the directory already lists every user to every session (D-34), so
+    nothing here is scoped. No session is a 401, from the global ``IsAuthenticated``.
+
+    **One 404 for every absence.** An unknown id and a user with no picture are the same query,
+    ``get_object_or_404`` over users who have one, with the same body. A stored file gone from
+    disk, or named by a path outside MEDIA_ROOT, is that body too, and is logged (D-75's rule for
+    the download).
+
+    **The PNG is sent as bytes, never a ``FileResponse``.** The file is read whole and closed before
+    the response is built: it is the server's own PNG of at most PICTURE_MAX_DIMENSION a side. A
+    ``FileResponse`` would hold the file open while the response is sent, and on Windows an open
+    handle makes the after-commit delete of a replaced picture fail.
+
+    **Headers.** ``Content-Type: image/png``, ``X-Content-Type-Options: nosniff`` set here as well as
+    by ``SecurityMiddleware``, so the type holds even where that setting is turned off, and
+    ``Content-Disposition: inline``. The cache headers are the API's own, never-cache, from
+    ``NeverCacheApiMiddleware`` (D-76); the user object's ``?v=`` is what changes the address when
+    the picture changes.
+
+    **The request's ``Accept`` header is not consulted** (``IgnoreClientContentNegotiation``), as on
+    the download: a client asking for ``image/png`` would otherwise get DRF's 406, since the API's
+    only renderer is JSON. The 401 and the 404 are still JSON.
+
+    **Nothing serves MEDIA_ROOT.** This route is the only way a picture leaves, and only to a
+    signed-in session.
+    """
+
+    content_negotiation_class = IgnoreClientContentNegotiation
+
+    def get(self, request, pk):
+        account = get_object_or_404(User.objects.exclude(picture="").only("pk", "picture"), pk=pk)
+        stored_name = account.picture.name
+        try:
+            with account.picture.open("rb") as handle:
+                data = handle.read()
+        except (OSError, SuspiciousFileOperation):
+            logger.error(
+                "The profile picture of user %s is missing, unreadable or outside the media folder "
+                "(stored name %r).",
+                account.pk,
+                stored_name,
+                exc_info=True,
+            )
+            raise Http404(USER_NOT_FOUND_MESSAGE)
+        response = HttpResponse(data, content_type="image/png")
+        response["Content-Disposition"] = content_disposition_header(
+            as_attachment=False, filename=PICTURE_FILENAME
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        return response
 
 
 # --- FR-05 role management ---------------------------------------------------------------

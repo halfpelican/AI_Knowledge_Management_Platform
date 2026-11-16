@@ -4,7 +4,9 @@
 ``password_hash``, ``failed_attempts`` or ``locked_until``; a test asserts the exact
 key set so a field cannot leak in later. The one exception is ``UserListEntrySerializer``,
 which adds a ``lock`` object to ``GET /api/users``, and to the unlock route's 200, for a
-holder of ``release_account_locks`` only (FR-03, D-130).
+holder of ``release_account_locks`` only (FR-03, D-130). Since D-137 the user object carries
+``picture``, the address of the user's profile picture or null (``picture_url``), and so do the
+directory's entries and a meeting detail's ``attendee_people``.
 """
 
 import unicodedata
@@ -15,11 +17,13 @@ from uuid import UUID
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.urls import reverse
 from rest_framework import serializers
 
 from django.utils import timezone
 
 from apps.accounts.models import Role
+from apps.accounts.pictures import picture_version
 from apps.core.constants import (
     CLASSIFICATION_DIMENSIONS,
     DEFAULT_DOCUMENT_SORT,
@@ -55,16 +59,36 @@ from .repository import classification_of, extracted_text_of, tag_details_of, ta
 
 User = get_user_model()
 
-USER_FIELDS = ("id", "name", "email", "role", "created_at")
+USER_FIELDS = ("id", "name", "email", "role", "created_at", "picture")
+
+
+def picture_url(user) -> str | None:
+    """``picture`` wherever a user is returned (D-137): ``/api/users/<id>/picture?v=<version>``, or
+    None while the user has no picture.
+
+    The address of ``GET /api/users/{id}/picture``, which any signed-in session may fetch, and never
+    a path under MEDIA_ROOT, which nothing serves. ``v`` is ``picture_updated_at`` in whole
+    microseconds (``picture_version``), so a replaced picture is a new address, and a page holding
+    the old image fetches the new one rather than reusing what it has. Read from the user's row
+    alone, so a list of users costs no query per picture.
+    """
+    if not user.picture or user.picture_updated_at is None:
+        return None
+    path = reverse("user-picture", kwargs={"pk": user.pk})
+    return f"{path}?v={picture_version(user.picture_updated_at)}"
 
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.CharField(source="role.role_name", read_only=True)
+    picture = serializers.SerializerMethodField()  # D-137
 
     class Meta:
         model = User
         fields = USER_FIELDS
         read_only_fields = USER_FIELDS
+
+    def get_picture(self, user):
+        return picture_url(user)
 
 
 class UserListEntrySerializer(UserSerializer):
@@ -121,12 +145,21 @@ class DirectoryEntrySerializer(serializers.ModelSerializer):
     Three fields, and none of them is ``role``: who may change roles, and who holds
     which, stays FR-05's business. This is a staff directory, which is what naming
     an attendee needs and no more.
+
+    Since D-137 a fourth, ``picture``, the user object's own (``picture_url``): every signed-in user
+    sees every profile picture, wherever users are listed. Still no role, no timestamps and no
+    account state.
     """
+
+    picture = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ("id", "name", "email")
+        fields = ("id", "name", "email", "picture")
         read_only_fields = fields
+
+    def get_picture(self, user):
+        return picture_url(user)
 
 
 # --- FR-01, FR-02 -------------------------------------------------------------------
@@ -700,16 +733,33 @@ class MeetingDetailSerializer(MeetingSerializer):
     fields. A meeting's text is already ``transcript_text``, and FR-15's browse by tag is about
     documents (D-74). ``POST /api/meetings`` keeps ``MeetingSerializer``, as the upload keeps
     ``DocumentSerializer``.
+
+    **D-137 adds ``attendee_people``**, the attendees as people the page can show with their
+    pictures: ``[{"email", "name", "picture"}]``, ``picture`` as in the user object. It is in the
+    order of ``attendees``, which keeps its shape. Both are read from the one list the view's
+    ``prefetch_related("attendees__user")`` fetched, so neither costs a query per attendee. The list
+    and the dashboard keep ``MeetingListSerializer``, without it.
     """
 
     can_delete = serializers.SerializerMethodField()
+    attendee_people = serializers.SerializerMethodField()
 
     class Meta(MeetingSerializer.Meta):
-        fields = MeetingSerializer.Meta.fields + ("can_delete",)
+        fields = MeetingSerializer.Meta.fields + ("can_delete", "attendee_people")
         read_only_fields = fields
 
     def get_can_delete(self, meeting):
         return self.context["can_delete"]
+
+    def get_attendee_people(self, meeting):
+        return [
+            {
+                "email": attendee.user.email,
+                "name": attendee.user.name,
+                "picture": picture_url(attendee.user),
+            }
+            for attendee in meeting.attendees.all()
+        ]
 
 
 class MeetingIngestSerializer(serializers.Serializer):

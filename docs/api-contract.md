@@ -18,17 +18,23 @@ invariant 4). Validation errors are `400 {"field": ["message"], ...}` in DRF's s
 Error messages never disclose whether an email address is registered, except the
 409 on registration, which FR-01 specifies. Every response under `/api/`, whatever its status,
 carries `Cache-Control: max-age=0, no-cache, no-store, must-revalidate, private` and an
-`Expires` header (D-76). The one route that answers with something other than JSON is FR-15's
-download, which returns the stored original (D-75).
+`Expires` header (D-76). Two routes answer with something other than JSON: FR-15's download,
+which returns the stored original (D-75), and since D-137 `GET /api/users/{id}/picture`, which
+returns a profile picture as PNG bytes.
 
 The user object, wherever a user is returned:
 
 ```json
 {"id": "uuid", "name": "Ada Lovelace", "email": "ada@example.com",
- "role": "Employee", "created_at": "2026-09-12T10:00:00+10:00"}
+ "role": "Employee", "created_at": "2026-09-12T10:00:00+10:00",
+ "picture": "/api/users/uuid/picture?v=1794823200123456"}
 ```
 
 Never `password_hash`, `failed_attempts` or `locked_until`.
+
+> **16 November 2026 (D-137).** Every user object carries `picture`: the address of the user's
+> profile picture, `/api/users/{id}/picture?v=<version>`, or `null` while they have none. Never a
+> path under `MEDIA_ROOT`. See "Profile pictures" at the end of this file.
 
 > **13 November 2026 (D-130).** `GET /api/users` adds one field, `lock`, for a requester holding
 > `release_account_locks`, which only Administrators hold. That is FR-03's "An Administrator viewing
@@ -49,11 +55,12 @@ Every code below is quoted from the FR's own Responses clause unless marked
 | POST | `/api/auth/change-password` | session | Since D-137: `200 {"detail": "Your password has been changed."}`; this session stays signed in and every other session of the user ends (see "FR-04 — account self-service" at the end of this file) | `400` field errors, a wrong current password included, never `401`; `401` no valid session; `403` CSRF; `429` past the `password_change` rate, all as listed there |
 | GET | `/api/roles` | session | `200 [{"role_id": "uuid", "name": "Employee", "description": "...", "permissions": ["..."]}]` | `401` |
 | GET | `/api/users` | Administrator | `200 [user object, ...]` ordered by `created_at` | `401`; `403` Employee |
-| GET | `/api/users/directory` | session | `200 [{"id", "name", "email"}, ...]` ordered by name | `401` |
+| GET | `/api/users/directory` | session | `200 [{"id", "name", "email", "picture"}, ...]` ordered by name; `picture` since D-137, as in the user object | `401` |
 | PATCH | `/api/users/{id}/role` | Administrator | `200` updated user object; writes an audit entry | `400` the body is missing `role_id` or it is not a UUID; `401`; `403` Employee, or an administrator demoting themselves (*convention*: FR-05 enumerates only 200, 403 and 404); `404` the user or the role does not exist |
 
 **The directory is not the user list (D-34).** `GET /api/users/directory` carries a
-name and an address and nothing else — no role, no timestamps, no account state. It
+name and an address and nothing else — no role, no timestamps, no account state. (Since D-137 it
+also carries `picture`, which every signed-in user may see.) It
 exists because FR-09 gives attendee association to *any* user, while `GET /api/users`
 is Administrator-only: it carries the role each person holds and drives role
 management, so an Employee had no way to populate an attendee picker and FR-09's
@@ -73,7 +80,8 @@ cannot drift.
 per client address and answer `429` past the rate (D-26). Since Stage 5 item 5, asks, ingestion
 and thread creation are limited per user as well, and keyword search and a person applying a tag
 since 10 November 2026, a recording segment sent for transcription since D-123, and a password
-change since D-137; "Stage 5 item 5" below lists every throttled route (D-79).
+change and a profile picture upload since D-137; "Stage 5 item 5" below lists every throttled route
+(D-79).
 
 **FR-02 login side effects.** A failed attempt increments `failed_attempts`; five
 consecutive failures lock the account for `LOCKOUT_DURATION`. While the lock holds,
@@ -133,8 +141,9 @@ Response bodies the front end relies on (Stage 2 implementation):
 - `403`: `{"detail": "Your role does not hold the 'manage_roles' permission."}`.
 - Unmatched path under `/api/`: JSON `404 {"detail": "Not found."}`. Since Stage 5 item 9 a path
   outside `/api/` is the SPA's (see "Stage 5 item 9" at the end of this file).
-- CSRF: `POST /api/auth/logout`, `POST /api/auth/change-password` (since D-137) and `PATCH` always
-  require `X-CSRFToken`; so does `POST /api/auth/login` when the browser already holds a session.
+- CSRF: `POST /api/auth/logout`, `POST /api/auth/change-password`, `POST` and `DELETE
+  /api/users/me/picture` (all three since D-137) and `PATCH` always require `X-CSRFToken`; so does
+  `POST /api/auth/login` when the browser already holds a session.
   - **The token is read from that header only, never from a `csrfmiddlewaretoken` form field
     (D-124).** That is so the check never reads the request body. Every client already sends the
     header.
@@ -325,7 +334,7 @@ an upload may *write* into `visible_to_roles` is unchanged (D-29).
 |---|---|---|---|---|
 | POST | `/api/meetings` | session + `contribute_content` | `201` meeting object, carrying `meeting_id` | `422` the transcript was stored but every chunk failed to embed (*convention*: FR-09 enumerates only 201 and 400, and this mirrors FR-08's code for the same condition); `400` a missing or empty title, a missing date, a date in the future, a transcript below the minimum length, neither text nor file, both text and file, an unreadable file, a PDF file over one of D-81's extraction bounds (`{"file": ["..."]}` with that bound's own message, nothing stored), or an attendee who is not a registered user; `401`; `403` the role lacks `contribute_content`, or `visible_to_roles` excludes the ingester's own role; `413 {"detail": "Transcript exceeds the maximum permitted size of 50 MB."}` a body, pasted or a file, declaring more than 50 MB, refused before it is read, after the 403 and the 429, nothing stored (*convention*, D-124: FR-09 enumerates only 201 and 400, and a body refused unread has no field to report on); `400 {"detail": "Bad request."}` a pasted transcript whose JSON body declares between 2.5 MiB and 50 MB, refused unread by Django's `DATA_UPLOAD_MAX_MEMORY_SIZE`, nothing stored (always so; first written down at D-124); `429` past the ingestion rate (D-79); `429 {"detail": "...", "code": "ingestion_in_flight"}` while another upload, transcript or reprocess of this user's is still being processed, nothing stored (D-85) |
 | GET | `/api/meetings` | session | `200 [meeting object without `transcript_text`, ...]`, newest first, scoped to the caller's role | `401` |
-| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope |
+| GET | `/api/meetings/{id}` | session | `200` meeting object **with** `transcript_text`, and `can_delete` since D-99 (see Meeting deletion, below FR-15), and `attendee_people` since D-137 (see "Profile pictures" at the end of this file) | `401`; `404` no such meeting, or one outside the caller's scope |
 | DELETE | `/api/meetings/{id}` | session + `manage_meetings` | `204` no body (D-99; not in the proposal, see Meeting deletion, below FR-15) | `401`; `404` no such meeting, or one outside the caller's scope, checked **before** the permission; `403` the meeting is in scope and the role lacks `manage_meetings` |
 
 The meeting object:
@@ -1046,6 +1055,7 @@ not grant it, and it does not grant `manage_documents`.
 | `transcription` | `POST /api/transcriptions`, one recording segment per request, and `GET /api/transcriptions/status`, which asks FLM each time (D-123; see "Recording transcription" at the end of this file) | 60/min |
 | `action_items` | FR-16's `POST /api/meetings/{id}/action-items` and `PATCH` and `DELETE /api/meetings/{id}/action-items/{item_id}`, one budget (the security review of 12 November 2026, D-125's third note); checked before the meeting is looked up, so past the rate the `429` comes before the `404` and the `403` | 30/min |
 | `password_change` | `POST /api/auth/change-password` (D-137), per user across all their sessions, wrong current passwords included; checked after the `401` and a CSRF `403`, before the body is read (see "FR-04 — account self-service" at the end of this file) | 10/hour |
+| `picture` | `POST /api/users/me/picture` (D-137), per user, refused uploads included; checked after the `401` and a CSRF `403`, before the body is read. Not its `DELETE`, and not `GET /api/users/{id}/picture` (see "Profile pictures" at the end of this file) | 10/hour |
 
 A request over its rate is answered with DRF's 429, `{"detail": "Request was throttled. Expected
 available in N seconds."}`, and a `Retry-After` header in seconds. The rate is checked before the
@@ -1860,3 +1870,52 @@ every `401` as an expired session and signs the user out (D-137). Nothing is cha
 - **A change leaves FR-03's lock and count as they were.** A locked account stays locked, and the
   new password meets the lock's `403` at sign-in, as D-137 has a completed reset leave the lock.
 - **Only the password column is written.** A role change committed while the request runs is kept.
+
+### Profile pictures
+
+Every signed-in user sees every profile picture, wherever users are listed (D-137). No FR
+enumerates these codes; each is D-137's, or a rule this contract already has.
+
+| Method | Path | Auth | Success | Failures |
+|---|---|---|---|---|
+| POST | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, its `picture` the new address. Multipart, one file part, `picture`: a PNG, JPEG or WebP of at most 5 MB | `400 {"picture": ["No picture was submitted."]}` with no file part named `picture`; `401` no valid session; `403 {"detail": "CSRF Failed: ..."}` without `X-CSRFToken`; `413 {"detail": "Picture exceeds the maximum permitted size of 5 MB."}` for a body declaring more than 5 MB plus 64 KiB, refused unread, or for a file over 5 MB; `413 {"detail": "This picture's dimensions are too large. Choose a picture of at most 25 megapixels."}` for a header declaring more than 25,000,000 pixels, refused before a pixel is decoded; `415 {"detail": "Choose a PNG, JPEG or WebP picture. This file is not one, or it is damaged."}` for any other format, under any name, and for a corrupt or truncated picture, one body for all; `415` with DRF's own body for a request that is not multipart; `429` past the `picture` rate, with DRF's body and `Retry-After`. Nothing is stored for any of them |
+| DELETE | `/api/users/me/picture` | session, both roles, no permission code | `200` the user object, `picture` null. Idempotent: a user with no picture gets the same `200`. No body is read | `401`; `403` CSRF |
+| GET | `/api/users/{id}/picture` | session, both roles, no permission code | `200` the picture as PNG bytes, with `Content-Type: image/png`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline; filename="picture.png"` and the API's never-cache headers. The `Accept` header is not consulted | `401`; `404 {"detail": "No User matches the given query."}` for an unknown id, a user with no picture, and a stored file gone from disk alike |
+
+**The order on `POST`** is fixed: the `401`, the CSRF `403`, the `429`, the declared-length `413`
+(the body is not read), the `400`, the file's `413`, then the `415` for content that is not a PNG,
+JPEG or WebP, the pixel `413`, and the `415` for a picture that cannot be decoded.
+
+**What is stored.**
+
+- **The format is read from the content,** never from the filename or the declared type. Pillow
+  tries PNG, JPEG and WebP and nothing else, so no GIF and no SVG.
+- **Only the pixels are kept.** The first frame is decoded and turned upright by its EXIF
+  orientation. It is converted to RGB, or to RGBA when it has transparency, and scaled down to fit
+  512 × 512, keeping its shape and never scaled up. Then it is rebuilt from its pixels alone.
+- **It is stored as a PNG under a new random name,** with no text, ICC profile, EXIF or
+  transparency key, so a photo's location is not kept.
+
+**Replacing and removing.**
+
+- **One change at a time per account.** The user's row is locked for the change, so two uploads
+  for one account take turns.
+- **The previous file is deleted once the change has committed,** never before. A file the storage
+  cannot delete is logged, and the request still succeeds.
+- **Nothing serves `MEDIA_ROOT`.** A picture leaves only through the `GET` above.
+
+**`picture` wherever a user is returned:** `/api/users/{id}/picture?v=<version>`, or `null`.
+
+- **`v` is `picture_updated_at` in whole microseconds** since the Unix epoch, so a replaced picture
+  has a new address. The server does not read `v`: any value, or none, gets the current picture.
+- **Where it appears:**
+  - the user object: `/api/auth/me`, login, registration, `GET /api/users`, the role change's and
+    the unlock route's `200`s, and the picture routes' own `200`s;
+  - every `GET /api/users/directory` entry.
+- **A meeting's attendees.** `GET /api/meetings/{id}` gains `attendee_people`,
+  `[{"email", "name", "picture"}]`, in the order of `attendees`, which is unchanged. The meeting
+  list and the dashboard do not carry it.
+
+**Who sees what.** Every signed-in session may fetch every user's picture. The directory already
+lists every user to every session (D-34), and shows which of them have a picture. An unknown id and
+a user with no picture get the same `404`.

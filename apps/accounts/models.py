@@ -4,7 +4,13 @@ section 1).
 Permissions are held against roles, never against individual users (FR-05, FR-06).
 Every table and column is named as the schema document names it; the email address
 is the login identifier, unique case-insensitively (docs/decisions.md D-02).
+
+Since D-137 a user may have a profile picture, which every signed-in user sees. The file is the
+PNG ``apps/accounts/pictures.py`` re-encodes from the upload, stored beneath MEDIA_ROOT, and it
+leaves only through ``GET /api/users/{id}/picture``. Nothing serves MEDIA_ROOT.
 """
+
+import uuid
 
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.db import models
@@ -82,6 +88,16 @@ class UserManager(BaseUserManager):
         return super().get_by_natural_key(username.lower())
 
 
+def picture_upload_path(instance, filename):
+    """Where a profile picture is stored beneath MEDIA_ROOT (D-137): ``profile-pictures/<random>.png``.
+
+    ``filename`` is ignored. The file is a PNG the server made, whatever the upload was called, and
+    every upload gets a new random name, so a replaced picture is a different file from its
+    successor, which is what lets the old one be deleted only once the new one has committed.
+    """
+    return f"profile-pictures/{uuid.uuid4().hex}.png"
+
+
 class User(AbstractBaseUser):
     id = uuid_primary_key("user_id")
     name = models.CharField(max_length=NAME_MAX_LENGTH)
@@ -96,6 +112,11 @@ class User(AbstractBaseUser):
     # Written by FR-02 on failed logins, read by FR-03 (NIT3004).
     failed_attempts = models.PositiveIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
+    # D-137: the profile picture, a PNG of at most PICTURE_MAX_DIMENSION a side, and when it last
+    # changed, which is the user object's ?v=. Written together, by apps/accounts/pictures.py only:
+    # both empty while there is no picture.
+    picture = models.FileField(upload_to=picture_upload_path, blank=True)
+    picture_updated_at = models.DateTimeField(null=True, blank=True)
 
     objects = UserManager()
 

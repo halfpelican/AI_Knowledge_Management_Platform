@@ -25,10 +25,19 @@ free text. All timestamps are timezone-aware.
 | `failed_attempts` | integer | default 0; incremented on failed login (FR-02) |
 | `locked_until` | timestamp, nullable | five consecutive failures → 15 minutes (FR-02), by default; since D-130 decisions 7 and 8 the running `.env` policy, which can only be tightened |
 | `last_login_at` | timestamp, nullable | |
+| `picture` | text (FileField), blank | **D-137** — the profile picture, the name of a PNG under `MEDIA_ROOT`, `profile-pictures/<random>.png`; blank while the user has none |
+| `picture_updated_at` | timestamp, nullable | **D-137** — when the picture last changed; null while there is none. The user object's `?v=` is this instant in whole microseconds |
 
 `failed_attempts` and `locked_until` are written by FR-02 and read by FR-03. FR-02 is
 MUST, so the columns belong in v1 even though the full lockout interface is FR-03
 (SHOULD, NIT3004).
+
+> **16 November 2026 (D-137).** `accounts 0012_user_picture` adds `picture` and
+> `picture_updated_at`, which no FR names: Benjamin's decision gives every user a profile picture
+> that every signed-in user sees. Both are written together, by `POST` and `DELETE
+> /api/users/me/picture` only. The file is the PNG the server re-encodes from the upload, at most
+> 512 pixels a side, and it leaves only through `GET /api/users/{id}/picture`. Nothing serves
+> `MEDIA_ROOT`.
 
 > **13 November 2026 (D-130).** FR-03 now writes both columns too: an Administrator's release
 > (`POST /api/users/{id}/unlock`) sets `locked_until` to null and `failed_attempts` to 0, the state
@@ -722,7 +731,11 @@ QueryLog and SearchLogs; the executor plans them immediately after `retrieval 00
 `accounts 0008` (the `manage_tags` seed, D-119 finding 5) immediately after `accounts 0007`.
 `LoginAttempts` (v2, `accounts 0009`, FR-03) follows Users. The executor plans it immediately after
 `accounts 0008`, and `accounts 0010` (the `release_account_locks` seed) immediately after 0009,
-both before `documents 0001` (D-130).
+both before `documents 0001` (D-130). `accounts 0012_user_picture` (Users' `picture` and
+`picture_updated_at`, D-137) depends on 0010, and the executor plans it immediately after 0010,
+before `documents 0001`. It is numbered 0012 because FR-20's `accounts 0011` (D-132) was built on
+another branch from the same 0010. Once both are on one branch, a merge migration with no
+operations joins them, as `documents 0014` joined two 0012s.
 
 Enable the `vector` extension in its own migration before any table carrying a vector
 column.

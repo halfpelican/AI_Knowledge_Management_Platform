@@ -98,7 +98,10 @@ PROTECTED_ROUTES = {"api-root", "auth-logout", "auth-me", "role-list", "user-lis
                     "user-unlock",
                     # D-137: a signed-in user changes their own password. A session and no
                     # permission code, for both roles
-                    "auth-change-password"}
+                    "auth-change-password",
+                    # D-137: profile pictures. Setting and removing one's own, and viewing
+                    # anyone's: a session and no permission code, for both roles
+                    "user-own-picture", "user-picture"}
 # Routes that need more than a session, with the permission code they check.
 # document-list is absent on purpose: its GET needs only a session, and the
 # contribute permission its POST needs is returned by get_permissions() per method

@@ -212,6 +212,9 @@ THROTTLED_ROUTES = {
     # D-137: a password change, in a budget of its own, which is the only bound on guessing the
     # current password from a session left open.
     ("auth-change-password", "POST"): "password_change",
+    # D-137: a profile picture uploaded, which Pillow decodes and re-encodes. Its POST only: the
+    # DELETE beside it and GET /api/users/{id}/picture are not throttled.
+    ("user-own-picture", "POST"): "picture",
 }
 
 

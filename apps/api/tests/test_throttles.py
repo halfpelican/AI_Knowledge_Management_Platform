@@ -17,7 +17,9 @@ The per-user scopes, each a DRF ``ScopedRateThrottle`` rate from ``apps/core/con
   ``DELETE /api/meetings/{id}/action-items/{item_id}``, one budget (the security review of 12
   November 2026, finding 2, D-125's third note);
 - ``password_change`` on ``POST /api/auth/change-password`` (D-137), wrong current passwords
-  included. ``apps/api/tests/test_fr01_password_change.py`` tests the rest of the route.
+  included. ``apps/api/tests/test_fr01_password_change.py`` tests the rest of the route;
+- ``picture`` on ``POST /api/users/me/picture`` (D-137), refused uploads included, and not on the
+  ``DELETE`` beside it. ``apps/api/tests/test_fr01_profile_pictures.py`` tests the rest of the route.
 
 Each test sends real requests at the real rates and counts to the limit, so a rate changed in
 ``constants.py`` moves the tests with it and a rate dropped from the wiring fails them. The
@@ -35,10 +37,13 @@ Every per-user test runs from an Employee session and from an Administrator sess
 (``session_client``; CLAUDE.md section 8).
 """
 
+import io
 import uuid
 
 import pytest
 from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
+from PIL import Image
 from rest_framework.settings import api_settings
 from rest_framework.test import APIClient
 from rest_framework.throttling import ScopedRateThrottle
@@ -59,6 +64,7 @@ from apps.core.constants import (
     EMPLOYEE_ROLE_NAME,
     INGESTION_THROTTLE_RATE,
     PASSWORD_CHANGE_THROTTLE_RATE,
+    PICTURE_THROTTLE_RATE,
     SEARCH_THROTTLE_RATE,
     TAGGING_THROTTLE_RATE,
     TOPIC_DIMENSION,
@@ -148,6 +154,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
     assert TRANSCRIPTION_THROTTLE_RATE == "60/min"
     assert ACTION_ITEM_THROTTLE_RATE == "30/min"
     assert PASSWORD_CHANGE_THROTTLE_RATE == "10/hour"  # D-137
+    assert PICTURE_THROTTLE_RATE == "10/hour"  # D-137
     expected = {
         "auth": AUTHENTICATION_THROTTLE_RATE,
         "ask": ASK_THROTTLE_RATE,
@@ -158,6 +165,7 @@ def test_the_rates_are_the_ones_d79_settles_and_reach_drf():
         "transcription": TRANSCRIPTION_THROTTLE_RATE,
         "action_items": ACTION_ITEM_THROTTLE_RATE,
         "password_change": PASSWORD_CHANGE_THROTTLE_RATE,
+        "picture": PICTURE_THROTTLE_RATE,
     }
     assert settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] == expected
     # DRF binds the rates to the throttle class when it is imported, so read them from there too.
@@ -611,3 +619,56 @@ def test_one_users_password_change_budget_is_not_anothers(employee_client, admin
     assert_rate_throttled(change_password(clients[spender], PASSWORD))
 
     assert change_password(clients[other], PASSWORD).status_code == 200
+
+
+# --- picture (D-137) ------------------------------------------------------------------------------
+
+OWN_PICTURE_URL = "/api/users/me/picture"
+PICTURE_LIMIT = allowed(PICTURE_THROTTLE_RATE)
+
+
+def a_picture():
+    buffer = io.BytesIO()
+    Image.new("RGB", (24, 16), (40, 120, 200)).save(buffer, format="PNG")
+    return SimpleUploadedFile("me.png", buffer.getvalue(), content_type="image/png")
+
+
+def upload_a_picture(client):
+    return client.post(OWN_PICTURE_URL, {"picture": a_picture()}, format="multipart")
+
+
+def upload_without_a_picture(client):
+    """The cheapest upload the route refuses: no file part, a 400 that decodes nothing."""
+    return client.post(OWN_PICTURE_URL, {}, format="multipart")
+
+
+def test_the_picture_scope_answers_429_past_its_rate_on_post_only(session_client):
+    """D-137. Every upload counts, a refused one included, because the rate is counted before the
+    body is read. Past the rate a good picture is refused too and the stored one stays. Viewing a
+    picture and removing one are not throttled: each is sent more often than the rate allows."""
+    client = session_client.client
+    user = session_client.user
+    assert upload_a_picture(client).status_code == 200
+    user.refresh_from_db()
+    stored = user.picture.name
+    for number in range(2, PICTURE_LIMIT + 1):
+        assert upload_without_a_picture(client).status_code == 400, number
+
+    assert_rate_throttled(upload_a_picture(client))
+    user.refresh_from_db()
+    assert user.picture.name == stored
+    for number in range(PICTURE_LIMIT + 1):
+        assert client.get(f"/api/users/{user.pk}/picture").status_code == 200, number
+    for number in range(PICTURE_LIMIT + 1):
+        assert client.delete(OWN_PICTURE_URL).status_code == 200, number
+
+
+@pytest.mark.parametrize("spender", [EMPLOYEE_ROLE_NAME, ADMINISTRATOR_ROLE_NAME])
+def test_one_users_picture_budget_is_not_anothers(employee_client, administrator_client, spender):
+    clients = {EMPLOYEE_ROLE_NAME: employee_client, ADMINISTRATOR_ROLE_NAME: administrator_client}
+    [other] = set(clients) - {spender}
+    for number in range(PICTURE_LIMIT):
+        assert upload_without_a_picture(clients[spender]).status_code == 400, number
+    assert_rate_throttled(upload_a_picture(clients[spender]))
+
+    assert upload_a_picture(clients[other]).status_code == 200

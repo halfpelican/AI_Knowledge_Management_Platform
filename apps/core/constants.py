@@ -534,6 +534,12 @@ ACTION_ITEM_THROTTLE_RATE = "30/min"
 # failed_attempts or locked_until, so the rate is the only bound on it. A person changing their
 # password sends one request.
 PASSWORD_CHANGE_THROTTLE_RATE = "10/hour"
+# POST /api/users/me/picture, scope "picture" (D-137, the lead's decision of 16 November 2026).
+# Each upload is decoded and re-encoded by Pillow, the heaviest work a signed-in user can ask of
+# the server without a provider call, so the rate bounds it. Counted per user, and before the body
+# is read, so a refused upload counts. DELETE and GET /api/users/{id}/picture are not throttled.
+# A person choosing a picture sends one request.
+PICTURE_THROTTLE_RATE = "10/hour"
 
 # How much longer than generation's worst case a user's in-flight ask slot is held before it
 # expires on its own, in seconds. The slot's timeout is GENERATION_TIMEOUT_SECONDS times
@@ -830,6 +836,30 @@ SESSION_INACTIVITY_MINUTES = 60
 # whole number of seconds as an inactivity age, which SESSION_SAVE_EVERY_REQUEST restarts on every
 # request, so the seven days slide with use as the 60 minutes do.
 REMEMBERED_SESSION_DAYS = 7
+
+# --- Profile pictures (D-137, the lead's decision of 16 November 2026) ----------------------
+# What POST /api/users/me/picture accepts and what it stores. apps/accounts/pictures.py opens every
+# upload with Pillow, reads its format from its content and never from its name or declared type,
+# checks its size, and re-encodes it, so nothing of the upload but its pixels is kept.
+#
+# The formats Pillow may read a picture as, in Pillow's own names. Pillow is told to try no other
+# format, so a GIF, an SVG or an EPS, under any name, never reaches a parser. No GIF and no SVG.
+PICTURE_FORMATS = ("PNG", "JPEG", "WEBP")
+# The largest picture accepted, in bytes: 5 MB, in the MB MAX_UPLOAD_BYTES uses.
+MAX_PICTURE_BYTES = 5 * 1024 * 1024  # 5 MB
+# How much more than MAX_PICTURE_BYTES a request body may declare before it is refused unread, by
+# its declared length (D-124): room for the multipart boundary and the part's headers, which a
+# browser keeps to a few hundred bytes for one file. The file's own size is checked against
+# MAX_PICTURE_BYTES once the body is parsed.
+PICTURE_UPLOAD_ALLOWANCE_BYTES = 64 * 1024  # 64 KiB
+# The most pixels a picture's header may declare. Refused with a 413 before a pixel is decoded.
+# Below Pillow's own DecompressionBombWarning threshold (Image.MAX_IMAGE_PIXELS, 89,478,485), so
+# every picture Pillow would warn about is refused here, without a warnings filter, which is not
+# thread-safe under Waitress's threads. It also bounds a decoded copy at 100 MB (4 bytes a pixel).
+MAX_PICTURE_PIXELS = 25_000_000
+# The stored picture's largest side, in pixels. Every upload is scaled down, keeping its shape, to
+# fit a square of this side, never scaled up, and stored as a PNG.
+PICTURE_MAX_DIMENSION = 512
 
 # --- Knowledge gaps (FR-19; docs/decisions.md D-107, D-108, D-109) --------------------------
 # A KnowledgeGap's status (FR-19 Front-End: "the ability to mark an entry as addressed"). Every

@@ -565,7 +565,11 @@ ROUTES_RETURNING_NO_SOURCE_ROWS = {
     ("api/auth/change-password", "POST"): "A confirmation message.",
     ("api/roles", "GET"): "Roles and their permission codes.",
     ("api/users", "GET"): "Users and roles (FR-05).",
-    ("api/users/directory", "GET"): "Names and addresses (D-34).",
+    ("api/users/directory", "GET"): "Names and addresses (D-34), and since D-137 picture addresses.",
+    # D-137: profile pictures. Each reads and writes the users row and the picture file only.
+    ("api/users/me/picture", "POST"): "The caller's own user object.",
+    ("api/users/me/picture", "DELETE"): "The caller's own user object.",
+    ("api/users/<uuid:pk>/picture", "GET"): "A user's profile picture, a PNG the server made.",
     ("api/users/<uuid:pk>/role", "PATCH"): "The updated user.",
     # FR-03's release (D-130): reads and writes the users and login_attempts rows only.
     ("api/users/<uuid:pk>/unlock", "POST"): "The released user, as GET /api/users lists it.",
