@@ -16109,10 +16109,14 @@ Each break is an exact replacement of a text that occurs once, applied alone, ch
 before and after, and restored. Both tables are generated from the runs' own output, after the
 reviews' corrections:
 
-- **The server table** is from a run on `89fc063`. No file under `apps/` differs between
-  `89fc063` and `377eff0`. The fourth merge then changed files under `apps/`, so the server
-  breaks are being run again after the fifth, with break S41 added (the follow-up audit's R6).
-  Until that run is recorded here, the table below is the run on `89fc063`.
+- **The server table** is from a run on `ffb9d67`, after the sixth merge, with 41 breaks. It
+  replaces the table of a run on `89fc063`, which had 40: S41 was added for the follow-up
+  audit's R6.
+  - **The two runs agree on every break they share but one, S16.** S16 orders nodes by their
+    identifier, a random UUID, so which tests it fails varies from run to run: 24 in the
+    earlier run and 24 in this one, 18 of them the same.
+  - **No case rests on S16 alone.** In both runs, every case that fails under S16 also fails
+    under another break.
 - **The front-end table** is from a run on `377eff0`. An earlier run on `89fc063` is the one
   that found break F094 failing no test (item 5).
   - No file under `frontend/src`, and none of the eight test files run, differs between
@@ -16126,37 +16130,37 @@ reviews' corrections:
 **The server side.**
 
 - **The files run:** `apps/api/tests/test_knowledge_map.py`, `apps/accounts/tests/test_view_knowledge_map_seed.py`, `apps/api/tests/test_source_rows_fail_closed.py`, `apps/api/tests/test_rbac.py`, `apps/api/tests/test_never_cache.py`.
-- **Unbroken,** they pass: 229 passed in 172.72s (0:02:52). After the last break, restored: 229 passed in 122.57s (0:02:02).
-- **40 breaks,** each failing at least one test and each restored. Those that change the seed migration rebuild the test database.
+- **Unbroken,** they pass: 229 passed in 140.94s (0:02:20). After the last break, restored: 229 passed in 112.59s (0:01:52).
+- **41 breaks,** each failing at least one test and each restored. Those that change the seed migration rebuild the test database.
 - **118 new test cases** in 59 test functions: every case fails under at least one break. A function with several cases is one row, with the breaks that fail any of its cases.
-- **7 tests that existed before this build** also fail under a break, and are listed after the breaks.
+- **8 tests that existed before this build** also fail under a break, and are listed after the breaks.
 
 | Test | Fails under |
 |---|---|
 | **`apps/api/tests/test_knowledge_map.py`** | |
-| `test_a_restricted_source_and_what_only_it_carries_are_absent` (2 cases) | S01, S02, S12, S13, S29, S30, S38, S39 |
-| `test_the_administrator_is_shown_what_the_employee_is_not` | S01, S02, S10, S12, S13, S29, S30, S38, S39 |
-| `test_an_employees_bytes_are_identical_with_and_without_restricted_rows` (5 cases) | S01, S02, S13, S29, S30, S38, S39 |
-| `test_an_overview_over_the_cap_is_not_moved_by_restricted_rows_of_any_age` | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S39 |
-| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_restricted_rows` | S01, S12, S13, S20, S21, S23, S29, S30, S38, S39 |
-| `test_a_selections_depth_flag_is_not_raised_by_restricted_material` | S01, S12, S13, S16, S19, S20, S21, S25, S29, S30, S38, S39 |
-| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_restricted_rows` | S01, S12, S13, S15, S19, S20, S21, S24, S29, S30, S38, S39 |
-| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S39 |
-| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S29, S30, S38, S39 |
-| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S16, S29, S30, S38, S39 |
-| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S15, S16, S29, S30, S38, S39 |
-| `test_the_walk_does_not_pass_through_a_restricted_node` (2 cases) | S01, S02, S12, S13, S29, S30, S38, S39 |
-| `test_the_administrator_walks_through_the_same_nodes_an_employee_cannot` | S01, S12, S13, S15, S16, S29, S30, S38, S39 |
-| `test_every_absent_focus_gets_the_literal_empty_body_from_identical_statements` (2 cases) | S01, S04, S12, S13, S14, S17, S18, S29, S30, S38, S39 |
-| `test_the_same_focuses_are_answered_for_the_administrator_they_admit` | S01, S04, S12, S13, S17, S18, S21, S29, S30, S38, S39 |
+| `test_a_restricted_source_and_what_only_it_carries_are_absent` (2 cases) | S01, S02, S12, S13, S29, S30, S38, S39, S41 |
+| `test_the_administrator_is_shown_what_the_employee_is_not` | S01, S02, S10, S12, S13, S29, S30, S38, S39, S41 |
+| `test_an_employees_bytes_are_identical_with_and_without_restricted_rows` (5 cases) | S01, S02, S13, S29, S30, S38, S39, S41 |
+| `test_an_overview_over_the_cap_is_not_moved_by_restricted_rows_of_any_age` | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S39, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_restricted_rows` | S01, S12, S13, S20, S21, S23, S29, S30, S38, S39, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_restricted_material` | S01, S12, S13, S19, S20, S21, S25, S29, S30, S38, S39, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_restricted_rows` | S01, S12, S13, S15, S16, S19, S20, S21, S24, S29, S30, S38, S39, S41 |
+| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S39, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S29, S30, S38, S39, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S16, S29, S30, S38, S39, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read` (2 cases) | S01, S12, S13, S15, S16, S29, S30, S38, S39, S41 |
+| `test_the_walk_does_not_pass_through_a_restricted_node` (2 cases) | S01, S02, S12, S13, S29, S30, S38, S39, S41 |
+| `test_the_administrator_walks_through_the_same_nodes_an_employee_cannot` | S01, S12, S13, S15, S16, S29, S30, S38, S39, S41 |
+| `test_every_absent_focus_gets_the_literal_empty_body_from_identical_statements` (2 cases) | S01, S04, S12, S13, S14, S17, S18, S29, S30, S38, S39, S41 |
+| `test_the_same_focuses_are_answered_for_the_administrator_they_admit` | S01, S04, S12, S13, S17, S18, S21, S29, S30, S38, S39, S41 |
 | `test_the_viewers_own_attendance_of_a_restricted_meeting_admits_nothing` (2 cases) | S02, S12, S13, S17, S18, S29, S30, S38, S39 |
 | `test_an_employees_attendance_shows_only_to_a_role_that_reads_the_meeting` | S02, S12, S13, S29, S30, S38, S39 |
-| `test_one_process_serves_each_role_its_own_map_and_a_demotion_takes_effect_at_once` (3 cases) | S01, S02, S13, S29, S30, S38, S39 |
-| `test_a_tag_whose_only_readable_link_is_removed_or_provisional_is_not_a_node` | S01, S04, S06, S07, S12, S13, S18, S29, S30, S38, S39 |
-| `test_a_link_is_matched_on_its_source_type_and_identifier_together` (2 cases) | S02, S05, S08, S12, S13, S15, S17, S18, S29, S30, S38, S39 |
+| `test_one_process_serves_each_role_its_own_map_and_a_demotion_takes_effect_at_once` (3 cases) | S01, S02, S13, S29, S30, S38, S39, S41 |
+| `test_a_tag_whose_only_readable_link_is_removed_or_provisional_is_not_a_node` | S01, S04, S06, S07, S12, S13, S18, S29, S30, S38, S39, S41 |
+| `test_a_link_is_matched_on_its_source_type_and_identifier_together` (2 cases) | S02, S05, S08, S12, S13, S15, S16, S17, S18, S29, S30, S38, S39 |
 | `test_a_contributor_is_a_name_and_an_identifier_and_nothing_else` (2 cases) | S10, S12, S13, S29, S30, S38, S39 |
-| `test_the_module_reads_no_tag_table_no_user_table_and_no_reverse_relation` | S10, S14 |
-| `test_the_assembly_takes_no_focus_and_the_walk_touches_no_database` | S16, S17, S30 |
+| `test_the_module_reads_no_tag_table_no_user_table_and_no_reverse_relation` | S10, S14, S41 |
+| `test_the_assembly_takes_no_focus_and_the_walk_touches_no_database` | S17, S30 |
 | `test_the_body_has_exactly_the_contracts_keys_and_the_two_maximums` (2 cases) | S12, S13, S29, S30, S38, S39 |
 | `test_the_focus_is_the_returned_node_in_its_canonical_form` (2 cases) | S12, S13, S18, S29, S30, S33, S38, S39 |
 | `test_the_same_request_gives_the_same_bytes` (2 cases) | S29, S30, S38, S39 |
@@ -16174,7 +16178,7 @@ reviews' corrections:
 | `test_a_retired_tag_two_dimensions_of_one_name_and_a_failed_source_are_nodes` (2 cases) | S09, S11, S12, S13, S26, S29, S30, S38, S39 |
 | `test_an_isolated_meeting_is_a_node_with_no_connections` (2 cases) | S13, S29, S30, S38, S39 |
 | `test_a_count_is_of_the_edges_shown_on_a_truncated_view` (2 cases) | S12, S13, S19, S21, S24, S29, S30, S38, S39 |
-| `test_nothing_in_scope_is_the_same_bytes_as_an_empty_database` (2 cases) | S01, S02, S03, S13, S18, S29, S30, S38, S39 |
+| `test_nothing_in_scope_is_the_same_bytes_as_an_empty_database` (2 cases) | S01, S02, S03, S13, S18, S29, S30, S38, S39, S41 |
 | `test_an_anonymous_request_is_401` | S31 |
 | `test_a_role_without_view_knowledge_map_is_forbidden` (2 cases) | S27, S29, S31, S38, S39 |
 | `test_a_malformed_query_is_400_keyed_on_its_parameter` (20 cases) | S28, S29, S32, S33, S34, S38, S39 |
@@ -16193,7 +16197,7 @@ reviews' corrections:
 | `test_seed_is_reversible` | S29, S38, S39 |
 | `test_the_migration_reverses_through_the_executor` | S29, S38, S39 |
 | **`apps/api/tests/test_source_rows_fail_closed.py`** | |
-| `test_a_source_its_chunks_disagree_with_is_withheld_from_an_employee` | S01, S02, S29, S38 |
+| `test_a_source_its_chunks_disagree_with_is_withheld_from_an_employee` | S01, S02, S29, S38, S41 |
 | `test_the_same_source_is_returned_to_the_administrator_it_admits` | S13, S38, S39 |
 
 The breaks, each applied alone:
@@ -16238,6 +16242,7 @@ The breaks, each applied alone:
 - **S38:** The seed's code is one an earlier migration already seeds (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
 - **S39:** The seed gives view_knowledge_map to the Employee alone (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
 - **S40:** The seed creates its rows without checking for them (`apps/accounts/migrations/0011_seed_view_knowledge_map.py`).
+- **S41:** Documents are read with no scope at all, so a document stamped for no role reaches every caller, the Administrator included (`apps/api/knowledge_map.py`).
 
 Tests outside this build that a break also fails:
 
@@ -16248,6 +16253,20 @@ Tests outside this build that a break also fails:
 - `apps/api/tests/test_rbac.py` `test_every_route_but_the_opt_outs_is_401_anonymously`
 - `apps/api/tests/test_rbac.py` `test_every_route_but_the_opt_outs_is_401_with_a_forged_session`
 - `apps/api/tests/test_rbac.py` `test_the_url_conf_is_exactly_the_contract`
+- `apps/api/tests/test_source_rows_fail_closed.py` `test_request_serving_code_reads_source_rows_only_through_the_scoped_helpers`
+
+**The eight cases the audit's A7 added, one by one** (the follow-up audit's R6). The table above gives a test one row for both of its roles, so it cannot show which case a break fails. S01 gives every caller the Administrator's scope, which still leaves out a row stamped for no role, so it cannot fail a case run as the Administrator. S41 reads documents with no scope at all.
+
+| Case | Fails under |
+|---|---|
+| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read[employee]` | S01, S12, S13, S15, S16, S20, S21, S22, S23, S29, S30, S38, S41 |
+| `test_an_overview_over_the_cap_is_not_moved_by_rows_the_viewer_cannot_read[administrator]` | S12, S13, S15, S16, S20, S21, S22, S23, S30, S38, S39, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[employee]` | S01, S12, S13, S29, S30, S38, S41 |
+| `test_an_overview_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[administrator]` | S12, S13, S30, S38, S39, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read[employee]` | S01, S12, S13, S29, S30, S38, S41 |
+| `test_a_selections_depth_flag_is_not_raised_by_material_the_viewer_cannot_read[administrator]` | S12, S13, S16, S30, S38, S39, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[employee]` | S01, S12, S13, S15, S16, S29, S30, S38, S41 |
+| `test_a_selection_exactly_at_the_cap_is_not_truncated_by_rows_the_viewer_cannot_read[administrator]` | S12, S13, S15, S16, S30, S38, S39, S41 |
 
 **The front end.**
 
@@ -16818,7 +16837,7 @@ be checked against the proposal before it is built.
 | R3 | low, record | Two inexact sentences in the build's note | **Fixed**: item 1 says the merge also rewrote two passages of the migration's docstring. Item 5 says equal rows come out reversed when the sort is descending |
 | R4 | low, record | Item 18 had no pointer to item 9 of the build's note | **Fixed**: a dated sentence at the end of item 18 |
 | R5 | low, comments | Three comments misquoted D-132 or the screen | **Fixed** in `ba2893d`. Comments only: the built JavaScript and stylesheet are byte for byte the same before and after it |
-| R6 | low, test evidence | No listed break showed that A7's four cases run as the Administrator can fail for the reason they were added | **Break S41 is added:** documents are read with no scope at all, so a document stamped for no role reaches every caller. The server breaks are being run again after the fifth merge with it, and its result is recorded here from that run |
+| R6 | low, test evidence | No listed break showed that A7's four cases run as the Administrator can fail for the reason they were added | **Fixed.** Break S41 is added: documents are read with no scope at all, so a document stamped for no role reaches every caller. All eight cases fail under it, the four run as the Administrator among them. They are listed one by one under the server table |
 
 **The corrections above were not read by an auditor again.** A9's walk cannot be closed from here, so a third run would not return a clean verdict either. The line numbers in the quotation are the auditor's, read at `b44b75b`; the corrections moved some of them.
 
